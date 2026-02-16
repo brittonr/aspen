@@ -855,7 +855,8 @@ pub enum ClientRpcRequest {
         /// Cluster ID of the peer.
         cluster_id: String,
         /// Whether to enable the subscription.
-        enabled: bool,
+        #[serde(rename = "enabled")]
+        is_enabled: bool,
     },
 
     /// Get the origin metadata for a key.
@@ -1691,7 +1692,8 @@ pub enum ClientRpcRequest {
         /// Zone name (e.g., "example.com").
         name: String,
         /// Whether the zone is enabled.
-        enabled: bool,
+        #[serde(rename = "enabled")]
+        is_enabled: bool,
         /// Default TTL for records in this zone (seconds).
         default_ttl_secs: u32,
         /// Optional description.
@@ -1712,7 +1714,8 @@ pub enum ClientRpcRequest {
         /// Zone name.
         name: String,
         /// Whether to also delete all records in the zone.
-        delete_records: bool,
+        #[serde(rename = "delete_records")]
+        should_delete_records: bool,
     },
 
     // =========================================================================

@@ -25,7 +25,7 @@ use super::error::SqlError;
 use super::schema::KV_SCHEMA;
 
 /// Default batch size for streaming RecordBatches.
-pub const DEFAULT_BATCH_SIZE: usize = 8192;
+pub const DEFAULT_BATCH_SIZE: u32 = 8192;
 
 /// A stream that reads from Redb and produces Arrow RecordBatches.
 ///
@@ -51,11 +51,11 @@ pub struct RedbRecordBatchStream {
     /// Key range end (exclusive). Empty means scan to end.
     end_key: Vec<u8>,
     /// Maximum rows to return (None = unlimited up to Tiger Style bounds).
-    limit: Option<usize>,
+    limit: Option<u32>,
     /// Batch size for streaming.
-    batch_size: usize,
+    batch_size: u32,
     /// Total rows returned so far.
-    rows_returned: usize,
+    rows_returned: u32,
     /// Last key read (for continuation).
     last_key: Option<Vec<u8>>,
     /// Whether we've finished scanning.
@@ -74,7 +74,7 @@ impl RedbRecordBatchStream {
         projection: Option<Vec<usize>>,
         start_key: Vec<u8>,
         end_key: Vec<u8>,
-        limit: Option<usize>,
+        limit: Option<u32>,
     ) -> Self {
         // Compute the output schema based on projection.
         // For empty projection (e.g., COUNT(*)), we produce batches with no columns
@@ -107,7 +107,7 @@ impl RedbRecordBatchStream {
 
     /// Set the batch size for streaming.
     #[allow(dead_code)] // May be used for future tuning
-    pub fn with_batch_size(mut self, batch_size: usize) -> Self {
+    pub fn with_batch_size(mut self, batch_size: u32) -> Self {
         self.batch_size = batch_size;
         self
     }
@@ -157,7 +157,7 @@ impl RedbRecordBatchStream {
             None => self.start_key.clone(),
         };
 
-        let mut rows_in_batch = 0;
+        let mut rows_in_batch: u32 = 0;
         let mut last_key_in_batch: Option<Vec<u8>> = None;
 
         // Perform the range scan
@@ -263,7 +263,7 @@ impl RedbRecordBatchStream {
             let batch = RecordBatch::try_new_with_options(
                 self.schema.clone(),
                 vec![],
-                &arrow::record_batch::RecordBatchOptions::new().with_row_count(Some(rows_in_batch)),
+                &arrow::record_batch::RecordBatchOptions::new().with_row_count(Some(rows_in_batch as usize)),
             )?;
             return Ok(Some(batch));
         }
@@ -341,7 +341,9 @@ pub fn full_scan_stream(
     projection: Option<Vec<usize>>,
     limit: Option<usize>,
 ) -> RedbRecordBatchStream {
-    RedbRecordBatchStream::new(db, projection, Vec::new(), Vec::new(), limit)
+    // Convert usize limit to u32 at boundary (DataFusion uses usize, Tiger Style uses u32)
+    let limit_u32 = limit.map(|l| l.min(u32::MAX as usize) as u32);
+    RedbRecordBatchStream::new(db, projection, Vec::new(), Vec::new(), limit_u32)
 }
 
 /// Create a prefix scan stream.
@@ -355,7 +357,9 @@ pub fn prefix_scan_stream(
 ) -> RedbRecordBatchStream {
     // Calculate end key using strinc (FoundationDB pattern)
     let end_key = strinc(prefix);
-    RedbRecordBatchStream::new(db, projection, prefix.to_vec(), end_key.unwrap_or_default(), limit)
+    // Convert usize limit to u32 at boundary
+    let limit_u32 = limit.map(|l| l.min(u32::MAX as usize) as u32);
+    RedbRecordBatchStream::new(db, projection, prefix.to_vec(), end_key.unwrap_or_default(), limit_u32)
 }
 
 /// Create a range scan stream.
@@ -368,7 +372,9 @@ pub fn range_scan_stream(
     projection: Option<Vec<usize>>,
     limit: Option<usize>,
 ) -> RedbRecordBatchStream {
-    RedbRecordBatchStream::new(db, projection, start.to_vec(), end.to_vec(), limit)
+    // Convert usize limit to u32 at boundary
+    let limit_u32 = limit.map(|l| l.min(u32::MAX as usize) as u32);
+    RedbRecordBatchStream::new(db, projection, start.to_vec(), end.to_vec(), limit_u32)
 }
 
 /// Create an index scan stream.
@@ -382,7 +388,9 @@ pub fn index_scan_stream(
     projection: Option<Vec<usize>>,
     limit: Option<usize>,
 ) -> IndexRecordBatchStream {
-    IndexRecordBatchStream::new(db, index_registry, index_scan.clone(), projection, limit)
+    // Convert usize limit to u32 at boundary
+    let limit_u32 = limit.map(|l| l.min(u32::MAX as usize) as u32);
+    IndexRecordBatchStream::new(db, index_registry, index_scan.clone(), projection, limit_u32)
 }
 
 /// A stream that reads from Redb using a secondary index.
@@ -402,11 +410,11 @@ pub struct IndexRecordBatchStream {
     /// Optional projection (column indices to include).
     projection: Option<Vec<usize>>,
     /// Maximum rows to return.
-    limit: Option<usize>,
+    limit: Option<u32>,
     /// Batch size for streaming.
-    batch_size: usize,
+    batch_size: u32,
     /// Total rows returned so far.
-    rows_returned: usize,
+    rows_returned: u32,
     /// Whether we've finished scanning.
     is_done: bool,
     /// Current timestamp for TTL filtering.
@@ -426,7 +434,7 @@ impl IndexRecordBatchStream {
         index_registry: Arc<aspen_core::layer::IndexRegistry>,
         index_scan: super::provider::IndexScanSpec,
         projection: Option<Vec<usize>>,
-        limit: Option<usize>,
+        limit: Option<u32>,
     ) -> Self {
         let schema = match &projection {
             Some(indices) if indices.is_empty() => Arc::new(arrow::datatypes::Schema::empty()),
@@ -456,7 +464,7 @@ impl IndexRecordBatchStream {
     /// Load primary keys from the index (lazy, called on first poll).
     fn load_primary_keys(&mut self) -> Result<(), SqlError> {
         // Query the index based on the scan spec
-        let index_limit = self.limit.map(|l| l as u32).unwrap_or(10_000);
+        let index_limit = self.limit.unwrap_or(10_000);
 
         let result = if self.index_scan.is_exact {
             if let Some(value) = &self.index_scan.exact_value {
@@ -607,7 +615,7 @@ impl IndexRecordBatchStream {
         let read_txn = self.db.begin_read().map_err(|e| SqlError::BeginRead { source: Box::new(e) })?;
         let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| SqlError::OpenTable { source: Box::new(e) })?;
 
-        let mut rows_in_batch = 0;
+        let mut rows_in_batch: u32 = 0;
 
         // Fetch entries for each primary key
         while self.pk_position < primary_keys.len() && rows_in_batch < rows_to_fetch {
@@ -687,7 +695,7 @@ impl IndexRecordBatchStream {
             let batch = RecordBatch::try_new_with_options(
                 self.schema.clone(),
                 vec![],
-                &arrow::record_batch::RecordBatchOptions::new().with_row_count(Some(rows_in_batch)),
+                &arrow::record_batch::RecordBatchOptions::new().with_row_count(Some(rows_in_batch as usize)),
             )?;
             return Ok(Some(batch));
         }

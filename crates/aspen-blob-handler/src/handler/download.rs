@@ -22,7 +22,7 @@ pub(crate) async fn handle_download_blob(
         return Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
             is_success: false,
             hash: None,
-            size: None,
+            size_bytes: None,
             error: Some("blob store not enabled".to_string()),
         }));
     };
@@ -34,7 +34,7 @@ pub(crate) async fn handle_download_blob(
             return Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
                 is_success: false,
                 hash: None,
-                size: None,
+                size_bytes: None,
                 error: Some("invalid ticket".to_string()),
             }));
         }
@@ -54,7 +54,7 @@ pub(crate) async fn handle_download_blob(
             Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
                 is_success: true,
                 hash: Some(blob_ref.hash.to_string()),
-                size: Some(blob_ref.size_bytes),
+                size_bytes: Some(blob_ref.size_bytes),
                 error: None,
             }))
         }
@@ -114,7 +114,7 @@ pub(crate) async fn handle_download_blob(
                                 return Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
                                     is_success: true,
                                     hash: Some(blob_ref.hash.to_string()),
-                                    size: Some(blob_ref.size_bytes),
+                                    size_bytes: Some(blob_ref.size_bytes),
                                     error: None,
                                 }));
                             }
@@ -128,7 +128,7 @@ pub(crate) async fn handle_download_blob(
             Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
                 is_success: false,
                 hash: None,
-                size: None,
+                size_bytes: None,
                 error: Some(sanitize_blob_error(&ticket_error)),
             }))
         }
@@ -148,7 +148,7 @@ pub(crate) async fn handle_download_blob_by_hash(
         return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
             is_success: false,
             hash: None,
-            size: None,
+            size_bytes: None,
             error: Some("blob store not enabled".to_string()),
         }));
     };
@@ -157,7 +157,7 @@ pub(crate) async fn handle_download_blob_by_hash(
         return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
             is_success: false,
             hash: None,
-            size: None,
+            size_bytes: None,
             error: Some("content discovery not enabled".to_string()),
         }));
     };
@@ -169,7 +169,7 @@ pub(crate) async fn handle_download_blob_by_hash(
             return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
                 is_success: false,
                 hash: None,
-                size: None,
+                size_bytes: None,
                 error: Some("invalid hash".to_string()),
             }));
         }
@@ -183,7 +183,7 @@ pub(crate) async fn handle_download_blob_by_hash(
             return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
                 is_success: false,
                 hash: Some(hash.to_string()),
-                size: None,
+                size_bytes: None,
                 error: Some("provider lookup failed".to_string()),
             }));
         }
@@ -193,7 +193,7 @@ pub(crate) async fn handle_download_blob_by_hash(
         return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
             is_success: false,
             hash: Some(hash.to_string()),
-            size: None,
+            size_bytes: None,
             error: Some("no providers found".to_string()),
         }));
     }
@@ -233,7 +233,7 @@ pub(crate) async fn handle_download_blob_by_hash(
                 return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
                     is_success: true,
                     hash: Some(blob_ref.hash.to_string()),
-                    size: Some(blob_ref.size_bytes),
+                    size_bytes: Some(blob_ref.size_bytes),
                     error: None,
                 }));
             }
@@ -254,7 +254,7 @@ pub(crate) async fn handle_download_blob_by_hash(
     Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
         is_success: false,
         hash: Some(hash.to_string()),
-        size: None,
+        size_bytes: None,
         error: Some(error_msg),
     }))
 }
@@ -268,7 +268,7 @@ pub(crate) async fn handle_download_blob_by_hash(
     Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
         is_success: false,
         hash: None,
-        size: None,
+        size_bytes: None,
         error: Some("global-discovery feature not enabled".to_string()),
     }))
 }
@@ -288,7 +288,7 @@ pub(crate) async fn handle_download_blob_by_provider(
         return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
             is_success: false,
             hash: None,
-            size: None,
+            size_bytes: None,
             error: Some("blob store not enabled".to_string()),
         }));
     };
@@ -297,7 +297,7 @@ pub(crate) async fn handle_download_blob_by_provider(
         return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
             is_success: false,
             hash: None,
-            size: None,
+            size_bytes: None,
             error: Some("content discovery not enabled".to_string()),
         }));
     };
@@ -309,7 +309,7 @@ pub(crate) async fn handle_download_blob_by_provider(
             return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
                 is_success: false,
                 hash: None,
-                size: None,
+                size_bytes: None,
                 error: Some("invalid hash".to_string()),
             }));
         }
@@ -322,7 +322,7 @@ pub(crate) async fn handle_download_blob_by_provider(
             return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
                 is_success: false,
                 hash: Some(hash.to_string()),
-                size: None,
+                size_bytes: None,
                 error: Some("invalid provider public key".to_string()),
             }));
         }
@@ -340,7 +340,7 @@ pub(crate) async fn handle_download_blob_by_provider(
             return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
                 is_success: false,
                 hash: Some(hash.to_string()),
-                size: None,
+                size_bytes: None,
                 error: Some("provider not found in DHT".to_string()),
             }));
         }
@@ -354,7 +354,7 @@ pub(crate) async fn handle_download_blob_by_provider(
             return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
                 is_success: false,
                 hash: Some(hash.to_string()),
-                size: None,
+                size_bytes: None,
                 error: Some(format!("DHT lookup failed: {}", e)),
             }));
         }
@@ -389,7 +389,7 @@ pub(crate) async fn handle_download_blob_by_provider(
             Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
                 is_success: true,
                 hash: Some(blob_ref.hash.to_string()),
-                size: Some(blob_ref.size_bytes),
+                size_bytes: Some(blob_ref.size_bytes),
                 error: None,
             }))
         }
@@ -404,7 +404,7 @@ pub(crate) async fn handle_download_blob_by_provider(
             Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
                 is_success: false,
                 hash: Some(hash.to_string()),
-                size: None,
+                size_bytes: None,
                 error: Some(error_msg),
             }))
         }
@@ -421,7 +421,7 @@ pub(crate) async fn handle_download_blob_by_provider(
     Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
         is_success: false,
         hash: None,
-        size: None,
+        size_bytes: None,
         error: Some("global-discovery feature not enabled".to_string()),
     }))
 }

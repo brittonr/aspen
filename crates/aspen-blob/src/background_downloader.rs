@@ -299,42 +299,41 @@ impl DownloadWorker {
         info!("background blob download worker stopped");
     }
 
-    async fn handle_request(&self, request: DownloadRequest) {
-        let hash = request.hash;
-
+    /// Check if download should be skipped (already in progress, peer in backoff, or blob exists).
+    async fn handle_request_check_skip(&self, hash: &Hash, provider: &iroh::PublicKey) -> bool {
         // Check if already in progress
         {
             let in_progress = self.in_progress.lock().await;
-            if in_progress.contains(&hash) {
+            if in_progress.contains(hash) {
                 debug!(hash = %hash, "skipping: download already in progress");
                 self.stats.lock().await.skipped += 1;
-                return;
+                return true;
             }
         }
 
         // Check if peer is in backoff
         {
             let peer_states = self.peer_states.lock().await;
-            if let Some(state) = peer_states.get(&request.provider)
+            if let Some(state) = peer_states.get(provider)
                 && let Some(backoff_until) = state.backoff_until
                 && Instant::now() < backoff_until
             {
                 debug!(
                     hash = %hash,
-                    provider = %request.provider.fmt_short(),
+                    provider = %provider.fmt_short(),
                     "skipping: peer in backoff"
                 );
                 self.stats.lock().await.skipped += 1;
-                return;
+                return true;
             }
         }
 
         // Check if blob already exists
-        match self.blob_store.status(&hash).await {
+        match self.blob_store.status(hash).await {
             Ok(Some(status)) if status.is_complete => {
                 debug!(hash = %hash, "skipping: blob already exists");
                 self.stats.lock().await.skipped += 1;
-                return;
+                return true;
             }
             Ok(_) => {}
             Err(e) => {
@@ -342,14 +341,36 @@ impl DownloadWorker {
             }
         }
 
-        // Mark as in progress
+        false
+    }
+
+    /// Mark a hash as in-progress before spawning download task.
+    async fn handle_request_mark_in_progress(&self, hash: Hash) {
         {
             let mut in_progress = self.in_progress.lock().await;
             in_progress.insert(hash);
         }
         self.stats.lock().await.in_progress += 1;
+    }
+
+    async fn handle_request(&self, request: DownloadRequest) {
+        let hash = request.hash;
+
+        // Check if we should skip this download
+        if self.handle_request_check_skip(&hash, &request.provider).await {
+            return;
+        }
+
+        // Mark as in progress
+        self.handle_request_mark_in_progress(hash).await;
 
         // Spawn the download task
+        self.handle_request_spawn_download(request).await;
+    }
+
+    /// Spawn a background task to execute the download.
+    async fn handle_request_spawn_download(&self, request: DownloadRequest) {
+        let hash = request.hash;
         let blob_store = Arc::clone(&self.blob_store);
         let stats = Arc::clone(&self.stats);
         let semaphore = Arc::clone(&self.semaphore);
@@ -363,11 +384,7 @@ impl DownloadWorker {
                 Ok(permit) => permit,
                 Err(_) => {
                     // Semaphore closed (shutdown)
-                    let mut in_prog = in_progress.lock().await;
-                    in_prog.remove(&hash);
-                    let mut s = stats.lock().await;
-                    s.in_progress = s.in_progress.saturating_sub(1);
-                    s.failed += 1;
+                    handle_request_cleanup_failed(&in_progress, &stats, hash).await;
                     return;
                 }
             };
@@ -385,73 +402,100 @@ impl DownloadWorker {
                 in_prog.remove(&hash);
             }
 
-            // Update stats and peer state
-            let mut s = stats.lock().await;
-            s.in_progress = s.in_progress.saturating_sub(1);
-
-            match result {
-                Ok(Ok(blob_ref)) => {
-                    s.completed += 1;
-                    info!(
-                        hash = %hash,
-                        size = blob_ref.size_bytes,
-                        provider = %request.provider.fmt_short(),
-                        tag = ?request.tag,
-                        "background download completed"
-                    );
-
-                    // Reset peer failure count on success
-                    let mut peer_states = peer_states.lock().await;
-                    peer_states.remove(&request.provider);
-                }
-                Ok(Err(e)) => {
-                    s.failed += 1;
-                    warn!(
-                        hash = %hash,
-                        provider = %request.provider.fmt_short(),
-                        error = %e,
-                        "background download failed"
-                    );
-
-                    // Update peer failure state
-                    let mut peer_states = peer_states.lock().await;
-                    let state = peer_states.entry(request.provider).or_default();
-                    state.consecutive_failures += 1;
-
-                    if state.consecutive_failures >= MAX_PEER_FAILURES {
-                        let backoff = PEER_BACKOFF_BASE * state.consecutive_failures;
-                        state.backoff_until = Some(Instant::now() + backoff);
-                        warn!(
-                            provider = %request.provider.fmt_short(),
-                            failures = state.consecutive_failures,
-                            backoff_secs = backoff.as_secs(),
-                            "peer entering backoff due to repeated failures"
-                        );
-                    }
-                }
-                Err(_timeout) => {
-                    if !cancel.is_cancelled() {
-                        s.failed += 1;
-                        warn!(
-                            hash = %hash,
-                            provider = %request.provider.fmt_short(),
-                            timeout_secs = BACKGROUND_DOWNLOAD_TIMEOUT.as_secs(),
-                            "background download timed out"
-                        );
-
-                        // Timeout counts as a failure
-                        let mut peer_states = peer_states.lock().await;
-                        let state = peer_states.entry(request.provider).or_default();
-                        state.consecutive_failures += 1;
-
-                        if state.consecutive_failures >= MAX_PEER_FAILURES {
-                            let backoff = PEER_BACKOFF_BASE * state.consecutive_failures;
-                            state.backoff_until = Some(Instant::now() + backoff);
-                        }
-                    }
-                }
-            }
+            // Update stats and peer state based on result
+            handle_request_process_result(result, hash, &request, &stats, &peer_states, &cancel).await;
         });
+    }
+}
+
+/// Clean up state when download fails to start.
+async fn handle_request_cleanup_failed(
+    in_progress: &Arc<Mutex<HashSet<Hash>>>,
+    stats: &Arc<Mutex<DownloadStats>>,
+    hash: Hash,
+) {
+    let mut in_prog = in_progress.lock().await;
+    in_prog.remove(&hash);
+    let mut s = stats.lock().await;
+    s.in_progress = s.in_progress.saturating_sub(1);
+    s.failed += 1;
+}
+
+/// Process download result and update peer state accordingly.
+async fn handle_request_process_result(
+    result: Result<Result<crate::BlobRef, crate::BlobStoreError>, tokio::time::error::Elapsed>,
+    hash: Hash,
+    request: &DownloadRequest,
+    stats: &Arc<Mutex<DownloadStats>>,
+    peer_states: &Arc<Mutex<HashMap<iroh::PublicKey, PeerState>>>,
+    cancel: &CancellationToken,
+) {
+    let mut s = stats.lock().await;
+    s.in_progress = s.in_progress.saturating_sub(1);
+
+    match result {
+        Ok(Ok(blob_ref)) => {
+            s.completed += 1;
+            drop(s); // Release stats lock before logging
+            info!(
+                hash = %hash,
+                size = blob_ref.size_bytes,
+                provider = %request.provider.fmt_short(),
+                tag = ?request.tag,
+                "background download completed"
+            );
+
+            // Reset peer failure count on success
+            let mut peer_states = peer_states.lock().await;
+            peer_states.remove(&request.provider);
+        }
+        Ok(Err(e)) => {
+            s.failed += 1;
+            drop(s); // Release stats lock before logging
+            warn!(
+                hash = %hash,
+                provider = %request.provider.fmt_short(),
+                error = %e,
+                "background download failed"
+            );
+
+            handle_request_record_peer_failure(peer_states, &request.provider).await;
+        }
+        Err(_timeout) => {
+            if !cancel.is_cancelled() {
+                s.failed += 1;
+                drop(s); // Release stats lock before logging
+                warn!(
+                    hash = %hash,
+                    provider = %request.provider.fmt_short(),
+                    timeout_secs = BACKGROUND_DOWNLOAD_TIMEOUT.as_secs(),
+                    "background download timed out"
+                );
+
+                handle_request_record_peer_failure(peer_states, &request.provider).await;
+            }
+        }
+    }
+}
+
+/// Record a failure for a peer and apply backoff if threshold reached.
+async fn handle_request_record_peer_failure(
+    peer_states: &Arc<Mutex<HashMap<iroh::PublicKey, PeerState>>>,
+    provider: &iroh::PublicKey,
+) {
+    let mut peer_states = peer_states.lock().await;
+    let state = peer_states.entry(*provider).or_default();
+    state.consecutive_failures += 1;
+
+    if state.consecutive_failures >= MAX_PEER_FAILURES {
+        let backoff = PEER_BACKOFF_BASE * state.consecutive_failures;
+        state.backoff_until = Some(Instant::now() + backoff);
+        warn!(
+            provider = %provider.fmt_short(),
+            failures = state.consecutive_failures,
+            backoff_secs = backoff.as_secs(),
+            "peer entering backoff due to repeated failures"
+        );
     }
 }
 

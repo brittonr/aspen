@@ -215,8 +215,8 @@ pub async fn load_pipeline_config_str_async(content: String, source_name: String
         .map_err(|e| CiError::NickelEvaluation {
             message: format!("Nickel evaluation task was cancelled: {e}"),
         })?
-        .map_err(|_| CiError::NickelEvaluation {
-            message: "Nickel evaluation thread panicked".to_string(),
+        .map_err(|e| CiError::NickelEvaluation {
+            message: format!("Nickel evaluation thread panicked: {:?}", e),
         })?
 }
 

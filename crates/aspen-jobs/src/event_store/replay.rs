@@ -43,7 +43,7 @@ impl<S: aspen_traits::KeyValueStore + ?Sized + 'static> WorkflowEventStore<S> {
             .store
             .scan(ScanRequest {
                 prefix: scan_prefix,
-                limit: Some(MAX_EVENTS_PER_SCAN),
+                limit_results: Some(MAX_EVENTS_PER_SCAN),
                 continuation_token: None,
             })
             .await

@@ -55,7 +55,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             .store
             .scan(aspen_core::ScanRequest {
                 prefix: prefix.to_string(),
-                limit: Some(limit),
+                limit_results: Some(limit),
                 continuation_token: None,
             })
             .await

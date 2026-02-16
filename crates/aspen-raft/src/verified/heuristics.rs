@@ -200,9 +200,9 @@ pub fn compute_ewma(new_value: f64, old_avg: f64, alpha: f64) -> f64 {
 /// assert_eq!(calculate_backoff_duration(100, &durations), Duration::from_secs(10)); // capped
 /// ```
 #[inline]
-pub fn calculate_backoff_duration(restart_count: usize, backoff_durations: &[Duration]) -> Duration {
+pub fn calculate_backoff_duration(restart_count: u32, backoff_durations: &[Duration]) -> Duration {
     debug_assert!(!backoff_durations.is_empty(), "backoff_durations must not be empty");
-    let idx = restart_count.min(backoff_durations.len().saturating_sub(1));
+    let idx = (restart_count as usize).min(backoff_durations.len().saturating_sub(1));
     backoff_durations[idx]
 }
 
@@ -654,7 +654,7 @@ mod tests {
     fn test_backoff_capped() {
         let durations = [Duration::from_secs(1), Duration::from_secs(5), Duration::from_secs(10)];
         assert_eq!(calculate_backoff_duration(100, &durations), Duration::from_secs(10));
-        assert_eq!(calculate_backoff_duration(usize::MAX, &durations), Duration::from_secs(10));
+        assert_eq!(calculate_backoff_duration(u32::MAX, &durations), Duration::from_secs(10));
     }
 
     #[test]
@@ -930,7 +930,7 @@ mod property_tests {
         let durations = [Duration::from_secs(1), Duration::from_secs(5), Duration::from_secs(10)];
         let max_duration = Duration::from_secs(10);
 
-        check!().with_type::<usize>().for_each(|restart_count| {
+        check!().with_type::<u32>().for_each(|restart_count| {
             let result = calculate_backoff_duration(*restart_count, &durations);
             assert!(result <= max_duration);
         });

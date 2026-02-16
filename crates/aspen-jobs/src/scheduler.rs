@@ -221,7 +221,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
             .store
             .scan(aspen_core::ScanRequest {
                 prefix: SCHEDULE_KEY_PREFIX.to_string(),
-                limit: Some(MAX_SCHEDULES_TO_RECOVER),
+                limit_results: Some(MAX_SCHEDULES_TO_RECOVER),
                 continuation_token: None,
             })
             .await

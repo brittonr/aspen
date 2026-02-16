@@ -138,7 +138,7 @@ where KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static
             .kv_store
             .scan(aspen_core::kv::ScanRequest {
                 prefix: REPLICA_KEY_PREFIX.to_string(),
-                limit: Some(MAX_REPAIR_BATCH_SIZE * 10), // Scan extra to find enough matching status
+                limit_results: Some(MAX_REPAIR_BATCH_SIZE * 10), // Scan extra to find enough matching status
                 continuation_token: None,
             })
             .await
@@ -209,21 +209,10 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
     async fn transfer_to_node(&self, hash: &Hash, target: &NodeInfo) -> Result<bool> {
         let start = Instant::now();
 
-        // First verify we have the blob locally
-        if !self.blob_store.has(hash).await.context("failed to check local blob availability")? {
-            return Err(anyhow::anyhow!("cannot transfer blob {}: not available locally", hash.to_hex()));
-        }
+        // Verify local availability and get size
+        let size = self.transfer_verify_local_blob(hash).await?;
 
-        // Get blob size for the request
-        let size = self
-            .blob_store
-            .status(hash)
-            .await
-            .context("failed to get blob status for transfer")?
-            .and_then(|s| s.size_bytes)
-            .unwrap_or(0);
-
-        // Get our public key as the provider (use secret_key().public() for iroh 0.95)
+        // Get our public key as the provider
         let our_key = self.endpoint.secret_key().public();
 
         debug!(
@@ -236,7 +225,6 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
         );
 
         // Build the RPC request
-        // We need to use the client API types - import them via the messages module
         let request = aspen_client_api::ClientRpcRequest::BlobReplicatePull {
             hash: hash.to_hex(),
             size_bytes: size,
@@ -244,6 +232,49 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
             tag: Some(format!("_replica:{}", hash.to_hex())),
         };
 
+        // Send RPC and get response
+        let response = self.transfer_send_rpc(target, &request).await?;
+
+        let duration_ms = start.elapsed().as_millis() as u64;
+
+        // Process the response
+        self.transfer_handle_response(response, hash, target, duration_ms)
+    }
+
+    async fn has_locally(&self, hash: &Hash) -> Result<bool> {
+        self.blob_store.has(hash).await.context("failed to check blob availability")
+    }
+
+    async fn get_size(&self, hash: &Hash) -> Result<Option<u64>> {
+        let status = self.blob_store.status(hash).await.context("failed to get blob status")?;
+        Ok(status.and_then(|s| s.size_bytes))
+    }
+}
+
+impl IrohBlobTransfer {
+    /// Verify blob exists locally and return its size.
+    async fn transfer_verify_local_blob(&self, hash: &Hash) -> Result<u64> {
+        if !self.blob_store.has(hash).await.context("failed to check local blob availability")? {
+            return Err(anyhow::anyhow!("cannot transfer blob {}: not available locally", hash.to_hex()));
+        }
+
+        let size = self
+            .blob_store
+            .status(hash)
+            .await
+            .context("failed to get blob status for transfer")?
+            .and_then(|s| s.size_bytes)
+            .unwrap_or(0);
+
+        Ok(size)
+    }
+
+    /// Connect to target node and send RPC request.
+    async fn transfer_send_rpc(
+        &self,
+        target: &NodeInfo,
+        request: &aspen_client_api::ClientRpcRequest,
+    ) -> Result<aspen_client_api::ClientRpcResponse> {
         // Connect to the target node
         let target_addr = EndpointAddr::new(target.public_key);
         let connection = timeout(RPC_TIMEOUT, async {
@@ -255,9 +286,8 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
         // Open bidirectional stream
         let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
 
-        // Serialize request
-        let request_bytes = postcard::to_stdvec(&request).context("failed to serialize request")?;
-
+        // Serialize and send request
+        let request_bytes = postcard::to_stdvec(request).context("failed to serialize request")?;
         send.write_all(&request_bytes).await.context("failed to send request")?;
         send.finish().context("failed to finish send stream")?;
 
@@ -275,9 +305,17 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
         // Close connection gracefully
         connection.close(VarInt::from_u32(0), b"done");
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        Ok(response)
+    }
 
-        // Check the response
+    /// Handle the RPC response and return success/failure.
+    fn transfer_handle_response(
+        &self,
+        response: aspen_client_api::ClientRpcResponse,
+        hash: &Hash,
+        target: &NodeInfo,
+        duration_ms: u64,
+    ) -> Result<bool> {
         match response {
             aspen_client_api::ClientRpcResponse::BlobReplicatePullResult(result) => {
                 if result.is_success {
@@ -310,15 +348,6 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
                 Err(anyhow::anyhow!("unexpected response type: {:?}", other))
             }
         }
-    }
-
-    async fn has_locally(&self, hash: &Hash) -> Result<bool> {
-        self.blob_store.has(hash).await.context("failed to check blob availability")
-    }
-
-    async fn get_size(&self, hash: &Hash) -> Result<Option<u64>> {
-        let status = self.blob_store.status(hash).await.context("failed to get blob status")?;
-        Ok(status.and_then(|s| s.size_bytes))
     }
 }
 
@@ -391,7 +420,7 @@ mod tests {
             let entries: Vec<_> = data
                 .iter()
                 .filter(|(k, _)| k.starts_with(&request.prefix))
-                .take(request.limit.unwrap_or(100) as usize)
+                .take(request.limit_results.unwrap_or(100) as usize)
                 .map(|(k, v)| aspen_core::kv::KeyValueWithRevision {
                     key: k.clone(),
                     value: v.clone(),
@@ -400,10 +429,10 @@ mod tests {
                     mod_revision: 1,
                 })
                 .collect();
-            let count = entries.len() as u32;
+            let result_count = entries.len() as u32;
             Ok(aspen_core::kv::ScanResult {
                 entries,
-                count,
+                result_count,
                 is_truncated: false,
                 continuation_token: None,
             })

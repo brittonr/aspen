@@ -486,7 +486,7 @@ async fn dns_set_zone(client: &AspenClient, args: SetZoneArgs, json: bool) -> Re
     let response = client
         .send(ClientRpcRequest::DnsSetZone {
             name: args.name.clone(),
-            enabled: !args.disabled,
+            is_enabled: !args.disabled,
             default_ttl_secs: args.default_ttl,
             description: args.description,
         })
@@ -575,7 +575,7 @@ async fn dns_delete_zone(client: &AspenClient, args: DeleteZoneArgs, json: bool)
     let response = client
         .send(ClientRpcRequest::DnsDeleteZone {
             name: args.name.clone(),
-            delete_records: args.delete_records,
+            should_delete_records: args.delete_records,
         })
         .await?;
 

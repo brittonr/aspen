@@ -443,7 +443,7 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
         let shards = self.shards.read().await;
 
         let mut all_entries = Vec::new();
-        let mut max_entries_per_shard = request.limit.unwrap_or(1000) / shard_ids.len().max(1) as u32;
+        let mut max_entries_per_shard = request.limit_results.unwrap_or(1000) / shard_ids.len().max(1) as u32;
         if max_entries_per_shard == 0 {
             max_entries_per_shard = 1;
         }
@@ -452,7 +452,7 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
             if let Some(shard) = shards.get(&shard_id) {
                 let shard_request = ScanRequest {
                     prefix: request.prefix.clone(),
-                    limit: Some(max_entries_per_shard),
+                    limit_results: Some(max_entries_per_shard),
                     continuation_token: None, // Can't use tokens across shards
                 };
 
@@ -472,7 +472,7 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
         all_entries.sort_by(|a, b| a.key.cmp(&b.key));
 
         // Apply overall limit
-        let limit = request.limit.unwrap_or(1000) as usize;
+        let limit = request.limit_results.unwrap_or(1000) as usize;
         if all_entries.len() > limit {
             all_entries.truncate(limit);
         }
@@ -484,11 +484,11 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
         } else {
             None
         };
-        let count = all_entries.len() as u32;
+        let result_count = all_entries.len() as u32;
 
         Ok(ScanResult {
             entries: all_entries,
-            count,
+            result_count,
             is_truncated,
             continuation_token,
         })

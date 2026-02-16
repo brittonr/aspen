@@ -1002,14 +1002,14 @@ mod tests {
         let result = store
             .scan(ScanRequest {
                 prefix: "".to_string(),
-                limit: Some(100),
+                limit_results: Some(100),
                 continuation_token: None,
             })
             .await
             .unwrap();
 
         // Should have stored metadata (layer, prefix, created_at for each directory)
-        assert!(result.count >= 6); // At least 3 keys per directory * 2 directories
+        assert!(result.result_count >= 6); // At least 3 keys per directory * 2 directories
     }
 
     #[tokio::test]
@@ -1039,7 +1039,7 @@ mod tests {
         let result = store
             .scan(ScanRequest {
                 prefix: start_str,
-                limit: Some(100),
+                limit_results: Some(100),
                 continuation_token: None,
             })
             .await

@@ -130,7 +130,7 @@ impl<K: KeyValueStore + ?Sized + 'static> ConsumerGroupManager<K> {
             .store
             .scan(aspen_core::kv::ScanRequest {
                 prefix,
-                limit: Some(MAX_CONSUMER_GROUPS as u32),
+                limit_results: Some(MAX_CONSUMER_GROUPS as u32),
                 continuation_token: None,
             })
             .await?;

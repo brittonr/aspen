@@ -6,7 +6,8 @@ use serde::Serialize;
 // Peer cluster operation response types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddPeerClusterResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub cluster_id: Option<String>,
     pub priority: Option<u32>,
     pub error: Option<String>,
@@ -14,7 +15,8 @@ pub struct AddPeerClusterResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemovePeerClusterResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub cluster_id: String,
     pub error: Option<String>,
 }
@@ -40,10 +42,12 @@ pub struct PeerClusterInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerClusterStatusResponse {
-    pub found: bool,
+    #[serde(rename = "found")]
+    pub was_found: bool,
     pub cluster_id: String,
     pub state: String,
-    pub syncing: bool,
+    #[serde(rename = "syncing")]
+    pub is_syncing: bool,
     pub entries_received: u64,
     pub entries_imported: u64,
     pub entries_skipped: u64,
@@ -53,7 +57,8 @@ pub struct PeerClusterStatusResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdatePeerClusterFilterResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub cluster_id: String,
     pub filter_type: Option<String>,
     pub error: Option<String>,
@@ -61,7 +66,8 @@ pub struct UpdatePeerClusterFilterResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdatePeerClusterPriorityResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub cluster_id: String,
     pub previous_priority: Option<u32>,
     pub new_priority: Option<u32>,
@@ -70,7 +76,8 @@ pub struct UpdatePeerClusterPriorityResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetPeerClusterEnabledResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub cluster_id: String,
     #[serde(rename = "enabled")]
     pub is_enabled: Option<bool>,
@@ -79,7 +86,8 @@ pub struct SetPeerClusterEnabledResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyOriginResultResponse {
-    pub found: bool,
+    #[serde(rename = "found")]
+    pub was_found: bool,
     pub key: String,
     pub cluster_id: Option<String>,
     pub priority: Option<u32>,
@@ -94,8 +102,10 @@ pub struct FederationStatusResponse {
     pub is_enabled: bool,
     pub cluster_name: String,
     pub cluster_key: String,
-    pub dht_enabled: bool,
-    pub gossip_enabled: bool,
+    #[serde(rename = "dht_enabled")]
+    pub is_dht_enabled: bool,
+    #[serde(rename = "gossip_enabled")]
+    pub is_gossip_enabled: bool,
     pub discovered_clusters: u32,
     pub federated_repos: u32,
     pub error: Option<String>,
@@ -119,7 +129,8 @@ pub struct DiscoveredClustersResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredClusterResponse {
-    pub found: bool,
+    #[serde(rename = "found")]
+    pub was_found: bool,
     pub cluster_key: Option<String>,
     pub name: Option<String>,
     pub node_count: Option<u32>,
@@ -130,19 +141,22 @@ pub struct DiscoveredClusterResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrustClusterResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UntrustClusterResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FederateRepositoryResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub fed_id: Option<String>,
     pub error: Option<String>,
 }
@@ -163,7 +177,8 @@ pub struct FederatedRepositoriesResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeFetchFederatedResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub remote_cluster: Option<String>,
     pub fetched: u32,
     pub already_present: u32,

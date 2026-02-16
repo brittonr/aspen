@@ -196,7 +196,7 @@ async fn test_blob_status_accuracy() {
         ClientRpcResponse::GetBlobStatusResult(result) => {
             assert!(result.was_found, "blob should be found");
             assert!(result.complete.unwrap_or(false), "blob should be complete");
-            assert_eq!(result.size, Some(SMALL_BLOB_CONTENT.len() as u64), "size should match");
+            assert_eq!(result.size_bytes, Some(SMALL_BLOB_CONTENT.len() as u64), "size should match");
         }
         _ => panic!("unexpected response"),
     }

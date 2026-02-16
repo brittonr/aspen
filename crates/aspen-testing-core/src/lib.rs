@@ -776,7 +776,7 @@ impl KeyValueStore for DeterministicKeyValueStore {
         let inner = self.inner.lock().await;
 
         // Apply Tiger Style bounded limit
-        let limit = request.limit.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
+        let limit = request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
 
         // Decode continuation token (format: base64(last_key))
         let start_after = request.continuation_token.as_ref().and_then(|token| {
@@ -823,11 +823,11 @@ impl KeyValueStore for DeterministicKeyValueStore {
             None
         };
 
-        let count = entries.len() as u32;
+        let result_count = entries.len() as u32;
 
         Ok(ScanResult {
             entries,
-            count,
+            result_count,
             is_truncated,
             continuation_token,
         })

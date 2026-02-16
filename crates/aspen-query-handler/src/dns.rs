@@ -72,18 +72,19 @@ impl RequestHandler for DnsHandler {
 
             ClientRpcRequest::DnsSetZone {
                 name,
-                enabled,
+                is_enabled,
                 default_ttl_secs,
                 description,
-            } => handle_dns_set_zone(ctx, name, enabled, default_ttl_secs, description).await,
+            } => handle_dns_set_zone(ctx, name, is_enabled, default_ttl_secs, description).await,
 
             ClientRpcRequest::DnsGetZone { name } => handle_dns_get_zone(ctx, name).await,
 
             ClientRpcRequest::DnsListZones => handle_dns_list_zones(ctx).await,
 
-            ClientRpcRequest::DnsDeleteZone { name, delete_records } => {
-                handle_dns_delete_zone(ctx, name, delete_records).await
-            }
+            ClientRpcRequest::DnsDeleteZone {
+                name,
+                should_delete_records,
+            } => handle_dns_delete_zone(ctx, name, should_delete_records).await,
 
             _ => Err(anyhow::anyhow!("request not handled by DnsHandler")),
         }

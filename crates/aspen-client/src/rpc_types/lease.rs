@@ -5,7 +5,8 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseGrantResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub lease_id: Option<u64>,
     pub ttl_seconds: Option<u32>,
     pub error: Option<String>,
@@ -13,14 +14,16 @@ pub struct LeaseGrantResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseRevokeResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub keys_deleted: Option<u32>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseKeepaliveResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub lease_id: Option<u64>,
     pub ttl_seconds: Option<u32>,
     pub error: Option<String>,
@@ -28,7 +31,8 @@ pub struct LeaseKeepaliveResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseTimeToLiveResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub lease_id: Option<u64>,
     pub granted_ttl_seconds: Option<u32>,
     pub remaining_ttl_seconds: Option<u32>,
@@ -38,7 +42,8 @@ pub struct LeaseTimeToLiveResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseListResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub leases: Option<Vec<LeaseInfo>>,
     pub error: Option<String>,
 }

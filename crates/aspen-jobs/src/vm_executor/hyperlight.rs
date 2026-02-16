@@ -243,11 +243,8 @@ impl HyperlightWorker {
         Ok(binary)
     }
 
-    /// Build a binary from an inline Nix expression.
-    async fn build_from_nix_expr(&self, content: &str) -> Result<Vec<u8>> {
-        info!("Building from inline Nix expression");
-
-        // Write to temporary file
+    /// Create a temporary file with the given Nix expression content.
+    async fn build_from_nix_expr_create_temp(content: &str) -> Result<NamedTempFile> {
         let temp_file = NamedTempFile::new().map_err(|e| JobError::BuildFailed {
             reason: format!("Failed to create temp file: {}", e),
         })?;
@@ -256,7 +253,13 @@ impl HyperlightWorker {
             reason: format!("Failed to write Nix expression: {}", e),
         })?;
 
-        // Build with streaming stderr and timeout
+        Ok(temp_file)
+    }
+
+    /// Spawn nix-build process and return the child process and stderr lines reader.
+    fn build_from_nix_expr_spawn(
+        temp_file: &NamedTempFile,
+    ) -> Result<(tokio::process::Child, tokio::io::Lines<BufReader<tokio::process::ChildStderr>>)> {
         let mut child = tokio::process::Command::new("nix-build")
             .arg(temp_file.path())
             .arg("--no-out-link")
@@ -267,23 +270,19 @@ impl HyperlightWorker {
                 reason: format!("Failed to spawn nix-build: {}", e),
             })?;
 
-        // Stream stderr for build progress
         let stderr = child.stderr.take().ok_or_else(|| JobError::BuildFailed {
             reason: "stderr not available after spawn".to_string(),
         })?;
-        let mut stderr_lines = BufReader::new(stderr).lines();
+        let stderr_lines = BufReader::new(stderr).lines();
 
-        let stderr_task = tokio::spawn(async move {
-            let mut collected_stderr = String::new();
-            while let Ok(Some(line)) = stderr_lines.next_line().await {
-                debug!(build_output = %line, "nix-build progress");
-                collected_stderr.push_str(&line);
-                collected_stderr.push('\n');
-            }
-            collected_stderr
-        });
+        Ok((child, stderr_lines))
+    }
 
-        // Wait for build with timeout
+    /// Wait for nix-build process with timeout and return output.
+    async fn build_from_nix_expr_wait(
+        child: tokio::process::Child,
+        stderr_task: tokio::task::JoinHandle<String>,
+    ) -> Result<std::process::Output> {
         let wait_result = tokio::time::timeout(NIX_BUILD_TIMEOUT, child.wait_with_output()).await;
 
         let output = match wait_result {
@@ -301,7 +300,6 @@ impl HyperlightWorker {
             }
         };
 
-        // Wait for stderr collection
         let collected_stderr = stderr_task.await.unwrap_or_default();
 
         if !output.status.success() {
@@ -315,32 +313,36 @@ impl HyperlightWorker {
             });
         }
 
+        Ok(output)
+    }
+
+    /// Build a binary from an inline Nix expression.
+    async fn build_from_nix_expr(&self, content: &str) -> Result<Vec<u8>> {
+        info!("Building from inline Nix expression");
+
+        // Create temp file with content
+        let temp_file = Self::build_from_nix_expr_create_temp(content).await?;
+
+        // Spawn nix-build process
+        let (child, mut stderr_lines) = Self::build_from_nix_expr_spawn(&temp_file)?;
+
+        // Spawn task to collect stderr
+        let stderr_task = tokio::spawn(async move {
+            let mut collected_stderr = String::new();
+            while let Ok(Some(line)) = stderr_lines.next_line().await {
+                debug!(build_output = %line, "nix-build progress");
+                collected_stderr.push_str(&line);
+                collected_stderr.push('\n');
+            }
+            collected_stderr
+        });
+
+        // Wait for build with timeout
+        let output = Self::build_from_nix_expr_wait(child, stderr_task).await?;
+
+        // Extract store path and read binary
         let store_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-        // Find the binary
-        let binary_path = format!("{}/bin/*", store_path);
-        let glob_pattern = glob::glob(&binary_path).map_err(|e| JobError::BuildFailed {
-            reason: format!("Invalid glob pattern: {}", e),
-        })?;
-
-        let binary_file = glob_pattern.filter_map(|p| p.ok()).next().ok_or_else(|| JobError::BuildFailed {
-            reason: format!("No binary found in {}/bin/", store_path),
-        })?;
-
-        // Read the binary
-        let binary = fs::read(&binary_file).await.map_err(|e| JobError::BuildFailed {
-            reason: format!("Failed to read binary: {}", e),
-        })?;
-
-        // Check size
-        if binary.len() > MAX_BINARY_SIZE {
-            return Err(JobError::BinaryTooLarge {
-                size_bytes: binary.len() as u64,
-                max_bytes: MAX_BINARY_SIZE as u64,
-            });
-        }
-
-        Ok(binary)
+        Self::build_from_nix_read_binary(&store_path).await
     }
 
     /// Execute a native binary in a micro-VM.

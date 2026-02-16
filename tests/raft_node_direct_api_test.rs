@@ -418,7 +418,7 @@ async fn test_scan_with_prefix() {
     // Scan for users
     let scan_request = ScanRequest {
         prefix: "users/".to_string(),
-        limit: None,
+        limit_results: None,
         continuation_token: None,
     };
 
@@ -426,7 +426,7 @@ async fn test_scan_with_prefix() {
     assert!(scan_result.is_ok(), "scan failed: {:?}", scan_result);
 
     let result = scan_result.unwrap();
-    assert_eq!(result.count, 3);
+    assert_eq!(result.result_count, 3);
     assert!(!result.is_truncated);
     assert!(result.continuation_token.is_none());
 
@@ -460,35 +460,35 @@ async fn test_scan_pagination() {
     // Scan with limit of 2
     let scan_request = ScanRequest {
         prefix: "item/".to_string(),
-        limit: Some(2),
+        limit_results: Some(2),
         continuation_token: None,
     };
 
     let scan_result = raft_node.scan(scan_request).await.unwrap();
-    assert_eq!(scan_result.count, 2);
+    assert_eq!(scan_result.result_count, 2);
     assert!(scan_result.is_truncated);
     assert!(scan_result.continuation_token.is_some());
 
     // Get next page
     let scan_request2 = ScanRequest {
         prefix: "item/".to_string(),
-        limit: Some(2),
+        limit_results: Some(2),
         continuation_token: scan_result.continuation_token,
     };
 
     let scan_result2 = raft_node.scan(scan_request2).await.unwrap();
-    assert_eq!(scan_result2.count, 2);
+    assert_eq!(scan_result2.result_count, 2);
     assert!(scan_result2.is_truncated);
 
     // Get final page
     let scan_request3 = ScanRequest {
         prefix: "item/".to_string(),
-        limit: Some(2),
+        limit_results: Some(2),
         continuation_token: scan_result2.continuation_token,
     };
 
     let scan_result3 = raft_node.scan(scan_request3).await.unwrap();
-    assert_eq!(scan_result3.count, 1);
+    assert_eq!(scan_result3.result_count, 1);
     assert!(!scan_result3.is_truncated);
     assert!(scan_result3.continuation_token.is_none());
 

@@ -5,7 +5,8 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchCreateResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub watch_id: Option<u64>,
     pub current_index: Option<u64>,
     pub error: Option<String>,
@@ -13,14 +14,16 @@ pub struct WatchCreateResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchCancelResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub watch_id: u64,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchStatusResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub watches: Option<Vec<WatchInfo>>,
     pub error: Option<String>,
 }

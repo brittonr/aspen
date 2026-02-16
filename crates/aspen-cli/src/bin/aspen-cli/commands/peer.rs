@@ -564,7 +564,7 @@ async fn peer_enable(client: &AspenClient, args: EnableArgs, json: bool) -> Resu
     let response = client
         .send(ClientRpcRequest::SetPeerClusterEnabled {
             cluster_id: args.cluster_id.clone(),
-            enabled: true,
+            is_enabled: true,
         })
         .await?;
 
@@ -591,7 +591,7 @@ async fn peer_disable(client: &AspenClient, args: DisableArgs, json: bool) -> Re
     let response = client
         .send(ClientRpcRequest::SetPeerClusterEnabled {
             cluster_id: args.cluster_id.clone(),
-            enabled: false,
+            is_enabled: false,
         })
         .await?;
 

@@ -201,7 +201,7 @@ impl<KV: KeyValueStore + ?Sized + 'static> DnsStore for AspenDnsStore<KV> {
             .kv
             .scan(ScanRequest {
                 prefix,
-                limit: Some(100), // MAX_RECORDS_PER_DOMAIN
+                limit_results: Some(100), // MAX_RECORDS_PER_DOMAIN
                 continuation_token: None,
             })
             .await?;
@@ -322,7 +322,7 @@ impl<KV: KeyValueStore + ?Sized + 'static> DnsStore for AspenDnsStore<KV> {
             .kv
             .scan(ScanRequest {
                 prefix: DNS_ZONE_PREFIX.to_string(),
-                limit: Some(MAX_ZONES),
+                limit_results: Some(MAX_ZONES),
                 continuation_token: None,
             })
             .await?;
@@ -355,7 +355,7 @@ impl<KV: KeyValueStore + ?Sized + 'static> DnsStore for AspenDnsStore<KV> {
                     .kv
                     .scan(ScanRequest {
                         prefix: prefix.clone(),
-                        limit: Some(MAX_BATCH_SIZE),
+                        limit_results: Some(MAX_BATCH_SIZE),
                         continuation_token: continuation_token.clone(),
                     })
                     .await?;
@@ -435,7 +435,7 @@ impl<KV: KeyValueStore + ?Sized + 'static> DnsStore for AspenDnsStore<KV> {
             .kv
             .scan(ScanRequest {
                 prefix: scan_prefix,
-                limit: Some(limit),
+                limit_results: Some(limit),
                 continuation_token: None,
             })
             .await?;

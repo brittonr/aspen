@@ -611,7 +611,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
             .kv
             .scan(aspen_core::ScanRequest {
                 prefix: KV_PREFIX_FEDERATION_SETTINGS.to_string(),
-                limit: Some(10_000), // Tiger Style: bounded scan
+                limit_results: Some(10_000), // Tiger Style: bounded scan
                 continuation_token: None,
             })
             .await?;
@@ -652,7 +652,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
             .kv
             .scan(aspen_core::ScanRequest {
                 prefix: KV_PREFIX_FEDERATION_SETTINGS.to_string(),
-                limit: Some(limit),
+                limit_results: Some(limit),
                 continuation_token: start_after,
             })
             .await?;

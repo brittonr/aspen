@@ -96,7 +96,7 @@ impl DocsExporter {
             let result = kv_store
                 .scan(ScanRequest {
                     prefix: String::new(), // All keys
-                    limit: Some(EXPORT_BATCH_SIZE),
+                    limit_results: Some(EXPORT_BATCH_SIZE),
                     continuation_token: continuation_token.clone(),
                 })
                 .await

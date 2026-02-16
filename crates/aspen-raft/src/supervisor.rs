@@ -156,7 +156,7 @@ impl Supervisor {
     fn get_backoff(&self) -> Duration {
         use crate::verified::calculate_backoff_duration;
 
-        let count = self.restart_count.load(Ordering::Acquire) as usize;
+        let count = self.restart_count.load(Ordering::Acquire);
         calculate_backoff_duration(count, &BACKOFF_DURATIONS)
     }
 

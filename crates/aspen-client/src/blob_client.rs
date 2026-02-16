@@ -132,7 +132,7 @@ impl<'a> BlobClient<'a> {
                 if result.is_success {
                     Ok(BlobUploadResult {
                         hash: result.hash.context("Blob uploaded but no hash returned")?,
-                        size_bytes: result.size.context("Blob uploaded but no size returned")?,
+                        size_bytes: result.size_bytes.context("Blob uploaded but no size returned")?,
                         was_new: result.was_new.unwrap_or(true),
                     })
                 } else {
@@ -211,7 +211,7 @@ impl<'a> BlobClient<'a> {
             ClientRpcResponse::DownloadBlobResult(result) => {
                 if result.is_success {
                     let hash = result.hash.context("Blob downloaded but no hash returned")?;
-                    let _size = result.size.context("Blob downloaded but no size returned")?;
+                    let _size = result.size_bytes.context("Blob downloaded but no size returned")?;
 
                     // Now fetch the actual data
                     if let Some(download) = self.download(&hash).await? {
@@ -314,7 +314,7 @@ impl<'a> BlobClient<'a> {
                 if result.was_found {
                     Ok(Some(BlobStatus {
                         hash: result.hash.context("Status found but no hash returned")?,
-                        size_bytes: result.size,
+                        size_bytes: result.size_bytes,
                         is_complete: result.complete.unwrap_or(false),
                         tags: result.tags.unwrap_or_default(),
                     }))
@@ -491,7 +491,7 @@ mod rpc_blob_store {
                             message: "Blob uploaded but no hash returned".to_string(),
                         })?;
                         let hash = Self::parse_hash(&hash_str)?;
-                        let size = result.size.unwrap_or(data.len() as u64);
+                        let size = result.size_bytes.unwrap_or(data.len() as u64);
                         Ok(AddBlobResult {
                             blob_ref: BlobRef::new(hash, size, BlobFormat::Raw),
                             was_new: result.was_new.unwrap_or(true),
@@ -637,7 +637,7 @@ mod rpc_blob_store {
                     if result.was_found {
                         Ok(Some(BlobStatus {
                             hash: *hash,
-                            size_bytes: result.size,
+                            size_bytes: result.size_bytes,
                             is_complete: result.complete.unwrap_or(false),
                             tags: result.tags.unwrap_or_default(),
                         }))
@@ -716,7 +716,7 @@ mod rpc_blob_store {
                         let hash = Self::parse_hash(&hash_str).map_err(|e| BlobStoreError::Download {
                             message: format!("{}", e),
                         })?;
-                        let size = result.size.unwrap_or(0);
+                        let size = result.size_bytes.unwrap_or(0);
                         Ok(BlobRef::new(hash, size, BlobFormat::Raw))
                     } else {
                         Err(BlobStoreError::Download {

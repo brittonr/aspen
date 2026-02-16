@@ -28,7 +28,8 @@ pub enum DnsRequest {
     /// Create or update a DNS zone.
     DnsSetZone {
         name: String,
-        enabled: bool,
+        #[serde(rename = "enabled")]
+        is_enabled: bool,
         default_ttl_secs: u32,
         description: Option<String>,
     },
@@ -37,7 +38,11 @@ pub enum DnsRequest {
     /// List all DNS zones.
     DnsListZones,
     /// Delete a DNS zone.
-    DnsDeleteZone { name: String, delete_records: bool },
+    DnsDeleteZone {
+        name: String,
+        #[serde(rename = "delete_records")]
+        should_delete_records: bool,
+    },
 }
 
 impl DnsRequest {

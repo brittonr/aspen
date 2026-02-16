@@ -273,7 +273,7 @@ impl IrohBlobStore {
 
         // Emit event if broadcaster is configured
         if let Some(broadcaster) = &self.broadcaster {
-            let content = if bytes.len() <= INLINE_BLOB_THRESHOLD {
+            let content = if bytes.len() <= INLINE_BLOB_THRESHOLD as usize {
                 Some(bytes.as_ref())
             } else {
                 None
@@ -540,7 +540,7 @@ impl BlobTransfer for IrohBlobStore {
 
         // Emit event if broadcaster is configured
         if let Some(broadcaster) = &self.broadcaster {
-            let content = if bytes.len() <= INLINE_BLOB_THRESHOLD {
+            let content = if bytes.len() <= INLINE_BLOB_THRESHOLD as usize {
                 Some(bytes.as_ref())
             } else {
                 None

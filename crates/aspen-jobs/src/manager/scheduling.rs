@@ -112,7 +112,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             .store
             .scan(aspen_core::ScanRequest {
                 prefix: prefix.to_string(),
-                limit: Some(self.config.max_schedule_per_tick),
+                limit_results: Some(self.config.max_schedule_per_tick),
                 continuation_token: None,
             })
             .await

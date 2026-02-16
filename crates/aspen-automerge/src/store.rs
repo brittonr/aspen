@@ -389,7 +389,7 @@ impl<KV: KeyValueStore + ?Sized + 'static> DocumentStore for AspenAutomergeStore
             .kv
             .scan(ScanRequest {
                 prefix: DOC_META_PREFIX.to_string(),
-                limit: Some(limit),
+                limit_results: Some(limit),
                 continuation_token: options.continuation_token,
             })
             .await?;
@@ -428,7 +428,7 @@ impl<KV: KeyValueStore + ?Sized + 'static> DocumentStore for AspenAutomergeStore
             .kv
             .scan(ScanRequest {
                 prefix: DOC_KEY_PREFIX.to_string(),
-                limit: Some(limit),
+                limit_results: Some(limit),
                 continuation_token: None,
             })
             .await?;

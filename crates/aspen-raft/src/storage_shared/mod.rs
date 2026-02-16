@@ -906,7 +906,7 @@ mod tests {
         let db_path = temp_dir.path().join("test_broadcast.redb");
 
         // Create broadcast channel
-        let (sender, mut receiver) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
+        let (sender, mut receiver) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE as usize);
 
         // Create storage with broadcast
         let mut storage = SharedRedbStorage::with_broadcast(&db_path, Some(sender), "test-node-1").unwrap();

@@ -5,7 +5,8 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsSetResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub key: Option<String>,
     #[serde(rename = "size")]
     pub size_bytes: Option<u64>,
@@ -14,7 +15,8 @@ pub struct DocsSetResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsGetResultResponse {
-    pub found: bool,
+    #[serde(rename = "found")]
+    pub was_found: bool,
     pub value: Option<Vec<u8>>,
     #[serde(rename = "size")]
     pub size_bytes: Option<u64>,
@@ -23,7 +25,8 @@ pub struct DocsGetResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsDeleteResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
@@ -50,6 +53,7 @@ pub struct DocsStatusResultResponse {
     pub namespace_id: Option<String>,
     pub author_id: Option<String>,
     pub entry_count: Option<u64>,
-    pub replica_open: Option<bool>,
+    #[serde(rename = "replica_open")]
+    pub is_replica_open: Option<bool>,
     pub error: Option<String>,
 }

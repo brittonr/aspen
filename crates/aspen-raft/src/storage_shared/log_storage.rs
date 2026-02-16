@@ -299,81 +299,26 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
     ///   indices <= purge_index. This is ensured by the retain() call that removes purged
     ///   responses.
     async fn purge(&mut self, log_id: LogIdOf<AppTypeConfig>) -> Result<(), io::Error> {
-        // =========================================================================
-        // INVARIANT 6 (Monotonic Purge):
-        // Verify purge is monotonic - new purge index must be >= previous.
-        // This check enforces the invariant and will reject invalid requests.
-        // =========================================================================
-        if let Some(prev) = self.read_raft_meta::<LogIdOf<AppTypeConfig>>("last_purged_log_id")?
-            && prev > log_id
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("purge must be monotonic: prev={:?}, new={:?}", prev, log_id),
-            ));
-        }
+        // INVARIANT 6 (Monotonic Purge): Verify purge is monotonic
+        self.purge_check_monotonicity(&log_id)?;
 
-        // =========================================================================
-        // GHOST: Capture pre-state for verification
-        // =========================================================================
         ghost! {
             let _ghost_pre_last_purged = Ghost::<Option<u64>>::new(None);
             let _ghost_new_purge_index = Ghost::<u64>::new(log_id.index());
         }
 
-        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
-        {
-            let mut log_table = write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
-            let mut hash_table = write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
-
-            // Collect keys to remove
-            let keys: Vec<u64> = log_table
-                .range(..=log_id.index())
-                .context(RangeSnafu)?
-                .map(|item| {
-                    let (key, _) = item.context(GetSnafu)?;
-                    Ok::<_, SharedStorageError>(key.value())
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            for key in &keys {
-                log_table.remove(*key).context(RemoveSnafu)?;
-                hash_table.remove(*key).context(RemoveSnafu)?;
-            }
-        }
-        write_txn.commit().context(CommitSnafu)?;
-
-        // =========================================================================
-        // INVARIANT 4 (Response Cache Consistency):
-        // Clean up pending responses for purged log entries.
-        // After this, no responses exist for indices <= log_id.index().
-        // =========================================================================
-        {
-            let mut pending_responses =
-                self.pending_responses.write().map_err(|_| SharedStorageError::LockPoisoned {
-                    context: "writing pending_responses during purge".into(),
-                })?;
-            // Remove all responses for indices <= purge index
-            pending_responses.retain(|&idx, _| idx > log_id.index());
-        }
-
+        self.purge_remove_entries_from_tables(&log_id)?;
+        self.purge_clean_pending_responses(&log_id)?;
         self.write_raft_meta("last_purged_log_id", &log_id)?;
 
-        // =========================================================================
-        // GHOST: Verify post-conditions
-        // =========================================================================
         proof! {
             // INVARIANT 6 (Monotonic Purge):
             // The check at the start ensures prev_purged <= log_id.index().
             // We then set last_purged = log_id.
             // Therefore: pre.last_purged <= post.last_purged (monotonic).
-            // This matches the purge_monotonic predicate in verus/purge.rs.
 
             // INVARIANT 4 (Response Cache Consistency):
             // After retain(), all remaining response indices > log_id.index().
-            // Since last_applied >= last_purged (by Raft semantics),
-            // all cached responses have index <= last_applied.
-            // Therefore response_cache_consistent holds.
         }
 
         Ok(())
@@ -572,6 +517,67 @@ impl SharedRedbStorage {
         for (index, response) in pending_response_batch {
             pending_responses.insert(index, response);
         }
+        Ok(())
+    }
+
+    // ====================================================================================
+    // Purge Helper Functions
+    // ====================================================================================
+
+    /// Check that purge is monotonic (INVARIANT 6).
+    fn purge_check_monotonicity(&self, log_id: &LogIdOf<AppTypeConfig>) -> Result<(), io::Error> {
+        if let Some(prev) = self.read_raft_meta::<LogIdOf<AppTypeConfig>>("last_purged_log_id")?
+            && prev > *log_id
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("purge must be monotonic: prev={:?}, new={:?}", prev, log_id),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Remove log and hash entries from tables up to and including the given log ID.
+    fn purge_remove_entries_from_tables(&self, log_id: &LogIdOf<AppTypeConfig>) -> Result<(), io::Error> {
+        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
+        {
+            let mut log_table = write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+            let mut hash_table = write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
+
+            let keys = self.purge_collect_keys_to_remove(&log_table, log_id.index())?;
+
+            for key in &keys {
+                log_table.remove(*key).context(RemoveSnafu)?;
+                hash_table.remove(*key).context(RemoveSnafu)?;
+            }
+        }
+        write_txn.commit().context(CommitSnafu)?;
+        Ok(())
+    }
+
+    /// Collect keys to remove during purge operation.
+    fn purge_collect_keys_to_remove(
+        &self,
+        log_table: &redb::Table<u64, &[u8]>,
+        purge_index: u64,
+    ) -> Result<Vec<u64>, io::Error> {
+        log_table
+            .range(..=purge_index)
+            .context(RangeSnafu)?
+            .map(|item| {
+                let (key, _) = item.context(GetSnafu)?;
+                Ok::<_, SharedStorageError>(key.value())
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.into())
+    }
+
+    /// Clean pending responses for purged log entries (INVARIANT 4).
+    fn purge_clean_pending_responses(&self, log_id: &LogIdOf<AppTypeConfig>) -> Result<(), io::Error> {
+        let mut pending_responses = self.pending_responses.write().map_err(|_| SharedStorageError::LockPoisoned {
+            context: "writing pending_responses during purge".into(),
+        })?;
+        pending_responses.retain(|&idx, _| idx > log_id.index());
         Ok(())
     }
 }

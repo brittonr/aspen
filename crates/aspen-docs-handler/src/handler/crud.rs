@@ -50,7 +50,7 @@ async fn handle_docs_set(
         return Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
             is_success: false,
             key: None,
-            size: None,
+            size_bytes: None,
             error: Some("docs not enabled".to_string()),
         }));
     };
@@ -60,7 +60,7 @@ async fn handle_docs_set(
         Ok(()) => Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
             is_success: true,
             key: Some(key),
-            size: Some(value_len),
+            size_bytes: Some(value_len),
             error: None,
         })),
         Err(e) => {
@@ -68,7 +68,7 @@ async fn handle_docs_set(
             Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
                 is_success: false,
                 key: Some(key),
-                size: None,
+                size_bytes: None,
                 error: Some("docs operation failed".to_string()),
             }))
         }
@@ -80,7 +80,7 @@ async fn handle_docs_get(ctx: &ClientProtocolContext, key: String) -> anyhow::Re
         return Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
             was_found: false,
             value: None,
-            size: None,
+            size_bytes: None,
             error: Some("docs not enabled".to_string()),
         }));
     };
@@ -89,13 +89,13 @@ async fn handle_docs_get(ctx: &ClientProtocolContext, key: String) -> anyhow::Re
         Ok(Some((value, size, _hash))) => Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
             was_found: true,
             value: Some(value),
-            size: Some(size),
+            size_bytes: Some(size),
             error: None,
         })),
         Ok(None) => Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
             was_found: false,
             value: None,
-            size: None,
+            size_bytes: None,
             error: None,
         })),
         Err(e) => {
@@ -103,7 +103,7 @@ async fn handle_docs_get(ctx: &ClientProtocolContext, key: String) -> anyhow::Re
             Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
                 was_found: false,
                 value: None,
-                size: None,
+                size_bytes: None,
                 error: Some("docs operation failed".to_string()),
             }))
         }

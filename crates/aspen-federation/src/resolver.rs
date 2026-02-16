@@ -235,7 +235,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Di
             let prefix = Self::derive_prefix(fed_id);
             let scan_req = ScanRequest {
                 prefix: prefix.clone(),
-                limit: Some(1),
+                limit_results: Some(1),
                 continuation_token: None,
             };
 
@@ -259,7 +259,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Di
         let heads_prefix = format!("{}heads:", prefix);
         let scan_req = ScanRequest {
             prefix: heads_prefix.clone(),
-            limit: Some(1000), // Reasonable limit for refs
+            limit_results: Some(1000), // Reasonable limit for refs
             continuation_token: None,
         };
 
@@ -327,7 +327,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Di
 
             let scan_req = ScanRequest {
                 prefix: type_prefix.clone(),
-                limit: Some(remaining as u32),
+                limit_results: Some(remaining as u32),
                 continuation_token: None,
             };
 
@@ -375,7 +375,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Di
         let prefix = Self::derive_prefix(fed_id);
         let scan_req = ScanRequest {
             prefix,
-            limit: Some(1),
+            limit_results: Some(1),
             continuation_token: None,
         };
 
@@ -475,7 +475,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Sh
             let prefix = Self::derive_prefix(fed_id);
             let scan_req = ScanRequest {
                 prefix: prefix.clone(),
-                limit: Some(1),
+                limit_results: Some(1),
                 continuation_token: None,
             };
 
@@ -499,7 +499,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Sh
         let heads_prefix = format!("{}heads:", prefix);
         let scan_req = ScanRequest {
             prefix: heads_prefix.clone(),
-            limit: Some(1000),
+            limit_results: Some(1000),
             continuation_token: None,
         };
 
@@ -561,7 +561,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Sh
 
             let scan_req = ScanRequest {
                 prefix: type_prefix.clone(),
-                limit: Some(remaining as u32),
+                limit_results: Some(remaining as u32),
                 continuation_token: None,
             };
 
@@ -605,7 +605,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Sh
         let prefix = Self::derive_prefix(fed_id);
         let scan_req = ScanRequest {
             prefix,
-            limit: Some(1),
+            limit_results: Some(1),
             continuation_token: None,
         };
 

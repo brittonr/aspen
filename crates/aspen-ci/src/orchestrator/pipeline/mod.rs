@@ -467,7 +467,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
 
         let scan_request = ScanRequest {
             prefix,
-            limit: Some(limit * 2), // Fetch extra for filtering
+            limit_results: Some(limit * 2), // Fetch extra for filtering
             continuation_token: None,
         };
 

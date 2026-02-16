@@ -182,91 +182,105 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
         })
     }
 
+    /// Build SQL for success rate query.
+    fn build_sql_success_rate(&self, job_type: Option<&String>, time_window: &TimeWindow) -> String {
+        let time_filter = self.build_time_filter(time_window);
+        let type_filter = job_type.map(|t| format!(" AND job_type = '{}'", t)).unwrap_or_default();
+
+        format!(
+            "SELECT
+                COUNT(CASE WHEN status = 'Completed' THEN 1 END) * 100.0 / COUNT(*) as success_rate,
+                COUNT(*) as total_jobs
+             FROM jobs
+             WHERE {}{}",
+            time_filter, type_filter
+        )
+    }
+
+    /// Build SQL for average duration query.
+    fn build_sql_average_duration(&self, job_type: Option<&String>, status: Option<&JobStatus>) -> String {
+        let type_filter = job_type.map(|t| format!(" WHERE job_type = '{}'", t)).unwrap_or_default();
+        let status_filter = status.map(|s| format!(" AND status = '{:?}'", s)).unwrap_or_default();
+
+        format!(
+            "SELECT
+                AVG(duration_ms) as avg_duration,
+                MIN(duration_ms) as min_duration,
+                MAX(duration_ms) as max_duration,
+                COUNT(*) as job_count
+             FROM jobs{}{}",
+            type_filter, status_filter
+        )
+    }
+
+    /// Build SQL for throughput query.
+    fn build_sql_throughput(&self, time_window: &TimeWindow) -> String {
+        let time_filter = self.build_time_filter(time_window);
+        format!(
+            "SELECT
+                COUNT(*) / {} as jobs_per_second,
+                COUNT(*) as total_jobs
+             FROM jobs
+             WHERE {}",
+            self.get_window_seconds(time_window),
+            time_filter
+        )
+    }
+
+    /// Build SQL for queue depth query.
+    fn build_sql_queue_depth(&self, priority: Option<&crate::types::Priority>) -> String {
+        let priority_filter = priority.map(|p| format!(" WHERE priority = '{:?}'", p)).unwrap_or_default();
+
+        format!(
+            "SELECT
+                COUNT(*) as queued_jobs,
+                priority
+             FROM jobs
+             WHERE status = 'Queued'{}
+             GROUP BY priority",
+            priority_filter
+        )
+    }
+
+    /// Build SQL for failure analysis query.
+    fn build_sql_failure_analysis(&self, time_window: &TimeWindow, group_by: &GroupBy) -> String {
+        let time_filter = self.build_time_filter(time_window);
+        let group_field = match group_by {
+            GroupBy::JobType => "job_type",
+            GroupBy::Worker => "worker_id",
+            GroupBy::ErrorType => "error_type",
+            GroupBy::Hour => "DATE_TRUNC('hour', created_at)",
+            GroupBy::Day => "DATE_TRUNC('day', created_at)",
+        };
+
+        format!(
+            "SELECT
+                {} as group_key,
+                COUNT(*) as failure_count,
+                COUNT(*) * 100.0 / SUM(COUNT(*)) OVER() as failure_percentage
+             FROM jobs
+             WHERE status = 'Failed' AND {}
+             GROUP BY {}
+             ORDER BY failure_count DESC",
+            group_field, time_filter, group_field
+        )
+    }
+
     /// Build SQL query from analytics query.
     fn build_sql(&self, query: &AnalyticsQuery) -> Result<String> {
         let sql = match query {
             AnalyticsQuery::SuccessRate { job_type, time_window } => {
-                let time_filter = self.build_time_filter(time_window);
-                let type_filter = job_type.as_ref().map(|t| format!(" AND job_type = '{}'", t)).unwrap_or_default();
-
-                format!(
-                    "SELECT
-                        COUNT(CASE WHEN status = 'Completed' THEN 1 END) * 100.0 / COUNT(*) as success_rate,
-                        COUNT(*) as total_jobs
-                     FROM jobs
-                     WHERE {}{}",
-                    time_filter, type_filter
-                )
+                self.build_sql_success_rate(job_type.as_ref(), time_window)
             }
-
             AnalyticsQuery::AverageDuration { job_type, status } => {
-                let type_filter = job_type.as_ref().map(|t| format!(" WHERE job_type = '{}'", t)).unwrap_or_default();
-                let status_filter = status.as_ref().map(|s| format!(" AND status = '{:?}'", s)).unwrap_or_default();
-
-                format!(
-                    "SELECT
-                        AVG(duration_ms) as avg_duration,
-                        MIN(duration_ms) as min_duration,
-                        MAX(duration_ms) as max_duration,
-                        COUNT(*) as job_count
-                     FROM jobs{}{}",
-                    type_filter, status_filter
-                )
+                self.build_sql_average_duration(job_type.as_ref(), status.as_ref())
             }
-
-            AnalyticsQuery::Throughput { time_window } => {
-                let time_filter = self.build_time_filter(time_window);
-                format!(
-                    "SELECT
-                        COUNT(*) / {} as jobs_per_second,
-                        COUNT(*) as total_jobs
-                     FROM jobs
-                     WHERE {}",
-                    self.get_window_seconds(time_window),
-                    time_filter
-                )
-            }
-
-            AnalyticsQuery::QueueDepth { priority } => {
-                let priority_filter =
-                    priority.as_ref().map(|p| format!(" WHERE priority = '{:?}'", p)).unwrap_or_default();
-
-                format!(
-                    "SELECT
-                        COUNT(*) as queued_jobs,
-                        priority
-                     FROM jobs
-                     WHERE status = 'Queued'{}
-                     GROUP BY priority",
-                    priority_filter
-                )
-            }
-
+            AnalyticsQuery::Throughput { time_window } => self.build_sql_throughput(time_window),
+            AnalyticsQuery::QueueDepth { priority } => self.build_sql_queue_depth(priority.as_ref()),
             AnalyticsQuery::FailureAnalysis { time_window, group_by } => {
-                let time_filter = self.build_time_filter(time_window);
-                let group_field = match group_by {
-                    GroupBy::JobType => "job_type",
-                    GroupBy::Worker => "worker_id",
-                    GroupBy::ErrorType => "error_type",
-                    GroupBy::Hour => "DATE_TRUNC('hour', created_at)",
-                    GroupBy::Day => "DATE_TRUNC('day', created_at)",
-                };
-
-                format!(
-                    "SELECT
-                        {} as group_key,
-                        COUNT(*) as failure_count,
-                        COUNT(*) * 100.0 / SUM(COUNT(*)) OVER() as failure_percentage
-                     FROM jobs
-                     WHERE status = 'Failed' AND {}
-                     GROUP BY {}
-                     ORDER BY failure_count DESC",
-                    group_field, time_filter, group_field
-                )
+                self.build_sql_failure_analysis(time_window, group_by)
             }
-
             AnalyticsQuery::Custom { sql } => sql.clone(),
-
             _ => "SELECT 1".to_string(),
         };
 

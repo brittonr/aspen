@@ -164,7 +164,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             .store
             .scan(aspen_core::ScanRequest {
                 prefix,
-                limit: Some(MAX_STEAL_HINTS_PER_WORKER),
+                limit_results: Some(MAX_STEAL_HINTS_PER_WORKER),
                 continuation_token: None,
             })
             .await?;
@@ -248,7 +248,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             .store
             .scan(aspen_core::ScanRequest {
                 prefix: verified::STEAL_HINT_PREFIX.to_string(),
-                limit: Some(MAX_HINT_CLEANUP_BATCH),
+                limit_results: Some(MAX_HINT_CLEANUP_BATCH),
                 continuation_token: None,
             })
             .await?;
@@ -285,7 +285,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             .store
             .scan(aspen_core::ScanRequest {
                 prefix: verified::STEAL_HINT_PREFIX.to_string(),
-                limit: Some(MAX_HINT_CLEANUP_BATCH),
+                limit_results: Some(MAX_HINT_CLEANUP_BATCH),
                 continuation_token: None,
             })
             .await?;

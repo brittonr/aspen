@@ -43,8 +43,8 @@ impl PeerConfigHandler {
             ClientRpcRequest::UpdatePeerClusterPriority { cluster_id, priority } => {
                 handle_update_peer_cluster_priority(ctx, cluster_id, priority).await
             }
-            ClientRpcRequest::SetPeerClusterEnabled { cluster_id, enabled } => {
-                handle_set_peer_cluster_enabled(ctx, cluster_id, enabled).await
+            ClientRpcRequest::SetPeerClusterEnabled { cluster_id, is_enabled } => {
+                handle_set_peer_cluster_enabled(ctx, cluster_id, is_enabled).await
             }
             _ => Err(anyhow::anyhow!("request not handled by PeerConfigHandler")),
         }

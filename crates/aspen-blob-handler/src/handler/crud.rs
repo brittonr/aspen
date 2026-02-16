@@ -25,7 +25,7 @@ pub(crate) async fn handle_add_blob(
         return Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
             is_success: false,
             hash: None,
-            size: None,
+            size_bytes: None,
             was_new: None,
             error: Some("blob store not enabled".to_string()),
         }));
@@ -62,7 +62,7 @@ pub(crate) async fn handle_add_blob(
             Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
                 is_success: true,
                 hash: Some(result.blob_ref.hash.to_string()),
-                size: Some(result.blob_ref.size_bytes),
+                size_bytes: Some(result.blob_ref.size_bytes),
                 was_new: Some(result.was_new),
                 error: None,
             }))
@@ -72,7 +72,7 @@ pub(crate) async fn handle_add_blob(
             Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
                 is_success: false,
                 hash: None,
-                size: None,
+                size_bytes: None,
                 was_new: None,
                 error: Some(sanitize_blob_error(&e)),
             }))
@@ -257,7 +257,7 @@ pub(crate) async fn handle_get_blob_status(
         return Ok(ClientRpcResponse::GetBlobStatusResult(GetBlobStatusResultResponse {
             was_found: false,
             hash: None,
-            size: None,
+            size_bytes: None,
             complete: None,
             tags: None,
             error: Some("blob store not enabled".to_string()),
@@ -271,7 +271,7 @@ pub(crate) async fn handle_get_blob_status(
             return Ok(ClientRpcResponse::GetBlobStatusResult(GetBlobStatusResultResponse {
                 was_found: false,
                 hash: None,
-                size: None,
+                size_bytes: None,
                 complete: None,
                 tags: None,
                 error: Some("invalid hash".to_string()),
@@ -283,7 +283,7 @@ pub(crate) async fn handle_get_blob_status(
         Ok(Some(status)) => Ok(ClientRpcResponse::GetBlobStatusResult(GetBlobStatusResultResponse {
             was_found: true,
             hash: Some(status.hash.to_string()),
-            size: status.size_bytes,
+            size_bytes: status.size_bytes,
             complete: Some(status.is_complete),
             tags: Some(status.tags),
             error: None,
@@ -291,7 +291,7 @@ pub(crate) async fn handle_get_blob_status(
         Ok(None) => Ok(ClientRpcResponse::GetBlobStatusResult(GetBlobStatusResultResponse {
             was_found: false,
             hash: Some(hash.to_string()),
-            size: None,
+            size_bytes: None,
             complete: None,
             tags: None,
             error: None,
@@ -301,7 +301,7 @@ pub(crate) async fn handle_get_blob_status(
             Ok(ClientRpcResponse::GetBlobStatusResult(GetBlobStatusResultResponse {
                 was_found: false,
                 hash: None,
-                size: None,
+                size_bytes: None,
                 complete: None,
                 tags: None,
                 error: Some(sanitize_blob_error(&e)),

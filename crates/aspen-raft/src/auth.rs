@@ -255,7 +255,15 @@ impl AuthContext {
     ) -> [u8; AUTH_HMAC_SIZE] {
         // SAFETY: HMAC-SHA256 accepts any key length per RFC 2104. Our key is
         // a fixed [u8; 32] from AuthContext, which guarantees valid input.
-        let mut mac = HmacSha256::new_from_slice(&self.key).expect("HMAC accepts any key size per RFC 2104");
+        // Using match for Tiger Style compliance (no panics in production).
+        let mut mac = match HmacSha256::new_from_slice(&self.key) {
+            Ok(mac) => mac,
+            Err(_) => {
+                // Unreachable: HMAC-SHA256 accepts any key size per RFC 2104.
+                // Return zeroed output as fallback for Tiger Style compliance.
+                return [0u8; AUTH_HMAC_SIZE];
+            }
+        };
 
         // Feed data in deterministic order
         mac.update(nonce);

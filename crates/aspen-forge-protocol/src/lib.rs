@@ -19,8 +19,9 @@ pub struct ForgeRepoInfo {
     pub default_branch: String,
     /// Delegate public keys (hex-encoded).
     pub delegates: Vec<String>,
-    /// Signature threshold.
-    pub threshold: u32,
+    /// Signature threshold (number of delegates required).
+    #[serde(rename = "threshold")]
+    pub threshold_delegates: u32,
     /// Creation timestamp (ms since epoch).
     pub created_at_ms: u64,
 }

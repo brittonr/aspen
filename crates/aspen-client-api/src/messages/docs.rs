@@ -38,7 +38,11 @@ pub enum DocsRequest {
     /// Update the priority for a peer cluster.
     UpdatePeerClusterPriority { cluster_id: String, priority: u32 },
     /// Enable or disable a peer cluster subscription.
-    SetPeerClusterEnabled { cluster_id: String, enabled: bool },
+    SetPeerClusterEnabled {
+        cluster_id: String,
+        #[serde(rename = "enabled")]
+        is_enabled: bool,
+    },
     /// Get the origin metadata for a key.
     GetKeyOrigin { key: String },
 }
@@ -100,7 +104,8 @@ pub struct DocsSetResultResponse {
     /// The key that was set.
     pub key: Option<String>,
     /// Size of the value in bytes.
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -113,7 +118,8 @@ pub struct DocsGetResultResponse {
     /// The value if found.
     pub value: Option<Vec<u8>>,
     /// Size of the value in bytes.
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     /// Error message if failed.
     pub error: Option<String>,
 }

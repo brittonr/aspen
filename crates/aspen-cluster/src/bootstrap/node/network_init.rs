@@ -55,9 +55,9 @@ pub(super) fn build_iroh_config_from_node_config(config: &NodeConfig) -> Result<
     let iroh_config = match &config.iroh.secret_key {
         Some(secret_key_hex) => {
             let bytes = hex::decode(secret_key_hex).map_err(|e| anyhow::anyhow!("invalid secret key hex: {}", e))?;
-            let secret_key = iroh::SecretKey::from_bytes(
-                &bytes.try_into().map_err(|_| anyhow::anyhow!("invalid secret key length"))?,
-            );
+            let secret_key = iroh::SecretKey::from_bytes(&bytes.try_into().map_err(|e: Vec<u8>| {
+                anyhow::anyhow!("invalid secret key length: expected 32 bytes, got {}: {:?}", e.len(), e)
+            })?);
             iroh_config.with_secret_key(secret_key)
         }
         None => iroh_config,

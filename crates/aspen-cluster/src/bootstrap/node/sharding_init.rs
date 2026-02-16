@@ -382,7 +382,11 @@ fn bootstrap_sharded_node_build_handle(
     }
 }
 
-pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNodeHandle> {
+/// Prepare shard configuration from node config.
+///
+/// Validates sharding is enabled, applies security defaults, and determines
+/// which shards this node will host.
+fn bootstrap_sharded_node_prepare_config(config: &mut NodeConfig) -> Result<Vec<ShardId>> {
     config.apply_security_defaults();
     ensure!(config.sharding.is_enabled, "sharding must be enabled to use bootstrap_sharded_node");
 
@@ -394,6 +398,58 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     };
 
     info!(node_id = config.node_id, num_shards, local_shards = ?local_shards, "bootstrapping sharded node");
+    Ok(local_shards)
+}
+
+/// Initialize content discovery and register metadata.
+async fn bootstrap_sharded_node_init_discovery(
+    config: &NodeConfig,
+    base: &BaseNodeResources,
+    shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
+) -> Result<(Option<crate::content_discovery::ContentDiscoveryService>, Option<CancellationToken>)> {
+    let shutdown_for_content = CancellationToken::new();
+    let (content_discovery, content_discovery_cancel) =
+        initialize_content_discovery(config, &base.network.iroh_manager, &shutdown_for_content)
+            .await
+            .context("failed to initialize content discovery")?;
+
+    #[cfg(feature = "blob")]
+    spawn_sharded_blob_announce(config, &base.network.blob_store, &content_discovery, shard_nodes);
+    register_sharded_node_metadata(config, &base.metadata_store, &base.network.iroh_manager)?;
+
+    info!(node_id = config.node_id, shard_count = shard_nodes.len(), "sharded node bootstrap complete");
+
+    Ok((content_discovery, content_discovery_cancel))
+}
+
+/// Build ShardingResources from shard loop results.
+fn bootstrap_sharded_node_build_sharding(
+    shard_results: ShardLoopResults,
+    sharded_kv: Arc<ShardedKeyValueStore<RaftNode>>,
+    sharded_handler: Arc<ShardedRaftProtocolHandler>,
+    topology: Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>,
+) -> ShardingResources {
+    let ShardLoopResults {
+        shard_nodes,
+        health_monitors,
+        ttl_cleanup_cancels,
+        shard_state_machines,
+    } = shard_results;
+
+    ShardingResources {
+        shard_nodes,
+        sharded_kv,
+        sharded_handler,
+        health_monitors,
+        ttl_cleanup_cancels,
+        shard_state_machines,
+        topology: Some(topology),
+    }
+}
+
+pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNodeHandle> {
+    let local_shards = bootstrap_sharded_node_prepare_config(&mut config)?;
+    let num_shards = config.sharding.num_shards;
 
     let base = bootstrap_base_node(&config).await.context("failed to bootstrap base node resources")?;
     let ctx = create_shard_context_resources(&config, num_shards);
@@ -424,32 +480,18 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     )
     .await
     .context("failed to create shard Raft instances")?;
-    let ShardLoopResults {
-        shard_nodes,
-        health_monitors,
-        ttl_cleanup_cancels,
-        shard_state_machines,
-    } = shard_results;
 
-    let peer_manager = initialize_sharded_peer_sync(&config, &shard_nodes);
+    #[cfg(feature = "docs")]
+    let peer_manager = initialize_sharded_peer_sync(&config, &shard_results.shard_nodes);
 
-    let shutdown_for_content = CancellationToken::new();
     let (content_discovery, content_discovery_cancel) =
-        initialize_content_discovery(&config, &base.network.iroh_manager, &shutdown_for_content)
-            .await
-            .context("failed to initialize content discovery")?;
+        bootstrap_sharded_node_init_discovery(&config, &base, &shard_results.shard_nodes).await?;
 
-    #[cfg(feature = "blob")]
-    spawn_sharded_blob_announce(&config, &base.network.blob_store, &content_discovery, &shard_nodes);
-    register_sharded_node_metadata(&config, &base.metadata_store, &base.network.iroh_manager)?;
-
-    info!(node_id = config.node_id, shard_count = shard_nodes.len(), "sharded node bootstrap complete");
-
-    let (blob_event_sender, docs_event_sender) = create_sharded_event_channels(&config, &shard_nodes);
+    let (blob_event_sender, docs_event_sender) = create_sharded_event_channels(&config, &shard_results.shard_nodes);
     let hooks = initialize_sharded_hooks(
         &config,
-        &shard_nodes,
-        &shard_state_machines,
+        &shard_results.shard_nodes,
+        &shard_results.shard_state_machines,
         &shard_0_broadcasts,
         blob_event_sender,
         docs_event_sender,
@@ -457,15 +499,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     .await
     .context("failed to initialize hooks for sharded node")?;
 
-    let sharding = ShardingResources {
-        shard_nodes,
-        sharded_kv,
-        sharded_handler,
-        health_monitors,
-        ttl_cleanup_cancels,
-        shard_state_machines,
-        topology: Some(topology.clone()),
-    };
+    let sharding = bootstrap_sharded_node_build_sharding(shard_results, sharded_kv, sharded_handler, topology.clone());
 
     Ok(bootstrap_sharded_node_build_handle(
         base,
@@ -693,9 +727,9 @@ fn create_shard_context_resources(config: &NodeConfig, num_shards: u32) -> Shard
 /// Only shard 0 needs these channels for hooks to work in sharded mode.
 pub(super) fn create_shard_0_broadcasts(config: &NodeConfig, local_shards: &[ShardId]) -> Shard0Broadcasts {
     if (config.hooks.is_enabled || config.docs.is_enabled) && local_shards.contains(&0) {
-        let (log_sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
+        let (log_sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE as usize);
         let (snapshot_sender, _) =
-            broadcast::channel::<aspen_raft::storage_shared::SnapshotEvent>(LOG_BROADCAST_BUFFER_SIZE);
+            broadcast::channel::<aspen_raft::storage_shared::SnapshotEvent>(LOG_BROADCAST_BUFFER_SIZE as usize);
         info!(
             node_id = config.node_id,
             buffer_size = LOG_BROADCAST_BUFFER_SIZE,

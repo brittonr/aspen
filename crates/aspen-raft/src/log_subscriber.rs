@@ -40,18 +40,18 @@ pub use aspen_transport::log_subscriber::{
 /// Maximum number of concurrent log subscribers per node.
 ///
 /// Tiger Style: Fixed upper bound on subscriber connections.
-pub const MAX_LOG_SUBSCRIBERS: usize = 100;
+pub const MAX_LOG_SUBSCRIBERS: u32 = 100;
 
 /// Size of the broadcast channel buffer for log entries.
 ///
 /// Subscribers that fall behind by more than this many entries
 /// will experience lag (receive lagged error).
-pub const LOG_BROADCAST_BUFFER_SIZE: usize = 1000;
+pub const LOG_BROADCAST_BUFFER_SIZE: u32 = 1000;
 
 /// Maximum size of a single log entry message (10 MB).
 ///
 /// Matches MAX_RPC_MESSAGE_SIZE for consistency.
-pub const MAX_LOG_ENTRY_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
+pub const MAX_LOG_ENTRY_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
 
 /// Timeout for subscription handshake (5 seconds).
 pub const SUBSCRIBE_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -193,12 +193,12 @@ impl LogSubscriberProtocolHandler {
     /// # Note
     /// Historical replay is disabled by default. Use `with_historical_reader()` to enable it.
     pub fn new(cluster_cookie: &str, node_id: u64) -> (Self, broadcast::Sender<LogEntryPayload>, Arc<AtomicU64>) {
-        let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
+        let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE as usize);
         let committed_index = Arc::new(AtomicU64::new(0));
         let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
         let handler = Self {
             auth_context: AuthContext::new(cluster_cookie),
-            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
+            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS as usize)),
             log_sender: log_sender.clone(),
             node_id,
             next_subscriber_id: AtomicU64::new(1),
@@ -222,7 +222,7 @@ impl LogSubscriberProtocolHandler {
         let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
         Self {
             auth_context: AuthContext::new(cluster_cookie),
-            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
+            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS as usize)),
             log_sender,
             node_id,
             next_subscriber_id: AtomicU64::new(1),
@@ -254,7 +254,7 @@ impl LogSubscriberProtocolHandler {
         let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
         Self {
             auth_context: AuthContext::new(cluster_cookie),
-            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
+            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS as usize)),
             log_sender,
             node_id,
             next_subscriber_id: AtomicU64::new(1),

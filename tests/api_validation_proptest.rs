@@ -294,7 +294,7 @@ fn test_scan_request_json_roundtrip() {
         .for_each(|(prefix, limit, continuation_token)| {
             let request = ScanRequest {
                 prefix: prefix.0.clone(),
-                limit: limit.0,
+                limit_results: limit.0,
                 continuation_token: continuation_token.0.clone(),
             };
             let serialized = serde_json::to_string(&request).expect("serialize");
@@ -337,7 +337,7 @@ fn test_scan_result_json_roundtrip() {
                 .collect();
             let result = ScanResult {
                 entries,
-                count,
+                result_count: count,
                 is_truncated: *is_truncated,
                 continuation_token: continuation_token.0.clone(),
             };

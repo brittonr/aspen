@@ -44,7 +44,7 @@ pub(crate) async fn handle_get_job_logs(
         .kv_store
         .scan(ScanRequest {
             prefix: start_key,
-            limit: Some(limit),
+            limit_results: Some(limit),
             continuation_token: None,
         })
         .await;
@@ -72,7 +72,7 @@ pub(crate) async fn handle_get_job_logs(
             .kv_store
             .scan(ScanRequest {
                 prefix: check_prefix,
-                limit: Some(1),
+                limit_results: Some(1),
                 continuation_token: None,
             })
             .await;
@@ -187,7 +187,7 @@ pub(crate) async fn handle_subscribe_logs(
             .kv_store
             .scan(ScanRequest {
                 prefix: watch_prefix.clone(),
-                limit: Some(MAX_CI_LOG_FETCH_CHUNKS),
+                limit_results: Some(MAX_CI_LOG_FETCH_CHUNKS),
                 continuation_token: None,
             })
             .await;
@@ -224,7 +224,7 @@ pub(crate) async fn handle_subscribe_logs(
         .kv_store
         .scan(ScanRequest {
             prefix: check_prefix,
-            limit: Some(1),
+            limit_results: Some(1),
             continuation_token: None,
         })
         .await

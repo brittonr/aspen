@@ -81,8 +81,8 @@ pub struct VerifyDocsArgs {
 #[derive(Args)]
 pub struct VerifyBlobArgs {
     /// Size of test blob in bytes.
-    #[arg(long, default_value = "1024")]
-    pub size: u32,
+    #[arg(long = "size", default_value = "1024")]
+    pub size_bytes: u32,
 
     /// Skip cleanup of test blob.
     #[arg(long)]
@@ -679,7 +679,7 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
     let mut details = Vec::new();
 
     // Generate test data
-    let test_data: Vec<u8> = (0..args.size).map(|i| (i % 256) as u8).collect();
+    let test_data: Vec<u8> = (0..args.size_bytes).map(|i| (i % 256) as u8).collect();
 
     // Add blob and get hash
     let hash = match verify_blob_add(client, &test_data, &mut details).await {

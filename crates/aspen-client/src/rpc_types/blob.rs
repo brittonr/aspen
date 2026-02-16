@@ -5,7 +5,8 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddBlobResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub hash: Option<String>,
     #[serde(rename = "size")]
     pub size_bytes: Option<u64>,
@@ -15,20 +16,23 @@ pub struct AddBlobResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetBlobResultResponse {
-    pub found: bool,
+    #[serde(rename = "found")]
+    pub was_found: bool,
     pub data: Option<Vec<u8>>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HasBlobResultResponse {
-    pub exists: bool,
+    #[serde(rename = "exists")]
+    pub does_exist: bool,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetBlobTicketResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub ticket: Option<String>,
     pub error: Option<String>,
 }
@@ -51,25 +55,29 @@ pub struct ListBlobsResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProtectBlobResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnprotectBlobResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteBlobResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadBlobResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub hash: Option<String>,
     #[serde(rename = "size")]
     pub size_bytes: Option<u64>,
@@ -78,11 +86,13 @@ pub struct DownloadBlobResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetBlobStatusResultResponse {
-    pub found: bool,
+    #[serde(rename = "found")]
+    pub was_found: bool,
     pub hash: Option<String>,
     #[serde(rename = "size")]
     pub size_bytes: Option<u64>,
-    pub complete: Option<bool>,
+    #[serde(rename = "complete")]
+    pub is_complete: Option<bool>,
     pub tags: Option<Vec<String>>,
     pub error: Option<String>,
 }

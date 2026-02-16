@@ -33,7 +33,7 @@ pub(crate) async fn handle_blob_replicate_pull(
         return Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
             is_success: false,
             hash: None,
-            size: None,
+            size_bytes: None,
             duration_ms: None,
             error: Some("blob store not enabled".to_string()),
         }));
@@ -46,7 +46,7 @@ pub(crate) async fn handle_blob_replicate_pull(
             return Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
                 is_success: false,
                 hash: None,
-                size: None,
+                size_bytes: None,
                 duration_ms: None,
                 error: Some("invalid hash format".to_string()),
             }));
@@ -60,7 +60,7 @@ pub(crate) async fn handle_blob_replicate_pull(
             return Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
                 is_success: false,
                 hash: Some(hash.to_string()),
-                size: None,
+                size_bytes: None,
                 duration_ms: None,
                 error: Some("invalid provider public key format".to_string()),
             }));
@@ -77,7 +77,7 @@ pub(crate) async fn handle_blob_replicate_pull(
             return Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
                 is_success: true,
                 hash: Some(hash.to_string()),
-                size: Some(size),
+                size_bytes: Some(size),
                 duration_ms: Some(0),
                 error: None,
             }));
@@ -119,7 +119,7 @@ pub(crate) async fn handle_blob_replicate_pull(
             Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
                 is_success: true,
                 hash: Some(blob_ref.hash.to_string()),
-                size: Some(blob_ref.size_bytes),
+                size_bytes: Some(blob_ref.size_bytes),
                 duration_ms: Some(duration_ms),
                 error: None,
             }))
@@ -136,7 +136,7 @@ pub(crate) async fn handle_blob_replicate_pull(
             Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
                 is_success: false,
                 hash: Some(hash.to_string()),
-                size: None,
+                size_bytes: None,
                 duration_ms: Some(duration_ms),
                 error: Some(sanitize_blob_error(&e)),
             }))
@@ -159,7 +159,7 @@ pub(crate) async fn handle_get_blob_replication_status(
             return Ok(ClientRpcResponse::GetBlobReplicationStatusResult(GetBlobReplicationStatusResultResponse {
                 was_found: false,
                 hash: None,
-                size: None,
+                size_bytes: None,
                 replica_nodes: None,
                 replication_factor: None,
                 min_replicas: None,
@@ -220,7 +220,7 @@ pub(crate) async fn handle_get_blob_replication_status(
                         Ok(ClientRpcResponse::GetBlobReplicationStatusResult(GetBlobReplicationStatusResultResponse {
                             was_found: true,
                             hash: Some(hash.to_string()),
-                            size,
+                            size_bytes: size,
                             replica_nodes: nodes,
                             replication_factor,
                             min_replicas,
@@ -234,7 +234,7 @@ pub(crate) async fn handle_get_blob_replication_status(
                         Ok(ClientRpcResponse::GetBlobReplicationStatusResult(GetBlobReplicationStatusResultResponse {
                             was_found: false,
                             hash: Some(hash.to_string()),
-                            size: None,
+                            size_bytes: None,
                             replica_nodes: None,
                             replication_factor: None,
                             min_replicas: None,
@@ -250,7 +250,7 @@ pub(crate) async fn handle_get_blob_replication_status(
                 Ok(ClientRpcResponse::GetBlobReplicationStatusResult(GetBlobReplicationStatusResultResponse {
                     was_found: false,
                     hash: Some(hash.to_string()),
-                    size: None,
+                    size_bytes: None,
                     replica_nodes: None,
                     replication_factor: None,
                     min_replicas: None,
@@ -264,7 +264,7 @@ pub(crate) async fn handle_get_blob_replication_status(
         Err(e) => Ok(ClientRpcResponse::GetBlobReplicationStatusResult(GetBlobReplicationStatusResultResponse {
             was_found: false,
             hash: Some(hash.to_string()),
-            size: None,
+            size_bytes: None,
             replica_nodes: None,
             replication_factor: None,
             min_replicas: None,

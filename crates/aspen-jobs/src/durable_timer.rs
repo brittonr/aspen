@@ -250,7 +250,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> DurableTimerManager<S> {
             .store
             .scan(ScanRequest {
                 prefix: TIMER_KEY_PREFIX.to_string(),
-                limit: Some(TIMER_SCAN_BATCH_SIZE),
+                limit_results: Some(TIMER_SCAN_BATCH_SIZE),
                 continuation_token: None,
             })
             .await
@@ -316,7 +316,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> DurableTimerManager<S> {
             .store
             .scan(ScanRequest {
                 prefix: TIMER_KEY_PREFIX.to_string(),
-                limit: Some(TIMER_SCAN_BATCH_SIZE),
+                limit_results: Some(TIMER_SCAN_BATCH_SIZE),
                 continuation_token: None,
             })
             .await

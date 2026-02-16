@@ -72,7 +72,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
             .store
             .scan(ScanRequest {
                 prefix: prefix.to_string(),
-                limit: Some(limit),
+                limit_results: Some(limit),
                 continuation_token: None,
             })
             .await

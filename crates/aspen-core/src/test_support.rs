@@ -192,7 +192,7 @@ impl KeyValueStore for DeterministicKeyValueStore {
         let data = self.data.read().await;
 
         let prefix = &request.prefix;
-        let limit = request.limit.unwrap_or(100) as usize;
+        let limit = request.limit_results.unwrap_or(100) as usize;
 
         let entries: Vec<_> = data
             .iter()
@@ -214,7 +214,7 @@ impl KeyValueStore for DeterministicKeyValueStore {
         };
 
         Ok(ScanResult {
-            count: entries.len() as u32,
+            result_count: entries.len() as u32,
             entries,
             is_truncated,
             continuation_token: None,

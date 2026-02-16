@@ -115,7 +115,7 @@ impl<S: aspen_traits::KeyValueStore + ?Sized + 'static> WorkflowEventStore<S> {
             .store
             .scan(ScanRequest {
                 prefix,
-                limit: Some(100), // Snapshots should be infrequent
+                limit_results: Some(100), // Snapshots should be infrequent
                 continuation_token: None,
             })
             .await
@@ -138,7 +138,7 @@ impl<S: aspen_traits::KeyValueStore + ?Sized + 'static> WorkflowEventStore<S> {
             .store
             .scan(ScanRequest {
                 prefix: EVENT_KEY_PREFIX.to_string(),
-                limit: Some(limit),
+                limit_results: Some(limit),
                 continuation_token: None,
             })
             .await

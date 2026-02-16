@@ -33,7 +33,7 @@ verus! {
     /// Abstract stream permit
     pub struct StreamPermitSpec {
         /// Whether this permit is valid (not dropped)
-        pub valid: bool,
+        pub is_valid: bool,
     }
 
     // ========================================================================
@@ -89,7 +89,7 @@ verus! {
         post: StreamManagerState,
         permit: StreamPermitSpec,
     ) -> bool {
-        permit.valid ==>
+        permit.is_valid ==>
         // Counter decremented
         post.active_streams_counter == pre.active_streams_counter - 1 &&
         // Available incremented
@@ -107,7 +107,7 @@ verus! {
         requires
             stream_invariant(pre),
             permit_release_decrements(pre, post, permit),
-            permit.valid,
+            permit.is_valid,
             pre.active_streams_counter > 0,  // At least one held
         ensures stream_invariant(post)
     {

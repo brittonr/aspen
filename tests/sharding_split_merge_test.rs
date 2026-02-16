@@ -183,7 +183,7 @@ async fn test_scan_across_multiple_shards() {
     // Scan should aggregate results from all shards
     let scan_req = aspen::api::ScanRequest {
         prefix: prefix.to_string(),
-        limit: Some(100),
+        limit_results: Some(100),
         continuation_token: None,
     };
     let result = store.scan(scan_req).await.expect("scan should succeed");

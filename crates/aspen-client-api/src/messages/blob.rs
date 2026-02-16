@@ -107,7 +107,8 @@ pub struct AddBlobResultResponse {
     /// BLAKE3 hash of the stored blob (hex-encoded).
     pub hash: Option<String>,
     /// Size of the blob in bytes.
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     /// Whether the blob was new (not already in store).
     pub was_new: Option<bool>,
     /// Error message if failed.
@@ -205,7 +206,8 @@ pub struct DownloadBlobResultResponse {
     /// BLAKE3 hash of the downloaded blob (hex-encoded).
     pub hash: Option<String>,
     /// Size of the downloaded blob in bytes.
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -218,7 +220,8 @@ pub struct GetBlobStatusResultResponse {
     /// BLAKE3 hash of the blob (hex-encoded).
     pub hash: Option<String>,
     /// Size of the blob in bytes.
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     /// Whether the blob is complete (all chunks present).
     pub complete: Option<bool>,
     /// List of protection tags.
@@ -235,7 +238,8 @@ pub struct BlobReplicatePullResultResponse {
     /// BLAKE3 hash of the replicated blob (hex-encoded).
     pub hash: Option<String>,
     /// Size of the replicated blob in bytes.
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     /// Time taken to download in milliseconds.
     pub duration_ms: Option<u64>,
     /// Error message if failed.
@@ -250,7 +254,8 @@ pub struct GetBlobReplicationStatusResultResponse {
     /// BLAKE3 hash of the blob (hex-encoded).
     pub hash: Option<String>,
     /// Size of the blob in bytes.
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     /// Node IDs that have confirmed replicas.
     pub replica_nodes: Option<Vec<u64>>,
     /// Target replication factor from policy.

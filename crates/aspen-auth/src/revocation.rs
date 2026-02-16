@@ -113,7 +113,7 @@ impl<K: KeyValueStore + Send + Sync> RevocationStore for KeyValueRevocationStore
             .kv
             .scan(ScanRequest {
                 prefix: REVOCATION_PREFIX.to_string(),
-                limit: Some(MAX_REVOCATION_LIST_SIZE),
+                limit_results: Some(MAX_REVOCATION_LIST_SIZE),
                 continuation_token: None,
             })
             .await?;

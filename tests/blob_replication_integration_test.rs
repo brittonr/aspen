@@ -87,8 +87,8 @@ async fn test_blob_add_and_get() {
         ClientRpcResponse::AddBlobResult(result) => {
             assert!(result.is_success, "add blob should succeed: {:?}", result.error);
             assert!(result.hash.is_some(), "should return hash");
-            assert_eq!(result.size, Some(TEST_BLOB_CONTENT.len() as u64));
-            tracing::info!(hash = ?result.hash, size = result.size, "blob added");
+            assert_eq!(result.size_bytes, Some(TEST_BLOB_CONTENT.len() as u64));
+            tracing::info!(hash = ?result.hash, size_bytes = result.size_bytes, "blob added");
             result.hash.unwrap()
         }
         ClientRpcResponse::Error(e) => {
@@ -330,7 +330,7 @@ async fn test_blob_replication_status() {
             // Blob should be tracked (either auto-replicated or explicitly)
             if result.was_found {
                 assert!(result.hash.is_some());
-                assert!(result.size.is_some());
+                assert!(result.size_bytes.is_some());
                 // Status should be one of the valid states
                 if let Some(status) = &result.status {
                     assert!(
@@ -393,10 +393,10 @@ async fn test_blob_status() {
         ClientRpcResponse::GetBlobStatusResult(result) => {
             assert!(result.was_found, "blob should be found");
             assert_eq!(result.hash.as_deref(), Some(hash.as_str()));
-            assert_eq!(result.size, Some(TEST_BLOB_CONTENT.len() as u64));
+            assert_eq!(result.size_bytes, Some(TEST_BLOB_CONTENT.len() as u64));
             assert!(result.complete.unwrap_or(false), "blob should be complete");
             tracing::info!(
-                size = result.size,
+                size_bytes = result.size_bytes,
                 complete = result.complete,
                 tags = ?result.tags,
                 "blob status"
@@ -512,8 +512,8 @@ async fn test_blob_large_replication() {
     let hash = match add_response {
         ClientRpcResponse::AddBlobResult(result) => {
             assert!(result.is_success, "large blob add should succeed");
-            assert_eq!(result.size, Some(1024 * 1024));
-            tracing::info!(hash = ?result.hash, size = result.size, "large blob added");
+            assert_eq!(result.size_bytes, Some(1024 * 1024));
+            tracing::info!(hash = ?result.hash, size_bytes = result.size_bytes, "large blob added");
             result.hash.unwrap()
         }
         _ => panic!("unexpected response"),

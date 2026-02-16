@@ -162,8 +162,9 @@ pub struct ResourceMetadata {
     pub description: Option<String>,
     /// Delegate public keys (for Forge repos).
     pub delegates: Vec<[u8; 32]>,
-    /// Signature threshold.
-    pub threshold: u32,
+    /// Signature threshold (number of replicas required).
+    #[serde(rename = "threshold")]
+    pub threshold_replicas: u32,
     /// HLC timestamp when created.
     pub created_at_hlc: SerializableTimestamp,
     /// HLC timestamp when last updated.

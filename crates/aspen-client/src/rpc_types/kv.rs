@@ -7,21 +7,24 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadResultResponse {
     pub value: Option<Vec<u8>>,
-    pub found: bool,
+    #[serde(rename = "found")]
+    pub was_found: bool,
     pub error: Option<String>,
 }
 
 /// Write key result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WriteResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 /// Compare-and-swap result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompareAndSwapResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub actual_value: Option<Vec<u8>>,
     pub error: Option<String>,
 }
@@ -30,7 +33,8 @@ pub struct CompareAndSwapResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteResultResponse {
     pub key: String,
-    pub deleted: bool,
+    #[serde(rename = "deleted")]
+    pub was_deleted: bool,
     pub error: Option<String>,
 }
 

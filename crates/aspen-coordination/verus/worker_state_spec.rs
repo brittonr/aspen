@@ -45,7 +45,7 @@ verus! {
         /// Lease deadline (Unix ms)
         pub lease_deadline_ms: u64,
         /// Whether worker is active (not expired)
-        pub active: bool,
+        pub is_active: bool,
         /// Worker capabilities/tags
         pub capabilities: Set<Seq<u8>>,
     }
@@ -144,7 +144,7 @@ verus! {
     pub open spec fn lease_validity(state: WorkerState) -> bool {
         forall |worker_id: Seq<u8>|
             state.workers.contains_key(worker_id) &&
-            state.workers[worker_id].active ==>
+            state.workers[worker_id].is_active ==>
             state.workers[worker_id].lease_deadline_ms > state.current_time_ms
     }
 
@@ -219,7 +219,7 @@ verus! {
     pub open spec fn has_capacity(state: WorkerState, worker_id: Seq<u8>) -> bool {
         state.workers.contains_key(worker_id) &&
         state.workers[worker_id].current_load < state.workers[worker_id].capacity &&
-        state.workers[worker_id].active
+        state.workers[worker_id].is_active
     }
 
     /// Check if worker has required capabilities
@@ -252,7 +252,7 @@ verus! {
     pub open spec fn active_worker_count(state: WorkerState) -> int {
         Set::new(|worker_id: Seq<u8>|
             state.workers.contains_key(worker_id) &&
-            state.workers[worker_id].active
+            state.workers[worker_id].is_active
         ).len() as int
     }
 }

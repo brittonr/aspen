@@ -152,7 +152,8 @@ pub struct PijulRepoIdentity {
     pub delegates: Vec<iroh::PublicKey>,
 
     /// Number of delegate signatures required for canonical updates.
-    pub threshold: u32,
+    #[serde(rename = "threshold")]
+    pub threshold_delegates: u32,
 
     /// Creation timestamp (milliseconds since epoch).
     pub created_at_ms: u64,
@@ -167,7 +168,7 @@ impl PijulRepoIdentity {
             description: None,
             default_channel: "main".to_string(),
             delegates,
-            threshold: delegates_count.max(1),
+            threshold_delegates: delegates_count.max(1),
             created_at_ms: chrono::Utc::now().timestamp_millis() as u64,
         }
     }
@@ -185,8 +186,8 @@ impl PijulRepoIdentity {
     }
 
     /// Set a custom threshold.
-    pub fn with_threshold(mut self, threshold: u32) -> Self {
-        self.threshold = threshold;
+    pub fn with_threshold(mut self, threshold_delegates: u32) -> Self {
+        self.threshold_delegates = threshold_delegates;
         self
     }
 

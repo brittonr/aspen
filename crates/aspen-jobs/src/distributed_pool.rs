@@ -265,34 +265,33 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
         Ok(())
     }
 
-    /// Start background tasks for coordination.
-    async fn start_background_tasks(&self) -> Result<()> {
-        // Heartbeat task
-        let pool = self.pool.clone();
-        let coordinator = self.coordinator.clone();
-        let registrations = self.registrations.clone();
-        let shutdown = self.shutdown.clone();
-        let node_id = self.config.node_id.clone();
-
-        self.task_tracker.spawn(async move {
+    /// Spawn the heartbeat background task that sends periodic health updates.
+    fn start_background_tasks_spawn_heartbeat(
+        task_tracker: &TaskTracker,
+        pool: Arc<WorkerPool<S>>,
+        coordinator: Arc<DistributedWorkerCoordinator<S>>,
+        registrations: Arc<RwLock<HashMap<String, WorkerRegistration>>>,
+        shutdown: Arc<tokio::sync::Notify>,
+        node_id: String,
+    ) {
+        task_tracker.spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(10));
 
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
-                        // Send heartbeats for all workers
                         let worker_info = pool.get_worker_info().await;
                         let regs = registrations.read().await;
 
                         for info in worker_info {
-                            if let Some(_reg) = regs.get(&info.id) {
+                            if regs.get(&info.id).is_some() {
                                 let stats = WorkerStats {
-                                    load: info.jobs_processed as f32 / 100.0,  // Simplified
+                                    load: info.jobs_processed as f32 / 100.0,
                                     active_jobs: if info.status == WorkerStatus::Processing { 1 } else { 0 },
-                                    queue_depth: 0,  // Would need queue depth tracking
+                                    queue_depth: 0,
                                     total_processed: info.jobs_processed,
                                     total_failed: info.jobs_failed,
-                                    avg_processing_time_ms: 50,  // Would need timing tracking
+                                    avg_processing_time_ms: 50,
                                     health: match info.status {
                                         WorkerStatus::Failed(_) => HealthStatus::Unhealthy,
                                         _ => HealthStatus::Healthy,
@@ -300,11 +299,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
                                 };
 
                                 if let Err(e) = coordinator.heartbeat(&info.id, stats).await {
-                                    warn!(
-                                        worker_id = %info.id,
-                                        error = %e,
-                                        "failed to send heartbeat"
-                                    );
+                                    warn!(worker_id = %info.id, error = %e, "failed to send heartbeat");
                                 }
                             }
                         }
@@ -316,40 +311,58 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
                 }
             }
         });
+    }
 
-        // Work stealing task
-        if self.config.enable_work_stealing {
-            let manager = self.manager.clone();
-            let coordinator = self.coordinator.clone();
-            let node_id = self.config.node_id.clone();
-            let shutdown = self.shutdown.clone();
-            let interval = self.config.steal_check_interval;
+    /// Spawn the work stealing background task that redistributes jobs across nodes.
+    fn start_background_tasks_spawn_work_stealing(
+        task_tracker: &TaskTracker,
+        manager: Arc<JobManager<S>>,
+        coordinator: Arc<DistributedWorkerCoordinator<S>>,
+        shutdown: Arc<tokio::sync::Notify>,
+        node_id: String,
+        interval: Duration,
+    ) {
+        task_tracker.spawn(async move {
+            let mut check_interval = tokio::time::interval(interval);
 
-            self.task_tracker.spawn(async move {
-                let mut check_interval = tokio::time::interval(interval);
-
-                loop {
-                    tokio::select! {
-                        _ = check_interval.tick() => {
-                            if let Err(e) = perform_work_stealing(
-                                &manager,
-                                &coordinator,
-                                &node_id,
-                            ).await {
-                                error!(
-                                    node_id,
-                                    error = %e,
-                                    "work stealing failed"
-                                );
-                            }
-                        }
-                        _ = shutdown.notified() => {
-                            debug!(node_id, "work stealing task shutting down");
-                            break;
+            loop {
+                tokio::select! {
+                    _ = check_interval.tick() => {
+                        if let Err(e) = perform_work_stealing(&manager, &coordinator, &node_id).await {
+                            error!(node_id, error = %e, "work stealing failed");
                         }
                     }
+                    _ = shutdown.notified() => {
+                        debug!(node_id, "work stealing task shutting down");
+                        break;
+                    }
                 }
-            });
+            }
+        });
+    }
+
+    /// Start background tasks for coordination.
+    async fn start_background_tasks(&self) -> Result<()> {
+        // Spawn heartbeat task
+        Self::start_background_tasks_spawn_heartbeat(
+            &self.task_tracker,
+            self.pool.clone(),
+            self.coordinator.clone(),
+            self.registrations.clone(),
+            self.shutdown.clone(),
+            self.config.node_id.clone(),
+        );
+
+        // Spawn work stealing task if enabled
+        if self.config.enable_work_stealing {
+            Self::start_background_tasks_spawn_work_stealing(
+                &self.task_tracker,
+                self.manager.clone(),
+                self.coordinator.clone(),
+                self.shutdown.clone(),
+                self.config.node_id.clone(),
+                self.config.steal_check_interval,
+            );
         }
 
         Ok(())

@@ -26,7 +26,8 @@ impl SqlCellValue {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SqlResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub columns: Option<Vec<String>>,
     pub rows: Option<Vec<Vec<SqlCellValue>>>,
     pub row_count: Option<u32>,

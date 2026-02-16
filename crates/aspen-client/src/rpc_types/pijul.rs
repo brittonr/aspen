@@ -60,7 +60,8 @@ pub struct PijulApplyResponse {
 #[cfg(feature = "pijul")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PijulUnrecordResponse {
-    pub unrecorded: bool,
+    #[serde(rename = "unrecorded")]
+    pub was_unrecorded: bool,
 }
 
 #[cfg(feature = "pijul")]

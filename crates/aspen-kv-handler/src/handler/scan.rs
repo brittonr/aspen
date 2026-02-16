@@ -46,7 +46,7 @@ async fn handle_scan_keys(
         .kv_store
         .scan(ScanRequest {
             prefix,
-            limit,
+            limit_results: limit,
             continuation_token,
         })
         .await;
@@ -68,7 +68,7 @@ async fn handle_scan_keys(
 
             Ok(ClientRpcResponse::ScanResult(ScanResultResponse {
                 entries,
-                count: scan_resp.count,
+                count: scan_resp.result_count,
                 is_truncated: scan_resp.is_truncated,
                 continuation_token: scan_resp.continuation_token,
                 error: None,

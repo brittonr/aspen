@@ -289,7 +289,7 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
             .scan(ScanRequest {
                 prefix: prefix.clone(),
                 continuation_token: None,
-                limit: Some(MAX_REFS_PER_REPO),
+                limit_results: Some(MAX_REFS_PER_REPO),
             })
             .await
             .map_err(|e| ForgeError::KvStorage {

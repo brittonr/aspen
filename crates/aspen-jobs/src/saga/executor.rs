@@ -335,7 +335,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
             .store
             .scan(ScanRequest {
                 prefix: SAGA_STATE_PREFIX.to_string(),
-                limit: Some(MAX_SAGA_LIST_LIMIT),
+                limit_results: Some(MAX_SAGA_LIST_LIMIT),
                 continuation_token: None,
             })
             .await

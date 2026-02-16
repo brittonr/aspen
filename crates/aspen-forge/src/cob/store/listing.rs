@@ -26,7 +26,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             .kv
             .scan(aspen_core::ScanRequest {
                 prefix: prefix.clone(),
-                limit: None,
+                limit_results: None,
                 continuation_token: None,
             })
             .await

@@ -145,7 +145,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
             .kv
             .scan(ScanRequest {
                 prefix: KV_PREFIX_PIJUL_REPOS.to_string(),
-                limit: Some(limit),
+                limit_results: Some(limit),
                 continuation_token: None,
             })
             .await?;

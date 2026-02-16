@@ -33,7 +33,7 @@ verus! {
     /// Abstract connection permit
     pub struct ConnectionPermitSpec {
         /// Whether this permit is valid (not dropped)
-        pub valid: bool,
+        pub is_valid: bool,
     }
 
     // ========================================================================
@@ -80,7 +80,7 @@ verus! {
         permit: ConnectionPermitSpec,
     ) -> bool {
         // If permit was valid and is being dropped
-        permit.valid ==>
+        permit.is_valid ==>
         // Available permits increase by 1
         post.available_permits == pre.available_permits + 1 &&
         // Max stays the same
@@ -98,7 +98,7 @@ verus! {
         requires
             permits_bounded(pre),
             permit_released_on_drop(pre, post, permit),
-            permit.valid,
+            permit.is_valid,
             pre.available_permits < pre.max_connections,  // At least one held
         ensures permits_bounded(post)
     {

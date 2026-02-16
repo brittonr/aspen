@@ -468,17 +468,17 @@ async fn test_scan_across_cluster() -> Result<()> {
 
         let scan_request = aspen::api::ScanRequest {
             prefix: "users/".to_string(),
-            limit: Some(10),
+            limit_results: Some(10),
             continuation_token: None,
         };
 
         let result = node.raft_node().scan(scan_request).await?;
 
-        assert_eq!(result.count, 10, "node {} should return 10 entries", node_id);
+        assert_eq!(result.result_count, 10, "node {} should return 10 entries", node_id);
         assert!(result.is_truncated, "node {} result should be truncated", node_id);
         assert!(result.continuation_token.is_some(), "should have continuation token");
 
-        info!(node_id = node_id, count = result.count, truncated = result.is_truncated, "scan verified");
+        info!(node_id = node_id, count = result.result_count, truncated = result.is_truncated, "scan verified");
     }
 
     // Shutdown

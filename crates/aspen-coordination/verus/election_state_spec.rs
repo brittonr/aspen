@@ -49,7 +49,7 @@ verus! {
         /// Maximum fencing token ever seen in this election
         pub max_fencing_token: u64,
         /// Whether the election is running
-        pub running: bool,
+        pub is_running: bool,
     }
 
     // ========================================================================
@@ -226,7 +226,7 @@ verus! {
         ElectionState {
             state: LeadershipStateSpec::Follower,
             max_fencing_token: 0,
-            running: false,
+            is_running: false,
         }
     }
 

@@ -46,9 +46,9 @@ verus! {
         /// BLAKE3 hash of blob content
         pub hash: Seq<u8>,
         /// Size of the blob in bytes
-        pub size: u64,
+        pub size_bytes: u64,
         /// Whether blob exists in store
-        pub exists: bool,
+        pub does_exist: bool,
     }
 
     /// Abstract KV value storage decision
@@ -65,16 +65,16 @@ verus! {
 
     /// Blob size is within limits
     pub open spec fn blob_size_bounded(blob: BlobRefSpec) -> bool {
-        blob.size <= MAX_BLOB_SIZE
+        blob.size_bytes <= MAX_BLOB_SIZE
     }
 
     /// Proof: Accept only bounded blobs
-    pub proof fn reject_oversized_blobs(size: u64)
-        requires size > MAX_BLOB_SIZE
+    pub proof fn reject_oversized_blobs(size_bytes: u64)
+        requires size_bytes > MAX_BLOB_SIZE
         ensures !blob_size_bounded(BlobRefSpec {
             hash: Seq::empty(),
-            size,
-            exists: true,
+            size_bytes,
+            does_exist: true,
         })
     {
         // size > MAX => !bounded
@@ -130,7 +130,7 @@ verus! {
 
     /// Blob reference points to existing blob
     pub open spec fn reference_integrity(blob_ref: BlobRefSpec) -> bool {
-        blob_ref.exists
+        blob_ref.does_exist
     }
 
     /// Blob store with reference integrity
@@ -145,7 +145,7 @@ verus! {
         new_blob: BlobRefSpec,
     ) -> bool {
         // New blob is valid
-        new_blob.exists &&
+        new_blob.does_exist &&
         blob_size_bounded(new_blob) &&
         // Added to store
         post_refs.len() == pre_refs.len() + 1 &&

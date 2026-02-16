@@ -107,7 +107,7 @@ impl<S: KeyValueStore + ?Sized + 'static> OrphanedPipelineRecovery<S> {
         // Scan for all pipeline runs
         let scan_request = ScanRequest {
             prefix: KV_PREFIX_CI_RUNS.to_string(),
-            limit: Some(self.batch_size),
+            limit_results: Some(self.batch_size),
             continuation_token: None,
         };
 
@@ -305,7 +305,7 @@ impl<S: KeyValueStore + ?Sized + 'static> OrphanedPipelineRecovery<S> {
     pub async fn list_orphaned_pipelines(&self) -> Result<Vec<PipelineRun>> {
         let scan_request = ScanRequest {
             prefix: KV_PREFIX_CI_RUNS.to_string(),
-            limit: Some(self.batch_size),
+            limit_results: Some(self.batch_size),
             continuation_token: None,
         };
 

@@ -16,14 +16,16 @@ pub struct ForgeRepoInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRepoResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub repo: Option<ForgeRepoInfo>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRepoListResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub repos: Vec<ForgeRepoInfo>,
     pub count: u32,
     pub error: Option<String>,
@@ -31,10 +33,12 @@ pub struct ForgeRepoListResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeBlobResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub hash: Option<String>,
     pub content: Option<Vec<u8>>,
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     pub error: Option<String>,
 }
 
@@ -47,7 +51,8 @@ pub struct ForgeTreeEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeTreeResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub hash: Option<String>,
     pub entries: Option<Vec<ForgeTreeEntry>>,
     pub error: Option<String>,
@@ -67,14 +72,16 @@ pub struct ForgeCommitInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeCommitResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub commit: Option<ForgeCommitInfo>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeLogResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub commits: Vec<ForgeCommitInfo>,
     pub count: u32,
     pub error: Option<String>,
@@ -88,8 +95,10 @@ pub struct ForgeRefInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRefResultResponse {
-    pub success: bool,
-    pub found: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
+    #[serde(rename = "found")]
+    pub was_found: bool,
     pub ref_info: Option<ForgeRefInfo>,
     pub previous_hash: Option<String>,
     pub error: Option<String>,
@@ -97,7 +106,8 @@ pub struct ForgeRefResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRefListResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub refs: Vec<ForgeRefInfo>,
     pub count: u32,
     pub error: Option<String>,
@@ -126,7 +136,8 @@ pub struct ForgeIssueInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeIssueResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub issue: Option<ForgeIssueInfo>,
     pub comments: Option<Vec<ForgeCommentInfo>>,
     pub error: Option<String>,
@@ -134,7 +145,8 @@ pub struct ForgeIssueResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeIssueListResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub issues: Vec<ForgeIssueInfo>,
     pub count: u32,
     pub error: Option<String>,
@@ -175,7 +187,8 @@ pub struct ForgePatchInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgePatchResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub patch: Option<ForgePatchInfo>,
     pub comments: Option<Vec<ForgeCommentInfo>>,
     pub revisions: Option<Vec<ForgePatchRevision>>,
@@ -185,7 +198,8 @@ pub struct ForgePatchResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgePatchListResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub patches: Vec<ForgePatchInfo>,
     pub count: u32,
     pub error: Option<String>,
@@ -193,13 +207,15 @@ pub struct ForgePatchListResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeOperationResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeKeyResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub public_key: Option<String>,
     pub secret_key: Option<String>,
     pub error: Option<String>,
@@ -218,7 +234,8 @@ pub struct GitBridgeRefUpdate {
     pub ref_name: String,
     pub old_sha1: String,
     pub new_sha1: String,
-    pub force: bool,
+    #[serde(rename = "force")]
+    pub is_force: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -229,7 +246,8 @@ pub struct GitBridgeRefInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgeListRefsResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub refs: Vec<GitBridgeRefInfo>,
     pub head: Option<String>,
     pub error: Option<String>,
@@ -237,7 +255,8 @@ pub struct GitBridgeListRefsResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgeFetchResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub objects: Vec<GitBridgeObject>,
     pub skipped: u32,
     pub error: Option<String>,
@@ -245,7 +264,8 @@ pub struct GitBridgeFetchResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgePushResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub objects_imported: u32,
     pub objects_skipped: u32,
     pub ref_results: Vec<GitBridgeRefResult>,
@@ -255,6 +275,7 @@ pub struct GitBridgePushResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgeRefResult {
     pub ref_name: String,
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }

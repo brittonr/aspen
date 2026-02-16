@@ -149,7 +149,7 @@ impl SecretsBackend for AspenSecretsBackend {
         let full_prefix = self.full_path(prefix);
         let request = ScanRequest {
             prefix: full_prefix.clone(),
-            limit: None,
+            limit_results: None,
             continuation_token: None,
         };
 

@@ -18,22 +18,26 @@ pub enum BatchCondition {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchReadResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub values: Option<Vec<Option<Vec<u8>>>>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchWriteResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub operations_applied: Option<u32>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConditionalBatchWriteResultResponse {
-    pub success: bool,
-    pub conditions_met: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
+    #[serde(rename = "conditions_met")]
+    pub were_conditions_met: bool,
     pub operations_applied: Option<u32>,
     pub failed_condition_index: Option<u32>,
     pub failed_condition_reason: Option<String>,

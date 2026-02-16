@@ -157,7 +157,7 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static
                 let result = match kv
                     .scan(aspen_core::kv::ScanRequest {
                         prefix: prefix.clone(),
-                        limit: Some(page_size),
+                        limit_results: Some(page_size),
                         continuation_token: continuation_token.clone(),
                     })
                     .await

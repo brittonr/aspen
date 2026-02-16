@@ -171,6 +171,101 @@ pub fn topological_sort(objects: Vec<PendingObject>) -> BridgeResult<Topological
     })
 }
 
+/// Result of building an adjacency graph for Kahn's algorithm.
+struct AdjacencyGraph {
+    /// In-degree count for each object (number of unprocessed dependencies).
+    in_degree: HashMap<Sha1Hash, usize>,
+    /// Map from object to its dependents (objects that depend on it).
+    dependents: HashMap<Sha1Hash, Vec<Sha1Hash>>,
+    /// Map from SHA-1 to the actual pending object.
+    object_map: HashMap<Sha1Hash, PendingObject>,
+}
+
+/// Build adjacency graph for topological sorting.
+///
+/// Constructs in-degree counts and dependent lists for Kahn's algorithm.
+/// Only counts dependencies that are within the input set (internal dependencies).
+fn topological_sort_waves_build_adjacency(
+    objects: Vec<PendingObject>,
+    all_hashes: &HashSet<Sha1Hash>,
+) -> AdjacencyGraph {
+    let mut in_degree: HashMap<Sha1Hash, usize> = HashMap::new();
+    let mut dependents: HashMap<Sha1Hash, Vec<Sha1Hash>> = HashMap::new();
+    let mut object_map: HashMap<Sha1Hash, PendingObject> = HashMap::new();
+
+    for obj in objects {
+        in_degree.entry(obj.sha1).or_insert(0);
+
+        for dep in &obj.dependencies {
+            if all_hashes.contains(dep) {
+                // Only count dependencies that are in our set
+                *in_degree.entry(obj.sha1).or_insert(0) += 1;
+                dependents.entry(*dep).or_default().push(obj.sha1);
+            }
+            // External dependencies (already processed) don't contribute to in-degree
+        }
+
+        object_map.insert(obj.sha1, obj);
+    }
+
+    AdjacencyGraph {
+        in_degree,
+        dependents,
+        object_map,
+    }
+}
+
+/// Process wave iterations using Kahn's algorithm.
+///
+/// Iteratively processes waves of objects with zero in-degree,
+/// updating dependents as each wave completes.
+fn topological_sort_waves_process_iterations(
+    graph: &mut AdjacencyGraph,
+) -> (Vec<Vec<PendingObject>>, HashSet<Sha1Hash>) {
+    // Initialize first wave with objects that have no in-set dependencies
+    let mut current_wave: Vec<Sha1Hash> =
+        graph.in_degree.iter().filter(|&(_, deg)| *deg == 0).map(|(sha1, _)| *sha1).collect();
+
+    let mut waves: Vec<Vec<PendingObject>> = Vec::new();
+    let mut processed = HashSet::new();
+
+    while !current_wave.is_empty() {
+        let mut wave_objects = Vec::with_capacity(current_wave.len());
+        let mut next_wave = Vec::new();
+
+        for sha1 in current_wave {
+            if processed.contains(&sha1) {
+                continue;
+            }
+            processed.insert(sha1);
+
+            if let Some(obj) = graph.object_map.remove(&sha1) {
+                wave_objects.push(obj);
+            }
+
+            // Decrease in-degree for dependents and collect those ready for next wave
+            if let Some(deps) = graph.dependents.get(&sha1) {
+                for dependent in deps {
+                    if let Some(deg) = graph.in_degree.get_mut(dependent) {
+                        *deg = deg.saturating_sub(1);
+                        if *deg == 0 && !processed.contains(dependent) {
+                            next_wave.push(*dependent);
+                        }
+                    }
+                }
+            }
+        }
+
+        if !wave_objects.is_empty() {
+            waves.push(wave_objects);
+        }
+
+        current_wave = next_wave;
+    }
+
+    (waves, processed)
+}
+
 /// Topologically sort objects into parallel waves.
 ///
 /// Uses Kahn's algorithm to produce waves where all objects in a wave
@@ -205,69 +300,12 @@ pub fn topological_sort_waves(objects: Vec<PendingObject>) -> BridgeResult<Topol
     // First pass: collect all hashes so we know which dependencies are internal
     let all_hashes: HashSet<Sha1Hash> = objects.iter().map(|obj| obj.sha1).collect();
 
-    // Build adjacency list and in-degree count
-    let mut in_degree: HashMap<Sha1Hash, usize> = HashMap::new();
-    let mut dependents: HashMap<Sha1Hash, Vec<Sha1Hash>> = HashMap::new();
-    let mut object_map: HashMap<Sha1Hash, PendingObject> = HashMap::new();
-
-    for obj in objects {
-        in_degree.entry(obj.sha1).or_insert(0);
-
-        for dep in &obj.dependencies {
-            if all_hashes.contains(dep) {
-                // Only count dependencies that are in our set
-                *in_degree.entry(obj.sha1).or_insert(0) += 1;
-                dependents.entry(*dep).or_default().push(obj.sha1);
-            }
-            // External dependencies (already processed) don't contribute to in-degree
-        }
-
-        object_map.insert(obj.sha1, obj);
-    }
-
-    // Initialize first wave with objects that have no in-set dependencies
-    let mut current_wave: Vec<Sha1Hash> =
-        in_degree.iter().filter(|&(_, deg)| *deg == 0).map(|(sha1, _)| *sha1).collect();
-
-    let mut waves: Vec<Vec<PendingObject>> = Vec::new();
-    let mut processed = HashSet::new();
-
-    while !current_wave.is_empty() {
-        let mut wave_objects = Vec::with_capacity(current_wave.len());
-        let mut next_wave = Vec::new();
-
-        for sha1 in current_wave {
-            if processed.contains(&sha1) {
-                continue;
-            }
-            processed.insert(sha1);
-
-            if let Some(obj) = object_map.remove(&sha1) {
-                wave_objects.push(obj);
-            }
-
-            // Decrease in-degree for dependents and collect those ready for next wave
-            if let Some(deps) = dependents.get(&sha1) {
-                for dependent in deps {
-                    if let Some(deg) = in_degree.get_mut(dependent) {
-                        *deg = deg.saturating_sub(1);
-                        if *deg == 0 && !processed.contains(dependent) {
-                            next_wave.push(*dependent);
-                        }
-                    }
-                }
-            }
-        }
-
-        if !wave_objects.is_empty() {
-            waves.push(wave_objects);
-        }
-
-        current_wave = next_wave;
-    }
+    // Build adjacency graph and process waves
+    let mut graph = topological_sort_waves_build_adjacency(objects, &all_hashes);
+    let (waves, processed) = topological_sort_waves_process_iterations(&mut graph);
 
     // Check for cycles - if any objects remain in object_map, we have a cycle
-    if !object_map.is_empty() {
+    if !graph.object_map.is_empty() {
         return Err(BridgeError::CycleDetected);
     }
 

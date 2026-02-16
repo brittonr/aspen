@@ -473,7 +473,7 @@ async fn test_scan_verification_with_prefix() {
     let results = store
         .scan(ScanRequest {
             prefix: "scan_test_".to_string(),
-            limit: Some(100),
+            limit_results: Some(100),
             continuation_token: None,
         })
         .await
@@ -507,7 +507,7 @@ async fn test_scan_verification_pagination() {
     let page1 = store
         .scan(ScanRequest {
             prefix: "page_test_".to_string(),
-            limit: Some(20),
+            limit_results: Some(20),
             continuation_token: None,
         })
         .await
@@ -520,7 +520,7 @@ async fn test_scan_verification_pagination() {
     let page2 = store
         .scan(ScanRequest {
             prefix: "page_test_".to_string(),
-            limit: Some(20),
+            limit_results: Some(20),
             continuation_token: page1.continuation_token,
         })
         .await

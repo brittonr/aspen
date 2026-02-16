@@ -69,7 +69,7 @@ async fn test_docs_exporter_with_real_store() -> Result<()> {
     let exporter = Arc::new(DocsExporter::new(writer.clone()));
 
     // Create broadcast channel
-    let (sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
+    let (sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE as usize);
     let receiver = sender.subscribe();
 
     // Spawn exporter

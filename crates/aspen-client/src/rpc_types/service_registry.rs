@@ -5,7 +5,8 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceRegisterResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub fencing_token: Option<u64>,
     pub deadline_ms: Option<u64>,
     pub error: Option<String>,
@@ -37,7 +38,8 @@ pub struct ServiceInstanceResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceDiscoverResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub instances: Vec<ServiceInstanceResponse>,
     pub count: u32,
     pub error: Option<String>,
@@ -45,7 +47,8 @@ pub struct ServiceDiscoverResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceListResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub services: Vec<String>,
     pub count: u32,
     pub error: Option<String>,
@@ -53,15 +56,18 @@ pub struct ServiceListResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceGetInstanceResultResponse {
-    pub success: bool,
-    pub found: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
+    #[serde(rename = "found")]
+    pub was_found: bool,
     pub instance: Option<ServiceInstanceResponse>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceHeartbeatResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub new_deadline_ms: Option<u64>,
     pub health_status: Option<String>,
     pub error: Option<String>,
@@ -69,12 +75,14 @@ pub struct ServiceHeartbeatResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceUpdateHealthResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceUpdateMetadataResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }

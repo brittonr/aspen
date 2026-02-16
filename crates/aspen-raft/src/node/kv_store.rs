@@ -122,7 +122,7 @@ impl KeyValueStore for RaftNode {
         self.scan_ensure_linearizable().await?;
 
         // Apply default limit if not specified
-        let limit = _request.limit.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
+        let limit = _request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
 
         // Tiger Style: scan limit must be bounded
         assert!(
@@ -306,7 +306,7 @@ impl RaftNode {
         };
 
         Ok(ScanResult {
-            count: entries.len() as u32,
+            result_count: entries.len() as u32,
             entries,
             is_truncated,
             continuation_token,
@@ -334,7 +334,7 @@ impl RaftNode {
                 };
 
                 Ok(ScanResult {
-                    count: entries.len() as u32,
+                    result_count: entries.len() as u32,
                     entries,
                     is_truncated,
                     continuation_token,

@@ -118,7 +118,7 @@ pub(crate) async fn handle_job_list(
     match kv_store
         .scan(aspen_core::ScanRequest {
             prefix: prefix.to_string(),
-            limit: Some(limit as u32),
+            limit_results: Some(limit as u32),
             continuation_token: None,
         })
         .await

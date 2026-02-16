@@ -422,14 +422,14 @@ async fn test_kv_store_scan_empty() {
     let result = store
         .scan(ScanRequest {
             prefix: "".to_string(),
-            limit: None,
+            limit_results: None,
             continuation_token: None,
         })
         .await
         .unwrap();
 
     assert!(result.entries.is_empty());
-    assert_eq!(result.count, 0);
+    assert_eq!(result.result_count, 0);
     assert!(!result.is_truncated);
     assert!(result.continuation_token.is_none());
 }
@@ -454,13 +454,13 @@ async fn test_kv_store_scan_all_keys() {
     let result = store
         .scan(ScanRequest {
             prefix: "".to_string(),
-            limit: None,
+            limit_results: None,
             continuation_token: None,
         })
         .await
         .unwrap();
 
-    assert_eq!(result.count, 10);
+    assert_eq!(result.result_count, 10);
     assert!(!result.is_truncated);
     // Keys should be sorted
     assert_eq!(result.entries[0].key, "key01");
@@ -490,13 +490,13 @@ async fn test_kv_store_scan_with_prefix() {
     let result = store
         .scan(ScanRequest {
             prefix: "user:".to_string(),
-            limit: None,
+            limit_results: None,
             continuation_token: None,
         })
         .await
         .unwrap();
 
-    assert_eq!(result.count, 5);
+    assert_eq!(result.result_count, 5);
     for entry in &result.entries {
         assert!(entry.key.starts_with("user:"));
     }
@@ -523,13 +523,13 @@ async fn test_kv_store_scan_with_limit() {
     let result = store
         .scan(ScanRequest {
             prefix: "".to_string(),
-            limit: Some(10),
+            limit_results: Some(10),
             continuation_token: None,
         })
         .await
         .unwrap();
 
-    assert_eq!(result.count, 10);
+    assert_eq!(result.result_count, 10);
     assert!(result.is_truncated);
     assert!(result.continuation_token.is_some());
     assert_eq!(result.entries[0].key, "key001");
@@ -557,13 +557,13 @@ async fn test_kv_store_scan_pagination() {
     let page1 = store
         .scan(ScanRequest {
             prefix: "".to_string(),
-            limit: Some(10),
+            limit_results: Some(10),
             continuation_token: None,
         })
         .await
         .unwrap();
 
-    assert_eq!(page1.count, 10);
+    assert_eq!(page1.result_count, 10);
     assert!(page1.is_truncated);
     assert_eq!(page1.entries[0].key, "key01");
     assert_eq!(page1.entries[9].key, "key10");
@@ -572,13 +572,13 @@ async fn test_kv_store_scan_pagination() {
     let page2 = store
         .scan(ScanRequest {
             prefix: "".to_string(),
-            limit: Some(10),
+            limit_results: Some(10),
             continuation_token: page1.continuation_token,
         })
         .await
         .unwrap();
 
-    assert_eq!(page2.count, 10);
+    assert_eq!(page2.result_count, 10);
     assert!(page2.is_truncated);
     assert_eq!(page2.entries[0].key, "key11");
     assert_eq!(page2.entries[9].key, "key20");
@@ -587,13 +587,13 @@ async fn test_kv_store_scan_pagination() {
     let page3 = store
         .scan(ScanRequest {
             prefix: "".to_string(),
-            limit: Some(10),
+            limit_results: Some(10),
             continuation_token: page2.continuation_token,
         })
         .await
         .unwrap();
 
-    assert_eq!(page3.count, 5);
+    assert_eq!(page3.result_count, 5);
     assert!(!page3.is_truncated);
     assert!(page3.continuation_token.is_none());
     assert_eq!(page3.entries[0].key, "key21");
@@ -621,13 +621,13 @@ async fn test_kv_store_scan_default_limit() {
     let result = store
         .scan(ScanRequest {
             prefix: "".to_string(),
-            limit: None,
+            limit_results: None,
             continuation_token: None,
         })
         .await
         .unwrap();
 
-    assert_eq!(result.count, DEFAULT_SCAN_LIMIT);
+    assert_eq!(result.result_count, DEFAULT_SCAN_LIMIT);
     assert!(result.is_truncated);
 }
 
@@ -652,14 +652,14 @@ async fn test_kv_store_scan_respects_max_limit() {
     let result = store
         .scan(ScanRequest {
             prefix: "".to_string(),
-            limit: Some(20000),
+            limit_results: Some(20000),
             continuation_token: None,
         })
         .await
         .unwrap();
 
     // Should be capped at MAX_SCAN_RESULTS
-    assert_eq!(result.count, MAX_SCAN_RESULTS);
+    assert_eq!(result.result_count, MAX_SCAN_RESULTS);
     assert!(result.is_truncated);
 }
 
@@ -684,14 +684,14 @@ async fn test_kv_store_scan_prefix_no_matches() {
     let result = store
         .scan(ScanRequest {
             prefix: "config:".to_string(),
-            limit: None,
+            limit_results: None,
             continuation_token: None,
         })
         .await
         .unwrap();
 
     assert!(result.entries.is_empty());
-    assert_eq!(result.count, 0);
+    assert_eq!(result.result_count, 0);
     assert!(!result.is_truncated);
 }
 
@@ -860,13 +860,13 @@ fn test_kv_store_scan_prefix_filtering() {
             let result = store
                 .scan(ScanRequest {
                     prefix: prefix.0.clone(),
-                    limit: None,
+                    limit_results: None,
                     continuation_token: None,
                 })
                 .await
                 .unwrap();
 
-            assert_eq!(result.count as usize, num_keys.0);
+            assert_eq!(result.result_count as usize, num_keys.0);
             for entry in &result.entries {
                 assert!(entry.key.starts_with(&prefix.0));
             }

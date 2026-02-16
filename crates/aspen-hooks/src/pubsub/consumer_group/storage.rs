@@ -201,7 +201,7 @@ pub async fn count_groups<S: KeyValueStore + ?Sized>(store: &S) -> Result<u32> {
     let result = store
         .scan(ScanRequest {
             prefix,
-            limit: Some((MAX_CONSUMER_GROUPS + 1) as u32),
+            limit_results: Some((MAX_CONSUMER_GROUPS + 1) as u32),
             continuation_token: None,
         })
         .await?;
@@ -221,12 +221,12 @@ pub async fn count_consumers<S: KeyValueStore + ?Sized>(store: &S, group_id: &Co
     let result = store
         .scan(ScanRequest {
             prefix,
-            limit: Some(MAX_CONSUMERS_PER_GROUP + 1),
+            limit_results: Some(MAX_CONSUMERS_PER_GROUP + 1),
             continuation_token: None,
         })
         .await?;
 
-    Ok(result.count)
+    Ok(result.result_count)
 }
 
 /// List all consumers in a group.
@@ -240,7 +240,7 @@ pub async fn list_consumers<S: KeyValueStore + ?Sized>(
     let result = store
         .scan(ScanRequest {
             prefix,
-            limit: Some(MAX_CONSUMERS_PER_GROUP),
+            limit_results: Some(MAX_CONSUMERS_PER_GROUP),
             continuation_token: None,
         })
         .await?;
@@ -424,7 +424,7 @@ pub async fn scan_expired_pending<S: KeyValueStore + ?Sized>(
     let result = store
         .scan(ScanRequest {
             prefix,
-            limit: Some(limit),
+            limit_results: Some(limit),
             continuation_token: None,
         })
         .await?;
@@ -532,7 +532,7 @@ pub async fn delete_keys_with_prefix<S: KeyValueStore + ?Sized>(store: &S, prefi
         let result = store
             .scan(ScanRequest {
                 prefix: prefix.to_string(),
-                limit: Some(BATCH_DELETE_SIZE),
+                limit_results: Some(BATCH_DELETE_SIZE),
                 continuation_token: None,
             })
             .await?;

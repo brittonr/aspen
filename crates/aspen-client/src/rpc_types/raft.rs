@@ -26,7 +26,8 @@ pub struct ReplicationProgress {
 /// Snapshot trigger result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnapshotResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub snapshot_index: Option<u64>,
     pub error: Option<String>,
 }
@@ -34,7 +35,8 @@ pub struct SnapshotResultResponse {
 /// Checkpoint WAL result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckpointWalResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub pages_checkpointed: Option<u32>,
     pub wal_size_before_bytes: Option<u64>,
     pub wal_size_after_bytes: Option<u64>,

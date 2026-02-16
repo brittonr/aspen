@@ -14,15 +14,18 @@ pub struct DnsRecordResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsRecordResultResponse {
-    pub success: bool,
-    pub found: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
+    #[serde(rename = "found")]
+    pub was_found: bool,
     pub record: Option<DnsRecordResponse>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsRecordsResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub records: Vec<DnsRecordResponse>,
     pub count: u32,
     pub error: Option<String>,
@@ -30,8 +33,10 @@ pub struct DnsRecordsResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsDeleteRecordResultResponse {
-    pub success: bool,
-    pub deleted: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
+    #[serde(rename = "deleted")]
+    pub was_deleted: bool,
     pub error: Option<String>,
 }
 
@@ -49,15 +54,18 @@ pub struct DnsZoneResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsZoneResultResponse {
-    pub success: bool,
-    pub found: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
+    #[serde(rename = "found")]
+    pub was_found: bool,
     pub zone: Option<DnsZoneResponse>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsZonesResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub zones: Vec<DnsZoneResponse>,
     pub count: u32,
     pub error: Option<String>,
@@ -65,8 +73,10 @@ pub struct DnsZonesResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsDeleteZoneResultResponse {
-    pub success: bool,
-    pub deleted: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
+    #[serde(rename = "deleted")]
+    pub was_deleted: bool,
     pub records_deleted: u32,
     pub error: Option<String>,
 }

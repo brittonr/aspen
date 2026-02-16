@@ -9,7 +9,8 @@ use crate::KeyValueWithRevision;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScanRequest {
     pub prefix: String,
-    pub limit: Option<u32>,
+    #[serde(rename = "limit")]
+    pub limit_results: Option<u32>,
     pub continuation_token: Option<String>,
 }
 
@@ -17,7 +18,8 @@ pub struct ScanRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScanResult {
     pub entries: Vec<KeyValueWithRevision>,
-    pub count: u32,
+    #[serde(rename = "count")]
+    pub result_count: u32,
     pub is_truncated: bool,
     pub continuation_token: Option<String>,
 }
@@ -30,7 +32,7 @@ mod tests {
     fn scan_request_serialization_roundtrip() {
         let req = ScanRequest {
             prefix: "prefix".into(),
-            limit: Some(100),
+            limit_results: Some(100),
             continuation_token: Some("token".into()),
         };
         let json = serde_json::to_string(&req).unwrap();
@@ -48,7 +50,7 @@ mod tests {
                 create_revision: 1,
                 mod_revision: 1,
             }],
-            count: 1,
+            result_count: 1,
             is_truncated: false,
             continuation_token: None,
         };

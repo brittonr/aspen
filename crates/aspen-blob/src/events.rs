@@ -44,12 +44,12 @@ use crate::types::BlobRef;
 
 /// Buffer size for blob event broadcast channel.
 /// Tiger Style: Bounded to prevent unbounded memory growth.
-pub const BLOB_EVENT_BUFFER_SIZE: usize = 500;
+pub const BLOB_EVENT_BUFFER_SIZE: u32 = 500;
 
 /// Threshold for inlining blob content in events (64 KB).
 /// Blobs smaller than this have their content included in the event payload.
 /// Larger blobs include a ticket for the handler to fetch.
-pub const INLINE_BLOB_THRESHOLD: usize = 65_536;
+pub const INLINE_BLOB_THRESHOLD: u32 = 65_536;
 
 /// Types of blob events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -225,7 +225,7 @@ impl BlobEvent {
 /// content or generate a ticket based on size threshold.
 pub struct BlobEventBroadcaster {
     sender: broadcast::Sender<BlobEvent>,
-    inline_threshold: usize,
+    inline_threshold: u32,
 }
 
 impl BlobEventBroadcaster {
@@ -238,7 +238,7 @@ impl BlobEventBroadcaster {
     }
 
     /// Create a new broadcaster with a custom inline threshold.
-    pub fn with_threshold(sender: broadcast::Sender<BlobEvent>, threshold: usize) -> Self {
+    pub fn with_threshold(sender: broadcast::Sender<BlobEvent>, threshold: u32) -> Self {
         Self {
             sender,
             inline_threshold: threshold,
@@ -259,7 +259,7 @@ impl BlobEventBroadcaster {
     ///
     /// Content is included if the blob is under the inline threshold.
     pub fn emit_added(&self, blob_ref: &BlobRef, source: BlobSource, data: &[u8], was_new: bool) {
-        let content = if data.len() <= self.inline_threshold {
+        let content = if data.len() <= self.inline_threshold as usize {
             Some(data.to_vec())
         } else {
             None
@@ -275,7 +275,7 @@ impl BlobEventBroadcaster {
     /// Content is included if the blob is under the inline threshold.
     pub fn emit_downloaded(&self, blob_ref: &BlobRef, provider_id: &str, duration_ms: u64, data: Option<&[u8]>) {
         let content = data.and_then(|d| {
-            if d.len() <= self.inline_threshold {
+            if d.len() <= self.inline_threshold as usize {
                 Some(d.to_vec())
             } else {
                 None
@@ -319,7 +319,7 @@ impl BlobEventBroadcaster {
 ///
 /// Returns the sender (for the broadcaster) and a receiver (for testing).
 pub fn create_blob_event_channel() -> (broadcast::Sender<BlobEvent>, broadcast::Receiver<BlobEvent>) {
-    broadcast::channel(BLOB_EVENT_BUFFER_SIZE)
+    broadcast::channel(BLOB_EVENT_BUFFER_SIZE as usize)
 }
 
 #[cfg(test)]

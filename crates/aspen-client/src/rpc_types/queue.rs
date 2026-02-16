@@ -13,28 +13,33 @@ pub struct QueueEnqueueItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueCreateResultResponse {
-    pub success: bool,
-    pub created: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
+    #[serde(rename = "created")]
+    pub was_created: bool,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueDeleteResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub items_deleted: Option<u64>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueEnqueueResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub item_id: Option<u64>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueEnqueueBatchResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub item_ids: Vec<u64>,
     pub error: Option<String>,
 }
@@ -51,7 +56,8 @@ pub struct QueueDequeuedItemResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueDequeueResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub items: Vec<QueueDequeuedItemResponse>,
     pub error: Option<String>,
 }
@@ -67,34 +73,40 @@ pub struct QueueItemResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueuePeekResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub items: Vec<QueueItemResponse>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueAckResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueNackResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueExtendVisibilityResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub new_deadline_ms: Option<u64>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueStatusResultResponse {
-    pub success: bool,
-    pub exists: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
+    #[serde(rename = "exists")]
+    pub does_exist: bool,
     pub visible_count: Option<u64>,
     pub pending_count: Option<u64>,
     pub dlq_count: Option<u64>,
@@ -116,13 +128,15 @@ pub struct QueueDLQItemResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueGetDLQResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub items: Vec<QueueDLQItemResponse>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueRedriveDLQResultResponse {
-    pub success: bool,
+    #[serde(rename = "success")]
+    pub is_success: bool,
     pub error: Option<String>,
 }

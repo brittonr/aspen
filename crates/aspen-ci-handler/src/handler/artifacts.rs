@@ -53,7 +53,7 @@ pub(crate) async fn handle_list_artifacts(
         .kv_store
         .scan(ScanRequest {
             prefix,
-            limit: Some(100), // Tiger Style: bounded results
+            limit_results: Some(100), // Tiger Style: bounded results
             continuation_token: None,
         })
         .await;
@@ -119,7 +119,7 @@ pub(crate) async fn handle_get_artifact(
         .kv_store
         .scan(aspen_core::ScanRequest {
             prefix,
-            limit: Some(1000), // Tiger Style: bounded search
+            limit_results: Some(1000), // Tiger Style: bounded search
             continuation_token: None,
         })
         .await;

@@ -74,8 +74,8 @@ impl<B: BlobStore> SyncService<B> {
             })?;
 
         let signed: SignedObject<GitObject> =
-            SignedObject::from_bytes(&bytes).map_err(|_| ForgeError::InvalidObject {
-                message: "failed to deserialize git object".to_string(),
+            SignedObject::from_bytes(&bytes).map_err(|e| ForgeError::InvalidObject {
+                message: format!("failed to deserialize git object: {}", e),
             })?;
 
         Ok(Self::extract_git_references(&signed.payload))
@@ -93,8 +93,8 @@ impl<B: BlobStore> SyncService<B> {
             })?;
 
         let signed: SignedObject<CobChange> =
-            SignedObject::from_bytes(&bytes).map_err(|_| ForgeError::InvalidObject {
-                message: "failed to deserialize COB change".to_string(),
+            SignedObject::from_bytes(&bytes).map_err(|e| ForgeError::InvalidObject {
+                message: format!("failed to deserialize COB change: {}", e),
             })?;
 
         Ok(signed.payload.parents())

@@ -419,7 +419,9 @@ impl IrohEndpointManager {
         // Tiger Style: decoded bytes must be exactly 32 bytes for Ed25519
         debug_assert!(bytes.len() == 32, "ENDPOINT: decoded secret key must be 32 bytes");
 
-        let bytes_array: [u8; 32] = bytes.try_into().map_err(|_| anyhow::anyhow!("invalid secret key length"))?;
+        let bytes_array: [u8; 32] = bytes
+            .try_into()
+            .map_err(|e: Vec<u8>| anyhow::anyhow!("invalid secret key length: expected 32 bytes, got {}", e.len()))?;
 
         Ok(SecretKey::from(bytes_array))
     }

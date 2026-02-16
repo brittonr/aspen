@@ -108,8 +108,14 @@ fn set_value(table: &mut toml::Table, key: &str, value: &str) {
             *entry = toml::Value::Table(toml::Table::new());
         }
         // SAFETY: We just ensured this is a table above - the condition guarantees
-        // entry.is_table() == true at this point, so as_table_mut() cannot return None.
-        current = entry.as_table_mut().expect("set_value: entry is guaranteed to be a table by preceding logic");
+        // entry.is_table() == true at this point. Using if-let for Tiger Style.
+        current = if let Some(table) = entry.as_table_mut() {
+            table
+        } else {
+            // Unreachable: we just ensured entry.is_table() == true above.
+            // Return early for Tiger Style compliance (no panics).
+            return;
+        };
     }
 
     current.insert(parts[parts.len() - 1].to_string(), toml::Value::String(value.to_string()));

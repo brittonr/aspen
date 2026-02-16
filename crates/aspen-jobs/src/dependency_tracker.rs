@@ -396,6 +396,46 @@ impl DependencyGraph {
         Ok(newly_ready)
     }
 
+    /// Handle cascade failure policy: mark dependent as failed and queue transitive dependents.
+    fn mark_failed_handle_cascade(
+        dep_info: &mut JobDependencyInfo,
+        dep_job_id: &JobId,
+        parent_reason: &str,
+        edges_reverse: &HashMap<JobId, HashSet<JobId>>,
+        processed: &HashSet<JobId>,
+        worklist: &mut VecDeque<(JobId, String)>,
+        affected: &mut Vec<JobId>,
+    ) {
+        let cascade_reason = format!("Cascade failure: {}", parent_reason);
+        dep_info.state = DependencyState::Failed(cascade_reason.clone());
+        affected.push(dep_job_id.clone());
+
+        // Add this job's dependents to the worklist for recursive processing
+        if let Some(transitive_deps) = edges_reverse.get(dep_job_id) {
+            for trans_id in transitive_deps {
+                if !processed.contains(trans_id) {
+                    worklist.push_back((trans_id.clone(), cascade_reason.clone()));
+                }
+            }
+        }
+    }
+
+    /// Handle skip-failed policy: remove failed dependency and check if job becomes ready.
+    fn mark_failed_handle_skip(
+        dep_info: &mut JobDependencyInfo,
+        dep_job_id: &JobId,
+        failed_job_id: &JobId,
+        affected: &mut Vec<JobId>,
+    ) {
+        if let DependencyState::Waiting(ref mut waiting_on) = dep_info.state {
+            waiting_on.retain(|id| id != failed_job_id);
+            if waiting_on.is_empty() {
+                dep_info.state = DependencyState::Ready;
+                affected.push(dep_job_id.clone());
+            }
+        }
+    }
+
     /// Mark a job as failed and handle dependent failures recursively.
     ///
     /// This uses a worklist algorithm to propagate failures through the entire
@@ -432,42 +472,30 @@ impl DependencyGraph {
 
         // Process the worklist until empty
         while let Some((dep_job_id, parent_reason)) = worklist.pop_front() {
-            // Skip if already processed (prevents infinite loops in cyclic graphs)
             if processed.contains(&dep_job_id) {
                 continue;
             }
             processed.insert(dep_job_id.clone());
 
             if let Some(dep_info) = nodes.get_mut(&dep_job_id) {
-                // Skip jobs already in terminal state
                 if dep_info.state.is_terminal() {
                     continue;
                 }
 
                 match dep_info.failure_policy {
                     DependencyFailurePolicy::FailCascade => {
-                        let cascade_reason = format!("Cascade failure: {}", parent_reason);
-                        dep_info.state = DependencyState::Failed(cascade_reason.clone());
-                        affected.push(dep_job_id.clone());
-
-                        // Add this job's dependents to the worklist for recursive processing
-                        if let Some(transitive_deps) = edges_reverse.get(&dep_job_id) {
-                            for trans_id in transitive_deps {
-                                if !processed.contains(trans_id) {
-                                    worklist.push_back((trans_id.clone(), cascade_reason.clone()));
-                                }
-                            }
-                        }
+                        Self::mark_failed_handle_cascade(
+                            dep_info,
+                            &dep_job_id,
+                            &parent_reason,
+                            &edges_reverse,
+                            &processed,
+                            &mut worklist,
+                            &mut affected,
+                        );
                     }
                     DependencyFailurePolicy::SkipFailed => {
-                        // Check if job can still run with remaining deps
-                        if let DependencyState::Waiting(ref mut waiting_on) = dep_info.state {
-                            waiting_on.retain(|id| id != job_id);
-                            if waiting_on.is_empty() {
-                                dep_info.state = DependencyState::Ready;
-                                affected.push(dep_job_id.clone());
-                            }
-                        }
+                        Self::mark_failed_handle_skip(dep_info, &dep_job_id, job_id, &mut affected);
                     }
                     _ => {
                         // Keep waiting (WaitForRetry, ContinuePartial)

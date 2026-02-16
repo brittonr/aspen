@@ -524,7 +524,7 @@ async fn test_pubsub_multi_node_replication() -> Result<()> {
             .raft_node()
             .scan(ScanRequest {
                 prefix: "__pubsub/events/".to_string(),
-                limit: Some(10),
+                limit_results: Some(10),
                 continuation_token: None,
             })
             .await;

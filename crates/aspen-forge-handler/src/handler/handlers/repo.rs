@@ -32,7 +32,7 @@ pub(crate) async fn handle_create_repo(
                     description,
                     default_branch: identity.default_branch.clone(),
                     delegates: delegates.iter().map(|k| k.to_string()).collect(),
-                    threshold,
+                    threshold_delegates: threshold,
                     created_at_ms: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|d| d.as_millis() as u64)
@@ -74,7 +74,7 @@ pub(crate) async fn handle_get_repo(forge_node: &ForgeNodeRef, repo_id: String) 
                 description: None,
                 default_branch: identity.default_branch.clone(),
                 delegates: identity.delegates.iter().map(|k| k.to_string()).collect(),
-                threshold: identity.threshold,
+                threshold_delegates: identity.threshold,
                 created_at_ms: 0, // Not stored in identity
             }),
             error: None,
@@ -107,7 +107,7 @@ pub(crate) async fn handle_list_repos(
         .kv_store
         .scan(ScanRequest {
             prefix: KV_PREFIX_REPOS.to_string(),
-            limit: Some(limit + offset),
+            limit_results: Some(limit + offset),
             continuation_token: None,
         })
         .await;
@@ -133,7 +133,7 @@ pub(crate) async fn handle_list_repos(
                             description: identity.description,
                             default_branch: identity.default_branch,
                             delegates: identity.delegates.iter().map(|k| k.to_string()).collect(),
-                            threshold: identity.threshold,
+                            threshold_delegates: identity.threshold,
                             created_at_ms: identity.created_at_ms,
                         })
                     } else {

@@ -194,7 +194,7 @@ fn generate_http_api_corpus(corpus_dir: &Path) -> Result<()> {
             "scan_request",
             serde_json::to_string(&ScanRequest {
                 prefix: "test".to_string(),
-                limit: Some(100),
+                limit_results: Some(100),
                 continuation_token: None,
             })
             .context("failed to serialize scan_request")?,

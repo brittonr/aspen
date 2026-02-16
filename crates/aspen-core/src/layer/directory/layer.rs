@@ -164,7 +164,7 @@ impl<KV: KeyValueStore + ?Sized> DirectoryLayer<KV> {
             .store
             .scan(ScanRequest {
                 prefix: prefix_str.clone(),
-                limit: Some(MAX_LIST_RESULTS),
+                limit_results: Some(MAX_LIST_RESULTS),
                 continuation_token: None,
             })
             .await

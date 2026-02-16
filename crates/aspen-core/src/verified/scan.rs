@@ -12,8 +12,8 @@ use crate::constants::MAX_SCAN_RESULTS;
 ///
 /// Applies default if not specified and caps at MAX_SCAN_RESULTS.
 #[inline]
-pub fn normalize_scan_limit(limit: Option<u32>, default: u32, max: u32) -> usize {
-    limit.unwrap_or(default).min(max) as usize
+pub fn normalize_scan_limit(limit: Option<u32>, default: u32, max: u32) -> u32 {
+    limit.unwrap_or(default).min(max)
 }
 
 /// Decode base64-encoded continuation token to a key string.
@@ -49,20 +49,20 @@ where
 }
 
 /// Paginate scan results with truncation detection.
-pub fn paginate_entries<T>(entries: Vec<T>, limit: usize) -> (Vec<T>, bool) {
-    let is_truncated = entries.len() > limit;
-    let paginated = entries.into_iter().take(limit).collect();
+pub fn paginate_entries<T>(entries: Vec<T>, limit: u32) -> (Vec<T>, bool) {
+    let is_truncated = entries.len() > limit as usize;
+    let paginated = entries.into_iter().take(limit as usize).collect();
     (paginated, is_truncated)
 }
 
 /// Build scan result with pagination metadata.
-pub fn build_scan_metadata(count: usize, is_truncated: bool, last_key: Option<&str>) -> (u32, bool, Option<String>) {
+pub fn build_scan_metadata(count: u32, is_truncated: bool, last_key: Option<&str>) -> (u32, bool, Option<String>) {
     let continuation_token = if is_truncated {
         last_key.map(encode_continuation_token)
     } else {
         None
     };
-    (count as u32, is_truncated, continuation_token)
+    (count, is_truncated, continuation_token)
 }
 
 /// Complete scan pipeline: normalize, filter, sort, paginate.
@@ -91,7 +91,7 @@ where
     let (paginated, is_truncated) = paginate_entries(sorted, limit);
 
     let last_key = paginated.last().map(|(k, _)| k.as_ref());
-    let (count, is_truncated, next_token) = build_scan_metadata(paginated.len(), is_truncated, last_key);
+    let (count, is_truncated, next_token) = build_scan_metadata(paginated.len() as u32, is_truncated, last_key);
 
     (paginated, count, is_truncated, next_token)
 }

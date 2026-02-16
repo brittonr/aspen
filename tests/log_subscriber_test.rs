@@ -529,7 +529,7 @@ fn test_log_entry_message_size_within_limit() {
     let bytes = postcard::to_stdvec(&message).expect("serialize");
 
     assert!(
-        bytes.len() < MAX_LOG_ENTRY_MESSAGE_SIZE,
+        bytes.len() < MAX_LOG_ENTRY_MESSAGE_SIZE as usize,
         "message size {} should be less than {}",
         bytes.len(),
         MAX_LOG_ENTRY_MESSAGE_SIZE
@@ -541,7 +541,7 @@ fn test_subscribe_request_size() {
     // Large prefix should still serialize
     let request = SubscribeRequest::with_prefix(0, vec![0u8; 10_000]);
     let bytes = postcard::to_stdvec(&request).expect("serialize");
-    assert!(bytes.len() < MAX_LOG_ENTRY_MESSAGE_SIZE);
+    assert!(bytes.len() < MAX_LOG_ENTRY_MESSAGE_SIZE as usize);
 }
 
 // ============================================================================

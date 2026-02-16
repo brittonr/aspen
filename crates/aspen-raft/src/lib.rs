@@ -140,7 +140,7 @@ impl StateMachineVariant {
     /// Returns keys in sorted order (lexicographic).
     /// Tiger Style: Bounded results prevent unbounded memory usage.
     pub async fn scan(&self, request: &ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
-        let limit_u32 = request.limit.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS).min(MAX_BATCH_SIZE);
+        let limit_u32 = request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS).min(MAX_BATCH_SIZE);
         let limit = limit_u32 as usize;
         let fetch_limit = limit_u32.saturating_add(1);
 
@@ -206,11 +206,11 @@ impl StateMachineVariant {
             None
         };
 
-        let count = entries.len() as u32;
+        let result_count = entries.len() as u32;
 
         Ok(ScanResult {
             entries,
-            count,
+            result_count,
             is_truncated,
             continuation_token,
         })

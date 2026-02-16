@@ -155,6 +155,82 @@ impl<KV: KeyValueStore> BlobAwareKeyValueStore<KV> {
             Err(_) => None,
         }
     }
+
+    /// Process a Set command, offloading large values to blobs if needed.
+    async fn write_process_set(&self, key: String, value: String) -> WriteCommand {
+        let final_value = if self.should_offload(&value) {
+            match self.offload_to_blob(&key, &value).await {
+                Ok(blob_ref) => {
+                    debug!(key, size = value.len(), "offloaded large value to blob");
+                    blob_ref
+                }
+                Err(e) => {
+                    warn!(error = %e, key, "failed to offload to blob, storing directly");
+                    value
+                }
+            }
+        } else {
+            value
+        };
+
+        // Unprotect old blob if exists
+        self.write_unprotect_old_blob(&key, UnprotectReason::KvOverwrite).await;
+
+        WriteCommand::Set {
+            key,
+            value: final_value,
+        }
+    }
+
+    /// Process a SetMulti command, offloading large values to blobs if needed.
+    async fn write_process_set_multi(&self, pairs: Vec<(String, String)>) -> WriteCommand {
+        let mut processed_pairs = Vec::with_capacity(pairs.len());
+        for (key, value) in pairs {
+            let final_value = if self.should_offload(&value) {
+                match self.offload_to_blob(&key, &value).await {
+                    Ok(blob_ref) => {
+                        debug!(key, size = value.len(), "offloaded large value to blob");
+                        blob_ref
+                    }
+                    Err(e) => {
+                        warn!(error = %e, key, "failed to offload to blob, storing directly");
+                        value
+                    }
+                }
+            } else {
+                value
+            };
+
+            // Unprotect old blob if exists
+            self.write_unprotect_old_blob(&key, UnprotectReason::KvOverwrite).await;
+
+            processed_pairs.push((key, final_value));
+        }
+        WriteCommand::SetMulti { pairs: processed_pairs }
+    }
+
+    /// Process a Delete command, unprotecting any blob references.
+    async fn write_process_delete(&self, key: String) -> WriteCommand {
+        self.write_unprotect_old_blob(&key, UnprotectReason::KvDelete).await;
+        WriteCommand::Delete { key }
+    }
+
+    /// Process a DeleteMulti command, unprotecting any blob references.
+    async fn write_process_delete_multi(&self, keys: Vec<String>) -> WriteCommand {
+        for key in &keys {
+            self.write_unprotect_old_blob(key, UnprotectReason::KvDelete).await;
+        }
+        WriteCommand::DeleteMulti { keys }
+    }
+
+    /// Helper to unprotect old blob for a key if it exists.
+    async fn write_unprotect_old_blob(&self, key: &str, reason: UnprotectReason) {
+        if let Some(old_value) = self.read_raw(key).await
+            && let Err(e) = self.unprotect_blob(key, &old_value, reason).await
+        {
+            warn!(error = %e, key, "failed to unprotect old blob");
+        }
+    }
 }
 
 #[async_trait]
@@ -200,157 +276,12 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
         // Process command, offloading large values to blobs
         let processed_command = match request.command {
-            WriteCommand::Set { key, value } => {
-                // Check if we should offload this value
-                let final_value = if self.should_offload(&value) {
-                    match self.offload_to_blob(&key, &value).await {
-                        Ok(blob_ref) => {
-                            debug!(key, size = value.len(), "offloaded large value to blob");
-                            blob_ref
-                        }
-                        Err(e) => {
-                            warn!(error = %e, key, "failed to offload to blob, storing directly");
-                            value
-                        }
-                    }
-                } else {
-                    value
-                };
-
-                // First, read existing value to check if we need to unprotect old blob
-                if let Some(old_value) = self.read_raw(&key).await
-                    && let Err(e) = self.unprotect_blob(&key, &old_value, UnprotectReason::KvOverwrite).await
-                {
-                    warn!(error = %e, key, "failed to unprotect old blob");
-                }
-
-                WriteCommand::Set {
-                    key,
-                    value: final_value,
-                }
-            }
-            WriteCommand::SetMulti { pairs } => {
-                let mut processed_pairs = Vec::with_capacity(pairs.len());
-                for (key, value) in pairs {
-                    let final_value = if self.should_offload(&value) {
-                        match self.offload_to_blob(&key, &value).await {
-                            Ok(blob_ref) => {
-                                debug!(key, size = value.len(), "offloaded large value to blob");
-                                blob_ref
-                            }
-                            Err(e) => {
-                                warn!(error = %e, key, "failed to offload to blob, storing directly");
-                                value
-                            }
-                        }
-                    } else {
-                        value
-                    };
-
-                    // Unprotect old blob if exists
-                    if let Some(old_value) = self.read_raw(&key).await
-                        && let Err(e) = self.unprotect_blob(&key, &old_value, UnprotectReason::KvOverwrite).await
-                    {
-                        warn!(error = %e, key, "failed to unprotect old blob");
-                    }
-
-                    processed_pairs.push((key, final_value));
-                }
-                WriteCommand::SetMulti { pairs: processed_pairs }
-            }
-            WriteCommand::Delete { key } => {
-                // Unprotect blob before delete
-                if let Some(old_value) = self.read_raw(&key).await
-                    && let Err(e) = self.unprotect_blob(&key, &old_value, UnprotectReason::KvDelete).await
-                {
-                    warn!(error = %e, key, "failed to unprotect old blob");
-                }
-                WriteCommand::Delete { key }
-            }
-            WriteCommand::DeleteMulti { keys } => {
-                // Unprotect blobs before delete
-                for key in &keys {
-                    if let Some(old_value) = self.read_raw(key).await
-                        && let Err(e) = self.unprotect_blob(key, &old_value, UnprotectReason::KvDelete).await
-                    {
-                        warn!(error = %e, key, "failed to unprotect old blob");
-                    }
-                }
-                WriteCommand::DeleteMulti { keys }
-            }
-            // CAS operations pass through directly without blob offloading.
-            // CAS is typically used for small values (locks, counters) that don't need offloading.
-            WriteCommand::CompareAndSwap {
-                key,
-                expected,
-                new_value,
-            } => WriteCommand::CompareAndSwap {
-                key,
-                expected,
-                new_value,
-            },
-            WriteCommand::CompareAndDelete { key, expected } => WriteCommand::CompareAndDelete { key, expected },
-            // Batch operations pass through directly without blob offloading.
-            // Batches are typically used for transactional operations that don't need offloading.
-            WriteCommand::Batch { operations } => WriteCommand::Batch { operations },
-            WriteCommand::ConditionalBatch { conditions, operations } => {
-                WriteCommand::ConditionalBatch { conditions, operations }
-            }
-            // TTL operations pass through - no blob offloading for TTL values
-            WriteCommand::SetWithTTL {
-                key,
-                value,
-                ttl_seconds,
-            } => WriteCommand::SetWithTTL {
-                key,
-                value,
-                ttl_seconds,
-            },
-            WriteCommand::SetMultiWithTTL { pairs, ttl_seconds } => {
-                WriteCommand::SetMultiWithTTL { pairs, ttl_seconds }
-            }
-            // Lease operations pass through - no blob offloading
-            WriteCommand::SetWithLease { key, value, lease_id } => WriteCommand::SetWithLease { key, value, lease_id },
-            WriteCommand::SetMultiWithLease { pairs, lease_id } => WriteCommand::SetMultiWithLease { pairs, lease_id },
-            WriteCommand::LeaseGrant { lease_id, ttl_seconds } => WriteCommand::LeaseGrant { lease_id, ttl_seconds },
-            WriteCommand::LeaseRevoke { lease_id } => WriteCommand::LeaseRevoke { lease_id },
-            WriteCommand::LeaseKeepalive { lease_id } => WriteCommand::LeaseKeepalive { lease_id },
-            // Transaction operations pass through directly (blob processing not supported in transactions)
-            WriteCommand::Transaction {
-                compare,
-                success,
-                failure,
-            } => WriteCommand::Transaction {
-                compare,
-                success,
-                failure,
-            },
-            // OptimisticTransaction operations pass through directly
-            WriteCommand::OptimisticTransaction { read_set, write_set } => {
-                WriteCommand::OptimisticTransaction { read_set, write_set }
-            }
-            // Shard topology operations pass through directly (control plane operations)
-            WriteCommand::ShardSplit {
-                source_shard,
-                split_key,
-                new_shard_id,
-                topology_version,
-            } => WriteCommand::ShardSplit {
-                source_shard,
-                split_key,
-                new_shard_id,
-                topology_version,
-            },
-            WriteCommand::ShardMerge {
-                source_shard,
-                target_shard,
-                topology_version,
-            } => WriteCommand::ShardMerge {
-                source_shard,
-                target_shard,
-                topology_version,
-            },
-            WriteCommand::TopologyUpdate { topology_data } => WriteCommand::TopologyUpdate { topology_data },
+            WriteCommand::Set { key, value } => self.write_process_set(key, value).await,
+            WriteCommand::SetMulti { pairs } => self.write_process_set_multi(pairs).await,
+            WriteCommand::Delete { key } => self.write_process_delete(key).await,
+            WriteCommand::DeleteMulti { keys } => self.write_process_delete_multi(keys).await,
+            // All other commands pass through directly without blob offloading
+            other => other,
         };
 
         // Write to underlying KV

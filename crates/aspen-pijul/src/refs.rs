@@ -302,7 +302,7 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
             .kv
             .scan(ScanRequest {
                 prefix: prefix.clone(),
-                limit: Some(MAX_CHANNELS),
+                limit_results: Some(MAX_CHANNELS),
                 continuation_token: None,
             })
             .await?;

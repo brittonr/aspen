@@ -34,7 +34,7 @@ use crate::job::JobId;
 
 /// Maximum number of progress entries before automatic GC triggers.
 /// Tiger Style: Fixed limit prevents unbounded memory growth.
-const MAX_PROGRESS_ENTRIES: usize = 10_000;
+const MAX_PROGRESS_ENTRIES: u32 = 10_000;
 
 /// Default age threshold for GC in milliseconds (24 hours).
 /// Tiger Style: Fixed limit on entry lifetime.
@@ -57,7 +57,7 @@ pub struct CrdtProgressTracker {
     /// Node ID for vector clock.
     node_id: String,
     /// Maximum entries before GC triggers.
-    max_entries: usize,
+    max_entries: u32,
     /// Age threshold for GC in milliseconds.
     gc_age_threshold_ms: u64,
     /// Last GC timestamp (milliseconds since epoch).
@@ -81,7 +81,7 @@ impl CrdtProgressTracker {
     }
 
     /// Create a progress tracker with custom GC configuration.
-    pub fn with_gc_config(node_id: String, max_entries: usize, gc_age_threshold_ms: u64) -> Self {
+    pub fn with_gc_config(node_id: String, max_entries: u32, gc_age_threshold_ms: u64) -> Self {
         let hlc = create_hlc(&node_id);
 
         Self {
@@ -207,7 +207,7 @@ impl CrdtProgressTracker {
             states.len()
         };
 
-        if entry_count <= self.max_entries {
+        if entry_count <= self.max_entries as usize {
             return 0;
         }
 

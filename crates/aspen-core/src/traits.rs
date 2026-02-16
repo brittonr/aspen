@@ -208,13 +208,13 @@ mod tests {
         let result = arc_store
             .scan(ScanRequest {
                 prefix: "prefix:".to_string(),
-                limit: None,
+                limit_results: None,
                 continuation_token: None,
             })
             .await;
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().count, 2);
+        assert_eq!(result.unwrap().result_count, 2);
     }
 
     // ============================================================================
