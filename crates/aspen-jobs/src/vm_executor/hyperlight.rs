@@ -92,27 +92,13 @@ impl HyperlightWorker {
         Ok(bytes.to_vec())
     }
 
-    /// Build a binary from a Nix flake.
-    async fn build_from_nix(&self, flake_url: &str, attribute: &str) -> Result<Vec<u8>> {
-        let cache_key = format!("{}#{}", flake_url, attribute);
-
-        // Check cache first (now stores blob hashes)
-        let cached_hash = {
-            let cache = self.build_cache.lock().await;
-            cache.get(&cache_key).cloned()
-        };
-
-        if let Some(hash) = cached_hash {
-            debug!(flake_url, attribute, "Using cached binary from blob store");
-            // Size 0 means we don't validate (we trust our cache)
-            return self.retrieve_binary_from_blob(&hash, 0, "nix").await;
-        }
-
-        info!(flake_url, attribute, "Building from Nix flake");
-
+    /// Execute a nix build command and wait for completion with timeout.
+    ///
+    /// Returns the build output on success, or an error with collected stderr.
+    async fn build_from_nix_execute(flake_url: &str, cache_key: &str) -> Result<std::process::Output> {
         // Run nix build command with streaming stderr and timeout
         let mut child = tokio::process::Command::new("nix")
-            .args(["build", &cache_key])
+            .args(["build", cache_key])
             .args(["--json", "--no-link"])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -151,7 +137,7 @@ impl HyperlightWorker {
             }
             Err(_) => {
                 // Timeout - try to kill the process
-                warn!(flake_url, attribute, timeout_secs = NIX_BUILD_TIMEOUT.as_secs(), "Nix build timed out");
+                warn!(flake_url, timeout_secs = NIX_BUILD_TIMEOUT.as_secs(), "Nix build timed out");
                 return Err(JobError::BuildFailed {
                     reason: format!("Nix build timed out after {} seconds", NIX_BUILD_TIMEOUT.as_secs()),
                 });
@@ -173,20 +159,13 @@ impl HyperlightWorker {
             });
         }
 
-        // Parse the JSON output
-        let build_result: Vec<NixBuildOutput> =
-            serde_json::from_slice(&output.stdout).map_err(|e| JobError::BuildFailed {
-                reason: format!("Failed to parse nix build output: {}", e),
-            })?;
+        Ok(output)
+    }
 
-        let store_path = build_result
-            .first()
-            .ok_or_else(|| JobError::BuildFailed {
-                reason: "No build output from nix".to_string(),
-            })?
-            .out_path
-            .clone();
-
+    /// Read the built binary from a Nix store path.
+    ///
+    /// Locates the binary in the store path's bin/ directory and validates size.
+    async fn build_from_nix_read_binary(store_path: &str) -> Result<Vec<u8>> {
         // Try to find the binary in the store path
         let binary_path = format!("{}/bin/*", store_path);
         let glob_pattern = glob::glob(&binary_path).map_err(|e| JobError::BuildFailed {
@@ -209,6 +188,47 @@ impl HyperlightWorker {
                 max: MAX_BINARY_SIZE,
             });
         }
+
+        Ok(binary)
+    }
+
+    /// Build a binary from a Nix flake.
+    async fn build_from_nix(&self, flake_url: &str, attribute: &str) -> Result<Vec<u8>> {
+        let cache_key = format!("{}#{}", flake_url, attribute);
+
+        // Check cache first (now stores blob hashes)
+        let cached_hash = {
+            let cache = self.build_cache.lock().await;
+            cache.get(&cache_key).cloned()
+        };
+
+        if let Some(hash) = cached_hash {
+            debug!(flake_url, attribute, "Using cached binary from blob store");
+            // Size 0 means we don't validate (we trust our cache)
+            return self.retrieve_binary_from_blob(&hash, 0, "nix").await;
+        }
+
+        info!(flake_url, attribute, "Building from Nix flake");
+
+        // Execute the nix build
+        let output = Self::build_from_nix_execute(flake_url, &cache_key).await?;
+
+        // Parse the JSON output
+        let build_result: Vec<NixBuildOutput> =
+            serde_json::from_slice(&output.stdout).map_err(|e| JobError::BuildFailed {
+                reason: format!("Failed to parse nix build output: {}", e),
+            })?;
+
+        let store_path = build_result
+            .first()
+            .ok_or_else(|| JobError::BuildFailed {
+                reason: "No build output from nix".to_string(),
+            })?
+            .out_path
+            .clone();
+
+        // Read the binary from the store path
+        let binary = Self::build_from_nix_read_binary(&store_path).await?;
 
         // Store binary in blob store and cache the hash
         let add_result = self.blob_store.add_bytes(&binary).await.map_err(|e| JobError::VmExecutionFailed {

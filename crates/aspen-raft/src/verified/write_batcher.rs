@@ -9,7 +9,7 @@
 //!
 //! # Tiger Style
 //!
-//! - All calculations use explicit types (usize for counts/sizes)
+//! - All calculations use explicit types (u32 for counts, u64 for byte sizes)
 //! - No side effects or I/O
 //! - Deterministic pure functions
 
@@ -75,11 +75,11 @@ impl BatchLimitCheck {
 /// ```
 #[inline]
 pub fn check_batch_limits(
-    current_entries: usize,
-    current_bytes: usize,
-    op_bytes: usize,
-    max_entries: usize,
-    max_bytes: usize,
+    current_entries: u32,
+    current_bytes: u64,
+    op_bytes: u64,
+    max_entries: u32,
+    max_bytes: u64,
 ) -> BatchLimitCheck {
     // Only check limits if batch is non-empty
     // (we always allow adding to an empty batch)
@@ -152,10 +152,10 @@ pub enum FlushDecision {
 /// ```
 #[inline]
 pub fn determine_flush_action(
-    pending_count: usize,
-    current_bytes: usize,
-    max_entries: usize,
-    max_bytes: usize,
+    pending_count: u32,
+    current_bytes: u64,
+    max_entries: u32,
+    max_bytes: u64,
     max_wait_is_zero: bool,
     flush_already_scheduled: bool,
 ) -> FlushDecision {
@@ -198,7 +198,7 @@ pub fn determine_flush_action(
 ///
 /// Total size in bytes (key_len + value_len).
 #[inline]
-pub const fn calculate_set_op_size(key_len: usize, value_len: usize) -> usize {
+pub const fn calculate_set_op_size(key_len: u64, value_len: u64) -> u64 {
     key_len + value_len
 }
 
@@ -212,7 +212,7 @@ pub const fn calculate_set_op_size(key_len: usize, value_len: usize) -> usize {
 ///
 /// Size in bytes (just key_len, no value).
 #[inline]
-pub const fn calculate_delete_op_size(key_len: usize) -> usize {
+pub const fn calculate_delete_op_size(key_len: u64) -> u64 {
     key_len
 }
 
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_entry_limit_exceeded() {
-        let check = check_batch_limits(100, 0, 0, 100, usize::MAX);
+        let check = check_batch_limits(100, 0, 0, 100, u64::MAX);
         assert!(check.exceeds_entries);
         assert!(!check.exceeds_bytes);
         assert!(check.would_exceed());
@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn test_entry_limit_not_exceeded() {
-        let check = check_batch_limits(99, 0, 0, 100, usize::MAX);
+        let check = check_batch_limits(99, 0, 0, 100, u64::MAX);
         assert!(!check.exceeds_entries);
         assert!(!check.would_exceed());
     }
@@ -287,9 +287,9 @@ mod tests {
     #[test]
     fn test_saturating_arithmetic_prevents_overflow() {
         // Should not overflow when adding huge values
-        let check = check_batch_limits(1, usize::MAX - 1, usize::MAX, 100, usize::MAX);
-        // This should saturate to usize::MAX, not wrap around
-        assert!(!check.exceeds_bytes); // usize::MAX <= usize::MAX
+        let check = check_batch_limits(1, u64::MAX - 1, u64::MAX, 100, u64::MAX);
+        // This should saturate to u64::MAX, not wrap around
+        assert!(!check.exceeds_bytes); // u64::MAX <= u64::MAX
     }
 
     // ========================================================================

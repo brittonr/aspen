@@ -268,6 +268,93 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
         Ok(())
     }
 
+    /// Read current workflow state from storage.
+    async fn update_workflow_state_read(
+        &self,
+        key: &str,
+        workflow_id: &str,
+    ) -> Result<(Option<String>, WorkflowState)> {
+        let result = self
+            .store
+            .read(aspen_core::ReadRequest::new(key.to_string()))
+            .await
+            .map_err(|e| crate::error::JobError::StorageError { source: e })?;
+
+        let (current_value, data) = match result {
+            aspen_core::ReadResult { kv: Some(kv), .. } => {
+                let value = kv.value.clone();
+                (Some(value.clone()), value.into_bytes())
+            }
+            _ => {
+                return Err(crate::error::JobError::JobNotFound {
+                    id: workflow_id.to_string(),
+                });
+            }
+        };
+
+        let state: WorkflowState =
+            serde_json::from_slice(&data).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
+
+        Ok((current_value, state))
+    }
+
+    /// Attempt CAS write and handle conflict with backoff.
+    async fn update_workflow_state_cas(
+        &self,
+        key: &str,
+        workflow_id: &str,
+        current_value: Option<String>,
+        state: &WorkflowState,
+        attempt: u32,
+        max_retries: u32,
+    ) -> std::result::Result<(), crate::error::JobError> {
+        let new_value =
+            serde_json::to_string(state).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
+
+        match self
+            .store
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::CompareAndSwap {
+                    key: key.to_string(),
+                    expected: current_value,
+                    new_value,
+                },
+            })
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(aspen_core::KeyValueStoreError::CompareAndSwapFailed { .. }) if attempt < max_retries - 1 => {
+                // CAS conflict - use exponential backoff: 1ms, 2ms, 4ms, 8ms, ...
+                let backoff_ms = aspen_core::CAS_RETRY_INITIAL_BACKOFF_MS << attempt.min(7);
+                warn!(
+                    workflow_id = %workflow_id,
+                    attempt,
+                    backoff_ms,
+                    "CAS conflict, retrying with backoff"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+                Err(crate::error::JobError::CasRetryExhausted {
+                    workflow_id: "retry".to_string(),
+                    attempts: 0,
+                }) // Signal retry needed
+            }
+            Err(aspen_core::KeyValueStoreError::CompareAndSwapFailed { expected, actual, .. }) => {
+                warn!(
+                    workflow_id = %workflow_id,
+                    attempt,
+                    ?expected,
+                    ?actual,
+                    "CAS conflict on final retry"
+                );
+                Err(crate::error::JobError::CasRetryExhausted {
+                    workflow_id: workflow_id.to_string(),
+                    attempts: max_retries,
+                })
+            }
+            Err(e) => Err(crate::error::JobError::StorageError { source: e }),
+        }
+    }
+
     /// Update workflow state using true CAS operation via Aspen's CompareAndSwap.
     ///
     /// This function implements optimistic concurrency control with exponential backoff:
@@ -283,27 +370,8 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
         let max_retries: u32 = aspen_core::MAX_CAS_RETRIES.min(10); // Cap at 10 for workflows
 
         for attempt in 0..max_retries {
-            // Read current state with version
-            let result = self
-                .store
-                .read(aspen_core::ReadRequest::new(key.clone()))
-                .await
-                .map_err(|e| crate::error::JobError::StorageError { source: e })?;
-
-            let (current_value, data) = match result {
-                aspen_core::ReadResult { kv: Some(kv), .. } => {
-                    let value = kv.value.clone();
-                    (Some(value.clone()), value.into_bytes())
-                }
-                _ => {
-                    return Err(crate::error::JobError::JobNotFound {
-                        id: workflow_id.to_string(),
-                    });
-                }
-            };
-
-            let mut state: WorkflowState =
-                serde_json::from_slice(&data).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
+            // Read current state
+            let (current_value, mut state) = self.update_workflow_state_read(&key, workflow_id).await?;
 
             let old_version = state.version;
             state.version += 1;
@@ -311,24 +379,9 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
             // Apply update
             state = updater(state)?;
 
-            // Serialize updated state
-            let new_value =
-                serde_json::to_string(&state).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
-
-            // Use true CompareAndSwap operation from Aspen
-            // This is atomic at the Raft consensus level
-            match self
-                .store
-                .write(aspen_core::WriteRequest {
-                    command: aspen_core::WriteCommand::CompareAndSwap {
-                        key: key.clone(),
-                        expected: current_value.clone(),
-                        new_value,
-                    },
-                })
-                .await
-            {
-                Ok(_) => {
+            // Attempt CAS write
+            match self.update_workflow_state_cas(&key, workflow_id, current_value, &state, attempt, max_retries).await {
+                Ok(()) => {
                     info!(
                         workflow_id = %workflow_id,
                         old_version,
@@ -337,35 +390,13 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
                     );
                     return Ok(state);
                 }
-                Err(aspen_core::KeyValueStoreError::CompareAndSwapFailed { .. }) if attempt < max_retries - 1 => {
-                    // CAS conflict - another writer modified the state
-                    // Use exponential backoff: 1ms, 2ms, 4ms, 8ms, ...
-                    let backoff_ms = aspen_core::CAS_RETRY_INITIAL_BACKOFF_MS << attempt.min(7);
-                    warn!(
-                        workflow_id = %workflow_id,
-                        attempt,
-                        backoff_ms,
-                        "CAS conflict, retrying with backoff"
-                    );
-                    tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+                Err(crate::error::JobError::CasRetryExhausted {
+                    workflow_id: ref wf, ..
+                }) if wf == "retry" => {
+                    // Retry signal - continue loop
+                    continue;
                 }
-                Err(aspen_core::KeyValueStoreError::CompareAndSwapFailed { expected, actual, .. }) => {
-                    // Final retry exhausted
-                    warn!(
-                        workflow_id = %workflow_id,
-                        attempt,
-                        ?expected,
-                        ?actual,
-                        "CAS conflict on final retry"
-                    );
-                    return Err(crate::error::JobError::CasRetryExhausted {
-                        workflow_id: workflow_id.to_string(),
-                        attempts: max_retries,
-                    });
-                }
-                Err(e) => {
-                    return Err(crate::error::JobError::StorageError { source: e });
-                }
+                Err(e) => return Err(e),
             }
         }
 

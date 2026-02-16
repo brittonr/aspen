@@ -9,10 +9,10 @@ use serde::Serialize;
 pub struct BatchConfig {
     /// Maximum number of operations per batch.
     /// Tiger Style: bounded to prevent unbounded memory use.
-    pub max_entries: usize,
+    pub max_entries: u32,
     /// Maximum total size of values in bytes per batch.
     /// Tiger Style: bounded to prevent memory exhaustion.
-    pub max_bytes: usize,
+    pub max_bytes: u64,
     /// Maximum time to wait before flushing a batch in milliseconds.
     /// Trade-off: higher = more throughput, lower = less latency.
     #[serde(default = "default_max_wait_ms")]
@@ -30,7 +30,7 @@ impl Default for BatchConfig {
     fn default() -> Self {
         Self {
             max_entries: 100,
-            max_bytes: 1024 * 1024, // 1 MB
+            max_bytes: 1024 * 1024, // 1 MB (u64)
             max_wait_ms: 2,
             max_wait: Duration::from_millis(2),
         }
@@ -46,7 +46,7 @@ impl BatchConfig {
     pub fn high_throughput() -> Self {
         Self {
             max_entries: 100,           // Capped at MAX_SETMULTI_KEYS
-            max_bytes: 4 * 1024 * 1024, // 4 MB
+            max_bytes: 4 * 1024 * 1024, // 4 MB (u64)
             max_wait_ms: 5,
             max_wait: Duration::from_millis(5),
         }
@@ -56,7 +56,7 @@ impl BatchConfig {
     pub fn low_latency() -> Self {
         Self {
             max_entries: 20,
-            max_bytes: 256 * 1024, // 256 KB
+            max_bytes: 256 * 1024, // 256 KB (u64)
             max_wait_ms: 1,
             max_wait: Duration::from_millis(1),
         }
@@ -66,7 +66,7 @@ impl BatchConfig {
     pub fn disabled() -> Self {
         Self {
             max_entries: 1,
-            max_bytes: usize::MAX,
+            max_bytes: u64::MAX,
             max_wait_ms: 0,
             max_wait: Duration::ZERO,
         }

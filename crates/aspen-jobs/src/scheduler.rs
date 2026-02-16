@@ -408,7 +408,9 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
         }
 
         // Clean up old entries
-        self.cleanup_old_entries(now).await?;
+        self.cleanup_old_entries(now)
+            .await
+            .map_err(|e| JobError::CleanupScheduleEntries { source: Box::new(e) })?;
 
         Ok(())
     }
@@ -424,7 +426,10 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
                 ConflictPolicy::Skip => {
                     debug!(job_id = %job_id, "skipping due to conflict");
                     scheduled_job.mark_missed();
-                    self.update_scheduled_job(scheduled_job).await?;
+                    self.update_scheduled_job(scheduled_job).await.map_err(|e| JobError::UpdateScheduledJob {
+                        job_id: job_id.to_string(),
+                        source: Box::new(e),
+                    })?;
                     return Ok(());
                 }
                 ConflictPolicy::Queue => {
@@ -452,7 +457,11 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
         // Submit job for execution
         self.executing.lock().await.insert(job_id.clone());
 
-        let new_job_id = self.manager.submit(scheduled_job.spec.clone()).await?;
+        let new_job_id =
+            self.manager.submit(scheduled_job.spec.clone()).await.map_err(|e| JobError::SubmitScheduledJob {
+                job_id: job_id.to_string(),
+                source: Box::new(e),
+            })?;
 
         info!(
             job_id = %job_id,
@@ -462,7 +471,10 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
 
         // Update scheduled job
         scheduled_job.mark_executed(now);
-        self.update_scheduled_job(scheduled_job).await?;
+        self.update_scheduled_job(scheduled_job).await.map_err(|e| JobError::UpdateScheduledJob {
+            job_id: job_id.to_string(),
+            source: Box::new(e),
+        })?;
 
         // Remove from executing set (with delay to handle immediate completion)
         let executing = self.executing.clone();
@@ -506,7 +518,10 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
         };
 
         // Persist to KV store first for durability
-        self.persist_scheduled_job(&scheduled_job).await?;
+        self.persist_scheduled_job(&scheduled_job).await.map_err(|e| JobError::PersistScheduledJob {
+            job_id: job_id.to_string(),
+            source: Box::new(e),
+        })?;
 
         // Add to in-memory indices
         {
@@ -545,7 +560,10 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
             // Do this after in-memory removal so we don't lose the job if persistence fails
             drop(schedule_index);
             drop(jobs);
-            self.delete_persisted_schedule(job_id).await?;
+            self.delete_persisted_schedule(job_id).await.map_err(|e| JobError::DeletePersistedSchedule {
+                job_id: job_id.to_string(),
+                source: Box::new(e),
+            })?;
 
             info!(job_id = %job_id, "scheduled job cancelled (removed from storage)");
             Ok(())
@@ -606,7 +624,10 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
     /// Update scheduled job in indices and persistent storage.
     async fn update_scheduled_job(&self, scheduled_job: &ScheduledJob) -> Result<()> {
         // Persist first for durability
-        self.persist_scheduled_job(scheduled_job).await?;
+        self.persist_scheduled_job(scheduled_job).await.map_err(|e| JobError::PersistScheduledJob {
+            job_id: scheduled_job.job_id.to_string(),
+            source: Box::new(e),
+        })?;
 
         let mut schedule_index = self.schedule_index.write().await;
         let mut jobs = self.jobs.write().await;

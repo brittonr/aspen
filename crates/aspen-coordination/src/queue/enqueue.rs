@@ -42,18 +42,52 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             }
         };
 
-        // Check deduplication
+        // Check deduplication - return existing item ID if duplicate
+        if let Some(existing_id) = self.enqueue_check_dedup(name, &options).await? {
+            return Ok(existing_id);
+        }
+
+        // Generate item ID and create the item
+        let (item_id, item) = self.enqueue_create_item(name, payload, &options, &queue_state).await?;
+
+        // Store the item
+        self.enqueue_store_item(name, item_id, &item).await?;
+
+        // Store dedup entry if provided
+        self.enqueue_store_dedup(name, item_id, &options).await?;
+
+        // Update stats
+        self.increment_enqueue_count(name).await?;
+
+        debug_assert!(item_id > 0, "QUEUE: enqueued item must have positive ID");
+        debug_assert!(item.enqueued_at_ms > 0, "QUEUE: enqueued item must have positive timestamp");
+
+        debug!(name, item_id, "item enqueued");
+        Ok(item_id)
+    }
+
+    /// Check for duplicate item by deduplication ID.
+    async fn enqueue_check_dedup(&self, name: &str, options: &EnqueueOptions) -> Result<Option<u64>> {
         if let Some(ref dedup_id) = options.deduplication_id {
             let dedup_key = verified::dedup_key(name, dedup_id);
             if let Some(entry) = self.read_dedup_entry(&dedup_key).await?
                 && !entry.is_expired()
             {
                 debug!(name, dedup_id, item_id = entry.item_id, "duplicate detected");
-                return Ok(entry.item_id);
+                return Ok(Some(entry.item_id));
             }
         }
+        Ok(None)
+    }
 
-        // Generate item ID
+    /// Generate item ID and create the queue item.
+    async fn enqueue_create_item(
+        &self,
+        name: &str,
+        payload: Vec<u8>,
+        options: &EnqueueOptions,
+        queue_state: &super::QueueState,
+    ) -> Result<(u64, QueueItem)> {
         let seq_key = verified::sequence_key(name);
         let seq_gen = SequenceGenerator::new(self.store.clone(), &seq_key, Default::default());
         let item_id = seq_gen.next().await?;
@@ -68,13 +102,17 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             enqueued_at_ms: now,
             expires_at_ms,
             delivery_attempts: 0,
-            message_group_id: options.message_group_id,
+            message_group_id: options.message_group_id.clone(),
             deduplication_id: options.deduplication_id.clone(),
         };
 
-        // Store item
+        Ok((item_id, item))
+    }
+
+    /// Store the queue item in the key-value store.
+    async fn enqueue_store_item(&self, name: &str, item_id: u64, item: &QueueItem) -> Result<()> {
         let item_key = verified::item_key(name, item_id);
-        let item_json = serde_json::to_string(&item)?;
+        let item_json = serde_json::to_string(item)?;
 
         self.store
             .write(WriteRequest {
@@ -85,9 +123,14 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             })
             .await?;
 
-        // Store dedup entry if provided
+        Ok(())
+    }
+
+    /// Store deduplication entry if deduplication ID is provided.
+    async fn enqueue_store_dedup(&self, name: &str, item_id: u64, options: &EnqueueOptions) -> Result<()> {
         if let Some(ref dedup_id) = options.deduplication_id {
             let dedup_key = verified::dedup_key(name, dedup_id);
+            let now = now_unix_ms();
             let dedup_entry = DeduplicationEntry {
                 dedup_id: dedup_id.clone(),
                 item_id,
@@ -104,15 +147,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 })
                 .await;
         }
-
-        // Update stats
-        self.increment_enqueue_count(name).await?;
-
-        debug_assert!(item_id > 0, "QUEUE: enqueued item must have positive ID");
-        debug_assert!(item.enqueued_at_ms > 0, "QUEUE: enqueued item must have positive timestamp");
-
-        debug!(name, item_id, "item enqueued");
-        Ok(item_id)
+        Ok(())
     }
 
     /// Enqueue multiple items in a batch.

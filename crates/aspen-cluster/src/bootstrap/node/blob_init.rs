@@ -67,6 +67,24 @@ pub(super) async fn initialize_blob_store(
     }
 }
 
+/// Build replication configuration from BlobConfig.
+#[cfg(feature = "blob")]
+fn initialize_blob_replication_build_config(config: &NodeConfig) -> aspen_blob::ReplicationConfig {
+    aspen_blob::ReplicationConfig {
+        default_policy: aspen_blob::ReplicationPolicy {
+            replication_factor: config.blobs.replication_factor.min(aspen_blob::MAX_REPLICATION_FACTOR),
+            min_replicas: config.blobs.min_replicas.min(config.blobs.replication_factor),
+            failure_domain_key: config.blobs.failure_domain_key.clone(),
+            enable_quorum_writes: config.blobs.enable_quorum_writes,
+        },
+        node_id: config.node_id,
+        auto_replicate: config.blobs.enable_auto_replication,
+        repair_interval_secs: config.blobs.repair_interval_secs,
+        repair_delay_secs: config.blobs.repair_delay_secs,
+        max_concurrent: aspen_blob::MAX_CONCURRENT_REPLICATIONS,
+    }
+}
+
 /// Initialize blob replication manager if replication is enabled.
 ///
 /// Creates the `BlobReplicationManager` which coordinates blob replication
@@ -104,7 +122,7 @@ where
         config.blobs.replication_factor
     );
 
-    // Check if blob replication should be enabled
+    // Check required resources
     let Some(blob_store) = blob_store else {
         info!(node_id = config.node_id, "blob replication disabled: no blob store");
         return BlobReplicationResources::disabled();
@@ -120,9 +138,7 @@ where
         return BlobReplicationResources::disabled();
     };
 
-    // Only enable replication if:
-    // - replication_factor > 1 (need multiple replicas), OR
-    // - auto_replication is enabled (even with factor=1, we track replicas)
+    // Check replication factor requirements
     if config.blobs.replication_factor <= 1 && !config.blobs.enable_auto_replication {
         info!(
             node_id = config.node_id,
@@ -132,30 +148,12 @@ where
         return BlobReplicationResources::disabled();
     }
 
-    // Build replication configuration from BlobConfig
-    let replication_config = aspen_blob::ReplicationConfig {
-        default_policy: aspen_blob::ReplicationPolicy {
-            replication_factor: config.blobs.replication_factor.min(aspen_blob::MAX_REPLICATION_FACTOR),
-            min_replicas: config.blobs.min_replicas.min(config.blobs.replication_factor),
-            failure_domain_key: config.blobs.failure_domain_key.clone(),
-            enable_quorum_writes: config.blobs.enable_quorum_writes,
-        },
-        node_id: config.node_id,
-        auto_replicate: config.blobs.enable_auto_replication,
-        repair_interval_secs: config.blobs.repair_interval_secs,
-        repair_delay_secs: config.blobs.repair_delay_secs,
-        max_concurrent: aspen_blob::MAX_CONCURRENT_REPLICATIONS,
-    };
-
-    // Create the trait adapters
+    let replication_config = initialize_blob_replication_build_config(config);
     let metadata_store = Arc::new(aspen_blob::KvReplicaMetadataStore::new(kv_store));
     let blob_transfer = Arc::new(aspen_blob::IrohBlobTransfer::new(blob_store, endpoint));
     let placement = Arc::new(aspen_blob::WeightedPlacement);
-
-    // Create child cancellation token for replication manager
     let replication_cancel = shutdown.child_token();
 
-    // Spawn the replication manager
     match aspen_blob::BlobReplicationManager::spawn(
         replication_config.clone(),
         blob_events,
@@ -178,15 +176,11 @@ where
                 replication_manager: Some(manager),
                 replication_cancel: Some(replication_cancel),
                 replication_task: Some(task),
-                topology_cancel: None, // Set later via wire_topology_watcher()
+                topology_cancel: None,
             }
         }
         Err(err) => {
-            warn!(
-                error = ?err,
-                node_id = config.node_id,
-                "failed to start blob replication manager, continuing without replication"
-            );
+            warn!(error = ?err, node_id = config.node_id, "failed to start blob replication manager");
             BlobReplicationResources::disabled()
         }
     }

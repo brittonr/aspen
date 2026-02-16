@@ -115,7 +115,7 @@ pub fn compute_dependency_depth(dependency_depths: &[u32]) -> u32 {
 /// assert!(!is_initially_ready(3, 2));
 /// ```
 #[inline]
-pub const fn is_initially_ready(total_dependencies: usize, completed_dependencies: usize) -> bool {
+pub const fn is_initially_ready(total_dependencies: u32, completed_dependencies: u32) -> bool {
     total_dependencies == completed_dependencies
 }
 
@@ -139,7 +139,7 @@ pub const fn is_initially_ready(total_dependencies: usize, completed_dependencie
 /// assert!(!are_all_dependencies_satisfied(5));
 /// ```
 #[inline]
-pub const fn are_all_dependencies_satisfied(waiting_count: usize) -> bool {
+pub const fn are_all_dependencies_satisfied(waiting_count: u32) -> bool {
     waiting_count == 0
 }
 

@@ -556,13 +556,13 @@ mod tests {
     async fn test_zone_operations() {
         let store = create_test_store();
 
-        let zone = Zone::new("example.com").with_default_ttl(7200).with_description("Test zone");
+        let zone = Zone::new("example.com").with_default_ttl_secs(7200).with_description("Test zone");
 
         store.set_zone(zone.clone()).await.unwrap();
 
         let retrieved = store.get_zone("example.com").await.unwrap();
         assert!(retrieved.is_some());
-        assert_eq!(retrieved.unwrap().default_ttl, 7200);
+        assert_eq!(retrieved.unwrap().default_ttl_secs, 7200);
 
         let zones = store.list_zones().await.unwrap();
         assert_eq!(zones.len(), 1);

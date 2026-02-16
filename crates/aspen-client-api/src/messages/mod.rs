@@ -1692,8 +1692,8 @@ pub enum ClientRpcRequest {
         name: String,
         /// Whether the zone is enabled.
         enabled: bool,
-        /// Default TTL for records in this zone.
-        default_ttl: u32,
+        /// Default TTL for records in this zone (seconds).
+        default_ttl_secs: u32,
         /// Optional description.
         description: Option<String>,
     },

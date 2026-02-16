@@ -277,6 +277,65 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
         workers.insert(metadata.id.clone(), metadata);
     }
 
+    /// Find worker with lowest latency to target node.
+    fn find_best_worker_closest_to(workers: &HashMap<String, WorkerMetadata>, target_node: &NodeId) -> Option<String> {
+        workers
+            .values()
+            .filter_map(|w| w.latencies.get(target_node).map(|latency| (w.id.clone(), *latency)))
+            .min_by_key(|(_, latency)| *latency)
+            .map(|(id, _)| id)
+    }
+
+    /// Find least loaded worker from the collection.
+    fn find_best_worker_least_loaded(workers: &HashMap<String, WorkerMetadata>) -> Option<String> {
+        workers
+            .values()
+            .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|w| w.id.clone())
+    }
+
+    /// Find best worker for FollowData affinity with shard awareness.
+    fn find_best_worker_follow_data(
+        &self,
+        workers: &HashMap<String, WorkerMetadata>,
+        keys: &[String],
+    ) -> Option<String> {
+        if keys.is_empty() {
+            return Self::find_best_worker_least_loaded(workers);
+        }
+
+        // Tiger Style: Bound the number of keys we process
+        let keys_to_check = &keys[..keys.len().min(MAX_AFFINITY_KEYS)];
+
+        // Shard-aware routing when num_shards > 1
+        if self.num_shards > 1 {
+            // Build a map of shard_id -> count of keys in that shard
+            let mut shard_counts: HashMap<u32, usize> = HashMap::new();
+            for key in keys_to_check {
+                let shard_id = compute_shard_for_key(key, self.num_shards);
+                *shard_counts.entry(shard_id).or_insert(0) += 1;
+            }
+
+            // Find the dominant shard (most keys)
+            if let Some((target_shard, _)) = shard_counts.iter().max_by_key(|(_, count)| *count) {
+                // Prefer workers on nodes hosting the target shard
+                let local_workers: Vec<_> =
+                    workers.values().filter(|w| w.local_shards.contains(target_shard)).collect();
+
+                if !local_workers.is_empty() {
+                    // Among local workers, pick least loaded
+                    return local_workers
+                        .into_iter()
+                        .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal))
+                        .map(|w| w.id.clone());
+                }
+            }
+        }
+
+        // Fallback: use least loaded worker
+        Self::find_best_worker_least_loaded(workers)
+    }
+
     /// Find the best worker based on affinity strategy.
     async fn find_best_worker(&self, affinity: &JobAffinity) -> Option<String> {
         let workers = self.worker_metadata.read().await;
@@ -288,14 +347,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
         match &affinity.strategy {
             AffinityStrategy::None => None,
 
-            AffinityStrategy::ClosestTo(target_node) => {
-                // Find worker with lowest latency to target
-                workers
-                    .values()
-                    .filter_map(|w| w.latencies.get(target_node).map(|latency| (w.id.clone(), *latency)))
-                    .min_by_key(|(_, latency)| *latency)
-                    .map(|(id, _)| id)
-            }
+            AffinityStrategy::ClosestTo(target_node) => Self::find_best_worker_closest_to(&workers, target_node),
 
             AffinityStrategy::PreferWorker(worker_id) => {
                 if workers.contains_key(worker_id) {
@@ -306,12 +358,10 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
             }
 
             AffinityStrategy::PreferNode(node_id) => {
-                // Find worker on the specified node
                 workers.values().find(|w| w.node_id == *node_id).map(|w| w.id.clone())
             }
 
             AffinityStrategy::AvoidNode(node_id) => {
-                // Find any worker NOT on the specified node
                 workers.values().find(|w| w.node_id != *node_id).map(|w| w.id.clone())
             }
 
@@ -330,63 +380,16 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                 .map(|w| w.id.clone()),
 
             AffinityStrategy::DataLocality { blob_hash } => {
-                // Find worker that has the blob locally
                 workers.values().find(|w| w.local_blobs.contains(blob_hash)).map(|w| w.id.clone())
             }
 
-            AffinityStrategy::FollowData { keys } => {
-                if keys.is_empty() {
-                    // No keys specified, fall back to least loaded
-                    return workers
-                        .values()
-                        .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal))
-                        .map(|w| w.id.clone());
-                }
-
-                // Tiger Style: Bound the number of keys we process
-                let keys_to_check = &keys[..keys.len().min(MAX_AFFINITY_KEYS)];
-
-                // Shard-aware routing when num_shards > 1
-                if self.num_shards > 1 {
-                    // Build a map of shard_id -> count of keys in that shard
-                    let mut shard_counts: HashMap<u32, usize> = HashMap::new();
-                    for key in keys_to_check {
-                        let shard_id = compute_shard_for_key(key, self.num_shards);
-                        *shard_counts.entry(shard_id).or_insert(0) += 1;
-                    }
-
-                    // Find the dominant shard (most keys)
-                    if let Some((target_shard, _)) = shard_counts.iter().max_by_key(|(_, count)| *count) {
-                        // Prefer workers on nodes hosting the target shard
-                        let local_workers: Vec<_> =
-                            workers.values().filter(|w| w.local_shards.contains(target_shard)).collect();
-
-                        if !local_workers.is_empty() {
-                            // Among local workers, pick least loaded
-                            return local_workers
-                                .into_iter()
-                                .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal))
-                                .map(|w| w.id.clone());
-                        }
-                    }
-                }
-
-                // Fallback: use least loaded worker
-                // In non-sharded Raft, all nodes have all data, so load is the differentiator
-                workers
-                    .values()
-                    .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal))
-                    .map(|w| w.id.clone())
-            }
+            AffinityStrategy::FollowData { keys } => self.find_best_worker_follow_data(&workers, keys),
 
             AffinityStrategy::Geographic { region } => {
                 workers.values().find(|w| w.region.as_ref() == Some(region)).map(|w| w.id.clone())
             }
 
-            AffinityStrategy::LeastLoaded => workers
-                .values()
-                .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal))
-                .map(|w| w.id.clone()),
+            AffinityStrategy::LeastLoaded => Self::find_best_worker_least_loaded(&workers),
 
             AffinityStrategy::Composite { strategies } => {
                 // Apply strategies in order until one returns a worker
@@ -399,6 +402,48 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                 None
             }
         }
+    }
+
+    /// Calculate score for FollowData affinity strategy.
+    fn calculate_affinity_score_follow_data(&self, worker: &WorkerMetadata, keys: &[String]) -> f32 {
+        if keys.is_empty() {
+            // No keys = neutral score based on load
+            return 1.0 - worker.load;
+        }
+
+        // Tiger Style: Bound the number of keys we process
+        let keys_to_check = &keys[..keys.len().min(MAX_AFFINITY_KEYS)];
+
+        // Calculate shard locality score when sharding is enabled
+        if self.num_shards > 1 {
+            let mut local_key_count = 0;
+            let total_keys = keys_to_check.len();
+
+            for key in keys_to_check {
+                let shard_id = compute_shard_for_key(key, self.num_shards);
+                if worker.local_shards.contains(&shard_id) {
+                    local_key_count += 1;
+                }
+            }
+
+            if total_keys > 0 {
+                // Score is proportion of keys that are local to this worker
+                // Combined with inverse load for tie-breaking
+                let locality_score = local_key_count as f32 / total_keys as f32;
+                let load_score = 1.0 - worker.load;
+
+                // Weight locality higher than load (70/30 split)
+                return locality_score * 0.7 + load_score * 0.3;
+            }
+        }
+
+        // Non-sharded mode: all nodes have all data, score based on load only
+        1.0 - worker.load
+    }
+
+    /// Calculate score for a simple binary match (returns 1.0 if match, 0.0 otherwise).
+    fn calculate_affinity_score_binary(matches: bool) -> f32 {
+        if matches { 1.0 } else { 0.0 }
     }
 
     /// Calculate affinity score between a job and worker.
@@ -415,29 +460,11 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                 }
             }
 
-            AffinityStrategy::PreferWorker(id) => {
-                if worker.id == *id {
-                    1.0
-                } else {
-                    0.0
-                }
-            }
+            AffinityStrategy::PreferWorker(id) => Self::calculate_affinity_score_binary(worker.id == *id),
 
-            AffinityStrategy::PreferNode(node_id) => {
-                if worker.node_id == *node_id {
-                    1.0
-                } else {
-                    0.0
-                }
-            }
+            AffinityStrategy::PreferNode(node_id) => Self::calculate_affinity_score_binary(worker.node_id == *node_id),
 
-            AffinityStrategy::AvoidNode(node_id) => {
-                if worker.node_id != *node_id {
-                    1.0
-                } else {
-                    0.0
-                }
-            }
+            AffinityStrategy::AvoidNode(node_id) => Self::calculate_affinity_score_binary(worker.node_id != *node_id),
 
             AffinityStrategy::AvoidLeader => {
                 // This strategy requires runtime context (leader node ID) which
@@ -453,55 +480,13 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
             }
 
             AffinityStrategy::DataLocality { blob_hash } => {
-                if worker.local_blobs.contains(blob_hash) {
-                    1.0
-                } else {
-                    0.0
-                }
+                Self::calculate_affinity_score_binary(worker.local_blobs.contains(blob_hash))
             }
 
-            AffinityStrategy::FollowData { keys } => {
-                if keys.is_empty() {
-                    // No keys = neutral score based on load
-                    return 1.0 - worker.load;
-                }
-
-                // Tiger Style: Bound the number of keys we process
-                let keys_to_check = &keys[..keys.len().min(MAX_AFFINITY_KEYS)];
-
-                // Calculate shard locality score when sharding is enabled
-                if self.num_shards > 1 {
-                    let mut local_key_count = 0;
-                    let total_keys = keys_to_check.len();
-
-                    for key in keys_to_check {
-                        let shard_id = compute_shard_for_key(key, self.num_shards);
-                        if worker.local_shards.contains(&shard_id) {
-                            local_key_count += 1;
-                        }
-                    }
-
-                    if total_keys > 0 {
-                        // Score is proportion of keys that are local to this worker
-                        // Combined with inverse load for tie-breaking
-                        let locality_score = local_key_count as f32 / total_keys as f32;
-                        let load_score = 1.0 - worker.load;
-
-                        // Weight locality higher than load (70/30 split)
-                        return locality_score * 0.7 + load_score * 0.3;
-                    }
-                }
-
-                // Non-sharded mode: all nodes have all data, score based on load only
-                1.0 - worker.load
-            }
+            AffinityStrategy::FollowData { keys } => self.calculate_affinity_score_follow_data(worker, keys),
 
             AffinityStrategy::Geographic { region } => {
-                if worker.region.as_ref() == Some(region) {
-                    1.0
-                } else {
-                    0.0
-                }
+                Self::calculate_affinity_score_binary(worker.region.as_ref() == Some(region))
             }
 
             AffinityStrategy::LeastLoaded => 1.0 - worker.load,

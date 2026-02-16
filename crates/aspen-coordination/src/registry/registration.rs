@@ -46,57 +46,109 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
             // Read existing instance if any
             let existing = self.read_json::<ServiceInstance>(&key).await?;
 
-            let (fencing_token, registered_at_ms) = match &existing {
-                Some(inst) => (crate::verified::compute_next_instance_token(inst.fencing_token), inst.registered_at_ms),
-                None => (1, now),
-            };
-
-            let instance = ServiceInstance {
-                instance_id: instance_id.to_string(),
-                service_name: service_name.to_string(),
-                address: address.to_string(),
-                health_status: options.initial_status.unwrap_or(HealthStatus::Healthy),
-                metadata: metadata.clone(),
-                registered_at_ms,
-                last_heartbeat_ms: now,
+            let instance = self.register_build_instance(
+                service_name,
+                instance_id,
+                address,
+                &metadata,
+                &options,
+                now,
                 deadline_ms,
                 ttl_ms,
-                lease_id: options.lease_id,
-                fencing_token,
-            };
+                &existing,
+            );
 
-            let new_json = serde_json::to_string(&instance)?;
-
-            let command = match &existing {
-                Some(old) => {
-                    let old_json = serde_json::to_string(old)?;
-                    WriteCommand::CompareAndSwap {
-                        key: key.clone(),
-                        expected: Some(old_json),
-                        new_value: new_json,
-                    }
-                }
-                None => WriteCommand::Set {
-                    key: key.clone(),
-                    value: new_json,
-                },
-            };
-
-            match self.store.write(WriteRequest { command }).await {
-                Ok(_) => {
-                    // Tiger Style: registered instance must have positive fencing token
-                    debug_assert!(fencing_token > 0, "REGISTRY: fencing_token must be positive after registration");
-                    debug_assert!(deadline_ms > now, "REGISTRY: deadline_ms {} must be > now {}", deadline_ms, now);
-
-                    debug!(service_name, instance_id, fencing_token, deadline_ms, "instance registered");
-                    return Ok((fencing_token, deadline_ms));
-                }
-                Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                    // Retry on CAS failure
-                    continue;
-                }
-                Err(e) => bail!("failed to register instance: {}", e),
+            match self.register_write(&key, &instance, &existing).await? {
+                Some((token, deadline)) => return Ok((token, deadline)),
+                None => continue, // CAS conflict, retry
             }
+        }
+    }
+
+    /// Build a ServiceInstance for registration.
+    #[allow(clippy::too_many_arguments)]
+    fn register_build_instance(
+        &self,
+        service_name: &str,
+        instance_id: &str,
+        address: &str,
+        metadata: &ServiceInstanceMetadata,
+        options: &RegisterOptions,
+        now: u64,
+        deadline_ms: u64,
+        ttl_ms: u64,
+        existing: &Option<ServiceInstance>,
+    ) -> ServiceInstance {
+        let (fencing_token, registered_at_ms) = match existing {
+            Some(inst) => (crate::verified::compute_next_instance_token(inst.fencing_token), inst.registered_at_ms),
+            None => (1, now),
+        };
+
+        ServiceInstance {
+            instance_id: instance_id.to_string(),
+            service_name: service_name.to_string(),
+            address: address.to_string(),
+            health_status: options.initial_status.unwrap_or(HealthStatus::Healthy),
+            metadata: metadata.clone(),
+            registered_at_ms,
+            last_heartbeat_ms: now,
+            deadline_ms,
+            ttl_ms,
+            lease_id: options.lease_id,
+            fencing_token,
+        }
+    }
+
+    /// Write the instance to the store, returning (token, deadline) on success or None on CAS
+    /// failure.
+    async fn register_write(
+        &self,
+        key: &str,
+        instance: &ServiceInstance,
+        existing: &Option<ServiceInstance>,
+    ) -> Result<Option<(u64, u64)>> {
+        let new_json = serde_json::to_string(instance)?;
+
+        let command = match existing {
+            Some(old) => {
+                let old_json = serde_json::to_string(old)?;
+                WriteCommand::CompareAndSwap {
+                    key: key.to_string(),
+                    expected: Some(old_json),
+                    new_value: new_json,
+                }
+            }
+            None => WriteCommand::Set {
+                key: key.to_string(),
+                value: new_json,
+            },
+        };
+
+        match self.store.write(WriteRequest { command }).await {
+            Ok(_) => {
+                // Tiger Style: registered instance must have positive fencing token
+                debug_assert!(
+                    instance.fencing_token > 0,
+                    "REGISTRY: fencing_token must be positive after registration"
+                );
+                debug_assert!(
+                    instance.deadline_ms > instance.last_heartbeat_ms,
+                    "REGISTRY: deadline_ms {} must be > now {}",
+                    instance.deadline_ms,
+                    instance.last_heartbeat_ms
+                );
+
+                debug!(
+                    service_name = instance.service_name,
+                    instance_id = instance.instance_id,
+                    fencing_token = instance.fencing_token,
+                    deadline_ms = instance.deadline_ms,
+                    "instance registered"
+                );
+                Ok(Some((instance.fencing_token, instance.deadline_ms)))
+            }
+            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Ok(None),
+            Err(e) => bail!("failed to register instance: {}", e),
         }
     }
 

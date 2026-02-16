@@ -33,6 +33,327 @@ use crate::types::AppRequest;
 use crate::types::AppResponse;
 use crate::types::AppTypeConfig;
 
+// ====================================================================================
+// Helper functions for apply() - extracted for Tiger Style compliance
+// ====================================================================================
+
+/// Apply a Set operation to the state machine.
+fn apply_set(data: &mut BTreeMap<String, String>, key: &str, value: &str) -> AppResponse {
+    data.insert(key.to_owned(), value.to_owned());
+    AppResponse {
+        value: Some(value.to_owned()),
+        ..Default::default()
+    }
+}
+
+/// Apply a SetMulti operation to the state machine.
+fn apply_set_multi(data: &mut BTreeMap<String, String>, pairs: &[(String, String)]) -> AppResponse {
+    for (key, value) in pairs {
+        data.insert(key.clone(), value.clone());
+    }
+    AppResponse::default()
+}
+
+/// Apply a Delete operation to the state machine.
+fn apply_delete(data: &mut BTreeMap<String, String>, key: &str) -> AppResponse {
+    let existed = data.remove(key).is_some();
+    AppResponse {
+        deleted: Some(existed),
+        ..Default::default()
+    }
+}
+
+/// Apply a DeleteMulti operation to the state machine.
+fn apply_delete_multi(data: &mut BTreeMap<String, String>, keys: &[String]) -> AppResponse {
+    let mut deleted_any = false;
+    for key in keys {
+        deleted_any |= data.contains_key(key);
+        data.remove(key);
+    }
+    AppResponse {
+        deleted: Some(deleted_any),
+        ..Default::default()
+    }
+}
+
+/// Apply a CompareAndSwap operation to the state machine.
+fn apply_compare_and_swap(
+    data: &mut BTreeMap<String, String>,
+    key: &str,
+    expected: Option<&String>,
+    new_value: &str,
+) -> AppResponse {
+    let current = data.get(key).cloned();
+    let condition_matches = match (expected, &current) {
+        (None, None) => true,
+        (Some(exp), Some(cur)) => exp == cur,
+        _ => false,
+    };
+    if condition_matches {
+        data.insert(key.to_owned(), new_value.to_owned());
+        AppResponse {
+            value: Some(new_value.to_owned()),
+            cas_succeeded: Some(true),
+            ..Default::default()
+        }
+    } else {
+        AppResponse {
+            value: current,
+            cas_succeeded: Some(false),
+            ..Default::default()
+        }
+    }
+}
+
+/// Apply a CompareAndDelete operation to the state machine.
+fn apply_compare_and_delete(data: &mut BTreeMap<String, String>, key: &str, expected: &str) -> AppResponse {
+    let current = data.get(key).cloned();
+    let condition_matches = matches!(&current, Some(cur) if cur == expected);
+    if condition_matches {
+        data.remove(key);
+        AppResponse {
+            deleted: Some(true),
+            cas_succeeded: Some(true),
+            ..Default::default()
+        }
+    } else {
+        AppResponse {
+            value: current,
+            cas_succeeded: Some(false),
+            ..Default::default()
+        }
+    }
+}
+
+/// Apply a Batch operation to the state machine.
+fn apply_batch(data: &mut BTreeMap<String, String>, operations: &[(bool, String, String)]) -> AppResponse {
+    for (is_set, key, value) in operations {
+        if *is_set {
+            data.insert(key.clone(), value.clone());
+        } else {
+            data.remove(key);
+        }
+    }
+    AppResponse {
+        batch_applied: Some(operations.len() as u32),
+        ..Default::default()
+    }
+}
+
+/// Apply a ConditionalBatch operation to the state machine.
+fn apply_conditional_batch(
+    data: &mut BTreeMap<String, String>,
+    conditions: &[(u8, String, String)],
+    operations: &[(bool, String, String)],
+) -> AppResponse {
+    // Check all conditions first
+    // condition types: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists
+    let mut conditions_met = true;
+    let mut failed_index = None;
+    for (i, (cond_type, key, expected)) in conditions.iter().enumerate() {
+        let current = data.get(key);
+        let met = match cond_type {
+            0 => current.map(|v| v == expected).unwrap_or(false), // ValueEquals
+            1 => current.is_some(),                               // KeyExists
+            2 => current.is_none(),                               // KeyNotExists
+            _ => false,
+        };
+        if !met {
+            conditions_met = false;
+            failed_index = Some(i as u32);
+            break;
+        }
+    }
+
+    if conditions_met {
+        // Apply all operations
+        for (is_set, key, value) in operations {
+            if *is_set {
+                data.insert(key.clone(), value.clone());
+            } else {
+                data.remove(key);
+            }
+        }
+        AppResponse {
+            batch_applied: Some(operations.len() as u32),
+            conditions_met: Some(true),
+            ..Default::default()
+        }
+    } else {
+        AppResponse {
+            conditions_met: Some(false),
+            failed_condition_index: failed_index,
+            ..Default::default()
+        }
+    }
+}
+
+/// Apply a LeaseGrant operation (no-op for in-memory).
+fn apply_lease_grant(lease_id: u64, ttl_seconds: u32) -> AppResponse {
+    AppResponse {
+        lease_id: Some(lease_id),
+        ttl_seconds: Some(ttl_seconds),
+        ..Default::default()
+    }
+}
+
+/// Apply a LeaseRevoke operation (no-op for in-memory).
+fn apply_lease_revoke(lease_id: u64) -> AppResponse {
+    AppResponse {
+        lease_id: Some(lease_id),
+        keys_deleted: Some(0),
+        ..Default::default()
+    }
+}
+
+/// Apply a LeaseKeepalive operation (no-op for in-memory).
+fn apply_lease_keepalive(lease_id: u64) -> AppResponse {
+    AppResponse {
+        lease_id: Some(lease_id),
+        ttl_seconds: Some(60), // Dummy value
+        ..Default::default()
+    }
+}
+
+/// Apply a Transaction operation to the state machine.
+fn apply_transaction(
+    data: &mut BTreeMap<String, String>,
+    compare: &[(u8, u8, String, String)],
+    success: &[(u8, String, String)],
+    failure: &[(u8, String, String)],
+) -> AppResponse {
+    // Evaluate all comparison conditions
+    let all_conditions_met = apply_transaction_evaluate_conditions(data, compare);
+
+    // Execute the appropriate branch based on conditions
+    let operations = if all_conditions_met { success } else { failure };
+    let results = apply_transaction_execute_operations(data, operations);
+
+    AppResponse {
+        succeeded: Some(all_conditions_met),
+        txn_results: Some(results),
+        ..Default::default()
+    }
+}
+
+/// Evaluate transaction comparison conditions.
+fn apply_transaction_evaluate_conditions(
+    data: &BTreeMap<String, String>,
+    compare: &[(u8, u8, String, String)],
+) -> bool {
+    for (target, op, key, value) in compare {
+        let current_value = data.get(key);
+
+        let condition_met = match target {
+            0 => {
+                // Value comparison
+                match op {
+                    0 => current_value.map(|v| v.as_str()) == Some(value.as_str()), // Equal
+                    1 => current_value.map(|v| v.as_str()) != Some(value.as_str()), // NotEqual
+                    2 => current_value.map(|v| v.as_str() > value.as_str()).unwrap_or(false), // Greater
+                    3 => current_value.map(|v| v.as_str() < value.as_str()).unwrap_or(false), // Less
+                    _ => false,
+                }
+            }
+            1..=3 => {
+                // Version/CreateRevision/ModRevision comparison
+                // In-memory doesn't track versions, treat as 0
+                let current_version: i64 = 0;
+                let expected_version: i64 = value.parse().unwrap_or(0);
+                match op {
+                    0 => current_version == expected_version,
+                    1 => current_version != expected_version,
+                    2 => current_version > expected_version,
+                    3 => current_version < expected_version,
+                    _ => false,
+                }
+            }
+            _ => false,
+        };
+
+        if !condition_met {
+            return false;
+        }
+    }
+    true
+}
+
+/// Execute transaction operations.
+fn apply_transaction_execute_operations(
+    data: &mut BTreeMap<String, String>,
+    operations: &[(u8, String, String)],
+) -> Vec<TxnOpResult> {
+    let mut results = Vec::new();
+
+    for (op_type, key, value) in operations {
+        let result = match op_type {
+            0 => {
+                // Put operation
+                data.insert(key.clone(), value.clone());
+                TxnOpResult::Put { revision: 0 }
+            }
+            1 => {
+                // Delete operation
+                let deleted = if data.remove(key).is_some() { 1 } else { 0 };
+                TxnOpResult::Delete { deleted }
+            }
+            2 => {
+                // Get operation
+                let kv = data.get(key).map(|v| KeyValueWithRevision {
+                    key: key.clone(),
+                    value: v.clone(),
+                    version: 0,
+                    create_revision: 0,
+                    mod_revision: 0,
+                });
+                TxnOpResult::Get { kv }
+            }
+            3 => {
+                // Range operation
+                let limit: usize = value.parse().unwrap_or(10);
+                let prefix = key;
+                let kvs: Vec<_> = data
+                    .iter()
+                    .filter(|(k, _)| k.starts_with(prefix))
+                    .take(limit)
+                    .map(|(k, v)| KeyValueWithRevision {
+                        key: k.clone(),
+                        value: v.clone(),
+                        version: 0,
+                        create_revision: 0,
+                        mod_revision: 0,
+                    })
+                    .collect();
+                TxnOpResult::Range { kvs, more: false }
+            }
+            _ => continue,
+        };
+        results.push(result);
+    }
+
+    results
+}
+
+/// Apply an OptimisticTransaction operation to the state machine.
+fn apply_optimistic_transaction(
+    data: &mut BTreeMap<String, String>,
+    write_set: &[(bool, String, String)],
+) -> AppResponse {
+    // In-memory state machine doesn't track versions, just apply the writes
+    for (is_set, key, value) in write_set {
+        if *is_set {
+            data.insert(key.clone(), value.clone());
+        } else {
+            data.remove(key);
+        }
+    }
+    AppResponse {
+        occ_conflict: Some(false),
+        batch_applied: Some(write_set.len() as u32),
+        ..Default::default()
+    }
+}
+
 /// Internal state machine data for InMemoryStateMachine.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub(crate) struct StateMachineData {
@@ -169,317 +490,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
             sm.last_applied_log = Some(entry.log_id);
             let response = match entry.payload {
                 EntryPayload::Blank => AppResponse::default(),
-                EntryPayload::Normal(ref req) => match req {
-                    AppRequest::Set { key, value } => {
-                        sm.data.insert(key.clone(), value.clone());
-                        AppResponse {
-                            value: Some(value.clone()),
-                            ..Default::default()
-                        }
-                    }
-                    // TTL operations in in-memory store: we store the value but don't
-                    // track expiration (in-memory is for testing only, not production).
-                    AppRequest::SetWithTTL { key, value, .. } => {
-                        sm.data.insert(key.clone(), value.clone());
-                        AppResponse {
-                            value: Some(value.clone()),
-                            ..Default::default()
-                        }
-                    }
-                    AppRequest::SetMulti { pairs } => {
-                        for (key, value) in pairs {
-                            sm.data.insert(key.clone(), value.clone());
-                        }
-                        AppResponse::default()
-                    }
-                    AppRequest::SetMultiWithTTL { pairs, .. } => {
-                        for (key, value) in pairs {
-                            sm.data.insert(key.clone(), value.clone());
-                        }
-                        AppResponse::default()
-                    }
-                    AppRequest::Delete { key } => {
-                        let existed = sm.data.remove(key).is_some();
-                        AppResponse {
-                            deleted: Some(existed),
-                            ..Default::default()
-                        }
-                    }
-                    AppRequest::DeleteMulti { keys } => {
-                        let mut deleted_any = false;
-                        for key in keys {
-                            deleted_any |= sm.data.contains_key(key);
-                            sm.data.remove(key);
-                        }
-                        AppResponse {
-                            deleted: Some(deleted_any),
-                            ..Default::default()
-                        }
-                    }
-                    AppRequest::CompareAndSwap {
-                        key,
-                        expected,
-                        new_value,
-                    } => {
-                        let current = sm.data.get(key).cloned();
-                        let condition_matches = match (expected.as_ref(), &current) {
-                            (None, None) => true,
-                            (Some(exp), Some(cur)) => exp == cur,
-                            _ => false,
-                        };
-                        if condition_matches {
-                            sm.data.insert(key.clone(), new_value.clone());
-                            AppResponse {
-                                value: Some(new_value.clone()),
-                                cas_succeeded: Some(true),
-                                ..Default::default()
-                            }
-                        } else {
-                            AppResponse {
-                                value: current,
-                                cas_succeeded: Some(false),
-                                ..Default::default()
-                            }
-                        }
-                    }
-                    AppRequest::CompareAndDelete { key, expected } => {
-                        let current = sm.data.get(key).cloned();
-                        let condition_matches = matches!(&current, Some(cur) if cur == expected);
-                        if condition_matches {
-                            sm.data.remove(key);
-                            AppResponse {
-                                deleted: Some(true),
-                                cas_succeeded: Some(true),
-                                ..Default::default()
-                            }
-                        } else {
-                            AppResponse {
-                                value: current,
-                                cas_succeeded: Some(false),
-                                ..Default::default()
-                            }
-                        }
-                    }
-                    AppRequest::Batch { operations } => {
-                        for (is_set, key, value) in operations {
-                            if *is_set {
-                                sm.data.insert(key.clone(), value.clone());
-                            } else {
-                                sm.data.remove(key);
-                            }
-                        }
-                        AppResponse {
-                            batch_applied: Some(operations.len() as u32),
-                            ..Default::default()
-                        }
-                    }
-                    AppRequest::ConditionalBatch { conditions, operations } => {
-                        // Check all conditions first
-                        // condition types: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists
-                        let mut conditions_met = true;
-                        let mut failed_index = None;
-                        for (i, (cond_type, key, expected)) in conditions.iter().enumerate() {
-                            let current = sm.data.get(key);
-                            let met = match cond_type {
-                                0 => current.map(|v| v == expected).unwrap_or(false), // ValueEquals
-                                1 => current.is_some(),                               // KeyExists
-                                2 => current.is_none(),                               // KeyNotExists
-                                _ => false,
-                            };
-                            if !met {
-                                conditions_met = false;
-                                failed_index = Some(i as u32);
-                                break;
-                            }
-                        }
-
-                        if conditions_met {
-                            // Apply all operations
-                            for (is_set, key, value) in operations {
-                                if *is_set {
-                                    sm.data.insert(key.clone(), value.clone());
-                                } else {
-                                    sm.data.remove(key);
-                                }
-                            }
-                            AppResponse {
-                                batch_applied: Some(operations.len() as u32),
-                                conditions_met: Some(true),
-                                ..Default::default()
-                            }
-                        } else {
-                            AppResponse {
-                                conditions_met: Some(false),
-                                failed_condition_index: failed_index,
-                                ..Default::default()
-                            }
-                        }
-                    }
-                    // Lease operations in in-memory store: store values but don't track leases.
-                    // This is for testing only, not production.
-                    AppRequest::SetWithLease { key, value, .. } => {
-                        sm.data.insert(key.clone(), value.clone());
-                        AppResponse {
-                            value: Some(value.clone()),
-                            ..Default::default()
-                        }
-                    }
-                    AppRequest::SetMultiWithLease { pairs, .. } => {
-                        for (key, value) in pairs {
-                            sm.data.insert(key.clone(), value.clone());
-                        }
-                        AppResponse::default()
-                    }
-                    AppRequest::LeaseGrant { lease_id, ttl_seconds } => {
-                        // In-memory doesn't track leases, just return success
-                        AppResponse {
-                            lease_id: Some(*lease_id),
-                            ttl_seconds: Some(*ttl_seconds),
-                            ..Default::default()
-                        }
-                    }
-                    AppRequest::LeaseRevoke { lease_id } => {
-                        // In-memory doesn't track leases, just return success
-                        AppResponse {
-                            lease_id: Some(*lease_id),
-                            keys_deleted: Some(0),
-                            ..Default::default()
-                        }
-                    }
-                    AppRequest::LeaseKeepalive { lease_id } => {
-                        // In-memory doesn't track leases, just return success
-                        AppResponse {
-                            lease_id: Some(*lease_id),
-                            ttl_seconds: Some(60), // Dummy value
-                            ..Default::default()
-                        }
-                    }
-                    // Transaction: etcd-style conditional transactions
-                    // Note: In-memory doesn't track versions, so version-based comparisons
-                    // always compare against 0 (as if the key doesn't exist with version).
-                    AppRequest::Transaction {
-                        compare,
-                        success,
-                        failure,
-                    } => {
-                        // Evaluate all comparison conditions
-                        let mut all_conditions_met = true;
-
-                        for (target, op, key, value) in compare {
-                            let current_value = sm.data.get(key);
-
-                            let condition_met = match target {
-                                0 => {
-                                    // Value comparison
-                                    match op {
-                                        0 => current_value.map(|v| v.as_str()) == Some(value.as_str()), // Equal
-                                        1 => current_value.map(|v| v.as_str()) != Some(value.as_str()), // NotEqual
-                                        2 => current_value.map(|v| v.as_str() > value.as_str()).unwrap_or(false), /* Greater */
-                                        3 => current_value.map(|v| v.as_str() < value.as_str()).unwrap_or(false), /* Less */
-                                        _ => false,
-                                    }
-                                }
-                                1..=3 => {
-                                    // Version/CreateRevision/ModRevision comparison
-                                    // In-memory doesn't track versions, treat as 0
-                                    let current_version: i64 = 0;
-                                    let expected_version: i64 = value.parse().unwrap_or(0);
-                                    match op {
-                                        0 => current_version == expected_version,
-                                        1 => current_version != expected_version,
-                                        2 => current_version > expected_version,
-                                        3 => current_version < expected_version,
-                                        _ => false,
-                                    }
-                                }
-                                _ => false,
-                            };
-
-                            if !condition_met {
-                                all_conditions_met = false;
-                                break;
-                            }
-                        }
-
-                        // Execute the appropriate branch based on conditions
-                        let operations = if all_conditions_met { success } else { failure };
-                        let mut results = Vec::new();
-
-                        for (op_type, key, value) in operations {
-                            let result = match op_type {
-                                0 => {
-                                    // Put operation
-                                    sm.data.insert(key.clone(), value.clone());
-                                    TxnOpResult::Put { revision: 0 }
-                                }
-                                1 => {
-                                    // Delete operation
-                                    let deleted = if sm.data.remove(key).is_some() { 1 } else { 0 };
-                                    TxnOpResult::Delete { deleted }
-                                }
-                                2 => {
-                                    // Get operation
-                                    let kv = sm.data.get(key).map(|v| KeyValueWithRevision {
-                                        key: key.clone(),
-                                        value: v.clone(),
-                                        version: 0,
-                                        create_revision: 0,
-                                        mod_revision: 0,
-                                    });
-                                    TxnOpResult::Get { kv }
-                                }
-                                3 => {
-                                    // Range operation
-                                    let limit: usize = value.parse().unwrap_or(10);
-                                    let prefix = key;
-                                    let kvs: Vec<_> = sm
-                                        .data
-                                        .iter()
-                                        .filter(|(k, _)| k.starts_with(prefix))
-                                        .take(limit)
-                                        .map(|(k, v)| KeyValueWithRevision {
-                                            key: k.clone(),
-                                            value: v.clone(),
-                                            version: 0,
-                                            create_revision: 0,
-                                            mod_revision: 0,
-                                        })
-                                        .collect();
-                                    TxnOpResult::Range { kvs, more: false }
-                                }
-                                _ => continue,
-                            };
-                            results.push(result);
-                        }
-
-                        AppResponse {
-                            succeeded: Some(all_conditions_met),
-                            txn_results: Some(results),
-                            ..Default::default()
-                        }
-                    }
-                    // OptimisticTransaction: in-memory state machine doesn't track versions,
-                    // so we can't do proper OCC validation. Just apply the writes.
-                    AppRequest::OptimisticTransaction { write_set, .. } => {
-                        for (is_set, key, value) in write_set {
-                            if *is_set {
-                                sm.data.insert(key.clone(), value.clone());
-                            } else {
-                                sm.data.remove(key);
-                            }
-                        }
-                        AppResponse {
-                            occ_conflict: Some(false),
-                            batch_applied: Some(write_set.len() as u32),
-                            ..Default::default()
-                        }
-                    }
-                    // Shard topology operations: in-memory doesn't support sharding,
-                    // just return success (for testing purposes only).
-                    AppRequest::ShardSplit { .. }
-                    | AppRequest::ShardMerge { .. }
-                    | AppRequest::TopologyUpdate { .. } => AppResponse::default(),
-                },
+                EntryPayload::Normal(ref req) => apply_app_request(&mut sm.data, req),
                 EntryPayload::Membership(ref membership) => {
                     sm.last_membership = StoredMembership::new(Some(entry.log_id), membership.clone());
                     AppResponse::default()
@@ -545,6 +556,49 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
 
     async fn get_snapshot_builder(&mut self) -> Self::SnapshotBuilder {
         self.clone()
+    }
+}
+
+/// Apply a single request to the state machine data.
+///
+/// This is extracted from apply() for Tiger Style compliance (function length < 70 lines).
+fn apply_app_request(data: &mut BTreeMap<String, String>, req: &AppRequest) -> AppResponse {
+    match req {
+        AppRequest::Set { key, value } => apply_set(data, key, value),
+        // TTL operations: store value but don't track expiration (testing only)
+        AppRequest::SetWithTTL { key, value, .. } => apply_set(data, key, value),
+        AppRequest::SetMulti { pairs } => apply_set_multi(data, pairs),
+        AppRequest::SetMultiWithTTL { pairs, .. } => apply_set_multi(data, pairs),
+        AppRequest::Delete { key } => apply_delete(data, key),
+        AppRequest::DeleteMulti { keys } => apply_delete_multi(data, keys),
+        AppRequest::CompareAndSwap {
+            key,
+            expected,
+            new_value,
+        } => apply_compare_and_swap(data, key, expected.as_ref(), new_value),
+        AppRequest::CompareAndDelete { key, expected } => apply_compare_and_delete(data, key, expected),
+        AppRequest::Batch { operations } => apply_batch(data, operations),
+        AppRequest::ConditionalBatch { conditions, operations } => {
+            apply_conditional_batch(data, conditions, operations)
+        }
+        // Lease operations: store values but don't track leases (testing only)
+        AppRequest::SetWithLease { key, value, .. } => apply_set(data, key, value),
+        AppRequest::SetMultiWithLease { pairs, .. } => apply_set_multi(data, pairs),
+        AppRequest::LeaseGrant { lease_id, ttl_seconds } => apply_lease_grant(*lease_id, *ttl_seconds),
+        AppRequest::LeaseRevoke { lease_id } => apply_lease_revoke(*lease_id),
+        AppRequest::LeaseKeepalive { lease_id } => apply_lease_keepalive(*lease_id),
+        // Transaction: etcd-style conditional transactions
+        AppRequest::Transaction {
+            compare,
+            success,
+            failure,
+        } => apply_transaction(data, compare, success, failure),
+        // OptimisticTransaction: in-memory doesn't track versions
+        AppRequest::OptimisticTransaction { write_set, .. } => apply_optimistic_transaction(data, write_set),
+        // Shard topology operations: no-op for in-memory (testing only)
+        AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
+            AppResponse::default()
+        }
     }
 }
 

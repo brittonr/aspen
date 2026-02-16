@@ -178,7 +178,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
     }
 
     /// Start the worker pool with the specified number of workers.
-    pub async fn start(&self, num_workers: usize) -> Result<()> {
+    pub async fn start(&self, num_workers: u32) -> Result<()> {
         // Tiger Style: must request at least one worker
         assert!(num_workers > 0, "num_workers must be positive, got 0");
         // Tiger Style: bounded worker count
@@ -199,7 +199,8 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
                 ..Default::default()
             };
 
-            let handle = self.spawn_worker(worker_config).await?;
+            let handle =
+                self.spawn_worker(worker_config).await.map_err(|e| JobError::SpawnWorker { source: Box::new(e) })?;
             handles.push(handle);
         }
 
@@ -521,8 +522,17 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                     tokio::time::sleep(config.poll_interval).await;
                 } else {
                     for (queue_item, job) in jobs {
-                        // SAFETY: The semaphore is owned by this function and never closed.
-                        let _permit = concurrency_limiter.acquire().await.expect("semaphore should not be closed");
+                        // The semaphore is owned by the worker pool and should never be closed
+                        // while workers are running. If it is closed, treat it as a fatal error.
+                        let _permit = match concurrency_limiter.acquire().await {
+                            Ok(permit) => permit,
+                            Err(_) => {
+                                error!(worker_id, "concurrency limiter semaphore was closed unexpectedly");
+                                return Err(JobError::WorkerCommunicationFailed {
+                                    reason: "concurrency limiter semaphore closed".to_string(),
+                                });
+                            }
+                        };
 
                         // Update worker status to processing
                         run_worker_update_status(

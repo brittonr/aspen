@@ -69,6 +69,61 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         Ok(cob_id)
     }
 
+    /// Track scalar field values from a change operation for MergeHeads resolution.
+    fn resolve_patch_track_field_value<'a>(
+        hash: &blake3::Hash,
+        op: &'a CobOperation,
+        field_values: &mut HashMap<([u8; 32], &'a str), super::super::patch::ScalarFieldValue>,
+        final_resolutions: &mut Vec<FieldResolution>,
+    ) {
+        match op {
+            CobOperation::CreatePatch { title, description, .. } => {
+                field_values
+                    .insert((*hash.as_bytes(), "title"), super::super::patch::ScalarFieldValue::Title(title.clone()));
+                field_values.insert(
+                    (*hash.as_bytes(), "description"),
+                    super::super::patch::ScalarFieldValue::Description(description.clone()),
+                );
+            }
+            CobOperation::EditTitle { title } => {
+                field_values
+                    .insert((*hash.as_bytes(), "title"), super::super::patch::ScalarFieldValue::Title(title.clone()));
+            }
+            CobOperation::EditBody { body } => {
+                field_values.insert(
+                    (*hash.as_bytes(), "description"),
+                    super::super::patch::ScalarFieldValue::Description(body.clone()),
+                );
+            }
+            CobOperation::Merge { commit } => {
+                field_values.insert(
+                    (*hash.as_bytes(), "state"),
+                    super::super::patch::ScalarFieldValue::State(super::super::patch::PatchState::Merged {
+                        commit: *commit,
+                    }),
+                );
+            }
+            CobOperation::Close { reason } => {
+                field_values.insert(
+                    (*hash.as_bytes(), "state"),
+                    super::super::patch::ScalarFieldValue::State(super::super::patch::PatchState::Closed {
+                        reason: reason.clone(),
+                    }),
+                );
+            }
+            CobOperation::Reopen => {
+                field_values.insert(
+                    (*hash.as_bytes(), "state"),
+                    super::super::patch::ScalarFieldValue::State(super::super::patch::PatchState::Open),
+                );
+            }
+            CobOperation::MergeHeads { resolutions, .. } => {
+                *final_resolutions = resolutions.clone();
+            }
+            _ => {}
+        }
+    }
+
     /// Resolve the current state of a patch by walking its change DAG.
     ///
     /// This method walks the change DAG, topologically sorts changes, and applies
@@ -93,79 +148,18 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             });
         }
 
-        // Collect all changes by walking the DAG
         let changes = self.collect_changes(heads).await?;
-
-        // Topologically sort changes (parents before children)
         let sorted = self.topological_sort(&changes)?;
 
-        // Track scalar field values set by each change for MergeHeads resolution
         let mut field_values: HashMap<([u8; 32], &str), super::super::patch::ScalarFieldValue> = HashMap::new();
-
-        // Track the most recent MergeHeads resolutions (later ones override earlier)
         let mut final_resolutions: Vec<FieldResolution> = Vec::new();
-
-        // Apply changes in order
         let mut patch = super::super::patch::Patch::default();
-        for (hash, signed) in &sorted {
-            // Track scalar field values before applying
-            match &signed.payload.op {
-                CobOperation::CreatePatch { title, description, .. } => {
-                    field_values.insert(
-                        (*hash.as_bytes(), "title"),
-                        super::super::patch::ScalarFieldValue::Title(title.clone()),
-                    );
-                    field_values.insert(
-                        (*hash.as_bytes(), "description"),
-                        super::super::patch::ScalarFieldValue::Description(description.clone()),
-                    );
-                }
-                CobOperation::EditTitle { title } => {
-                    field_values.insert(
-                        (*hash.as_bytes(), "title"),
-                        super::super::patch::ScalarFieldValue::Title(title.clone()),
-                    );
-                }
-                CobOperation::EditBody { body } => {
-                    field_values.insert(
-                        (*hash.as_bytes(), "description"),
-                        super::super::patch::ScalarFieldValue::Description(body.clone()),
-                    );
-                }
-                CobOperation::Merge { commit } => {
-                    field_values.insert(
-                        (*hash.as_bytes(), "state"),
-                        super::super::patch::ScalarFieldValue::State(super::super::patch::PatchState::Merged {
-                            commit: *commit,
-                        }),
-                    );
-                }
-                CobOperation::Close { reason } => {
-                    field_values.insert(
-                        (*hash.as_bytes(), "state"),
-                        super::super::patch::ScalarFieldValue::State(super::super::patch::PatchState::Closed {
-                            reason: reason.clone(),
-                        }),
-                    );
-                }
-                CobOperation::Reopen => {
-                    field_values.insert(
-                        (*hash.as_bytes(), "state"),
-                        super::super::patch::ScalarFieldValue::State(super::super::patch::PatchState::Open),
-                    );
-                }
-                CobOperation::MergeHeads { resolutions, .. } => {
-                    // Collect field resolutions from MergeHeads operations
-                    // Later MergeHeads operations override earlier ones
-                    final_resolutions = resolutions.clone();
-                }
-                _ => {}
-            }
 
+        for (hash, signed) in &sorted {
+            Self::resolve_patch_track_field_value(hash, &signed.payload.op, &mut field_values, &mut final_resolutions);
             patch.apply_change(*hash, &signed.author, &signed.hlc_timestamp, &signed.payload.op);
         }
 
-        // Apply field resolutions from the final MergeHeads operation
         if !final_resolutions.is_empty() {
             patch.apply_field_resolutions(&final_resolutions, &field_values);
         }

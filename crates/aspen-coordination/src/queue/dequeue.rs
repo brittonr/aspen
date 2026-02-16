@@ -24,6 +24,18 @@ use super::QueueManager;
 use crate::types::now_unix_ms;
 use crate::verified;
 
+/// Result of processing a single item during dequeue.
+enum DequeueItemResult {
+    /// Item was successfully dequeued.
+    Dequeued(DequeuedItem),
+    /// Item should be skipped (expired, pending group, etc).
+    Skip,
+    /// CAS conflict - another consumer claimed the item.
+    Conflict,
+    /// Item was moved to DLQ.
+    MovedToDlq,
+}
+
 impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Dequeue items with visibility timeout (non-blocking).
     ///
@@ -76,96 +88,20 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 break;
             }
 
-            // Read item
-            let item: QueueItem = match self.read_json(&item_key).await? {
-                Some(item) => item,
-                None => continue, // Item was deleted
-            };
-
-            // Skip expired items
-            if item.is_expired() {
-                let _ = self.delete_key(&item_key).await;
-                continue;
-            }
-
-            // Check message group ordering - skip if group is currently pending
-            if let Some(ref group) = item.message_group_id
-                && pending_groups.contains(group)
-            {
-                debug!(name, item_id = item.item_id, group, "skipping item - message group is pending");
-                continue;
-            }
-
-            // Check max delivery attempts
-            if queue_state.max_delivery_attempts > 0 && item.delivery_attempts >= queue_state.max_delivery_attempts {
-                // Move to DLQ
-                self.move_to_dlq(name, &item, DLQReason::MaxDeliveryAttemptsExceeded, None).await?;
-                let _ = self.delete_key(&item_key).await;
-                continue;
-            }
-
-            // Generate receipt handle
-            let receipt_handle = verified::generate_receipt_handle(item.item_id, now, rand::random::<u64>());
-
-            // Create pending item
-            let pending = PendingItem {
-                item_id: item.item_id,
-                payload: item.payload.clone(),
-                consumer_id: consumer_id.to_string(),
-                receipt_handle: receipt_handle.clone(),
-                dequeued_at_ms: now,
-                visibility_deadline_ms: verified::compute_visibility_deadline(now, visibility_timeout_ms),
-                delivery_attempts: item.delivery_attempts + 1,
-                enqueued_at_ms: item.enqueued_at_ms,
-                message_group_id: item.message_group_id.clone(),
-            };
-
-            // Try to claim item with CAS
-            let pend_key = verified::pending_key(name, item.item_id);
-            let pending_json = serde_json::to_string(&pending)?;
-
             match self
-                .store
-                .write(WriteRequest {
-                    command: WriteCommand::CompareAndSwap {
-                        key: pend_key.clone(),
-                        expected: None,
-                        new_value: pending_json,
-                    },
-                })
-                .await
+                .dequeue_process_item(
+                    name,
+                    consumer_id,
+                    &item_key,
+                    &queue_state,
+                    &pending_groups,
+                    visibility_timeout_ms,
+                    now,
+                )
+                .await?
             {
-                Ok(_) => {
-                    // Successfully claimed - delete from items
-                    let _ = self.delete_key(&item_key).await;
-
-                    debug_assert!(
-                        pending.visibility_deadline_ms > 0,
-                        "QUEUE: dequeued item must have positive visibility deadline"
-                    );
-                    debug_assert!(
-                        pending.delivery_attempts >= 1,
-                        "QUEUE: dequeued item must have at least 1 delivery attempt"
-                    );
-                    debug_assert!(
-                        !pending.receipt_handle.is_empty(),
-                        "QUEUE: dequeued item must have non-empty receipt handle"
-                    );
-
-                    dequeued.push(DequeuedItem {
-                        item_id: item.item_id,
-                        payload: item.payload,
-                        receipt_handle,
-                        delivery_attempts: pending.delivery_attempts,
-                        enqueued_at_ms: item.enqueued_at_ms,
-                        visibility_deadline_ms: pending.visibility_deadline_ms,
-                    });
-                }
-                Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                    // Another consumer got it, try next
-                    continue;
-                }
-                Err(e) => bail!("dequeue CAS failed: {}", e),
+                DequeueItemResult::Dequeued(item) => dequeued.push(item),
+                DequeueItemResult::Skip | DequeueItemResult::Conflict | DequeueItemResult::MovedToDlq => continue,
             }
         }
 
@@ -173,6 +109,125 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
         debug!(name, consumer_id, count = dequeued.len(), "items dequeued");
         Ok(dequeued)
+    }
+
+    /// Process a single item during dequeue operation.
+    #[allow(clippy::too_many_arguments)]
+    async fn dequeue_process_item(
+        &self,
+        name: &str,
+        consumer_id: &str,
+        item_key: &str,
+        queue_state: &super::QueueState,
+        pending_groups: &[String],
+        visibility_timeout_ms: u64,
+        now: u64,
+    ) -> Result<DequeueItemResult> {
+        // Read item
+        let item: QueueItem = match self.read_json(item_key).await? {
+            Some(item) => item,
+            None => return Ok(DequeueItemResult::Skip), // Item was deleted
+        };
+
+        // Skip expired items
+        if item.is_expired() {
+            let _ = self.delete_key(item_key).await;
+            return Ok(DequeueItemResult::Skip);
+        }
+
+        // Check message group ordering - skip if group is currently pending
+        if let Some(ref group) = item.message_group_id
+            && pending_groups.contains(group)
+        {
+            debug!(name, item_id = item.item_id, group, "skipping item - message group is pending");
+            return Ok(DequeueItemResult::Skip);
+        }
+
+        // Check max delivery attempts
+        if queue_state.max_delivery_attempts > 0 && item.delivery_attempts >= queue_state.max_delivery_attempts {
+            // Move to DLQ
+            self.move_to_dlq(name, &item, DLQReason::MaxDeliveryAttemptsExceeded, None).await?;
+            let _ = self.delete_key(item_key).await;
+            return Ok(DequeueItemResult::MovedToDlq);
+        }
+
+        // Try to claim the item
+        self.dequeue_claim_item(name, consumer_id, item_key, &item, visibility_timeout_ms, now).await
+    }
+
+    /// Attempt to claim an item by creating a pending entry.
+    async fn dequeue_claim_item(
+        &self,
+        name: &str,
+        consumer_id: &str,
+        item_key: &str,
+        item: &QueueItem,
+        visibility_timeout_ms: u64,
+        now: u64,
+    ) -> Result<DequeueItemResult> {
+        // Generate receipt handle
+        let receipt_handle = verified::generate_receipt_handle(item.item_id, now, rand::random::<u64>());
+
+        // Create pending item
+        let pending = PendingItem {
+            item_id: item.item_id,
+            payload: item.payload.clone(),
+            consumer_id: consumer_id.to_string(),
+            receipt_handle: receipt_handle.clone(),
+            dequeued_at_ms: now,
+            visibility_deadline_ms: verified::compute_visibility_deadline(now, visibility_timeout_ms),
+            delivery_attempts: item.delivery_attempts + 1,
+            enqueued_at_ms: item.enqueued_at_ms,
+            message_group_id: item.message_group_id.clone(),
+        };
+
+        // Try to claim item with CAS
+        let pend_key = verified::pending_key(name, item.item_id);
+        let pending_json = serde_json::to_string(&pending)?;
+
+        match self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::CompareAndSwap {
+                    key: pend_key.clone(),
+                    expected: None,
+                    new_value: pending_json,
+                },
+            })
+            .await
+        {
+            Ok(_) => {
+                // Successfully claimed - delete from items
+                let _ = self.delete_key(item_key).await;
+
+                debug_assert!(
+                    pending.visibility_deadline_ms > 0,
+                    "QUEUE: dequeued item must have positive visibility deadline"
+                );
+                debug_assert!(
+                    pending.delivery_attempts >= 1,
+                    "QUEUE: dequeued item must have at least 1 delivery attempt"
+                );
+                debug_assert!(
+                    !pending.receipt_handle.is_empty(),
+                    "QUEUE: dequeued item must have non-empty receipt handle"
+                );
+
+                Ok(DequeueItemResult::Dequeued(DequeuedItem {
+                    item_id: item.item_id,
+                    payload: item.payload.clone(),
+                    receipt_handle,
+                    delivery_attempts: pending.delivery_attempts,
+                    enqueued_at_ms: item.enqueued_at_ms,
+                    visibility_deadline_ms: pending.visibility_deadline_ms,
+                }))
+            }
+            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
+                // Another consumer got it
+                Ok(DequeueItemResult::Conflict)
+            }
+            Err(e) => bail!("dequeue CAS failed: {}", e),
+        }
     }
 
     /// Dequeue items with blocking wait.

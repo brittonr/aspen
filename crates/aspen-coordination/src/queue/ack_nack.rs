@@ -73,61 +73,78 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 && pending.delivery_attempts >= queue_state.max_delivery_attempts);
 
         if should_dlq {
-            // Move to DLQ
-            let reason = if move_to_dlq {
-                DLQReason::ExplicitlyRejected
-            } else {
-                DLQReason::MaxDeliveryAttemptsExceeded
-            };
-
-            let dlq_item = DLQItem {
-                item_id: pending.item_id,
-                payload: pending.payload,
-                enqueued_at_ms: pending.enqueued_at_ms,
-                delivery_attempts: pending.delivery_attempts,
-                reason,
-                moved_at_ms: now_unix_ms(),
-                last_error: error_message,
-            };
-
-            let d_key = verified::dlq_key(name, pending.item_id);
-            let dlq_json = serde_json::to_string(&dlq_item)?;
-
-            self.store
-                .write(WriteRequest {
-                    command: WriteCommand::Set {
-                        key: d_key,
-                        value: dlq_json,
-                    },
-                })
-                .await?;
-
-            // Update DLQ stats
-            self.increment_dlq_count(name).await?;
-
-            debug!(name, item_id, "item moved to DLQ");
+            self.nack_move_to_dlq(name, item_id, &pending, move_to_dlq, error_message).await?;
         } else {
-            // Return to queue with incremented delivery attempts
-            let item = verified::create_queue_item_from_pending(&pending, false);
-
-            let i_key = verified::item_key(name, pending.item_id);
-            let item_json = serde_json::to_string(&item)?;
-
-            self.store
-                .write(WriteRequest {
-                    command: WriteCommand::Set {
-                        key: i_key,
-                        value: item_json,
-                    },
-                })
-                .await?;
-
-            debug!(name, item_id, "item returned to queue");
+            self.nack_return_to_queue(name, item_id, &pending).await?;
         }
 
         // Delete pending item
         self.delete_key(&pend_key).await?;
 
+        Ok(())
+    }
+
+    /// Move a nacked item to the dead letter queue.
+    async fn nack_move_to_dlq(
+        &self,
+        name: &str,
+        item_id: u64,
+        pending: &PendingItem,
+        explicit_reject: bool,
+        error_message: Option<String>,
+    ) -> Result<()> {
+        let reason = if explicit_reject {
+            DLQReason::ExplicitlyRejected
+        } else {
+            DLQReason::MaxDeliveryAttemptsExceeded
+        };
+
+        let dlq_item = DLQItem {
+            item_id: pending.item_id,
+            payload: pending.payload.clone(),
+            enqueued_at_ms: pending.enqueued_at_ms,
+            delivery_attempts: pending.delivery_attempts,
+            reason,
+            moved_at_ms: now_unix_ms(),
+            last_error: error_message,
+        };
+
+        let d_key = verified::dlq_key(name, pending.item_id);
+        let dlq_json = serde_json::to_string(&dlq_item)?;
+
+        self.store
+            .write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: d_key,
+                    value: dlq_json,
+                },
+            })
+            .await?;
+
+        // Update DLQ stats
+        self.increment_dlq_count(name).await?;
+
+        debug!(name, item_id, "item moved to DLQ");
+        Ok(())
+    }
+
+    /// Return a nacked item to the queue for redelivery.
+    async fn nack_return_to_queue(&self, name: &str, item_id: u64, pending: &PendingItem) -> Result<()> {
+        let item = verified::create_queue_item_from_pending(pending, false);
+
+        let i_key = verified::item_key(name, pending.item_id);
+        let item_json = serde_json::to_string(&item)?;
+
+        self.store
+            .write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: i_key,
+                    value: item_json,
+                },
+            })
+            .await?;
+
+        debug!(name, item_id, "item returned to queue");
         Ok(())
     }
 

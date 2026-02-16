@@ -76,6 +76,18 @@ enum LeaveResult {
     LeftWaitingForOthers,
 }
 
+/// Internal result type for barrier enter operations.
+enum EnterResult {
+    /// Successfully entered, barrier is ready.
+    Ready(u32),
+    /// Successfully joined, waiting for more participants.
+    Waiting,
+    /// Barrier is in leaving phase, need to wait.
+    InLeavingPhase,
+    /// CAS conflict, retry required.
+    RetryRequired,
+}
+
 /// Manager for distributed barrier operations.
 pub struct BarrierManager<S: KeyValueStore + ?Sized> {
     store: Arc<S>,
@@ -118,116 +130,133 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
             let current = self.read_state(&key).await?;
 
             match current {
-                None => {
-                    // Create new barrier
-                    assert!(required_count > 0, "BARRIER: required_count must be > 0");
-                    // If required_count is 1, we're already ready
-                    let initial_phase = crate::verified::compute_initial_barrier_phase(required_count);
-
-                    let state = BarrierState {
-                        name: name.to_string(),
-                        required_count,
-                        participants: vec![participant_id.to_string()],
-                        phase: initial_phase,
-                        created_at_ms: crate::types::now_unix_ms(),
-                    };
-                    let new_json = serde_json::to_string(&state)?;
-
-                    match self
-                        .store
-                        .write(WriteRequest {
-                            command: WriteCommand::CompareAndSwap {
-                                key: key.clone(),
-                                expected: None,
-                                new_value: new_json,
-                            },
-                        })
-                        .await
-                    {
-                        Ok(_) => {
-                            debug!(name, participant_id, "barrier created, first participant");
-                            return Ok((1, initial_phase.as_str().to_string()));
-                        }
-                        Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                            // Race condition, retry
-                            continue;
-                        }
-                        Err(e) => bail!("barrier CAS failed: {}", e),
-                    }
-                }
-                Some(state) => {
-                    debug_assert!(
-                        state.participants.len() as u32 <= state.required_count * 2,
-                        "BARRIER: participant count ({}) far exceeds required ({})",
-                        state.participants.len(),
-                        state.required_count
-                    );
-
-                    // Check if already in barrier
-                    if state.participants.contains(&participant_id.to_string()) {
-                        // Already entered, just return current status
-                        let count = state.participants.len() as u32;
-                        if count >= required_count {
-                            return Ok((count, BarrierPhase::Ready.as_str().to_string()));
-                        } else {
-                            // Wait for more participants
-                            tokio::time::sleep(Duration::from_millis(50)).await;
-                            continue;
-                        }
-                    }
-
-                    // Check if barrier is in wrong phase
-                    if state.phase == BarrierPhase::Leaving {
-                        // Wait for leave phase to complete
+                None => match self.enter_create(name, participant_id, required_count, &key).await? {
+                    EnterResult::Ready(count) => return Ok((count, BarrierPhase::Ready.as_str().to_string())),
+                    EnterResult::Waiting => return Ok((1, BarrierPhase::Waiting.as_str().to_string())),
+                    EnterResult::RetryRequired => continue,
+                    EnterResult::InLeavingPhase => unreachable!(),
+                },
+                Some(state) => match self.enter_join(name, participant_id, required_count, &key, &state).await? {
+                    EnterResult::Ready(count) => return Ok((count, BarrierPhase::Ready.as_str().to_string())),
+                    EnterResult::Waiting | EnterResult::InLeavingPhase => {
                         tokio::time::sleep(Duration::from_millis(50)).await;
                         continue;
                     }
+                    EnterResult::RetryRequired => continue,
+                },
+            }
+        }
+    }
 
-                    // Add participant
-                    let mut new_state = state.clone();
-                    new_state.participants.push(participant_id.to_string());
+    /// Create a new barrier with the first participant.
+    async fn enter_create(
+        &self,
+        name: &str,
+        participant_id: &str,
+        required_count: u32,
+        key: &str,
+    ) -> Result<EnterResult> {
+        assert!(required_count > 0, "BARRIER: required_count must be > 0");
+        // If required_count is 1, we're already ready
+        let initial_phase = crate::verified::compute_initial_barrier_phase(required_count);
 
-                    let count = new_state.participants.len() as u32;
-                    if crate::verified::should_transition_to_ready(count, required_count) {
-                        new_state.phase = BarrierPhase::Ready;
-                        debug_assert!(
-                            count >= required_count,
-                            "BARRIER: transition to Ready requires count >= required_count"
-                        );
-                    }
+        let state = BarrierState {
+            name: name.to_string(),
+            required_count,
+            participants: vec![participant_id.to_string()],
+            phase: initial_phase,
+            created_at_ms: crate::types::now_unix_ms(),
+        };
+        let new_json = serde_json::to_string(&state)?;
 
-                    let old_json = serde_json::to_string(&state)?;
-                    let new_json = serde_json::to_string(&new_state)?;
-
-                    match self
-                        .store
-                        .write(WriteRequest {
-                            command: WriteCommand::CompareAndSwap {
-                                key: key.clone(),
-                                expected: Some(old_json),
-                                new_value: new_json,
-                            },
-                        })
-                        .await
-                    {
-                        Ok(_) => {
-                            debug!(name, participant_id, count, "joined barrier");
-                            if count >= required_count {
-                                return Ok((count, BarrierPhase::Ready.as_str().to_string()));
-                            }
-                            // Wait for more participants
-                        }
-                        Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                            // Race condition, retry
-                            continue;
-                        }
-                        Err(e) => bail!("barrier CAS failed: {}", e),
-                    }
+        match self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::CompareAndSwap {
+                    key: key.to_string(),
+                    expected: None,
+                    new_value: new_json,
+                },
+            })
+            .await
+        {
+            Ok(_) => {
+                debug!(name, participant_id, "barrier created, first participant");
+                if initial_phase == BarrierPhase::Ready {
+                    Ok(EnterResult::Ready(1))
+                } else {
+                    Ok(EnterResult::Waiting)
                 }
             }
+            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Ok(EnterResult::RetryRequired),
+            Err(e) => bail!("barrier CAS failed: {}", e),
+        }
+    }
 
-            // Wait before polling again
-            tokio::time::sleep(Duration::from_millis(50)).await;
+    /// Join an existing barrier.
+    async fn enter_join(
+        &self,
+        name: &str,
+        participant_id: &str,
+        required_count: u32,
+        key: &str,
+        state: &BarrierState,
+    ) -> Result<EnterResult> {
+        debug_assert!(
+            state.participants.len() as u32 <= state.required_count * 2,
+            "BARRIER: participant count ({}) far exceeds required ({})",
+            state.participants.len(),
+            state.required_count
+        );
+
+        // Check if already in barrier
+        if state.participants.contains(&participant_id.to_string()) {
+            let count = state.participants.len() as u32;
+            if count >= required_count {
+                return Ok(EnterResult::Ready(count));
+            }
+            return Ok(EnterResult::Waiting);
+        }
+
+        // Check if barrier is in wrong phase
+        if state.phase == BarrierPhase::Leaving {
+            return Ok(EnterResult::InLeavingPhase);
+        }
+
+        // Add participant
+        let mut new_state = state.clone();
+        new_state.participants.push(participant_id.to_string());
+
+        let count = new_state.participants.len() as u32;
+        if crate::verified::should_transition_to_ready(count, required_count) {
+            new_state.phase = BarrierPhase::Ready;
+            debug_assert!(count >= required_count, "BARRIER: transition to Ready requires count >= required_count");
+        }
+
+        let old_json = serde_json::to_string(state)?;
+        let new_json = serde_json::to_string(&new_state)?;
+
+        match self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::CompareAndSwap {
+                    key: key.to_string(),
+                    expected: Some(old_json),
+                    new_value: new_json,
+                },
+            })
+            .await
+        {
+            Ok(_) => {
+                debug!(name, participant_id, count, "joined barrier");
+                if count >= required_count {
+                    Ok(EnterResult::Ready(count))
+                } else {
+                    Ok(EnterResult::Waiting)
+                }
+            }
+            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Ok(EnterResult::RetryRequired),
+            Err(e) => bail!("barrier CAS failed: {}", e),
         }
     }
 

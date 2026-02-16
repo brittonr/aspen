@@ -558,8 +558,9 @@ pub struct Zone {
     pub name: String,
     /// Whether this zone is enabled.
     pub is_enabled: bool,
-    /// Default TTL for records in this zone.
-    pub default_ttl: u32,
+    /// Default TTL for records in this zone (seconds).
+    #[serde(rename = "default_ttl")]
+    pub default_ttl_secs: u32,
     /// Zone metadata.
     pub metadata: ZoneMetadata,
 }
@@ -586,7 +587,7 @@ impl Zone {
         Self {
             name: name.into(),
             is_enabled: true,
-            default_ttl: super::constants::DEFAULT_TTL,
+            default_ttl_secs: super::constants::DEFAULT_TTL,
             metadata: ZoneMetadata {
                 serial: 1,
                 last_modified_ms: now,
@@ -595,9 +596,9 @@ impl Zone {
         }
     }
 
-    /// Set the default TTL for this zone.
-    pub fn with_default_ttl(mut self, ttl: u32) -> Self {
-        self.default_ttl = ttl;
+    /// Set the default TTL for this zone (seconds).
+    pub fn with_default_ttl_secs(mut self, ttl_secs: u32) -> Self {
+        self.default_ttl_secs = ttl_secs;
         self
     }
 
@@ -694,13 +695,13 @@ mod tests {
 
     #[test]
     fn test_zone_json_roundtrip() {
-        let zone = Zone::new("example.com").with_default_ttl(7200).with_description("Production zone");
+        let zone = Zone::new("example.com").with_default_ttl_secs(7200).with_description("Production zone");
 
         let bytes = zone.to_json_bytes();
         let parsed = Zone::from_json_bytes(&bytes).unwrap();
 
         assert_eq!(zone.name, parsed.name);
-        assert_eq!(zone.default_ttl, parsed.default_ttl);
+        assert_eq!(zone.default_ttl_secs, parsed.default_ttl_secs);
         assert_eq!(zone.metadata.description, parsed.metadata.description);
     }
 

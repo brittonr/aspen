@@ -37,10 +37,10 @@ enum TryAcquireResult {
 #[derive(Debug, Clone)]
 pub struct RateLimiterConfig {
     /// Maximum tokens (burst capacity).
-    pub capacity: u64,
+    pub capacity_tokens: u64,
     /// Tokens added per second.
     pub refill_rate: f64,
-    /// Initial tokens (defaults to capacity).
+    /// Initial tokens (defaults to capacity_tokens).
     pub initial_tokens: Option<u64>,
 }
 
@@ -53,7 +53,7 @@ impl RateLimiterConfig {
         debug_assert!(burst > 0, "burst capacity must be positive, got {}", burst);
 
         Self {
-            capacity: burst,
+            capacity_tokens: burst,
             refill_rate: rate_per_second,
             initial_tokens: None,
         }
@@ -67,7 +67,7 @@ impl RateLimiterConfig {
         debug_assert!(burst > 0, "burst capacity must be positive, got {}", burst);
 
         Self {
-            capacity: burst,
+            capacity_tokens: burst,
             refill_rate: rate_per_minute as f64 / 60.0,
             initial_tokens: None,
         }
@@ -109,7 +109,12 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
         // Tiger Style: token count must be positive
         debug_assert!(n > 0, "token count must be positive, got {}", n);
         // Tiger Style: token count cannot exceed capacity
-        debug_assert!(n <= self.config.capacity, "token count {} cannot exceed capacity {}", n, self.config.capacity);
+        debug_assert!(
+            n <= self.config.capacity_tokens,
+            "token count {} cannot exceed capacity {}",
+            n,
+            self.config.capacity_tokens
+        );
 
         let mut attempt = 0u32;
         let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
@@ -134,7 +139,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
             let new_state = BucketState {
                 tokens: available - (n as f64),
                 last_update_ms: now_ms,
-                capacity: self.config.capacity,
+                capacity: self.config.capacity_tokens,
                 refill_rate: self.config.refill_rate,
             };
 
@@ -153,7 +158,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
         let elapsed_ms = now_ms.saturating_sub(current.last_update_ms);
         let elapsed_secs = elapsed_ms as f64 / 1000.0;
         let replenished = elapsed_secs * self.config.refill_rate;
-        (current.tokens + replenished).min(self.config.capacity as f64)
+        (current.tokens + replenished).min(self.config.capacity_tokens as f64)
     }
 
     /// Build error for tokens exhausted case.
@@ -275,7 +280,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
 
     /// Reset the bucket to full capacity.
     pub async fn reset(&self) -> Result<(), CoordinationError> {
-        let new_state = BucketState::new(self.config.capacity, self.config.refill_rate);
+        let new_state = BucketState::new(self.config.capacity_tokens, self.config.refill_rate);
         let json = serde_json::to_string(&new_state)?;
 
         let mut attempt = 0u32;
@@ -336,11 +341,11 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
             }
             Err(KeyValueStoreError::NotFound { .. }) => {
                 // Initialize with config
-                let initial_tokens = self.config.initial_tokens.unwrap_or(self.config.capacity);
+                let initial_tokens = self.config.initial_tokens.unwrap_or(self.config.capacity_tokens);
                 Ok(BucketState {
                     tokens: initial_tokens as f64,
                     last_update_ms: now_unix_ms(),
-                    capacity: self.config.capacity,
+                    capacity: self.config.capacity_tokens,
                     refill_rate: self.config.refill_rate,
                 })
             }

@@ -482,7 +482,6 @@ impl NodeConfig {
     pub fn validate(&self) -> Result<(), ConfigError> {
         use tracing::warn;
 
-        use crate::validation::check_disk_usage;
         use crate::validation::check_raft_timing_sanity;
         use crate::validation::validate_cookie;
         use crate::validation::validate_cookie_safety;
@@ -492,19 +491,14 @@ impl NodeConfig {
 
         // Validate core fields using extracted pure functions
         validate_node_id(self.node_id).map_err(|e| ConfigError::Validation { message: e.to_string() })?;
-
         validate_cookie(&self.cookie).map_err(|e| ConfigError::Validation { message: e.to_string() })?;
-
-        // Reject unsafe default cookie (security-critical: prevents shared gossip topics)
         validate_cookie_safety(&self.cookie).map_err(|e| ConfigError::Validation { message: e.to_string() })?;
-
         validate_raft_timings(self.heartbeat_interval_ms, self.election_timeout_min_ms, self.election_timeout_max_ms)
             .map_err(|e| ConfigError::Validation { message: e.to_string() })?;
-
         validate_secret_key(self.iroh.secret_key.as_deref())
             .map_err(|e| ConfigError::Validation { message: e.to_string() })?;
 
-        // Log sanity warnings using extracted pure function
+        // Log sanity warnings
         for warning in check_raft_timing_sanity(
             self.heartbeat_interval_ms,
             self.election_timeout_min_ms,
@@ -513,69 +507,88 @@ impl NodeConfig {
             warn!("{}", warning);
         }
 
-        // File path validation (has I/O side effects, kept inline)
-        if let Some(ref data_dir) = self.data_dir
-            && let Some(parent) = data_dir.parent()
-        {
-            if !parent.exists() {
-                return Err(ConfigError::Validation {
-                    message: format!("data_dir parent directory does not exist: {}", parent.display()),
-                });
-            }
+        // Validate paths and disk space
+        self.validate_data_dir_path()?;
+        self.validate_storage_paths()?;
+        self.validate_sharding_config()?;
 
-            // Check if data_dir exists or can be created
-            if !data_dir.exists() {
-                std::fs::create_dir_all(data_dir).map_err(|e| ConfigError::Validation {
-                    message: format!("cannot create data_dir {}: {}", data_dir.display(), e),
-                })?;
-            }
+        // CI configuration validation (warnings only)
+        for ci_warning in self.validate_ci_config() {
+            warn!("{}", ci_warning);
+        }
 
-            // Check disk space (warning only, not error)
-            match check_disk_space(data_dir) {
-                Ok(disk_space) => {
-                    if let Some(warning) = check_disk_usage(disk_space.usage_percent) {
-                        warn!(
-                            data_dir = %data_dir.display(),
-                            available_gb = disk_space.available_bytes / (1024 * 1024 * 1024),
-                            "{}",
-                            warning
-                        );
-                    }
-                }
-                Err(e) => {
+        Ok(())
+    }
+
+    /// Validate data directory path exists and has sufficient disk space.
+    fn validate_data_dir_path(&self) -> Result<(), ConfigError> {
+        use tracing::warn;
+
+        use crate::validation::check_disk_usage;
+
+        let Some(ref data_dir) = self.data_dir else {
+            return Ok(());
+        };
+        let Some(parent) = data_dir.parent() else {
+            return Ok(());
+        };
+
+        if !parent.exists() {
+            return Err(ConfigError::Validation {
+                message: format!("data_dir parent directory does not exist: {}", parent.display()),
+            });
+        }
+
+        // Create data_dir if needed
+        if !data_dir.exists() {
+            std::fs::create_dir_all(data_dir).map_err(|e| ConfigError::Validation {
+                message: format!("cannot create data_dir {}: {}", data_dir.display(), e),
+            })?;
+        }
+
+        // Check disk space (warning only)
+        match check_disk_space(data_dir) {
+            Ok(disk_space) => {
+                if let Some(warning) = check_disk_usage(disk_space.usage_percent) {
                     warn!(
                         data_dir = %data_dir.display(),
-                        error = %e,
-                        "could not check disk space (non-fatal)"
+                        available_gb = disk_space.available_bytes / (1024 * 1024 * 1024),
+                        "{}",
+                        warning
                     );
                 }
             }
+            Err(e) => {
+                warn!(data_dir = %data_dir.display(), error = %e, "could not check disk space (non-fatal)");
+            }
         }
 
-        // Validate explicit storage paths if provided
-        // Tiger Style: Fail fast on invalid paths before node startup
+        Ok(())
+    }
+
+    /// Validate explicit storage paths (redb_path, etc.).
+    fn validate_storage_paths(&self) -> Result<(), ConfigError> {
         for (name, path) in [("redb_path", &self.redb_path)] {
             if let Some(path) = path {
-                // Validate parent directory exists or can be created
-                if let Some(parent) = path.parent()
-                    && !parent.as_os_str().is_empty()
-                    && !parent.exists()
-                {
-                    // Try to create parent directory
-                    if let Err(e) = std::fs::create_dir_all(parent) {
-                        return Err(ConfigError::Validation {
-                            message: format!(
-                                "{} parent directory {} does not exist and cannot be created: {}",
-                                name,
-                                parent.display(),
-                                e
-                            ),
-                        });
+                // Ensure parent directory exists or can be created
+                if let Some(parent) = path.parent() {
+                    let is_non_empty = !parent.as_os_str().is_empty();
+                    let does_not_exist = !parent.exists();
+                    if is_non_empty && does_not_exist {
+                        if let Err(e) = std::fs::create_dir_all(parent) {
+                            return Err(ConfigError::Validation {
+                                message: format!(
+                                    "{} parent directory {} does not exist and cannot be created: {}",
+                                    name,
+                                    parent.display(),
+                                    e
+                                ),
+                            });
+                        }
                     }
                 }
 
-                // Warn if path exists but is a directory (should be a file)
-                // Decomposed: check existence first, then check type
+                // Check path is not a directory
                 let does_exist = path.exists();
                 let is_directory = path.is_dir();
                 if does_exist && is_directory {
@@ -585,38 +598,36 @@ impl NodeConfig {
                 }
             }
         }
+        Ok(())
+    }
 
-        // Sharding configuration validation
-        if self.sharding.is_enabled {
-            use aspen_sharding::MAX_SHARDS;
-            use aspen_sharding::MIN_SHARDS;
+    /// Validate sharding configuration.
+    fn validate_sharding_config(&self) -> Result<(), ConfigError> {
+        if !self.sharding.is_enabled {
+            return Ok(());
+        }
 
-            // Validate num_shards is within bounds
-            if self.sharding.num_shards < MIN_SHARDS || self.sharding.num_shards > MAX_SHARDS {
+        use aspen_sharding::MAX_SHARDS;
+        use aspen_sharding::MIN_SHARDS;
+
+        if self.sharding.num_shards < MIN_SHARDS || self.sharding.num_shards > MAX_SHARDS {
+            return Err(ConfigError::Validation {
+                message: format!(
+                    "sharding.num_shards must be between {} and {}, got {}",
+                    MIN_SHARDS, MAX_SHARDS, self.sharding.num_shards
+                ),
+            });
+        }
+
+        for &shard_id in &self.sharding.local_shards {
+            if shard_id >= self.sharding.num_shards {
                 return Err(ConfigError::Validation {
                     message: format!(
-                        "sharding.num_shards must be between {} and {}, got {}",
-                        MIN_SHARDS, MAX_SHARDS, self.sharding.num_shards
+                        "sharding.local_shards contains invalid shard_id {}, must be < num_shards ({})",
+                        shard_id, self.sharding.num_shards
                     ),
                 });
             }
-
-            // Validate local_shards are within range
-            for &shard_id in &self.sharding.local_shards {
-                if shard_id >= self.sharding.num_shards {
-                    return Err(ConfigError::Validation {
-                        message: format!(
-                            "sharding.local_shards contains invalid shard_id {}, must be < num_shards ({})",
-                            shard_id, self.sharding.num_shards
-                        ),
-                    });
-                }
-            }
-        }
-
-        // CI configuration validation (warnings only, not errors)
-        for ci_warning in self.validate_ci_config() {
-            warn!("{}", ci_warning);
         }
 
         Ok(())

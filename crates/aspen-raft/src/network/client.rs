@@ -129,26 +129,45 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     async fn send_rpc(&self, request: RaftRpcProtocol) -> anyhow::Result<RaftRpcResponse> {
         let peer_addr = self.peer_addr.as_ref().context("peer address not found in peer map")?;
 
+        // Acquire connection and stream
+        let mut stream_handle = self.send_rpc_acquire_stream(peer_addr).await?;
+
+        // Record client send time (t1) for clock drift detection
+        let client_send_ms = current_time_ms();
+
+        // Serialize and send the request
+        self.send_rpc_write_request(&mut stream_handle, &request).await?;
+
+        // Read response (with size and time limits)
+        let response_buf = self.send_rpc_read_response(&mut stream_handle).await?;
+
+        // Record client receive time (t4) for clock drift detection
+        let client_recv_ms = current_time_ms();
+
+        // Process response and update failure/drift detectors
+        self.send_rpc_process_response(&response_buf, client_send_ms, client_recv_ms).await
+    }
+
+    /// Acquire connection and stream for RPC.
+    async fn send_rpc_acquire_stream(
+        &self,
+        peer_addr: &iroh::EndpointAddr,
+    ) -> anyhow::Result<crate::connection_pool::StreamHandle> {
         // Get or create connection from pool
         //
         // Error classification: Connection failure (timeout, refused, unreachable) is
-        // classified as NodeCrash (both Raft and Iroh disconnected). This is intentional:
-        // the failure detector tracks reachability, not error details. Specific error
-        // types are logged but not used for classification.
+        // classified as NodeCrash (both Raft and Iroh disconnected).
         let peer_connection = self
             .connection_pool
             .get_or_connect(self.target, peer_addr)
             .await
             .inspect_err(|err| {
-                // Log specific error for debugging, but classify uniformly as NodeCrash
                 tracing::debug!(
                     target = %self.target,
                     error = %err,
                     "connection failure, classifying as NodeCrash"
                 );
                 // Tiger Style: Use bounded channel instead of spawning unbounded tasks
-                // try_send is non-blocking; if channel is full, we drop the update
-                // (acceptable since failure detector will get future updates)
                 let _ = self.failure_update_tx.try_send(FailureDetectorUpdate {
                     node_id: self.target,
                     raft_status: ConnectionStatus::Disconnected,
@@ -160,62 +179,63 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         // Acquire a stream from the pooled connection
         //
         // Error classification: Stream failure with existing connection is classified
-        // as ActorCrash (Iroh connected but Raft disconnected). This distinguishes
-        // node-level failures from application-level issues.
-        let mut stream_handle = peer_connection
+        // as ActorCrash (Iroh connected but Raft disconnected).
+        peer_connection
             .acquire_stream()
             .await
             .inspect_err(|err| {
-                // Log specific error for debugging, but classify uniformly as ActorCrash
                 tracing::debug!(
                     target = %self.target,
                     error = %err,
                     "stream failure with connection up, classifying as ActorCrash"
                 );
-                // Tiger Style: Use bounded channel instead of spawning unbounded tasks
-                // try_send is non-blocking; if channel is full, we drop the update
-                // (acceptable since failure detector will get future updates)
                 let _ = self.failure_update_tx.try_send(FailureDetectorUpdate {
                     node_id: self.target,
                     raft_status: ConnectionStatus::Disconnected,
                     iroh_status: ConnectionStatus::Connected,
                 });
             })
-            .context("failed to acquire stream from connection")?;
+            .context("failed to acquire stream from connection")
+    }
 
-        // Record client send time (t1) for clock drift detection
-        let client_send_ms = current_time_ms();
-
-        // Serialize the request
-        let serialized = postcard::to_stdvec(&request).context("failed to serialize RPC request")?;
-
-        // If sharded mode, prepend shard ID prefix (pure function)
+    /// Serialize and send the RPC request.
+    async fn send_rpc_write_request(
+        &self,
+        stream_handle: &mut crate::connection_pool::StreamHandle,
+        request: &RaftRpcProtocol,
+    ) -> anyhow::Result<()> {
+        let serialized = postcard::to_stdvec(request).context("failed to serialize RPC request")?;
         let message = maybe_prefix_shard_id(serialized, self.shard_id);
-
-        // Send the request
         stream_handle.send.write_all(&message).await.context("failed to write RPC request to stream")?;
         stream_handle.send.finish().context("failed to finish send stream")?;
+        Ok(())
+    }
 
-        // Read response (with size and time limits)
-        let response_buf =
-            tokio::time::timeout(IROH_READ_TIMEOUT, stream_handle.recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize))
-                .await
-                .context("timeout reading RPC response")?
-                .context("failed to read RPC response")?;
+    /// Read the RPC response with timeout.
+    async fn send_rpc_read_response(
+        &self,
+        stream_handle: &mut crate::connection_pool::StreamHandle,
+    ) -> anyhow::Result<Vec<u8>> {
+        tokio::time::timeout(IROH_READ_TIMEOUT, stream_handle.recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize))
+            .await
+            .context("timeout reading RPC response")?
+            .context("failed to read RPC response")
+    }
 
-        // Record client receive time (t4) for clock drift detection
-        let client_recv_ms = current_time_ms();
-
+    /// Process RPC response: validate, deserialize, and update detectors.
+    async fn send_rpc_process_response(
+        &self,
+        response_buf: &[u8],
+        client_send_ms: u64,
+        client_recv_ms: u64,
+    ) -> anyhow::Result<RaftRpcResponse> {
         // CRITICAL: Detect empty response buffer
-        // This can happen when the server panics mid-RPC or closes the stream prematurely.
-        // An empty buffer is always an error - we need at least 1 byte for valid postcard encoding.
         if response_buf.is_empty() {
             error!(
                 target_node = %self.target,
                 shard_id = ?self.shard_id,
                 "received empty response buffer from peer - peer may have panicked or closed stream prematurely"
             );
-            // Mark node as having Raft issues (actor crash) but Iroh connection worked
             self.failure_detector.write().await.update_node_status(
                 self.target,
                 ConnectionStatus::Disconnected,
@@ -227,9 +247,9 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             ));
         }
 
-        // If sharded mode, strip shard ID prefix from response and verify (pure function)
+        // If sharded mode, strip shard ID prefix from response and verify
         let response_bytes =
-            extract_sharded_response(&response_buf, self.shard_id).map_err(|e| anyhow::anyhow!("{}", e))?;
+            extract_sharded_response(response_buf, self.shard_id).map_err(|e| anyhow::anyhow!("{}", e))?;
 
         info!(
             response_size = response_bytes.len(),
@@ -237,7 +257,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             "received RPC response bytes"
         );
 
-        // Deserialize response with backward compatibility (pure function)
+        // Deserialize response with backward compatibility
         let (response, timestamps) = deserialize_rpc_response(response_bytes).map_err(|e| {
             error!(
                 target_node = %self.target,
@@ -260,10 +280,9 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             );
         }
 
-        // Classify response health and update failure detector (pure function for classification)
+        // Classify response health and update failure detector
         let (raft_status, iroh_status) = classify_response_health(&response);
 
-        // Log fatal errors for visibility
         if let RaftRpcResponse::FatalError(error_kind) = &response {
             warn!(
                 target_node = %self.target,
@@ -272,7 +291,6 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             );
         }
 
-        // Update failure detector with the classified status
         self.failure_detector.write().await.update_node_status(self.target, raft_status, iroh_status);
 
         Ok(response)

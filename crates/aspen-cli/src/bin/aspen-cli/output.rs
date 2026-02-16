@@ -708,7 +708,7 @@ impl DnsZoneOutput {
         Self {
             name: resp.name,
             is_enabled: resp.is_enabled,
-            default_ttl: resp.default_ttl,
+            default_ttl: resp.default_ttl_secs,
             serial: resp.serial,
             last_modified_ms: resp.last_modified_ms,
             description: resp.description,

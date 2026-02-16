@@ -153,7 +153,7 @@ impl Worker for LocalExecutorWorker {
                             "stderr_full_size": result.stderr.len(),
                             "duration_ms": result.duration_ms,
                             "artifacts": artifact_list,
-                            "artifacts_total_size": artifacts.total_size,
+                            "artifacts_total_size": artifacts.total_size_bytes,
                             "artifacts_skipped": artifacts.skipped_files.len(),
                             "artifacts_unmatched_patterns": artifacts.unmatched_patterns,
                             "artifacts_upload": upload_stats,
@@ -162,7 +162,7 @@ impl Worker for LocalExecutorWorker {
                             ("local_execution".to_string(), "true".to_string()),
                             ("duration_ms".to_string(), result.duration_ms.to_string()),
                             ("artifacts_count".to_string(), artifacts.artifacts.len().to_string()),
-                            ("artifacts_total_size".to_string(), artifacts.total_size.to_string()),
+                            ("artifacts_total_size".to_string(), artifacts.total_size_bytes.to_string()),
                         ]),
                     };
                     JobResult::Success(output)

@@ -371,7 +371,7 @@ where C: ClusterController + 'static
     ) -> Result<(), PromotionError> {
         if let Some(failed_node) = replace_node {
             // Use pure function to check if removal maintains quorum
-            if !can_remove_voter_safely(current_voters.len()) {
+            if !can_remove_voter_safely(current_voters.len() as u32) {
                 return Err(PromotionError::NoQuorumWithoutFailedNode {
                     failed_node_id: Some(failed_node),
                 });

@@ -48,7 +48,7 @@ pub enum ConditionResult {
 /// assert_eq!(check_all_success(3, 2, 0), ConditionResult::Indeterminate);
 /// ```
 #[inline]
-pub const fn check_all_success(total_jobs: usize, succeeded_jobs: usize, failed_jobs: usize) -> ConditionResult {
+pub const fn check_all_success(total_jobs: u32, succeeded_jobs: u32, failed_jobs: u32) -> ConditionResult {
     if failed_jobs > 0 {
         ConditionResult::NotSatisfied
     } else if succeeded_jobs == total_jobs {
@@ -85,7 +85,7 @@ pub const fn check_all_success(total_jobs: usize, succeeded_jobs: usize, failed_
 /// assert_eq!(check_any_failed(3, 2, 0), ConditionResult::Indeterminate);
 /// ```
 #[inline]
-pub const fn check_any_failed(total_jobs: usize, succeeded_jobs: usize, failed_jobs: usize) -> ConditionResult {
+pub const fn check_any_failed(total_jobs: u32, succeeded_jobs: u32, failed_jobs: u32) -> ConditionResult {
     if failed_jobs > 0 {
         ConditionResult::Satisfied
     } else if succeeded_jobs == total_jobs {
@@ -124,9 +124,9 @@ pub const fn check_any_failed(total_jobs: usize, succeeded_jobs: usize, failed_j
 /// ```
 #[inline]
 pub fn check_success_rate(
-    total_jobs: usize,
-    succeeded_jobs: usize,
-    completed_jobs: usize,
+    total_jobs: u32,
+    succeeded_jobs: u32,
+    completed_jobs: u32,
     threshold: f32,
 ) -> ConditionResult {
     if completed_jobs < total_jobs {
@@ -235,7 +235,7 @@ pub const fn check_job_failed(job_failed: bool, job_completed: bool) -> Conditio
 /// assert_eq!(compute_history_trim_size(150, 100), 90);
 /// ```
 #[inline]
-pub const fn compute_history_trim_size(current_size: usize, max_size: usize) -> usize {
+pub const fn compute_history_trim_size(current_size: u32, max_size: u32) -> u32 {
     if current_size < max_size {
         current_size
     } else {

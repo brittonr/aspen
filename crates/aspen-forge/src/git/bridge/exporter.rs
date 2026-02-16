@@ -162,17 +162,34 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         })
     }
 
-    /// Export all objects reachable from a commit.
-    ///
-    /// Walks the DAG and exports objects in dependency order.
-    /// Optionally skip objects that are already known to the remote.
-    pub async fn export_commit_dag(
+    /// Queue dependencies of a git object for DAG traversal.
+    fn export_commit_dag_queue_deps(queue: &mut VecDeque<blake3::Hash>, object: &GitObject) {
+        match object {
+            GitObject::Commit(commit) => {
+                queue.push_back(commit.tree());
+                for parent in commit.parents() {
+                    queue.push_back(parent);
+                }
+            }
+            GitObject::Tree(tree) => {
+                for entry in &tree.entries {
+                    queue.push_back(entry.hash());
+                }
+            }
+            GitObject::Tag(tag) => {
+                queue.push_back(tag.target());
+            }
+            GitObject::Blob(_) => {}
+        }
+    }
+
+    /// Walk the DAG and collect objects to export (Phase 1).
+    async fn export_commit_dag_collect(
         &self,
         repo_id: &RepoId,
         commit_blake3: blake3::Hash,
         known_to_remote: &HashSet<Sha1Hash>,
-    ) -> BridgeResult<ExportResult> {
-        // Phase 1: Walk the DAG and collect all objects (without exporting)
+    ) -> BridgeResult<(Vec<(blake3::Hash, SignedObject<GitObject>)>, usize)> {
         let mut to_export: Vec<(blake3::Hash, SignedObject<GitObject>)> = Vec::new();
         let mut visited: HashSet<blake3::Hash> = HashSet::new();
         let mut queue: VecDeque<blake3::Hash> = VecDeque::new();
@@ -214,7 +231,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 continue;
             }
 
-            // Fetch the object (but don't export yet)
+            // Fetch the object
             let iroh_hash = iroh_blobs::Hash::from_bytes(*blake3.as_bytes());
             let bytes = self
                 .blobs
@@ -226,28 +243,25 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 })?;
 
             let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes)?;
-
-            // Queue dependencies for processing
-            match &signed.payload {
-                GitObject::Commit(commit) => {
-                    queue.push_back(commit.tree());
-                    for parent in commit.parents() {
-                        queue.push_back(parent);
-                    }
-                }
-                GitObject::Tree(tree) => {
-                    for entry in &tree.entries {
-                        queue.push_back(entry.hash());
-                    }
-                }
-                GitObject::Tag(tag) => {
-                    queue.push_back(tag.target());
-                }
-                GitObject::Blob(_) => {}
-            }
-
+            Self::export_commit_dag_queue_deps(&mut queue, &signed.payload);
             to_export.push((blake3, signed));
         }
+
+        Ok((to_export, skipped))
+    }
+
+    /// Export all objects reachable from a commit.
+    ///
+    /// Walks the DAG and exports objects in dependency order.
+    /// Optionally skip objects that are already known to the remote.
+    pub async fn export_commit_dag(
+        &self,
+        repo_id: &RepoId,
+        commit_blake3: blake3::Hash,
+        known_to_remote: &HashSet<Sha1Hash>,
+    ) -> BridgeResult<ExportResult> {
+        // Phase 1: Walk the DAG and collect all objects (without exporting)
+        let (mut to_export, skipped) = self.export_commit_dag_collect(repo_id, commit_blake3, known_to_remote).await?;
 
         // Phase 2: Reverse to get dependency order (blobs first, then trees, then commits)
         to_export.reverse();

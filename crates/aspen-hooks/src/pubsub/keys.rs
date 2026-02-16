@@ -85,8 +85,8 @@ pub fn parse_event_key(key: &str) -> Result<(Topic, Cursor)> {
         });
     }
 
-    // SAFETY: We verified segments.len() >= 2 above, so .last() is always Some.
-    let cursor_hex = segments.last().unwrap();
+    // Tiger Style: We verified segments.len() >= 2 above, so .last() is always Some.
+    let cursor_hex = segments.last().expect("segments.len() >= 2 verified above");
     let cursor_index = u64::from_str_radix(cursor_hex, 16).map_err(|_| super::error::PubSubError::KeyParseFailed {
         reason: format!("invalid cursor hex '{}' in key '{}'", cursor_hex, key),
     })?;

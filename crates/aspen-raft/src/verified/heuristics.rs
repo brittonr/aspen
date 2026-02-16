@@ -352,7 +352,7 @@ pub fn classify_node_failure(raft_heartbeat: ConnectionStatus, iroh_connection: 
 ///
 /// `true` if the oldest entry should be evicted to make room
 #[inline]
-pub fn should_evict_oldest_unreachable(current_count: usize, max_nodes: usize, new_node_already_tracked: bool) -> bool {
+pub fn should_evict_oldest_unreachable(current_count: u32, max_nodes: u32, new_node_already_tracked: bool) -> bool {
     !new_node_already_tracked && current_count >= max_nodes
 }
 

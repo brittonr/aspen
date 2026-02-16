@@ -103,8 +103,8 @@ pub struct ArtifactCollectionResult {
     /// Files skipped due to size limits.
     pub skipped_files: Vec<(PathBuf, u64)>,
 
-    /// Total size of collected artifacts.
-    pub total_size: u64,
+    /// Total size of collected artifacts (bytes).
+    pub total_size_bytes: u64,
 }
 
 /// An artifact that has been uploaded to the blob store.
@@ -191,7 +191,7 @@ pub async fn collect_artifacts(workspace_dir: &Path, patterns: &[String]) -> Res
                 continue;
             }
 
-            if result.total_size + size > MAX_TOTAL_ARTIFACT_SIZE {
+            if result.total_size_bytes + size > MAX_TOTAL_ARTIFACT_SIZE {
                 result.skipped_files.push((canonical.clone(), size));
                 continue;
             }
@@ -208,7 +208,7 @@ pub async fn collect_artifacts(workspace_dir: &Path, patterns: &[String]) -> Res
                 absolute_path: canonical,
                 size_bytes: size,
             });
-            result.total_size += size;
+            result.total_size_bytes += size;
         }
 
         if !matched {
@@ -218,7 +218,7 @@ pub async fn collect_artifacts(workspace_dir: &Path, patterns: &[String]) -> Res
 
     debug!(
         artifacts = result.artifacts.len(),
-        total_size = result.total_size,
+        total_size_bytes = result.total_size_bytes,
         skipped = result.skipped_files.len(),
         unmatched = result.unmatched_patterns.len(),
         "artifact collection complete"

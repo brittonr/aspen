@@ -11,7 +11,7 @@ impl WriteBatcher {
     pub(super) fn maybe_schedule_flush_shared(&self, state: &mut BatcherState) -> FlushDecision {
         // Use pure function for flush decision logic
         let decision = determine_flush_action(
-            state.pending.len(),
+            state.pending.len() as u32,
             state.current_bytes,
             self.config.max_entries,
             self.config.max_bytes,
@@ -32,7 +32,7 @@ impl WriteBatcher {
         // Use pure function for flush decision logic
         // Non-Arc version treats Delayed as no-flush (can't spawn background task)
         let decision = determine_flush_action(
-            state.pending.len(),
+            state.pending.len() as u32,
             state.current_bytes,
             self.config.max_entries,
             self.config.max_bytes,
@@ -97,7 +97,7 @@ impl WriteBatcher {
 
         // Tiger Style: batch size must be bounded
         assert!(
-            batch.len() <= self.config.max_entries,
+            batch.len() as u32 <= self.config.max_entries,
             "FLUSH: batch size {} exceeds max_entries {}",
             batch.len(),
             self.config.max_entries

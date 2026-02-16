@@ -40,7 +40,8 @@ pub struct DnsZoneResponse {
     pub name: String,
     #[serde(rename = "enabled")]
     pub is_enabled: bool,
-    pub default_ttl: u32,
+    #[serde(rename = "default_ttl")]
+    pub default_ttl_secs: u32,
     pub serial: u32,
     pub last_modified_ms: u64,
     pub description: Option<String>,

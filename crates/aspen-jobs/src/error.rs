@@ -186,6 +186,56 @@ pub enum JobError {
         /// Current leader node ID, if known.
         leader: Option<u64>,
     },
+
+    /// Failed to spawn a worker.
+    #[snafu(display("Failed to spawn worker: {source}"))]
+    SpawnWorker {
+        /// Source error.
+        source: Box<JobError>,
+    },
+
+    /// Failed to submit scheduled job for execution.
+    #[snafu(display("Failed to submit scheduled job {job_id}: {source}"))]
+    SubmitScheduledJob {
+        /// Job ID.
+        job_id: String,
+        /// Source error.
+        source: Box<JobError>,
+    },
+
+    /// Failed to update scheduled job state.
+    #[snafu(display("Failed to update scheduled job {job_id}: {source}"))]
+    UpdateScheduledJob {
+        /// Job ID.
+        job_id: String,
+        /// Source error.
+        source: Box<JobError>,
+    },
+
+    /// Failed to persist scheduled job to storage.
+    #[snafu(display("Failed to persist scheduled job {job_id}: {source}"))]
+    PersistScheduledJob {
+        /// Job ID.
+        job_id: String,
+        /// Source error.
+        source: Box<JobError>,
+    },
+
+    /// Failed to delete persisted schedule.
+    #[snafu(display("Failed to delete persisted schedule {job_id}: {source}"))]
+    DeletePersistedSchedule {
+        /// Job ID.
+        job_id: String,
+        /// Source error.
+        source: Box<JobError>,
+    },
+
+    /// Failed to clean up old schedule entries.
+    #[snafu(display("Failed to clean up old schedule entries: {source}"))]
+    CleanupScheduleEntries {
+        /// Source error.
+        source: Box<JobError>,
+    },
 }
 
 /// Error kinds for categorizing errors.
@@ -229,6 +279,12 @@ impl JobError {
             Self::CasRetryExhausted { .. } => JobErrorKind::Temporary,
             Self::NotFound { .. } => JobErrorKind::Permanent,
             Self::NotLeader { .. } => JobErrorKind::Temporary,
+            Self::SpawnWorker { source } => source.kind(),
+            Self::SubmitScheduledJob { source, .. } => source.kind(),
+            Self::UpdateScheduledJob { source, .. } => source.kind(),
+            Self::PersistScheduledJob { source, .. } => source.kind(),
+            Self::DeletePersistedSchedule { source, .. } => source.kind(),
+            Self::CleanupScheduleEntries { source } => source.kind(),
         }
     }
 

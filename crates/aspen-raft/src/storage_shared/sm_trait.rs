@@ -150,94 +150,15 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
             );
         }
 
-        // =========================================================================
-        // INVARIANT 7 (Snapshot Integrity): Verify before installation
-        // =========================================================================
-        // The snapshot integrity check verifies:
-        // 1. blake3(data) == integrity.data_hash
-        // 2. blake3(meta_bytes) == integrity.meta_hash
-        // 3. blake3(data_hash || meta_hash) == integrity.combined_hash
-        // 4. chain_hash_at_snapshot matches stored chain hash
-        //
-        // This ensures the snapshot has not been corrupted or tampered with.
-        // =========================================================================
-        {
-            let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-            if let Ok(table) = read_txn.open_table(SNAPSHOT_TABLE)
-                && let Some(value) = table.get("current").context(GetSnafu)?
-                && let Ok(stored) = bincode::deserialize::<StoredSnapshot>(value.value())
-                && let Some(ref integrity) = stored.integrity
-            {
-                // Verify the incoming data matches the stored integrity
-                let meta_bytes = bincode::serialize(meta).map_err(|e| {
-                    io::Error::other(format!("failed to serialize snapshot metadata for integrity check: {e}"))
-                })?;
-                if !integrity.verify(&meta_bytes, &data) {
-                    tracing::error!(
-                        snapshot_id = %meta.snapshot_id,
-                        "snapshot integrity verification failed"
-                    );
-                    return Err(io::Error::other("snapshot integrity verification failed"));
-                }
-                tracing::debug!(
-                    snapshot_id = %meta.snapshot_id,
-                    integrity_hash = %integrity.combined_hash_hex(),
-                    "snapshot integrity verified"
-                );
-            }
-        }
+        // Verify snapshot integrity before installation
+        self.install_snapshot_verify_integrity(meta, &data)?;
 
-        // Deserialize snapshot data
-        let kv_entries: BTreeMap<String, KvEntry> = bincode::deserialize(&data).map_err(|e| {
-            io::Error::other(format!("failed to deserialize snapshot KV entries ({} bytes): {e}", data.len()))
-        })?;
+        // Deserialize and validate snapshot data
+        let kv_entries = self.install_snapshot_deserialize_data(&data)?;
         let kv_entries_count = kv_entries.len();
 
-        // Tiger Style: installed snapshot must not exceed entry limit
-        assert!(
-            kv_entries_count <= MAX_SNAPSHOT_ENTRIES as usize,
-            "INSTALL SNAPSHOT: {} entries exceeds MAX_SNAPSHOT_ENTRIES {}",
-            kv_entries_count,
-            MAX_SNAPSHOT_ENTRIES
-        );
-        // Tiger Style: snapshot data must not be empty (snapshot_id implies content)
-        assert!(!data.is_empty(), "INSTALL SNAPSHOT: snapshot data must not be empty");
-
-        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
-        {
-            let mut kv_table = write_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
-            let mut sm_meta_table = write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
-
-            // Clear existing KV data
-            // Note: redb doesn't have a clear() method, so we iterate and remove
-            let keys: Vec<Vec<u8>> = kv_table
-                .iter()
-                .context(RangeSnafu)?
-                .map(|item| {
-                    let (key, _) = item.context(GetSnafu)?;
-                    Ok::<_, SharedStorageError>(key.value().to_vec())
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            for key in keys {
-                kv_table.remove(key.as_slice()).context(RemoveSnafu)?;
-            }
-
-            // Insert snapshot data
-            for (key, entry) in kv_entries {
-                let entry_bytes = bincode::serialize(&entry).context(SerializeSnafu)?;
-                kv_table.insert(key.as_bytes(), entry_bytes.as_slice()).context(InsertSnafu)?;
-            }
-
-            // Update last_applied
-            let log_id_bytes = bincode::serialize(&meta.last_log_id).context(SerializeSnafu)?;
-            sm_meta_table.insert("last_applied_log", log_id_bytes.as_slice()).context(InsertSnafu)?;
-
-            // Update membership (meta.last_membership is already a StoredMembership)
-            let membership_bytes = bincode::serialize(&meta.last_membership).context(SerializeSnafu)?;
-            sm_meta_table.insert("last_membership", membership_bytes.as_slice()).context(InsertSnafu)?;
-        }
-        write_txn.commit().context(CommitSnafu)?;
+        // Write snapshot data to state machine
+        self.install_snapshot_write_data(meta, kv_entries)?;
 
         tracing::info!(
             snapshot_id = %meta.snapshot_id,
@@ -247,16 +168,7 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
         );
 
         // Emit SnapshotInstalled event if broadcast channel is configured
-        if let Some(ref tx) = self.snapshot_broadcast {
-            let event = SnapshotEvent::Installed {
-                snapshot_id: meta.snapshot_id.clone(),
-                last_log_index: meta.last_log_id.as_ref().map(|l| l.index).unwrap_or(0),
-                term: meta.last_log_id.as_ref().map(|l| l.leader_id.term).unwrap_or(0),
-                entry_count: kv_entries_count as u64,
-            };
-            // Non-blocking send - ignore errors (no subscribers)
-            let _ = tx.send(event);
-        }
+        self.install_snapshot_broadcast_event(meta, kv_entries_count);
 
         // =========================================================================
         // GHOST: Verify post-conditions
@@ -294,6 +206,125 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
                 }))
             }
             None => Ok(None),
+        }
+    }
+}
+
+// ====================================================================================
+// install_snapshot helper methods (extracted for Tiger Style compliance)
+// ====================================================================================
+
+impl SharedRedbStorage {
+    /// Verify snapshot integrity before installation.
+    ///
+    /// INVARIANT 7 (Snapshot Integrity): The snapshot integrity check verifies:
+    /// 1. blake3(data) == integrity.data_hash
+    /// 2. blake3(meta_bytes) == integrity.meta_hash
+    /// 3. blake3(data_hash || meta_hash) == integrity.combined_hash
+    /// 4. chain_hash_at_snapshot matches stored chain hash
+    fn install_snapshot_verify_integrity(
+        &self,
+        meta: &openraft::SnapshotMeta<AppTypeConfig>,
+        data: &[u8],
+    ) -> Result<(), io::Error> {
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        if let Ok(table) = read_txn.open_table(SNAPSHOT_TABLE)
+            && let Some(value) = table.get("current").context(GetSnafu)?
+            && let Ok(stored) = bincode::deserialize::<StoredSnapshot>(value.value())
+            && let Some(ref integrity) = stored.integrity
+        {
+            let meta_bytes = bincode::serialize(meta).map_err(|e| {
+                io::Error::other(format!("failed to serialize snapshot metadata for integrity check: {e}"))
+            })?;
+            if !integrity.verify(&meta_bytes, data) {
+                tracing::error!(
+                    snapshot_id = %meta.snapshot_id,
+                    "snapshot integrity verification failed"
+                );
+                return Err(io::Error::other("snapshot integrity verification failed"));
+            }
+            tracing::debug!(
+                snapshot_id = %meta.snapshot_id,
+                integrity_hash = %integrity.combined_hash_hex(),
+                "snapshot integrity verified"
+            );
+        }
+        Ok(())
+    }
+
+    /// Deserialize and validate snapshot KV entries.
+    fn install_snapshot_deserialize_data(&self, data: &[u8]) -> Result<BTreeMap<String, KvEntry>, io::Error> {
+        let kv_entries: BTreeMap<String, KvEntry> = bincode::deserialize(data).map_err(|e| {
+            io::Error::other(format!("failed to deserialize snapshot KV entries ({} bytes): {e}", data.len()))
+        })?;
+
+        // Tiger Style: installed snapshot must not exceed entry limit
+        assert!(
+            kv_entries.len() <= MAX_SNAPSHOT_ENTRIES as usize,
+            "INSTALL SNAPSHOT: {} entries exceeds MAX_SNAPSHOT_ENTRIES {}",
+            kv_entries.len(),
+            MAX_SNAPSHOT_ENTRIES
+        );
+        // Tiger Style: snapshot data must not be empty (snapshot_id implies content)
+        assert!(!data.is_empty(), "INSTALL SNAPSHOT: snapshot data must not be empty");
+
+        Ok(kv_entries)
+    }
+
+    /// Write snapshot data to state machine tables.
+    fn install_snapshot_write_data(
+        &self,
+        meta: &openraft::SnapshotMeta<AppTypeConfig>,
+        kv_entries: BTreeMap<String, KvEntry>,
+    ) -> Result<(), io::Error> {
+        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
+        {
+            let mut kv_table = write_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
+            let mut sm_meta_table = write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
+
+            // Clear existing KV data
+            let keys: Vec<Vec<u8>> = kv_table
+                .iter()
+                .context(RangeSnafu)?
+                .map(|item| {
+                    let (key, _) = item.context(GetSnafu)?;
+                    Ok::<_, SharedStorageError>(key.value().to_vec())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            for key in keys {
+                kv_table.remove(key.as_slice()).context(RemoveSnafu)?;
+            }
+
+            // Insert snapshot data
+            for (key, entry) in kv_entries {
+                let entry_bytes = bincode::serialize(&entry).context(SerializeSnafu)?;
+                kv_table.insert(key.as_bytes(), entry_bytes.as_slice()).context(InsertSnafu)?;
+            }
+
+            // Update last_applied
+            let log_id_bytes = bincode::serialize(&meta.last_log_id).context(SerializeSnafu)?;
+            sm_meta_table.insert("last_applied_log", log_id_bytes.as_slice()).context(InsertSnafu)?;
+
+            // Update membership
+            let membership_bytes = bincode::serialize(&meta.last_membership).context(SerializeSnafu)?;
+            sm_meta_table.insert("last_membership", membership_bytes.as_slice()).context(InsertSnafu)?;
+        }
+        write_txn.commit().context(CommitSnafu)?;
+        Ok(())
+    }
+
+    /// Emit SnapshotInstalled event if broadcast channel is configured.
+    fn install_snapshot_broadcast_event(&self, meta: &openraft::SnapshotMeta<AppTypeConfig>, kv_entries_count: usize) {
+        if let Some(ref tx) = self.snapshot_broadcast {
+            let event = SnapshotEvent::Installed {
+                snapshot_id: meta.snapshot_id.clone(),
+                last_log_index: meta.last_log_id.as_ref().map(|l| l.index).unwrap_or(0),
+                term: meta.last_log_id.as_ref().map(|l| l.leader_id.term).unwrap_or(0),
+                entry_count: kv_entries_count as u64,
+            };
+            // Non-blocking send - ignore errors (no subscribers)
+            let _ = tx.send(event);
         }
     }
 }

@@ -487,7 +487,7 @@ async fn dns_set_zone(client: &AspenClient, args: SetZoneArgs, json: bool) -> Re
         .send(ClientRpcRequest::DnsSetZone {
             name: args.name.clone(),
             enabled: !args.disabled,
-            default_ttl: args.default_ttl,
+            default_ttl_secs: args.default_ttl,
             description: args.description,
         })
         .await?;

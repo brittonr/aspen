@@ -64,7 +64,7 @@ impl WorkerService {
         if self.config.enable_distributed {
             if let Some(ref distributed_pool) = self.distributed_pool {
                 distributed_pool
-                    .start(self.config.worker_count as usize)
+                    .start(self.config.worker_count)
                     .await
                     .map_err(|e| WorkerServiceError::InitializePool { source: e })?;
 

@@ -313,7 +313,7 @@ async fn test_artifact_collection_empty_patterns() {
 
     assert!(result.artifacts.is_empty(), "should have no artifacts");
     assert!(result.unmatched_patterns.is_empty(), "should have no unmatched patterns");
-    assert_eq!(result.total_size, 0, "should have zero total size");
+    assert_eq!(result.total_size_bytes, 0, "should have zero total size");
 }
 
 /// Test artifact collection with basic file patterns.
@@ -330,7 +330,7 @@ async fn test_artifact_collection_basic() {
 
     assert_eq!(result.artifacts.len(), 2, "should collect 2 artifacts");
     assert!(result.unmatched_patterns.is_empty(), "all patterns should match");
-    assert!(result.total_size > 0, "should have non-zero total size");
+    assert!(result.total_size_bytes > 0, "should have non-zero total size");
 }
 
 /// Test artifact collection tracks unmatched patterns.

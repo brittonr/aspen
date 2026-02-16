@@ -26,7 +26,7 @@ fn create_test_worker(id: &str, node: &str, load: f32) -> WorkerInfo {
         peer_id: None,
         capabilities: vec!["test".to_string()],
         load,
-        active_jobs: (load * 10.0) as usize,
+        active_jobs: (load * 10.0) as u32,
         max_concurrent: 10,
         queue_depth: 0,
         health: HealthStatus::Healthy,

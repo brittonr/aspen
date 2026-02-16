@@ -17,14 +17,14 @@ impl WriteBatcher {
         debug_assert!(!key.is_empty(), "BATCHER: set key must not be empty");
 
         let (tx, rx) = oneshot::channel();
-        let op_bytes = key.len() + value.len();
+        let op_bytes = (key.len() + value.len()) as u64;
 
         let flush_action = {
             let mut state = self.state.lock().await;
 
             // Check if adding this would exceed limits (pure function)
             let limit_check = check_batch_limits(
-                state.pending.len(),
+                state.pending.len() as u32,
                 state.current_bytes,
                 op_bytes,
                 self.config.max_entries,
@@ -74,14 +74,14 @@ impl WriteBatcher {
         debug_assert!(!key.is_empty(), "BATCHER: delete key must not be empty");
 
         let (tx, rx) = oneshot::channel();
-        let op_bytes = key.len();
+        let op_bytes = key.len() as u64;
 
         let flush_action = {
             let mut state = self.state.lock().await;
 
             // Check if adding this would exceed limits (pure function)
             let limit_check = check_batch_limits(
-                state.pending.len(),
+                state.pending.len() as u32,
                 state.current_bytes,
                 op_bytes,
                 self.config.max_entries,
@@ -127,14 +127,14 @@ impl WriteBatcher {
         debug_assert!(!key.is_empty(), "BATCHER: set key must not be empty (non-Arc)");
 
         let (tx, rx) = oneshot::channel();
-        let op_bytes = key.len() + value.len();
+        let op_bytes = (key.len() + value.len()) as u64;
 
         let should_flush = {
             let mut state = self.state.lock().await;
 
             // Check if adding this would exceed limits (pure function)
             let limit_check = check_batch_limits(
-                state.pending.len(),
+                state.pending.len() as u32,
                 state.current_bytes,
                 op_bytes,
                 self.config.max_entries,
@@ -174,14 +174,14 @@ impl WriteBatcher {
         debug_assert!(!key.is_empty(), "BATCHER: delete key must not be empty (non-Arc)");
 
         let (tx, rx) = oneshot::channel();
-        let op_bytes = key.len();
+        let op_bytes = key.len() as u64;
 
         let should_flush = {
             let mut state = self.state.lock().await;
 
             // Check if adding this would exceed limits (pure function)
             let limit_check = check_batch_limits(
-                state.pending.len(),
+                state.pending.len() as u32,
                 state.current_bytes,
                 op_bytes,
                 self.config.max_entries,
@@ -220,7 +220,7 @@ impl WriteBatcher {
         &self,
         state: &mut BatcherState,
         operation: (bool, String, String),
-        size_bytes: usize,
+        size_bytes: u64,
         result_tx: oneshot::Sender<Result<WriteResult, KeyValueStoreError>>,
     ) {
         // Tiger Style: operation key must not be empty
@@ -239,7 +239,7 @@ impl WriteBatcher {
 
         // Tiger Style: pending batch must not exceed configured max_entries
         debug_assert!(
-            state.pending.len() <= self.config.max_entries,
+            state.pending.len() as u32 <= self.config.max_entries,
             "BATCHER: pending count {} exceeds max_entries {}",
             state.pending.len(),
             self.config.max_entries

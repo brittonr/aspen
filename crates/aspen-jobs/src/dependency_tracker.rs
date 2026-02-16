@@ -116,6 +116,53 @@ impl DependencyGraph {
         }
     }
 
+    /// Calculate dependency depth and validate it doesn't exceed limit.
+    fn add_job_calculate_depth(
+        nodes: &HashMap<JobId, JobDependencyInfo>,
+        dependencies: &[JobId],
+        job_id: &JobId,
+    ) -> u32 {
+        let mut max_dep_depth = 0u32;
+        for dep_id in dependencies {
+            if let Some(dep_info) = nodes.get(dep_id) {
+                max_dep_depth = max_dep_depth.max(dep_info.depth);
+            }
+        }
+
+        let computed_depth = max_dep_depth.saturating_add(1);
+        assert!(
+            computed_depth <= MAX_DEPENDENCY_DEPTH,
+            "dependency chain depth {computed_depth} exceeds limit {MAX_DEPENDENCY_DEPTH} for job {job_id}"
+        );
+        computed_depth
+    }
+
+    /// Compute initial dependency state based on which dependencies are completed.
+    fn add_job_compute_state(nodes: &HashMap<JobId, JobDependencyInfo>, dependencies: &[JobId]) -> DependencyState {
+        if dependencies.is_empty() {
+            return DependencyState::Ready;
+        }
+
+        // Check which dependencies are already completed
+        let mut waiting_on = Vec::new();
+        for dep_id in dependencies {
+            if let Some(dep_info) = nodes.get(dep_id) {
+                if !matches!(dep_info.state, DependencyState::Completed) {
+                    waiting_on.push(dep_id.clone());
+                }
+            } else {
+                // Dependency doesn't exist yet, need to wait
+                waiting_on.push(dep_id.clone());
+            }
+        }
+
+        if waiting_on.is_empty() {
+            DependencyState::Ready
+        } else {
+            DependencyState::Waiting(waiting_on)
+        }
+    }
+
     /// Add a job with its dependencies.
     pub async fn add_job(
         &self,
@@ -156,44 +203,11 @@ impl DependencyGraph {
             MAX_GRAPH_NODES
         );
 
-        // Calculate depth (max depth of dependencies + 1)
-        let mut max_dep_depth = 0u32;
-        for dep_id in &dependencies {
-            if let Some(dep_info) = nodes.get(dep_id) {
-                max_dep_depth = max_dep_depth.max(dep_info.depth);
-            }
-        }
+        // Calculate depth and validate
+        let computed_depth = Self::add_job_calculate_depth(&nodes, &dependencies, &job_id);
 
-        // Tiger Style: dependency chain depth must not exceed limit
-        let computed_depth = max_dep_depth.saturating_add(1);
-        assert!(
-            computed_depth <= MAX_DEPENDENCY_DEPTH,
-            "dependency chain depth {computed_depth} exceeds limit {MAX_DEPENDENCY_DEPTH} for job {job_id}"
-        );
-
-        // Create job info
-        let state = if dependencies.is_empty() {
-            DependencyState::Ready
-        } else {
-            // Check which dependencies are already completed
-            let mut waiting_on = Vec::new();
-            for dep_id in &dependencies {
-                if let Some(dep_info) = nodes.get(dep_id) {
-                    if !matches!(dep_info.state, DependencyState::Completed) {
-                        waiting_on.push(dep_id.clone());
-                    }
-                } else {
-                    // Dependency doesn't exist yet, need to wait
-                    waiting_on.push(dep_id.clone());
-                }
-            }
-
-            if waiting_on.is_empty() {
-                DependencyState::Ready
-            } else {
-                DependencyState::Waiting(waiting_on)
-            }
-        };
+        // Compute initial state
+        let state = Self::add_job_compute_state(&nodes, &dependencies);
 
         let job_info = JobDependencyInfo {
             job_id: job_id.clone(),

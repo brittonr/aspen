@@ -49,7 +49,7 @@ struct PendingWrite {
     /// Size of this operation in bytes (key.len() + value.len())
     /// Tracked for future metrics/observability, not currently used.
     #[allow(dead_code)]
-    size_bytes: usize,
+    size_bytes: u64,
     /// Oneshot to notify when write completes
     result_tx: oneshot::Sender<Result<WriteResult, KeyValueStoreError>>,
 }
@@ -59,7 +59,7 @@ struct BatcherState {
     /// Pending operations waiting to be batched
     pending: Vec<PendingWrite>,
     /// Current total bytes in pending batch (Tiger Style: tracked for max_bytes enforcement)
-    current_bytes: usize,
+    current_bytes: u64,
     /// When the first item was added to current batch (for timeout)
     batch_start: Option<Instant>,
     /// Whether the flush task is currently scheduled

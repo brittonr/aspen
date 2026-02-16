@@ -133,6 +133,45 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         self.dequeue_jobs_filtered(worker_id, max_jobs, visibility_timeout, &[]).await
     }
 
+    /// Release an excluded job back to the queue.
+    async fn dequeue_jobs_release_excluded(
+        queue_manager: &aspen_coordination::QueueManager<S>,
+        queue_name: &str,
+        worker_id: &str,
+        job_id: &JobId,
+        job_type: &str,
+        receipt_handle: &str,
+    ) {
+        info!(
+            worker_id,
+            job_id = %job_id,
+            job_type = %job_type,
+            receipt_handle = %receipt_handle,
+            "skipping excluded job type, releasing back to queue"
+        );
+        match queue_manager
+            .nack(
+                queue_name,
+                receipt_handle,
+                false, // Don't move to DLQ
+                Some(format!("job type {} excluded by worker filter", job_type)),
+            )
+            .await
+        {
+            Ok(()) => {
+                info!(worker_id, job_id = %job_id, "excluded job successfully released back to queue");
+            }
+            Err(e) => {
+                error!(
+                    worker_id,
+                    job_id = %job_id,
+                    error = %e,
+                    "CRITICAL: failed to release excluded job back to queue - job may be lost"
+                );
+            }
+        }
+    }
+
     /// Dequeue jobs for processing by workers, excluding certain job types.
     ///
     /// Returns up to `max_jobs` jobs from the highest priority queues first.
@@ -162,85 +201,50 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             }
 
             let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
-            if let Some(queue_manager) = self.queue_managers.get(&priority) {
-                // Only try once per priority level - if we hit excluded jobs, we'll let other
-                // workers have a chance rather than retrying in a tight loop
-                if dequeued_jobs.len() < max_jobs as usize {
-                    let items_to_dequeue = max_jobs - dequeued_jobs.len() as u32;
+            let Some(queue_manager) = self.queue_managers.get(&priority) else {
+                continue;
+            };
 
-                    let items = queue_manager
-                        .dequeue(&queue_name, worker_id, items_to_dequeue, visibility_timeout_ms)
-                        .await
-                        .map_err(|e| JobError::QueueError { source: e })?;
+            let items_to_dequeue = max_jobs - dequeued_jobs.len() as u32;
+            let items = queue_manager
+                .dequeue(&queue_name, worker_id, items_to_dequeue, visibility_timeout_ms)
+                .await
+                .map_err(|e| JobError::QueueError { source: e })?;
 
-                    // If no items available, move to next priority
-                    if items.is_empty() {
-                        continue;
-                    }
+            if items.is_empty() {
+                continue;
+            }
 
-                    info!(worker_id, queue_name, items_count = items.len(), "dequeue returned items");
+            info!(worker_id, queue_name, items_count = items.len(), "dequeue returned items");
 
-                    for item in items {
-                        // Parse job ID from payload
-                        let job_id_str =
-                            String::from_utf8(item.payload.clone()).map_err(|_| JobError::InvalidJobSpec {
-                                reason: "invalid job ID in queue payload".to_string(),
-                            })?;
-                        let job_id = JobId::from_string(job_id_str);
+            for item in items {
+                let job_id_str = String::from_utf8(item.payload.clone()).map_err(|_| JobError::InvalidJobSpec {
+                    reason: "invalid job ID in queue payload".to_string(),
+                })?;
+                let job_id = JobId::from_string(job_id_str);
 
-                        // Retrieve job from storage
-                        if let Some(job) = self.get_job(&job_id).await? {
-                            // Check if job type is excluded
-                            // Decomposed: check if filter is active, then check if type matches
-                            let has_exclusions = !excluded_types.is_empty();
-                            let is_excluded_type = excluded_types.contains(&job.spec.job_type);
-                            if has_exclusions && is_excluded_type {
-                                // Release the job back to the queue immediately so other workers can claim it.
-                                // Use nack with move_to_dlq=false to return it without marking as failed.
-                                info!(
-                                    worker_id,
-                                    job_id = %job_id,
-                                    job_type = %job.spec.job_type,
-                                    receipt_handle = %item.receipt_handle,
-                                    "skipping excluded job type, releasing back to queue"
-                                );
-                                match queue_manager
-                                    .nack(
-                                        &queue_name,
-                                        &item.receipt_handle,
-                                        false, // Don't move to DLQ
-                                        Some(format!("job type {} excluded by worker filter", job.spec.job_type)),
-                                    )
-                                    .await
-                                {
-                                    Ok(()) => {
-                                        info!(
-                                            worker_id,
-                                            job_id = %job_id,
-                                            "excluded job successfully released back to queue"
-                                        );
-                                    }
-                                    Err(e) => {
-                                        error!(
-                                            worker_id,
-                                            job_id = %job_id,
-                                            error = %e,
-                                            "CRITICAL: failed to release excluded job back to queue - job may be lost"
-                                        );
-                                    }
-                                }
-                                continue;
-                            }
-                            dequeued_jobs.push((item, job));
-                        } else {
-                            warn!(job_id = %job_id, "job not found in storage, skipping");
-                        }
-                    }
+                let Some(job) = self.get_job(&job_id).await? else {
+                    warn!(job_id = %job_id, "job not found in storage, skipping");
+                    continue;
+                };
 
-                    // We only dequeue once per priority level. If we hit excluded jobs,
-                    // they've been nacked back to the queue and will be available for
-                    // other workers (e.g., VM workers) to claim on their next poll.
+                // Check if job type is excluded
+                let has_exclusions = !excluded_types.is_empty();
+                let is_excluded_type = excluded_types.contains(&job.spec.job_type);
+                if has_exclusions && is_excluded_type {
+                    Self::dequeue_jobs_release_excluded(
+                        queue_manager,
+                        &queue_name,
+                        worker_id,
+                        &job_id,
+                        &job.spec.job_type,
+                        &item.receipt_handle,
+                    )
+                    .await;
+                    continue;
                 }
+
+                dequeued_jobs.push((item, job));
             }
         }
 
@@ -314,6 +318,58 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         Ok(())
     }
 
+    /// Validate execution token for job operations.
+    ///
+    /// Returns Ok if token matches, otherwise logs warning and returns error.
+    fn nack_job_validate_token(job: &Job, job_id: &JobId, execution_token: &str, operation: &str) -> Result<()> {
+        match &job.execution_token {
+            Some(stored_token) if stored_token == execution_token => Ok(()),
+            Some(_) => {
+                warn!(job_id = %job_id, "{operation} rejected: stale execution token");
+                Err(JobError::InvalidJobState {
+                    state: "Stale execution token".to_string(),
+                    operation: operation.to_string(),
+                })
+            }
+            None => {
+                warn!(job_id = %job_id, "{operation} rejected: job has no execution token");
+                Err(JobError::InvalidJobState {
+                    state: "No execution token".to_string(),
+                    operation: operation.to_string(),
+                })
+            }
+        }
+    }
+
+    /// Log the outcome of a nack operation.
+    async fn nack_job_log_outcome(&self, job_id: &JobId, job: &Job, error: &str) {
+        match job.status {
+            JobStatus::Retrying => {
+                info!(
+                    job_id = %job_id,
+                    next_retry = ?job.next_retry_at,
+                    attempts = job.attempts,
+                    "job scheduled for retry"
+                );
+            }
+            JobStatus::DeadLetter => {
+                warn!(
+                    job_id = %job_id,
+                    attempts = job.attempts,
+                    reason = ?job.dlq_metadata.as_ref().map(|m| &m.reason),
+                    "job moved to dead letter queue"
+                );
+
+                // Notify completion callback for dead letter jobs (workflow integration)
+                if let Some(callback) = self.completion_callback.read().await.as_ref() {
+                    let result = JobResult::failure(error.to_string());
+                    callback(job_id.clone(), result).await;
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Negative acknowledge a job (return to queue or move to DLQ).
     ///
     /// The `execution_token` must match the token returned by `mark_started`.
@@ -334,34 +390,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         let current_job =
             self.get_job(job_id).await?.ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
 
-        // Validate execution token
-        match &current_job.execution_token {
-            Some(stored_token) if stored_token == execution_token => {
-                // Token matches, proceed
-            }
-            Some(_) => {
-                // Token mismatch - stale execution attempt
-                warn!(
-                    job_id = %job_id,
-                    "nack_job rejected: stale execution token"
-                );
-                return Err(JobError::InvalidJobState {
-                    state: "Stale execution token".to_string(),
-                    operation: "nack_job".to_string(),
-                });
-            }
-            None => {
-                // No token stored - shouldn't happen for Running jobs
-                warn!(
-                    job_id = %job_id,
-                    "nack_job rejected: job has no execution token"
-                );
-                return Err(JobError::InvalidJobState {
-                    state: "No execution token".to_string(),
-                    operation: "nack_job".to_string(),
-                });
-            }
-        }
+        Self::nack_job_validate_token(&current_job, job_id, execution_token, "nack_job")?;
 
         // Now atomically update the job status
         let job = self
@@ -414,32 +443,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         }
 
         // Log the outcome
-        match job.status {
-            JobStatus::Retrying => {
-                info!(
-                    job_id = %job_id,
-                    next_retry = ?job.next_retry_at,
-                    attempts = job.attempts,
-                    "job scheduled for retry"
-                );
-            }
-            JobStatus::DeadLetter => {
-                warn!(
-                    job_id = %job_id,
-                    attempts = job.attempts,
-                    reason = ?job.dlq_metadata.as_ref().map(|m| &m.reason),
-                    "job moved to dead letter queue"
-                );
-
-                // Notify completion callback for dead letter jobs (workflow integration)
-                // This ensures workflows can track failed jobs that exhausted retries
-                if let Some(callback) = self.completion_callback.read().await.as_ref() {
-                    let result = JobResult::failure(error.clone());
-                    callback(job_id.clone(), result).await;
-                }
-            }
-            _ => {}
-        }
+        self.nack_job_log_outcome(job_id, &job, &error).await;
 
         Ok(())
     }

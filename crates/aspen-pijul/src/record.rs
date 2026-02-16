@@ -77,7 +77,7 @@ pub struct ChangeRecorder<B: BlobStore> {
     algorithm: Algorithm,
 
     /// Number of threads for parallel file scanning (1 = single-threaded).
-    threads: usize,
+    threads: u32,
 
     /// Prefix to limit recording scope (empty = all files).
     prefix: String,
@@ -118,7 +118,7 @@ impl<B: BlobStore> ChangeRecorder<B> {
     /// of CPU cores (e.g., 4-8 threads).
     ///
     /// Default is 1 (single-threaded).
-    pub fn with_threads(mut self, threads: usize) -> Self {
+    pub fn with_threads(mut self, threads: u32) -> Self {
         self.threads = threads.max(1);
         self
     }
@@ -195,9 +195,9 @@ impl<B: BlobStore> ChangeRecorder<B> {
                     &arc_txn,
                     repo_path,
                     full,
-                    false,        // force: don't force-add ignored files
-                    self.threads, // threads: configurable parallelism
-                    0,            // salt: for conflict naming
+                    false,                 // force: don't force-add ignored files
+                    self.threads as usize, // threads: configurable parallelism
+                    0,                     // salt: for conflict naming
                 )
                 .map_err(|e| PijulError::RecordFailed {
                     message: format!("failed to add files: {:?}", e),
@@ -208,8 +208,9 @@ impl<B: BlobStore> ChangeRecorder<B> {
         let mut builder = RecordBuilder::new();
 
         // Create a default diff separator regex (empty pattern for line-based diffing)
-        // SAFETY: Empty regex pattern is always valid and cannot fail to compile.
-        let separator = regex::bytes::Regex::new("").expect("empty regex is always valid");
+        let separator = regex::bytes::Regex::new("").map_err(|e| PijulError::RecordFailed {
+            message: format!("failed to compile diff separator regex: {}", e),
+        })?;
 
         // Record changes using the configured settings
         builder
@@ -403,9 +404,9 @@ impl<B: BlobStore + Clone + 'static> ChangeRecorder<B> {
                     &arc_txn,
                     repo_path,
                     full,
-                    false,        // force: don't force-add ignored files
-                    self.threads, // threads: configurable parallelism
-                    0,            // salt: for conflict naming
+                    false,                 // force: don't force-add ignored files
+                    self.threads as usize, // threads: configurable parallelism
+                    0,                     // salt: for conflict naming
                 )
                 .map_err(|e| PijulError::RecordFailed {
                     message: format!("failed to add files: {:?}", e),
@@ -416,8 +417,9 @@ impl<B: BlobStore + Clone + 'static> ChangeRecorder<B> {
         let mut builder = RecordBuilder::new();
 
         // Create a default diff separator regex (empty pattern for line-based diffing)
-        // SAFETY: Empty regex pattern is always valid and cannot fail to compile.
-        let separator = regex::bytes::Regex::new("").expect("empty regex is always valid");
+        let separator = regex::bytes::Regex::new("").map_err(|e| PijulError::RecordFailed {
+            message: format!("failed to compile diff separator regex: {}", e),
+        })?;
 
         // Record changes using the configured settings
         builder

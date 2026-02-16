@@ -245,12 +245,32 @@ fn parse_duration(input: &str) -> Result<Duration> {
     parse_human_duration(input)
 }
 
+/// Parse a single ISO 8601 duration unit and return seconds.
+fn parse_iso8601_duration_unit(unit: char, current_num: &str, in_time_part: bool, input: &str) -> Result<u64> {
+    let value: f64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
+        reason: format!("invalid {} value in duration: '{}'", unit, input),
+    })?;
+
+    let multiplier = match unit {
+        'Y' => 365.0 * 24.0 * 60.0 * 60.0,                 // Years (approximate)
+        'M' if !in_time_part => 30.0 * 24.0 * 60.0 * 60.0, // Months (approximate)
+        'D' => 24.0 * 60.0 * 60.0,                         // Days
+        'H' => 60.0 * 60.0,                                // Hours
+        'M' if in_time_part => 60.0,                       // Minutes
+        'S' => 1.0,                                        // Seconds
+        _ => {
+            return Err(JobError::InvalidJobSpec {
+                reason: format!("invalid character '{}' in ISO 8601 duration: '{}'", unit, input),
+            });
+        }
+    };
+
+    Ok((value * multiplier) as u64)
+}
+
 /// Parse ISO 8601 duration (P[n]Y[n]M[n]DT[n]H[n]M[n]S).
 fn parse_iso8601_duration(input: &str) -> Result<Duration> {
     let input = input.to_uppercase();
-
-    // Simple ISO 8601 duration parser
-    // Handles: PT5M, PT1H, PT30S, P1D, P1DT2H, etc.
 
     let mut total_seconds: u64 = 0;
     let mut chars = input.chars().peekable();
@@ -273,52 +293,13 @@ fn parse_iso8601_duration(input: &str) -> Result<Duration> {
             '0'..='9' | '.' => {
                 current_num.push(c);
             }
-            'Y' => {
-                // Years (approximate as 365 days)
-                let years: f64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-                    reason: format!("invalid year value in duration: '{}'", input),
-                })?;
-                total_seconds += (years * 365.0 * 24.0 * 60.0 * 60.0) as u64;
-                current_num.clear();
-            }
-            'M' if !in_time_part => {
-                // Months (approximate as 30 days)
-                let months: f64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-                    reason: format!("invalid month value in duration: '{}'", input),
-                })?;
-                total_seconds += (months * 30.0 * 24.0 * 60.0 * 60.0) as u64;
-                current_num.clear();
-            }
-            'D' => {
-                // Days
-                let days: f64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-                    reason: format!("invalid day value in duration: '{}'", input),
-                })?;
-                total_seconds += (days * 24.0 * 60.0 * 60.0) as u64;
-                current_num.clear();
-            }
-            'H' => {
-                // Hours
-                let hours: f64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-                    reason: format!("invalid hour value in duration: '{}'", input),
-                })?;
-                total_seconds += (hours * 60.0 * 60.0) as u64;
-                current_num.clear();
-            }
-            'M' if in_time_part => {
-                // Minutes
-                let minutes: f64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-                    reason: format!("invalid minute value in duration: '{}'", input),
-                })?;
-                total_seconds += (minutes * 60.0) as u64;
-                current_num.clear();
-            }
-            'S' => {
-                // Seconds
-                let seconds: f64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-                    reason: format!("invalid second value in duration: '{}'", input),
-                })?;
-                total_seconds += seconds as u64;
+            'Y' | 'M' | 'D' | 'H' | 'S' => {
+                if current_num.is_empty() {
+                    return Err(JobError::InvalidJobSpec {
+                        reason: format!("missing number before '{}' in ISO 8601 duration: '{}'", c, input),
+                    });
+                }
+                total_seconds += parse_iso8601_duration_unit(c, &current_num, in_time_part, &input)?;
                 current_num.clear();
             }
             _ => {
@@ -338,6 +319,36 @@ fn parse_iso8601_duration(input: &str) -> Result<Duration> {
     Ok(Duration::from_secs(total_seconds))
 }
 
+/// Parse a single human duration unit and return its value in seconds.
+///
+/// Returns Ok(multiplier) for valid units, or Err for invalid units.
+fn parse_human_duration_unit(unit: char, current_num: &str, input: &str) -> Result<u64> {
+    if current_num.is_empty() {
+        return Err(JobError::InvalidJobSpec {
+            reason: format!("missing number before '{}' in duration: '{}'", unit, input),
+        });
+    }
+
+    let value: u64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
+        reason: format!("invalid {} value in duration: '{}'", unit, input),
+    })?;
+
+    let multiplier = match unit {
+        's' | 'S' => 1,
+        'm' => 60,
+        'h' | 'H' => 60 * 60,
+        'd' | 'D' => 24 * 60 * 60,
+        'w' | 'W' => 7 * 24 * 60 * 60,
+        _ => {
+            return Err(JobError::InvalidJobSpec {
+                reason: format!("invalid unit '{}' in duration '{}'. Valid units: s, m, h, d, w", unit, input),
+            });
+        }
+    };
+
+    Ok(value * multiplier)
+}
+
 /// Parse human-readable duration (e.g., "5m", "1h30m", "2d").
 fn parse_human_duration(input: &str) -> Result<Duration> {
     let mut total_seconds: u64 = 0;
@@ -348,64 +359,8 @@ fn parse_human_duration(input: &str) -> Result<Duration> {
             '0'..='9' => {
                 current_num.push(c);
             }
-            's' | 'S' => {
-                if current_num.is_empty() {
-                    return Err(JobError::InvalidJobSpec {
-                        reason: format!("missing number before 's' in duration: '{}'", input),
-                    });
-                }
-                let seconds: u64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-                    reason: format!("invalid seconds value in duration: '{}'", input),
-                })?;
-                total_seconds += seconds;
-                current_num.clear();
-            }
-            'm' => {
-                if current_num.is_empty() {
-                    return Err(JobError::InvalidJobSpec {
-                        reason: format!("missing number before 'm' in duration: '{}'", input),
-                    });
-                }
-                let minutes: u64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-                    reason: format!("invalid minutes value in duration: '{}'", input),
-                })?;
-                total_seconds += minutes * 60;
-                current_num.clear();
-            }
-            'h' | 'H' => {
-                if current_num.is_empty() {
-                    return Err(JobError::InvalidJobSpec {
-                        reason: format!("missing number before 'h' in duration: '{}'", input),
-                    });
-                }
-                let hours: u64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-                    reason: format!("invalid hours value in duration: '{}'", input),
-                })?;
-                total_seconds += hours * 60 * 60;
-                current_num.clear();
-            }
-            'd' | 'D' => {
-                if current_num.is_empty() {
-                    return Err(JobError::InvalidJobSpec {
-                        reason: format!("missing number before 'd' in duration: '{}'", input),
-                    });
-                }
-                let days: u64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-                    reason: format!("invalid days value in duration: '{}'", input),
-                })?;
-                total_seconds += days * 24 * 60 * 60;
-                current_num.clear();
-            }
-            'w' | 'W' => {
-                if current_num.is_empty() {
-                    return Err(JobError::InvalidJobSpec {
-                        reason: format!("missing number before 'w' in duration: '{}'", input),
-                    });
-                }
-                let weeks: u64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-                    reason: format!("invalid weeks value in duration: '{}'", input),
-                })?;
-                total_seconds += weeks * 7 * 24 * 60 * 60;
+            's' | 'S' | 'm' | 'h' | 'H' | 'd' | 'D' | 'w' | 'W' => {
+                total_seconds += parse_human_duration_unit(c, &current_num, input)?;
                 current_num.clear();
             }
             ' ' => {

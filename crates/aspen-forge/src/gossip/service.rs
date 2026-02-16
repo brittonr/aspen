@@ -43,6 +43,133 @@ use crate::refs::RefUpdateEvent;
 /// Sender half of a topic subscription.
 type TopicSender = iroh_gossip::api::GossipSender;
 
+// ============================================================================
+// Helper functions for spawn_receiver_task (extracted for Tiger Style compliance)
+// ============================================================================
+
+/// Process a received gossip message: rate limit, parse, verify, and dispatch.
+async fn spawn_receiver_process_message(
+    msg: &iroh_gossip::api::Message,
+    rate_limiter: &mut ForgeGossipRateLimiter,
+    node_id: PublicKey,
+    handler: &Arc<RwLock<Option<Arc<dyn AnnouncementCallback>>>>,
+) {
+    // Rate limit check BEFORE parsing (save CPU)
+    if let Err(reason) = rate_limiter.check(&msg.delivered_from) {
+        tracing::trace!("rate limited forge gossip from {:?}: {:?}", msg.delivered_from, reason);
+        return;
+    }
+
+    // Parse signed announcement
+    let signed = match SignedAnnouncement::from_bytes(&msg.content) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!("failed to parse forge gossip message: {}", e);
+            return;
+        }
+    };
+
+    // Verify signature
+    let announcement = match signed.verify() {
+        Some(ann) => ann,
+        None => {
+            tracing::warn!("rejected forge announcement with invalid signature from {:?}", signed.signer);
+            return;
+        }
+    };
+
+    let is_self_announcement = signed.signer == node_id;
+
+    // Call handler for ALL announcements (including self).
+    // This is critical for CI triggers which need to fire for local pushes.
+    if let Some(ref h) = *handler.read().await {
+        tracing::debug!(signer = %signed.signer, is_self = is_self_announcement, "calling announcement handler");
+        h.on_announcement(announcement, &signed.signer);
+    } else {
+        tracing::debug!("no announcement handler registered");
+    }
+
+    // Skip logging for self-announcements (we already know about them)
+    if is_self_announcement {
+        tracing::trace!("processed self-announcement (handler called)");
+        return;
+    }
+
+    // Log based on announcement type
+    spawn_receiver_log_announcement(announcement, &signed.signer);
+}
+
+/// Log a received announcement based on its type.
+fn spawn_receiver_log_announcement(announcement: &Announcement, signer: &PublicKey) {
+    match announcement {
+        Announcement::RefUpdate { repo_id, ref_name, .. } => {
+            tracing::debug!(
+                repo_id = %repo_id.to_hex(),
+                ref_name = %ref_name,
+                signer = %signer,
+                "received RefUpdate announcement"
+            );
+        }
+        Announcement::CobChange { repo_id, cob_type, .. } => {
+            tracing::debug!(
+                repo_id = %repo_id.to_hex(),
+                cob_type = ?cob_type,
+                signer = %signer,
+                "received CobChange announcement"
+            );
+        }
+        Announcement::Seeding {
+            repo_id,
+            node_id: seeder_id,
+        } => {
+            tracing::info!(repo_id = %repo_id.to_hex(), node_id = %seeder_id, "received Seeding announcement");
+        }
+        Announcement::Unseeding {
+            repo_id,
+            node_id: unseeder_id,
+        } => {
+            tracing::info!(repo_id = %repo_id.to_hex(), node_id = %unseeder_id, "received Unseeding announcement");
+        }
+        Announcement::RepoCreated { repo_id, name, creator } => {
+            tracing::info!(
+                repo_id = %repo_id.to_hex(),
+                name = %name,
+                creator = %creator,
+                "received RepoCreated announcement"
+            );
+        }
+    }
+}
+
+/// Handle a stream error with backoff. Returns true if the loop should break.
+async fn spawn_receiver_handle_error(
+    consecutive_errors: u32,
+    backoff_durations: &[Duration],
+    error: &iroh_gossip::api::ApiError,
+) -> bool {
+    if consecutive_errors > FORGE_GOSSIP_MAX_STREAM_RETRIES {
+        tracing::error!("forge gossip receiver exceeded max retries, giving up: {}", error);
+        return true;
+    }
+
+    let idx = (consecutive_errors as usize).saturating_sub(1);
+    let backoff = backoff_durations
+        .get(idx)
+        .copied()
+        .unwrap_or_else(|| *backoff_durations.last().unwrap_or(&Duration::from_secs(16)));
+
+    tracing::warn!(
+        "forge gossip receiver error (retry {}/{}), backing off {:?}: {}",
+        consecutive_errors,
+        FORGE_GOSSIP_MAX_STREAM_RETRIES,
+        backoff,
+        error
+    );
+
+    tokio::time::sleep(backoff).await;
+    false
+}
+
 /// Active topic subscription state.
 struct TopicSubscription {
     sender: TopicSender,
@@ -379,6 +506,85 @@ impl ForgeGossipService {
         Ok(())
     }
 
+    /// Handle a ref update event by invoking handler and broadcasting.
+    ///
+    /// Returns the new consecutive failure count.
+    async fn run_announcer_handle_ref_event(&self, ref_event: RefUpdateEvent, consecutive_failures: u32) -> u32 {
+        tracing::debug!(
+            repo_id = %ref_event.repo_id.to_hex(),
+            ref_name = %ref_event.ref_name,
+            "announcer received RefUpdateEvent, broadcasting"
+        );
+
+        let announcement = Announcement::RefUpdate {
+            repo_id: ref_event.repo_id,
+            ref_name: ref_event.ref_name.clone(),
+            new_hash: *ref_event.new_hash.as_bytes(),
+            old_hash: ref_event.old_hash.map(|h| *h.as_bytes()),
+        };
+
+        // Call handler directly for local events.
+        // Gossip doesn't deliver messages back to the sender,
+        // so we need to invoke the handler here for local triggers (like CI).
+        if let Some(ref h) = *self.handler.read().await {
+            tracing::info!(
+                repo_id = %ref_event.repo_id.to_hex(),
+                ref_name = %ref_event.ref_name,
+                "invoking CI handler for local RefUpdate"
+            );
+            h.on_announcement(&announcement, &self.node_id);
+        } else {
+            tracing::warn!(
+                repo_id = %ref_event.repo_id.to_hex(),
+                ref_name = %ref_event.ref_name,
+                "no handler registered for RefUpdate - CI will not trigger"
+            );
+        }
+
+        if let Err(e) = self.broadcast(announcement).await {
+            let new_failures = consecutive_failures + 1;
+            tracing::warn!("failed to broadcast ref update (failure {}): {}", new_failures, e);
+
+            if new_failures >= FORGE_GOSSIP_ANNOUNCE_FAILURE_THRESHOLD {
+                let backoff = FORGE_GOSSIP_MAX_ANNOUNCE_INTERVAL.min(FORGE_GOSSIP_ANNOUNCE_INTERVAL * new_failures);
+                tokio::time::sleep(backoff).await;
+            }
+            new_failures
+        } else {
+            tracing::debug!(
+                repo_id = %ref_event.repo_id.to_hex(),
+                ref_name = %ref_event.ref_name,
+                "broadcast ref update announcement to gossip"
+            );
+            0
+        }
+    }
+
+    /// Handle a COB update event by broadcasting.
+    ///
+    /// Returns the new consecutive failure count.
+    async fn run_announcer_handle_cob_event(&self, cob_event: CobUpdateEvent, consecutive_failures: u32) -> u32 {
+        let announcement = Announcement::CobChange {
+            repo_id: cob_event.repo_id,
+            cob_type: cob_event.cob_type,
+            cob_id: *cob_event.cob_id.as_bytes(),
+            change_hash: *cob_event.change_hash.as_bytes(),
+        };
+
+        if let Err(e) = self.broadcast(announcement).await {
+            let new_failures = consecutive_failures + 1;
+            tracing::warn!("failed to broadcast COB change (failure {}): {}", new_failures, e);
+            new_failures
+        } else {
+            tracing::trace!(
+                repo_id = %cob_event.repo_id.to_hex(),
+                cob_type = ?cob_event.cob_type,
+                "broadcast COB change announcement"
+            );
+            0
+        }
+    }
+
     /// Run the announcer task that listens to store events.
     async fn run_announcer(
         &self,
@@ -395,63 +601,10 @@ impl ForgeGossipService {
                     break;
                 }
 
-                // Handle ref update events
                 event = ref_events.recv() => {
                     match event {
                         Ok(ref_event) => {
-                            tracing::debug!(
-                                repo_id = %ref_event.repo_id.to_hex(),
-                                ref_name = %ref_event.ref_name,
-                                "announcer received RefUpdateEvent, broadcasting"
-                            );
-
-                            let announcement = Announcement::RefUpdate {
-                                repo_id: ref_event.repo_id,
-                                ref_name: ref_event.ref_name.clone(),
-                                new_hash: *ref_event.new_hash.as_bytes(),
-                                old_hash: ref_event.old_hash.map(|h| *h.as_bytes()),
-                            };
-
-                            // Call handler directly for local events.
-                            // Gossip doesn't deliver messages back to the sender,
-                            // so we need to invoke the handler here for local triggers (like CI).
-                            if let Some(ref h) = *self.handler.read().await {
-                                tracing::info!(
-                                    repo_id = %ref_event.repo_id.to_hex(),
-                                    ref_name = %ref_event.ref_name,
-                                    "invoking CI handler for local RefUpdate"
-                                );
-                                h.on_announcement(&announcement, &self.node_id);
-                            } else {
-                                tracing::warn!(
-                                    repo_id = %ref_event.repo_id.to_hex(),
-                                    ref_name = %ref_event.ref_name,
-                                    "no handler registered for RefUpdate - CI will not trigger"
-                                );
-                            }
-
-                            if let Err(e) = self.broadcast(announcement).await {
-                                consecutive_failures += 1;
-                                tracing::warn!(
-                                    "failed to broadcast ref update (failure {}): {}",
-                                    consecutive_failures,
-                                    e
-                                );
-
-                                if consecutive_failures >= FORGE_GOSSIP_ANNOUNCE_FAILURE_THRESHOLD {
-                                    // Apply backoff by sleeping
-                                    let backoff = FORGE_GOSSIP_MAX_ANNOUNCE_INTERVAL
-                                        .min(FORGE_GOSSIP_ANNOUNCE_INTERVAL * consecutive_failures);
-                                    tokio::time::sleep(backoff).await;
-                                }
-                            } else {
-                                consecutive_failures = 0;
-                                tracing::debug!(
-                                    repo_id = %ref_event.repo_id.to_hex(),
-                                    ref_name = %ref_event.ref_name,
-                                    "broadcast ref update announcement to gossip"
-                                );
-                            }
+                            consecutive_failures = self.run_announcer_handle_ref_event(ref_event, consecutive_failures).await;
                         }
                         Err(broadcast::error::RecvError::Lagged(n)) => {
                             tracing::warn!("ref events receiver lagged by {} messages", n);
@@ -462,32 +615,10 @@ impl ForgeGossipService {
                     }
                 }
 
-                // Handle COB update events
                 event = cob_events.recv() => {
                     match event {
                         Ok(cob_event) => {
-                            let announcement = Announcement::CobChange {
-                                repo_id: cob_event.repo_id,
-                                cob_type: cob_event.cob_type,
-                                cob_id: *cob_event.cob_id.as_bytes(),
-                                change_hash: *cob_event.change_hash.as_bytes(),
-                            };
-
-                            if let Err(e) = self.broadcast(announcement).await {
-                                consecutive_failures += 1;
-                                tracing::warn!(
-                                    "failed to broadcast COB change (failure {}): {}",
-                                    consecutive_failures,
-                                    e
-                                );
-                            } else {
-                                consecutive_failures = 0;
-                                tracing::trace!(
-                                    repo_id = %cob_event.repo_id.to_hex(),
-                                    cob_type = ?cob_event.cob_type,
-                                    "broadcast COB change announcement"
-                                );
-                            }
+                            consecutive_failures = self.run_announcer_handle_cob_event(cob_event, consecutive_failures).await;
                         }
                         Err(broadcast::error::RecvError::Lagged(n)) => {
                             tracing::warn!("COB events receiver lagged by {} messages", n);
@@ -528,101 +659,7 @@ impl ForgeGossipService {
                     event = receiver.next() => match event {
                         Some(Ok(iroh_gossip::api::Event::Received(msg))) => {
                             consecutive_errors = 0;
-
-                            // Rate limit check BEFORE parsing (save CPU)
-                            if let Err(reason) = rate_limiter.check(&msg.delivered_from) {
-                                tracing::trace!(
-                                    "rate limited forge gossip from {:?}: {:?}",
-                                    msg.delivered_from,
-                                    reason
-                                );
-                                continue;
-                            }
-
-                            // Parse signed announcement
-                            let signed = match SignedAnnouncement::from_bytes(&msg.content) {
-                                Ok(s) => s,
-                                Err(e) => {
-                                    tracing::warn!("failed to parse forge gossip message: {}", e);
-                                    continue;
-                                }
-                            };
-
-                            // Verify signature
-                            let announcement = match signed.verify() {
-                                Some(ann) => ann,
-                                None => {
-                                    tracing::warn!(
-                                        "rejected forge announcement with invalid signature from {:?}",
-                                        signed.signer
-                                    );
-                                    continue;
-                                }
-                            };
-
-                            let is_self_announcement = signed.signer == node_id;
-
-                            // Call handler for ALL announcements (including self).
-                            // This is critical for CI triggers which need to fire for local pushes.
-                            // The handler can decide how to handle self-announcements if needed.
-                            if let Some(ref h) = *handler.read().await {
-                                tracing::debug!(
-                                    signer = %signed.signer,
-                                    is_self = is_self_announcement,
-                                    "calling announcement handler"
-                                );
-                                h.on_announcement(announcement, &signed.signer);
-                            } else {
-                                tracing::debug!("no announcement handler registered");
-                            }
-
-                            // Skip logging for self-announcements (we already know about them)
-                            if is_self_announcement {
-                                tracing::trace!("processed self-announcement (handler called)");
-                                continue;
-                            }
-
-                            // Log based on announcement type
-                            match announcement {
-                                Announcement::RefUpdate { repo_id, ref_name, .. } => {
-                                    tracing::debug!(
-                                        repo_id = %repo_id.to_hex(),
-                                        ref_name = %ref_name,
-                                        signer = %signed.signer,
-                                        "received RefUpdate announcement"
-                                    );
-                                }
-                                Announcement::CobChange { repo_id, cob_type, .. } => {
-                                    tracing::debug!(
-                                        repo_id = %repo_id.to_hex(),
-                                        cob_type = ?cob_type,
-                                        signer = %signed.signer,
-                                        "received CobChange announcement"
-                                    );
-                                }
-                                Announcement::Seeding { repo_id, node_id: seeder_id } => {
-                                    tracing::info!(
-                                        repo_id = %repo_id.to_hex(),
-                                        node_id = %seeder_id,
-                                        "received Seeding announcement"
-                                    );
-                                }
-                                Announcement::Unseeding { repo_id, node_id: unseeder_id } => {
-                                    tracing::info!(
-                                        repo_id = %repo_id.to_hex(),
-                                        node_id = %unseeder_id,
-                                        "received Unseeding announcement"
-                                    );
-                                }
-                                Announcement::RepoCreated { repo_id, name, creator } => {
-                                    tracing::info!(
-                                        repo_id = %repo_id.to_hex(),
-                                        name = %name,
-                                        creator = %creator,
-                                        "received RepoCreated announcement"
-                                    );
-                                }
-                            }
+                            spawn_receiver_process_message(&msg, &mut rate_limiter, node_id, &handler).await;
                         }
 
                         Some(Ok(iroh_gossip::api::Event::NeighborUp(neighbor))) => {
@@ -639,28 +676,14 @@ impl ForgeGossipService {
 
                         Some(Err(e)) => {
                             consecutive_errors += 1;
-
-                            if consecutive_errors > FORGE_GOSSIP_MAX_STREAM_RETRIES {
-                                tracing::error!(
-                                    "forge gossip receiver exceeded max retries, giving up: {}",
-                                    e
-                                );
+                            let should_break = spawn_receiver_handle_error(
+                                consecutive_errors,
+                                &backoff_durations,
+                                &e,
+                            ).await;
+                            if should_break {
                                 break;
                             }
-
-                            let idx = (consecutive_errors as usize).saturating_sub(1);
-                            let backoff = backoff_durations.get(idx).copied()
-                                .unwrap_or_else(|| *backoff_durations.last().unwrap_or(&Duration::from_secs(16)));
-
-                            tracing::warn!(
-                                "forge gossip receiver error (retry {}/{}), backing off {:?}: {}",
-                                consecutive_errors,
-                                FORGE_GOSSIP_MAX_STREAM_RETRIES,
-                                backoff,
-                                e
-                            );
-
-                            tokio::time::sleep(backoff).await;
                         }
 
                         None => {

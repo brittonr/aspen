@@ -245,90 +245,119 @@ async fn handle_rpc_stream(
     raft_core: Raft<AppTypeConfig>,
 ) -> Result<()> {
     info!("handle_rpc_stream started, reading RPC message");
-    // Read the RPC message with size limit
-    let buffer = recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.context("failed to read RPC message")?;
 
-    // Record server receive time (t2) for clock drift detection
-    let server_recv_ms = current_time_ms();
-
-    info!(buffer_size = buffer.len(), "read RPC message bytes");
-
-    // Deserialize the RPC request (protocol enum without channels)
-    let request: RaftRpcProtocol = postcard::from_bytes(&buffer).context("failed to deserialize RPC request")?;
-
-    info!(request_type = ?request, "received and deserialized RPC request");
+    // Read and deserialize the RPC request
+    let (request, server_recv_ms) = handle_rpc_read_request(&mut recv).await?;
 
     // Process the RPC and create response
-    // IMPORTANT: Even on fatal errors, we send a proper response to the client
-    // instead of dropping the stream. This enables proper failure detection.
-    let response = match request {
-        RaftRpcProtocol::Vote(vote_req) => {
-            match raft_core.vote(vote_req.request).await {
-                Ok(result) => RaftRpcResponse::Vote(result),
-                Err(openraft::error::RaftError::Fatal(fatal)) => {
-                    let error_kind = RaftFatalErrorKind::from_fatal(&fatal);
-                    error!(
-                        error_kind = %error_kind,
-                        fatal_error = ?fatal,
-                        rpc_type = "vote",
-                        "RaftCore in fatal state, sending error response to client"
-                    );
-                    RaftRpcResponse::FatalError(error_kind)
-                }
-                Err(openraft::error::RaftError::APIError(api_err)) => {
-                    // API errors for vote should not happen (Infallible), but handle gracefully
-                    error!(api_error = ?api_err, "unexpected API error in vote RPC");
-                    RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked)
-                }
-            }
-        }
-        RaftRpcProtocol::AppendEntries(append_req) => {
-            match raft_core.append_entries(append_req.request).await {
-                Ok(result) => RaftRpcResponse::AppendEntries(result),
-                Err(openraft::error::RaftError::Fatal(fatal)) => {
-                    let error_kind = RaftFatalErrorKind::from_fatal(&fatal);
-                    error!(
-                        error_kind = %error_kind,
-                        fatal_error = ?fatal,
-                        rpc_type = "append_entries",
-                        "RaftCore in fatal state, sending error response to client"
-                    );
-                    RaftRpcResponse::FatalError(error_kind)
-                }
-                Err(openraft::error::RaftError::APIError(api_err)) => {
-                    // API errors for append_entries should not happen (Infallible), but handle gracefully
-                    error!(api_error = ?api_err, "unexpected API error in append_entries RPC");
-                    RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked)
-                }
-            }
-        }
-        RaftRpcProtocol::InstallSnapshot(snapshot_req) => {
-            // Convert snapshot bytes back to Cursor for Raft
-            let snapshot_cursor = Cursor::new(snapshot_req.snapshot_data);
-            let snapshot = openraft::Snapshot {
-                meta: snapshot_req.snapshot_meta,
-                snapshot: snapshot_cursor,
-            };
-            match raft_core.install_full_snapshot(snapshot_req.vote, snapshot).await {
-                Ok(result) => RaftRpcResponse::InstallSnapshot(Ok(result)),
-                Err(fatal) => {
-                    let error_kind = RaftFatalErrorKind::from_fatal(&fatal);
-                    error!(
-                        error_kind = %error_kind,
-                        fatal_error = ?fatal,
-                        rpc_type = "install_snapshot",
-                        "RaftCore in fatal state, sending error response to client"
-                    );
-                    RaftRpcResponse::FatalError(error_kind)
-                }
-            }
-        }
-    };
+    let response = handle_rpc_process_request(request, &raft_core).await;
 
-    // Record server send time (t3) for clock drift detection
+    // Send the response with timestamps
+    handle_rpc_send_response(&mut send, response, server_recv_ms).await?;
+
+    info!("RPC response sent successfully");
+    Ok(())
+}
+
+/// Read and deserialize an RPC request from the stream.
+async fn handle_rpc_read_request(recv: &mut iroh::endpoint::RecvStream) -> Result<(RaftRpcProtocol, u64)> {
+    let buffer = recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.context("failed to read RPC message")?;
+    let server_recv_ms = current_time_ms();
+    info!(buffer_size = buffer.len(), "read RPC message bytes");
+
+    let request: RaftRpcProtocol = postcard::from_bytes(&buffer).context("failed to deserialize RPC request")?;
+    info!(request_type = ?request, "received and deserialized RPC request");
+
+    Ok((request, server_recv_ms))
+}
+
+/// Process an RPC request and return the response.
+async fn handle_rpc_process_request(request: RaftRpcProtocol, raft_core: &Raft<AppTypeConfig>) -> RaftRpcResponse {
+    match request {
+        RaftRpcProtocol::Vote(vote_req) => handle_rpc_vote(vote_req, raft_core).await,
+        RaftRpcProtocol::AppendEntries(append_req) => handle_rpc_append_entries(append_req, raft_core).await,
+        RaftRpcProtocol::InstallSnapshot(snapshot_req) => handle_rpc_install_snapshot(snapshot_req, raft_core).await,
+    }
+}
+
+/// Handle a Vote RPC request.
+async fn handle_rpc_vote(vote_req: crate::rpc::RaftVoteRequest, raft_core: &Raft<AppTypeConfig>) -> RaftRpcResponse {
+    match raft_core.vote(vote_req.request).await {
+        Ok(result) => RaftRpcResponse::Vote(result),
+        Err(openraft::error::RaftError::Fatal(fatal)) => {
+            let error_kind = RaftFatalErrorKind::from_fatal(&fatal);
+            error!(
+                error_kind = %error_kind,
+                fatal_error = ?fatal,
+                rpc_type = "vote",
+                "RaftCore in fatal state, sending error response to client"
+            );
+            RaftRpcResponse::FatalError(error_kind)
+        }
+        Err(openraft::error::RaftError::APIError(api_err)) => {
+            error!(api_error = ?api_err, "unexpected API error in vote RPC");
+            RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked)
+        }
+    }
+}
+
+/// Handle an AppendEntries RPC request.
+async fn handle_rpc_append_entries(
+    append_req: crate::rpc::RaftAppendEntriesRequest,
+    raft_core: &Raft<AppTypeConfig>,
+) -> RaftRpcResponse {
+    match raft_core.append_entries(append_req.request).await {
+        Ok(result) => RaftRpcResponse::AppendEntries(result),
+        Err(openraft::error::RaftError::Fatal(fatal)) => {
+            let error_kind = RaftFatalErrorKind::from_fatal(&fatal);
+            error!(
+                error_kind = %error_kind,
+                fatal_error = ?fatal,
+                rpc_type = "append_entries",
+                "RaftCore in fatal state, sending error response to client"
+            );
+            RaftRpcResponse::FatalError(error_kind)
+        }
+        Err(openraft::error::RaftError::APIError(api_err)) => {
+            error!(api_error = ?api_err, "unexpected API error in append_entries RPC");
+            RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked)
+        }
+    }
+}
+
+/// Handle an InstallSnapshot RPC request.
+async fn handle_rpc_install_snapshot(
+    snapshot_req: crate::rpc::RaftSnapshotRequest,
+    raft_core: &Raft<AppTypeConfig>,
+) -> RaftRpcResponse {
+    let snapshot_cursor = Cursor::new(snapshot_req.snapshot_data);
+    let snapshot = openraft::Snapshot {
+        meta: snapshot_req.snapshot_meta,
+        snapshot: snapshot_cursor,
+    };
+    match raft_core.install_full_snapshot(snapshot_req.vote, snapshot).await {
+        Ok(result) => RaftRpcResponse::InstallSnapshot(Ok(result)),
+        Err(fatal) => {
+            let error_kind = RaftFatalErrorKind::from_fatal(&fatal);
+            error!(
+                error_kind = %error_kind,
+                fatal_error = ?fatal,
+                rpc_type = "install_snapshot",
+                "RaftCore in fatal state, sending error response to client"
+            );
+            RaftRpcResponse::FatalError(error_kind)
+        }
+    }
+}
+
+/// Send an RPC response with timestamps.
+async fn handle_rpc_send_response(
+    send: &mut iroh::endpoint::SendStream,
+    response: RaftRpcResponse,
+    server_recv_ms: u64,
+) -> Result<()> {
     let server_send_ms = current_time_ms();
 
-    // Log if we're sending a fatal error response
     if let RaftRpcResponse::FatalError(kind) = &response {
         warn!(
             error_kind = %kind,
@@ -336,7 +365,6 @@ async fn handle_rpc_stream(
         );
     }
 
-    // Wrap response with timestamps for clock drift detection
     let response_with_timestamps = RaftRpcResponseWithTimestamps {
         inner: response,
         timestamps: Some(TimestampInfo {
@@ -345,15 +373,11 @@ async fn handle_rpc_stream(
         }),
     };
 
-    // Serialize and send response
     let response_bytes = postcard::to_stdvec(&response_with_timestamps).context("failed to serialize RPC response")?;
-
     info!(response_size = response_bytes.len(), "sending RPC response");
 
     send.write_all(&response_bytes).await.context("failed to write RPC response")?;
     send.finish().context("failed to finish send stream")?;
-
-    info!("RPC response sent successfully");
 
     Ok(())
 }

@@ -73,9 +73,9 @@ impl RequestHandler for DnsHandler {
             ClientRpcRequest::DnsSetZone {
                 name,
                 enabled,
-                default_ttl,
+                default_ttl_secs,
                 description,
-            } => handle_dns_set_zone(ctx, name, enabled, default_ttl, description).await,
+            } => handle_dns_set_zone(ctx, name, enabled, default_ttl_secs, description).await,
 
             ClientRpcRequest::DnsGetZone { name } => handle_dns_get_zone(ctx, name).await,
 
@@ -339,13 +339,13 @@ async fn handle_dns_set_zone(
     ctx: &ClientProtocolContext,
     name: String,
     enabled: bool,
-    default_ttl: u32,
+    default_ttl_secs: u32,
     description: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
     // Build zone with optional settings
-    let mut zone = Zone::new(&name).with_default_ttl(default_ttl);
+    let mut zone = Zone::new(&name).with_default_ttl_secs(default_ttl_secs);
     if !enabled {
         zone = zone.disabled();
     }
@@ -471,7 +471,7 @@ fn zone_to_response(zone: &Zone) -> DnsZoneResponse {
     DnsZoneResponse {
         name: zone.name.clone(),
         is_enabled: zone.is_enabled,
-        default_ttl: zone.default_ttl,
+        default_ttl_secs: zone.default_ttl_secs,
         serial: zone.metadata.serial,
         last_modified_ms: zone.metadata.last_modified_ms,
         description: zone.metadata.description.clone(),

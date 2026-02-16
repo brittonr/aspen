@@ -72,122 +72,10 @@ impl KeyValueStore for RaftNode {
         self.ensure_initialized_kv()?;
 
         // Apply consistency level based on request
-        match request.consistency {
-            ReadConsistency::Linearizable => {
-                // ReadIndex: Strongest consistency via quorum confirmation
-                //
-                // ReadIndex works by:
-                // 1. Leader records its current commit index
-                // 2. Leader confirms it's still leader via heartbeat quorum
-                // 3. await_ready() waits for our state machine to catch up to that commit index
-                //
-                // This guarantees linearizability because any read after await_ready()
-                // sees all writes committed before get_read_linearizer() was called.
-                //
-                // Tiger Style: Timeout the linearizer acquisition itself, not just await_ready().
-                // The get_read_linearizer() call spawns a background task that waits for heartbeat
-                // quorum confirmation. If followers are unreachable, this can hang indefinitely.
-                let linearizer =
-                    tokio::time::timeout(READ_INDEX_TIMEOUT, self.raft().get_read_linearizer(ReadPolicy::ReadIndex))
-                        .await
-                        .map_err(|_| KeyValueStoreError::Timeout {
-                            duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
-                        })?
-                        .map_err(|err| {
-                            let leader_hint = self.raft().metrics().borrow().current_leader.map(|id| id.0);
-                            KeyValueStoreError::NotLeader {
-                                leader: leader_hint,
-                                reason: err.to_string(),
-                            }
-                        })?;
+        self.read_ensure_consistency(request.consistency).await?;
 
-                // Tiger Style: Explicit timeout prevents indefinite hang during network partition
-                tokio::time::timeout(READ_INDEX_TIMEOUT, linearizer.await_ready(self.raft()))
-                    .await
-                    .map_err(|_| KeyValueStoreError::Timeout {
-                        duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
-                    })?
-                    .map_err(|err| {
-                        let leader_hint = self.raft().metrics().borrow().current_leader.map(|id| id.0);
-                        KeyValueStoreError::NotLeader {
-                            leader: leader_hint,
-                            reason: err.to_string(),
-                        }
-                    })?;
-            }
-            ReadConsistency::Lease => {
-                // LeaseRead: Lower latency via leader lease (no quorum confirmation)
-                //
-                // Uses the leader's lease to serve reads without contacting followers.
-                // Safe as long as clock drift is less than the lease duration.
-                // Falls back to ReadIndex if the lease has expired.
-                //
-                // Tiger Style: Timeout for consistency with ReadIndex path, though
-                // LeaseRead should return quickly (either from cache or ForwardToLeader).
-                let linearizer =
-                    tokio::time::timeout(READ_INDEX_TIMEOUT, self.raft().get_read_linearizer(ReadPolicy::LeaseRead))
-                        .await
-                        .map_err(|_| KeyValueStoreError::Timeout {
-                            duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
-                        })?
-                        .map_err(|err| {
-                            let leader_hint = self.raft().metrics().borrow().current_leader.map(|id| id.0);
-                            KeyValueStoreError::NotLeader {
-                                leader: leader_hint,
-                                reason: err.to_string(),
-                            }
-                        })?;
-
-                // Tiger Style: Explicit timeout prevents indefinite hang during network partition
-                tokio::time::timeout(READ_INDEX_TIMEOUT, linearizer.await_ready(self.raft()))
-                    .await
-                    .map_err(|_| KeyValueStoreError::Timeout {
-                        duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
-                    })?
-                    .map_err(|err| {
-                        let leader_hint = self.raft().metrics().borrow().current_leader.map(|id| id.0);
-                        KeyValueStoreError::NotLeader {
-                            leader: leader_hint,
-                            reason: err.to_string(),
-                        }
-                    })?;
-            }
-            ReadConsistency::Stale => {
-                // Stale: Read directly from local state machine without consistency checks
-                // WARNING: May return uncommitted or rolled-back data
-            }
-        }
-
-        // Read directly from state machine (linearizability guaranteed by ReadIndex above)
-        match self.state_machine() {
-            StateMachineVariant::InMemory(sm) => match sm.get(&request.key).await {
-                Some(value) => Ok(ReadResult {
-                    kv: Some(KeyValueWithRevision {
-                        key: request.key,
-                        value,
-                        version: 1,         // In-memory doesn't track versions
-                        create_revision: 0, // In-memory doesn't track revisions
-                        mod_revision: 0,
-                    }),
-                }),
-                None => Err(KeyValueStoreError::NotFound { key: request.key }),
-            },
-            StateMachineVariant::Redb(sm) => match sm.get(&request.key) {
-                Ok(Some(entry)) => Ok(ReadResult {
-                    kv: Some(KeyValueWithRevision {
-                        key: request.key,
-                        value: entry.value,
-                        version: entry.version as u64,
-                        create_revision: entry.create_revision as u64,
-                        mod_revision: entry.mod_revision as u64,
-                    }),
-                }),
-                Ok(None) => Err(KeyValueStoreError::NotFound { key: request.key }),
-                Err(err) => Err(KeyValueStoreError::Failed {
-                    reason: err.to_string(),
-                }),
-            },
-        }
+        // Read directly from state machine (linearizability guaranteed by consistency check above)
+        self.read_from_state_machine(&request.key).await
     }
 
     #[instrument(skip(self))]
@@ -230,11 +118,127 @@ impl KeyValueStore for RaftNode {
 
         self.ensure_initialized_kv()?;
 
-        // Use ReadIndex for linearizable scan (see read() for protocol details)
-        //
+        // Ensure linearizable read via ReadIndex
+        self.scan_ensure_linearizable().await?;
+
+        // Apply default limit if not specified
+        let limit = _request.limit.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
+
+        // Tiger Style: scan limit must be bounded
+        assert!(
+            limit <= MAX_SCAN_RESULTS as usize,
+            "SCAN: computed limit {} exceeds MAX_SCAN_RESULTS {}",
+            limit,
+            MAX_SCAN_RESULTS
+        );
+
+        // Scan from appropriate state machine backend
+        match self.state_machine() {
+            StateMachineVariant::InMemory(sm) => self.scan_from_inmemory(sm, &_request, limit).await,
+            StateMachineVariant::Redb(sm) => self.scan_from_redb(sm, &_request, limit),
+        }
+    }
+}
+
+// ====================================================================================
+// read() helper methods (extracted for Tiger Style compliance)
+// ====================================================================================
+
+impl RaftNode {
+    /// Ensure read consistency based on the requested consistency level.
+    async fn read_ensure_consistency(&self, consistency: ReadConsistency) -> Result<(), KeyValueStoreError> {
+        match consistency {
+            ReadConsistency::Linearizable => {
+                // ReadIndex: Strongest consistency via quorum confirmation
+                self.read_ensure_linearizable_with_policy(ReadPolicy::ReadIndex).await
+            }
+            ReadConsistency::Lease => {
+                // LeaseRead: Lower latency via leader lease (no quorum confirmation)
+                self.read_ensure_linearizable_with_policy(ReadPolicy::LeaseRead).await
+            }
+            ReadConsistency::Stale => {
+                // Stale: Read directly from local state machine without consistency checks
+                // WARNING: May return uncommitted or rolled-back data
+                Ok(())
+            }
+        }
+    }
+
+    /// Ensure linearizable read with the specified policy.
+    async fn read_ensure_linearizable_with_policy(&self, policy: ReadPolicy) -> Result<(), KeyValueStoreError> {
         // Tiger Style: Timeout the linearizer acquisition itself, not just await_ready().
-        // The get_read_linearizer() call spawns a background task that waits for heartbeat
-        // quorum confirmation. If followers are unreachable, this can hang indefinitely.
+        let linearizer = tokio::time::timeout(READ_INDEX_TIMEOUT, self.raft().get_read_linearizer(policy))
+            .await
+            .map_err(|_| KeyValueStoreError::Timeout {
+                duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
+            })?
+            .map_err(|err| {
+                let leader_hint = self.raft().metrics().borrow().current_leader.map(|id| id.0);
+                KeyValueStoreError::NotLeader {
+                    leader: leader_hint,
+                    reason: err.to_string(),
+                }
+            })?;
+
+        // Tiger Style: Explicit timeout prevents indefinite hang during network partition
+        tokio::time::timeout(READ_INDEX_TIMEOUT, linearizer.await_ready(self.raft()))
+            .await
+            .map_err(|_| KeyValueStoreError::Timeout {
+                duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
+            })?
+            .map_err(|err| {
+                let leader_hint = self.raft().metrics().borrow().current_leader.map(|id| id.0);
+                KeyValueStoreError::NotLeader {
+                    leader: leader_hint,
+                    reason: err.to_string(),
+                }
+            })?;
+
+        Ok(())
+    }
+
+    /// Read a key from the state machine.
+    async fn read_from_state_machine(&self, key: &str) -> Result<ReadResult, KeyValueStoreError> {
+        match self.state_machine() {
+            StateMachineVariant::InMemory(sm) => match sm.get(key).await {
+                Some(value) => Ok(ReadResult {
+                    kv: Some(KeyValueWithRevision {
+                        key: key.to_owned(),
+                        value,
+                        version: 1,         // In-memory doesn't track versions
+                        create_revision: 0, // In-memory doesn't track revisions
+                        mod_revision: 0,
+                    }),
+                }),
+                None => Err(KeyValueStoreError::NotFound { key: key.to_owned() }),
+            },
+            StateMachineVariant::Redb(sm) => match sm.get(key) {
+                Ok(Some(entry)) => Ok(ReadResult {
+                    kv: Some(KeyValueWithRevision {
+                        key: key.to_owned(),
+                        value: entry.value,
+                        version: entry.version as u64,
+                        create_revision: entry.create_revision as u64,
+                        mod_revision: entry.mod_revision as u64,
+                    }),
+                }),
+                Ok(None) => Err(KeyValueStoreError::NotFound { key: key.to_owned() }),
+                Err(err) => Err(KeyValueStoreError::Failed {
+                    reason: err.to_string(),
+                }),
+            },
+        }
+    }
+}
+
+// ====================================================================================
+// scan() helper methods (extracted for Tiger Style compliance)
+// ====================================================================================
+
+impl RaftNode {
+    /// Ensure linearizable read via ReadIndex protocol.
+    async fn scan_ensure_linearizable(&self) -> Result<(), KeyValueStoreError> {
+        // Tiger Style: Timeout the linearizer acquisition itself, not just await_ready().
         let linearizer =
             tokio::time::timeout(READ_INDEX_TIMEOUT, self.raft().get_read_linearizer(ReadPolicy::ReadIndex))
                 .await
@@ -263,51 +267,64 @@ impl KeyValueStore for RaftNode {
                 }
             })?;
 
-        // Scan directly from state machine (linearizability guaranteed by ReadIndex above)
-        // Apply default limit if not specified
-        let limit = _request.limit.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
+        Ok(())
+    }
 
-        // Tiger Style: scan limit must be bounded
-        assert!(
-            limit <= MAX_SCAN_RESULTS as usize,
-            "SCAN: computed limit {} exceeds MAX_SCAN_RESULTS {}",
-            limit,
-            MAX_SCAN_RESULTS
-        );
+    /// Scan from in-memory state machine with pagination.
+    async fn scan_from_inmemory(
+        &self,
+        sm: &std::sync::Arc<crate::InMemoryStateMachine>,
+        request: &ScanRequest,
+        limit: usize,
+    ) -> Result<ScanResult, KeyValueStoreError> {
+        // Get all KV pairs matching prefix
+        let all_pairs = sm.scan_kv_with_prefix_async(&request.prefix).await;
 
-        match self.state_machine() {
-            StateMachineVariant::InMemory(sm) => {
-                // Get all KV pairs matching prefix
-                let all_pairs = sm.scan_kv_with_prefix_async(&_request.prefix).await;
+        // Handle pagination via continuation token
+        let start_key = request.continuation_token.as_deref();
+        let filtered: Vec<_> =
+            all_pairs.into_iter().filter(|(k, _)| start_key.is_none_or(|start| k.as_str() > start)).collect();
 
-                // Handle pagination via continuation token
-                //
-                // Tiger Style: Use >= comparison and skip the exact token key.
-                // This handles the edge case where the continuation token key was
-                // deleted between paginated calls - we still return all keys after it.
-                // Using only > would skip entries if the token key no longer exists.
-                let start_key = _request.continuation_token.as_deref();
-                let filtered: Vec<_> = all_pairs
-                    .into_iter()
-                    .filter(|(k, _)| {
-                        // Skip keys before or equal to continuation token
-                        start_key.is_none_or(|start| k.as_str() > start)
-                    })
-                    .collect();
+        // Take limit+1 to check if there are more results
+        let is_truncated = filtered.len() > limit;
+        let entries: Vec<KeyValueWithRevision> = filtered
+            .into_iter()
+            .take(limit)
+            .map(|(key, value)| KeyValueWithRevision {
+                key,
+                value,
+                version: 1,         // In-memory doesn't track versions
+                create_revision: 0, // In-memory doesn't track revisions
+                mod_revision: 0,
+            })
+            .collect();
 
-                // Take limit+1 to check if there are more results
-                let is_truncated = filtered.len() > limit;
-                let entries: Vec<KeyValueWithRevision> = filtered
-                    .into_iter()
-                    .take(limit)
-                    .map(|(key, value)| KeyValueWithRevision {
-                        key,
-                        value,
-                        version: 1,         // In-memory doesn't track versions
-                        create_revision: 0, // In-memory doesn't track revisions
-                        mod_revision: 0,
-                    })
-                    .collect();
+        let continuation_token = if is_truncated {
+            entries.last().map(|e| e.key.clone())
+        } else {
+            None
+        };
+
+        Ok(ScanResult {
+            count: entries.len() as u32,
+            entries,
+            is_truncated,
+            continuation_token,
+        })
+    }
+
+    /// Scan from Redb state machine with pagination.
+    fn scan_from_redb(
+        &self,
+        sm: &crate::SharedRedbStorage,
+        request: &ScanRequest,
+        limit: usize,
+    ) -> Result<ScanResult, KeyValueStoreError> {
+        let start_key = request.continuation_token.as_deref();
+        match sm.scan(&request.prefix, start_key, Some(limit + 1)) {
+            Ok(entries_full) => {
+                let is_truncated = entries_full.len() > limit;
+                let entries: Vec<KeyValueWithRevision> = entries_full.into_iter().take(limit).collect();
 
                 let continuation_token = if is_truncated {
                     entries.last().map(|e| e.key.clone())
@@ -322,32 +339,9 @@ impl KeyValueStore for RaftNode {
                     continuation_token,
                 })
             }
-            StateMachineVariant::Redb(sm) => {
-                // Redb scan with pagination
-                let start_key = _request.continuation_token.as_deref();
-                match sm.scan(&_request.prefix, start_key, Some(limit + 1)) {
-                    Ok(entries_full) => {
-                        let is_truncated = entries_full.len() > limit;
-                        let entries: Vec<KeyValueWithRevision> = entries_full.into_iter().take(limit).collect();
-
-                        let continuation_token = if is_truncated {
-                            entries.last().map(|e| e.key.clone())
-                        } else {
-                            None
-                        };
-
-                        Ok(ScanResult {
-                            count: entries.len() as u32,
-                            entries,
-                            is_truncated,
-                            continuation_token,
-                        })
-                    }
-                    Err(err) => Err(KeyValueStoreError::Failed {
-                        reason: err.to_string(),
-                    }),
-                }
-            }
+            Err(err) => Err(KeyValueStoreError::Failed {
+                reason: err.to_string(),
+            }),
         }
     }
 }

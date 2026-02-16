@@ -16,15 +16,15 @@ pub enum SagaPhase {
     /// Saga has not started.
     NotStarted,
     /// Executing forward at the given step index.
-    Executing(usize),
+    Executing(u32),
     /// All steps completed successfully.
     Completed,
     /// Compensating at the given step index (counting down).
-    Compensating(usize),
+    Compensating(u32),
     /// All compensations completed.
     CompensationCompleted,
     /// Compensation failed at the given step.
-    CompensationFailed(usize),
+    CompensationFailed(u32),
 }
 
 /// Compute the next phase after a successful step execution.
@@ -56,7 +56,7 @@ pub enum SagaPhase {
 /// );
 /// ```
 #[inline]
-pub const fn compute_next_phase_after_success(current_step: usize, total_steps: usize) -> SagaPhase {
+pub const fn compute_next_phase_after_success(current_step: u32, total_steps: u32) -> SagaPhase {
     let next_step = current_step + 1;
     if next_step >= total_steps {
         SagaPhase::Completed
@@ -96,7 +96,7 @@ pub const fn compute_next_phase_after_success(current_step: usize, total_steps: 
 /// );
 /// ```
 #[inline]
-pub const fn compute_initial_compensation_phase(failed_step: usize) -> SagaPhase {
+pub const fn compute_initial_compensation_phase(failed_step: u32) -> SagaPhase {
     if failed_step == 0 {
         SagaPhase::CompensationCompleted
     } else {
@@ -132,7 +132,7 @@ pub const fn compute_initial_compensation_phase(failed_step: usize) -> SagaPhase
 /// );
 /// ```
 #[inline]
-pub const fn compute_next_compensation_phase(current_compensation_step: usize) -> SagaPhase {
+pub const fn compute_next_compensation_phase(current_compensation_step: u32) -> SagaPhase {
     if current_compensation_step == 0 {
         SagaPhase::CompensationCompleted
     } else {

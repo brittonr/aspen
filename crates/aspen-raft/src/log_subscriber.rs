@@ -432,7 +432,7 @@ async fn handle_log_subscriber_authenticate(
     let auth_result = auth_context.verify_response(&challenge, &auth_response);
 
     // Step 4: Send auth result
-    let result_bytes = postcard::to_stdvec(&auth_result)?;
+    let result_bytes = postcard::to_stdvec(&auth_result).context("failed to serialize auth result")?;
     send.write_all(&result_bytes).await.context("failed to send auth result")?;
 
     if !auth_result.is_ok() {
@@ -519,7 +519,7 @@ async fn handle_log_subscriber_accept(
         current_index: current_committed_index,
         node_id,
     };
-    let response_bytes = postcard::to_stdvec(&response)?;
+    let response_bytes = postcard::to_stdvec(&response).context("failed to serialize subscribe response")?;
     send.write_all(&response_bytes).await.context("failed to send subscribe response")?;
 
     debug!(subscriber_id = subscriber_id, current_committed_index, "subscription accepted");

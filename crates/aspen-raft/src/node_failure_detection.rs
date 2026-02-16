@@ -103,8 +103,8 @@ impl NodeFailureDetector {
                 // Tiger Style: Enforce bounded map size before insertion (using pure function)
                 let already_tracked = self.unreachable_nodes.contains_key(&node_id);
                 if should_evict_oldest_unreachable(
-                    self.unreachable_nodes.len(),
-                    MAX_UNREACHABLE_NODES as usize,
+                    self.unreachable_nodes.len() as u32,
+                    MAX_UNREACHABLE_NODES,
                     already_tracked,
                 ) {
                     tracing::error!(

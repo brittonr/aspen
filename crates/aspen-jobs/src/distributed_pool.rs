@@ -190,7 +190,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
     }
 
     /// Start the distributed pool with the specified number of local workers.
-    pub async fn start(&self, num_workers: usize) -> Result<()> {
+    pub async fn start(&self, num_workers: u32) -> Result<()> {
         // Tiger Style: must start at least one worker
         assert!(num_workers > 0, "num_workers must be positive, got 0");
         // Tiger Style: bounded worker count per node

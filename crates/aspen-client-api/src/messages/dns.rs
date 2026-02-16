@@ -29,7 +29,7 @@ pub enum DnsRequest {
     DnsSetZone {
         name: String,
         enabled: bool,
-        default_ttl: u32,
+        default_ttl_secs: u32,
         description: Option<String>,
     },
     /// Get a DNS zone.
@@ -128,8 +128,9 @@ pub struct DnsZoneResponse {
     /// Whether the zone is enabled.
     #[serde(rename = "enabled")]
     pub is_enabled: bool,
-    /// Default TTL for records in this zone.
-    pub default_ttl: u32,
+    /// Default TTL for records in this zone (seconds).
+    #[serde(rename = "default_ttl")]
+    pub default_ttl_secs: u32,
     /// SOA serial number.
     pub serial: u32,
     /// Unix timestamp of last modification (milliseconds).

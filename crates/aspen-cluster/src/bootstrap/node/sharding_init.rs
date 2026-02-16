@@ -709,6 +709,91 @@ pub(super) fn create_shard_0_broadcasts(config: &NodeConfig, local_shards: &[Sha
     }
 }
 
+/// Create in-memory storage for a shard.
+async fn create_shard_raft_storage_inmemory(
+    shard_node_id: u64,
+    shard_id: ShardId,
+    raft_config: Arc<RaftConfig>,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+) -> Result<(Arc<Raft<AppTypeConfig>>, StateMachineVariant, Option<CancellationToken>)> {
+    let log_store = Arc::new(InMemoryLogStore::default());
+    let state_machine = InMemoryStateMachine::new();
+    let raft: Arc<Raft<AppTypeConfig>> = Arc::new(
+        Raft::new(
+            shard_node_id.into(),
+            raft_config,
+            network_factory.as_ref().clone(),
+            log_store.as_ref().clone(),
+            state_machine.clone(),
+        )
+        .await
+        .with_context(|| format!("failed to create in-memory Raft for shard {}", shard_id))?,
+    );
+    Ok((raft, StateMachineVariant::InMemory(state_machine), None))
+}
+
+/// Create redb storage for a shard.
+async fn create_shard_raft_storage_redb(
+    config: &NodeConfig,
+    shard_node_id: u64,
+    shard_id: ShardId,
+    paths: &ShardStoragePaths,
+    raft_config: Arc<RaftConfig>,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+    shard_0_broadcasts: &Shard0Broadcasts,
+) -> Result<(Arc<Raft<AppTypeConfig>>, StateMachineVariant, Option<CancellationToken>)> {
+    let db_path = paths.log_path.with_extension("shared.redb");
+
+    // For shard 0, pass broadcast channels if hooks/docs are enabled
+    let shared_storage = if shard_id == 0 {
+        if let Some((log_sender, snapshot_sender)) = shard_0_broadcasts {
+            Arc::new(
+                SharedRedbStorage::with_broadcasts(
+                    &db_path,
+                    Some(log_sender.clone()),
+                    Some(snapshot_sender.clone()),
+                    &shard_node_id.to_string(),
+                )
+                .map_err(|e| {
+                    anyhow::anyhow!("failed to open shared redb storage for shard 0 with broadcasts: {}", e)
+                })?,
+            )
+        } else {
+            Arc::new(
+                SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
+                    .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
+            )
+        }
+    } else {
+        Arc::new(
+            SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
+                .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
+        )
+    };
+
+    info!(
+        node_id = config.node_id,
+        shard_id,
+        path = %db_path.display(),
+        has_broadcasts = shard_id == 0 && shard_0_broadcasts.is_some(),
+        "created shared redb storage for shard (single-fsync mode)"
+    );
+
+    let raft: Arc<Raft<AppTypeConfig>> = Arc::new(
+        Raft::new(
+            shard_node_id.into(),
+            raft_config,
+            network_factory.as_ref().clone(),
+            shared_storage.as_ref().clone(),
+            shared_storage.as_ref().clone(),
+        )
+        .await
+        .with_context(|| format!("failed to create Redb-backed Raft for shard {}", shard_id))?,
+    );
+
+    Ok((raft, StateMachineVariant::Redb(shared_storage), None))
+}
+
 /// Create a Raft instance for a single shard.
 ///
 /// This handles storage creation, Raft initialization, and registration
@@ -726,16 +811,12 @@ async fn create_shard_raft_instance(
 ) -> Result<ShardRaftResult> {
     info!(node_id = config.node_id, shard_id, "creating Raft instance for shard");
 
-    // Generate storage paths for this shard
     let paths = ShardStoragePaths::new(data_dir, shard_id);
     paths
         .ensure_dir_exists()
         .map_err(|e| anyhow::anyhow!("failed to create shard directory {}: {}", paths.shard_dir.display(), e))?;
 
-    // Encode shard-aware node ID (shard in upper 16 bits)
     let shard_node_id = encode_shard_node_id(config.node_id, shard_id);
-
-    // Create shard-specific Raft config
     let raft_config = Arc::new(RaftConfig {
         cluster_name: format!("{}-shard-{}", config.cookie, shard_id),
         ..base_raft_config.clone()
@@ -744,72 +825,19 @@ async fn create_shard_raft_instance(
     // Create storage based on backend type
     let (raft, state_machine_variant, ttl_cancel) = match config.storage_backend {
         StorageBackend::InMemory => {
-            let log_store = Arc::new(InMemoryLogStore::default());
-            let state_machine = InMemoryStateMachine::new();
-            let raft: Arc<Raft<AppTypeConfig>> = Arc::new(
-                Raft::new(
-                    shard_node_id.into(),
-                    raft_config.clone(),
-                    network_factory.as_ref().clone(),
-                    log_store.as_ref().clone(),
-                    state_machine.clone(),
-                )
-                .await
-                .with_context(|| format!("failed to create in-memory Raft for shard {}", shard_id))?,
-            );
-            (raft, StateMachineVariant::InMemory(state_machine), None)
+            create_shard_raft_storage_inmemory(shard_node_id, shard_id, raft_config.clone(), network_factory).await?
         }
         StorageBackend::Redb => {
-            let db_path = paths.log_path.with_extension("shared.redb");
-
-            // For shard 0, pass broadcast channels if hooks/docs are enabled
-            let shared_storage = if shard_id == 0 {
-                if let Some((log_sender, snapshot_sender)) = shard_0_broadcasts {
-                    Arc::new(
-                        SharedRedbStorage::with_broadcasts(
-                            &db_path,
-                            Some(log_sender.clone()),
-                            Some(snapshot_sender.clone()),
-                            &shard_node_id.to_string(),
-                        )
-                        .map_err(|e| {
-                            anyhow::anyhow!("failed to open shared redb storage for shard 0 with broadcasts: {}", e)
-                        })?,
-                    )
-                } else {
-                    Arc::new(
-                        SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
-                            .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
-                    )
-                }
-            } else {
-                Arc::new(
-                    SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
-                        .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
-                )
-            };
-
-            info!(
-                node_id = config.node_id,
+            create_shard_raft_storage_redb(
+                config,
+                shard_node_id,
                 shard_id,
-                path = %db_path.display(),
-                has_broadcasts = shard_id == 0 && shard_0_broadcasts.is_some(),
-                "created shared redb storage for shard (single-fsync mode)"
-            );
-
-            let raft: Arc<Raft<AppTypeConfig>> = Arc::new(
-                Raft::new(
-                    shard_node_id.into(),
-                    raft_config.clone(),
-                    network_factory.as_ref().clone(),
-                    shared_storage.as_ref().clone(),
-                    shared_storage.as_ref().clone(),
-                )
-                .await
-                .with_context(|| format!("failed to create Redb-backed Raft for shard {}", shard_id))?,
-            );
-
-            (raft, StateMachineVariant::Redb(shared_storage), None)
+                &paths,
+                raft_config.clone(),
+                network_factory,
+                shard_0_broadcasts,
+            )
+            .await?
         }
     };
 
@@ -829,7 +857,7 @@ async fn create_shard_raft_instance(
     let transport_raft: openraft::Raft<TransportAppTypeConfig> = unsafe { std::mem::transmute(raft.as_ref().clone()) };
     sharded_handler.register_shard(shard_id, transport_raft);
 
-    // Create RaftNode wrapper - use batch config from NodeConfig or default
+    // Create RaftNode wrapper
     let raft_node = if let Some(batch_config) = config.batch_config.clone() {
         Arc::new(RaftNode::with_write_batching(
             shard_node_id.into(),
@@ -841,10 +869,7 @@ async fn create_shard_raft_instance(
         Arc::new(RaftNode::new(shard_node_id.into(), raft.clone(), state_machine_variant.clone()))
     };
 
-    // Create health monitor
     let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
-
-    // Register with ShardedKeyValueStore
     sharded_kv.add_shard(shard_id, raft_node.clone()).await;
 
     Ok(ShardRaftResult {

@@ -64,7 +64,7 @@ pub struct WorkingDirOutput<B: BlobStore> {
     working_dir: PathBuf,
 
     /// Number of worker threads for parallel output.
-    n_workers: usize,
+    n_workers: u32,
 }
 
 impl<B: BlobStore> WorkingDirOutput<B> {
@@ -88,7 +88,7 @@ impl<B: BlobStore> WorkingDirOutput<B> {
     ///
     /// More workers can speed up output for repositories with many files,
     /// but also increase resource usage.
-    pub fn with_workers(mut self, n_workers: usize) -> Self {
+    pub fn with_workers(mut self, n_workers: u32) -> Self {
         self.n_workers = n_workers.max(1);
         self
     }
@@ -144,7 +144,7 @@ impl<B: BlobStore> WorkingDirOutput<B> {
             "",   // prefix: empty = all files
             true, // output_name_conflicts: show conflicting file names
             None, // if_modified_since: always output all files
-            self.n_workers,
+            self.n_workers as usize,
             0, // salt: used for conflict naming
         )
         .map_err(|e| PijulError::OutputFailed {
@@ -220,7 +220,7 @@ impl<B: BlobStore> WorkingDirOutput<B> {
             prefix,
             true,
             None,
-            self.n_workers,
+            self.n_workers as usize,
             0,
         )
         .map_err(|e| PijulError::OutputFailed {

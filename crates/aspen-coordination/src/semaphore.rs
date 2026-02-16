@@ -25,6 +25,18 @@ use crate::error::CoordinationError;
 use crate::types::now_unix_ms;
 use crate::verified;
 
+/// Internal result type for try_acquire operations.
+enum TryAcquireResult {
+    /// Successfully acquired permits (permits_acquired, available_after).
+    Success((u32, u32)),
+    /// CAS conflict, retry required.
+    Retry,
+    /// No permits available.
+    NoPermits,
+    /// Error occurred.
+    Error(String),
+}
+
 /// Semaphore state stored in the key-value store.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SemaphoreState {
@@ -151,137 +163,184 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
             let current = self.read_state(&key).await?;
 
             match current {
-                None => {
-                    // Create new semaphore
-                    if permits > capacity {
-                        bail!("requested permits {} exceeds capacity {}", permits, capacity);
-                    }
-
-                    let now = now_unix_ms();
-                    let state = SemaphoreState {
-                        name: name.to_string(),
-                        capacity,
-                        holders: vec![SemaphoreHolder {
-                            holder_id: holder_id.to_string(),
-                            permits,
-                            acquired_at_ms: now,
-                            deadline_ms: crate::verified::compute_holder_deadline(now, ttl_ms),
-                        }],
-                    };
-                    let new_json = serde_json::to_string(&state)?;
-
-                    match self
-                        .store
-                        .write(WriteRequest {
-                            command: WriteCommand::CompareAndSwap {
-                                key: key.clone(),
-                                expected: None,
-                                new_value: new_json,
-                            },
-                        })
-                        .await
-                    {
-                        Ok(_) => {
-                            debug!(name, holder_id, permits, "semaphore created");
-                            return Ok(Some((permits, capacity - permits)));
-                        }
-                        Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                            continue;
-                        }
-                        Err(e) => bail!("semaphore CAS failed: {}", e),
-                    }
-                }
+                None => match self.try_acquire_create(name, holder_id, permits, capacity, ttl_ms, &key).await? {
+                    TryAcquireResult::Success(result) => return Ok(Some(result)),
+                    TryAcquireResult::Retry => continue,
+                    TryAcquireResult::NoPermits => return Ok(None),
+                    TryAcquireResult::Error(e) => bail!("{}", e),
+                },
                 Some(mut state) => {
                     // Cleanup expired holders
                     state.cleanup_expired();
 
-                    // Check if already holding permits
-                    if let Some(holder) = state.find_holder(holder_id) {
-                        // Refresh TTL and return current permits
-                        let mut new_state = state.clone();
-                        if let Some(h) = new_state.find_holder_mut(holder_id) {
-                            let now = now_unix_ms();
-                            h.deadline_ms = crate::verified::compute_holder_deadline(now, ttl_ms);
-                        }
-
-                        let old_json = serde_json::to_string(&state)?;
-                        let new_json = serde_json::to_string(&new_state)?;
-
-                        match self
-                            .store
-                            .write(WriteRequest {
-                                command: WriteCommand::CompareAndSwap {
-                                    key: key.clone(),
-                                    expected: Some(old_json),
-                                    new_value: new_json,
-                                },
-                            })
-                            .await
-                        {
-                            Ok(_) => {
-                                let available = new_state.available_permits();
-                                return Ok(Some((holder.permits, available)));
-                            }
-                            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                                continue;
-                            }
-                            Err(e) => bail!("semaphore CAS failed: {}", e),
+                    // Check if already holding permits - refresh TTL
+                    if state.find_holder(holder_id).is_some() {
+                        match self.try_acquire_refresh(name, holder_id, ttl_ms, &key, &state).await? {
+                            TryAcquireResult::Success(result) => return Ok(Some(result)),
+                            TryAcquireResult::Retry => continue,
+                            TryAcquireResult::NoPermits => return Ok(None),
+                            TryAcquireResult::Error(e) => bail!("{}", e),
                         }
                     }
 
-                    // Check if enough permits available
-                    let available = state.available_permits();
-                    if available < permits {
-                        return Ok(None);
-                    }
-
-                    // Tiger Style: Enforce holder limit to prevent resource exhaustion
-                    let active_holders = state.holders.len();
-                    if active_holders >= MAX_SEMAPHORE_HOLDERS as usize {
-                        return Err(CoordinationError::TooManySemaphoreHolders {
-                            name: name.to_string(),
-                            count: active_holders as u32,
-                            max: MAX_SEMAPHORE_HOLDERS,
-                        }
-                        .into());
-                    }
-
-                    // Acquire permits
-                    let now = now_unix_ms();
-                    let mut new_state = state.clone();
-                    new_state.holders.push(SemaphoreHolder {
-                        holder_id: holder_id.to_string(),
-                        permits,
-                        acquired_at_ms: now,
-                        deadline_ms: crate::verified::compute_holder_deadline(now, ttl_ms),
-                    });
-
-                    let old_json = serde_json::to_string(&state)?;
-                    let new_json = serde_json::to_string(&new_state)?;
-
-                    match self
-                        .store
-                        .write(WriteRequest {
-                            command: WriteCommand::CompareAndSwap {
-                                key: key.clone(),
-                                expected: Some(old_json),
-                                new_value: new_json,
-                            },
-                        })
-                        .await
-                    {
-                        Ok(_) => {
-                            let new_available = new_state.available_permits();
-                            debug!(name, holder_id, permits, available = new_available, "acquired permits");
-                            return Ok(Some((permits, new_available)));
-                        }
-                        Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                            continue;
-                        }
-                        Err(e) => bail!("semaphore CAS failed: {}", e),
+                    // Try to acquire new permits
+                    match self.try_acquire_new(name, holder_id, permits, ttl_ms, &key, &state).await? {
+                        TryAcquireResult::Success(result) => return Ok(Some(result)),
+                        TryAcquireResult::Retry => continue,
+                        TryAcquireResult::NoPermits => return Ok(None),
+                        TryAcquireResult::Error(e) => bail!("{}", e),
                     }
                 }
             }
+        }
+    }
+
+    /// Create a new semaphore with the first holder.
+    async fn try_acquire_create(
+        &self,
+        name: &str,
+        holder_id: &str,
+        permits: u32,
+        capacity: u32,
+        ttl_ms: u64,
+        key: &str,
+    ) -> Result<TryAcquireResult> {
+        if permits > capacity {
+            return Ok(TryAcquireResult::Error(format!("requested permits {} exceeds capacity {}", permits, capacity)));
+        }
+
+        let now = now_unix_ms();
+        let state = SemaphoreState {
+            name: name.to_string(),
+            capacity,
+            holders: vec![SemaphoreHolder {
+                holder_id: holder_id.to_string(),
+                permits,
+                acquired_at_ms: now,
+                deadline_ms: crate::verified::compute_holder_deadline(now, ttl_ms),
+            }],
+        };
+        let new_json = serde_json::to_string(&state)?;
+
+        match self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::CompareAndSwap {
+                    key: key.to_string(),
+                    expected: None,
+                    new_value: new_json,
+                },
+            })
+            .await
+        {
+            Ok(_) => {
+                debug!(name, holder_id, permits, "semaphore created");
+                Ok(TryAcquireResult::Success((permits, capacity - permits)))
+            }
+            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Ok(TryAcquireResult::Retry),
+            Err(e) => Ok(TryAcquireResult::Error(format!("semaphore CAS failed: {}", e))),
+        }
+    }
+
+    /// Refresh TTL for an existing holder.
+    async fn try_acquire_refresh(
+        &self,
+        name: &str,
+        holder_id: &str,
+        ttl_ms: u64,
+        key: &str,
+        state: &SemaphoreState,
+    ) -> Result<TryAcquireResult> {
+        let holder_permits = state.find_holder(holder_id).map(|h| h.permits).unwrap_or(0);
+
+        let mut new_state = state.clone();
+        if let Some(h) = new_state.find_holder_mut(holder_id) {
+            let now = now_unix_ms();
+            h.deadline_ms = crate::verified::compute_holder_deadline(now, ttl_ms);
+        }
+
+        let old_json = serde_json::to_string(state)?;
+        let new_json = serde_json::to_string(&new_state)?;
+
+        match self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::CompareAndSwap {
+                    key: key.to_string(),
+                    expected: Some(old_json),
+                    new_value: new_json,
+                },
+            })
+            .await
+        {
+            Ok(_) => {
+                let available = new_state.available_permits();
+                debug!(name, holder_id, "refreshed semaphore TTL");
+                Ok(TryAcquireResult::Success((holder_permits, available)))
+            }
+            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Ok(TryAcquireResult::Retry),
+            Err(e) => Ok(TryAcquireResult::Error(format!("semaphore CAS failed: {}", e))),
+        }
+    }
+
+    /// Acquire new permits for a holder not yet in the semaphore.
+    async fn try_acquire_new(
+        &self,
+        name: &str,
+        holder_id: &str,
+        permits: u32,
+        ttl_ms: u64,
+        key: &str,
+        state: &SemaphoreState,
+    ) -> Result<TryAcquireResult> {
+        // Check if enough permits available
+        let available = state.available_permits();
+        if available < permits {
+            return Ok(TryAcquireResult::NoPermits);
+        }
+
+        // Tiger Style: Enforce holder limit to prevent resource exhaustion
+        let active_holders = state.holders.len();
+        if active_holders >= MAX_SEMAPHORE_HOLDERS as usize {
+            return Err(CoordinationError::TooManySemaphoreHolders {
+                name: name.to_string(),
+                count: active_holders as u32,
+                max: MAX_SEMAPHORE_HOLDERS,
+            }
+            .into());
+        }
+
+        // Acquire permits
+        let now = now_unix_ms();
+        let mut new_state = state.clone();
+        new_state.holders.push(SemaphoreHolder {
+            holder_id: holder_id.to_string(),
+            permits,
+            acquired_at_ms: now,
+            deadline_ms: crate::verified::compute_holder_deadline(now, ttl_ms),
+        });
+
+        let old_json = serde_json::to_string(state)?;
+        let new_json = serde_json::to_string(&new_state)?;
+
+        match self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::CompareAndSwap {
+                    key: key.to_string(),
+                    expected: Some(old_json),
+                    new_value: new_json,
+                },
+            })
+            .await
+        {
+            Ok(_) => {
+                let new_available = new_state.available_permits();
+                debug!(name, holder_id, permits, available = new_available, "acquired permits");
+                Ok(TryAcquireResult::Success((permits, new_available)))
+            }
+            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Ok(TryAcquireResult::Retry),
+            Err(e) => Ok(TryAcquireResult::Error(format!("semaphore CAS failed: {}", e))),
         }
     }
 

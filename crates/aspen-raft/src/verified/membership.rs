@@ -103,7 +103,7 @@ pub const fn is_learner_caught_up(lag: u64, threshold: u64) -> bool {
 /// assert_eq!(calculate_quorum_size(5), 3); // 5/2 + 1 = 3
 /// ```
 #[inline]
-pub const fn calculate_quorum_size(voter_count: usize) -> usize {
+pub const fn calculate_quorum_size(voter_count: u32) -> u32 {
     (voter_count / 2) + 1
 }
 
@@ -137,7 +137,7 @@ pub const fn calculate_quorum_size(voter_count: usize) -> usize {
 /// assert!(!can_remove_voter_safely(1)); // 0 remaining < quorum(1)=1
 /// ```
 #[inline]
-pub const fn can_remove_voter_safely(current_voter_count: usize) -> bool {
+pub const fn can_remove_voter_safely(current_voter_count: u32) -> bool {
     if current_voter_count == 0 {
         return false;
     }
@@ -167,8 +167,8 @@ pub const fn can_remove_voter_safely(current_voter_count: usize) -> bool {
 /// assert!(would_exceed_max_voters(100, 100));  // Actually: 100 >= 100, so adding would make 101
 /// ```
 #[inline]
-pub const fn would_exceed_max_voters(current_voter_count: usize, max_voters: u32) -> bool {
-    current_voter_count >= max_voters as usize
+pub const fn would_exceed_max_voters(current_voter_count: u32, max_voters: u32) -> bool {
+    current_voter_count >= max_voters
 }
 
 /// Build a new membership set by promoting a learner and optionally replacing a voter.
@@ -222,9 +222,9 @@ pub fn build_new_membership(
     }
 
     // Enforce maximum voters limit
-    if new_members.len() > max_voters as usize {
+    if new_members.len() as u32 > max_voters {
         return Err(MembershipError::MaxVotersExceeded {
-            current: new_members.len(),
+            current: new_members.len() as u32,
             max: max_voters,
         });
     }
@@ -241,7 +241,7 @@ pub enum MembershipError {
     /// Adding a voter would exceed the maximum allowed.
     MaxVotersExceeded {
         /// Current count after proposed change.
-        current: usize,
+        current: u32,
         /// Maximum allowed voters.
         max: u32,
     },

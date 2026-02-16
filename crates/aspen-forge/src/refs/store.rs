@@ -153,7 +153,10 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
             .write(WriteRequest {
                 command: WriteCommand::Set { key, value },
             })
-            .await?;
+            .await
+            .map_err(|e| ForgeError::KvStorage {
+                message: format!("failed to set ref '{}': {}", ref_name, e),
+            })?;
 
         // Emit event for gossip broadcast
         let event = RefUpdateEvent {
@@ -261,7 +264,10 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
             .write(WriteRequest {
                 command: WriteCommand::Delete { key },
             })
-            .await?;
+            .await
+            .map_err(|e| ForgeError::KvStorage {
+                message: format!("failed to delete ref '{}': {}", ref_name, e),
+            })?;
 
         Ok(())
     }
@@ -285,7 +291,10 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
                 continuation_token: None,
                 limit: Some(MAX_REFS_PER_REPO),
             })
-            .await?;
+            .await
+            .map_err(|e| ForgeError::KvStorage {
+                message: format!("failed to list refs for repo '{}': {}", repo_id.to_hex(), e),
+            })?;
 
         let mut refs = Vec::with_capacity(result.entries.len());
 
