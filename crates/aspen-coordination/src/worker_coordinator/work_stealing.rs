@@ -20,6 +20,10 @@ use crate::verified;
 impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     /// Find workers that can steal work (low load).
     pub async fn find_steal_targets(&self) -> Result<Vec<WorkerInfo>> {
+        // Tiger Style: config thresholds must be valid
+        debug_assert!(self.config.steal_load_threshold > 0.0, "WORK_STEAL: steal_load_threshold must be positive");
+        debug_assert!(self.config.heartbeat_timeout_ms > 0, "WORK_STEAL: heartbeat_timeout_ms must be positive");
+
         let workers = self.workers.read().await;
 
         let targets: Vec<_> = workers
@@ -115,8 +119,12 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             );
 
             // Create typed steal hint with TTL
-            let hint =
-                StealHint::new(target.worker_id.clone(), source.worker_id.clone(), MAX_STEAL_BATCH, source_index);
+            let hint = StealHint::new(
+                target.worker_id.clone(),
+                source.worker_id.clone(),
+                MAX_STEAL_BATCH,
+                source_index as u32,
+            );
 
             // Store hint with composite key
             let key = verified::steal_hint_key(&target.worker_id, &source.worker_id);
@@ -145,6 +153,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     /// Returns all non-expired steal hints where the given worker is the target.
     /// The job manager should call this periodically to check for stealing opportunities.
     pub async fn get_steal_hints(&self, worker_id: &str) -> Result<Vec<StealHint>> {
+        // Tiger Style: argument validation
+        debug_assert!(!worker_id.is_empty(), "WORK_STEAL: worker_id must not be empty for get_steal_hints");
+
         // Scan for hints targeting this worker
         let prefix = verified::steal_hint_prefix(worker_id);
 
@@ -152,7 +163,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             .store
             .scan(aspen_core::ScanRequest {
                 prefix,
-                limit: Some(MAX_STEAL_HINTS_PER_WORKER as u32),
+                limit: Some(MAX_STEAL_HINTS_PER_WORKER),
                 continuation_token: None,
             })
             .await?;
@@ -188,6 +199,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     /// This operation is idempotent - calling it on an already-consumed or
     /// non-existent hint returns success.
     pub async fn consume_steal_hint(&self, target_id: &str, source_id: &str) -> Result<()> {
+        // Tiger Style: argument validation
+        debug_assert!(!target_id.is_empty(), "WORK_STEAL: target_id must not be empty");
+        debug_assert!(!source_id.is_empty(), "WORK_STEAL: source_id must not be empty");
+        debug_assert!(target_id != source_id, "WORK_STEAL: target_id must differ from source_id");
+
         let key = verified::steal_hint_key(target_id, source_id);
 
         // Delete is idempotent - succeeds even if key doesn't exist
@@ -231,7 +247,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             .store
             .scan(aspen_core::ScanRequest {
                 prefix: verified::STEAL_HINT_PREFIX.to_string(),
-                limit: Some(MAX_HINT_CLEANUP_BATCH as u32),
+                limit: Some(MAX_HINT_CLEANUP_BATCH),
                 continuation_token: None,
             })
             .await?;
@@ -268,7 +284,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             .store
             .scan(aspen_core::ScanRequest {
                 prefix: verified::STEAL_HINT_PREFIX.to_string(),
-                limit: Some(MAX_HINT_CLEANUP_BATCH as u32),
+                limit: Some(MAX_HINT_CLEANUP_BATCH),
                 continuation_token: None,
             })
             .await?;

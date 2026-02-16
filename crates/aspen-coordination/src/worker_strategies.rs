@@ -179,8 +179,8 @@ impl LeastLoadedStrategy {
     fn calculate_score(&self, worker: &WorkerInfo) -> f32 {
         calculate_load_score(
             worker.load,
-            worker.queue_depth as u32,
-            worker.max_concurrent as u32,
+            worker.queue_depth,
+            worker.max_concurrent,
             self.load_weight,
             self.queue_weight,
         )
@@ -254,7 +254,7 @@ pub struct AffinityStrategy {
     affinity_map: HashMap<String, String>, // affinity_key -> worker_id
     fallback: Box<dyn LoadBalancer>,
     metrics: StrategyMetrics,
-    max_affinity_entries: usize,
+    max_affinity_entries: u32,
 }
 
 impl AffinityStrategy {
@@ -279,7 +279,7 @@ impl LoadBalancer for AffinityStrategy {
         let start = std::time::Instant::now();
 
         // Clean up periodically
-        if self.affinity_map.len() > self.max_affinity_entries {
+        if self.affinity_map.len() > self.max_affinity_entries as usize {
             self.cleanup_stale_affinities(workers);
         }
 
@@ -489,8 +489,7 @@ impl LoadBalancer for WorkStealingStrategy {
             .iter()
             .enumerate()
             .filter(|(_, w)| {
-                w.can_handle(job_type)
-                    && is_worker_idle_for_stealing(w.load, self.steal_threshold, w.queue_depth as u32)
+                w.can_handle(job_type) && is_worker_idle_for_stealing(w.load, self.steal_threshold, w.queue_depth)
             })
             .collect();
 

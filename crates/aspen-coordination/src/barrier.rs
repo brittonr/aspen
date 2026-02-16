@@ -71,6 +71,7 @@ pub struct BarrierManager<S: KeyValueStore + ?Sized> {
 impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
     /// Create a new barrier manager.
     pub fn new(store: Arc<S>) -> Self {
+        debug_assert!(Arc::strong_count(&store) >= 1, "BARRIER: store Arc must have at least 1 strong reference");
         Self { store }
     }
 
@@ -84,6 +85,11 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
         required_count: u32,
         timeout: Option<Duration>,
     ) -> Result<(u32, String)> {
+        // Tiger Style: argument validation
+        debug_assert!(!name.is_empty(), "BARRIER: name must not be empty");
+        debug_assert!(!participant_id.is_empty(), "BARRIER: participant_id must not be empty");
+        debug_assert!(required_count > 0, "BARRIER: required_count must be positive");
+
         let key = format!("{}{}", BARRIER_PREFIX, name);
         let deadline = timeout.map(|t| std::time::Instant::now() + t);
 
@@ -216,6 +222,10 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
     ///
     /// Returns (remaining_count, phase) on success.
     pub async fn leave(&self, name: &str, participant_id: &str, timeout: Option<Duration>) -> Result<(u32, String)> {
+        // Tiger Style: argument validation
+        debug_assert!(!name.is_empty(), "BARRIER: name must not be empty for leave");
+        debug_assert!(!participant_id.is_empty(), "BARRIER: participant_id must not be empty for leave");
+
         let key = format!("{}{}", BARRIER_PREFIX, name);
         let deadline = timeout.map(|t| std::time::Instant::now() + t);
 

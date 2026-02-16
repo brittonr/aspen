@@ -210,6 +210,9 @@ pub(super) fn spawn_blob_announcer(
         return;
     }
 
+    // Tiger Style: This is a fire-and-forget one-shot task that runs at startup.
+    // It completes after announcing blobs and does not need lifecycle management.
+    // Failure is logged but not fatal - blobs can be announced later via gossip.
     let config_clone = config.clone();
     let blob_store_clone = blob_store.clone();
     let content_discovery_clone = content_discovery.clone();

@@ -102,3 +102,34 @@ pub const DIR_FIELD_CREATED_AT_MS: &str = "created_at_ms";
 
 /// Default layer type for directories.
 pub const DEFAULT_LAYER_TYPE: &str = "default";
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Directory depth must be positive and reasonable
+const _: () = assert!(MAX_DIRECTORY_DEPTH > 0);
+const _: () = assert!(MAX_DIRECTORY_DEPTH <= 256); // sanity check
+
+// Path component must fit in key
+const _: () = assert!(MAX_PATH_COMPONENT_LENGTH_BYTES > 0);
+const _: () = assert!(MAX_PATH_COMPONENT_LENGTH_BYTES <= 1024); // fits in typical key
+
+// List results must be bounded
+const _: () = assert!(MAX_LIST_RESULTS > 0);
+const _: () = assert!(MAX_RECURSIVE_DELETE > 0);
+
+// HCA window sizing must be ordered
+const _: () = assert!(HCA_INITIAL_WINDOW_SIZE > 0);
+const _: () = assert!(HCA_INITIAL_WINDOW_SIZE <= HCA_MEDIUM_WINDOW_SIZE);
+const _: () = assert!(HCA_MEDIUM_WINDOW_SIZE <= HCA_MAX_WINDOW_SIZE);
+const _: () = assert!(HCA_MAX_WINDOW_SIZE > 0);
+
+// HCA thresholds must be ordered
+const _: () = assert!(HCA_MEDIUM_WINDOW_THRESHOLD < HCA_LARGE_WINDOW_THRESHOLD);
+
+// HCA candidates must be positive
+const _: () = assert!(HCA_MAX_CANDIDATES_PER_ATTEMPT > 0);
+
+// Reserved prefixes must be distinct
+const _: () = assert!(DIRECTORY_PREFIX != SYSTEM_RESERVED_PREFIX);

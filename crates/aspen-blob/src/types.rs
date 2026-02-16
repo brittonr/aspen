@@ -77,8 +77,9 @@ pub struct BlobStatus {
     /// Size in bytes (if known).
     #[serde(rename = "size")]
     pub size_bytes: Option<u64>,
-    /// Whether the blob is complete.
-    pub complete: bool,
+    /// Whether the blob is complete (Tiger Style: boolean prefix `is_`).
+    #[serde(alias = "complete")]
+    pub is_complete: bool,
     /// Tags protecting this blob from GC.
     pub tags: Vec<String>,
 }

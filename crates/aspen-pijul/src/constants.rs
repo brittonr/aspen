@@ -221,3 +221,53 @@ pub const MAX_STAGED_FILES: u32 = 10_000;
 /// Tiger Style: Prevents memory exhaustion from oversized metadata files.
 /// These are small metadata files that should never exceed 1 MB.
 pub const MAX_WORKING_DIR_FILE_SIZE: u64 = 1024 * 1024;
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Change limits must be positive
+const _: () = assert!(MAX_CHANGE_SIZE_BYTES > 0);
+const _: () = assert!(MAX_HUNKS_PER_CHANGE > 0);
+const _: () = assert!(MAX_CHANGE_DEPENDENCIES > 0);
+const _: () = assert!(MAX_CHANGE_DAG_DEPTH > 0);
+
+// Repository limits must be positive
+const _: () = assert!(MAX_PATH_LENGTH_BYTES > 0);
+const _: () = assert!(MAX_CHANNELS > 0);
+const _: () = assert!(MAX_CHANNEL_NAME_LENGTH_BYTES > 0);
+const _: () = assert!(MAX_CHANGE_MESSAGE_BYTES > 0);
+const _: () = assert!(MAX_AUTHORS_PER_CHANGE > 0);
+
+// Pristine limits must be positive
+const _: () = assert!(MAX_PRISTINE_SIZE_BYTES > 0);
+const _: () = assert!(MAX_PRISTINE_VERTICES > 0);
+
+// Sync limits must be positive
+const _: () = assert!(MAX_SYNC_BATCH_SIZE > 0);
+const _: () = assert!(MAX_CONCURRENT_CHANGE_FETCHES > 0);
+
+// Cache sizes must be positive
+const _: () = assert!(CHANGE_CACHE_SIZE > 0);
+const _: () = assert!(PRISTINE_CACHE_SIZE > 0);
+
+// Gossip limits must be positive
+const _: () = assert!(PIJUL_GOSSIP_MAX_SUBSCRIBED_REPOS > 0);
+const _: () = assert!(PIJUL_GOSSIP_MAX_STREAM_RETRIES > 0);
+const _: () = assert!(PIJUL_GOSSIP_MAX_CHANGE_HASHES > 0);
+
+// Sync handler limits must be positive
+const _: () = assert!(MAX_CHANGES_PER_REQUEST > 0);
+const _: () = assert!(PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS > 0);
+const _: () = assert!(MAX_DOWNLOAD_RETRIES > 0);
+const _: () = assert!(DOWNLOAD_RETRY_INITIAL_BACKOFF_MS > 0);
+const _: () = assert!(DOWNLOAD_RETRY_INITIAL_BACKOFF_MS <= DOWNLOAD_RETRY_MAX_BACKOFF_MS);
+const _: () = assert!(DOWNLOAD_RETRY_MAX_BACKOFF_MS > 0);
+const _: () = assert!(PIJUL_SYNC_REQUEST_DEDUP_SECS > 0);
+const _: () = assert!(MAX_PENDING_CHANGES > 0);
+const _: () = assert!(MAX_AWAITING_UPDATES_PER_CHANGE > 0);
+const _: () = assert!(MAX_SYNC_COMMANDS > 0);
+
+// Working directory limits must be positive
+const _: () = assert!(MAX_STAGED_FILES > 0);
+const _: () = assert!(MAX_WORKING_DIR_FILE_SIZE > 0);

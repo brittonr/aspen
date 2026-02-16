@@ -118,7 +118,10 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         let connection_pool =
             Arc::new(RaftConnectionPool::new(Arc::clone(&transport), Arc::clone(&failure_detector), use_auth_alpn));
 
-        // Start the background cleanup task for idle connections
+        // Start the background cleanup task for idle connections.
+        // Tiger Style: This task runs for the lifetime of the process and terminates
+        // when the connection pool is dropped. The JoinHandle is not tracked because
+        // the task is intentionally long-lived and shutdown is handled via process exit.
         let pool_clone = Arc::clone(&connection_pool);
         tokio::spawn(async move {
             pool_clone.start_cleanup_task().await;
@@ -130,7 +133,10 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         let (failure_update_tx, mut failure_update_rx) =
             tokio::sync::mpsc::channel::<FailureDetectorUpdate>(FAILURE_DETECTOR_CHANNEL_CAPACITY);
 
-        // Spawn single consumer task for failure detector updates
+        // Spawn single consumer task for failure detector updates.
+        // Tiger Style: This task terminates automatically when failure_update_tx is dropped
+        // (channel closes, recv() returns None). No explicit shutdown needed because the
+        // task lifetime is bounded by the channel sender's lifetime.
         let failure_detector_clone = Arc::clone(&failure_detector);
         tokio::spawn(async move {
             while let Some(update) = failure_update_rx.recv().await {

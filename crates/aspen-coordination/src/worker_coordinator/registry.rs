@@ -31,7 +31,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         // Early validation (optimistic, may have false positives from concurrent registrations)
         {
             let workers = self.workers.read().await;
-            if workers.len() >= self.config.max_workers {
+            if workers.len() >= self.config.max_workers as usize {
                 bail!("maximum worker limit {} reached", self.config.max_workers);
             }
         }
@@ -77,7 +77,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
         // Re-check limit under write lock - if we've hit the limit and this worker
         // isn't already registered (idempotent re-registration is OK), reject
-        if workers.len() >= self.config.max_workers && !workers.contains_key(&worker_id) {
+        if workers.len() >= self.config.max_workers as usize && !workers.contains_key(&worker_id) {
             // Rollback: cleanup KV store (fire-and-forget with logging)
             if let Err(e) = self
                 .store

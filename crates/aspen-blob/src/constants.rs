@@ -65,3 +65,22 @@ pub const MAX_BLOB_WAIT_TIMEOUT: Duration = Duration::from_secs(300);
 ///
 /// Tiger Style: Bounded polling frequency prevents CPU spin.
 pub const BLOB_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Blob threshold must be positive and smaller than max size
+const _: () = assert!(BLOB_THRESHOLD > 0);
+const _: () = assert!((BLOB_THRESHOLD as u64) <= MAX_BLOB_SIZE);
+
+// Max blob size must be positive
+const _: () = assert!(MAX_BLOB_SIZE > 0);
+const _: () = assert!(MAX_BLOB_SIZE <= 100 * 1024 * 1024 * 1024); // max 100GB sanity check
+
+// Concurrent operation limits must be positive
+const _: () = assert!(MAX_CONCURRENT_BLOB_DOWNLOADS > 0);
+const _: () = assert!(MAX_CONCURRENT_BLOB_UPLOADS > 0);
+
+// List size must be positive
+const _: () = assert!(MAX_BLOB_LIST_SIZE > 0);

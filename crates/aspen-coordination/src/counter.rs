@@ -67,9 +67,14 @@ pub struct AtomicCounter<S: KeyValueStore + ?Sized> {
 impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
     /// Create a new atomic counter.
     pub fn new(store: Arc<S>, key: impl Into<String>, config: CounterConfig) -> Self {
+        let key_str = key.into();
+        // Tiger Style: argument validation
+        debug_assert!(!key_str.is_empty(), "COUNTER: key must not be empty");
+        debug_assert!(config.max_retries > 0, "COUNTER: max_retries must be positive");
+
         Self {
             store,
-            key: key.into(),
+            key: key_str,
             config,
         }
     }
@@ -258,9 +263,14 @@ pub struct SignedAtomicCounter<S: KeyValueStore + ?Sized> {
 impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
     /// Create a new signed counter.
     pub fn new(store: Arc<S>, key: impl Into<String>, config: CounterConfig) -> Self {
+        let key_str = key.into();
+        // Tiger Style: argument validation
+        debug_assert!(!key_str.is_empty(), "SIGNED_COUNTER: key must not be empty");
+        debug_assert!(config.max_retries > 0, "SIGNED_COUNTER: max_retries must be positive");
+
         Self {
             store,
-            key: key.into(),
+            key: key_str,
             config,
         }
     }

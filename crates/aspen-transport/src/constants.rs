@@ -57,3 +57,11 @@ pub const MAX_CLIENT_CONNECTIONS: u32 = 50;
 
 /// Maximum concurrent streams per Client connection.
 pub const MAX_CLIENT_STREAMS_PER_CONNECTION: u32 = 10;
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Connection limits must be positive
+const _: () = assert!(MAX_CLIENT_CONNECTIONS > 0);
+const _: () = assert!(MAX_CLIENT_STREAMS_PER_CONNECTION > 0);

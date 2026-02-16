@@ -186,10 +186,13 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
         .unwrap_or_else(|_| std::path::PathBuf::from("/workspace"));
 
     // Generate unique worker ID for this VM instance
+    // SAFETY: SystemTime::now() returns time after UNIX_EPOCH on all supported platforms.
+    // The only failure case is if the system clock is set before 1970, which is an invalid
+    // system configuration that would break many other things. Using unwrap_or(0) as fallback.
     let worker_id = format!(
         "vm-worker-{}-{}",
         endpoint_id.fmt_short(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs()
     );
 
     info!(worker_id, "registering ephemeral worker with cluster");

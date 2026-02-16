@@ -38,3 +38,17 @@ pub const SUBSCRIBE_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Maximum number of historical entries to fetch in a single batch.
 pub const MAX_HISTORICAL_BATCH_SIZE: usize = 1000;
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Subscriber limits must be positive
+const _: () = assert!(MAX_LOG_SUBSCRIBERS > 0);
+const _: () = assert!(LOG_BROADCAST_BUFFER_SIZE > 0);
+const _: () = assert!(MAX_LOG_ENTRY_MESSAGE_SIZE > 0);
+const _: () = assert!(MAX_AUTH_MESSAGE_SIZE > 0);
+const _: () = assert!(MAX_HISTORICAL_BATCH_SIZE > 0);
+
+// Protocol version must be positive
+const _: () = assert!(LOG_SUBSCRIBE_PROTOCOL_VERSION > 0);

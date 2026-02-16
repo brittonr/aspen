@@ -79,10 +79,10 @@ pub enum SqlQueryError {
     NotLeader { leader: Option<u64> },
 
     #[error("query size {size} exceeds maximum of {max} bytes")]
-    QueryTooLarge { size: usize, max: u32 },
+    QueryTooLarge { size: u32, max: u32 },
 
     #[error("parameter count {count} exceeds maximum of {max}")]
-    TooManyParams { count: usize, max: u32 },
+    TooManyParams { count: u32, max: u32 },
 
     #[error("SQL queries not supported by {backend} backend")]
     NotSupported { backend: String },
@@ -92,14 +92,14 @@ pub enum SqlQueryError {
 pub fn validate_sql_request(request: &SqlQueryRequest) -> Result<(), SqlQueryError> {
     if request.query.len() > MAX_SQL_QUERY_SIZE as usize {
         return Err(SqlQueryError::QueryTooLarge {
-            size: request.query.len(),
+            size: request.query.len() as u32,
             max: MAX_SQL_QUERY_SIZE,
         });
     }
 
     if request.params.len() > MAX_SQL_PARAMS as usize {
         return Err(SqlQueryError::TooManyParams {
-            count: request.params.len(),
+            count: request.params.len() as u32,
             max: MAX_SQL_PARAMS,
         });
     }

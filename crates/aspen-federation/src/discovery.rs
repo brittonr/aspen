@@ -649,7 +649,9 @@ impl FederationDiscoveryService {
         let node_keys = vec![self.endpoint.id()];
         let relay_urls: Vec<String> = self.endpoint.addr().relay_urls().map(|u| u.to_string()).collect();
 
-        let announcement = ClusterAnnouncement::new(&self.cluster_identity, node_keys, relay_urls);
+        // Create HLC for timestamping
+        let hlc = aspen_core::hlc::create_hlc(&self.cluster_identity.name());
+        let announcement = ClusterAnnouncement::new(&self.cluster_identity, node_keys, relay_urls, vec![], &hlc);
 
         let announce_bytes = announcement.to_bytes()?;
         if announce_bytes.len() > MAX_CLUSTER_ANNOUNCE_SIZE {
@@ -659,7 +661,7 @@ impl FederationDiscoveryService {
         // Sign and store via BEP-44
         let signing_key = iroh_secret_to_signing_key(self.cluster_identity.secret_key());
         let dht_key = ClusterAnnouncement::to_dht_key(&cluster_key);
-        let seq = (announcement.timestamp_micros / 1_000_000) as i64; // Use seconds as seq
+        let seq = (announcement.hlc_timestamp.to_unix_ms() / 1_000) as i64; // Use seconds as seq
 
         let item = mainline::MutableItem::new(signing_key, &announce_bytes, seq, Some(&dht_key));
 

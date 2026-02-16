@@ -98,7 +98,7 @@ pub(crate) async fn handle_worker_register(
         capabilities,
         load: 0.0,
         active_jobs: 0,
-        max_concurrent: capacity as usize,
+        max_concurrent: capacity as u32,
         queue_depth: 0,
         health: aspen_coordination::HealthStatus::Healthy,
         tags: vec![],
@@ -149,7 +149,7 @@ pub(crate) async fn handle_worker_heartbeat(
 
     // Calculate load based on active jobs (assume max_concurrent from registration)
     // Note: In production, we'd track max_concurrent per worker, but for now estimate
-    let active_count = active_jobs.len();
+    let active_count = active_jobs.len() as u32;
     let load = if active_count == 0 {
         0.0
     } else {

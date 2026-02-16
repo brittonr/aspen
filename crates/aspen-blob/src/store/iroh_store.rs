@@ -465,7 +465,7 @@ impl BlobRead for IrohBlobStore {
         Ok(Some(BlobStatus {
             hash: *hash,
             size_bytes,
-            complete: true,
+            is_complete: true,
             tags,
         }))
     }

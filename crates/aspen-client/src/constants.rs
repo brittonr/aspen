@@ -10,3 +10,12 @@ pub const RETRY_DELAY_MS: u64 = 100;
 
 // Re-export overlay constants
 pub use crate::overlay_constants::*;
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Retry constants must be positive and reasonable
+const _: () = assert!(MAX_RETRIES > 0);
+const _: () = assert!(MAX_RETRIES <= 100); // sanity check
+const _: () = assert!(RETRY_DELAY_MS > 0);

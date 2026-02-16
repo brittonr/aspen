@@ -570,7 +570,9 @@ impl RedbScanExec {
                 // Empty projection means no columns needed - just counting rows
                 Arc::new(arrow::datatypes::Schema::empty())
             }
-            Some(indices) => Arc::new(KV_SCHEMA.project(indices).expect("valid projection")),
+            // SAFETY: DataFusion provides projection indices that are valid for KV_SCHEMA.
+            // Invalid indices would be a bug in DataFusion's query planning.
+            Some(indices) => Arc::new(KV_SCHEMA.project(indices).expect("DataFusion projection indices must be valid")),
             None => KV_SCHEMA.clone(),
         };
 

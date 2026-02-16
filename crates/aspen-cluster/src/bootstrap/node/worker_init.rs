@@ -26,6 +26,8 @@ pub(super) fn spawn_health_monitoring(
     let supervisor_for_health = supervisor.clone();
     let node_id_for_health = config.node_id;
 
+    // Tiger Style: Outer task runs until shutdown_clone is cancelled. The JoinHandle
+    // is not tracked because shutdown is controlled via CancellationToken.
     tokio::spawn(async move {
         let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(32);
         let dropped_count = Arc::new(std::sync::atomic::AtomicU64::new(0));
@@ -33,6 +35,8 @@ pub(super) fn spawn_health_monitoring(
 
         let supervisor_clone = supervisor_for_health.clone();
         let node_id_for_processor = node_id_for_health;
+        // Tiger Style: Inner processor task terminates when tx is dropped (channel closes).
+        // Its lifetime is bounded by the outer task's lifetime.
         tokio::spawn(async move {
             while let Some(reason) = rx.recv().await {
                 supervisor_clone.record_health_failure(&reason).await;

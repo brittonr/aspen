@@ -101,3 +101,36 @@ pub const MAX_HEADS: usize = 100;
 /// Maximum depth of version history to return.
 /// Tiger Style: Bounded to prevent expensive traversals.
 pub const MAX_HISTORY_DEPTH: usize = 1000;
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Document ID size must be consistent
+const _: () = assert!(DOC_ID_BYTES > 0);
+const _: () = assert!(DOC_ID_HEX_LENGTH == DOC_ID_BYTES * 2);
+const _: () = assert!(MAX_CUSTOM_DOC_ID_LENGTH > 0);
+
+// Document size limits must be positive
+const _: () = assert!(MAX_DOCUMENT_SIZE > 0);
+const _: () = assert!(MAX_CHANGE_SIZE > 0);
+const _: () = assert!(MAX_CHANGE_SIZE <= MAX_DOCUMENT_SIZE); // changes should fit in documents
+const _: () = assert!(MAX_BATCH_CHANGES > 0);
+
+// Namespace limits must be positive
+const _: () = assert!(MAX_DOCUMENTS_PER_NAMESPACE > 0);
+const _: () = assert!(MAX_NAMESPACES > 0);
+
+// Sync limits must be positive
+const _: () = assert!(MAX_SYNC_BUFFER > 0);
+const _: () = assert!(MAX_SYNC_MESSAGE_SIZE > 0);
+const _: () = assert!(MAX_SYNC_MESSAGE_SIZE > MAX_DOCUMENT_SIZE); // sync messages include overhead
+
+// Query limits must be positive and ordered
+const _: () = assert!(DEFAULT_LIST_LIMIT > 0);
+const _: () = assert!(DEFAULT_LIST_LIMIT <= MAX_SCAN_RESULTS);
+const _: () = assert!(MAX_SCAN_RESULTS > 0);
+
+// History limits must be positive
+const _: () = assert!(MAX_HEADS > 0);
+const _: () = assert!(MAX_HISTORY_DEPTH > 0);

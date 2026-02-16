@@ -186,3 +186,48 @@ pub const WILDCARD_CHAR: char = '*';
 
 /// Label separator in domain names.
 pub const LABEL_SEPARATOR: char = '.';
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Domain length limits per RFC 1035
+const _: () = assert!(MAX_DOMAIN_LENGTH > 0);
+const _: () = assert!(MAX_DOMAIN_LENGTH <= 253); // RFC 1035 limit
+const _: () = assert!(MAX_LABEL_LENGTH > 0);
+const _: () = assert!(MAX_LABEL_LENGTH <= 63); // RFC 1035 limit
+const _: () = assert!(MIN_LABEL_LENGTH > 0);
+const _: () = assert!(MIN_LABEL_LENGTH <= MAX_LABEL_LENGTH);
+
+// Record limits must be positive
+const _: () = assert!(MAX_RECORDS_PER_DOMAIN > 0);
+const _: () = assert!(MAX_ZONES > 0);
+const _: () = assert!(MAX_BATCH_SIZE > 0);
+
+// TXT record limits per RFC 1035
+const _: () = assert!(MAX_TXT_LENGTH > 0);
+const _: () = assert!(MAX_TXT_LENGTH <= 65535); // RFC limit
+const _: () = assert!(MAX_TXT_STRING_LENGTH > 0);
+const _: () = assert!(MAX_TXT_STRING_LENGTH <= 255); // RFC limit
+const _: () = assert!(MAX_TXT_STRINGS > 0);
+
+// MX/SRV/CNAME targets must fit in domain length
+const _: () = assert!(MAX_MX_EXCHANGE_LENGTH == MAX_DOMAIN_LENGTH);
+const _: () = assert!(MAX_SRV_TARGET_LENGTH == MAX_DOMAIN_LENGTH);
+const _: () = assert!(MAX_CNAME_TARGET_LENGTH == MAX_DOMAIN_LENGTH);
+
+// Record type limits must be positive
+const _: () = assert!(MAX_MX_RECORDS > 0);
+const _: () = assert!(MAX_SRV_RECORDS > 0);
+const _: () = assert!(MAX_NS_RECORDS > 0);
+
+// TTL ordering
+const _: () = assert!(MIN_TTL > 0);
+const _: () = assert!(MIN_TTL <= DEFAULT_TTL);
+const _: () = assert!(DEFAULT_TTL <= MAX_TTL);
+const _: () = assert!(MAX_TTL > 0);
+
+// Client cache limits must be positive
+const _: () = assert!(MAX_CACHED_RECORDS > 0);
+const _: () = assert!(MAX_SUBSCRIBERS > 0);
+const _: () = assert!(MAX_RECONNECT_ATTEMPTS > 0);

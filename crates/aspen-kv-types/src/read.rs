@@ -68,7 +68,9 @@ impl DeleteRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DeleteResult {
     pub key: String,
-    pub deleted: bool,
+    /// Whether the key was deleted (Tiger Style: boolean prefix `is_`).
+    #[serde(alias = "deleted")]
+    pub is_deleted: bool,
 }
 
 #[cfg(test)]

@@ -233,3 +233,55 @@ pub const MAX_CONCURRENT_PUSH_SESSIONS: usize = 64;
 ///
 /// Tiger Style: Automatic cleanup of abandoned sessions.
 pub const PUSH_SESSION_TIMEOUT: Duration = Duration::from_secs(300);
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Git object limits must be positive
+const _: () = assert!(MAX_BLOB_SIZE_BYTES > 0);
+const _: () = assert!(MAX_TREE_SIZE_BYTES > 0);
+const _: () = assert!(MAX_TREE_ENTRIES > 0);
+const _: () = assert!(MAX_COMMIT_MESSAGE_BYTES > 0);
+const _: () = assert!(MAX_COMMIT_PARENTS > 0);
+
+// COB limits must be positive
+const _: () = assert!(MAX_COB_CHANGE_SIZE_BYTES > 0);
+const _: () = assert!(MAX_COB_PARENTS > 0);
+const _: () = assert!(MAX_LABELS > 0);
+const _: () = assert!(MAX_LABEL_LENGTH_BYTES > 0);
+const _: () = assert!(MAX_TITLE_LENGTH_BYTES > 0);
+const _: () = assert!(MAX_COB_CHANGES_TO_RESOLVE > 0);
+
+// Repository limits must be positive
+const _: () = assert!(MAX_DELEGATES > 0);
+const _: () = assert!(MAX_THRESHOLD > 0);
+const _: () = assert!(MAX_THRESHOLD <= MAX_DELEGATES); // threshold can't exceed delegates
+const _: () = assert!(MAX_REPO_NAME_LENGTH_BYTES > 0);
+const _: () = assert!(MAX_REPO_DESCRIPTION_LENGTH_BYTES > 0);
+const _: () = assert!(MAX_REFS_PER_REPO > 0);
+const _: () = assert!(MAX_REF_NAME_LENGTH_BYTES > 0);
+
+// Sync limits must be positive
+const _: () = assert!(MAX_FETCH_BATCH_SIZE > 0);
+const _: () = assert!(MAX_CONCURRENT_FETCHES > 0);
+
+// Gossip limits must be positive
+const _: () = assert!(MAX_GOSSIP_REFS > 0);
+const _: () = assert!(MAX_GOSSIP_MESSAGE_SIZE_BYTES > 0);
+const _: () = assert!(FORGE_GOSSIP_MAX_QUEUED_ANNOUNCEMENTS > 0);
+const _: () = assert!(FORGE_GOSSIP_PER_PEER_RATE_PER_MINUTE > 0);
+const _: () = assert!(FORGE_GOSSIP_PER_PEER_BURST > 0);
+const _: () = assert!(FORGE_GOSSIP_GLOBAL_RATE_PER_MINUTE > 0);
+const _: () = assert!(FORGE_GOSSIP_GLOBAL_BURST > 0);
+const _: () = assert!(FORGE_GOSSIP_MAX_TRACKED_PEERS > 0);
+const _: () = assert!(FORGE_GOSSIP_MAX_SUBSCRIBED_REPOS > 0);
+const _: () = assert!(FORGE_GOSSIP_MAX_STREAM_RETRIES > 0);
+const _: () = assert!(FORGE_GOSSIP_ANNOUNCE_FAILURE_THRESHOLD > 0);
+
+// Global rate must exceed per-peer rate
+const _: () = assert!(FORGE_GOSSIP_GLOBAL_RATE_PER_MINUTE > FORGE_GOSSIP_PER_PEER_RATE_PER_MINUTE);
+const _: () = assert!(FORGE_GOSSIP_GLOBAL_BURST >= FORGE_GOSSIP_PER_PEER_BURST);
+
+// Push session limits must be positive
+const _: () = assert!(MAX_CONCURRENT_PUSH_SESSIONS > 0);

@@ -86,6 +86,9 @@ fn get_value(table: &toml::Table, key: &str) -> Option<String> {
 }
 
 /// Set a value in config using dot notation.
+///
+/// If an intermediate path component exists but is not a table, it will be overwritten
+/// with a new table. This matches the behavior of tools like `git config`.
 fn set_value(table: &mut toml::Table, key: &str, value: &str) {
     let parts: Vec<&str> = key.split('.').collect();
 
@@ -97,11 +100,16 @@ fn set_value(table: &mut toml::Table, key: &str, value: &str) {
     // Navigate/create nested tables
     let mut current = table;
     for part in &parts[..parts.len() - 1] {
-        current = current
-            .entry(part.to_string())
-            .or_insert_with(|| toml::Value::Table(toml::Table::new()))
-            .as_table_mut()
-            .expect("expected table");
+        // or_insert_with guarantees we have a Value here, and we ensure it's a Table
+        // by using or_insert_with to create one if the entry doesn't exist.
+        // If the entry exists but isn't a table, overwrite it with a new table.
+        let entry = current.entry(part.to_string()).or_insert_with(|| toml::Value::Table(toml::Table::new()));
+        if !entry.is_table() {
+            *entry = toml::Value::Table(toml::Table::new());
+        }
+        // SAFETY: We just ensured this is a table above - the condition guarantees
+        // entry.is_table() == true at this point, so as_table_mut() cannot return None.
+        current = entry.as_table_mut().expect("set_value: entry is guaranteed to be a table by preceding logic");
     }
 
     current.insert(parts[parts.len() - 1].to_string(), toml::Value::String(value.to_string()));

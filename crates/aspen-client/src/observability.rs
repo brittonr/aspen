@@ -245,7 +245,8 @@ impl MetricsCollector {
         let histograms = self.histograms.read().await;
         histograms.get(name).map(|values| {
             let mut sorted = values.clone();
-            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            // f64 comparison: use total_cmp for NaN-safe ordering (NaN sorts as greater than all values)
+            sorted.sort_by(|a, b| a.total_cmp(b));
 
             HistogramStats {
                 count: sorted.len(),

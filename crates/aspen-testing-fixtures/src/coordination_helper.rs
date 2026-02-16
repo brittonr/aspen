@@ -122,7 +122,7 @@ impl CoordinationTestHelper {
     /// Delete a key.
     pub async fn delete_key(&self, key: &str) -> bool {
         use aspen_kv_types::DeleteRequest;
-        self.store.delete(DeleteRequest::new(key)).await.map(|r| r.deleted).unwrap_or(false)
+        self.store.delete(DeleteRequest::new(key)).await.map(|r| r.is_deleted).unwrap_or(false)
     }
 
     /// Assert that a lock is not held.

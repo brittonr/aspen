@@ -27,7 +27,10 @@ pub(in super::super) async fn pijul_push(client: &AspenClient, args: PushArgs, j
     let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
 
     // Determine cache directory
-    let cache_dir = args.data_dir.unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+    let cache_dir = match args.data_dir {
+        Some(dir) => dir,
+        None => repo_cache_dir(&repo_id).context("failed to determine cache directory")?,
+    };
 
     // Check if cache exists
     if !cache_dir.exists() {

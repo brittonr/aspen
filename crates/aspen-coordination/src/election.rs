@@ -138,7 +138,20 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
         candidate_id: impl Into<String>,
         config: ElectionConfig,
     ) -> Self {
+        let election_key_str: String = election_key.into();
         let candidate_id_str: String = candidate_id.into();
+
+        // Tiger Style: argument validation
+        assert!(!election_key_str.is_empty(), "ELECTION: election_key must not be empty");
+        assert!(!candidate_id_str.is_empty(), "ELECTION: candidate_id must not be empty");
+        assert!(config.lease_ttl_ms > 0, "ELECTION: lease_ttl_ms must be positive");
+        assert!(
+            config.renew_interval_ms < config.lease_ttl_ms,
+            "ELECTION: renew_interval_ms ({}) must be less than lease_ttl_ms ({})",
+            config.renew_interval_ms,
+            config.lease_ttl_ms
+        );
+
         let lock_config = LockConfig {
             ttl_ms: config.lease_ttl_ms,
             acquire_timeout_ms: config.election_timeout_ms,
@@ -147,7 +160,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
         };
 
         Self {
-            lock: DistributedLock::new(store, election_key, candidate_id_str.clone(), lock_config),
+            lock: DistributedLock::new(store, election_key_str, candidate_id_str.clone(), lock_config),
             config,
             candidate_id: candidate_id_str,
         }

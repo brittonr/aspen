@@ -138,7 +138,7 @@ impl SecretsBackend for AspenSecretsBackend {
 
         let result = self.kv.delete(request).await.map_err(|e| SecretsError::KvStore { reason: e.to_string() })?;
 
-        Ok(result.deleted)
+        Ok(result.is_deleted)
     }
 
     async fn list(&self, prefix: &str) -> Result<Vec<String>> {

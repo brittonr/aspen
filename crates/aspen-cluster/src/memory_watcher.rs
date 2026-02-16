@@ -252,7 +252,8 @@ impl Drop for MemoryWatcher {
 
 /// Read memory statistics from /proc/meminfo.
 fn read_memory_stats() -> Result<MemoryStats, std::io::Error> {
-    let content = std::fs::read_to_string("/proc/meminfo")?;
+    let content = std::fs::read_to_string("/proc/meminfo")
+        .map_err(|e| std::io::Error::other(format!("failed to read /proc/meminfo for memory stats: {e}")))?;
 
     let mut total_kb: u64 = 0;
     let mut available_kb: u64 = 0;

@@ -91,3 +91,33 @@ pub const GOSSIP_MESSAGE_VERSION: u8 = 2;
 ///
 /// 4KB is generous for gossip messages while preventing abuse.
 pub const MAX_GOSSIP_MESSAGE_SIZE: usize = 4096;
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Rate limits must be positive
+const _: () = assert!(GOSSIP_MAX_TRACKED_PEERS > 0);
+const _: () = assert!(GOSSIP_PER_PEER_RATE_PER_MINUTE > 0);
+const _: () = assert!(GOSSIP_PER_PEER_BURST > 0);
+const _: () = assert!(GOSSIP_GLOBAL_RATE_PER_MINUTE > 0);
+const _: () = assert!(GOSSIP_GLOBAL_BURST > 0);
+
+// Global rate must exceed per-peer rate (otherwise one peer could use all capacity)
+const _: () = assert!(GOSSIP_GLOBAL_RATE_PER_MINUTE > GOSSIP_PER_PEER_RATE_PER_MINUTE);
+const _: () = assert!(GOSSIP_GLOBAL_BURST >= GOSSIP_PER_PEER_BURST);
+
+// Stream retry limits must be positive
+const _: () = assert!(GOSSIP_MAX_STREAM_RETRIES > 0);
+
+// Announcement interval ordering
+const _: () = assert!(GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS > 0);
+const _: () = assert!(GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS < GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS);
+const _: () = assert!(GOSSIP_ANNOUNCE_FAILURE_THRESHOLD > 0);
+
+// Protocol version must be positive
+const _: () = assert!(GOSSIP_MESSAGE_VERSION > 0);
+
+// Message size must be positive and reasonable
+const _: () = assert!(MAX_GOSSIP_MESSAGE_SIZE > 0);
+const _: () = assert!(MAX_GOSSIP_MESSAGE_SIZE <= 1024 * 1024); // max 1MB (sanity check)

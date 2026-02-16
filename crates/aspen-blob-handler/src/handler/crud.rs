@@ -221,7 +221,7 @@ pub(crate) async fn handle_list_blobs(
                 .into_iter()
                 .map(|entry| BlobListEntry {
                     hash: entry.hash.to_string(),
-                    size: entry.size_bytes,
+                    size_bytes: entry.size_bytes,
                 })
                 .collect();
 
@@ -281,7 +281,7 @@ pub(crate) async fn handle_get_blob_status(
             found: true,
             hash: Some(status.hash.to_string()),
             size: status.size_bytes,
-            complete: Some(status.complete),
+            complete: Some(status.is_complete),
             tags: Some(status.tags),
             error: None,
         })),

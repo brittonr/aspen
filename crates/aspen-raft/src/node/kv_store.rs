@@ -213,7 +213,7 @@ impl KeyValueStore for RaftNode {
                 let deleted = resp.data.deleted.unwrap_or(false);
                 Ok(DeleteResult {
                     key: request.key,
-                    deleted,
+                    is_deleted: deleted,
                 })
             }
             Err(err) => Err(KeyValueStoreError::Failed {

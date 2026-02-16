@@ -186,9 +186,10 @@ fn rewrite_flake_lock_for_offline(
     input_paths: &HashMap<String, PathBuf>,
 ) -> io::Result<()> {
     let lock_path = workspace.join("flake.lock");
-    let lock_content = std::fs::read_to_string(&lock_path)?;
+    let lock_content = std::fs::read_to_string(&lock_path)
+        .map_err(|e| io::Error::other(format!("failed to read {}: {e}", lock_path.display())))?;
     let mut lock: serde_json::Value = serde_json::from_str(&lock_content)
-        .map_err(|e| io::Error::other(format!("failed to parse flake.lock: {e}")))?;
+        .map_err(|e| io::Error::other(format!("failed to parse {}: {e}", lock_path.display())))?;
 
     if let Some(nodes) = lock.get_mut("nodes").and_then(|v| v.as_object_mut()) {
         for (node_name, node_value) in nodes.iter_mut() {
@@ -203,10 +204,13 @@ fn rewrite_flake_lock_for_offline(
     }
 
     let modified_lock = serde_json::to_string_pretty(&lock)
-        .map_err(|e| io::Error::other(format!("failed to serialize flake.lock: {e}")))?;
+        .map_err(|e| io::Error::other(format!("failed to serialize {}: {e}", lock_path.display())))?;
     let temp_path = lock_path.with_extension("lock.tmp");
-    std::fs::write(&temp_path, &modified_lock)?;
-    std::fs::rename(&temp_path, &lock_path)?;
+    std::fs::write(&temp_path, &modified_lock)
+        .map_err(|e| io::Error::other(format!("failed to write {}: {e}", temp_path.display())))?;
+    std::fs::rename(&temp_path, &lock_path).map_err(|e| {
+        io::Error::other(format!("failed to rename {} to {}: {e}", temp_path.display(), lock_path.display()))
+    })?;
 
     Ok(())
 }

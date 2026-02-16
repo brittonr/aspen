@@ -336,6 +336,49 @@ struct ShardLoopResults {
 /// - Sharding is not enabled in config
 /// - Base node bootstrap fails
 /// - Any shard's Raft instance fails to initialize
+/// Build the final ShardedNodeHandle from all bootstrapped resources.
+fn bootstrap_sharded_node_build_handle(
+    base: BaseNodeResources,
+    sharding: ShardingResources,
+    content_discovery: Option<crate::content_discovery::ContentDiscoveryService>,
+    content_discovery_cancel: Option<CancellationToken>,
+    shard_0_broadcasts: Shard0Broadcasts,
+    #[cfg(feature = "docs")] peer_manager: Option<Arc<aspen_docs::PeerManager>>,
+    hooks: HookResources,
+    supervisor: Arc<Supervisor>,
+    topology: Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>,
+) -> ShardedNodeHandle {
+    let gossip_topic_id = base.discovery.gossip_topic_id;
+    ShardedNodeHandle {
+        base,
+        root_token: None,
+        sharding,
+        discovery: DiscoveryResources {
+            gossip_discovery: None,
+            gossip_topic_id,
+            content_discovery,
+            content_discovery_cancel,
+        },
+        sync: SyncResources {
+            log_broadcast: shard_0_broadcasts.map(|(log, _)| log),
+            docs_exporter_cancel: None,
+            sync_event_listener_cancel: None,
+            docs_sync_service_cancel: None,
+            #[cfg(feature = "docs")]
+            docs_sync: None,
+            #[cfg(feature = "docs")]
+            peer_manager,
+        },
+        worker: WorkerResources {
+            #[cfg(feature = "jobs")]
+            worker_service: None,
+            worker_service_cancel: None,
+        },
+        hooks,
+        supervisor,
+    }
+}
+
 pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNodeHandle> {
     config.apply_security_defaults();
     ensure!(config.sharding.is_enabled, "sharding must be enabled to use bootstrap_sharded_node");
@@ -366,7 +409,6 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
 
     let shard_0_broadcasts = create_shard_0_broadcasts(&config, &local_shards);
 
-    // Create all shard Raft instances
     let shard_results = create_all_shard_instances(
         &config,
         &local_shards,
@@ -408,45 +450,130 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     )
     .await?;
 
-    // Extract gossip_topic_id before moving base
-    let gossip_topic_id = base.discovery.gossip_topic_id;
+    let sharding = ShardingResources {
+        shard_nodes,
+        sharded_kv,
+        sharded_handler,
+        health_monitors,
+        ttl_cleanup_cancels,
+        shard_state_machines,
+        topology: Some(topology.clone()),
+    };
 
-    Ok(ShardedNodeHandle {
+    Ok(bootstrap_sharded_node_build_handle(
         base,
-        root_token: None,
-        sharding: ShardingResources {
-            shard_nodes,
-            sharded_kv,
-            sharded_handler,
-            health_monitors,
-            ttl_cleanup_cancels,
-            shard_state_machines,
-            topology: Some(topology),
-        },
-        discovery: DiscoveryResources {
-            gossip_discovery: None,
-            gossip_topic_id,
-            content_discovery,
-            content_discovery_cancel,
-        },
-        sync: SyncResources {
-            log_broadcast: shard_0_broadcasts.map(|(log, _)| log),
-            docs_exporter_cancel: None,
-            sync_event_listener_cancel: None,
-            docs_sync_service_cancel: None,
-            #[cfg(feature = "docs")]
-            docs_sync: None,
-            #[cfg(feature = "docs")]
-            peer_manager,
-        },
-        worker: WorkerResources {
-            #[cfg(feature = "jobs")]
-            worker_service: None,
-            worker_service_cancel: None,
-        },
+        sharding,
+        content_discovery,
+        content_discovery_cancel,
+        shard_0_broadcasts,
+        #[cfg(feature = "docs")]
+        peer_manager,
         hooks,
         supervisor,
-    })
+        topology,
+    ))
+}
+
+/// Initialize metadata store and ensure data directory exists.
+fn bootstrap_base_node_init_metadata(config: &NodeConfig) -> Result<Arc<MetadataStore>> {
+    let data_dir = config.data_dir.as_ref().ok_or_else(|| anyhow::anyhow!("data_dir must be set"))?;
+    std::fs::create_dir_all(data_dir)
+        .map_err(|e| anyhow::anyhow!("failed to create data directory {}: {}", data_dir.display(), e))?;
+    let metadata_db_path = data_dir.join("metadata.redb");
+    Ok(Arc::new(MetadataStore::new(&metadata_db_path)?))
+}
+
+/// Derive gossip topic ID from config, preferring cluster ticket if available.
+fn bootstrap_base_node_derive_topic_id(config: &NodeConfig) -> TopicId {
+    if let Some(ref ticket_str) = config.iroh.gossip_ticket {
+        match AspenClusterTicket::deserialize(ticket_str) {
+            Ok(ticket) => {
+                info!(
+                    cluster_id = %ticket.cluster_id,
+                    bootstrap_peers = ticket.bootstrap.len(),
+                    "using topic ID from cluster ticket"
+                );
+                return ticket.topic_id;
+            }
+            Err(err) => {
+                warn!(error = %err, "failed to parse gossip ticket, falling back to cookie-derived topic");
+            }
+        }
+    }
+    derive_topic_id_from_cookie(&config.cookie)
+}
+
+/// Setup gossip discovery if enabled.
+async fn bootstrap_base_node_setup_gossip(
+    config: &NodeConfig,
+    gossip_topic_id: TopicId,
+    iroh_manager: &Arc<IrohEndpointManager>,
+    network_factory: Arc<IrpcRaftNetworkFactory>,
+) -> Option<GossipPeerDiscovery> {
+    if !config.iroh.enable_gossip {
+        info!(
+            node_id = config.node_id,
+            topic_id = %hex::encode(gossip_topic_id.as_bytes()),
+            "gossip discovery disabled by configuration"
+        );
+        return None;
+    }
+
+    info!(
+        node_id = config.node_id,
+        topic_id = %hex::encode(gossip_topic_id.as_bytes()),
+        "starting gossip discovery"
+    );
+
+    match spawn_gossip_peer_discovery(gossip_topic_id, config.node_id.into(), iroh_manager, Some(network_factory)).await
+    {
+        Ok(discovery) => {
+            info!(
+                node_id = config.node_id,
+                topic_id = %hex::encode(gossip_topic_id.as_bytes()),
+                "gossip discovery started successfully"
+            );
+            Some(discovery)
+        }
+        Err(err) => {
+            warn!(error = %err, node_id = config.node_id, "failed to start gossip discovery, continuing without it");
+            None
+        }
+    }
+}
+
+/// Initialize blob store if enabled.
+#[cfg(feature = "blob")]
+async fn bootstrap_base_node_init_blobs(
+    config: &NodeConfig,
+    iroh_manager: &Arc<IrohEndpointManager>,
+) -> Option<Arc<IrohBlobStore>> {
+    if !config.blobs.is_enabled {
+        info!(node_id = config.node_id, "blob store disabled by configuration");
+        return None;
+    }
+
+    let data_dir = match config.data_dir.as_ref() {
+        Some(d) => d,
+        None => return None,
+    };
+
+    let blobs_dir = data_dir.join("blobs");
+    if let Err(e) = std::fs::create_dir_all(&blobs_dir) {
+        warn!(error = %e, path = %blobs_dir.display(), "failed to create blobs directory");
+        return None;
+    }
+
+    match IrohBlobStore::new(&blobs_dir, iroh_manager.endpoint().clone()).await {
+        Ok(store) => {
+            info!(node_id = config.node_id, path = %blobs_dir.display(), "blob store initialized");
+            Some(Arc::new(store))
+        }
+        Err(err) => {
+            warn!(error = ?err, node_id = config.node_id, "failed to initialize blob store, continuing without it");
+            None
+        }
+    }
 }
 
 /// Bootstrap base node resources (Iroh, metadata, gossip) without Raft.
@@ -456,138 +583,27 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
 async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
     info!(node_id = config.node_id, "bootstrapping base node resources (Iroh, metadata, gossip)");
 
-    // Initialize metadata store
-    let data_dir = config.data_dir.as_ref().ok_or_else(|| anyhow::anyhow!("data_dir must be set"))?;
+    let metadata_store = bootstrap_base_node_init_metadata(config)?;
 
-    // Ensure data directory exists
-    std::fs::create_dir_all(data_dir)
-        .map_err(|e| anyhow::anyhow!("failed to create data directory {}: {}", data_dir.display(), e))?;
-
-    // MetadataStore expects a path to the database file, not directory
-    let metadata_db_path = data_dir.join("metadata.redb");
-    let metadata_store = Arc::new(MetadataStore::new(&metadata_db_path)?);
-
-    // Create Iroh endpoint manager
     let iroh_config = super::network_init::build_iroh_config_from_node_config(config)?;
     let iroh_manager = Arc::new(IrohEndpointManager::new(iroh_config).await?);
-    info!(
-        node_id = config.node_id,
-        endpoint_id = %iroh_manager.node_addr().id,
-        "created Iroh endpoint"
-    );
+    info!(node_id = config.node_id, endpoint_id = %iroh_manager.node_addr().id, "created Iroh endpoint");
 
-    // Parse peer addresses from config if provided
     let peer_addrs = super::network_init::parse_peer_addresses(&config.peers)?;
 
-    // Iroh-Native Authentication: No client-side auth needed
-    // Authentication is handled at connection accept time by the server.
-    // The server validates the remote NodeId (verified by QUIC TLS handshake)
-    // against the TrustedPeersRegistry populated from Raft membership.
     if config.iroh.enable_raft_auth {
         info!("Raft authentication enabled - using Iroh-native NodeId verification and RAFT_AUTH_ALPN");
     }
 
-    // Create network factory with appropriate ALPN based on auth config
-    // When auth is enabled, use RAFT_AUTH_ALPN (raft-auth) for connections
     let network_factory =
         Arc::new(IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs, config.iroh.enable_raft_auth));
 
-    // Derive gossip topic ID
-    let gossip_topic_id = if let Some(ref ticket_str) = config.iroh.gossip_ticket {
-        match AspenClusterTicket::deserialize(ticket_str) {
-            Ok(ticket) => {
-                info!(
-                    cluster_id = %ticket.cluster_id,
-                    bootstrap_peers = ticket.bootstrap.len(),
-                    "using topic ID from cluster ticket"
-                );
-                ticket.topic_id
-            }
-            Err(err) => {
-                warn!(
-                    error = %err,
-                    "failed to parse gossip ticket, falling back to cookie-derived topic"
-                );
-                derive_topic_id_from_cookie(&config.cookie)
-            }
-        }
-    } else {
-        derive_topic_id_from_cookie(&config.cookie)
-    };
+    let gossip_topic_id = bootstrap_base_node_derive_topic_id(config);
+    let gossip_discovery =
+        bootstrap_base_node_setup_gossip(config, gossip_topic_id, &iroh_manager, network_factory.clone()).await;
 
-    // Setup gossip discovery if enabled
-    let gossip_discovery = if config.iroh.enable_gossip {
-        info!(
-            node_id = config.node_id,
-            topic_id = %hex::encode(gossip_topic_id.as_bytes()),
-            "starting gossip discovery"
-        );
-
-        match spawn_gossip_peer_discovery(
-            gossip_topic_id,
-            config.node_id.into(),
-            &iroh_manager,
-            Some(network_factory.clone()),
-        )
-        .await
-        {
-            Ok(discovery) => {
-                info!(
-                    node_id = config.node_id,
-                    topic_id = %hex::encode(gossip_topic_id.as_bytes()),
-                    "gossip discovery started successfully"
-                );
-                Some(discovery)
-            }
-            Err(err) => {
-                warn!(
-                    error = %err,
-                    node_id = config.node_id,
-                    "failed to start gossip discovery, continuing without it"
-                );
-                None
-            }
-        }
-    } else {
-        info!(
-            node_id = config.node_id,
-            topic_id = %hex::encode(gossip_topic_id.as_bytes()),
-            "gossip discovery disabled by configuration"
-        );
-        None
-    };
-
-    // Initialize blob store if enabled
     #[cfg(feature = "blob")]
-    let blob_store = if config.blobs.is_enabled {
-        let blobs_dir = data_dir.join("blobs");
-        std::fs::create_dir_all(&blobs_dir)
-            .map_err(|e| anyhow::anyhow!("failed to create blobs directory {}: {}", blobs_dir.display(), e))?;
-
-        match IrohBlobStore::new(&blobs_dir, iroh_manager.endpoint().clone()).await {
-            Ok(store) => {
-                info!(
-                    node_id = config.node_id,
-                    path = %blobs_dir.display(),
-                    "blob store initialized"
-                );
-                Some(Arc::new(store))
-            }
-            Err(err) => {
-                warn!(
-                    error = ?err,
-                    node_id = config.node_id,
-                    "failed to initialize blob store, continuing without it"
-                );
-                None
-            }
-        }
-    } else {
-        info!(node_id = config.node_id, "blob store disabled by configuration");
-        None
-    };
-
-    let shutdown_token = CancellationToken::new();
+    let blob_store = bootstrap_base_node_init_blobs(config, &iroh_manager).await;
 
     Ok(BaseNodeResources {
         config: config.clone(),
@@ -595,7 +611,7 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
         network: NetworkResources {
             iroh_manager,
             network_factory,
-            rpc_server: None, // Not used in sharded mode
+            rpc_server: None,
             #[cfg(feature = "blob")]
             blob_store,
         },
@@ -603,7 +619,7 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
             gossip_discovery,
             gossip_topic_id,
         },
-        shutdown_token,
+        shutdown_token: CancellationToken::new(),
     })
 }
 

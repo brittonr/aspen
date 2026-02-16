@@ -23,11 +23,11 @@ pub struct WorkerInfo {
     /// Current load (0.0 = idle, 1.0 = fully loaded).
     pub load: f32,
     /// Number of jobs currently processing.
-    pub active_jobs: usize,
+    pub active_jobs: u32,
     /// Maximum concurrent jobs.
-    pub max_concurrent: usize,
+    pub max_concurrent: u32,
     /// Queue depth at this worker.
-    pub queue_depth: usize,
+    pub queue_depth: u32,
     /// Worker health status.
     pub health: HealthStatus,
     /// Custom tags for routing.
@@ -77,9 +77,9 @@ pub struct WorkerGroup {
     /// Required capabilities for group members.
     pub required_capabilities: Vec<String>,
     /// Minimum members needed for group to be active.
-    pub min_members: usize,
+    pub min_members: u32,
     /// Maximum members allowed.
-    pub max_members: usize,
+    pub max_members: u32,
     /// Group creation timestamp.
     pub created_at_ms: u64,
     /// Group state.
@@ -111,18 +111,18 @@ pub struct StealHint {
     /// Source worker ID (the worker to steal from).
     pub source_worker_id: String,
     /// Suggested batch size for stealing.
-    pub batch_size: usize,
+    pub batch_size: u32,
     /// When this hint was created (Unix ms).
     pub created_at_ms: u64,
     /// When this hint expires (Unix ms).
     pub expires_at_ms: u64,
     /// Round-robin index used for source selection (for debugging).
-    pub source_index: usize,
+    pub source_index: u32,
 }
 
 impl StealHint {
     /// Create a new steal hint with TTL.
-    pub fn new(target_worker_id: String, source_worker_id: String, batch_size: usize, source_index: usize) -> Self {
+    pub fn new(target_worker_id: String, source_worker_id: String, batch_size: u32, source_index: u32) -> Self {
         let now = now_unix_ms();
         Self {
             target_worker_id,
@@ -176,15 +176,15 @@ pub struct WorkerCoordinatorConfig {
     /// Load threshold for stealing (steal if load < threshold).
     pub steal_load_threshold: f32,
     /// Queue depth threshold for stealing source.
-    pub steal_queue_threshold: usize,
+    pub steal_queue_threshold: u32,
     /// Enable automatic failover.
     pub enable_failover: bool,
     /// Failover check interval in milliseconds.
     pub failover_check_interval_ms: u64,
     /// Maximum workers to track.
-    pub max_workers: usize,
+    pub max_workers: u32,
     /// Maximum groups to manage.
-    pub max_groups: usize,
+    pub max_groups: u32,
 }
 
 impl Default for WorkerCoordinatorConfig {
@@ -226,9 +226,9 @@ pub struct WorkerStats {
     /// Current load.
     pub load: f32,
     /// Active jobs.
-    pub active_jobs: usize,
+    pub active_jobs: u32,
     /// Queue depth.
-    pub queue_depth: usize,
+    pub queue_depth: u32,
     /// Total processed.
     pub total_processed: u64,
     /// Total failed.

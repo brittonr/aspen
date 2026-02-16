@@ -132,8 +132,9 @@ pub struct DocsDeleteResultResponse {
 pub struct DocsListEntry {
     /// The key.
     pub key: String,
-    /// Size of the value in bytes.
-    pub size: u64,
+    /// Size of the value in bytes (Tiger Style: units in name).
+    #[serde(alias = "size")]
+    pub size_bytes: u64,
     /// Content hash (hex-encoded).
     pub hash: String,
 }

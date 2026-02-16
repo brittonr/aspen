@@ -79,9 +79,15 @@ pub struct SequenceGenerator<S: KeyValueStore + ?Sized> {
 impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
     /// Create a new sequence generator.
     pub fn new(store: Arc<S>, key: impl Into<String>, config: SequenceConfig) -> Self {
+        let key_str = key.into();
+        // Tiger Style: argument validation
+        assert!(!key_str.is_empty(), "SEQUENCE: key must not be empty");
+        assert!(config.batch_size > 0, "SEQUENCE: batch_size must be positive");
+        assert!(config.start_value > 0, "SEQUENCE: start_value must be positive");
+
         Self {
             store,
-            key: key.into(),
+            key: key_str,
             state: Mutex::new(SequenceState { next: 0, batch_end: 0 }),
             config,
         }
@@ -97,7 +103,12 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
             let mut state = self.state.lock().await;
             if !should_refill_batch(state.next, state.batch_end) {
                 let id = state.next;
+                debug_assert!(id > 0, "SEQUENCE: generated ID must be positive");
                 state.next = state.next.saturating_add(1);
+                debug_assert!(
+                    state.next <= state.batch_end,
+                    "SEQUENCE: next must not exceed batch_end after increment"
+                );
                 return Ok(id);
             }
         }
@@ -132,40 +143,16 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
     /// - Range is disjoint from all previously reserved ranges
     /// - current_value strictly increases
     pub async fn reserve(&self, count: u64) -> Result<u64, CoordinationError> {
-        // INVARIANT: count must be > 0 for valid range
-        requires! {
-            count > 0
-        }
+        requires! { count > 0 }
 
         let mut attempt = 0u32;
         let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
 
         loop {
-            // Read current sequence value using pure parsing
-            let current = match self.store.read(ReadRequest::new(self.key.clone())).await {
-                Ok(result) => {
-                    let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
-                    match parse_sequence_value(&value_str) {
-                        ParseSequenceResult::Value(v) => v,
-                        ParseSequenceResult::Empty => compute_initial_current(self.config.start_value),
-                        ParseSequenceResult::Invalid => {
-                            return Err(CoordinationError::CorruptedData {
-                                key: self.key.clone(),
-                                reason: "not a valid u64".to_string(),
-                            });
-                        }
-                    }
-                }
-                Err(KeyValueStoreError::NotFound { .. }) => compute_initial_current(self.config.start_value),
-                Err(e) => return Err(CoordinationError::Storage { source: e }),
-            };
+            let current = self.reserve_read_current().await?;
 
-            // Ghost: capture pre-state for proof
-            ghost! {
-                let pre_current = current;
-            }
+            ghost! { let pre_current = current; }
 
-            // Check for overflow using pure function - INVARIANT 4: Overflow Safety
             let new_value = match compute_new_sequence_value(current, count) {
                 SequenceReservationResult::Success { new_value } => new_value,
                 SequenceReservationResult::Overflow => {
@@ -173,64 +160,17 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
                 }
             };
 
-            // Compute expected value for CAS using pure function
             let expected = if is_initial_reservation(current, self.config.start_value) {
                 None
             } else {
                 Some(current.to_string())
             };
 
-            match self
-                .store
-                .write(WriteRequest {
-                    command: WriteCommand::CompareAndSwap {
-                        key: self.key.clone(),
-                        expected,
-                        new_value: new_value.to_string(),
-                    },
-                })
-                .await
-            {
-                Ok(_) => {
-                    // Proof: verify postconditions
-                    proof! {
-                        // INVARIANT 2: Monotonicity - new value > old value
-                        assert(new_value > current);
-                        // INVARIANT 3: Disjointness - returned range starts after previous
-                        assert(current + 1 > current);
-                    }
-
-                    // Runtime assertions for sequence invariants
-                    debug_assert!(
-                        new_value > current,
-                        "SEQ-2: sequence values must be monotonically increasing: new={}, current={}",
-                        new_value,
-                        current
-                    );
-
-                    // Compute range start using pure function
-                    let range_start = compute_range_start(current)
-                        .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
-
-                    debug_assert!(range_start >= 1, "SEQ-1: range start must be positive, got {}", range_start);
-
-                    debug!(
-                        key = %self.key,
-                        range_start,
-                        range_end = new_value,
-                        count,
-                        "reserved sequence range"
-                    );
-
-                    // Ensures: returns start of reserved range [range_start, new_value]
-                    ensures! {
-                        // Range is valid and disjoint from all previous
-                        true
-                    }
-
-                    return Ok(range_start);
+            match self.reserve_cas(expected, new_value).await {
+                Ok(()) => {
+                    return self.reserve_finalize(current, new_value, count);
                 }
-                Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
+                Err(CoordinationError::CasConflict) => {
                     attempt += 1;
                     if attempt >= MAX_CAS_RETRIES {
                         return Err(CoordinationError::MaxRetriesExceeded {
@@ -241,9 +181,73 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
                     tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
                     backoff_ms = (backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
                 }
-                Err(e) => return Err(CoordinationError::Storage { source: e }),
+                Err(e) => return Err(e),
             }
         }
+    }
+
+    /// Read current sequence value from store.
+    async fn reserve_read_current(&self) -> Result<u64, CoordinationError> {
+        match self.store.read(ReadRequest::new(self.key.clone())).await {
+            Ok(result) => {
+                let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
+                match parse_sequence_value(&value_str) {
+                    ParseSequenceResult::Value(v) => Ok(v),
+                    ParseSequenceResult::Empty => Ok(compute_initial_current(self.config.start_value)),
+                    ParseSequenceResult::Invalid => Err(CoordinationError::CorruptedData {
+                        key: self.key.clone(),
+                        reason: "not a valid u64".to_string(),
+                    }),
+                }
+            }
+            Err(KeyValueStoreError::NotFound { .. }) => Ok(compute_initial_current(self.config.start_value)),
+            Err(e) => Err(CoordinationError::Storage { source: e }),
+        }
+    }
+
+    /// Execute CAS for sequence reservation.
+    async fn reserve_cas(&self, expected: Option<String>, new_value: u64) -> Result<(), CoordinationError> {
+        match self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::CompareAndSwap {
+                    key: self.key.clone(),
+                    expected,
+                    new_value: new_value.to_string(),
+                },
+            })
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Err(CoordinationError::CasConflict),
+            Err(e) => Err(CoordinationError::Storage { source: e }),
+        }
+    }
+
+    /// Finalize reservation and return range start.
+    fn reserve_finalize(&self, current: u64, new_value: u64, count: u64) -> Result<u64, CoordinationError> {
+        proof! {
+            assert(new_value > current);
+            assert(current + 1 > current);
+        }
+
+        debug_assert!(
+            new_value > current,
+            "SEQ-2: sequence values must be monotonically increasing: new={}, current={}",
+            new_value,
+            current
+        );
+
+        let range_start = compute_range_start(current)
+            .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
+
+        debug_assert!(range_start >= 1, "SEQ-1: range start must be positive, got {}", range_start);
+
+        debug!(key = %self.key, range_start, range_end = new_value, count, "reserved sequence range");
+
+        ensures! { true }
+
+        Ok(range_start)
     }
 
     /// Get current sequence value without incrementing.

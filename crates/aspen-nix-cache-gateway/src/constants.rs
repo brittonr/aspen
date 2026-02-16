@@ -40,3 +40,18 @@ pub const DEFAULT_CACHE_PRIORITY: u32 = 30;
 
 /// Default store directory.
 pub const DEFAULT_STORE_DIR: &str = "/nix/store";
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Chunk size must be positive and power of 2 for efficiency
+const _: () = assert!(STREAM_CHUNK_SIZE > 0);
+const _: () = assert!(STREAM_CHUNK_SIZE.count_ones() == 1); // power of 2
+
+// Connection limits must be positive
+const _: () = assert!(MAX_GATEWAY_CONNECTIONS > 0);
+const _: () = assert!(MAX_STREAMS_PER_CONNECTION > 0);
+
+// Priority must be reasonable (lower = higher priority)
+const _: () = assert!(DEFAULT_CACHE_PRIORITY > 0);

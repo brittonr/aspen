@@ -169,7 +169,9 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
                 && let Some(ref integrity) = stored.integrity
             {
                 // Verify the incoming data matches the stored integrity
-                let meta_bytes = bincode::serialize(meta).map_err(|e| io::Error::other(e.to_string()))?;
+                let meta_bytes = bincode::serialize(meta).map_err(|e| {
+                    io::Error::other(format!("failed to serialize snapshot metadata for integrity check: {e}"))
+                })?;
                 if !integrity.verify(&meta_bytes, &data) {
                     tracing::error!(
                         snapshot_id = %meta.snapshot_id,
@@ -186,8 +188,9 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
         }
 
         // Deserialize snapshot data
-        let kv_entries: BTreeMap<String, KvEntry> =
-            bincode::deserialize(&data).map_err(|e| io::Error::other(e.to_string()))?;
+        let kv_entries: BTreeMap<String, KvEntry> = bincode::deserialize(&data).map_err(|e| {
+            io::Error::other(format!("failed to deserialize snapshot KV entries ({} bytes): {e}", data.len()))
+        })?;
         let kv_entries_count = kv_entries.len();
 
         // Tiger Style: installed snapshot must not exceed entry limit

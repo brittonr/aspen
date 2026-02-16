@@ -111,7 +111,7 @@ impl BlobRead for InMemoryBlobStore {
         Ok(blobs.get(hash).map(|b| BlobStatus {
             hash: *hash,
             size_bytes: Some(b.len() as u64),
-            complete: true,
+            is_complete: true,
             tags: Vec::new(),
         }))
     }

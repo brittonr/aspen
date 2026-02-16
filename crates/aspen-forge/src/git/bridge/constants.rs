@@ -118,3 +118,25 @@ pub const MAX_HELPER_LINE_SIZE: usize = 64 * 1024; // 64 KB
 ///
 /// Tiger Style: Limits memory usage during ref listing.
 pub const MAX_LISTED_REFS: usize = 10_000;
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Concurrency limits must be positive
+const _: () = assert!(MAX_IMPORT_CONCURRENCY > 0);
+const _: () = assert!(MAX_IMPORT_CONCURRENCY <= 256); // sanity check
+
+// Hash cache limits must be positive
+const _: () = assert!(MAX_HASH_CACHE_SIZE > 0);
+const _: () = assert!(MAX_HASH_MAPPING_BATCH_SIZE > 0);
+
+// Import/export limits must be positive
+const _: () = assert!(MAX_IMPORT_BATCH_SIZE > 0);
+const _: () = assert!(MAX_PUSH_OBJECTS > 0);
+const _: () = assert!(MAX_DAG_TRAVERSAL_DEPTH > 0);
+const _: () = assert!(MAX_PENDING_OBJECTS > 0);
+
+// Protocol limits must be positive
+const _: () = assert!(MAX_HELPER_LINE_SIZE > 0);
+const _: () = assert!(MAX_LISTED_REFS > 0);

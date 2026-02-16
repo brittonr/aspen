@@ -174,6 +174,27 @@ pub enum PijulError {
     #[snafu(display("IO error: {message}"))]
     Io { message: String },
 
+    /// Failed to create directory.
+    #[snafu(display("failed to create directory {}: {source}", path.display()))]
+    CreateDir {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
+
+    /// Failed to read file.
+    #[snafu(display("failed to read file {}: {source}", path.display()))]
+    ReadFile {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
+
+    /// Failed to write file.
+    #[snafu(display("failed to write file {}: {source}", path.display()))]
+    WriteFile {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
+
     // ========================================================================
     // Working Directory Errors
     // ========================================================================

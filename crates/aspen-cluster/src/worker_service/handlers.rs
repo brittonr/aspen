@@ -21,6 +21,10 @@ impl WorkerService {
     /// * `job_type` - Type of jobs this handler processes
     /// * `handler` - Worker implementation
     pub async fn register_handler<W: Worker>(&self, job_type: &str, handler: W) -> Result<()> {
+        // Tiger Style: argument validation
+        debug_assert!(!job_type.is_empty(), "WORKER_SERVICE: job_type must not be empty");
+        debug_assert!(self.node_id > 0, "WORKER_SERVICE: node_id must be positive");
+
         info!(node_id = self.node_id, job_type, "registering worker handler");
 
         self.pool.register_handler(job_type, handler).await.context(RegisterHandlerSnafu {
@@ -36,6 +40,12 @@ impl WorkerService {
     /// This starts the configured number of workers and begins processing jobs
     /// from the distributed queue.
     pub async fn start(&mut self) -> Result<()> {
+        // Tiger Style: validate config before starting
+        debug_assert!(
+            self.config.worker_count > 0 || !self.config.is_enabled,
+            "WORKER_SERVICE: worker_count must be positive when enabled"
+        );
+
         if !self.config.is_enabled {
             info!(node_id = self.node_id, "worker service disabled in configuration");
             return Ok(());

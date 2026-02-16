@@ -3,6 +3,7 @@
 //! Commands for managing git repositories, commits, and refs
 //! on the decentralized Forge.
 
+use anyhow::Context;
 use anyhow::Result;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
@@ -449,8 +450,10 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
                     "default_branch": repo_info.default_branch,
                 });
                 let config_path = target_dir.join(".aspen/config.json");
-                let mut file = fs::File::create(&config_path)?;
-                file.write_all(serde_json::to_string_pretty(&config)?.as_bytes())?;
+                let mut file = fs::File::create(&config_path)
+                    .with_context(|| format!("failed to create {}", config_path.display()))?;
+                file.write_all(serde_json::to_string_pretty(&config)?.as_bytes())
+                    .with_context(|| format!("failed to write {}", config_path.display()))?;
                 return Ok(());
             }
         }
@@ -611,12 +614,15 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
         .collect();
 
     let commits_path = target_dir.join(".aspen/commits.json");
-    let mut file = fs::File::create(&commits_path)?;
-    file.write_all(serde_json::to_string_pretty(&commits_manifest)?.as_bytes())?;
+    let mut file =
+        fs::File::create(&commits_path).with_context(|| format!("failed to create {}", commits_path.display()))?;
+    file.write_all(serde_json::to_string_pretty(&commits_manifest)?.as_bytes())
+        .with_context(|| format!("failed to write {}", commits_path.display()))?;
 
     // Step 8: Write HEAD ref
     let head_path = target_dir.join(".aspen/refs/heads").join(&branch_name);
-    fs::write(&head_path, &head_hash)?;
+    fs::write(&head_path, &head_hash)
+        .with_context(|| format!("failed to write HEAD ref at {}", head_path.display()))?;
 
     // Step 9: Write repo config
     let config = serde_json::json!({
@@ -627,8 +633,10 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
         "head": head_hash,
     });
     let config_path = target_dir.join(".aspen/config.json");
-    let mut file = fs::File::create(&config_path)?;
-    file.write_all(serde_json::to_string_pretty(&config)?.as_bytes())?;
+    let mut file =
+        fs::File::create(&config_path).with_context(|| format!("failed to create {}", config_path.display()))?;
+    file.write_all(serde_json::to_string_pretty(&config)?.as_bytes())
+        .with_context(|| format!("failed to write {}", config_path.display()))?;
 
     if json {
         let output = serde_json::json!({

@@ -331,7 +331,7 @@ impl DownloadWorker {
 
         // Check if blob already exists
         match self.blob_store.status(&hash).await {
-            Ok(Some(status)) if status.complete => {
+            Ok(Some(status)) if status.is_complete => {
                 debug!(hash = %hash, "skipping: blob already exists");
                 self.stats.lock().await.skipped += 1;
                 return;

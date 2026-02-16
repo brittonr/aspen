@@ -20,6 +20,18 @@ use crate::error::CoordinationError;
 use crate::types::now_unix_ms;
 use crate::verified;
 
+/// Result of a CAS operation on lock state.
+enum CasResult<T> {
+    /// CAS succeeded with the given result
+    Success(T),
+    /// CAS failed due to concurrent modification, retry needed
+    Retry,
+}
+
+/// Type alias for the complex return type of blocking checks.
+/// Returns (writer_seq, reader_seq, timeout_ms) when blocking is needed.
+type BlockingResult = Result<Option<(u64, u64, u32)>>;
+
 impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     /// Acquire a read lock, blocking until available or timeout.
     ///
@@ -61,153 +73,160 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
             let current = self.read_state(&key).await?;
 
             match current {
-                None => {
-                    // Create new lock with this reader
-                    let now = now_unix_ms();
-                    let deadline = now + ttl_ms;
-                    let state = RWLockState {
-                        name: name.to_string(),
-                        mode: RWLockMode::Read,
-                        writer: None,
-                        readers: vec![ReaderEntry {
-                            holder_id: holder_id.to_string(),
-                            deadline_ms: deadline,
-                        }],
-                        pending_writers: 0,
-                        fencing_token: 0,
-                        created_at_ms: now,
-                    };
-                    let new_json = serde_json::to_string(&state)?;
-
-                    match self
-                        .store
-                        .write(WriteRequest {
-                            command: WriteCommand::CompareAndSwap {
-                                key: key.clone(),
-                                expected: None,
-                                new_value: new_json,
-                            },
-                        })
-                        .await
-                    {
-                        Ok(_) => {
-                            debug_assert!(
-                                state.writer.is_none(),
-                                "RWLOCK: no writer must exist when creating new read lock"
-                            );
-                            debug!(name, holder_id, "read lock created");
-                            return Ok(Some((0, deadline, 1)));
-                        }
-                        Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                            continue;
-                        }
-                        Err(e) => bail!("rwlock CAS failed: {}", e),
-                    }
-                }
+                None => match self.try_acquire_read_create(&key, name, holder_id, ttl_ms).await? {
+                    CasResult::Success(result) => return Ok(Some(result)),
+                    CasResult::Retry => continue,
+                },
                 Some(mut state) => {
-                    // Cleanup expired entries
                     state.cleanup_expired_readers();
                     state.cleanup_expired_writer();
 
-                    // Check if already holding read lock
+                    // Check if already holding read lock - refresh TTL
                     if state.has_read_lock(holder_id) {
-                        // Refresh TTL
-                        let mut new_state = state.clone();
-                        let now = now_unix_ms();
-                        let deadline = now + ttl_ms;
-                        if let Some(reader) = new_state.readers.iter_mut().find(|r| r.holder_id == holder_id) {
-                            reader.deadline_ms = deadline;
-                        }
-
-                        let old_json = serde_json::to_string(&state)?;
-                        let new_json = serde_json::to_string(&new_state)?;
-
-                        match self
-                            .store
-                            .write(WriteRequest {
-                                command: WriteCommand::CompareAndSwap {
-                                    key: key.clone(),
-                                    expected: Some(old_json),
-                                    new_value: new_json,
-                                },
-                            })
-                            .await
-                        {
-                            Ok(_) => {
-                                let count = new_state.active_reader_count();
-                                return Ok(Some((new_state.fencing_token, deadline, count)));
-                            }
-                            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                                continue;
-                            }
-                            Err(e) => bail!("rwlock CAS failed: {}", e),
+                        match self.try_acquire_read_refresh(&key, &state, holder_id, ttl_ms).await? {
+                            CasResult::Success(result) => return Ok(Some(result)),
+                            CasResult::Retry => continue,
                         }
                     }
 
-                    // Check if can acquire read lock
-                    // Writer-preference: block if writer is waiting or holding
-                    if state.mode == RWLockMode::Write || state.writer.as_ref().is_some_and(|w| !w.is_expired()) {
-                        // Write lock held, cannot acquire read
-                        return Ok(None);
+                    // Check blocking conditions
+                    if let Some(blocking_reason) = self.try_acquire_read_check_blocked(&state, name)? {
+                        return blocking_reason;
                     }
 
-                    if state.pending_writers > 0 {
-                        // Writers waiting, block new readers (writer-preference)
-                        return Ok(None);
-                    }
-
-                    // Tiger Style: Enforce reader limit to prevent resource exhaustion
-                    let active_readers = state.active_reader_count();
-                    if active_readers >= MAX_RWLOCK_READERS {
-                        return Err(CoordinationError::TooManyReaders {
-                            name: name.to_string(),
-                            count: active_readers,
-                            max: MAX_RWLOCK_READERS,
-                        }
-                        .into());
-                    }
-
-                    // Can acquire read lock
-                    let mut new_state = state.clone();
-                    let now = now_unix_ms();
-                    let deadline = now + ttl_ms;
-                    new_state.readers.push(ReaderEntry {
-                        holder_id: holder_id.to_string(),
-                        deadline_ms: deadline,
-                    });
-                    new_state.mode = RWLockMode::Read;
-
-                    let old_json = serde_json::to_string(&state)?;
-                    let new_json = serde_json::to_string(&new_state)?;
-
-                    match self
-                        .store
-                        .write(WriteRequest {
-                            command: WriteCommand::CompareAndSwap {
-                                key: key.clone(),
-                                expected: Some(old_json),
-                                new_value: new_json,
-                            },
-                        })
-                        .await
-                    {
-                        Ok(_) => {
-                            let count = new_state.active_reader_count();
-                            debug_assert!(
-                                new_state.writer.as_ref().is_none_or(|w| w.is_expired()),
-                                "RWLOCK: no active writer must be held when read lock is acquired"
-                            );
-                            debug_assert!(count > 0, "RWLOCK: reader count must be positive after read acquisition");
-                            debug!(name, holder_id, count, "read lock acquired");
-                            return Ok(Some((new_state.fencing_token, deadline, count)));
-                        }
-                        Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                            continue;
-                        }
-                        Err(e) => bail!("rwlock CAS failed: {}", e),
+                    // Acquire the read lock
+                    match self.try_acquire_read_add_reader(&key, &state, holder_id, ttl_ms).await? {
+                        CasResult::Success(result) => return Ok(Some(result)),
+                        CasResult::Retry => continue,
                     }
                 }
             }
+        }
+    }
+
+    /// Create a new read lock state when none exists.
+    async fn try_acquire_read_create(
+        &self,
+        key: &str,
+        name: &str,
+        holder_id: &str,
+        ttl_ms: u64,
+    ) -> Result<CasResult<(u64, u64, u32)>> {
+        let now = now_unix_ms();
+        let deadline = now + ttl_ms;
+        let state = RWLockState {
+            name: name.to_string(),
+            mode: RWLockMode::Read,
+            writer: None,
+            readers: vec![ReaderEntry {
+                holder_id: holder_id.to_string(),
+                deadline_ms: deadline,
+            }],
+            pending_writers: 0,
+            fencing_token: 0,
+            created_at_ms: now,
+        };
+        let new_json = serde_json::to_string(&state)?;
+
+        match self.cas_write(key, None, new_json).await? {
+            CasResult::Success(()) => {
+                debug_assert!(state.writer.is_none(), "RWLOCK: no writer must exist when creating new read lock");
+                debug!(name, holder_id, "read lock created");
+                Ok(CasResult::Success((0, deadline, 1)))
+            }
+            CasResult::Retry => Ok(CasResult::Retry),
+        }
+    }
+
+    /// Refresh TTL for an existing read lock holder.
+    async fn try_acquire_read_refresh(
+        &self,
+        key: &str,
+        state: &RWLockState,
+        holder_id: &str,
+        ttl_ms: u64,
+    ) -> Result<CasResult<(u64, u64, u32)>> {
+        let mut new_state = state.clone();
+        let now = now_unix_ms();
+        let deadline = now + ttl_ms;
+        if let Some(reader) = new_state.readers.iter_mut().find(|r| r.holder_id == holder_id) {
+            reader.deadline_ms = deadline;
+        }
+
+        let old_json = serde_json::to_string(state)?;
+        let new_json = serde_json::to_string(&new_state)?;
+
+        match self.cas_write(key, Some(old_json), new_json).await? {
+            CasResult::Success(()) => {
+                let count = new_state.active_reader_count();
+                Ok(CasResult::Success((new_state.fencing_token, deadline, count)))
+            }
+            CasResult::Retry => Ok(CasResult::Retry),
+        }
+    }
+
+    /// Check if read acquisition is blocked.
+    /// Returns Some(result) if blocked, None if acquisition can proceed.
+    fn try_acquire_read_check_blocked(
+        &self,
+        state: &RWLockState,
+        name: &str,
+    ) -> Result<Option<BlockingResult>> {
+        // Writer-preference: block if writer is waiting or holding
+        if state.mode == RWLockMode::Write || state.writer.as_ref().is_some_and(|w| !w.is_expired()) {
+            return Ok(Some(Ok(None)));
+        }
+
+        if state.pending_writers > 0 {
+            return Ok(Some(Ok(None)));
+        }
+
+        // Tiger Style: Enforce reader limit
+        let active_readers = state.active_reader_count();
+        if active_readers >= MAX_RWLOCK_READERS {
+            return Ok(Some(Err(CoordinationError::TooManyReaders {
+                name: name.to_string(),
+                count: active_readers,
+                max: MAX_RWLOCK_READERS,
+            }
+            .into())));
+        }
+
+        Ok(None)
+    }
+
+    /// Add a new reader to an existing lock state.
+    async fn try_acquire_read_add_reader(
+        &self,
+        key: &str,
+        state: &RWLockState,
+        holder_id: &str,
+        ttl_ms: u64,
+    ) -> Result<CasResult<(u64, u64, u32)>> {
+        let mut new_state = state.clone();
+        let now = now_unix_ms();
+        let deadline = now + ttl_ms;
+        new_state.readers.push(ReaderEntry {
+            holder_id: holder_id.to_string(),
+            deadline_ms: deadline,
+        });
+        new_state.mode = RWLockMode::Read;
+
+        let old_json = serde_json::to_string(state)?;
+        let new_json = serde_json::to_string(&new_state)?;
+
+        match self.cas_write(key, Some(old_json), new_json).await? {
+            CasResult::Success(()) => {
+                let count = new_state.active_reader_count();
+                debug_assert!(
+                    new_state.writer.as_ref().is_none_or(|w| w.is_expired()),
+                    "RWLOCK: no active writer must be held when read lock is acquired"
+                );
+                debug_assert!(count > 0, "RWLOCK: reader count must be positive after read acquisition");
+                debug!(holder_id, count, "read lock acquired");
+                Ok(CasResult::Success((new_state.fencing_token, deadline, count)))
+            }
+            CasResult::Retry => Ok(CasResult::Retry),
         }
     }
 
@@ -283,156 +302,172 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
             let current = self.read_state(key).await?;
 
             match current {
-                None => {
-                    // Create new lock with this writer
-                    let now = now_unix_ms();
-                    let lock_deadline = now + ttl_ms;
-                    let new_token = 1;
-                    let state = RWLockState {
-                        name: name.to_string(),
-                        mode: RWLockMode::Write,
-                        writer: Some(WriterEntry {
-                            holder_id: holder_id.to_string(),
-                            fencing_token: new_token,
-                            deadline_ms: lock_deadline,
-                        }),
-                        readers: Vec::new(),
-                        pending_writers: 0, // We got it, not pending anymore
-                        fencing_token: new_token,
-                        created_at_ms: now,
-                    };
-                    let new_json = serde_json::to_string(&state)?;
-
-                    match self
-                        .store
-                        .write(WriteRequest {
-                            command: WriteCommand::CompareAndSwap {
-                                key: key.to_string(),
-                                expected: None,
-                                new_value: new_json,
-                            },
-                        })
-                        .await
-                    {
-                        Ok(_) => {
-                            debug_assert!(new_token > 0, "RWLOCK: write fencing token must be positive");
-                            debug!(name, holder_id, fencing_token = new_token, "write lock created");
-                            return Ok(Some((new_token, lock_deadline)));
-                        }
-                        Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                            continue;
-                        }
-                        Err(e) => bail!("rwlock CAS failed: {}", e),
-                    }
-                }
+                None => match self.try_acquire_write_create(key, name, holder_id, ttl_ms).await? {
+                    CasResult::Success(result) => return Ok(Some(result)),
+                    CasResult::Retry => continue,
+                },
                 Some(mut state) => {
-                    // Cleanup expired entries
                     state.cleanup_expired_readers();
                     state.cleanup_expired_writer();
 
-                    // Check if already holding write lock (reentrant)
+                    // Check if already holding write lock - refresh TTL
                     if state.has_write_lock(holder_id) {
-                        // Refresh TTL
-                        let mut new_state = state.clone();
-                        let now = now_unix_ms();
-                        let lock_deadline = now + ttl_ms;
-                        if let Some(ref mut writer) = new_state.writer {
-                            writer.deadline_ms = lock_deadline;
-                        }
-
-                        let old_json = serde_json::to_string(&state)?;
-                        let new_json = serde_json::to_string(&new_state)?;
-
-                        match self
-                            .store
-                            .write(WriteRequest {
-                                command: WriteCommand::CompareAndSwap {
-                                    key: key.to_string(),
-                                    expected: Some(old_json),
-                                    new_value: new_json,
-                                },
-                            })
-                            .await
-                        {
-                            Ok(_) => {
-                                let token = match new_state.writer.as_ref() {
-                                    Some(w) => w.fencing_token,
-                                    None => new_state.fencing_token,
-                                };
-                                return Ok(Some((token, lock_deadline)));
-                            }
-                            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                                continue;
-                            }
-                            Err(e) => bail!("rwlock CAS failed: {}", e),
+                        match self.try_acquire_write_refresh(key, &state, ttl_ms).await? {
+                            CasResult::Success(result) => return Ok(Some(result)),
+                            CasResult::Retry => continue,
                         }
                     }
 
-                    // Check if lock is free (no readers, no writer)
-                    if state.mode != RWLockMode::Free && state.active_reader_count() > 0 {
-                        // Readers holding, cannot acquire write
+                    // Check blocking conditions
+                    if self.try_acquire_write_is_blocked(&state) {
                         return Ok(None);
                     }
 
-                    if state.mode == RWLockMode::Write {
-                        // Writer holding
-                        return Ok(None);
-                    }
-
-                    // Can acquire write lock
-                    let mut new_state = state.clone();
-                    let now = now_unix_ms();
-                    let lock_deadline = now + ttl_ms;
-                    let new_token = crate::verified::compute_next_write_token(new_state.fencing_token);
-                    new_state.mode = RWLockMode::Write;
-                    new_state.writer = Some(WriterEntry {
-                        holder_id: holder_id.to_string(),
-                        fencing_token: new_token,
-                        deadline_ms: lock_deadline,
-                    });
-                    new_state.fencing_token = new_token;
-                    // Decrement pending_writers since we're acquiring
-                    new_state.pending_writers = new_state.pending_writers.saturating_sub(1);
-
-                    debug_assert!(
-                        new_state.readers.iter().all(|r| r.is_expired()),
-                        "RWLOCK: no active readers when acquiring write lock"
-                    );
-                    debug_assert!(new_token > state.fencing_token, "RWLOCK: write token must increase");
-
-                    let old_json = serde_json::to_string(&state)?;
-                    let new_json = serde_json::to_string(&new_state)?;
-
-                    match self
-                        .store
-                        .write(WriteRequest {
-                            command: WriteCommand::CompareAndSwap {
-                                key: key.to_string(),
-                                expected: Some(old_json),
-                                new_value: new_json,
-                            },
-                        })
-                        .await
-                    {
-                        Ok(_) => {
-                            debug_assert!(
-                                new_state.active_reader_count() == 0,
-                                "RWLOCK: no active readers must be held when write lock is acquired"
-                            );
-                            debug_assert!(
-                                new_state.mode == RWLockMode::Write,
-                                "RWLOCK: mode must be Write after write acquisition"
-                            );
-                            debug!(name, holder_id, fencing_token = new_token, "write lock acquired");
-                            return Ok(Some((new_token, lock_deadline)));
-                        }
-                        Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                            continue;
-                        }
-                        Err(e) => bail!("rwlock CAS failed: {}", e),
+                    // Acquire the write lock
+                    match self.try_acquire_write_set_writer(key, &state, holder_id, ttl_ms).await? {
+                        CasResult::Success(result) => return Ok(Some(result)),
+                        CasResult::Retry => continue,
                     }
                 }
             }
+        }
+    }
+
+    /// Create a new write lock state when none exists.
+    async fn try_acquire_write_create(
+        &self,
+        key: &str,
+        name: &str,
+        holder_id: &str,
+        ttl_ms: u64,
+    ) -> Result<CasResult<(u64, u64)>> {
+        let now = now_unix_ms();
+        let lock_deadline = now + ttl_ms;
+        let new_token = 1u64;
+        let state = RWLockState {
+            name: name.to_string(),
+            mode: RWLockMode::Write,
+            writer: Some(WriterEntry {
+                holder_id: holder_id.to_string(),
+                fencing_token: new_token,
+                deadline_ms: lock_deadline,
+            }),
+            readers: Vec::new(),
+            pending_writers: 0,
+            fencing_token: new_token,
+            created_at_ms: now,
+        };
+        let new_json = serde_json::to_string(&state)?;
+
+        match self.cas_write(key, None, new_json).await? {
+            CasResult::Success(()) => {
+                debug_assert!(new_token > 0, "RWLOCK: write fencing token must be positive");
+                debug!(name, holder_id, fencing_token = new_token, "write lock created");
+                Ok(CasResult::Success((new_token, lock_deadline)))
+            }
+            CasResult::Retry => Ok(CasResult::Retry),
+        }
+    }
+
+    /// Refresh TTL for an existing write lock holder.
+    async fn try_acquire_write_refresh(
+        &self,
+        key: &str,
+        state: &RWLockState,
+        ttl_ms: u64,
+    ) -> Result<CasResult<(u64, u64)>> {
+        let mut new_state = state.clone();
+        let now = now_unix_ms();
+        let lock_deadline = now + ttl_ms;
+        if let Some(ref mut writer) = new_state.writer {
+            writer.deadline_ms = lock_deadline;
+        }
+
+        let old_json = serde_json::to_string(state)?;
+        let new_json = serde_json::to_string(&new_state)?;
+
+        match self.cas_write(key, Some(old_json), new_json).await? {
+            CasResult::Success(()) => {
+                let token = new_state.writer.as_ref().map(|w| w.fencing_token).unwrap_or(new_state.fencing_token);
+                Ok(CasResult::Success((token, lock_deadline)))
+            }
+            CasResult::Retry => Ok(CasResult::Retry),
+        }
+    }
+
+    /// Check if write acquisition is blocked.
+    fn try_acquire_write_is_blocked(&self, state: &RWLockState) -> bool {
+        // Readers holding, cannot acquire write
+        if state.mode != RWLockMode::Free && state.active_reader_count() > 0 {
+            return true;
+        }
+        // Writer holding
+        state.mode == RWLockMode::Write
+    }
+
+    /// Set a new writer on an existing lock state.
+    async fn try_acquire_write_set_writer(
+        &self,
+        key: &str,
+        state: &RWLockState,
+        holder_id: &str,
+        ttl_ms: u64,
+    ) -> Result<CasResult<(u64, u64)>> {
+        let mut new_state = state.clone();
+        let now = now_unix_ms();
+        let lock_deadline = now + ttl_ms;
+        let new_token = crate::verified::compute_next_write_token(new_state.fencing_token);
+        new_state.mode = RWLockMode::Write;
+        new_state.writer = Some(WriterEntry {
+            holder_id: holder_id.to_string(),
+            fencing_token: new_token,
+            deadline_ms: lock_deadline,
+        });
+        new_state.fencing_token = new_token;
+        new_state.pending_writers = new_state.pending_writers.saturating_sub(1);
+
+        debug_assert!(
+            new_state.readers.iter().all(|r| r.is_expired()),
+            "RWLOCK: no active readers when acquiring write lock"
+        );
+        debug_assert!(new_token > state.fencing_token, "RWLOCK: write token must increase");
+
+        let old_json = serde_json::to_string(state)?;
+        let new_json = serde_json::to_string(&new_state)?;
+
+        match self.cas_write(key, Some(old_json), new_json).await? {
+            CasResult::Success(()) => {
+                debug_assert!(
+                    new_state.active_reader_count() == 0,
+                    "RWLOCK: no active readers must be held when write lock is acquired"
+                );
+                debug_assert!(
+                    new_state.mode == RWLockMode::Write,
+                    "RWLOCK: mode must be Write after write acquisition"
+                );
+                debug!(holder_id, fencing_token = new_token, "write lock acquired");
+                Ok(CasResult::Success((new_token, lock_deadline)))
+            }
+            CasResult::Retry => Ok(CasResult::Retry),
+        }
+    }
+
+    /// Common CAS write helper that handles retry logic.
+    async fn cas_write(&self, key: &str, expected: Option<String>, new_value: String) -> Result<CasResult<()>> {
+        match self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::CompareAndSwap {
+                    key: key.to_string(),
+                    expected,
+                    new_value,
+                },
+            })
+            .await
+        {
+            Ok(_) => Ok(CasResult::Success(())),
+            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Ok(CasResult::Retry),
+            Err(e) => bail!("rwlock CAS failed: {}", e),
         }
     }
 }

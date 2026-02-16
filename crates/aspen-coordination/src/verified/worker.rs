@@ -182,7 +182,7 @@ pub fn compute_steal_hint_deadline(now_ms: u64, ttl_ms: u64) -> u64 {
 ///
 /// Number of items to attempt to steal.
 #[inline]
-pub fn compute_steal_batch_size(source_queue_depth: usize, max_steal_batch: usize) -> usize {
+pub fn compute_steal_batch_size(source_queue_depth: u32, max_steal_batch: u32) -> u32 {
     assert!(max_steal_batch > 0, "WORKER: max_steal_batch must be > 0");
     // Steal at most half of what the source has, capped at max
     let result = (source_queue_depth / 2).min(max_steal_batch);
@@ -339,8 +339,8 @@ pub fn is_steal_target(
     is_alive: bool,
     load: f32,
     steal_load_threshold: f32,
-    active_jobs: usize,
-    max_concurrent: usize,
+    active_jobs: u32,
+    max_concurrent: u32,
 ) -> bool {
     is_healthy && is_alive && load < steal_load_threshold && active_jobs < max_concurrent
 }
@@ -363,7 +363,7 @@ pub fn is_steal_target(
 ///
 /// `true` if the worker is a good steal source.
 #[inline]
-pub fn is_steal_source(is_healthy: bool, is_alive: bool, queue_depth: usize, steal_queue_threshold: usize) -> bool {
+pub fn is_steal_source(is_healthy: bool, is_alive: bool, queue_depth: u32, steal_queue_threshold: u32) -> bool {
     is_healthy && is_alive && queue_depth > steal_queue_threshold
 }
 
@@ -658,10 +658,10 @@ mod tests {
 
     #[test]
     fn test_compute_steal_batch_size() {
-        assert_eq!(compute_steal_batch_size(20, 10), 10); // Half is 10, capped at 10
-        assert_eq!(compute_steal_batch_size(6, 10), 3); // Half is 3
-        assert_eq!(compute_steal_batch_size(1, 10), 0); // Half is 0
-        assert_eq!(compute_steal_batch_size(100, 5), 5); // Capped at max
+        assert_eq!(compute_steal_batch_size(20u32, 10u32), 10); // Half is 10, capped at 10
+        assert_eq!(compute_steal_batch_size(6u32, 10u32), 3); // Half is 3
+        assert_eq!(compute_steal_batch_size(1u32, 10u32), 0); // Half is 0
+        assert_eq!(compute_steal_batch_size(100u32, 5u32), 5); // Capped at max
     }
 
     // ========================================================================
@@ -738,20 +738,20 @@ mod tests {
 
     #[test]
     fn test_is_steal_target() {
-        assert!(is_steal_target(true, true, 0.1, 0.2, 1, 10));
-        assert!(!is_steal_target(false, true, 0.1, 0.2, 1, 10)); // Not healthy
-        assert!(!is_steal_target(true, false, 0.1, 0.2, 1, 10)); // Not alive
-        assert!(!is_steal_target(true, true, 0.3, 0.2, 1, 10)); // Load too high
-        assert!(!is_steal_target(true, true, 0.1, 0.2, 10, 10)); // At capacity
+        assert!(is_steal_target(true, true, 0.1, 0.2, 1u32, 10u32));
+        assert!(!is_steal_target(false, true, 0.1, 0.2, 1u32, 10u32)); // Not healthy
+        assert!(!is_steal_target(true, false, 0.1, 0.2, 1u32, 10u32)); // Not alive
+        assert!(!is_steal_target(true, true, 0.3, 0.2, 1u32, 10u32)); // Load too high
+        assert!(!is_steal_target(true, true, 0.1, 0.2, 10u32, 10u32)); // At capacity
     }
 
     #[test]
     fn test_is_steal_source() {
-        assert!(is_steal_source(true, true, 15, 10));
-        assert!(!is_steal_source(false, true, 15, 10)); // Not healthy
-        assert!(!is_steal_source(true, false, 15, 10)); // Not alive
-        assert!(!is_steal_source(true, true, 5, 10)); // Queue too shallow
-        assert!(!is_steal_source(true, true, 10, 10)); // At threshold, not above
+        assert!(is_steal_source(true, true, 15u32, 10u32));
+        assert!(!is_steal_source(false, true, 15u32, 10u32)); // Not healthy
+        assert!(!is_steal_source(true, false, 15u32, 10u32)); // Not alive
+        assert!(!is_steal_source(true, true, 5u32, 10u32)); // Queue too shallow
+        assert!(!is_steal_source(true, true, 10u32, 10u32)); // At threshold, not above
     }
 
     #[test]

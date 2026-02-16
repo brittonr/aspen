@@ -105,6 +105,10 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
     /// Returns the fencing token on success.
     /// Retries with exponential backoff until timeout.
     pub async fn acquire(&self) -> Result<LockGuard<S>, CoordinationError> {
+        // Tiger Style: key and holder_id must be non-empty (validated at construction)
+        debug_assert!(!self.key.is_empty(), "LOCK: lock key must not be empty");
+        debug_assert!(!self.holder_id.is_empty(), "LOCK: holder_id must not be empty");
+
         let deadline = Instant::now() + Duration::from_millis(self.config.acquire_timeout_ms);
         let mut backoff_ms = self.config.initial_backoff_ms;
 
@@ -156,47 +160,48 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
     /// - **INVARIANT 2**: New deadline = acquired_at + ttl
     /// - **INVARIANT 3**: Only succeeds if lock is available (None or expired)
     pub async fn try_acquire(&self) -> Result<LockGuard<S>, CoordinationError> {
-        // Read current lock state
         let current = self.read_lock_entry().await?;
 
-        // Ghost: Capture pre-state for verification
         ghost! {
             let pre_token = current.as_ref().map(|e| e.fencing_token).unwrap_or(0);
             let _pre_state = LockStateSpec::from_entry(current.as_ref(), crate::types::now_unix_ms());
         }
 
-        // Determine expected value and new token
-        let (expected, new_token) = match current {
-            Some(ref entry) if !entry.is_expired() => {
-                // Lock held by someone else (not expired)
-                return LockHeldSnafu {
-                    holder: entry.holder_id.clone(),
-                    deadline_ms: entry.deadline_ms,
-                }
-                .fail();
-            }
-            Some(ref entry) => {
-                // Lock expired, we can take it
-                debug!(
-                    key = %self.key,
-                    previous_holder = %entry.holder_id,
-                    "taking expired lock"
-                );
-                (Some(serde_json::to_string(entry)?), entry.fencing_token + 1)
-            }
-            None => {
-                // Lock doesn't exist yet
-                (None, 1)
-            }
-        };
+        let (expected, new_token) = self.try_acquire_prepare(&current)?;
 
-        // Create new lock entry
         let new_entry = LockEntry::new(self.holder_id.clone(), new_token, self.config.ttl_ms);
         let new_json = serde_json::to_string(&new_entry)?;
-        // Pre-compute released JSON for Drop
         let released_json = serde_json::to_string(&new_entry.released())?;
 
-        // Atomic CAS
+        self.try_acquire_cas(current, expected, new_json, released_json, new_entry, new_token).await
+    }
+
+    /// Prepare expected value and new token for lock acquisition.
+    fn try_acquire_prepare(&self, current: &Option<LockEntry>) -> Result<(Option<String>, u64), CoordinationError> {
+        match current {
+            Some(entry) if !entry.is_expired() => LockHeldSnafu {
+                holder: entry.holder_id.clone(),
+                deadline_ms: entry.deadline_ms,
+            }
+            .fail(),
+            Some(entry) => {
+                debug!(key = %self.key, previous_holder = %entry.holder_id, "taking expired lock");
+                Ok((Some(serde_json::to_string(entry)?), entry.fencing_token + 1))
+            }
+            None => Ok((None, 1)),
+        }
+    }
+
+    /// Execute CAS and build lock guard on success.
+    async fn try_acquire_cas(
+        &self,
+        current: Option<LockEntry>,
+        expected: Option<String>,
+        new_json: String,
+        released_json: String,
+        new_entry: LockEntry,
+        new_token: u64,
+    ) -> Result<LockGuard<S>, CoordinationError> {
         match self
             .store
             .write(WriteRequest {
@@ -209,20 +214,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
             .await
         {
             Ok(_) => {
-                debug!(
-                    key = %self.key,
-                    holder = %self.holder_id,
-                    fencing_token = new_token,
-                    ttl_ms = self.config.ttl_ms,
-                    "lock acquired"
-                );
+                debug!(key = %self.key, holder = %self.holder_id, fencing_token = new_token, ttl_ms = self.config.ttl_ms, "lock acquired");
 
-                // Proof: Verify fencing token monotonicity and TTL validity
                 proof! {
-                    // Link to acquire_spec.rs proofs:
-                    // - acquire_increases_fencing_token: new_token > pre_token
-                    // - acquire_establishes_ttl_validity: deadline = acquired_at + ttl
-                    // - acquire_preserves_lock_invariant: all invariants maintained
                     assert(new_token > pre_token);
                     assert(new_entry.deadline_ms == new_entry.acquired_at_ms + new_entry.ttl_ms);
                 }
@@ -232,7 +226,6 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
                     current.as_ref().is_none_or(|e| new_token > e.fencing_token),
                     "LOCK-1: fencing token must be monotonically increasing"
                 );
-                debug_assert!(new_entry.deadline_ms > 0, "acquired lock must have positive deadline");
 
                 Ok(LockGuard {
                     store: self.store.clone(),
@@ -244,23 +237,23 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
                     deadline_ms: new_entry.deadline_ms,
                 })
             }
-            Err(KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => {
-                // Someone else got it or state changed
-                if let Some(json) = actual {
-                    match serde_json::from_str::<LockEntry>(&json) {
-                        Ok(entry) => LockHeldSnafu {
-                            holder: entry.holder_id,
-                            deadline_ms: entry.deadline_ms,
-                        }
-                        .fail(),
-                        Err(_) => Err(CoordinationError::CasConflict),
-                    }
-                } else {
-                    // Key was deleted between read and CAS
-                    Err(CoordinationError::CasConflict)
-                }
-            }
+            Err(KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => self.try_acquire_handle_cas_failed(actual),
             Err(e) => Err(CoordinationError::Storage { source: e }),
+        }
+    }
+
+    /// Handle CAS failure by extracting holder info.
+    fn try_acquire_handle_cas_failed(&self, actual: Option<String>) -> Result<LockGuard<S>, CoordinationError> {
+        match actual {
+            Some(json) => match serde_json::from_str::<LockEntry>(&json) {
+                Ok(entry) => LockHeldSnafu {
+                    holder: entry.holder_id,
+                    deadline_ms: entry.deadline_ms,
+                }
+                .fail(),
+                Err(_) => Err(CoordinationError::CasConflict),
+            },
+            None => Err(CoordinationError::CasConflict),
         }
     }
 
@@ -342,6 +335,8 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
 
     /// Read the current lock entry from storage.
     async fn read_lock_entry(&self) -> Result<Option<LockEntry>, CoordinationError> {
+        debug_assert!(!self.key.is_empty(), "LOCK: lock key must not be empty for read");
+
         match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();

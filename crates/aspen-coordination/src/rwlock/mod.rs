@@ -54,6 +54,7 @@ pub struct RWLockManager<S: KeyValueStore + ?Sized> {
 impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     /// Create a new RWLock manager.
     pub fn new(store: Arc<S>) -> Self {
+        debug_assert!(Arc::strong_count(&store) >= 1, "RWLOCK: store Arc must have at least 1 strong reference");
         Self { store }
     }
 
@@ -61,6 +62,9 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     ///
     /// Returns (mode, reader_count, writer_holder, fencing_token).
     pub async fn status(&self, name: &str) -> Result<(String, u32, Option<String>, u64)> {
+        // Tiger Style: name must not be empty
+        debug_assert!(!name.is_empty(), "RWLOCK: name must not be empty for status");
+
         let key = verified::rwlock_key(name);
 
         match self.read_state(&key).await? {
@@ -77,6 +81,8 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
 
     /// Read lock state from the store.
     pub(crate) async fn read_state(&self, key: &str) -> Result<Option<RWLockState>> {
+        debug_assert!(!key.is_empty(), "RWLOCK: key must not be empty for read_state");
+
         match self.store.read(ReadRequest::new(key.to_string())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();

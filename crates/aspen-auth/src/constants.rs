@@ -30,3 +30,14 @@ pub const MAX_REVOCATION_LIST_SIZE: u32 = 10_000;
 ///
 /// Tiger Style: Fixed tolerance for clock drift between nodes.
 pub const TOKEN_CLOCK_SKEW_SECS: u64 = 60;
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Capability limits must be positive
+const _: () = assert!(MAX_CAPABILITIES_PER_TOKEN > 0);
+const _: () = assert!(MAX_DELEGATION_DEPTH > 0);
+const _: () = assert!(MAX_TOKEN_SIZE > 0);
+const _: () = assert!(MAX_REVOCATION_LIST_SIZE > 0);
+const _: () = assert!(TOKEN_CLOCK_SKEW_SECS > 0);

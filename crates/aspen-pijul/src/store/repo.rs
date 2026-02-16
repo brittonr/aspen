@@ -3,12 +3,14 @@
 use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
 use aspen_forge::identity::RepoId;
+use snafu::ResultExt;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
 
 use super::PijulStore;
 use crate::constants::KV_PREFIX_PIJUL_REPOS;
+use crate::error::CreateDirSnafu;
 use crate::error::PijulError;
 use crate::error::PijulResult;
 use crate::types::PijulRepoIdentity;
@@ -47,7 +49,9 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
 
         // Create pristine directory
         let pristine_dir = self.pristine_path(&repo_id);
-        tokio::fs::create_dir_all(&pristine_dir).await?;
+        tokio::fs::create_dir_all(&pristine_dir).await.context(CreateDirSnafu {
+            path: pristine_dir.clone(),
+        })?;
 
         // Create the default channel (empty, no head yet)
         let default_channel = identity.default_channel.clone();

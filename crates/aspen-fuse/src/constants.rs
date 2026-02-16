@@ -70,3 +70,28 @@ pub const MAX_XATTR_VALUE_SIZE: usize = 64 * 1024;
 
 /// Maximum number of extended attributes per file.
 pub const MAX_XATTRS_PER_FILE: usize = 100;
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Inode and file handle limits must be positive
+const _: () = assert!(MAX_INODE_CACHE > 0);
+const _: () = assert!(MAX_READDIR_ENTRIES > 0);
+
+// Key/value limits must be positive and ordered
+const _: () = assert!(MAX_KEY_SIZE > 0);
+const _: () = assert!(MAX_VALUE_SIZE > 0);
+const _: () = assert!(MAX_KEY_SIZE < MAX_VALUE_SIZE);
+
+// Extended attribute limits must be positive
+const _: () = assert!(MAX_XATTR_NAME_SIZE > 0);
+const _: () = assert!(MAX_XATTR_VALUE_SIZE > 0);
+const _: () = assert!(MAX_XATTRS_PER_FILE > 0);
+
+// Block size must be positive and power of 2
+const _: () = assert!(BLOCK_SIZE > 0);
+const _: () = assert!(BLOCK_SIZE.count_ones() == 1); // power of 2
+
+// Root inode must be 1 per FUSE convention
+const _: () = assert!(ROOT_INODE == 1);

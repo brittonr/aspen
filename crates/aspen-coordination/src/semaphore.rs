@@ -84,6 +84,7 @@ pub struct SemaphoreManager<S: KeyValueStore + ?Sized> {
 impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
     /// Create a new semaphore manager.
     pub fn new(store: Arc<S>) -> Self {
+        debug_assert!(Arc::strong_count(&store) >= 1, "SEMAPHORE: store Arc must have at least 1 strong reference");
         Self { store }
     }
 
@@ -99,6 +100,13 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
         ttl_ms: u64,
         timeout: Option<Duration>,
     ) -> Result<(u32, u32)> {
+        // Tiger Style: argument validation
+        debug_assert!(!name.is_empty(), "SEMAPHORE: name must not be empty");
+        debug_assert!(!holder_id.is_empty(), "SEMAPHORE: holder_id must not be empty");
+        debug_assert!(permits > 0, "SEMAPHORE: permits must be positive");
+        debug_assert!(capacity > 0, "SEMAPHORE: capacity must be positive");
+        debug_assert!(permits <= capacity, "SEMAPHORE: permits ({}) must not exceed capacity ({})", permits, capacity);
+
         let deadline = timeout.map(|t| std::time::Instant::now() + t);
 
         loop {
@@ -130,6 +138,11 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
         capacity: u32,
         ttl_ms: u64,
     ) -> Result<Option<(u32, u32)>> {
+        // Tiger Style: argument validation
+        debug_assert!(!name.is_empty(), "SEMAPHORE: name must not be empty for try_acquire");
+        debug_assert!(!holder_id.is_empty(), "SEMAPHORE: holder_id must not be empty for try_acquire");
+        debug_assert!(ttl_ms > 0, "SEMAPHORE: ttl_ms must be positive");
+
         let key = verified::semaphore_key(name);
 
         loop {
@@ -276,6 +289,10 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
     /// If permits = 0, releases all permits held by the holder.
     /// Returns the number of available permits after release.
     pub async fn release(&self, name: &str, holder_id: &str, permits: u32) -> Result<u32> {
+        // Tiger Style: argument validation
+        debug_assert!(!name.is_empty(), "SEMAPHORE: name must not be empty for release");
+        debug_assert!(!holder_id.is_empty(), "SEMAPHORE: holder_id must not be empty for release");
+
         let key = verified::semaphore_key(name);
 
         loop {

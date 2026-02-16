@@ -29,13 +29,13 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         // Early validation (optimistic, may have false positives from concurrent creations)
         {
             let groups = self.groups.read().await;
-            if groups.len() >= self.config.max_groups {
+            if groups.len() >= self.config.max_groups as usize {
                 bail!("maximum group limit {} reached", self.config.max_groups);
             }
         }
 
         // Validate member count (stateless check)
-        if group.members.len() > MAX_WORKERS_PER_GROUP {
+        if group.members.len() > MAX_WORKERS_PER_GROUP as usize {
             bail!("group exceeds maximum member limit {}", MAX_WORKERS_PER_GROUP);
         }
 
@@ -57,7 +57,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         let mut groups = self.groups.write().await;
 
         // Re-check limit under write lock (TOCTOU protection)
-        if groups.len() >= self.config.max_groups && !groups.contains_key(&group.group_id) {
+        if groups.len() >= self.config.max_groups as usize && !groups.contains_key(&group.group_id) {
             // Rollback: cleanup KV store (fire-and-forget with logging)
             if let Err(e) = self
                 .store
@@ -103,7 +103,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             let groups = self.groups.read().await;
             let group = groups.get(group_id).ok_or_else(|| anyhow::anyhow!("group {} not found", group_id))?;
 
-            if group.members.len() >= group.max_members {
+            if group.members.len() >= group.max_members as usize {
                 bail!("group {} is at maximum capacity", group_id);
             }
 

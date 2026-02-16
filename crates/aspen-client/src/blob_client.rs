@@ -148,13 +148,17 @@ impl<'a> BlobClient<'a> {
 
     /// Upload a blob from a file.
     pub async fn upload_file(&self, path: impl AsRef<Path>) -> Result<BlobUploadResult> {
-        let data = std::fs::read(path)?;
+        let path = path.as_ref();
+        let data =
+            std::fs::read(path).with_context(|| format!("failed to read blob file for upload: {}", path.display()))?;
         self.upload(&data).await
     }
 
     /// Upload a file with a protection tag.
     pub async fn upload_file_with_tag(&self, path: impl AsRef<Path>, tag: String) -> Result<BlobUploadResult> {
-        let data = std::fs::read(path)?;
+        let path = path.as_ref();
+        let data = std::fs::read(path)
+            .with_context(|| format!("failed to read blob file for tagged upload: {}", path.display()))?;
         self.upload_with_tag(&data, Some(tag)).await
     }
 
@@ -287,7 +291,7 @@ impl<'a> BlobClient<'a> {
                             .into_iter()
                             .map(|e| BlobEntry {
                                 hash: e.hash,
-                                size: e.size,
+                                size: e.size_bytes,
                             })
                             .collect(),
                         has_more: result.has_more,
@@ -634,7 +638,7 @@ mod rpc_blob_store {
                         Ok(Some(BlobStatus {
                             hash: *hash,
                             size_bytes: result.size,
-                            complete: result.complete.unwrap_or(false),
+                            is_complete: result.complete.unwrap_or(false),
                             tags: result.tags.unwrap_or_default(),
                         }))
                     } else if let Some(error) = result.error {
@@ -755,7 +759,7 @@ mod rpc_blob_store {
                                 let hash = Self::parse_hash(&entry.hash).ok()?;
                                 Some(aspen_blob::BlobListEntry {
                                     hash,
-                                    size_bytes: entry.size,
+                                    size_bytes: entry.size_bytes,
                                     format: BlobFormat::Raw,
                                 })
                             })

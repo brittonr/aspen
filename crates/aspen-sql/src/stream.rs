@@ -81,7 +81,11 @@ impl RedbRecordBatchStream {
         // but with a row count that DataFusion can use for aggregation.
         let schema = match &projection {
             Some(indices) if indices.is_empty() => Arc::new(arrow::datatypes::Schema::empty()),
-            Some(indices) => Arc::new(KV_SCHEMA.project(indices).expect("valid projection")),
+            // SAFETY: DataFusion's query planner provides projection indices that are
+            // guaranteed to be valid for KV_SCHEMA (which has exactly 2 columns: key, value).
+            // An invalid projection (index >= 2) would indicate a bug in DataFusion's
+            // logical-to-physical plan conversion, not user input.
+            Some(indices) => Arc::new(KV_SCHEMA.project(indices).expect("DataFusion projection indices must be valid")),
             None => KV_SCHEMA.clone(),
         };
 
@@ -426,7 +430,9 @@ impl IndexRecordBatchStream {
     ) -> Self {
         let schema = match &projection {
             Some(indices) if indices.is_empty() => Arc::new(arrow::datatypes::Schema::empty()),
-            Some(indices) => Arc::new(KV_SCHEMA.project(indices).expect("valid projection")),
+            // SAFETY: DataFusion provides projection indices that are valid for KV_SCHEMA.
+            // Invalid indices would be a bug in DataFusion's query planning.
+            Some(indices) => Arc::new(KV_SCHEMA.project(indices).expect("DataFusion projection indices must be valid")),
             None => KV_SCHEMA.clone(),
         };
 

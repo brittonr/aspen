@@ -166,3 +166,57 @@ pub const TRANSIT_KEY_DOMAIN: &[u8] = b"aspen-secrets-transit-key-v1";
 
 /// Domain separator for PKI key derivation.
 pub const PKI_KEY_DOMAIN: &[u8] = b"aspen-secrets-pki-key-v1";
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// SOPS/Bootstrap limits must be positive
+const _: () = assert!(MAX_SECRETS_FILE_SIZE > 0);
+const _: () = assert!(MAX_DECRYPTED_AGE_SIZE > 0);
+const _: () = assert!(MAX_TRUSTED_ROOTS > 0);
+const _: () = assert!(MAX_PREBUILT_TOKENS > 0);
+const _: () = assert!(MAX_SECRET_VALUE_SIZE > 0);
+const _: () = assert!(DEFAULT_CACHE_TTL_SECS > 0);
+
+// KV v2 limits must be positive
+const _: () = assert!(MAX_KV_SECRET_SIZE > 0);
+const _: () = assert!(MAX_VERSIONS_PER_SECRET > 0);
+const _: () = assert!(DEFAULT_MAX_VERSIONS > 0);
+const _: () = assert!(DEFAULT_MAX_VERSIONS <= MAX_VERSIONS_PER_SECRET);
+const _: () = assert!(MAX_SECRET_PATH_LENGTH > 0);
+const _: () = assert!(MAX_SECRETS_PER_MOUNT > 0);
+const _: () = assert!(MAX_KV_PAIRS_PER_SECRET > 0);
+const _: () = assert!(MAX_SECRET_KEY_NAME_LENGTH > 0);
+
+// Transit engine limits must be positive
+const _: () = assert!(MAX_TRANSIT_KEYS_PER_MOUNT > 0);
+const _: () = assert!(MAX_KEY_VERSIONS > 0);
+const _: () = assert!(MAX_PLAINTEXT_SIZE > 0);
+const _: () = assert!(MAX_TRANSIT_BATCH_SIZE > 0);
+const _: () = assert!(MAX_TRANSIT_KEY_NAME_LENGTH > 0);
+
+// PKI engine limits must be positive
+const _: () = assert!(MAX_CERT_TTL_SECS > 0);
+const _: () = assert!(DEFAULT_CERT_TTL_SECS > 0);
+const _: () = assert!(DEFAULT_CERT_TTL_SECS <= MAX_CERT_TTL_SECS);
+const _: () = assert!(MAX_CERTS_PER_MOUNT > 0);
+const _: () = assert!(MAX_ROLES_PER_MOUNT > 0);
+const _: () = assert!(MAX_CRL_ENTRIES > 0);
+const _: () = assert!(MAX_SAN_COUNT > 0);
+const _: () = assert!(MAX_ROLE_NAME_LENGTH > 0);
+const _: () = assert!(MAX_COMMON_NAME_LENGTH > 0);
+
+// General limits must be positive
+const _: () = assert!(MAX_MOUNTS > 0);
+const _: () = assert!(MAX_MOUNT_NAME_LENGTH > 0);
+const _: () = assert!(MAX_CONCURRENT_OPS > 0);
+
+// Cryptographic constants must match expected sizes
+const _: () = assert!(XCHACHA_NONCE_SIZE == 24);
+const _: () = assert!(XCHACHA_KEY_SIZE == 32);
+const _: () = assert!(XCHACHA_TAG_SIZE == 16);
+const _: () = assert!(ED25519_SIGNATURE_SIZE == 64);
+const _: () = assert!(ED25519_PUBLIC_KEY_SIZE == 32);
+const _: () = assert!(ED25519_SECRET_KEY_SIZE == 32);
+const _: () = assert!(BLAKE3_HASH_SIZE == 32);

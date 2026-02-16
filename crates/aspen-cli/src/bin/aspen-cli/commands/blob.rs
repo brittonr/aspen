@@ -6,6 +6,7 @@
 use std::io::Read;
 use std::path::PathBuf;
 
+use anyhow::Context;
 use anyhow::Result;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
@@ -686,10 +687,10 @@ async fn blob_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()>
     let data = if let Some(ref path) = args.file {
         if path.as_os_str() == "-" {
             let mut buf = Vec::new();
-            std::io::stdin().read_to_end(&mut buf)?;
+            std::io::stdin().read_to_end(&mut buf).context("failed to read from stdin")?;
             buf
         } else {
-            std::fs::read(path)?
+            std::fs::read(path).with_context(|| format!("failed to read blob file: {}", path.display()))?
         }
     } else if let Some(ref data_str) = args.data {
         data_str.as_bytes().to_vec()
@@ -726,7 +727,8 @@ async fn blob_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
         ClientRpcResponse::GetBlobResult(result) => {
             // If output file specified and blob found with data, write directly
             if let (Some(output_path), true, Some(data)) = (&args.output, result.found, &result.data) {
-                std::fs::write(output_path, data)?;
+                std::fs::write(output_path, data)
+                    .with_context(|| format!("failed to write blob to {}", output_path.display()))?;
                 if !json {
                     println!("Wrote {} bytes to {}", data.len(), output_path.display());
                 }

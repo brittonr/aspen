@@ -26,6 +26,12 @@ use crate::types::RaftMemberInfo;
 impl ClusterController for RaftNode {
     #[instrument(skip(self))]
     async fn init(&self, request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
+        // Tiger Style: request must have initial members
+        debug_assert!(
+            !request.initial_members.is_empty(),
+            "CLUSTER: init request must have at least one initial member"
+        );
+
         // Acquire permit to limit concurrency
         let _permit = self.semaphore().acquire().await.map_err(|_| ControlPlaneError::Failed {
             reason: "semaphore closed".into(),
@@ -42,6 +48,14 @@ impl ClusterController for RaftNode {
             })?;
             nodes.insert(cluster_node.id.into(), RaftMemberInfo::new(iroh_addr.clone()));
         }
+
+        // Tiger Style: nodes map must match input
+        debug_assert!(
+            nodes.len() == request.initial_members.len(),
+            "CLUSTER: nodes map size ({}) must match initial_members ({})",
+            nodes.len(),
+            request.initial_members.len()
+        );
 
         info!("calling raft.initialize() with {} nodes", nodes.len());
         // Tiger Style: Explicit timeout prevents indefinite hang if quorum unavailable
@@ -63,6 +77,9 @@ impl ClusterController for RaftNode {
 
     #[instrument(skip(self))]
     async fn add_learner(&self, request: AddLearnerRequest) -> Result<ClusterState, ControlPlaneError> {
+        // Tiger Style: learner id must be positive
+        debug_assert!(request.learner.id > 0, "CLUSTER: learner id must be positive");
+
         let _permit = self.semaphore().acquire().await.map_err(|_| ControlPlaneError::Failed {
             reason: "semaphore closed".into(),
         })?;

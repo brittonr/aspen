@@ -209,7 +209,10 @@ impl RpcClient {
         // Set idle timeout high enough to handle server-side processing of large batches.
         // Server may take 30-60 seconds to process 5000+ tree objects sequentially.
         // Default QUIC idle timeout is often 30-60s, which is too short.
-        transport_config.max_idle_timeout(Some(RPC_TIMEOUT.try_into().unwrap()));
+        // SAFETY: RPC_TIMEOUT (600 seconds) is well within QUIC IdleTimeout max (2^62 microseconds).
+        // The conversion from Duration to IdleTimeout only fails for durations > ~146 years.
+        transport_config
+            .max_idle_timeout(Some(RPC_TIMEOUT.try_into().expect("RPC_TIMEOUT of 600s is valid for QUIC IdleTimeout")));
 
         // Build endpoint with or without discovery based on ticket type.
         // V2 tickets have direct addresses - prefer direct connection but keep

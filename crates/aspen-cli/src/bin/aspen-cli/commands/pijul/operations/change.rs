@@ -37,7 +37,10 @@ pub(in super::super) async fn pijul_record(client: &AspenClient, args: RecordArg
     let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
 
     // Use provided data-dir or auto-use the cache directory
-    let data_dir = args.data_dir.unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+    let data_dir = match args.data_dir {
+        Some(dir) => dir,
+        None => repo_cache_dir(&repo_id).context("failed to determine cache directory")?,
+    };
 
     // Always use local mode with the cache directory
     // Recording requires a local pristine - changes are then uploaded to the cluster
@@ -352,7 +355,10 @@ async fn pijul_checkout_local(args: CheckoutArgs, json: bool) -> Result<()> {
     let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
 
     // Determine cache directory
-    let cache_dir = args.data_dir.unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+    let cache_dir = match args.data_dir {
+        Some(dir) => dir,
+        None => repo_cache_dir(&repo_id).context("failed to determine cache directory")?,
+    };
 
     // Check if cache exists
     if !cache_dir.exists() {

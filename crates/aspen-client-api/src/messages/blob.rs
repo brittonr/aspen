@@ -150,8 +150,9 @@ pub struct GetBlobTicketResultResponse {
 pub struct BlobListEntry {
     /// BLAKE3 hash (hex-encoded).
     pub hash: String,
-    /// Size in bytes.
-    pub size: u64,
+    /// Size in bytes (Tiger Style: units in name).
+    #[serde(alias = "size")]
+    pub size_bytes: u64,
 }
 
 /// List blobs result response.

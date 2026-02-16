@@ -79,3 +79,36 @@ pub const MIGRATION_BATCH_DELAY_MS: u64 = 100;
 
 /// Key prefix for migration progress tracking.
 pub const MIGRATION_PROGRESS_KEY_PREFIX: &str = "snix:migration:";
+
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Blob limits must be positive
+const _: () = assert!(MAX_BLOB_SIZE_BYTES > 0);
+const _: () = assert!(BLOB_CHUNK_SIZE_BYTES > 0);
+const _: () = assert!((BLOB_CHUNK_SIZE_BYTES as u64) < MAX_BLOB_SIZE_BYTES);
+
+// Directory limits must be positive
+const _: () = assert!(MAX_DIRECTORY_ENTRIES > 0);
+const _: () = assert!(MAX_DIRECTORY_DEPTH > 0);
+const _: () = assert!(MAX_RECURSIVE_BUFFER > 0);
+
+// Path limits must be positive
+const _: () = assert!(MAX_PATH_REFERENCES > 0);
+const _: () = assert!(MAX_DERIVER_LENGTH > 0);
+const _: () = assert!(MAX_SIGNATURES > 0);
+
+// Timeouts must be positive
+const _: () = assert!(BLOB_TIMEOUT_MS > 0);
+const _: () = assert!(DIRECTORY_TIMEOUT_MS > 0);
+const _: () = assert!(PATHINFO_TIMEOUT_MS > 0);
+
+// Digest sizes must match expected values
+const _: () = assert!(STORE_PATH_DIGEST_LENGTH == 20); // Nix uses truncated SHA-256
+const _: () = assert!(B3_DIGEST_LENGTH == 32); // BLAKE3 is 256 bits
+
+// Migration limits must be positive
+const _: () = assert!(MIGRATION_BATCH_SIZE > 0);
+const _: () = assert!(MIGRATION_ENTRY_TIMEOUT_SECS > 0);
+const _: () = assert!(MIGRATION_BATCH_DELAY_MS > 0);

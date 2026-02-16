@@ -13,6 +13,9 @@ impl WriteBatcher {
         key: String,
         value: String,
     ) -> Result<WriteResult, KeyValueStoreError> {
+        // Tiger Style: key must not be empty
+        debug_assert!(!key.is_empty(), "BATCHER: set key must not be empty");
+
         let (tx, rx) = oneshot::channel();
         let op_bytes = key.len() + value.len();
 
@@ -67,6 +70,9 @@ impl WriteBatcher {
 
     /// Batch a Delete operation (Arc version with timeout support).
     pub(super) async fn batch_delete_shared(self: &Arc<Self>, key: String) -> Result<WriteResult, KeyValueStoreError> {
+        // Tiger Style: key must not be empty
+        debug_assert!(!key.is_empty(), "BATCHER: delete key must not be empty");
+
         let (tx, rx) = oneshot::channel();
         let op_bytes = key.len();
 
@@ -117,6 +123,9 @@ impl WriteBatcher {
 
     /// Batch a Set operation (non-Arc version, no timeout).
     pub(super) async fn batch_set(&self, key: String, value: String) -> Result<WriteResult, KeyValueStoreError> {
+        // Tiger Style: key must not be empty
+        debug_assert!(!key.is_empty(), "BATCHER: set key must not be empty (non-Arc)");
+
         let (tx, rx) = oneshot::channel();
         let op_bytes = key.len() + value.len();
 
@@ -161,6 +170,9 @@ impl WriteBatcher {
 
     /// Batch a Delete operation (non-Arc version, no timeout).
     pub(super) async fn batch_delete(&self, key: String) -> Result<WriteResult, KeyValueStoreError> {
+        // Tiger Style: key must not be empty
+        debug_assert!(!key.is_empty(), "BATCHER: delete key must not be empty (non-Arc)");
+
         let (tx, rx) = oneshot::channel();
         let op_bytes = key.len();
 

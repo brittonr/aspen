@@ -765,10 +765,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
 
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         let mut inner = self.inner.lock().await;
-        let deleted = inner.remove(&request.key).is_some();
+        let is_deleted = inner.remove(&request.key).is_some();
         Ok(DeleteResult {
             key: request.key,
-            deleted,
+            is_deleted,
         })
     }
 

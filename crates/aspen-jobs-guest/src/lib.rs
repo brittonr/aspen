@@ -98,6 +98,12 @@ pub fn init_heap() {
 fn panic(_panic: &PanicInfo) -> ! {
     // In a VM guest, we can't do much on panic
     // Just halt the VM
+    // SAFETY: The hlt instruction halts the CPU until the next external interrupt.
+    // This is safe in a VM guest context because:
+    // 1. We're in a panic handler where execution cannot continue normally
+    // 2. The hypervisor will handle the halt and terminate the VM
+    // 3. The hlt instruction has no memory safety implications
+    // 4. The infinite loop after ensures we never return from a diverging function
     unsafe {
         core::arch::asm!("hlt");
     }

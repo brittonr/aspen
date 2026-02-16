@@ -227,7 +227,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
                 capabilities: self.config.specializations.clone(),
                 load: 0.0,
                 active_jobs: 0,
-                max_concurrent: self.config.worker_config.concurrency,
+                max_concurrent: self.config.worker_config.concurrency as u32,
                 queue_depth: 0,
                 health: HealthStatus::Healthy,
                 tags: self.config.tags.clone(),
@@ -402,8 +402,8 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
             members: members.clone(),
             leader: members.iter().next().cloned(),
             required_capabilities,
-            min_members,
-            max_members: min_members * 2,
+            min_members: min_members as u32,
+            max_members: (min_members * 2) as u32,
             created_at_ms: aspen_coordination::now_unix_ms(),
             state: GroupState::Active,
         };
@@ -570,9 +570,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
 
         let total_workers = workers.len();
         let healthy_workers = workers.iter().filter(|w| w.health == HealthStatus::Healthy).count();
-        let total_capacity: usize = workers.iter().map(|w| w.max_concurrent).sum();
-        let total_active: usize = workers.iter().map(|w| w.active_jobs).sum();
-        let total_queued: usize = workers.iter().map(|w| w.queue_depth).sum();
+        let total_capacity: u32 = workers.iter().map(|w| w.max_concurrent).sum();
+        let total_active: u32 = workers.iter().map(|w| w.active_jobs).sum();
+        let total_queued: u32 = workers.iter().map(|w| w.queue_depth).sum();
         let avg_load = if !workers.is_empty() {
             workers.iter().map(|w| w.load).sum::<f32>() / workers.len() as f32
         } else {
@@ -612,11 +612,11 @@ pub struct ClusterJobStats {
     /// Number of healthy workers.
     pub healthy_workers: usize,
     /// Total capacity across all workers.
-    pub total_capacity: usize,
+    pub total_capacity: u32,
     /// Total active jobs currently processing.
-    pub total_active: usize,
+    pub total_active: u32,
     /// Total jobs queued for processing.
-    pub total_queued: usize,
+    pub total_queued: u32,
     /// Average load across workers (0.0-1.0).
     pub avg_load: f32,
     /// Number of nodes in the cluster.
