@@ -138,8 +138,10 @@ pub struct HashMappingStore<K: KeyValueStore + ?Sized> {
 impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
     /// Create a new hash mapping store.
     pub fn new(kv: Arc<K>) -> Self {
-        // SAFETY: MAX_HASH_CACHE_SIZE is a compile-time constant of 10_000, which is non-zero.
-        let cache_size = NonZeroUsize::new(MAX_HASH_CACHE_SIZE).expect("MAX_HASH_CACHE_SIZE is non-zero");
+        // SAFETY: MAX_HASH_CACHE_SIZE is a compile-time constant asserted > 0 in constants.rs.
+        // NonZeroUsize::new() is not const-stable, so we use expect() with static proof.
+        let cache_size =
+            NonZeroUsize::new(MAX_HASH_CACHE_SIZE).expect("MAX_HASH_CACHE_SIZE is non-zero (compile-time asserted)");
         Self {
             kv,
             cache: RwLock::new(LruCache::new(cache_size)),
@@ -280,8 +282,8 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
     ) -> BridgeResult<()> {
         if mappings.len() > MAX_HASH_MAPPING_BATCH_SIZE {
             return Err(BridgeError::ImportBatchExceeded {
-                count: mappings.len(),
-                max: MAX_HASH_MAPPING_BATCH_SIZE,
+                count: mappings.len() as u32,
+                max: MAX_HASH_MAPPING_BATCH_SIZE as u32,
             });
         }
 

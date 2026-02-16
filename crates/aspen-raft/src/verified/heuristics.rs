@@ -217,8 +217,8 @@ pub fn calculate_backoff_duration(restart_count: usize, backoff_durations: &[Dur
 ///
 /// `true` if restart is allowed, `false` if circuit breaker should trip
 #[inline]
-pub fn should_allow_restart(recent_restarts: usize, max_restarts: u32) -> bool {
-    recent_restarts < max_restarts as usize
+pub fn should_allow_restart(recent_restarts: u32, max_restarts: u32) -> bool {
+    recent_restarts < max_restarts
 }
 
 // ============================================================================

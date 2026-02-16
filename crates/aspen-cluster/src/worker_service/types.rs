@@ -34,7 +34,7 @@ pub enum WorkerServiceError {
 
     /// Failed to start workers.
     #[snafu(display("failed to start {} workers: {}", count, source))]
-    StartWorkers { count: usize, source: aspen_jobs::JobError },
+    StartWorkers { count: u32, source: aspen_jobs::JobError },
 
     /// Failed to update worker metadata.
     #[snafu(display("failed to update worker metadata: {}", source))]

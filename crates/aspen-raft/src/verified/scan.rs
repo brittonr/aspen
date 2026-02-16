@@ -173,9 +173,9 @@ pub struct PaginationResult {
 /// assert_eq!(result.count, 5);
 /// ```
 #[inline]
-pub fn compute_pagination_result(total_filtered: usize, limit: usize, last_key: Option<&str>) -> PaginationResult {
+pub fn compute_pagination_result(total_filtered: u32, limit: u32, last_key: Option<&str>) -> PaginationResult {
     let is_truncated = total_filtered > limit;
-    let count = total_filtered.min(limit) as u32;
+    let count = total_filtered.min(limit);
 
     let continuation_token = if is_truncated {
         last_key.map(encode_continuation_token)
@@ -421,10 +421,10 @@ mod property_tests {
 
     #[test]
     fn prop_pagination_count_bounded() {
-        check!().with_type::<(usize, usize)>().for_each(|(total, limit)| {
+        check!().with_type::<(u32, u32)>().for_each(|(total, limit)| {
             let result = compute_pagination_result(*total, *limit, Some("key"));
-            assert!(result.count as usize <= *limit);
-            assert!(result.count as usize <= *total);
+            assert!(result.count <= *limit);
+            assert!(result.count <= *total);
         });
     }
 

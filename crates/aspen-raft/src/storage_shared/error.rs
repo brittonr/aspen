@@ -122,7 +122,7 @@ pub enum SharedStorageError {
     #[snafu(display("batch size {} exceeds maximum {}", size, max))]
     BatchTooLarge {
         /// Actual batch size.
-        size: usize,
+        size: u32,
         /// Maximum allowed batch size.
         max: u32,
     },

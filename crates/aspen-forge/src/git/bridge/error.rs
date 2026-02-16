@@ -19,7 +19,7 @@ pub enum BridgeError {
 
     /// Invalid hash length.
     #[snafu(display("invalid hash length: expected {expected}, got {actual}"))]
-    InvalidHashLength { expected: usize, actual: usize },
+    InvalidHashLength { expected: u32, actual: u32 },
 
     /// Invalid hex encoding.
     #[snafu(display("invalid hex encoding: {message}"))]
@@ -79,18 +79,18 @@ pub enum BridgeError {
 
     /// DAG traversal depth exceeded.
     #[snafu(display("DAG traversal depth exceeded: {depth} > {max}"))]
-    DepthExceeded { depth: usize, max: usize },
+    DepthExceeded { depth: u32, max: u32 },
 
     // ========================================================================
     // Batch Limits (Tiger Style)
     // ========================================================================
     /// Import batch size exceeded.
     #[snafu(display("import batch size exceeded: {count} > {max}"))]
-    ImportBatchExceeded { count: usize, max: usize },
+    ImportBatchExceeded { count: u32, max: u32 },
 
     /// Push object count exceeded.
     #[snafu(display("push would include too many objects: {count} > {max}"))]
-    PushTooLarge { count: usize, max: usize },
+    PushTooLarge { count: u32, max: u32 },
 
     // ========================================================================
     // Ref Errors

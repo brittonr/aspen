@@ -94,7 +94,7 @@ impl WorkerService {
             let mut worker_config_copy = worker_config.clone();
             worker_config_copy.id = Some(format!("node-{}-worker-{}", self.node_id, i));
 
-            self.pool.spawn_worker(worker_config_copy).await.context(StartWorkersSnafu { count: 1usize })?;
+            self.pool.spawn_worker(worker_config_copy).await.context(StartWorkersSnafu { count: 1u32 })?;
         }
 
         // Update worker metadata for affinity routing

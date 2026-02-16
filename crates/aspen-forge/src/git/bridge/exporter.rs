@@ -54,7 +54,7 @@ pub struct ExportResult {
     /// Objects exported (in dependency order).
     pub objects: Vec<ExportedObject>,
     /// Number of objects that were already known to remote.
-    pub objects_skipped: usize,
+    pub objects_skipped: u32,
     /// Refs being pushed.
     pub refs: Vec<(String, Sha1Hash)>,
 }
@@ -205,16 +205,16 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
 
             if to_export.len() >= MAX_PUSH_OBJECTS {
                 return Err(BridgeError::PushTooLarge {
-                    count: to_export.len(),
-                    max: MAX_PUSH_OBJECTS,
+                    count: to_export.len() as u32,
+                    max: MAX_PUSH_OBJECTS as u32,
                 });
             }
 
             depth += 1;
             if depth > MAX_DAG_TRAVERSAL_DEPTH {
                 return Err(BridgeError::DepthExceeded {
-                    depth,
-                    max: MAX_DAG_TRAVERSAL_DEPTH,
+                    depth: depth as u32,
+                    max: MAX_DAG_TRAVERSAL_DEPTH as u32,
                 });
             }
 
@@ -277,7 +277,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
 
         Ok(ExportResult {
             objects,
-            objects_skipped: skipped,
+            objects_skipped: skipped as u32,
             refs: Vec::new(),
         })
     }

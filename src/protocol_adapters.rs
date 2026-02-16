@@ -115,7 +115,8 @@ impl StateMachineProvider for StateMachineProviderAdapter {
                 let results = sm.scan_kv_with_prefix_async(prefix_str).await;
                 results.into_iter().take(limit).map(|(k, v)| (k.into_bytes(), v.into_bytes())).collect()
             }
-            StateMachineVariant::Redb(sm) => match sm.scan(prefix_str, None, Some(limit)) {
+            StateMachineVariant::Redb(sm) => match sm.scan(prefix_str, None, Some(limit.min(u32::MAX as usize) as u32))
+            {
                 Ok(results) => results.into_iter().map(|kv| (kv.key.into_bytes(), kv.value.into_bytes())).collect(),
                 Err(e) => {
                     tracing::debug!(error = %e, prefix = ?prefix_str, limit, "direct_scan: scan failed");

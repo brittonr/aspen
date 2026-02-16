@@ -58,7 +58,7 @@ pub enum ValidationError {
     #[snafu(display("iroh secret key must be 64 hex characters (32 bytes), got {len}"))]
     SecretKeyLength {
         /// Actual length of the provided key in characters.
-        len: usize,
+        len: u32,
     },
 
     /// Iroh secret key contains invalid hexadecimal characters.
@@ -216,7 +216,7 @@ pub fn validate_secret_key(key_hex: Option<&str>) -> Result<(), ValidationError>
     };
 
     if key.len() != SECRET_KEY_HEX_LENGTH {
-        return Err(ValidationError::SecretKeyLength { len: key.len() });
+        return Err(ValidationError::SecretKeyLength { len: key.len() as u32 });
     }
 
     if let Err(e) = hex::decode(key) {
@@ -410,9 +410,9 @@ mod tests {
 
     #[test]
     fn test_secret_key_wrong_length() {
-        assert_eq!(validate_secret_key(Some("abc")), Err(ValidationError::SecretKeyLength { len: 3 }));
-        assert_eq!(validate_secret_key(Some(&"a".repeat(63))), Err(ValidationError::SecretKeyLength { len: 63 }));
-        assert_eq!(validate_secret_key(Some(&"a".repeat(65))), Err(ValidationError::SecretKeyLength { len: 65 }));
+        assert_eq!(validate_secret_key(Some("abc")), Err(ValidationError::SecretKeyLength { len: 3_u32 }));
+        assert_eq!(validate_secret_key(Some(&"a".repeat(63))), Err(ValidationError::SecretKeyLength { len: 63_u32 }));
+        assert_eq!(validate_secret_key(Some(&"a".repeat(65))), Err(ValidationError::SecretKeyLength { len: 65_u32 }));
     }
 
     #[test]

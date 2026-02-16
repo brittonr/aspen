@@ -44,9 +44,9 @@ use crate::refs::RefStore;
 #[derive(Debug)]
 pub struct ImportResult {
     /// Number of objects imported.
-    pub objects_imported: usize,
+    pub objects_imported: u32,
     /// Number of objects skipped (already had mappings).
-    pub objects_skipped: usize,
+    pub objects_skipped: u32,
     /// Refs that were updated.
     pub refs_updated: Vec<(String, blake3::Hash)>,
 }
@@ -131,8 +131,8 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
     ) -> BridgeResult<ImportResult> {
         if objects.len() > MAX_IMPORT_BATCH_SIZE {
             return Err(BridgeError::ImportBatchExceeded {
-                count: objects.len(),
-                max: MAX_IMPORT_BATCH_SIZE,
+                count: objects.len() as u32,
+                max: MAX_IMPORT_BATCH_SIZE as u32,
             });
         }
 
@@ -166,8 +166,8 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
 
         // Sort into waves for parallel processing
         let waves = collector.finish_waves()?;
-        let skipped_count = waves.skipped.len();
-        let total_objects: usize = waves.waves.iter().map(|w| w.len()).sum();
+        let skipped_count = waves.skipped.len() as u32;
+        let total_objects: u32 = waves.waves.iter().map(|w| w.len() as u32).sum();
         let wave_count = waves.waves.len();
 
         // Import objects wave by wave with parallelism within each wave.
@@ -177,7 +177,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         // objects in a wave to complete before starting the next wave
         // because later waves depend on mappings created in earlier waves.
         let repo_id = *repo_id;
-        let mut imported = 0usize;
+        let mut imported = 0u32;
 
         for (wave_idx, wave) in waves.waves.into_iter().enumerate() {
             let wave_size = wave.len();

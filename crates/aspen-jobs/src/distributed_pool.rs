@@ -535,7 +535,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
                 Priority::Normal => Some(RoutingPriority::Normal),
                 Priority::Low => Some(RoutingPriority::Low),
             },
-            estimated_size: None,
+            estimated_size_bytes: None,
             metadata: spec.metadata.clone(),
         };
 

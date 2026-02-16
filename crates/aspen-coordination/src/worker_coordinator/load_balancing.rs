@@ -36,8 +36,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         let selected = match self.config.strategy {
             LoadBalancingStrategy::RoundRobin => {
                 let mut counter = self.round_robin_counter.write().await;
-                let idx = *counter % eligible.len();
-                *counter = (*counter + 1) % eligible.len();
+                let eligible_count = eligible.len().min(u32::MAX as usize) as u32;
+                let idx = (*counter % eligible_count) as usize;
+                *counter = (*counter + 1) % eligible_count;
                 eligible.get(idx).cloned()
             }
             LoadBalancingStrategy::LeastLoaded => eligible.into_iter().max_by(|a, b| {
@@ -46,8 +47,8 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             LoadBalancingStrategy::Affinity => {
                 if let Some(key) = affinity_key {
                     // Simple hash-based affinity
-                    let hash = verified::simple_hash(key) as usize;
-                    eligible.get(hash % eligible.len()).cloned()
+                    let hash = verified::simple_hash(key);
+                    eligible.get((hash as usize) % eligible.len()).cloned()
                 } else {
                     // Fallback to least loaded
                     eligible.into_iter().max_by(|a, b| {
@@ -58,8 +59,8 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             LoadBalancingStrategy::ConsistentHash => {
                 // Simplified consistent hash
                 let key = affinity_key.unwrap_or(job_type);
-                let hash = verified::simple_hash(key) as usize;
-                eligible.get(hash % eligible.len()).cloned()
+                let hash = verified::simple_hash(key);
+                eligible.get((hash as usize) % eligible.len()).cloned()
             }
             LoadBalancingStrategy::WorkStealing => {
                 // For work stealing, prefer least loaded but consider queue depth

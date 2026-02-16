@@ -85,8 +85,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
         for target in targets.iter().take(MAX_TARGETS_PER_ROUND) {
             // Round-robin through sources
-            let source_index = *counter % sorted_sources.len();
-            *counter = (*counter + 1) % sorted_sources.len();
+            let sources_count = sorted_sources.len().min(u32::MAX as usize) as u32;
+            let source_index = (*counter % sources_count) as usize;
+            *counter = (*counter + 1) % sources_count;
 
             let source = &sorted_sources[source_index];
 

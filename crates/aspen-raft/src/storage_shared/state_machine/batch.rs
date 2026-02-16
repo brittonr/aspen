@@ -17,7 +17,7 @@ impl SharedRedbStorage {
     ) -> Result<AppResponse, SharedStorageError> {
         if operations.len() > MAX_SETMULTI_KEYS as usize {
             return Err(SharedStorageError::BatchTooLarge {
-                size: operations.len(),
+                size: operations.len() as u32,
                 max: MAX_SETMULTI_KEYS,
             });
         }
@@ -63,7 +63,7 @@ impl SharedRedbStorage {
     ) -> Result<AppResponse, SharedStorageError> {
         if operations.len() > MAX_SETMULTI_KEYS as usize {
             return Err(SharedStorageError::BatchTooLarge {
-                size: operations.len(),
+                size: operations.len() as u32,
                 max: MAX_SETMULTI_KEYS,
             });
         }

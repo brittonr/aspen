@@ -97,6 +97,19 @@ pub const APPLY_CHANGE_TIMEOUT: Duration = Duration::from_secs(60);
 /// Tiger Style: Bounds memory usage for change caching.
 pub const CHANGE_CACHE_SIZE: usize = 1_000;
 
+/// Non-zero version of CHANGE_CACHE_SIZE for LRU cache initialization.
+///
+/// This is a const so the value is validated at compile time, avoiding
+/// runtime `.expect()` calls per Tiger Style.
+// SAFETY: CHANGE_CACHE_SIZE is 1000, which is non-zero.
+pub const CHANGE_CACHE_SIZE_NONZERO: std::num::NonZeroUsize = {
+    // This will fail to compile if CHANGE_CACHE_SIZE is 0
+    match std::num::NonZeroUsize::new(CHANGE_CACHE_SIZE) {
+        Some(n) => n,
+        None => panic!("CHANGE_CACHE_SIZE must be non-zero"),
+    }
+};
+
 /// Maximum number of pristine handles to cache.
 ///
 /// Tiger Style: Limits open file handles.

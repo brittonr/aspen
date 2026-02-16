@@ -140,8 +140,9 @@ impl StateMachineVariant {
     /// Returns keys in sorted order (lexicographic).
     /// Tiger Style: Bounded results prevent unbounded memory usage.
     pub async fn scan(&self, request: &ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
-        let limit = request.limit.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS).min(MAX_BATCH_SIZE) as usize;
-        let fetch_limit = limit.saturating_add(1);
+        let limit_u32 = request.limit.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS).min(MAX_BATCH_SIZE);
+        let limit = limit_u32 as usize;
+        let fetch_limit = limit_u32.saturating_add(1);
 
         // Decode continuation token (format: base64(last_key))
         let start_after = request.continuation_token.as_ref().and_then(|token| {

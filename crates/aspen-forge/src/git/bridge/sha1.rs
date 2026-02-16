@@ -36,8 +36,8 @@ impl Sha1Hash {
     pub fn from_slice(bytes: &[u8]) -> Result<Self, BridgeError> {
         if bytes.len() != Self::SIZE {
             return Err(BridgeError::InvalidHashLength {
-                expected: Self::SIZE,
-                actual: bytes.len(),
+                expected: Self::SIZE as u32,
+                actual: bytes.len() as u32,
             });
         }
         let mut arr = [0u8; 20];
@@ -51,8 +51,8 @@ impl Sha1Hash {
     pub fn from_hex(s: &str) -> Result<Self, BridgeError> {
         if s.len() != Self::HEX_SIZE {
             return Err(BridgeError::InvalidHashLength {
-                expected: Self::HEX_SIZE,
-                actual: s.len(),
+                expected: Self::HEX_SIZE as u32,
+                actual: s.len() as u32,
             });
         }
 

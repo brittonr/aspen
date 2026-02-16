@@ -54,8 +54,8 @@ pub struct RoutingContext {
     pub preferred_node: Option<String>,
     /// Job priority.
     pub priority: Option<Priority>,
-    /// Job size estimate.
-    pub estimated_size: Option<usize>,
+    /// Job size estimate in bytes.
+    pub estimated_size_bytes: Option<u64>,
     /// Custom metadata.
     pub metadata: HashMap<String, String>,
 }
@@ -84,7 +84,7 @@ pub struct StrategyMetrics {
 
 /// Round-robin load balancing strategy.
 pub struct RoundRobinStrategy {
-    counter: usize,
+    counter: u32,
     metrics: StrategyMetrics,
 }
 
@@ -117,9 +117,10 @@ impl LoadBalancer for RoundRobinStrategy {
         }
 
         // Round-robin selection using pure function
-        let selected_local_idx = self.counter % eligible_indices.len();
+        let eligible_count = eligible_indices.len().min(u32::MAX as usize) as u32;
+        let selected_local_idx = (self.counter % eligible_count) as usize;
         let selected_idx = eligible_indices[selected_local_idx];
-        self.counter = (self.counter + 1) % eligible_indices.len();
+        self.counter = (self.counter + 1) % eligible_count;
 
         // Update metrics
         self.metrics.total_selections += 1;

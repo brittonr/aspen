@@ -82,7 +82,7 @@ pub fn batch_remaining(next: u64, batch_end: u64) -> u64 {
 #[inline]
 pub fn compute_batch_end(batch_start: u64, batch_size: u64) -> Option<u64> {
     let end = batch_start.checked_add(batch_size);
-    debug_assert!(end.is_none() || end.unwrap() >= batch_start, "batch_end must be >= batch_start when Some");
+    debug_assert!(end.is_none_or(|e| e >= batch_start), "batch_end must be >= batch_start when Some");
     end
 }
 

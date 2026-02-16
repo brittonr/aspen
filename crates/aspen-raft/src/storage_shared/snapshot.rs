@@ -107,7 +107,7 @@ impl SharedRedbSnapshotBuilder {
         &self,
         meta: &SnapshotMeta<AppTypeConfig>,
         data: &[u8],
-        entry_count: usize,
+        entry_count: u32,
     ) -> Result<String, std::io::Error> {
         let snapshot_index = meta.last_log_id.as_ref().map(|l| l.index).unwrap_or(0);
         let chain_hash = self.storage.read_chain_hash_at(snapshot_index)?.unwrap_or([0u8; 32]);
@@ -191,7 +191,7 @@ impl RaftSnapshotBuilder<AppTypeConfig> for SharedRedbSnapshotBuilder {
             snapshot_id,
         };
 
-        let entry_count = snapshot_data.kv_entries.len();
+        let entry_count = snapshot_data.kv_entries.len().min(u32::MAX as usize) as u32;
         self.build_snapshot_store(&meta, &data, entry_count)?;
         self.build_snapshot_emit_event(&meta, entry_count as u64, data.len() as u64);
 

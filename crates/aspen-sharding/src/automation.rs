@@ -216,7 +216,7 @@ impl ShardAutomationManager {
         // Apply the split to the topology
         let mut topology = self.topology.write().await;
         let timestamp =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
 
         topology.apply_split(shard_id, split_key, new_shard_id, timestamp)?;
 
@@ -255,10 +255,14 @@ impl ShardAutomationManager {
             if common_len < start.len() && common_len < end.len() {
                 // SAFETY: We verified common_len < start.len() && common_len < end.len()
                 // in the if condition, so chars().nth(common_len) is within bounds.
-                let start_char = start.chars().nth(common_len).unwrap() as u8;
-                let end_char = end.chars().nth(common_len).unwrap() as u8;
-                let mid_char = ((start_char + end_char) / 2) as char;
-                format!("{}{}", &start[..common_len], mid_char)
+                // However, to avoid unwrap we use and_then with fallback.
+                match (start.chars().nth(common_len), end.chars().nth(common_len)) {
+                    (Some(sc), Some(ec)) => {
+                        let mid_char = (((sc as u8).saturating_add(ec as u8)) / 2) as char;
+                        format!("{}{}", &start[..common_len], mid_char)
+                    }
+                    _ => format!("{}8", start), // Fallback if char access fails
+                }
             } else {
                 // Fallback: use start + "8"
                 format!("{}8", start)
@@ -335,7 +339,7 @@ impl ShardAutomationManager {
 
         let mut topology = self.topology.write().await;
         let timestamp =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
 
         topology.apply_merge(source, target, timestamp)?;
 

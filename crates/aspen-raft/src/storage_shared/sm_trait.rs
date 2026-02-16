@@ -155,7 +155,7 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
 
         // Deserialize and validate snapshot data
         let kv_entries = self.install_snapshot_deserialize_data(&data)?;
-        let kv_entries_count = kv_entries.len();
+        let kv_entries_count = kv_entries.len().min(u32::MAX as usize) as u32;
 
         // Write snapshot data to state machine
         self.install_snapshot_write_data(meta, kv_entries)?;
@@ -315,7 +315,7 @@ impl SharedRedbStorage {
     }
 
     /// Emit SnapshotInstalled event if broadcast channel is configured.
-    fn install_snapshot_broadcast_event(&self, meta: &openraft::SnapshotMeta<AppTypeConfig>, kv_entries_count: usize) {
+    fn install_snapshot_broadcast_event(&self, meta: &openraft::SnapshotMeta<AppTypeConfig>, kv_entries_count: u32) {
         if let Some(ref tx) = self.snapshot_broadcast {
             let event = SnapshotEvent::Installed {
                 snapshot_id: meta.snapshot_id.clone(),

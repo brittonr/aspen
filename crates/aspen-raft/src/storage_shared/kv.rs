@@ -47,7 +47,7 @@ impl SharedRedbStorage {
         &self,
         prefix: &str,
         after_key: Option<&str>,
-        limit: Option<usize>,
+        limit: Option<u32>,
     ) -> Result<Vec<KeyValueWithRevision>, SharedStorageError> {
         // Tiger Style: after_key must come after prefix if both specified
         if let Some(after) = after_key {
@@ -63,7 +63,7 @@ impl SharedRedbStorage {
         let table = read_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
 
         let now_ms = now_unix_ms();
-        let bounded_limit = limit.unwrap_or(MAX_BATCH_SIZE as usize).min(MAX_BATCH_SIZE as usize);
+        let bounded_limit = limit.unwrap_or(MAX_BATCH_SIZE).min(MAX_BATCH_SIZE) as usize;
         let prefix_bytes = prefix.as_bytes();
 
         let mut results = Vec::with_capacity(bounded_limit.min(128));

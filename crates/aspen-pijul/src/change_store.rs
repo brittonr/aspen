@@ -11,7 +11,7 @@ use parking_lot::RwLock;
 use tracing::debug;
 use tracing::instrument;
 
-use super::constants::CHANGE_CACHE_SIZE;
+use super::constants::CHANGE_CACHE_SIZE_NONZERO;
 use super::constants::MAX_CHANGE_SIZE_BYTES;
 use super::error::PijulError;
 use super::error::PijulResult;
@@ -46,13 +46,9 @@ pub struct AspenChangeStore<B: BlobStore> {
 impl<B: BlobStore> AspenChangeStore<B> {
     /// Create a new change store backed by the given blob store.
     pub fn new(blobs: Arc<B>) -> Self {
-        // SAFETY: CHANGE_CACHE_SIZE is a non-zero constant (1000), validated at compile time.
-        const _: () = assert!(CHANGE_CACHE_SIZE > 0);
         Self {
             blobs,
-            cache: RwLock::new(LruCache::new(
-                std::num::NonZeroUsize::new(CHANGE_CACHE_SIZE).expect("CHANGE_CACHE_SIZE is non-zero"),
-            )),
+            cache: RwLock::new(LruCache::new(CHANGE_CACHE_SIZE_NONZERO)),
         }
     }
 

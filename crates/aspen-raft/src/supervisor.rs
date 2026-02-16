@@ -136,7 +136,7 @@ impl Supervisor {
         times.retain(|&t| now.duration_since(t) < RESTART_WINDOW);
 
         // Check if we've exceeded max restarts in the window (extracted pure logic)
-        should_allow_restart(times.len(), MAX_RESTARTS)
+        should_allow_restart(times.len().min(u32::MAX as usize) as u32, MAX_RESTARTS)
     }
 
     /// Record a restart attempt.

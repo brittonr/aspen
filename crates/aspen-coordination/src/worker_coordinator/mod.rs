@@ -58,9 +58,9 @@ pub struct DistributedWorkerCoordinator<S: KeyValueStore + ?Sized> {
     /// Worker groups.
     groups: Arc<RwLock<HashMap<String, WorkerGroup>>>,
     /// Round-robin counter for simple distribution.
-    round_robin_counter: Arc<RwLock<usize>>,
+    round_robin_counter: Arc<RwLock<u32>>,
     /// Round-robin counter for work stealing source selection.
-    steal_source_counter: Arc<RwLock<usize>>,
+    steal_source_counter: Arc<RwLock<u32>>,
     /// Background task handles.
     tasks: Arc<RwLock<Vec<JoinHandle<()>>>>,
     /// Shutdown signal.

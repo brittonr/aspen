@@ -94,8 +94,8 @@ pub fn topological_sort(objects: Vec<PendingObject>) -> BridgeResult<Topological
 
     if objects.len() > MAX_PENDING_OBJECTS {
         return Err(BridgeError::ImportBatchExceeded {
-            count: objects.len(),
-            max: MAX_PENDING_OBJECTS,
+            count: objects.len() as u32,
+            max: MAX_PENDING_OBJECTS as u32,
         });
     }
 
@@ -190,8 +190,8 @@ pub fn topological_sort_waves(objects: Vec<PendingObject>) -> BridgeResult<Topol
 
     if objects.len() > MAX_PENDING_OBJECTS {
         return Err(BridgeError::ImportBatchExceeded {
-            count: objects.len(),
-            max: MAX_PENDING_OBJECTS,
+            count: objects.len() as u32,
+            max: MAX_PENDING_OBJECTS as u32,
         });
     }
 
@@ -412,8 +412,8 @@ impl ObjectCollector {
     pub fn add(&mut self, obj: PendingObject) -> BridgeResult<()> {
         if self.objects.len() >= MAX_PENDING_OBJECTS {
             return Err(BridgeError::ImportBatchExceeded {
-                count: self.objects.len() + 1,
-                max: MAX_PENDING_OBJECTS,
+                count: (self.objects.len() + 1) as u32,
+                max: MAX_PENDING_OBJECTS as u32,
             });
         }
 
@@ -427,8 +427,8 @@ impl ObjectCollector {
         self.depth += 1;
         if self.depth > MAX_DAG_TRAVERSAL_DEPTH {
             return Err(BridgeError::DepthExceeded {
-                depth: self.depth,
-                max: MAX_DAG_TRAVERSAL_DEPTH,
+                depth: self.depth as u32,
+                max: MAX_DAG_TRAVERSAL_DEPTH as u32,
             });
         }
         Ok(())

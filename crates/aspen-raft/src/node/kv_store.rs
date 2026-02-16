@@ -321,7 +321,8 @@ impl RaftNode {
         limit: usize,
     ) -> Result<ScanResult, KeyValueStoreError> {
         let start_key = request.continuation_token.as_deref();
-        match sm.scan(&request.prefix, start_key, Some(limit + 1)) {
+        let limit_u32 = limit.min(u32::MAX as usize - 1) as u32;
+        match sm.scan(&request.prefix, start_key, Some(limit_u32 + 1)) {
             Ok(entries_full) => {
                 let is_truncated = entries_full.len() > limit;
                 let entries: Vec<KeyValueWithRevision> = entries_full.into_iter().take(limit).collect();
