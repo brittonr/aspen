@@ -58,7 +58,9 @@ use crate::node_failure_detection::FailureType;
 #[inline]
 pub fn calculate_expires_at_ms(now_ms: u64, ttl_seconds: u32) -> u64 {
     let ttl_ms = (ttl_seconds as u64).saturating_mul(1000);
-    now_ms.saturating_add(ttl_ms)
+    let expires_at = now_ms.saturating_add(ttl_ms);
+    debug_assert!(expires_at >= now_ms, "expires_at must be >= now_ms");
+    expires_at
 }
 
 // ============================================================================
@@ -164,6 +166,7 @@ pub fn classify_drift_severity(
 /// ```
 #[inline]
 pub fn compute_ewma(new_value: f64, old_avg: f64, alpha: f64) -> f64 {
+    debug_assert!((0.0..=1.0).contains(&alpha), "alpha must be in [0.0, 1.0], got {}", alpha);
     alpha * new_value + (1.0 - alpha) * old_avg
 }
 
@@ -198,6 +201,7 @@ pub fn compute_ewma(new_value: f64, old_avg: f64, alpha: f64) -> f64 {
 /// ```
 #[inline]
 pub fn calculate_backoff_duration(restart_count: usize, backoff_durations: &[Duration]) -> Duration {
+    debug_assert!(!backoff_durations.is_empty(), "backoff_durations must not be empty");
     let idx = restart_count.min(backoff_durations.len().saturating_sub(1));
     backoff_durations[idx]
 }
@@ -296,7 +300,10 @@ pub fn transition_connection_health(
 /// ```
 #[inline]
 pub fn calculate_connection_retry_backoff(attempt: u32, base_ms: u64) -> Duration {
-    Duration::from_millis(base_ms.saturating_mul(1u64 << (attempt.saturating_sub(1))))
+    debug_assert!(attempt > 0, "attempt must be >= 1");
+    let backoff_ms = base_ms.saturating_mul(1u64 << (attempt.saturating_sub(1)));
+    debug_assert!(backoff_ms >= base_ms || base_ms == 0, "backoff must be >= base");
+    Duration::from_millis(backoff_ms)
 }
 
 // ============================================================================

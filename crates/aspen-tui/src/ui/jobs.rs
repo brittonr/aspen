@@ -104,7 +104,7 @@ fn draw_job_list(frame: &mut Frame, app: &App, area: Rect) {
                 _ => "?",
             };
 
-            let style = if i == app.jobs_state.selected_job {
+            let style = if i as u32 == app.jobs_state.selected_job {
                 Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
@@ -138,7 +138,7 @@ fn draw_job_list(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Draw job details panel.
 fn draw_job_details(frame: &mut Frame, app: &App, area: Rect) {
-    let details_text = if let Some(job) = app.jobs_state.jobs.get(app.jobs_state.selected_job) {
+    let details_text = if let Some(job) = app.jobs_state.jobs.get(app.jobs_state.selected_job as usize) {
         let mut lines = vec![
             Line::from(vec![
                 Span::styled("Job ID: ", Style::default().add_modifier(Modifier::BOLD)),
@@ -291,7 +291,7 @@ fn draw_worker_list(frame: &mut Frame, app: &App, area: Rect) {
                 _ => Color::White,
             };
 
-            let style = if i == app.workers_state.selected_worker {
+            let style = if i as u32 == app.workers_state.selected_worker {
                 Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
@@ -317,60 +317,60 @@ fn draw_worker_list(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Draw worker details panel.
 fn draw_worker_details(frame: &mut Frame, app: &App, area: Rect) {
-    let details_text = if let Some(worker) = app.workers_state.pool_info.workers.get(app.workers_state.selected_worker)
-    {
-        let mut lines = vec![
-            Line::from(vec![
-                Span::styled("Worker ID: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(&worker.worker_id),
-            ]),
-            Line::from(vec![
-                Span::styled("Status: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(&worker.status),
-            ]),
-            Line::from(vec![
-                Span::styled("Capacity: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(format!("{} (using {})", worker.capacity, worker.active_jobs)),
-            ]),
-            Line::from(vec![
-                Span::styled("Capabilities: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(worker.capabilities.join(", ")),
-            ]),
-            Line::from(vec![
-                Span::styled("Last Heartbeat: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(&worker.last_heartbeat),
-            ]),
-            Line::from(vec![
-                Span::styled("Total Processed: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(format!("{}", worker.total_processed)),
-            ]),
-            Line::from(vec![
-                Span::styled("Total Failed: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::styled(
-                    format!("{}", worker.total_failed),
-                    Style::default().fg(if worker.total_failed > 0 {
-                        Color::Red
-                    } else {
-                        Color::White
-                    }),
-                ),
-            ]),
-        ];
+    let details_text =
+        if let Some(worker) = app.workers_state.pool_info.workers.get(app.workers_state.selected_worker as usize) {
+            let mut lines = vec![
+                Line::from(vec![
+                    Span::styled("Worker ID: ", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw(&worker.worker_id),
+                ]),
+                Line::from(vec![
+                    Span::styled("Status: ", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw(&worker.status),
+                ]),
+                Line::from(vec![
+                    Span::styled("Capacity: ", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw(format!("{} (using {})", worker.capacity, worker.active_jobs)),
+                ]),
+                Line::from(vec![
+                    Span::styled("Capabilities: ", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw(worker.capabilities.join(", ")),
+                ]),
+                Line::from(vec![
+                    Span::styled("Last Heartbeat: ", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw(&worker.last_heartbeat),
+                ]),
+                Line::from(vec![
+                    Span::styled("Total Processed: ", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw(format!("{}", worker.total_processed)),
+                ]),
+                Line::from(vec![
+                    Span::styled("Total Failed: ", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        format!("{}", worker.total_failed),
+                        Style::default().fg(if worker.total_failed > 0 {
+                            Color::Red
+                        } else {
+                            Color::White
+                        }),
+                    ),
+                ]),
+            ];
 
-        if !worker.active_job_ids.is_empty() {
-            lines.push(Line::from(vec![Span::styled(
-                "Active Jobs:",
-                Style::default().add_modifier(Modifier::BOLD),
-            )]));
-            for job_id in &worker.active_job_ids {
-                lines.push(Line::from(vec![Span::raw("  - "), Span::raw(job_id)]));
+            if !worker.active_job_ids.is_empty() {
+                lines.push(Line::from(vec![Span::styled(
+                    "Active Jobs:",
+                    Style::default().add_modifier(Modifier::BOLD),
+                )]));
+                for job_id in &worker.active_job_ids {
+                    lines.push(Line::from(vec![Span::raw("  - "), Span::raw(job_id)]));
+                }
             }
-        }
 
-        lines
-    } else {
-        vec![Line::from("No worker selected")]
-    };
+            lines
+        } else {
+            vec![Line::from("No worker selected")]
+        };
 
     let paragraph = Paragraph::new(details_text)
         .block(Block::default().borders(Borders::ALL).title(" Worker Details "))

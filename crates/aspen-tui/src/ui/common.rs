@@ -41,7 +41,7 @@ pub(super) fn draw_sql_input_popup(frame: &mut Frame, app: &App) {
         if app.sql_state.history_browsing {
             app.sql_state.history_index + 1
         } else {
-            app.sql_state.history.len()
+            app.sql_state.history.len() as u32
         },
         app.sql_state.history.len()
     );

@@ -134,7 +134,7 @@ impl App {
             }
             Command::SqlScrollRight => {
                 if let Some(result) = &self.sql_state.last_result {
-                    let max = result.columns.len().saturating_sub(1);
+                    let max = (result.columns.len().saturating_sub(1)) as u32;
                     if self.sql_state.result_scroll_col < max {
                         self.sql_state.result_scroll_col += 1;
                     }
@@ -198,14 +198,15 @@ impl App {
                 }
             }
             Command::CiLogScrollDown => {
-                let max_scroll = self.ci_state.log_stream.lines.len().saturating_sub(1);
+                let max_scroll = (self.ci_state.log_stream.lines.len().saturating_sub(1)) as u32;
                 if self.ci_state.log_stream.scroll_position < max_scroll {
                     self.ci_state.log_stream.scroll_position =
                         (self.ci_state.log_stream.scroll_position + 10).min(max_scroll);
                 }
             }
             Command::CiLogScrollToEnd => {
-                self.ci_state.log_stream.scroll_position = self.ci_state.log_stream.lines.len().saturating_sub(1);
+                self.ci_state.log_stream.scroll_position =
+                    (self.ci_state.log_stream.lines.len().saturating_sub(1)) as u32;
                 self.ci_state.log_stream.auto_scroll = true;
             }
             Command::CiLogScrollToStart => {
@@ -215,7 +216,8 @@ impl App {
             Command::CiLogToggleFollow => {
                 self.ci_state.log_stream.auto_scroll = !self.ci_state.log_stream.auto_scroll;
                 if self.ci_state.log_stream.auto_scroll {
-                    self.ci_state.log_stream.scroll_position = self.ci_state.log_stream.lines.len().saturating_sub(1);
+                    self.ci_state.log_stream.scroll_position =
+                        (self.ci_state.log_stream.lines.len().saturating_sub(1)) as u32;
                     self.set_status("Follow mode enabled");
                 } else {
                     self.set_status("Follow mode disabled");

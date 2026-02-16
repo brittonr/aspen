@@ -105,7 +105,7 @@ fn draw_ci_run_list(frame: &mut Frame, app: &App, area: Rect) {
         .map(|(i, run)| {
             let status_color = ci_status_color(&run.status);
 
-            let style = if i == app.ci_state.selected_run {
+            let style = if i as u32 == app.ci_state.selected_run {
                 Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
@@ -281,7 +281,7 @@ fn draw_ci_log_viewer(frame: &mut Frame, app: &App, area: Rect) {
     let start_line = if log_state.auto_scroll {
         total_lines.saturating_sub(visible_height)
     } else {
-        log_state.scroll_position.saturating_sub(visible_height / 2)
+        (log_state.scroll_position as usize).saturating_sub(visible_height / 2)
     };
 
     let end_line = (start_line + visible_height).min(total_lines);

@@ -106,7 +106,9 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?;
 
         // Store the hash mapping
-        self.mapping.store(repo_id, blake3, sha1, obj_type).await?;
+        self.mapping.store(repo_id, blake3, sha1, obj_type).await.map_err(|e| BridgeError::KvStorage {
+            message: format!("failed to store hash mapping for {}: {}", sha1.to_hex(), e),
+        })?;
 
         Ok(blake3)
     }
@@ -223,7 +225,9 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         objects: Vec<(Sha1Hash, GitObjectType, Vec<u8>)>,
     ) -> BridgeResult<ImportResult> {
         // Import all objects
-        let mut result = self.import_objects(repo_id, objects).await?;
+        let mut result = self.import_objects(repo_id, objects).await.map_err(|e| BridgeError::ImportFailed {
+            message: format!("failed to import objects for ref {}: {}", ref_name, e),
+        })?;
 
         // Get the BLAKE3 hash for the commit
         let (commit_blake3, _) =

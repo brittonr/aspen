@@ -27,8 +27,8 @@ use crate::manager::JobManager;
 pub struct JobReplaySystem {
     /// Recorded job events.
     events: Vec<JobEvent>,
-    /// Current replay position.
-    position: usize,
+    /// Current replay position (bounded by event count).
+    position: u32,
     /// Simulation seed for deterministic randomness.
     seed: u64,
     /// Replay configuration.
@@ -154,8 +154,8 @@ impl JobReplaySystem {
 
     /// Get next event in replay.
     pub fn next_event(&mut self) -> Option<&JobEvent> {
-        if self.position < self.events.len() {
-            let event = &self.events[self.position];
+        if (self.position as usize) < self.events.len() {
+            let event = &self.events[self.position as usize];
             self.position += 1;
             Some(event)
         } else {
@@ -238,8 +238,8 @@ pub enum JobEvent {
     WorkerScaled {
         /// The pool ID.
         pool_id: String,
-        /// New pool size.
-        new_size: usize,
+        /// New pool size (bounded by worker limits).
+        new_size: u32,
         /// HLC timestamp when the scaling occurred.
         hlc_timestamp: SerializableTimestamp,
     },

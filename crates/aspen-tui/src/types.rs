@@ -146,8 +146,8 @@ pub struct SqlState {
     pub query_buffer: String,
     /// Query history.
     pub history: Vec<String>,
-    /// Current history navigation index.
-    pub history_index: usize,
+    /// Current history navigation index (bounded by MAX_SQL_HISTORY).
+    pub history_index: u32,
     /// Whether navigating history (vs editing).
     pub history_browsing: bool,
     /// Consistency level for queries.
@@ -155,11 +155,11 @@ pub struct SqlState {
     /// Last query result.
     pub last_result: Option<SqlQueryResult>,
     /// Vertical scroll position in results.
-    pub result_scroll_row: usize,
+    pub result_scroll_row: u32,
     /// Horizontal scroll position in results.
-    pub result_scroll_col: usize,
+    pub result_scroll_col: u32,
     /// Selected row index.
-    pub selected_row: usize,
+    pub selected_row: u32,
 }
 
 impl SqlState {
@@ -180,8 +180,8 @@ impl SqlState {
             self.history.remove(0);
         }
 
-        // Reset navigation
-        self.history_index = self.history.len();
+        // Reset navigation (cast len() safely since bounded by MAX_SQL_HISTORY)
+        self.history_index = self.history.len() as u32;
         self.history_browsing = false;
     }
 
@@ -194,12 +194,12 @@ impl SqlState {
         if !self.history_browsing {
             // Start browsing from the end
             self.history_browsing = true;
-            self.history_index = self.history.len();
+            self.history_index = self.history.len() as u32;
         }
 
         if self.history_index > 0 {
             self.history_index -= 1;
-            self.query_buffer = self.history[self.history_index].clone();
+            self.query_buffer = self.history[self.history_index as usize].clone();
         }
     }
 
@@ -209,12 +209,13 @@ impl SqlState {
             return;
         }
 
-        if self.history_index < self.history.len() - 1 {
+        let history_len = self.history.len() as u32;
+        if self.history_index < history_len.saturating_sub(1) {
             self.history_index += 1;
-            self.query_buffer = self.history[self.history_index].clone();
+            self.query_buffer = self.history[self.history_index as usize].clone();
         } else {
             // At the end, clear buffer
-            self.history_index = self.history.len();
+            self.history_index = history_len;
             self.query_buffer.clear();
             self.history_browsing = false;
         }
@@ -593,8 +594,8 @@ pub struct WorkerInfo {
 pub struct JobsState {
     /// Cached job list.
     pub jobs: Vec<JobInfo>,
-    /// Selected job index.
-    pub selected_job: usize,
+    /// Selected job index (bounded by MAX_DISPLAYED_JOBS).
+    pub selected_job: u32,
     /// Current status filter.
     pub status_filter: JobStatusFilter,
     /// Current priority filter.
@@ -610,8 +611,8 @@ pub struct JobsState {
 pub struct WorkersState {
     /// Worker pool information.
     pub pool_info: WorkerPoolInfo,
-    /// Selected worker index.
-    pub selected_worker: usize,
+    /// Selected worker index (bounded by MAX_DISPLAYED_WORKERS).
+    pub selected_worker: u32,
     /// Whether to show worker details panel.
     pub show_details: bool,
 }
@@ -752,8 +753,8 @@ pub struct CiJobInfo {
 pub struct CiState {
     /// Cached pipeline runs.
     pub runs: Vec<CiPipelineRunInfo>,
-    /// Selected run index.
-    pub selected_run: usize,
+    /// Selected run index (bounded by MAX_DISPLAYED_CI_RUNS).
+    pub selected_run: u32,
     /// Current status filter.
     pub status_filter: CiStatusFilter,
     /// Optional repository filter.
@@ -765,7 +766,7 @@ pub struct CiState {
     /// Log stream state for viewing job logs.
     pub log_stream: CiLogStreamState,
     /// Selected job index within the current run (for log viewing).
-    pub selected_job_index: Option<usize>,
+    pub selected_job_index: Option<u32>,
 }
 
 // ============================================================================
@@ -798,8 +799,8 @@ pub struct CiLogStreamState {
     pub job_id: Option<String>,
     /// Log lines buffer (bounded to MAX_TUI_LOG_LINES).
     pub lines: Vec<CiLogLine>,
-    /// Scroll position in the log view (line index).
-    pub scroll_position: usize,
+    /// Scroll position in the log view (line index, bounded by MAX_TUI_LOG_LINES).
+    pub scroll_position: u32,
     /// Whether auto-scroll is enabled (follow mode).
     pub auto_scroll: bool,
     /// Whether the stream is active (job still running).
@@ -829,7 +830,7 @@ impl CiLogStreamState {
         self.lines.push(line);
 
         if self.auto_scroll {
-            self.scroll_position = self.lines.len().saturating_sub(1);
+            self.scroll_position = (self.lines.len().saturating_sub(1)) as u32;
         }
     }
 
@@ -870,7 +871,7 @@ impl CiLogStreamState {
     pub fn toggle_auto_scroll(&mut self) {
         self.auto_scroll = !self.auto_scroll;
         if self.auto_scroll {
-            self.scroll_position = self.lines.len().saturating_sub(1);
+            self.scroll_position = (self.lines.len().saturating_sub(1)) as u32;
         }
     }
 
@@ -884,28 +885,30 @@ impl CiLogStreamState {
 
     /// Scroll down by one line.
     pub fn scroll_down(&mut self) {
-        if self.scroll_position < self.lines.len().saturating_sub(1) {
+        let max_pos = (self.lines.len().saturating_sub(1)) as u32;
+        if self.scroll_position < max_pos {
             self.scroll_position += 1;
         }
         // Re-enable auto-scroll if at bottom
-        if self.scroll_position >= self.lines.len().saturating_sub(1) {
+        if self.scroll_position >= max_pos {
             self.auto_scroll = true;
         }
     }
 
     /// Scroll up by a page (half the visible height).
-    pub fn page_up(&mut self, visible_lines: usize) {
+    pub fn page_up(&mut self, visible_lines: u32) {
         let half_page = visible_lines / 2;
         self.scroll_position = self.scroll_position.saturating_sub(half_page);
         self.auto_scroll = false;
     }
 
     /// Scroll down by a page (half the visible height).
-    pub fn page_down(&mut self, visible_lines: usize) {
+    pub fn page_down(&mut self, visible_lines: u32) {
         let half_page = visible_lines / 2;
-        self.scroll_position = (self.scroll_position + half_page).min(self.lines.len().saturating_sub(1));
+        let max_pos = (self.lines.len().saturating_sub(1)) as u32;
+        self.scroll_position = (self.scroll_position + half_page).min(max_pos);
         // Re-enable auto-scroll if at bottom
-        if self.scroll_position >= self.lines.len().saturating_sub(1) {
+        if self.scroll_position >= max_pos {
             self.auto_scroll = true;
         }
     }
@@ -918,7 +921,7 @@ impl CiLogStreamState {
 
     /// Jump to the end of logs.
     pub fn jump_to_end(&mut self) {
-        self.scroll_position = self.lines.len().saturating_sub(1);
+        self.scroll_position = (self.lines.len().saturating_sub(1)) as u32;
         self.auto_scroll = true;
     }
 

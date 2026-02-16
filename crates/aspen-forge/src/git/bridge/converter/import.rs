@@ -50,7 +50,11 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         let sha1 = compute_sha1("tree", git_tree_content);
 
         // Parse git tree format and translate hashes
-        let entries = self.parse_git_tree_content(repo_id, git_tree_content).await?;
+        let entries = self.parse_git_tree_content(repo_id, git_tree_content).await.map_err(|e| {
+            BridgeError::MalformedTreeEntry {
+                message: format!("failed to parse tree content: {}", e),
+            }
+        })?;
 
         // Create Forge object
         let tree = GitObject::Tree(TreeObject::new(entries));
@@ -116,7 +120,10 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
             let (blake3, _obj_type) = self
                 .mapping
                 .get_blake3(repo_id, &sha1)
-                .await?
+                .await
+                .map_err(|e| BridgeError::KvStorage {
+                    message: format!("failed to lookup blake3 mapping for tree entry {}: {}", sha1.to_hex(), e),
+                })?
                 .ok_or_else(|| BridgeError::MappingNotFound { hash: sha1.to_hex() })?;
 
             entries.push(TreeEntry {
@@ -142,7 +149,10 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
 
         // Parse git commit format
         let content_str = std::str::from_utf8(git_commit_content)?;
-        let commit_obj = self.parse_git_commit(repo_id, content_str).await?;
+        let commit_obj =
+            self.parse_git_commit(repo_id, content_str).await.map_err(|e| BridgeError::MalformedCommit {
+                message: format!("failed to parse commit {}: {}", sha1.to_hex(), e),
+            })?;
 
         // Create Forge object
         let commit = GitObject::Commit(commit_obj);
@@ -233,7 +243,9 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         let sha1 = compute_sha1("tag", git_tag_content);
 
         let content_str = std::str::from_utf8(git_tag_content)?;
-        let tag_obj = self.parse_git_tag(repo_id, content_str).await?;
+        let tag_obj = self.parse_git_tag(repo_id, content_str).await.map_err(|e| BridgeError::MalformedObject {
+            message: format!("failed to parse tag {}: {}", sha1.to_hex(), e),
+        })?;
 
         let tag = GitObject::Tag(tag_obj);
         let signed = SignedObject::new(tag, &self.secret_key, &self.hlc)?;
@@ -255,8 +267,14 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         })?;
 
         let target_sha1 = Sha1Hash::from_hex(target_sha1_hex)?;
-        let (target_blake3, _obj_type) =
-            self.mapping.get_blake3(repo_id, &target_sha1).await?.ok_or_else(|| BridgeError::MappingNotFound {
+        let (target_blake3, _obj_type) = self
+            .mapping
+            .get_blake3(repo_id, &target_sha1)
+            .await
+            .map_err(|e| BridgeError::KvStorage {
+                message: format!("failed to lookup blake3 for tag target {}: {}", target_sha1.to_hex(), e),
+            })?
+            .ok_or_else(|| BridgeError::MappingNotFound {
                 hash: target_sha1.to_hex(),
             })?;
 

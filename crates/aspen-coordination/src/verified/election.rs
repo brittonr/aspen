@@ -94,7 +94,11 @@ pub fn can_start_election(state: &LeadershipState, running: bool) -> bool {
 /// - New token is greater than max token
 #[inline]
 pub fn can_win_election(state: &LeadershipState, max_fencing_token: u64, new_token: u64) -> bool {
-    matches!(state, LeadershipState::Transitioning) && max_fencing_token < u64::MAX && new_token > max_fencing_token
+    let is_transitioning = matches!(state, LeadershipState::Transitioning);
+    let has_token_room = max_fencing_token < u64::MAX;
+    let is_token_valid = new_token > max_fencing_token;
+
+    is_transitioning && has_token_room && is_token_valid
 }
 
 /// Check if election can be lost.

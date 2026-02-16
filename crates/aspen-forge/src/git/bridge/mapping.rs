@@ -287,7 +287,9 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
 
         // Store each mapping (in production, this would use batch writes)
         for (blake3, sha1, object_type) in mappings {
-            self.store(repo_id, *blake3, *sha1, *object_type).await?;
+            self.store(repo_id, *blake3, *sha1, *object_type).await.map_err(|e| BridgeError::KvStorage {
+                message: format!("failed to store batch mapping for {}: {}", hex::encode(blake3.as_bytes()), e),
+            })?;
         }
 
         Ok(())

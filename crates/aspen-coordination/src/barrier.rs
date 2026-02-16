@@ -64,6 +64,18 @@ impl BarrierPhase {
     }
 }
 
+/// Internal result type for barrier leave operations.
+enum LeaveResult {
+    /// Barrier completed (all participants left).
+    Completed,
+    /// Waiting for other participants to leave.
+    WaitForOthers,
+    /// CAS conflict, retry required.
+    RetryRequired,
+    /// Successfully left but others still in barrier.
+    LeftWaitingForOthers,
+}
+
 /// Manager for distributed barrier operations.
 pub struct BarrierManager<S: KeyValueStore + ?Sized> {
     store: Arc<S>,
@@ -243,86 +255,116 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
 
             match current {
                 None => {
-                    // Barrier doesn't exist, already left
                     return Ok((0, "completed".to_string()));
                 }
-                Some(state) => {
-                    // Check if not in barrier
-                    if !state.participants.contains(&participant_id.to_string()) {
-                        // Not in barrier, check if we need to wait for others
-                        if state.participants.is_empty() {
-                            return Ok((0, "completed".to_string()));
-                        }
-                        // Wait for others to leave
+                Some(state) => match self.leave_process_state(name, participant_id, &key, state).await? {
+                    LeaveResult::Completed => return Ok((0, "completed".to_string())),
+                    LeaveResult::WaitForOthers | LeaveResult::RetryRequired => {
                         tokio::time::sleep(Duration::from_millis(50)).await;
                         continue;
                     }
-
-                    // Remove participant
-                    let mut new_state = state.clone();
-                    let count_before = new_state.participants.len();
-                    new_state.participants.retain(|p| p != participant_id);
-                    new_state.phase = BarrierPhase::Leaving;
-
-                    debug_assert!(
-                        new_state.participants.len() < count_before,
-                        "BARRIER: participant should have been removed but count unchanged"
-                    );
-
-                    let remaining = new_state.participants.len() as u32;
-
-                    let old_json = serde_json::to_string(&state)?;
-
-                    if remaining == 0 {
-                        // Last participant, delete the barrier
-                        match self
-                            .store
-                            .write(WriteRequest {
-                                command: WriteCommand::CompareAndSwap {
-                                    key: key.clone(),
-                                    expected: Some(old_json),
-                                    new_value: "".to_string(), // Empty = delete
-                                },
-                            })
-                            .await
-                        {
-                            Ok(_) => {
-                                debug!(name, participant_id, "barrier completed, last to leave");
-                                return Ok((0, "completed".to_string()));
-                            }
-                            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                                continue;
-                            }
-                            Err(e) => bail!("barrier delete failed: {}", e),
-                        }
-                    } else {
-                        let new_json = serde_json::to_string(&new_state)?;
-
-                        match self
-                            .store
-                            .write(WriteRequest {
-                                command: WriteCommand::CompareAndSwap {
-                                    key: key.clone(),
-                                    expected: Some(old_json),
-                                    new_value: new_json,
-                                },
-                            })
-                            .await
-                        {
-                            Ok(_) => {
-                                debug!(name, participant_id, remaining, "left barrier");
-                            }
-                            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                                continue;
-                            }
-                            Err(e) => bail!("barrier CAS failed: {}", e),
-                        }
+                    LeaveResult::LeftWaitingForOthers => {
+                        tokio::time::sleep(Duration::from_millis(50)).await;
                     }
-                }
+                },
             }
+        }
+    }
 
-            // Wait for all to leave
-            tokio::time::sleep(Duration::from_millis(50)).await;
+    /// Process barrier state during leave operation.
+    async fn leave_process_state(
+        &self,
+        name: &str,
+        participant_id: &str,
+        key: &str,
+        state: BarrierState,
+    ) -> Result<LeaveResult> {
+        // Check if not in barrier
+        if !state.participants.contains(&participant_id.to_string()) {
+            if state.participants.is_empty() {
+                return Ok(LeaveResult::Completed);
+            }
+            return Ok(LeaveResult::WaitForOthers);
+        }
+
+        // Remove participant
+        let mut new_state = state.clone();
+        let count_before = new_state.participants.len();
+        new_state.participants.retain(|p| p != participant_id);
+        new_state.phase = BarrierPhase::Leaving;
+
+        debug_assert!(
+            new_state.participants.len() < count_before,
+            "BARRIER: participant should have been removed but count unchanged"
+        );
+
+        let remaining = new_state.participants.len() as u32;
+        let old_json = serde_json::to_string(&state)?;
+
+        if remaining == 0 {
+            self.leave_delete_barrier(name, participant_id, key, old_json).await
+        } else {
+            self.leave_update_state(name, participant_id, key, old_json, &new_state, remaining).await
+        }
+    }
+
+    /// Delete barrier when last participant leaves.
+    async fn leave_delete_barrier(
+        &self,
+        name: &str,
+        participant_id: &str,
+        key: &str,
+        old_json: String,
+    ) -> Result<LeaveResult> {
+        match self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::CompareAndSwap {
+                    key: key.to_string(),
+                    expected: Some(old_json),
+                    new_value: "".to_string(),
+                },
+            })
+            .await
+        {
+            Ok(_) => {
+                debug!(name, participant_id, "barrier completed, last to leave");
+                Ok(LeaveResult::Completed)
+            }
+            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Ok(LeaveResult::RetryRequired),
+            Err(e) => bail!("barrier delete failed: {}", e),
+        }
+    }
+
+    /// Update barrier state after participant leaves.
+    async fn leave_update_state(
+        &self,
+        name: &str,
+        participant_id: &str,
+        key: &str,
+        old_json: String,
+        new_state: &BarrierState,
+        remaining: u32,
+    ) -> Result<LeaveResult> {
+        let new_json = serde_json::to_string(new_state)?;
+
+        match self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::CompareAndSwap {
+                    key: key.to_string(),
+                    expected: Some(old_json),
+                    new_value: new_json,
+                },
+            })
+            .await
+        {
+            Ok(_) => {
+                debug!(name, participant_id, remaining, "left barrier");
+                Ok(LeaveResult::LeftWaitingForOthers)
+            }
+            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Ok(LeaveResult::RetryRequired),
+            Err(e) => bail!("barrier CAS failed: {}", e),
         }
     }
 

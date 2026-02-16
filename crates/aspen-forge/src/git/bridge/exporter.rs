@@ -150,7 +150,9 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
 
         // Store the mapping if not already present
         if !self.mapping.has_blake3(repo_id, &blake3).await? {
-            self.mapping.store(repo_id, blake3, sha1, object_type).await?;
+            self.mapping.store(repo_id, blake3, sha1, object_type).await.map_err(|e| BridgeError::KvStorage {
+                message: format!("failed to store hash mapping during export: {}", e),
+            })?;
         }
 
         Ok(ExportedObject {
@@ -202,7 +204,10 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
             visited.insert(blake3);
 
             // Check if remote already has this object
-            if let Some((sha1, _)) = self.mapping.get_sha1(repo_id, &blake3).await?
+            if let Some((sha1, _)) =
+                self.mapping.get_sha1(repo_id, &blake3).await.map_err(|e| BridgeError::KvStorage {
+                    message: format!("failed to lookup SHA1 mapping for {}: {}", hex::encode(blake3.as_bytes()), e),
+                })?
                 && known_to_remote.contains(&sha1)
             {
                 skipped += 1;
@@ -250,7 +255,9 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         // Phase 3: Export each object in dependency order
         let mut objects = Vec::with_capacity(to_export.len());
         for (blake3, _signed) in to_export {
-            let exported = self.export_object(repo_id, blake3).await?;
+            let exported = self.export_object(repo_id, blake3).await.map_err(|e| BridgeError::ConversionFailed {
+                message: format!("failed to export object {}: {}", hex::encode(blake3.as_bytes()), e),
+            })?;
             objects.push(exported);
         }
 
@@ -279,7 +286,11 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
             })?;
 
         // Export the DAG
-        let mut result = self.export_commit_dag(repo_id, blake3, known_to_remote).await?;
+        let mut result = self.export_commit_dag(repo_id, blake3, known_to_remote).await.map_err(|e| {
+            BridgeError::ConversionFailed {
+                message: format!("failed to export commit DAG for ref {}: {}", ref_name, e),
+            }
+        })?;
 
         // Get SHA-1 for the ref
         let (sha1, _) = self.mapping.get_sha1(repo_id, &blake3).await?.ok_or_else(|| BridgeError::MappingNotFound {

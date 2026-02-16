@@ -160,8 +160,8 @@ impl<S: aspen_traits::KeyValueStore + ?Sized + 'static> WorkflowEventStore<S> {
 pub struct WorkflowReplayEngine {
     /// Events being replayed.
     events: Vec<WorkflowEvent>,
-    /// Current replay position.
-    replay_index: usize,
+    /// Current replay position (bounded by event count).
+    replay_index: u32,
     /// Whether we're in replay mode.
     is_replaying: bool,
     /// Cached activity results (activity_id -> result).
@@ -205,7 +205,7 @@ impl WorkflowReplayEngine {
 
     /// Check if we're still replaying.
     pub fn is_replaying(&self) -> bool {
-        self.is_replaying && self.replay_index < self.events.len()
+        self.is_replaying && (self.replay_index as usize) < self.events.len()
     }
 
     /// Get cached activity result during replay.
@@ -238,17 +238,17 @@ impl WorkflowReplayEngine {
 
     /// Advance replay position.
     pub fn advance(&mut self) {
-        if self.replay_index < self.events.len() {
+        if (self.replay_index as usize) < self.events.len() {
             self.replay_index += 1;
         }
-        if self.replay_index >= self.events.len() {
+        if (self.replay_index as usize) >= self.events.len() {
             self.is_replaying = false;
         }
     }
 
     /// Get current event during replay.
     pub fn current_event(&self) -> Option<&WorkflowEvent> {
-        self.events.get(self.replay_index)
+        self.events.get(self.replay_index as usize)
     }
 
     /// Mark replay as complete.

@@ -48,19 +48,19 @@ pub enum SagaState {
     NotStarted,
     /// Saga is executing forward steps.
     Executing {
-        /// Index of the current step being executed.
-        current_step: usize,
+        /// Index of the current step being executed (bounded by MAX_SAGA_STEPS).
+        current_step: u32,
     },
     /// Saga completed successfully.
     Completed,
     /// Saga is compensating (rolling back).
     Compensating {
-        /// Index of the step that failed.
-        failed_step: usize,
+        /// Index of the step that failed (bounded by MAX_SAGA_STEPS).
+        failed_step: u32,
         /// Error that caused the failure.
         failure_reason: String,
-        /// Index of the current compensation step.
-        current_compensation: usize,
+        /// Index of the current compensation step (bounded by MAX_SAGA_STEPS).
+        current_compensation: u32,
     },
     /// Saga compensation completed.
     CompensationCompleted {
@@ -73,8 +73,8 @@ pub enum SagaState {
     CompensationFailed {
         /// Original failure reason.
         failure_reason: String,
-        /// Step that failed compensation.
-        failed_compensation_step: usize,
+        /// Step that failed compensation (bounded by MAX_SAGA_STEPS).
+        failed_compensation_step: u32,
         /// Compensation error.
         compensation_error: String,
     },
@@ -139,13 +139,13 @@ impl SagaDefinition {
     }
 
     /// Get a step by index.
-    pub fn get_step(&self, index: usize) -> Option<&SagaStep> {
-        self.steps.get(index)
+    pub fn get_step(&self, index: u32) -> Option<&SagaStep> {
+        self.steps.get(index as usize)
     }
 
     /// Get a mutable step by index.
-    pub fn get_step_mut(&mut self, index: usize) -> Option<&mut SagaStep> {
-        self.steps.get_mut(index)
+    pub fn get_step_mut(&mut self, index: u32) -> Option<&mut SagaStep> {
+        self.steps.get_mut(index as usize)
     }
 }
 
@@ -199,17 +199,17 @@ pub struct PersistentSagaState {
 pub enum SagaAction {
     /// Execute a forward step.
     Execute {
-        /// Index of the step to execute.
-        step_index: usize,
+        /// Index of the step to execute (bounded by MAX_SAGA_STEPS).
+        step_index: u32,
     },
     /// Execute compensation for a step.
     Compensate {
-        /// Index of the step to compensate.
-        step_index: usize,
+        /// Index of the step to compensate (bounded by MAX_SAGA_STEPS).
+        step_index: u32,
     },
     /// Skip compensation for a step that wasn't executed.
     SkipCompensation {
-        /// Index of the step to skip.
-        step_index: usize,
+        /// Index of the step to skip (bounded by MAX_SAGA_STEPS).
+        step_index: u32,
     },
 }

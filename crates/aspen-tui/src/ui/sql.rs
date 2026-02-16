@@ -97,7 +97,7 @@ fn draw_sql_results(frame: &mut Frame, app: &App, area: Rect) {
                     })
                     .collect();
 
-                let style = if i == app.sql_state.selected_row {
+                let style = if i as u32 == app.sql_state.selected_row {
                     Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
                 } else {
                     Style::default()

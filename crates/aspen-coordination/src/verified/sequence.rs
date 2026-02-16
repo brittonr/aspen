@@ -56,7 +56,9 @@ pub fn should_refill_batch(next: u64, batch_end: u64) -> bool {
 /// - Uses saturating_sub to handle underflow (returns 0)
 #[inline]
 pub fn batch_remaining(next: u64, batch_end: u64) -> u64 {
-    batch_end.saturating_sub(next)
+    let remaining = batch_end.saturating_sub(next);
+    debug_assert!(remaining <= batch_end, "remaining must not exceed batch_end");
+    remaining
 }
 
 // ============================================================================
@@ -79,7 +81,9 @@ pub fn batch_remaining(next: u64, batch_end: u64) -> u64 {
 /// - Uses checked_add to detect overflow
 #[inline]
 pub fn compute_batch_end(batch_start: u64, batch_size: u64) -> Option<u64> {
-    batch_start.checked_add(batch_size)
+    let end = batch_start.checked_add(batch_size);
+    debug_assert!(end.is_none() || end.unwrap() >= batch_start, "batch_end must be >= batch_start when Some");
+    end
 }
 
 /// Compute the next ID pointer after refilling a batch.
@@ -147,7 +151,10 @@ pub enum SequenceReservationResult {
 #[inline]
 pub fn compute_new_sequence_value(current: u64, count: u64) -> SequenceReservationResult {
     match current.checked_add(count) {
-        Some(new_value) => SequenceReservationResult::Success { new_value },
+        Some(new_value) => {
+            debug_assert!(new_value >= current, "new_value must be >= current");
+            SequenceReservationResult::Success { new_value }
+        }
         None => SequenceReservationResult::Overflow,
     }
 }
@@ -209,7 +216,9 @@ pub fn is_initial_reservation(current: u64, start_value: u64) -> bool {
 /// - Uses saturating_sub to handle start_value = 0
 #[inline]
 pub fn compute_initial_current(start_value: u64) -> u64 {
-    start_value.saturating_sub(1)
+    let initial = start_value.saturating_sub(1);
+    debug_assert!(initial <= start_value, "initial must be <= start_value");
+    initial
 }
 
 // ============================================================================

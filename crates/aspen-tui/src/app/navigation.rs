@@ -94,26 +94,26 @@ impl App {
             }
             ActiveView::Sql => {
                 if let Some(result) = &self.sql_state.last_result {
-                    let max = result.rows.len().saturating_sub(1);
+                    let max = (result.rows.len().saturating_sub(1)) as u32;
                     if self.sql_state.selected_row < max {
                         self.sql_state.selected_row += 1;
                     }
                 }
             }
             ActiveView::Jobs => {
-                let max = self.jobs_state.jobs.len().saturating_sub(1);
+                let max = (self.jobs_state.jobs.len().saturating_sub(1)) as u32;
                 if self.jobs_state.selected_job < max {
                     self.jobs_state.selected_job += 1;
                 }
             }
             ActiveView::Workers => {
-                let max = self.workers_state.pool_info.workers.len().saturating_sub(1);
+                let max = (self.workers_state.pool_info.workers.len().saturating_sub(1)) as u32;
                 if self.workers_state.selected_worker < max {
                     self.workers_state.selected_worker += 1;
                 }
             }
             ActiveView::Ci => {
-                let max = self.ci_state.runs.len().saturating_sub(1);
+                let max = (self.ci_state.runs.len().saturating_sub(1)) as u32;
                 if self.ci_state.selected_run < max {
                     self.ci_state.selected_run += 1;
                 }

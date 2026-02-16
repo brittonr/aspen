@@ -212,7 +212,11 @@ pub const fn are_resource_limits_valid(
     max_memory_bytes: u64,
     max_pids: u32,
 ) -> bool {
-    memory_bytes >= min_memory_bytes && memory_bytes <= max_memory_bytes && pids <= max_pids
+    let has_sufficient_memory = memory_bytes >= min_memory_bytes;
+    let is_within_memory_limit = memory_bytes <= max_memory_bytes;
+    let is_within_pid_limit = pids <= max_pids;
+
+    has_sufficient_memory && is_within_memory_limit && is_within_pid_limit
 }
 
 /// Format bytes as a human-readable string for cgroup configuration.

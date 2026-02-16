@@ -49,6 +49,7 @@ pub struct CounterOpResult {
 pub fn apply_increment(current: u64, amount: u64) -> CounterOpResult {
     let new_value = current.saturating_add(amount);
     let saturated = new_value != current.wrapping_add(amount);
+    debug_assert!(new_value >= current, "increment must not decrease value");
     CounterOpResult { new_value, saturated }
 }
 
@@ -78,6 +79,7 @@ pub fn apply_increment(current: u64, amount: u64) -> CounterOpResult {
 pub fn apply_decrement(current: u64, amount: u64) -> CounterOpResult {
     let new_value = current.saturating_sub(amount);
     let saturated = new_value != current.wrapping_sub(amount);
+    debug_assert!(new_value <= current, "decrement must not increase value");
     CounterOpResult { new_value, saturated }
 }
 
@@ -108,6 +110,7 @@ pub struct SignedCounterOpResult {
 pub fn apply_signed_add(current: i64, amount: i64) -> SignedCounterOpResult {
     let new_value = current.saturating_add(amount);
     let saturated = new_value != current.wrapping_add(amount);
+    debug_assert!(!saturated || new_value == i64::MAX || new_value == i64::MIN, "saturated result must be at bounds");
     SignedCounterOpResult { new_value, saturated }
 }
 
@@ -125,6 +128,7 @@ pub fn apply_signed_add(current: i64, amount: i64) -> SignedCounterOpResult {
 pub fn apply_signed_sub(current: i64, amount: i64) -> SignedCounterOpResult {
     let new_value = current.saturating_sub(amount);
     let saturated = new_value != current.wrapping_sub(amount);
+    debug_assert!(!saturated || new_value == i64::MAX || new_value == i64::MIN, "saturated result must be at bounds");
     SignedCounterOpResult { new_value, saturated }
 }
 
@@ -265,7 +269,10 @@ pub fn should_flush_buffer(local_value: u64, flush_threshold: u64) -> bool {
 /// - Uses saturating_add to prevent overflow
 #[inline]
 pub fn compute_approximate_total(stored_value: u64, local_value: u64) -> u64 {
-    stored_value.saturating_add(local_value)
+    let total = stored_value.saturating_add(local_value);
+    debug_assert!(total >= stored_value, "total must be >= stored_value");
+    debug_assert!(total >= local_value, "total must be >= local_value");
+    total
 }
 
 // ============================================================================

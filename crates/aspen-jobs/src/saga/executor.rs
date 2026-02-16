@@ -122,7 +122,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
     pub async fn complete_step(
         &self,
         state: &mut PersistentSagaState,
-        step_index: usize,
+        step_index: u32,
         output: Option<String>,
     ) -> Result<()> {
         if let Some(step) = state.definition.get_step_mut(step_index) {
@@ -132,7 +132,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
 
         // Move to next step or complete
         let next_step = step_index + 1;
-        if next_step >= state.definition.step_count() {
+        if next_step as usize >= state.definition.step_count() {
             state.state = SagaState::Completed;
         } else {
             state.state = SagaState::Executing {
@@ -154,7 +154,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
     }
 
     /// Mark a step as failed and begin compensation.
-    pub async fn fail_step(&self, state: &mut PersistentSagaState, step_index: usize, error: String) -> Result<()> {
+    pub async fn fail_step(&self, state: &mut PersistentSagaState, step_index: u32, error: String) -> Result<()> {
         if let Some(step) = state.definition.get_step_mut(step_index) {
             step.action_result = Some(StepResult::Failed(error.clone()));
         }
@@ -194,7 +194,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
     pub async fn complete_compensation(
         &self,
         state: &mut PersistentSagaState,
-        step_index: usize,
+        step_index: u32,
         result: CompensationResult,
     ) -> Result<()> {
         if let Some(step) = state.definition.get_step_mut(step_index) {
@@ -296,7 +296,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
     pub async fn retry_compensation(
         &self,
         state: &mut PersistentSagaState,
-        step_index: usize,
+        step_index: u32,
         error: String,
     ) -> Result<bool> {
         let step = state.definition.get_step_mut(step_index).ok_or_else(|| JobError::NotFound {

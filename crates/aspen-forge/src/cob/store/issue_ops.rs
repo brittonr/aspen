@@ -17,6 +17,7 @@ use crate::constants::MAX_TITLE_LENGTH_BYTES;
 use crate::error::ForgeError;
 use crate::error::ForgeResult;
 use crate::identity::RepoId;
+use crate::types::SignedObject;
 
 impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     /// Create a new issue.
@@ -171,52 +172,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         // Apply changes in order
         let mut issue = Issue::default();
         for (hash, signed) in &sorted {
-            // Track scalar field values before applying
-            match &signed.payload.op {
-                CobOperation::CreateIssue { title, body, .. } => {
-                    field_values.insert(
-                        (*hash.as_bytes(), "title"),
-                        super::super::issue::IssueScalarFieldValue::Title(title.clone()),
-                    );
-                    field_values.insert(
-                        (*hash.as_bytes(), "body"),
-                        super::super::issue::IssueScalarFieldValue::Body(body.clone()),
-                    );
-                }
-                CobOperation::EditTitle { title } => {
-                    field_values.insert(
-                        (*hash.as_bytes(), "title"),
-                        super::super::issue::IssueScalarFieldValue::Title(title.clone()),
-                    );
-                }
-                CobOperation::EditBody { body } => {
-                    field_values.insert(
-                        (*hash.as_bytes(), "body"),
-                        super::super::issue::IssueScalarFieldValue::Body(body.clone()),
-                    );
-                }
-                CobOperation::Close { reason } => {
-                    field_values.insert(
-                        (*hash.as_bytes(), "state"),
-                        super::super::issue::IssueScalarFieldValue::State(super::super::issue::IssueState::Closed {
-                            reason: reason.clone(),
-                        }),
-                    );
-                }
-                CobOperation::Reopen => {
-                    field_values.insert(
-                        (*hash.as_bytes(), "state"),
-                        super::super::issue::IssueScalarFieldValue::State(super::super::issue::IssueState::Open),
-                    );
-                }
-                CobOperation::MergeHeads { resolutions, .. } => {
-                    // Collect field resolutions from MergeHeads operations
-                    // Later MergeHeads operations override earlier ones
-                    final_resolutions = resolutions.clone();
-                }
-                _ => {}
-            }
-
+            Self::resolve_issue_track_field_values(hash, signed, &mut field_values, &mut final_resolutions);
             issue.apply_change(*hash, &signed.author, &signed.hlc_timestamp, &signed.payload.op);
         }
 
@@ -226,5 +182,52 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         }
 
         Ok(issue)
+    }
+
+    /// Track scalar field values from a change operation for MergeHeads resolution.
+    fn resolve_issue_track_field_values<'a>(
+        hash: &blake3::Hash,
+        signed: &'a SignedObject<CobChange>,
+        field_values: &mut HashMap<([u8; 32], &'a str), super::super::issue::IssueScalarFieldValue>,
+        final_resolutions: &mut Vec<FieldResolution>,
+    ) {
+        match &signed.payload.op {
+            CobOperation::CreateIssue { title, body, .. } => {
+                field_values.insert(
+                    (*hash.as_bytes(), "title"),
+                    super::super::issue::IssueScalarFieldValue::Title(title.clone()),
+                );
+                field_values
+                    .insert((*hash.as_bytes(), "body"), super::super::issue::IssueScalarFieldValue::Body(body.clone()));
+            }
+            CobOperation::EditTitle { title } => {
+                field_values.insert(
+                    (*hash.as_bytes(), "title"),
+                    super::super::issue::IssueScalarFieldValue::Title(title.clone()),
+                );
+            }
+            CobOperation::EditBody { body } => {
+                field_values
+                    .insert((*hash.as_bytes(), "body"), super::super::issue::IssueScalarFieldValue::Body(body.clone()));
+            }
+            CobOperation::Close { reason } => {
+                field_values.insert(
+                    (*hash.as_bytes(), "state"),
+                    super::super::issue::IssueScalarFieldValue::State(super::super::issue::IssueState::Closed {
+                        reason: reason.clone(),
+                    }),
+                );
+            }
+            CobOperation::Reopen => {
+                field_values.insert(
+                    (*hash.as_bytes(), "state"),
+                    super::super::issue::IssueScalarFieldValue::State(super::super::issue::IssueState::Open),
+                );
+            }
+            CobOperation::MergeHeads { resolutions, .. } => {
+                *final_resolutions = resolutions.clone();
+            }
+            _ => {}
+        }
     }
 }

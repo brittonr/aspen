@@ -358,7 +358,9 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         }
 
         // Check concurrent run limits
-        self.check_run_limits(&context.repo_id).await?;
+        self.check_run_limits(&context.repo_id).await.map_err(|e| CiError::InvalidConfig {
+            reason: format!("run limit check failed for repo {}: {}", context.repo_id.to_hex(), e),
+        })?;
 
         // Create pipeline run
         let mut run = PipelineRun::new(pipeline_config.name.clone(), context.clone());
@@ -647,7 +649,9 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     /// The run starts in `Initializing` status.
     pub async fn create_early_run(&self, pipeline_name: String, context: PipelineContext) -> Result<PipelineRun> {
         // Check concurrent run limits first
-        self.check_run_limits(&context.repo_id).await?;
+        self.check_run_limits(&context.repo_id).await.map_err(|e| CiError::InvalidConfig {
+            reason: format!("run limit check failed for repo {}: {}", context.repo_id.to_hex(), e),
+        })?;
 
         // Create the run in Initializing state
         let run = PipelineRun::new(pipeline_name, context);

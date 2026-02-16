@@ -21,6 +21,18 @@ use crate::error::RateLimitError;
 use crate::types::BucketState;
 use crate::types::now_unix_ms;
 
+/// Internal result type for CAS update attempts.
+enum TryAcquireResult {
+    /// Successfully acquired tokens.
+    Success(u64),
+    /// Tokens exhausted.
+    Exhausted(RateLimitError),
+    /// Storage error.
+    StorageError(RateLimitError),
+    /// CAS conflict, retry.
+    Retry,
+}
+
 /// Configuration for distributed rate limiter.
 #[derive(Debug, Clone)]
 pub struct RateLimiterConfig {
@@ -107,27 +119,15 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
             let current = match self.read_state().await {
                 Ok(state) => state,
                 Err(e) => {
-                    // Storage unavailable - return distinct error for caller to handle
                     return Err(RateLimitError::StorageUnavailable { reason: e.to_string() });
                 }
             };
 
-            // Calculate replenished tokens using CONFIG values (not stored values)
-            // This ensures config changes take effect immediately
-            let elapsed_ms = now_ms.saturating_sub(current.last_update_ms);
-            let elapsed_secs = elapsed_ms as f64 / 1000.0;
-            let replenished = elapsed_secs * self.config.refill_rate;
-            let available = (current.tokens + replenished).min(self.config.capacity as f64);
+            let available = self.try_acquire_n_compute_available(&current, now_ms);
 
             // Check if we can acquire
             if (n as f64) > available {
-                let deficit = (n as f64) - available;
-                let wait_secs = deficit / self.config.refill_rate;
-                return Err(RateLimitError::TokensExhausted {
-                    requested: n,
-                    available: available as u64,
-                    retry_after_ms: (wait_secs * 1000.0).ceil() as u64,
-                });
+                return Err(self.try_acquire_n_exhausted_error(n, available));
             }
 
             // Prepare new state with current config values
@@ -139,58 +139,97 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
             };
 
             // Atomic update
-            match self.cas_state(&current, &new_state).await {
-                Ok(_) => {
-                    debug!(
-                        key = %self.key,
-                        tokens_consumed = n,
-                        remaining = new_state.tokens as u64,
-                        "rate limit tokens acquired"
-                    );
-                    return Ok(new_state.tokens as u64);
-                }
-                Err(CoordinationError::CasConflict) => {
-                    attempt += 1;
-                    if attempt >= MAX_CAS_RETRIES {
-                        // CAS contention is still rate limiting - use TokensExhausted
-                        return Err(RateLimitError::TokensExhausted {
-                            requested: n,
-                            available: 0,
-                            retry_after_ms: 1000,
-                        });
-                    }
-                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
-                    backoff_ms = (backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
-                }
-                Err(CoordinationError::Storage { source }) => {
-                    // Check if this is a "not leader" error from Raft write
-                    // Followers can read (stale) but cannot write through Raft
-                    let is_not_leader = matches!(&source, KeyValueStoreError::NotLeader { .. })
-                        || source.to_string().contains("forward");
+            match self.try_acquire_n_cas_update(n, &current, &new_state, &mut attempt, &mut backoff_ms).await {
+                TryAcquireResult::Success(remaining) => return Ok(remaining),
+                TryAcquireResult::Exhausted(err) => return Err(err),
+                TryAcquireResult::StorageError(err) => return Err(err),
+                TryAcquireResult::Retry => continue,
+            }
+        }
+    }
 
-                    if is_not_leader {
-                        // Follower node - stale read showed tokens available but we can't update.
-                        // Allow the request (fail-open) since leader handles authoritative updates.
-                        // This maintains availability while leader manages true rate limit state.
-                        debug!(
-                            key = %self.key,
-                            tokens_consumed = n,
-                            remaining = new_state.tokens as u64,
-                            "rate limit check passed (follower mode - state update deferred to leader)"
-                        );
-                        return Ok(new_state.tokens as u64);
-                    }
+    /// Compute available tokens after replenishment.
+    fn try_acquire_n_compute_available(&self, current: &BucketState, now_ms: u64) -> f64 {
+        let elapsed_ms = now_ms.saturating_sub(current.last_update_ms);
+        let elapsed_secs = elapsed_ms as f64 / 1000.0;
+        let replenished = elapsed_secs * self.config.refill_rate;
+        (current.tokens + replenished).min(self.config.capacity as f64)
+    }
 
-                    // Other storage errors - propagate as unavailable
-                    return Err(RateLimitError::StorageUnavailable {
-                        reason: source.to_string(),
+    /// Build error for tokens exhausted case.
+    fn try_acquire_n_exhausted_error(&self, requested: u64, available: f64) -> RateLimitError {
+        let deficit = (requested as f64) - available;
+        let wait_secs = deficit / self.config.refill_rate;
+        RateLimitError::TokensExhausted {
+            requested,
+            available: available as u64,
+            retry_after_ms: (wait_secs * 1000.0).ceil() as u64,
+        }
+    }
+
+    /// Attempt CAS update and handle result.
+    async fn try_acquire_n_cas_update(
+        &self,
+        n: u64,
+        current: &BucketState,
+        new_state: &BucketState,
+        attempt: &mut u32,
+        backoff_ms: &mut u64,
+    ) -> TryAcquireResult {
+        match self.cas_state(current, new_state).await {
+            Ok(_) => {
+                debug!(
+                    key = %self.key,
+                    tokens_consumed = n,
+                    remaining = new_state.tokens as u64,
+                    "rate limit tokens acquired"
+                );
+                TryAcquireResult::Success(new_state.tokens as u64)
+            }
+            Err(CoordinationError::CasConflict) => {
+                *attempt += 1;
+                if *attempt >= MAX_CAS_RETRIES {
+                    return TryAcquireResult::Exhausted(RateLimitError::TokensExhausted {
+                        requested: n,
+                        available: 0,
+                        retry_after_ms: 1000,
                     });
                 }
-                Err(e) => {
-                    // Non-storage coordination errors (serialization, etc.)
-                    return Err(RateLimitError::StorageUnavailable { reason: e.to_string() });
-                }
+                // Sleep happens in caller after returning Retry
+                let sleep_ms = *backoff_ms;
+                *backoff_ms = (*backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
+                tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
+                TryAcquireResult::Retry
             }
+            Err(CoordinationError::Storage { source }) => self.try_acquire_n_handle_storage_error(n, new_state, source),
+            Err(e) => TryAcquireResult::StorageError(RateLimitError::StorageUnavailable { reason: e.to_string() }),
+        }
+    }
+
+    /// Handle storage errors, with special case for follower nodes.
+    fn try_acquire_n_handle_storage_error(
+        &self,
+        n: u64,
+        new_state: &BucketState,
+        source: KeyValueStoreError,
+    ) -> TryAcquireResult {
+        // Check if this is a "not leader" error from Raft write
+        let is_not_leader =
+            matches!(&source, KeyValueStoreError::NotLeader { .. }) || source.to_string().contains("forward");
+
+        if is_not_leader {
+            // Follower node - allow request (fail-open), leader manages state
+            debug!(
+                key = %self.key,
+                tokens_consumed = n,
+                remaining = new_state.tokens as u64,
+                "rate limit check passed (follower mode - state update deferred to leader)"
+            );
+            TryAcquireResult::Success(new_state.tokens as u64)
+        } else {
+            TryAcquireResult::StorageError(RateLimitError::StorageUnavailable {
+                reason: source.to_string(),
+            })
         }
     }
 

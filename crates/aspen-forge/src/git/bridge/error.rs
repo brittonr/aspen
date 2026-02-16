@@ -44,6 +44,10 @@ pub enum BridgeError {
     #[snafu(display("object conversion failed: {message}"))]
     ConversionFailed { message: String },
 
+    /// Import operation failed.
+    #[snafu(display("import failed: {message}"))]
+    ImportFailed { message: String },
+
     // ========================================================================
     // Tree Errors
     // ========================================================================

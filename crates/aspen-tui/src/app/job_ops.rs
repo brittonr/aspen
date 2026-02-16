@@ -19,8 +19,9 @@ impl App {
                 }
                 self.jobs_state.jobs = jobs;
                 // Reset selection if out of bounds
-                if self.jobs_state.selected_job >= self.jobs_state.jobs.len() && !self.jobs_state.jobs.is_empty() {
-                    self.jobs_state.selected_job = self.jobs_state.jobs.len() - 1;
+                let jobs_len = self.jobs_state.jobs.len() as u32;
+                if self.jobs_state.selected_job >= jobs_len && !self.jobs_state.jobs.is_empty() {
+                    self.jobs_state.selected_job = jobs_len.saturating_sub(1);
                 }
             }
             Err(e) => {
@@ -46,10 +47,10 @@ impl App {
             Ok(pool_info) => {
                 self.workers_state.pool_info = pool_info;
                 // Reset selection if out of bounds
-                if self.workers_state.selected_worker >= self.workers_state.pool_info.workers.len()
-                    && !self.workers_state.pool_info.workers.is_empty()
+                let workers_len = self.workers_state.pool_info.workers.len() as u32;
+                if self.workers_state.selected_worker >= workers_len && !self.workers_state.pool_info.workers.is_empty()
                 {
-                    self.workers_state.selected_worker = self.workers_state.pool_info.workers.len() - 1;
+                    self.workers_state.selected_worker = workers_len.saturating_sub(1);
                 }
             }
             Err(e) => {
@@ -66,7 +67,7 @@ impl App {
             return;
         }
 
-        let Some(job) = self.jobs_state.jobs.get(self.jobs_state.selected_job) else {
+        let Some(job) = self.jobs_state.jobs.get(self.jobs_state.selected_job as usize) else {
             self.set_status("No job selected");
             return;
         };

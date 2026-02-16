@@ -80,7 +80,7 @@ pub fn compute_kv_versions(
     existing_version: Option<(i64, i64)>, // (create_revision, version)
     log_index: u64,
 ) -> KvVersions {
-    match existing_version {
+    let versions = match existing_version {
         Some((create_revision, version)) => KvVersions {
             create_revision,
             mod_revision: log_index as i64,
@@ -91,7 +91,13 @@ pub fn compute_kv_versions(
             mod_revision: log_index as i64,
             version: 1,
         },
-    }
+    };
+    debug_assert!(versions.version >= 1, "version must be >= 1");
+    debug_assert!(
+        existing_version.is_none() || versions.version >= existing_version.unwrap().1,
+        "version must be monotonically increasing"
+    );
+    versions
 }
 
 // ============================================================================
@@ -356,9 +362,11 @@ pub struct LeaseEntryData {
 /// - Bounded key vector (starts empty, filled by caller)
 #[inline]
 pub fn create_lease_entry(ttl_seconds: u32, now_ms: u64) -> LeaseEntryData {
+    let expires_at_ms = calculate_expires_at_ms(now_ms, ttl_seconds);
+    debug_assert!(expires_at_ms >= now_ms, "expires_at_ms must be >= now_ms");
     LeaseEntryData {
         ttl_seconds,
-        expires_at_ms: calculate_expires_at_ms(now_ms, ttl_seconds),
+        expires_at_ms,
         keys: Vec::new(),
     }
 }
@@ -386,7 +394,9 @@ pub fn create_lease_entry(ttl_seconds: u32, now_ms: u64) -> LeaseEntryData {
 /// ```
 #[inline]
 pub fn compute_lease_refresh(ttl_seconds: u32, now_ms: u64) -> u64 {
-    calculate_expires_at_ms(now_ms, ttl_seconds)
+    let new_expires = calculate_expires_at_ms(now_ms, ttl_seconds);
+    debug_assert!(new_expires >= now_ms, "new_expires must be >= now_ms");
+    new_expires
 }
 
 /// Check if a lease has expired.

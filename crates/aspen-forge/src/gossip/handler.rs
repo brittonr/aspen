@@ -80,6 +80,52 @@ impl ForgeAnnouncementHandler {
     }
 }
 
+impl ForgeAnnouncementHandler {
+    /// Queue a sync request, logging success or failure.
+    fn on_announcement_queue_sync(&self, request: SyncRequest, repo_id: &RepoId, context: &str) {
+        if let Err(e) = self.sync_tx.try_send(request) {
+            tracing::warn!(
+                repo_id = %repo_id.to_hex(),
+                context = %context,
+                "failed to queue sync request: {}",
+                e
+            );
+        } else {
+            tracing::debug!(
+                repo_id = %repo_id.to_hex(),
+                context = %context,
+                "queued sync request"
+            );
+        }
+    }
+
+    /// Queue a seeding update, logging success or failure.
+    fn on_announcement_queue_seeding(
+        &self,
+        update: SeedingUpdate,
+        repo_id: &RepoId,
+        node_id: &PublicKey,
+        action: &str,
+    ) {
+        if let Err(e) = self.seeding_tx.try_send(update) {
+            tracing::warn!(
+                repo_id = %repo_id.to_hex(),
+                node_id = %node_id,
+                "failed to queue {} update: {}",
+                action,
+                e
+            );
+        } else {
+            tracing::debug!(
+                repo_id = %repo_id.to_hex(),
+                node_id = %node_id,
+                "queued {} update",
+                action
+            );
+        }
+    }
+}
+
 impl AnnouncementCallback for ForgeAnnouncementHandler {
     fn on_announcement(&self, announcement: &Announcement, signer: &PublicKey) {
         match announcement {
@@ -95,22 +141,7 @@ impl AnnouncementCallback for ForgeAnnouncementHandler {
                     commit_hash: blake3::Hash::from_bytes(*new_hash),
                     peer: *signer,
                 };
-
-                // Non-blocking send - if channel is full, skip
-                if let Err(e) = self.sync_tx.try_send(request) {
-                    tracing::warn!(
-                        repo_id = %repo_id.to_hex(),
-                        ref_name = %ref_name,
-                        "failed to queue ref sync request: {}",
-                        e
-                    );
-                } else {
-                    tracing::debug!(
-                        repo_id = %repo_id.to_hex(),
-                        ref_name = %ref_name,
-                        "queued ref sync request"
-                    );
-                }
+                self.on_announcement_queue_sync(request, repo_id, ref_name);
             }
 
             Announcement::CobChange {
@@ -126,21 +157,7 @@ impl AnnouncementCallback for ForgeAnnouncementHandler {
                     change_hash: blake3::Hash::from_bytes(*change_hash),
                     peer: *signer,
                 };
-
-                if let Err(e) = self.sync_tx.try_send(request) {
-                    tracing::warn!(
-                        repo_id = %repo_id.to_hex(),
-                        cob_type = ?cob_type,
-                        "failed to queue COB sync request: {}",
-                        e
-                    );
-                } else {
-                    tracing::debug!(
-                        repo_id = %repo_id.to_hex(),
-                        cob_type = ?cob_type,
-                        "queued COB sync request"
-                    );
-                }
+                self.on_announcement_queue_sync(request, repo_id, &format!("{:?}", cob_type));
             }
 
             Announcement::Seeding { repo_id, node_id } => {
@@ -149,21 +166,7 @@ impl AnnouncementCallback for ForgeAnnouncementHandler {
                     peer: *node_id,
                     is_seeding: true,
                 };
-
-                if let Err(e) = self.seeding_tx.try_send(update) {
-                    tracing::warn!(
-                        repo_id = %repo_id.to_hex(),
-                        node_id = %node_id,
-                        "failed to queue seeding update: {}",
-                        e
-                    );
-                } else {
-                    tracing::debug!(
-                        repo_id = %repo_id.to_hex(),
-                        node_id = %node_id,
-                        "queued seeding peer add"
-                    );
-                }
+                self.on_announcement_queue_seeding(update, repo_id, node_id, "seeding");
             }
 
             Announcement::Unseeding { repo_id, node_id } => {
@@ -172,25 +175,10 @@ impl AnnouncementCallback for ForgeAnnouncementHandler {
                     peer: *node_id,
                     is_seeding: false,
                 };
-
-                if let Err(e) = self.seeding_tx.try_send(update) {
-                    tracing::warn!(
-                        repo_id = %repo_id.to_hex(),
-                        node_id = %node_id,
-                        "failed to queue unseeding update: {}",
-                        e
-                    );
-                } else {
-                    tracing::debug!(
-                        repo_id = %repo_id.to_hex(),
-                        node_id = %node_id,
-                        "queued seeding peer remove"
-                    );
-                }
+                self.on_announcement_queue_seeding(update, repo_id, node_id, "unseeding");
             }
 
             Announcement::RepoCreated { repo_id, name, creator } => {
-                // Just log - no automatic action for repo creation
                 tracing::info!(
                     repo_id = %repo_id.to_hex(),
                     name = %name,

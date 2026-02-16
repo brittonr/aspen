@@ -15,8 +15,9 @@ impl App {
             Ok(runs) => {
                 self.ci_state.runs = runs;
                 // Reset selection if out of bounds
-                if self.ci_state.selected_run >= self.ci_state.runs.len() && !self.ci_state.runs.is_empty() {
-                    self.ci_state.selected_run = self.ci_state.runs.len() - 1;
+                let runs_len = self.ci_state.runs.len() as u32;
+                if self.ci_state.selected_run >= runs_len && !self.ci_state.runs.is_empty() {
+                    self.ci_state.selected_run = runs_len.saturating_sub(1);
                 }
             }
             Err(e) => {
@@ -32,7 +33,7 @@ impl App {
             return;
         }
 
-        let Some(run) = self.ci_state.runs.get(self.ci_state.selected_run) else {
+        let Some(run) = self.ci_state.runs.get(self.ci_state.selected_run as usize) else {
             return;
         };
 
@@ -56,7 +57,7 @@ impl App {
             return;
         }
 
-        let Some(run) = self.ci_state.runs.get(self.ci_state.selected_run) else {
+        let Some(run) = self.ci_state.runs.get(self.ci_state.selected_run as usize) else {
             self.set_status("No CI run selected");
             return;
         };
@@ -85,7 +86,7 @@ impl App {
             return;
         }
 
-        let Some(run) = self.ci_state.runs.get(self.ci_state.selected_run) else {
+        let Some(run) = self.ci_state.runs.get(self.ci_state.selected_run as usize) else {
             self.set_status("No CI run selected");
             return;
         };
@@ -97,7 +98,7 @@ impl App {
 
         // Find the selected job from the stages
         let selected_job_idx = self.ci_state.selected_job_index.unwrap_or(0);
-        let mut job_idx = 0;
+        let mut job_idx: u32 = 0;
         let mut found_job: Option<(String, String)> = None;
 
         for stage in &details.stages {
@@ -149,7 +150,8 @@ impl App {
                 self.ci_state.log_stream.is_streaming = !result.is_complete;
 
                 if self.ci_state.log_stream.auto_scroll && !self.ci_state.log_stream.lines.is_empty() {
-                    self.ci_state.log_stream.scroll_position = self.ci_state.log_stream.lines.len().saturating_sub(1);
+                    self.ci_state.log_stream.scroll_position =
+                        (self.ci_state.log_stream.lines.len().saturating_sub(1)) as u32;
                 }
 
                 let line_count = self.ci_state.log_stream.lines.len();

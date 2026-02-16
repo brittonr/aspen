@@ -25,7 +25,9 @@ pub const SEMAPHORE_PREFIX: &str = "__semaphore:";
 /// ```
 #[inline]
 pub fn semaphore_key(name: &str) -> String {
-    format!("{}{}", SEMAPHORE_PREFIX, name)
+    let key = format!("{}{}", SEMAPHORE_PREFIX, name);
+    debug_assert!(key.starts_with(SEMAPHORE_PREFIX), "key must start with semaphore prefix");
+    key
 }
 
 // ============================================================================
@@ -72,7 +74,9 @@ where I: IntoIterator<Item = (u32, u64)> {
         .filter(|(_, deadline_ms)| *deadline_ms > now_ms)
         .map(|(permits, _)| permits)
         .sum();
-    capacity.saturating_sub(used)
+    let available = capacity.saturating_sub(used);
+    debug_assert!(available <= capacity, "available permits must not exceed capacity");
+    available
 }
 
 /// Check if permits can be acquired from a semaphore.
@@ -106,7 +110,9 @@ pub fn can_acquire_permits(requested: u32, available: u32) -> bool {
 /// - Uses saturating_add to prevent overflow
 #[inline]
 pub fn compute_holder_deadline(acquired_at_ms: u64, ttl_ms: u64) -> u64 {
-    acquired_at_ms.saturating_add(ttl_ms)
+    let deadline = acquired_at_ms.saturating_add(ttl_ms);
+    debug_assert!(deadline >= acquired_at_ms, "deadline must be >= acquired_at_ms (saturating)");
+    deadline
 }
 
 #[cfg(test)]

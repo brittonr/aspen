@@ -29,14 +29,27 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         assert!(!info.worker_id.is_empty(), "WORKER: worker_id must not be empty");
 
         // Early validation (optimistic, may have false positives from concurrent registrations)
-        {
-            let workers = self.workers.read().await;
-            if workers.len() >= self.config.max_workers as usize {
-                bail!("maximum worker limit {} reached", self.config.max_workers);
-            }
-        }
+        self.register_worker_check_limit().await?;
 
-        // Register in service registry (no local state changed yet)
+        // Register in service registry and KV store
+        self.register_worker_to_registry(&info).await?;
+        let key = self.register_worker_to_kv(&info).await?;
+
+        // Final insert with re-validation (TOCTOU protection)
+        self.register_worker_finalize(info, key).await
+    }
+
+    /// Check if worker limit has been reached (early optimistic check).
+    async fn register_worker_check_limit(&self) -> Result<()> {
+        let workers = self.workers.read().await;
+        if workers.len() >= self.config.max_workers as usize {
+            bail!("maximum worker limit {} reached", self.config.max_workers);
+        }
+        Ok(())
+    }
+
+    /// Register worker in service registry.
+    async fn register_worker_to_registry(&self, info: &WorkerInfo) -> Result<()> {
         let metadata = ServiceInstanceMetadata {
             version: "1.0.0".to_string(),
             tags: info.tags.clone(),
@@ -47,18 +60,20 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             ]),
         };
 
-        let (_token, _deadline) = self
-            .registry
+        self.registry
             .register("distributed-worker", &info.worker_id, &info.node_id, metadata, RegisterOptions {
                 ttl_ms: Some(self.config.heartbeat_timeout_ms),
                 initial_status: Some(info.health),
                 lease_id: None,
             })
             .await?;
+        Ok(())
+    }
 
-        // Store worker info in KV store (no local state changed yet)
+    /// Store worker info in KV store.
+    async fn register_worker_to_kv(&self, info: &WorkerInfo) -> Result<String> {
         let key = verified::worker_stats_key(&info.worker_id);
-        let value = serde_json::to_string(&info)?;
+        let value = serde_json::to_string(info)?;
 
         self.store
             .write(WriteRequest {
@@ -68,30 +83,19 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
                 },
             })
             .await?;
+        Ok(key)
+    }
 
-        // Final insert with re-validation (TOCTOU protection)
+    /// Finalize registration with TOCTOU-safe check.
+    async fn register_worker_finalize(&self, info: WorkerInfo, key: String) -> Result<()> {
         let worker_id = info.worker_id.clone();
         let node_id = info.node_id.clone();
 
         let mut workers = self.workers.write().await;
 
-        // Re-check limit under write lock - if we've hit the limit and this worker
-        // isn't already registered (idempotent re-registration is OK), reject
+        // Re-check limit under write lock
         if workers.len() >= self.config.max_workers as usize && !workers.contains_key(&worker_id) {
-            // Rollback: cleanup KV store (fire-and-forget with logging)
-            if let Err(e) = self
-                .store
-                .write(WriteRequest {
-                    command: WriteCommand::Delete { key },
-                })
-                .await
-            {
-                warn!(
-                    error = %e,
-                    worker_id = %worker_id,
-                    "failed to rollback worker registration from KV store"
-                );
-            }
+            self.register_worker_rollback(&key, &worker_id).await;
             bail!("maximum worker limit {} reached during registration", self.config.max_workers);
         }
 
@@ -104,6 +108,23 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         );
 
         Ok(())
+    }
+
+    /// Rollback KV store entry on registration failure.
+    async fn register_worker_rollback(&self, key: &str, worker_id: &str) {
+        if let Err(e) = self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::Delete { key: key.to_string() },
+            })
+            .await
+        {
+            warn!(
+                error = %e,
+                worker_id = %worker_id,
+                "failed to rollback worker registration from KV store"
+            );
+        }
     }
 
     /// Update worker heartbeat and stats.

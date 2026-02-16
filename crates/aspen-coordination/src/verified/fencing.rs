@@ -250,7 +250,10 @@ pub fn should_step_down(observed_tokens: &HashMap<String, u64>, my_token: u64, m
 /// ```
 #[inline]
 pub fn compute_quorum_threshold(total_nodes: u32) -> u32 {
-    if total_nodes == 0 { 0 } else { (total_nodes / 2) + 1 }
+    let quorum = if total_nodes == 0 { 0 } else { (total_nodes / 2) + 1 };
+    debug_assert!(total_nodes == 0 || quorum > total_nodes / 2, "quorum must be > half of total nodes");
+    debug_assert!(quorum <= total_nodes, "quorum must be <= total nodes");
+    quorum
 }
 
 /// Check if we have quorum with the given number of healthy nodes.
@@ -358,9 +361,12 @@ pub fn should_trigger_failover(
 /// Timeout with jitter applied.
 #[inline]
 pub fn compute_election_timeout_with_jitter(base_timeout_ms: u64, jitter_factor: f32, random_value: f32) -> u64 {
+    debug_assert!(jitter_factor >= 0.0, "jitter_factor must be non-negative");
     let jitter_range = (base_timeout_ms as f32 * jitter_factor) as u64;
     let jitter = (jitter_range as f32 * random_value.clamp(0.0, 1.0)) as u64;
-    base_timeout_ms.saturating_add(jitter)
+    let timeout = base_timeout_ms.saturating_add(jitter);
+    debug_assert!(timeout >= base_timeout_ms, "timeout must be >= base timeout");
+    timeout
 }
 
 // ============================================================================
@@ -400,7 +406,9 @@ pub fn is_lease_valid(lease_expires_at_ms: u64, now_ms: u64, grace_period_ms: u6
 #[inline]
 pub fn compute_lease_renew_time(lease_acquired_at_ms: u64, lease_ttl_ms: u64, renew_at_fraction: f32) -> u64 {
     let renew_after_ms = (lease_ttl_ms as f32 * renew_at_fraction.clamp(0.0, 1.0)) as u64;
-    lease_acquired_at_ms.saturating_add(renew_after_ms)
+    let renew_time = lease_acquired_at_ms.saturating_add(renew_after_ms);
+    debug_assert!(renew_time >= lease_acquired_at_ms, "renew time must be >= acquired time");
+    renew_time
 }
 
 /// Compute election timeout with jitter (Verus-aligned, integer-based).
@@ -419,6 +427,7 @@ pub fn compute_lease_renew_time(lease_acquired_at_ms: u64, lease_ttl_ms: u64, re
 /// Timeout with jitter applied (saturating at u64::MAX).
 #[inline]
 pub fn compute_election_timeout_with_jitter_u32(base_timeout_ms: u64, jitter_percent: u32, jitter_seed: u64) -> u64 {
+    debug_assert!(jitter_percent <= 100, "jitter_percent should be <= 100");
     if jitter_percent == 0 {
         return base_timeout_ms;
     }
@@ -428,7 +437,9 @@ pub fn compute_election_timeout_with_jitter_u32(base_timeout_ms: u64, jitter_per
     } else {
         0
     };
-    base_timeout_ms.saturating_add(jitter)
+    let timeout = base_timeout_ms.saturating_add(jitter);
+    debug_assert!(timeout >= base_timeout_ms, "timeout must be >= base timeout");
+    timeout
 }
 
 /// Compute lease renew time (Verus-aligned, percent-based).
@@ -447,8 +458,11 @@ pub fn compute_election_timeout_with_jitter_u32(base_timeout_ms: u64, jitter_per
 /// Time at which the lease should be renewed (Unix ms).
 #[inline]
 pub fn compute_lease_renew_time_percent(lease_acquired_at_ms: u64, lease_ttl_ms: u64, renew_percent: u32) -> u64 {
+    debug_assert!(renew_percent <= 100, "renew_percent should be <= 100");
     let renew_after_ms = lease_ttl_ms.saturating_mul(renew_percent as u64) / 100;
-    lease_acquired_at_ms.saturating_add(renew_after_ms)
+    let renew_time = lease_acquired_at_ms.saturating_add(renew_after_ms);
+    debug_assert!(renew_time >= lease_acquired_at_ms, "renew time must be >= acquired time");
+    renew_time
 }
 
 #[cfg(test)]

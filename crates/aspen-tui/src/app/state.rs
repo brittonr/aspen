@@ -120,7 +120,7 @@ impl App {
         // Load SQL history from disk
         let mut sql_state = SqlState::default();
         sql_state.history = load_sql_history();
-        sql_state.history_index = sql_state.history.len();
+        sql_state.history_index = sql_state.history.len() as u32;
 
         Self {
             should_quit: false,
@@ -170,7 +170,7 @@ impl App {
         // Load SQL history from disk
         let mut sql_state = SqlState::default();
         sql_state.history = load_sql_history();
-        sql_state.history_index = sql_state.history.len();
+        sql_state.history_index = sql_state.history.len() as u32;
 
         Ok(Self {
             should_quit: false,
@@ -213,7 +213,7 @@ impl App {
         // Load SQL history from disk
         let mut sql_state = SqlState::default();
         sql_state.history = load_sql_history();
-        sql_state.history_index = sql_state.history.len();
+        sql_state.history_index = sql_state.history.len() as u32;
 
         Self {
             should_quit: false,

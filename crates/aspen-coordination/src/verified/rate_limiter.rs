@@ -50,10 +50,13 @@ pub fn calculate_replenished_tokens(
     refill_rate: f64,
     capacity: u64,
 ) -> f64 {
+    debug_assert!(refill_rate >= 0.0, "refill_rate must be non-negative");
     let elapsed_ms = now_ms.saturating_sub(last_update_ms);
     let elapsed_secs = elapsed_ms as f64 / 1000.0;
     let replenished = elapsed_secs * refill_rate;
-    (current_tokens + replenished).min(capacity as f64)
+    let result = (current_tokens + replenished).min(capacity as f64);
+    debug_assert!(result <= capacity as f64, "result must not exceed capacity");
+    result
 }
 
 // ============================================================================
@@ -155,14 +158,19 @@ pub fn has_tokens_available(current_tokens: u64, requested: u64) -> bool {
 /// Consume tokens (subtract amount from current).
 #[inline]
 pub fn consume_tokens(current_tokens: u64, consumed: u64) -> u64 {
-    current_tokens.saturating_sub(consumed)
+    let remaining = current_tokens.saturating_sub(consumed);
+    debug_assert!(remaining <= current_tokens, "remaining must not exceed current_tokens");
+    remaining
 }
 
 /// Add tokens during refill (capped at capacity).
 #[inline]
 pub fn refill_tokens(current_tokens: u64, refill_amount: u64, capacity: u64) -> u64 {
     let sum = current_tokens.saturating_add(refill_amount);
-    if sum > capacity { capacity } else { sum }
+    let result = if sum > capacity { capacity } else { sum };
+    debug_assert!(result <= capacity, "result must not exceed capacity");
+    debug_assert!(result >= current_tokens || result == capacity, "result must be >= current or at capacity");
+    result
 }
 
 // ============================================================================
@@ -204,14 +212,18 @@ pub fn calculate_intervals_elapsed(last_refill_ms: u64, now_ms: u64, interval_ms
 #[inline]
 pub fn compute_tokens_to_add(intervals: u64, refill_amount: u64, capacity: u64) -> u64 {
     let raw = intervals.saturating_mul(refill_amount);
-    if raw > capacity { capacity } else { raw }
+    let result = if raw > capacity { capacity } else { raw };
+    debug_assert!(result <= capacity, "result must not exceed capacity");
+    result
 }
 
 /// Compute new last_refill_ms after refill.
 #[inline]
 pub fn calculate_new_last_refill(last_refill_ms: u64, intervals: u64, refill_interval_ms: u64) -> u64 {
     let increment = intervals.saturating_mul(refill_interval_ms);
-    last_refill_ms.saturating_add(increment)
+    let new_last = last_refill_ms.saturating_add(increment);
+    debug_assert!(new_last >= last_refill_ms, "new_last must be >= last_refill_ms");
+    new_last
 }
 
 // ============================================================================
@@ -219,9 +231,18 @@ pub fn calculate_new_last_refill(last_refill_ms: u64, intervals: u64, refill_int
 // ============================================================================
 
 /// Check if acquire is valid.
+///
+/// Returns true if:
+/// - Amount is positive (cannot acquire zero tokens)
+/// - Amount does not exceed capacity (request is reasonable)
+/// - Sufficient tokens are available
 #[inline]
 pub fn is_acquire_valid(amount: u64, capacity: u64, tokens: u64) -> bool {
-    amount > 0 && amount <= capacity && tokens >= amount
+    let is_positive_amount = amount > 0;
+    let is_within_capacity = amount <= capacity;
+    let has_sufficient_tokens = tokens >= amount;
+
+    is_positive_amount && is_within_capacity && has_sufficient_tokens
 }
 
 /// Check if refill is valid (time precondition).
@@ -261,7 +282,9 @@ pub fn calculate_load_factor(current_load: u32, capacity: u32) -> f64 {
     if capacity == 0 {
         return 0.0;
     }
-    current_load as f64 / capacity as f64
+    let factor = current_load as f64 / capacity as f64;
+    debug_assert!(factor >= 0.0, "load factor must be non-negative");
+    factor
 }
 
 // ============================================================================
@@ -314,20 +337,26 @@ pub fn compute_refill_intervals(current_time_ms: u64, last_refill_ms: u64, refil
 #[inline]
 pub fn compute_new_last_refill(last_refill_ms: u64, intervals: u64, refill_interval_ms: u64) -> u64 {
     let increment = intervals.saturating_mul(refill_interval_ms);
-    last_refill_ms.saturating_add(increment)
+    let new_last = last_refill_ms.saturating_add(increment);
+    debug_assert!(new_last >= last_refill_ms, "new_last must be >= last_refill_ms");
+    new_last
 }
 
 /// Compute tokens after acquire.
 #[inline]
 pub fn compute_tokens_after_acquire(tokens: u64, amount: u64) -> u64 {
-    tokens.saturating_sub(amount)
+    let remaining = tokens.saturating_sub(amount);
+    debug_assert!(remaining <= tokens, "remaining must not exceed tokens");
+    remaining
 }
 
 /// Compute tokens after refill.
 #[inline]
 pub fn compute_tokens_after_refill(current_tokens: u64, tokens_to_add: u64, capacity: u64) -> u64 {
     let sum = current_tokens.saturating_add(tokens_to_add);
-    if sum > capacity { capacity } else { sum }
+    let result = if sum > capacity { capacity } else { sum };
+    debug_assert!(result <= capacity, "result must not exceed capacity");
+    result
 }
 
 #[cfg(test)]
