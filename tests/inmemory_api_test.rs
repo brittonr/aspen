@@ -322,7 +322,7 @@ async fn test_kv_store_delete_existing_key() {
         .await
         .unwrap();
 
-    assert!(result.deleted);
+    assert!(result.is_deleted);
     assert_eq!(result.key, "key1");
 
     // Verify it's gone
@@ -341,7 +341,7 @@ async fn test_kv_store_delete_nonexistent_key() {
         .await
         .unwrap();
 
-    assert!(!result.deleted);
+    assert!(!result.is_deleted);
     assert_eq!(result.key, "nonexistent");
 }
 

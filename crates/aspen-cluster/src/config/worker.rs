@@ -50,7 +50,7 @@ pub struct WorkerConfig {
     ///
     /// Default: Number of CPU cores (capped at 8)
     #[serde(default = "default_worker_count")]
-    pub worker_count: usize,
+    pub worker_count: u32,
 
     /// Maximum concurrent jobs per worker.
     ///
@@ -61,7 +61,7 @@ pub struct WorkerConfig {
     ///
     /// Default: 1
     #[serde(default = "default_max_concurrent_jobs")]
-    pub max_concurrent_jobs: usize,
+    pub max_concurrent_jobs: u32,
 
     /// Job types this node can handle.
     ///
@@ -190,11 +190,11 @@ impl Default for WorkerConfig {
     }
 }
 
-pub(crate) fn default_worker_count() -> usize {
-    std::cmp::min(num_cpus::get(), 8)
+pub(crate) fn default_worker_count() -> u32 {
+    std::cmp::min(num_cpus::get(), 8) as u32
 }
 
-pub(crate) fn default_max_concurrent_jobs() -> usize {
+pub(crate) fn default_max_concurrent_jobs() -> u32 {
     1
 }
 

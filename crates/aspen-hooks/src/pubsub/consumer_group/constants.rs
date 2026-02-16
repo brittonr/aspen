@@ -71,26 +71,50 @@ pub const MAX_DLQ_SIZE: u32 = 10_000;
 /// Minimum time between rebalances to prevent thrashing.
 pub const REBALANCE_COOLDOWN_MS: u64 = 5_000; // 5 seconds
 
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Consumer group limits must be positive
+const _: () = assert!(MAX_CONSUMER_GROUPS > 0);
+const _: () = assert!(MAX_CONSUMERS_PER_GROUP > 0);
+const _: () = assert!(MAX_CONSUMERS_PER_GROUP >= 2); // need at least 2 for competition
+const _: () = assert!(MAX_PENDING_PER_CONSUMER > 0);
+const _: () = assert!(MAX_PENDING_PER_CONSUMER >= 1); // need at least 1 pending
+const _: () = assert!(MAX_PARTITIONS_PER_GROUP > 0);
+
+// Batch sizes must be positive
+const _: () = assert!(MAX_FETCH_BATCH_SIZE > 0);
+const _: () = assert!(MAX_BATCH_ACK_SIZE > 0);
+
+// Visibility timeout ordering
+const _: () = assert!(MIN_VISIBILITY_TIMEOUT_MS > 0);
+const _: () = assert!(DEFAULT_VISIBILITY_TIMEOUT_MS >= MIN_VISIBILITY_TIMEOUT_MS);
+const _: () = assert!(DEFAULT_VISIBILITY_TIMEOUT_MS <= MAX_VISIBILITY_TIMEOUT_MS);
+const _: () = assert!(MAX_VISIBILITY_TIMEOUT_MS > 0);
+
+// Delivery attempt ordering
+const _: () = assert!(MIN_DELIVERY_ATTEMPTS > 0);
+const _: () = assert!(DEFAULT_MAX_DELIVERY_ATTEMPTS >= MIN_DELIVERY_ATTEMPTS);
+const _: () = assert!(DEFAULT_MAX_DELIVERY_ATTEMPTS <= MAX_DELIVERY_ATTEMPTS);
+const _: () = assert!(MAX_DELIVERY_ATTEMPTS > 0);
+
+// Heartbeat timing relationships
+const _: () = assert!(CONSUMER_HEARTBEAT_INTERVAL_MS > 0);
+const _: () = assert!(CONSUMER_HEARTBEAT_TIMEOUT_MS > CONSUMER_HEARTBEAT_INTERVAL_MS);
+// Timeout should be at least 2x interval for reliability
+const _: () = assert!(CONSUMER_HEARTBEAT_TIMEOUT_MS >= CONSUMER_HEARTBEAT_INTERVAL_MS * 2);
+
+// DLQ and rebalance limits must be positive
+const _: () = assert!(MAX_DLQ_SIZE > 0);
+const _: () = assert!(REBALANCE_COOLDOWN_MS > 0);
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Compile-time assertions for sane limits
-    const _: () = {
-        assert!(MAX_CONSUMERS_PER_GROUP >= 2); // Need at least 2 for competition
-        assert!(MAX_PENDING_PER_CONSUMER >= 1); // Need at least 1 pending
-        assert!(DEFAULT_VISIBILITY_TIMEOUT_MS >= MIN_VISIBILITY_TIMEOUT_MS);
-        assert!(DEFAULT_VISIBILITY_TIMEOUT_MS <= MAX_VISIBILITY_TIMEOUT_MS);
-        assert!(DEFAULT_MAX_DELIVERY_ATTEMPTS >= MIN_DELIVERY_ATTEMPTS);
-        assert!(DEFAULT_MAX_DELIVERY_ATTEMPTS <= MAX_DELIVERY_ATTEMPTS);
-        assert!(CONSUMER_HEARTBEAT_TIMEOUT_MS > CONSUMER_HEARTBEAT_INTERVAL_MS);
-    };
-
     #[test]
     fn test_timeout_relationships() {
-        // Heartbeat timeout should be a multiple of interval
-        assert!(CONSUMER_HEARTBEAT_TIMEOUT_MS >= CONSUMER_HEARTBEAT_INTERVAL_MS * 2);
-
         // Visibility timeout range should be reasonable
         assert!(MAX_VISIBILITY_TIMEOUT_MS / MIN_VISIBILITY_TIMEOUT_MS >= 1000);
     }

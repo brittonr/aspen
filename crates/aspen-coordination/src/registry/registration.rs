@@ -30,6 +30,11 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
         metadata: ServiceInstanceMetadata,
         options: RegisterOptions,
     ) -> Result<(u64, u64)> {
+        // Tiger Style: argument validation
+        debug_assert!(!service_name.is_empty(), "REGISTRY: service_name must not be empty");
+        debug_assert!(!instance_id.is_empty(), "REGISTRY: instance_id must not be empty");
+        debug_assert!(!address.is_empty(), "REGISTRY: address must not be empty");
+
         let now = now_unix_ms();
         let ttl_ms = options.ttl_ms.unwrap_or(DEFAULT_SERVICE_TTL_MS).min(MAX_SERVICE_TTL_MS);
         let is_lease_based = options.lease_id.is_some();
@@ -79,6 +84,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
             match self.store.write(WriteRequest { command }).await {
                 Ok(_) => {
+                    // Tiger Style: registered instance must have positive fencing token
+                    debug_assert!(fencing_token > 0, "REGISTRY: fencing_token must be positive after registration");
+                    debug_assert!(deadline_ms > now, "REGISTRY: deadline_ms {} must be > now {}", deadline_ms, now);
+
                     debug!(service_name, instance_id, fencing_token, deadline_ms, "instance registered");
                     return Ok((fencing_token, deadline_ms));
                 }
@@ -95,6 +104,11 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
     ///
     /// Returns true if instance was found and removed.
     pub async fn deregister(&self, service_name: &str, instance_id: &str, fencing_token: u64) -> Result<bool> {
+        // Tiger Style: argument validation
+        debug_assert!(!service_name.is_empty(), "REGISTRY: service_name must not be empty for deregister");
+        debug_assert!(!instance_id.is_empty(), "REGISTRY: instance_id must not be empty for deregister");
+        debug_assert!(fencing_token > 0, "REGISTRY: fencing_token must be positive for deregister");
+
         let key = Self::instance_key(service_name, instance_id);
 
         loop {

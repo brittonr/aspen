@@ -12,6 +12,9 @@ use crate::verified;
 impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     /// Select a worker for a job based on the configured strategy.
     pub async fn select_worker(&self, job_type: &str, affinity_key: Option<&str>) -> Result<Option<WorkerInfo>> {
+        // Tiger Style: job_type must not be empty
+        debug_assert!(!job_type.is_empty(), "WORKER: job_type must not be empty");
+
         let workers = self.workers.read().await;
 
         // Filter to healthy, alive workers that can handle the job

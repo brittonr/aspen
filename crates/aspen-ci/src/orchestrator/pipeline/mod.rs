@@ -52,11 +52,11 @@ use crate::error::Result;
 
 // Tiger Style: Bounded resources
 /// Maximum concurrent pipeline runs per repository.
-const MAX_CONCURRENT_RUNS_PER_REPO: usize = 5;
+const MAX_CONCURRENT_RUNS_PER_REPO: u32 = 5;
 /// Maximum total concurrent pipeline runs.
-const MAX_TOTAL_CONCURRENT_RUNS: usize = 50;
+const MAX_TOTAL_CONCURRENT_RUNS: u32 = 50;
 /// Maximum jobs per pipeline.
-const MAX_JOBS_PER_PIPELINE: usize = 100;
+const MAX_JOBS_PER_PIPELINE: u32 = 100;
 /// Default step timeout (30 minutes).
 const DEFAULT_STEP_TIMEOUT_SECS: u64 = 1800;
 /// Maximum number of runs to list from KV store.
@@ -77,9 +77,9 @@ const KV_PREFIX_CI_RUNS_BY_REPO: &str = "_ci:runs:by-repo:";
 #[derive(Debug, Clone)]
 pub struct PipelineOrchestratorConfig {
     /// Maximum concurrent runs per repository.
-    pub max_runs_per_repo: usize,
+    pub max_runs_per_repo: u32,
     /// Maximum total concurrent runs.
-    pub max_total_runs: usize,
+    pub max_total_runs: u32,
     /// Default step timeout.
     pub default_step_timeout: Duration,
     /// Avoid scheduling CI jobs on the Raft leader node.
@@ -351,7 +351,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     pub async fn execute(&self, pipeline_config: PipelineConfig, context: PipelineContext) -> Result<PipelineRun> {
         // Validate job count
         let total_jobs: usize = pipeline_config.stages.iter().map(|s| s.jobs.len()).sum();
-        if total_jobs > MAX_JOBS_PER_PIPELINE {
+        if total_jobs as u32 > MAX_JOBS_PER_PIPELINE {
             return Err(CiError::InvalidConfig {
                 reason: format!("Pipeline has {} jobs, maximum is {}", total_jobs, MAX_JOBS_PER_PIPELINE),
             });
@@ -783,7 +783,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
 
         // Validate job count
         let total_jobs: usize = pipeline_config.stages.iter().map(|s| s.jobs.len()).sum();
-        if total_jobs > MAX_JOBS_PER_PIPELINE {
+        if total_jobs as u32 > MAX_JOBS_PER_PIPELINE {
             return Err(CiError::InvalidConfig {
                 reason: format!("Pipeline has {} jobs, maximum is {}", total_jobs, MAX_JOBS_PER_PIPELINE),
             });

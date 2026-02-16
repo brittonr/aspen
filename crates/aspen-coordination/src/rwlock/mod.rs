@@ -34,6 +34,7 @@ pub mod types;
 
 use std::sync::Arc;
 
+use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::bail;
 use aspen_kv_types::KeyValueStoreError;
@@ -89,7 +90,8 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                 if value.is_empty() {
                     Ok(None)
                 } else {
-                    let state: RWLockState = serde_json::from_str(&value)?;
+                    let state: RWLockState = serde_json::from_str(&value)
+                        .with_context(|| format!("failed to parse rwlock state for key '{}'", key))?;
                     Ok(Some(state))
                 }
             }

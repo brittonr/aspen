@@ -110,7 +110,7 @@ pub struct WorkerConfig {
     /// Worker ID (auto-generated if not provided).
     pub id: Option<String>,
     /// Maximum concurrent jobs.
-    pub concurrency: usize,
+    pub concurrency: u32,
     /// Heartbeat interval.
     pub heartbeat_interval: Duration,
     /// Graceful shutdown timeout.
@@ -285,11 +285,12 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
             "worker status counts (idle={idle}, processing={processing}, failed={failed}) exceed total {total}"
         );
 
+        // Tiger Style: Cast counts to u32 (worker counts are bounded and won't overflow)
         WorkerPoolStats {
-            total_workers: total,
-            idle_workers: idle,
-            processing_workers: processing,
-            failed_workers: failed,
+            total_workers: total as u32,
+            idle_workers: idle as u32,
+            processing_workers: processing as u32,
+            failed_workers: failed as u32,
             total_jobs_processed: total_processed,
             total_jobs_failed: total_failed,
         }
@@ -300,17 +301,188 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerPoolStats {
     /// Total number of workers.
-    pub total_workers: usize,
+    pub total_workers: u32,
     /// Number of idle workers.
-    pub idle_workers: usize,
+    pub idle_workers: u32,
     /// Number of workers processing jobs.
-    pub processing_workers: usize,
+    pub processing_workers: u32,
     /// Number of failed workers.
-    pub failed_workers: usize,
+    pub failed_workers: u32,
     /// Total jobs processed by all workers.
     pub total_jobs_processed: u64,
     /// Total jobs failed across all workers.
     pub total_jobs_failed: u64,
+}
+
+/// Update worker status in the info map.
+async fn run_worker_update_status(
+    worker_info: &RwLock<HashMap<String, WorkerInfo>>,
+    worker_id: &str,
+    status: WorkerStatus,
+    current_job: Option<String>,
+) {
+    let mut info = worker_info.write().await;
+    if let Some(w) = info.get_mut(worker_id) {
+        w.status = status;
+        w.current_job = current_job;
+        w.last_heartbeat = Utc::now();
+    }
+}
+
+/// Increment job success counter for worker.
+async fn run_worker_record_success(worker_info: &RwLock<HashMap<String, WorkerInfo>>, worker_id: &str) {
+    let mut info = worker_info.write().await;
+    if let Some(w) = info.get_mut(worker_id) {
+        w.jobs_processed += 1;
+    }
+}
+
+/// Increment job failure counter for worker.
+async fn run_worker_record_failure(worker_info: &RwLock<HashMap<String, WorkerInfo>>, worker_id: &str) {
+    let mut info = worker_info.write().await;
+    if let Some(w) = info.get_mut(worker_id) {
+        w.jobs_failed += 1;
+    }
+}
+
+/// Collect excluded job types from all registered handlers.
+async fn run_worker_collect_excluded_types(workers: &RwLock<HashMap<String, Arc<dyn Worker>>>) -> Vec<String> {
+    let workers_guard = workers.read().await;
+    workers_guard
+        .values()
+        .flat_map(|w| w.excluded_types())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+/// Find the appropriate handler for a job type.
+/// Priority: 1. Exact job_type match
+///           2. Handlers with specific job_types that can handle this type
+///           3. Wildcard handlers (empty job_types) that can_handle returns true
+async fn run_worker_find_handler(
+    workers: &RwLock<HashMap<String, Arc<dyn Worker>>>,
+    job_type: &str,
+) -> Option<Arc<dyn Worker>> {
+    let workers_guard = workers.read().await;
+    workers_guard.get(job_type).cloned().or_else(|| {
+        workers_guard
+            .iter()
+            .find(|(_, w)| {
+                let types = w.job_types();
+                !types.is_empty() && types.iter().any(|t| t == job_type)
+            })
+            .map(|(_, w)| w.clone())
+            .or_else(|| {
+                workers_guard
+                    .iter()
+                    .find(|(_, w)| w.job_types().is_empty() && w.can_handle(job_type))
+                    .map(|(_, w)| w.clone())
+            })
+    })
+}
+
+/// Spawn a heartbeat task that periodically updates job heartbeat.
+fn run_worker_spawn_heartbeat<S: aspen_core::KeyValueStore + ?Sized + 'static>(
+    manager: Arc<JobManager<S>>,
+    job_id: crate::job::JobId,
+    worker_id: String,
+) -> JoinHandle<()> {
+    let heartbeat_interval = Duration::from_millis(aspen_core::JOB_HEARTBEAT_INTERVAL_MS);
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(heartbeat_interval).await;
+            if let Err(e) = manager.update_heartbeat(&job_id).await {
+                warn!(worker_id = %worker_id, job_id = %job_id, error = ?e, "failed to update job heartbeat");
+            }
+        }
+    })
+}
+
+/// Handle successful job completion: ack with timeout.
+async fn run_worker_handle_success<S: aspen_core::KeyValueStore + ?Sized + 'static>(
+    manager: &JobManager<S>,
+    worker_id: &str,
+    job_id: &crate::job::JobId,
+    receipt_handle: &str,
+    execution_token: &str,
+    result: JobResult,
+) {
+    match timeout(JOB_ACK_TIMEOUT, manager.ack_job(job_id, receipt_handle, execution_token, result)).await {
+        Ok(Ok(())) => {
+            debug!(worker_id, job_id = %job_id, "job acknowledged successfully");
+        }
+        Ok(Err(e)) => {
+            error!(worker_id, job_id = %job_id, error = ?e, "failed to acknowledge job");
+        }
+        Err(_) => {
+            error!(
+                worker_id,
+                job_id = %job_id,
+                timeout_secs = JOB_ACK_TIMEOUT.as_secs(),
+                "timed out waiting for leader to acknowledge job"
+            );
+        }
+    }
+}
+
+/// Handle failed job: nack with timeout.
+async fn run_worker_handle_failure<S: aspen_core::KeyValueStore + ?Sized + 'static>(
+    manager: &JobManager<S>,
+    worker_id: &str,
+    job_id: &crate::job::JobId,
+    receipt_handle: &str,
+    execution_token: &str,
+    error_msg: String,
+) {
+    match timeout(JOB_ACK_TIMEOUT, manager.nack_job(job_id, receipt_handle, execution_token, error_msg)).await {
+        Ok(Ok(())) => {
+            debug!(worker_id, job_id = %job_id, "job nacked successfully");
+        }
+        Ok(Err(e)) => {
+            error!(worker_id, job_id = %job_id, error = ?e, "failed to nack job");
+        }
+        Err(_) => {
+            error!(
+                worker_id,
+                job_id = %job_id,
+                timeout_secs = JOB_ACK_TIMEOUT.as_secs(),
+                "timed out waiting for leader to nack job"
+            );
+        }
+    }
+}
+
+/// Execute a job with timeout and heartbeat tracking.
+async fn run_worker_execute_job<S: aspen_core::KeyValueStore + ?Sized + 'static>(
+    manager: Arc<JobManager<S>>,
+    worker_id: &str,
+    job: Job,
+    handler: Arc<dyn Worker>,
+) -> JobResult {
+    let job_timeout = job.spec.config.timeout.unwrap_or(Duration::from_secs(300));
+    let job_id = job.id.clone();
+
+    // Spawn heartbeat task
+    let heartbeat_handle = run_worker_spawn_heartbeat(manager.clone(), job_id.clone(), worker_id.to_string());
+
+    let result = match timeout(job_timeout, handler.execute(job)).await {
+        Ok(result) => result,
+        Err(_) => {
+            warn!(worker_id, job_id = %job_id, "job timed out");
+            JobResult::failure("job execution timed out")
+        }
+    };
+
+    // Stop heartbeat task
+    heartbeat_handle.abort();
+
+    // Remove heartbeat from KV store
+    if let Err(e) = manager.remove_heartbeat(&job_id).await {
+        debug!(worker_id, job_id = %job_id, error = ?e, "failed to remove job heartbeat");
+    }
+
+    result
 }
 
 /// Run a worker loop.
@@ -326,27 +498,10 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
     info!(worker_id, "worker starting");
 
     // Update status to idle
-    {
-        let mut info = worker_info.write().await;
-        if let Some(w) = info.get_mut(&worker_id) {
-            w.status = WorkerStatus::Idle;
-            w.last_heartbeat = Utc::now();
-        }
-    }
+    run_worker_update_status(&worker_info, &worker_id, WorkerStatus::Idle, None).await;
 
-    // Collect excluded job types from all registered handlers.
-    // This prevents the worker pool from dequeuing jobs it can't handle,
-    // avoiding unnecessary dequeue/release cycles that starve other workers.
-    let excluded_types: Vec<String> = {
-        let workers_guard = workers.read().await;
-        workers_guard
-            .values()
-            .flat_map(|w| w.excluded_types())
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .collect()
-    };
-
+    // Collect excluded job types from all registered handlers
+    let excluded_types = run_worker_collect_excluded_types(&workers).await;
     if !excluded_types.is_empty() {
         info!(worker_id, excluded_types = ?excluded_types, "worker excluding job types from dequeue");
     }
@@ -363,244 +518,79 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
         match manager.dequeue_jobs_filtered(&worker_id, 1, config.visibility_timeout, &excluded_types).await {
             Ok(jobs) => {
                 if jobs.is_empty() {
-                    // No jobs available, wait before polling again
                     tokio::time::sleep(config.poll_interval).await;
                 } else {
-                    // Process the job
                     for (queue_item, job) in jobs {
                         // SAFETY: The semaphore is owned by this function and never closed.
                         let _permit = concurrency_limiter.acquire().await.expect("semaphore should not be closed");
 
-                        // Update worker status
-                        {
-                            let mut info = worker_info.write().await;
-                            if let Some(w) = info.get_mut(&worker_id) {
-                                w.status = WorkerStatus::Processing;
-                                w.current_job = Some(job.id.to_string());
-                                w.last_heartbeat = Utc::now();
-                            }
-                        }
+                        // Update worker status to processing
+                        run_worker_update_status(
+                            &worker_info,
+                            &worker_id,
+                            WorkerStatus::Processing,
+                            Some(job.id.to_string()),
+                        )
+                        .await;
 
-                        // Find appropriate worker handler
-                        // Priority: 1. Exact job_type match first
-                        //           2. Then handlers with specific job_types that can handle this type
-                        //           3. Finally, wildcard handlers (job_types = [] AND can_handle returns true)
-                        let handler = {
-                            let workers = workers.read().await;
-                            // First, try exact key lookup
-                            workers.get(&job.spec.job_type).cloned().or_else(|| {
-                                // Then find a specific handler (non-empty job_types)
-                                workers
-                                    .iter()
-                                    .find(|(_, w)| {
-                                        let types = w.job_types();
-                                        !types.is_empty() && types.iter().any(|t| t == &job.spec.job_type)
-                                    })
-                                    .map(|(_, w)| w.clone())
-                                    .or_else(|| {
-                                        // Finally, fall back to wildcard handlers (empty job_types)
-                                        // Use can_handle() to allow wildcard handlers to exclude certain job types
-                                        workers
-                                            .iter()
-                                            .find(|(_, w)| w.job_types().is_empty() && w.can_handle(&job.spec.job_type))
-                                            .map(|(_, w)| w.clone())
-                                    })
-                            })
-                        };
+                        // Find appropriate handler
+                        let handler = run_worker_find_handler(&workers, &job.spec.job_type).await;
 
                         if let Some(handler) = handler {
                             // Mark job as started and get execution token
                             let execution_token = match manager.mark_started(&job.id, worker_id.clone()).await {
                                 Ok(token) => token,
                                 Err(e) => {
-                                    error!(
-                                        worker_id,
-                                        job_id = %job.id,
-                                        error = ?e,
-                                        "failed to mark job as started"
-                                    );
+                                    error!(worker_id, job_id = %job.id, error = ?e, "failed to mark job as started");
                                     continue;
                                 }
                             };
 
                             // Initial heartbeat
                             if let Err(e) = manager.update_heartbeat(&job.id).await {
-                                warn!(
-                                    worker_id,
-                                    job_id = %job.id,
-                                    error = ?e,
-                                    "failed to send initial heartbeat"
-                                );
+                                warn!(worker_id, job_id = %job.id, error = ?e, "failed to send initial heartbeat");
                             }
 
-                            // Execute job with timeout and heartbeat
-                            let job_timeout = job.spec.config.timeout.unwrap_or(Duration::from_secs(300));
                             let job_id = job.id.clone();
-                            let heartbeat_job_id = job_id.clone();
-                            let heartbeat_manager = manager.clone();
-                            let heartbeat_worker_id = worker_id.clone();
-                            let heartbeat_interval = Duration::from_millis(aspen_core::JOB_HEARTBEAT_INTERVAL_MS);
+                            let result = run_worker_execute_job(manager.clone(), &worker_id, job, handler).await;
 
-                            // Spawn heartbeat task
-                            let heartbeat_handle = tokio::spawn(async move {
-                                loop {
-                                    tokio::time::sleep(heartbeat_interval).await;
-                                    if let Err(e) = heartbeat_manager.update_heartbeat(&heartbeat_job_id).await {
-                                        warn!(
-                                            worker_id = %heartbeat_worker_id,
-                                            job_id = %heartbeat_job_id,
-                                            error = ?e,
-                                            "failed to update job heartbeat"
-                                        );
-                                    }
-                                }
-                            });
-
-                            let result = match timeout(job_timeout, handler.execute(job)).await {
-                                Ok(result) => result,
-                                Err(_) => {
-                                    warn!(
-                                        worker_id,
-                                        job_id = %job_id,
-                                        "job timed out"
-                                    );
-                                    JobResult::failure("job execution timed out")
-                                }
-                            };
-
-                            // Stop heartbeat task
-                            heartbeat_handle.abort();
-
-                            // Remove heartbeat from KV store
-                            if let Err(e) = manager.remove_heartbeat(&job_id).await {
-                                debug!(
-                                    worker_id,
-                                    job_id = %job_id,
-                                    error = ?e,
-                                    "failed to remove job heartbeat"
-                                );
-                            }
-
-                            // Release concurrency permit early - result handling (ack/nack)
-                            // may involve retries with sleeps that shouldn't block other workers
+                            // Release concurrency permit early
                             drop(_permit);
 
-                            // Process result with execution token to prove ownership
+                            // Process result
                             if result.is_success() {
-                                // Acknowledge successful completion with timeout
-                                match timeout(
-                                    JOB_ACK_TIMEOUT,
-                                    manager.ack_job(&job_id, &queue_item.receipt_handle, &execution_token, result),
+                                run_worker_handle_success(
+                                    &manager,
+                                    &worker_id,
+                                    &job_id,
+                                    &queue_item.receipt_handle,
+                                    &execution_token,
+                                    result,
                                 )
-                                .await
-                                {
-                                    Ok(Ok(())) => {
-                                        debug!(
-                                            worker_id,
-                                            job_id = %job_id,
-                                            "job acknowledged successfully"
-                                        );
-                                    }
-                                    Ok(Err(e)) => {
-                                        error!(
-                                            worker_id,
-                                            job_id = %job_id,
-                                            error = ?e,
-                                            "failed to acknowledge job"
-                                        );
-                                    }
-                                    Err(_) => {
-                                        error!(
-                                            worker_id,
-                                            job_id = %job_id,
-                                            timeout_secs = JOB_ACK_TIMEOUT.as_secs(),
-                                            "timed out waiting for leader to acknowledge job"
-                                        );
-                                    }
-                                }
-
-                                // Update worker stats
-                                let mut info = worker_info.write().await;
-                                if let Some(w) = info.get_mut(&worker_id) {
-                                    w.jobs_processed += 1;
-                                }
-
-                                info!(
-                                    worker_id,
-                                    job_id = %job_id,
-                                    "job completed successfully"
-                                );
+                                .await;
+                                run_worker_record_success(&worker_info, &worker_id).await;
+                                info!(worker_id, job_id = %job_id, "job completed successfully");
                             } else {
-                                // Handle failure
                                 let error_msg = match &result {
                                     JobResult::Failure(f) => f.reason.clone(),
                                     _ => "unknown error".to_string(),
                                 };
-
-                                // Nack job with timeout
-                                match timeout(
-                                    JOB_ACK_TIMEOUT,
-                                    manager.nack_job(
-                                        &job_id,
-                                        &queue_item.receipt_handle,
-                                        &execution_token,
-                                        error_msg.clone(),
-                                    ),
+                                run_worker_handle_failure(
+                                    &manager,
+                                    &worker_id,
+                                    &job_id,
+                                    &queue_item.receipt_handle,
+                                    &execution_token,
+                                    error_msg.clone(),
                                 )
-                                .await
-                                {
-                                    Ok(Ok(())) => {
-                                        debug!(
-                                            worker_id,
-                                            job_id = %job_id,
-                                            "job nacked successfully"
-                                        );
-                                    }
-                                    Ok(Err(e)) => {
-                                        error!(
-                                            worker_id,
-                                            job_id = %job_id,
-                                            error = ?e,
-                                            "failed to nack job"
-                                        );
-                                    }
-                                    Err(_) => {
-                                        error!(
-                                            worker_id,
-                                            job_id = %job_id,
-                                            timeout_secs = JOB_ACK_TIMEOUT.as_secs(),
-                                            "timed out waiting for leader to nack job"
-                                        );
-                                    }
-                                }
-
-                                // Update worker stats
-                                let mut info = worker_info.write().await;
-                                if let Some(w) = info.get_mut(&worker_id) {
-                                    w.jobs_failed += 1;
-                                }
-
-                                warn!(
-                                    worker_id,
-                                    job_id = %job_id,
-                                    error = error_msg,
-                                    "job failed"
-                                );
+                                .await;
+                                run_worker_record_failure(&worker_info, &worker_id).await;
+                                warn!(worker_id, job_id = %job_id, error = error_msg, "job failed");
                             }
                         } else {
-                            // Release permit before releasing the job
                             drop(_permit);
+                            warn!(worker_id, job_id = %job.id, job_type = job.spec.job_type, "no handler found for job type");
 
-                            warn!(
-                                worker_id,
-                                job_id = %job.id,
-                                job_type = job.spec.job_type,
-                                "no handler found for job type"
-                            );
-
-                            // Release the job back to the queue since we never started it.
-                            // This uses release_unhandled_job instead of nack_job because
-                            // the job was never marked as Running (no execution token).
                             if let Err(e) = manager
                                 .release_unhandled_job(
                                     &job.id,
@@ -609,33 +599,17 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                 )
                                 .await
                             {
-                                error!(
-                                    worker_id,
-                                    job_id = %job.id,
-                                    error = ?e,
-                                    "failed to release unhandled job"
-                                );
+                                error!(worker_id, job_id = %job.id, error = ?e, "failed to release unhandled job");
                             }
                         }
 
                         // Update worker status back to idle
-                        {
-                            let mut info = worker_info.write().await;
-                            if let Some(w) = info.get_mut(&worker_id) {
-                                w.status = WorkerStatus::Idle;
-                                w.current_job = None;
-                                w.last_heartbeat = Utc::now();
-                            }
-                        }
+                        run_worker_update_status(&worker_info, &worker_id, WorkerStatus::Idle, None).await;
                     }
                 }
             }
             Err(e) => {
-                debug!(
-                    worker_id,
-                    error = ?e,
-                    "failed to dequeue jobs, retrying"
-                );
+                debug!(worker_id, error = ?e, "failed to dequeue jobs, retrying");
                 tokio::time::sleep(config.poll_interval).await;
             }
         }
@@ -650,13 +624,7 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
     }
 
     // Update status to stopped
-    {
-        let mut info = worker_info.write().await;
-        if let Some(w) = info.get_mut(&worker_id) {
-            w.status = WorkerStatus::Stopped;
-        }
-    }
-
+    run_worker_update_status(&worker_info, &worker_id, WorkerStatus::Stopped, None).await;
     info!(worker_id, "worker stopped");
     Ok(())
 }

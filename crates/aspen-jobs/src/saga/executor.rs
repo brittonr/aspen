@@ -75,7 +75,10 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
 
         match response.kv {
             Some(kv) => {
-                let state: PersistentSagaState = serde_json::from_str(&kv.value)?;
+                let state: PersistentSagaState =
+                    serde_json::from_str(&kv.value).map_err(|e| JobError::ExecutionFailed {
+                        reason: format!("failed to parse saga state for '{}': {}", execution_id, e),
+                    })?;
                 Ok(Some(state))
             }
             None => Ok(None),

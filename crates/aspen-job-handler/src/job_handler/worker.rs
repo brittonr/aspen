@@ -62,12 +62,12 @@ pub(crate) async fn handle_worker_status(
 
     Ok(ClientRpcResponse::WorkerStatusResult(WorkerStatusResultResponse {
         workers,
-        total_workers: stats.total_workers as u32,
-        idle_workers: stats.idle_workers as u32,
-        busy_workers: stats.processing_workers as u32,
-        offline_workers: stats.failed_workers as u32,
-        total_capacity: stats.total_workers as u32, // 1 job per worker
-        used_capacity: stats.processing_workers as u32,
+        total_workers: stats.total_workers,
+        idle_workers: stats.idle_workers,
+        busy_workers: stats.processing_workers,
+        offline_workers: stats.failed_workers,
+        total_capacity: stats.total_workers, // 1 job per worker
+        used_capacity: stats.processing_workers,
         error: None,
     }))
 }
@@ -98,7 +98,7 @@ pub(crate) async fn handle_worker_register(
         capabilities,
         load: 0.0,
         active_jobs: 0,
-        max_concurrent: capacity as u32,
+        max_concurrent: capacity,
         queue_depth: 0,
         health: aspen_coordination::HealthStatus::Healthy,
         tags: vec![],

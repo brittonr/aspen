@@ -59,7 +59,7 @@ pub struct RedbRecordBatchStream {
     /// Last key read (for continuation).
     last_key: Option<Vec<u8>>,
     /// Whether we've finished scanning.
-    done: bool,
+    is_done: bool,
     /// Current timestamp for TTL filtering.
     now_ms: u64,
     /// Whether we've returned at least one batch (even if empty).
@@ -99,7 +99,7 @@ impl RedbRecordBatchStream {
             batch_size: DEFAULT_BATCH_SIZE,
             rows_returned: 0,
             last_key: None,
-            done: false,
+            is_done: false,
             now_ms: crate::now_unix_ms(),
             returned_first_batch: false,
         }
@@ -114,7 +114,7 @@ impl RedbRecordBatchStream {
 
     /// Read the next batch of records from Redb.
     fn read_next_batch(&mut self) -> Result<Option<RecordBatch>, SqlError> {
-        if self.done {
+        if self.is_done {
             return Ok(None);
         }
 
@@ -122,7 +122,7 @@ impl RedbRecordBatchStream {
         if let Some(limit) = self.limit
             && self.rows_returned >= limit
         {
-            self.done = true;
+            self.is_done = true;
             return Ok(None);
         }
 
@@ -233,7 +233,7 @@ impl RedbRecordBatchStream {
 
         // Update state
         if rows_in_batch == 0 {
-            self.done = true;
+            self.is_done = true;
             // For DataFusion aggregation compatibility, return an empty batch
             // with the correct schema on the first poll. This allows COUNT(*)
             // and other aggregations to work correctly on empty tables or
@@ -250,7 +250,7 @@ impl RedbRecordBatchStream {
 
         // If we got fewer rows than requested, we're done
         if rows_in_batch < rows_to_fetch {
-            self.done = true;
+            self.is_done = true;
         }
 
         // Handle empty projection (COUNT(*) case) - produce batch with row count only
@@ -408,7 +408,7 @@ pub struct IndexRecordBatchStream {
     /// Total rows returned so far.
     rows_returned: usize,
     /// Whether we've finished scanning.
-    done: bool,
+    is_done: bool,
     /// Current timestamp for TTL filtering.
     now_ms: u64,
     /// Whether we've returned at least one batch.
@@ -445,7 +445,7 @@ impl IndexRecordBatchStream {
             limit,
             batch_size: DEFAULT_BATCH_SIZE,
             rows_returned: 0,
-            done: false,
+            is_done: false,
             now_ms: crate::now_unix_ms(),
             returned_first_batch: false,
             primary_keys: None,
@@ -557,7 +557,7 @@ impl IndexRecordBatchStream {
 
     /// Read the next batch of records by fetching entries for primary keys.
     fn read_next_batch(&mut self) -> Result<Option<RecordBatch>, SqlError> {
-        if self.done {
+        if self.is_done {
             return Ok(None);
         }
 
@@ -572,13 +572,13 @@ impl IndexRecordBatchStream {
         if let Some(limit) = self.limit
             && self.rows_returned >= limit
         {
-            self.done = true;
+            self.is_done = true;
             return Ok(None);
         }
 
         // Check if we've processed all primary keys
         if self.pk_position >= primary_keys.len() {
-            self.done = true;
+            self.is_done = true;
             if !self.returned_first_batch {
                 self.returned_first_batch = true;
                 return self.create_empty_batch();
@@ -662,7 +662,7 @@ impl IndexRecordBatchStream {
 
         // Update state
         if rows_in_batch == 0 {
-            self.done = true;
+            self.is_done = true;
             if !self.returned_first_batch {
                 self.returned_first_batch = true;
                 return self.create_empty_batch();
@@ -674,7 +674,7 @@ impl IndexRecordBatchStream {
 
         // If we've processed all keys, we're done
         if self.pk_position >= primary_keys.len() {
-            self.done = true;
+            self.is_done = true;
         }
 
         // Handle empty projection (COUNT(*) case)

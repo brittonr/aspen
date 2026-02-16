@@ -103,10 +103,19 @@ impl IrohEndpointManager {
         use iroh::endpoint::TransportConfig;
         use iroh::endpoint::VarInt;
         let mut transport_config = TransportConfig::default();
+
+        // Tiger Style: validate transport config constants
+        const STREAM_WINDOW_BYTES: u32 = 64 * 1024 * 1024; // 64MB
+        const CONNECTION_WINDOW_BYTES: u32 = 256 * 1024 * 1024; // 256MB
+        const _: () = assert!(
+            STREAM_WINDOW_BYTES <= CONNECTION_WINDOW_BYTES,
+            "ENDPOINT: stream window must not exceed connection window"
+        );
+
         // Set stream receive window to 64MB to handle large git objects
-        transport_config.stream_receive_window(VarInt::from_u32(64 * 1024 * 1024));
+        transport_config.stream_receive_window(VarInt::from_u32(STREAM_WINDOW_BYTES));
         // Set connection receive window to 256MB
-        transport_config.receive_window(VarInt::from_u32(256 * 1024 * 1024));
+        transport_config.receive_window(VarInt::from_u32(CONNECTION_WINDOW_BYTES));
         // Set idle timeout high enough for server-side processing of large git batches.
         // Processing 5000+ tree objects sequentially can take 30-60 seconds.
         // Default QUIC idle timeout is often 30-60s, which is too short.
@@ -392,6 +401,9 @@ impl IrohEndpointManager {
     ///
     /// File format: 64 hex characters (32 bytes) with optional trailing newline.
     fn load_secret_key_from_file(path: &std::path::Path) -> Result<SecretKey> {
+        // Tiger Style: path must exist for loading
+        debug_assert!(path.exists(), "ENDPOINT: secret key path must exist for loading");
+
         let contents = std::fs::read_to_string(path)
             .with_context(|| format!("failed to read secret key file: {}", path.display()))?;
 
@@ -403,6 +415,9 @@ impl IrohEndpointManager {
         }
 
         let bytes = hex::decode(hex_str).with_context(|| "failed to decode secret key hex")?;
+
+        // Tiger Style: decoded bytes must be exactly 32 bytes for Ed25519
+        debug_assert!(bytes.len() == 32, "ENDPOINT: decoded secret key must be 32 bytes");
 
         let bytes_array: [u8; 32] = bytes.try_into().map_err(|_| anyhow::anyhow!("invalid secret key length"))?;
 

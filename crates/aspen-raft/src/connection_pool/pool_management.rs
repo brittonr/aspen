@@ -32,6 +32,9 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     /// Returns existing healthy connection if available, otherwise creates new one.
     /// Tiger Style: Lazy connection creation, bounded pool size.
     pub async fn get_or_connect(&self, node_id: NodeId, peer_addr: &EndpointAddr) -> Result<Arc<PeerConnection>> {
+        // Tiger Style: node_id must be valid (non-zero for most Raft implementations)
+        debug_assert!(node_id.0 > 0, "POOL: node_id must be positive, got 0");
+
         // Fast path: check for existing healthy connection
         {
             let connections = self.connections.read().await;
@@ -142,6 +145,15 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         {
             let mut connections = self.connections.write().await;
             connections.insert(node_id, Arc::clone(&peer_conn));
+
+            // Tiger Style: pool size must not exceed MAX_PEERS
+            debug_assert!(
+                connections.len() <= MAX_PEERS as usize,
+                "POOL: pool size {} exceeds MAX_PEERS {}",
+                connections.len(),
+                MAX_PEERS
+            );
+
             info!(
                 %node_id,
                 pool_size = connections.len(),
@@ -252,13 +264,13 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     pub async fn metrics(&self) -> ConnectionPoolMetrics {
         let connections = self.connections.read().await;
 
-        let mut healthy = 0;
-        let mut degraded = 0;
-        let mut failed = 0;
-        let mut total_streams = 0;
+        let mut healthy = 0u32;
+        let mut degraded = 0u32;
+        let mut failed = 0u32;
+        let mut total_streams = 0u32;
 
         for conn in connections.values() {
-            total_streams += conn.active_stream_count();
+            total_streams = total_streams.saturating_add(conn.active_stream_count());
 
             match conn.health().await {
                 ConnectionHealth::Healthy => healthy += 1,
@@ -267,8 +279,27 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             }
         }
 
+        let total_connections = connections.len() as u32;
+
+        // Tiger Style: metrics invariants
+        debug_assert!(
+            healthy + degraded + failed == total_connections,
+            "POOL: health counts ({} + {} + {} = {}) must equal total ({})",
+            healthy,
+            degraded,
+            failed,
+            healthy + degraded + failed,
+            total_connections
+        );
+        debug_assert!(
+            total_connections <= MAX_PEERS,
+            "POOL: total_connections {} exceeds MAX_PEERS {}",
+            total_connections,
+            MAX_PEERS
+        );
+
         ConnectionPoolMetrics {
-            total_connections: connections.len() as u32,
+            total_connections,
             healthy_connections: healthy,
             degraded_connections: degraded,
             failed_connections: failed,

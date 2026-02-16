@@ -317,12 +317,17 @@ impl JobBlobStorage {
     /// Get blob store statistics.
     pub async fn get_stats(&self) -> BlobStats {
         let blobs = self.store.blobs.read().await;
-        let total_size: usize = blobs.values().map(|b| b.len()).sum();
+        let total_size: u64 = blobs.values().map(|b| b.len() as u64).sum();
+        let blob_count = blobs.len() as u32;
 
         BlobStats {
-            total_blobs: blobs.len(),
+            total_blobs: blob_count,
             total_size_bytes: total_size,
-            average_size_bytes: if blobs.is_empty() { 0 } else { total_size / blobs.len() },
+            average_size_bytes: if blob_count == 0 {
+                0
+            } else {
+                total_size / blob_count as u64
+            },
         }
     }
 }
@@ -331,11 +336,11 @@ impl JobBlobStorage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobStats {
     /// Total number of blobs.
-    pub total_blobs: usize,
+    pub total_blobs: u32,
     /// Total size in bytes.
-    pub total_size_bytes: usize,
+    pub total_size_bytes: u64,
     /// Average blob size.
-    pub average_size_bytes: usize,
+    pub average_size_bytes: u64,
 }
 
 /// Extension for JobManager with blob storage support.

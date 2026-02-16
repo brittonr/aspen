@@ -237,7 +237,7 @@ pub struct RpcBlobWriter {
     service: RpcBlobService,
     buffer: Vec<u8>,
     digest: Option<B3Digest>,
-    closed: bool,
+    is_closed: bool,
 }
 
 impl RpcBlobWriter {
@@ -246,7 +246,7 @@ impl RpcBlobWriter {
             service,
             buffer: Vec::new(),
             digest: None,
-            closed: false,
+            is_closed: false,
         }
     }
 }
@@ -287,7 +287,7 @@ impl Unpin for RpcBlobWriter {}
 impl BlobWriter for RpcBlobWriter {
     async fn close(&mut self) -> io::Result<B3Digest> {
         // If already closed, return the cached digest
-        if self.closed {
+        if self.is_closed {
             debug!("blob writer already closed, returning cached digest");
             return self.digest.ok_or_else(|| {
                 error!("blob writer was closed but no digest available");
@@ -335,7 +335,7 @@ impl BlobWriter for RpcBlobWriter {
 
                 info!(hash = %hash_str, size = data_len, "blob uploaded successfully via RPC");
                 self.digest = Some(digest);
-                self.closed = true;
+                self.is_closed = true;
                 Ok(digest)
             }
             ClientRpcResponse::Error(err) => {

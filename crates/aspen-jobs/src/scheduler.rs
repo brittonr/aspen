@@ -33,7 +33,7 @@ pub struct SchedulerConfig {
     /// How often to check for due jobs (milliseconds).
     pub tick_interval_ms: u64,
     /// Maximum jobs to process per tick.
-    pub max_jobs_per_tick: usize,
+    pub max_jobs_per_tick: u32,
     /// Enable jitter to prevent thundering herd.
     pub enable_jitter: bool,
     /// Maximum jitter in milliseconds.
@@ -50,7 +50,7 @@ impl Default for SchedulerConfig {
     fn default() -> Self {
         Self {
             tick_interval_ms: 100, // 100ms for sub-second precision
-            max_jobs_per_tick: 1000,
+            max_jobs_per_tick: 1000_u32,
             enable_jitter: true,
             max_jitter_ms: 5000, // Up to 5 seconds jitter
             enable_catch_up: true,
@@ -382,7 +382,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
                 }
 
                 // Limit jobs per tick
-                if jobs_to_execute.len() >= self.config.max_jobs_per_tick {
+                if jobs_to_execute.len() as u32 >= self.config.max_jobs_per_tick {
                     break;
                 }
             }
@@ -390,7 +390,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
 
         // Tiger Style: jobs to execute must not exceed max_jobs_per_tick
         assert!(
-            jobs_to_execute.len() <= self.config.max_jobs_per_tick,
+            (jobs_to_execute.len() as u32) <= self.config.max_jobs_per_tick,
             "jobs_to_execute {} exceeds max_jobs_per_tick {}",
             jobs_to_execute.len(),
             self.config.max_jobs_per_tick

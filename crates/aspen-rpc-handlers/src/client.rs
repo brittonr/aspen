@@ -191,6 +191,133 @@ async fn handle_client_connection(
     Ok(())
 }
 
+/// Check if a request is a bootstrap operation (can run before cluster init).
+fn handle_client_request_is_bootstrap(request: &ClientRpcRequest) -> bool {
+    matches!(
+        request,
+        ClientRpcRequest::Ping
+            | ClientRpcRequest::GetHealth
+            | ClientRpcRequest::GetNodeInfo
+            | ClientRpcRequest::GetClusterTicket
+            | ClientRpcRequest::GetRaftMetrics
+            | ClientRpcRequest::InitCluster
+    )
+}
+
+/// Check if a request is exempt from rate limiting.
+fn handle_client_request_is_rate_limit_exempt(request: &ClientRpcRequest) -> bool {
+    handle_client_request_is_bootstrap(request)
+        || matches!(
+            request,
+            ClientRpcRequest::AddLearner { .. }
+                | ClientRpcRequest::ChangeMembership { .. }
+                | ClientRpcRequest::TriggerSnapshot
+                | ClientRpcRequest::GetClusterState
+                | ClientRpcRequest::GetLeader
+                | ClientRpcRequest::HookList
+                | ClientRpcRequest::HookGetMetrics { .. }
+                | ClientRpcRequest::HookTrigger { .. }
+                | ClientRpcRequest::GitBridgeListRefs { .. }
+                | ClientRpcRequest::GitBridgeFetch { .. }
+                | ClientRpcRequest::GitBridgePush { .. }
+                | ClientRpcRequest::CiWatchRepo { .. }
+                | ClientRpcRequest::CiUnwatchRepo { .. }
+                | ClientRpcRequest::ForgeCreateRepo { .. }
+                | ClientRpcRequest::ForgeListRepos { .. }
+                | ClientRpcRequest::ForgeGetRepo { .. }
+        )
+}
+
+/// Send an error response and finish the stream.
+async fn handle_client_request_send_error(
+    send: &mut iroh::endpoint::SendStream,
+    code: &str,
+    message: impl Into<String>,
+) -> anyhow::Result<()> {
+    use anyhow::Context;
+    let response = ClientRpcResponse::error(code, message);
+    let response_bytes = postcard::to_stdvec(&response).context("failed to serialize error response")?;
+    send.write_all(&response_bytes).await.context("failed to write error response")?;
+    send.finish().context("failed to finish send stream")?;
+    Ok(())
+}
+
+/// Check rate limiting for a client request.
+async fn handle_client_request_check_rate_limit(
+    ctx: &ClientProtocolContext,
+    client_id: &iroh::PublicKey,
+    send: &mut iroh::endpoint::SendStream,
+) -> anyhow::Result<bool> {
+    let rate_limit_key = format!("{}{}", CLIENT_RPC_RATE_LIMIT_PREFIX, client_id);
+    let limiter = DistributedRateLimiter::new(
+        ctx.kv_store.clone(),
+        &rate_limit_key,
+        RateLimiterConfig::new(CLIENT_RPC_RATE_PER_SECOND, CLIENT_RPC_BURST),
+    );
+
+    match limiter.try_acquire().await {
+        Ok(_) => Ok(true),
+        Err(RateLimitError::TokensExhausted { retry_after_ms, .. }) => {
+            warn!(client_id = %client_id, retry_after_ms, "Client rate limited");
+            handle_client_request_send_error(
+                send,
+                "RATE_LIMITED",
+                format!("Too many requests. Retry after {}ms", retry_after_ms),
+            )
+            .await?;
+            Ok(false)
+        }
+        Err(RateLimitError::StorageUnavailable { reason }) => {
+            warn!(client_id = %client_id, reason = %reason, "Rate limiter storage unavailable, rejecting request");
+            handle_client_request_send_error(send, "SERVICE_UNAVAILABLE", "rate limiter unavailable - try again later")
+                .await?;
+            Ok(false)
+        }
+    }
+}
+
+/// Check authorization for a client request.
+async fn handle_client_request_check_auth(
+    ctx: &ClientProtocolContext,
+    client_id: &iroh::PublicKey,
+    request: &ClientRpcRequest,
+    token: &Option<aspen_auth::CapabilityToken>,
+    send: &mut iroh::endpoint::SendStream,
+) -> anyhow::Result<bool> {
+    let verifier = match &ctx.token_verifier {
+        Some(v) => v,
+        None => return Ok(true),
+    };
+
+    let operation = match request.to_operation() {
+        Some(op) => op,
+        None => return Ok(true),
+    };
+
+    match token {
+        Some(cap_token) => {
+            let presenter = Some(client_id);
+            if let Err(auth_err) = verifier.authorize(cap_token, &operation, presenter) {
+                warn!(client_id = %client_id, error = %auth_err, operation = ?operation, "Authorization failed");
+                handle_client_request_send_error(send, "UNAUTHORIZED", format!("Authorization failed: {}", auth_err))
+                    .await?;
+                return Ok(false);
+            }
+            debug!(client_id = %client_id, operation = ?operation, "Authorization succeeded");
+        }
+        None => {
+            if ctx.require_auth {
+                warn!(client_id = %client_id, operation = ?operation, "Missing authentication token");
+                handle_client_request_send_error(send, "UNAUTHORIZED", "Authentication required but no token provided")
+                    .await?;
+                return Ok(false);
+            }
+            debug!(client_id = %client_id, operation = ?operation, "Unauthenticated request allowed (migration mode)");
+        }
+    }
+    Ok(true)
+}
+
 /// Handle a single Client RPC request on a stream.
 #[instrument(skip(recv, send, ctx, registry), fields(client_id = %client_id, request_id = %request_id))]
 async fn handle_client_request(
@@ -202,16 +329,12 @@ async fn handle_client_request(
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
-    // Read the request with size limit
+    // Read and parse the request
     let buffer = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read Client request")?;
-
-    // Try to parse as AuthenticatedRequest first (preferred format),
-    // then fall back to legacy ClientRpcRequest for backwards compatibility.
     let (request, token): (ClientRpcRequest, Option<aspen_auth::CapabilityToken>) =
         match postcard::from_bytes::<AuthenticatedRequest>(&buffer) {
             Ok(auth_req) => (auth_req.request, auth_req.token),
             Err(_) => {
-                // Fall back to legacy format (plain ClientRpcRequest without auth wrapper)
                 let req: ClientRpcRequest =
                     postcard::from_bytes(&buffer).context("failed to deserialize Client request")?;
                 (req, None)
@@ -220,186 +343,45 @@ async fn handle_client_request(
 
     debug!(request_type = ?request, client_id = %client_id, request_id = %request_id, has_token = token.is_some(), "received Client request");
 
-    // Check if cluster is initialized
-    let is_initialized = ctx.controller.is_initialized();
-
-    // Bootstrap operations: can run before cluster initialization
-    // These are status/bootstrap operations that should work on any node
-    let is_bootstrap_operation = matches!(
-        &request,
-        ClientRpcRequest::Ping
-            | ClientRpcRequest::GetHealth
-            | ClientRpcRequest::GetNodeInfo
-            | ClientRpcRequest::GetClusterTicket
-            | ClientRpcRequest::GetRaftMetrics
-            | ClientRpcRequest::InitCluster
-    );
-
-    // Rate-limit-exempt operations: skip rate limiting to avoid KV store dependency
-    // Includes bootstrap operations plus cluster management operations that:
-    // - Are administrative (run by operators, not regular client traffic)
-    // - Are protected by Raft consensus anyway
-    // - Must work during cluster bootstrap before KV store is available
-    let is_rate_limit_exempt = is_bootstrap_operation
-        || matches!(
-            &request,
-            ClientRpcRequest::AddLearner { .. }
-                | ClientRpcRequest::ChangeMembership { .. }
-                | ClientRpcRequest::TriggerSnapshot
-                | ClientRpcRequest::GetClusterState
-                | ClientRpcRequest::GetLeader
-                // Hook operations: administrative commands that should work immediately
-                // after cluster initialization, protected by hooks system's own limits
-                | ClientRpcRequest::HookList
-                | ClientRpcRequest::HookGetMetrics { .. }
-                | ClientRpcRequest::HookTrigger { .. }
-                // Git bridge operations: exempt because they have their own batch size
-                // limits (4MB per batch) and need to work immediately after cluster init
-                // for dogfooding. Git operations are inherently self-limiting.
-                | ClientRpcRequest::GitBridgeListRefs { .. }
-                | ClientRpcRequest::GitBridgeFetch { .. }
-                | ClientRpcRequest::GitBridgePush { .. }
-                // CI watch operations: administrative commands that need to work
-                // immediately after cluster init for dogfooding setup
-                | ClientRpcRequest::CiWatchRepo { .. }
-                | ClientRpcRequest::CiUnwatchRepo { .. }
-                // Forge repo management: admin operations for dogfooding setup
-                | ClientRpcRequest::ForgeCreateRepo { .. }
-                | ClientRpcRequest::ForgeListRepos { .. }
-                | ClientRpcRequest::ForgeGetRepo { .. }
-        );
-
-    // For non-bootstrap operations on uninitialized cluster, return clear error
-    // Tiger Style: Fail-fast with actionable error message
-    if !is_bootstrap_operation && !is_initialized {
-        let response = ClientRpcResponse::error("NOT_INITIALIZED", "cluster not initialized - call InitCluster first");
-        let response_bytes = postcard::to_stdvec(&response).context("failed to serialize not initialized response")?;
-        send.write_all(&response_bytes).await.context("failed to write not initialized response")?;
-        send.finish().context("failed to finish send stream")?;
+    // Check cluster initialization
+    let is_bootstrap_operation = handle_client_request_is_bootstrap(&request);
+    if !is_bootstrap_operation && !ctx.controller.is_initialized() {
+        handle_client_request_send_error(
+            &mut send,
+            "NOT_INITIALIZED",
+            "cluster not initialized - call InitCluster first",
+        )
+        .await?;
         return Ok(());
     }
 
-    // Rate limit check for non-exempt operations only
-    // Tiger Style: Per-client rate limiting prevents DoS from individual clients
-    if !is_rate_limit_exempt {
-        let rate_limit_key = format!("{}{}", CLIENT_RPC_RATE_LIMIT_PREFIX, client_id);
-        let limiter = DistributedRateLimiter::new(
-            ctx.kv_store.clone(),
-            &rate_limit_key,
-            RateLimiterConfig::new(CLIENT_RPC_RATE_PER_SECOND, CLIENT_RPC_BURST),
-        );
-
-        match limiter.try_acquire().await {
-            Ok(_) => {}
-            Err(RateLimitError::TokensExhausted { retry_after_ms, .. }) => {
-                warn!(
-                    client_id = %client_id,
-                    retry_after_ms,
-                    "Client rate limited"
-                );
-                let response = ClientRpcResponse::error(
-                    "RATE_LIMITED",
-                    format!("Too many requests. Retry after {}ms", retry_after_ms),
-                );
-                let response_bytes =
-                    postcard::to_stdvec(&response).context("failed to serialize rate limit response")?;
-                send.write_all(&response_bytes).await.context("failed to write rate limit response")?;
-                send.finish().context("failed to finish send stream")?;
-                return Ok(());
-            }
-            Err(RateLimitError::StorageUnavailable { reason }) => {
-                // FAIL CLOSED: Reject request when rate limiter storage is unavailable
-                // This maintains DoS protection at the cost of availability during partitions
-                warn!(
-                    client_id = %client_id,
-                    reason = %reason,
-                    "Rate limiter storage unavailable, rejecting request"
-                );
-                let response =
-                    ClientRpcResponse::error("SERVICE_UNAVAILABLE", "rate limiter unavailable - try again later");
-                let response_bytes =
-                    postcard::to_stdvec(&response).context("failed to serialize unavailable response")?;
-                send.write_all(&response_bytes).await.context("failed to write unavailable response")?;
-                send.finish().context("failed to finish send stream")?;
-                return Ok(());
-            }
-        }
+    // Rate limit check for non-exempt operations
+    if !handle_client_request_is_rate_limit_exempt(&request)
+        && !handle_client_request_check_rate_limit(&ctx, &client_id, &mut send).await?
+    {
+        return Ok(());
     }
 
-    // Authorization check: verify capability token if auth is enabled
-    // Tiger Style: Fail-fast on authorization errors before processing request
-    if let Some(ref verifier) = ctx.token_verifier {
-        // Check if this request requires authorization
-        if let Some(operation) = request.to_operation() {
-            match &token {
-                Some(cap_token) => {
-                    // No parsing needed - client_id is already a PublicKey from Iroh connection
-                    // This is type-safe and eliminates the security risk of parsing failures
-                    let presenter = Some(&client_id);
-
-                    // Verify token and authorize the operation
-                    if let Err(auth_err) = verifier.authorize(cap_token, &operation, presenter) {
-                        warn!(
-                            client_id = %client_id,
-                            error = %auth_err,
-                            operation = ?operation,
-                            "Authorization failed"
-                        );
-                        let response =
-                            ClientRpcResponse::error("UNAUTHORIZED", format!("Authorization failed: {}", auth_err));
-                        let response_bytes =
-                            postcard::to_stdvec(&response).context("failed to serialize auth error response")?;
-                        send.write_all(&response_bytes).await.context("failed to write auth error response")?;
-                        send.finish().context("failed to finish send stream")?;
-                        return Ok(());
-                    }
-                    debug!(client_id = %client_id, operation = ?operation, "Authorization succeeded");
-                }
-                None => {
-                    // No token provided - check if auth is required
-                    if ctx.require_auth {
-                        warn!(
-                            client_id = %client_id,
-                            operation = ?operation,
-                            "Missing authentication token"
-                        );
-                        let response =
-                            ClientRpcResponse::error("UNAUTHORIZED", "Authentication required but no token provided");
-                        let response_bytes =
-                            postcard::to_stdvec(&response).context("failed to serialize auth error response")?;
-                        send.write_all(&response_bytes).await.context("failed to write auth error response")?;
-                        send.finish().context("failed to finish send stream")?;
-                        return Ok(());
-                    }
-                    // During migration: warn but allow unauthenticated requests
-                    debug!(
-                        client_id = %client_id,
-                        operation = ?operation,
-                        "Unauthenticated request allowed (migration mode)"
-                    );
-                }
-            }
-        }
+    // Authorization check
+    if !handle_client_request_check_auth(&ctx, &client_id, &request, &token, &mut send).await? {
+        return Ok(());
     }
 
     // Process the request through the handler registry
     let response = match registry.dispatch(request, &ctx).await {
         Ok(resp) => resp,
         Err(err) => {
-            // Log full error internally for debugging, but return sanitized message to client
-            // HIGH-4: Prevent information leakage through error messages
             warn!(error = %err, "Client request processing failed");
             ClientRpcResponse::error("INTERNAL_ERROR", sanitize_error_for_client(&err))
         }
     };
 
-    // Serialize and send response
+    // Send response
     let response_bytes = postcard::to_stdvec(&response).context("failed to serialize Client response")?;
     send.write_all(&response_bytes).await.context("failed to write Client response")?;
     send.finish().context("failed to finish send stream")?;
 
     // Increment cluster-wide request counter (best-effort, non-blocking)
-    // Tiger Style: Fire-and-forget counter increment doesn't block request path
     let kv_store = ctx.kv_store.clone();
     tokio::spawn(async move {
         let counter = AtomicCounter::new(kv_store, CLIENT_RPC_REQUEST_COUNTER, CounterConfig::default());

@@ -95,3 +95,14 @@ const _: () = assert!(BLOCK_SIZE.count_ones() == 1); // power of 2
 
 // Root inode must be 1 per FUSE convention
 const _: () = assert!(ROOT_INODE == 1);
+
+// Timeout ordering: connection < read < write
+const _: () = assert!(CONNECTION_TIMEOUT.as_secs() > 0);
+const _: () = assert!(READ_TIMEOUT.as_secs() > 0);
+const _: () = assert!(WRITE_TIMEOUT.as_secs() > 0);
+const _: () = assert!(CONNECTION_TIMEOUT.as_secs() < READ_TIMEOUT.as_secs());
+const _: () = assert!(READ_TIMEOUT.as_secs() < WRITE_TIMEOUT.as_secs());
+
+// Xattr limits relationships
+const _: () = assert!(MAX_XATTR_NAME_SIZE < MAX_XATTR_VALUE_SIZE);
+const _: () = assert!(MAX_XATTR_VALUE_SIZE < MAX_VALUE_SIZE);

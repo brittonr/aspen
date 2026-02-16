@@ -80,7 +80,7 @@ pub fn build_cluster_config(args: &Args) -> NodeConfig {
     }
     if let Some(count) = args.worker_count {
         // Tiger Style: Cap at 64 workers per node
-        config.worker.worker_count = count.min(64);
+        config.worker.worker_count = count.min(64) as u32;
     }
     if !args.worker_job_types.is_empty() {
         config.worker.job_types = args.worker_job_types.clone();

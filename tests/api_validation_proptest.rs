@@ -277,7 +277,7 @@ fn test_delete_result_json_roundtrip() {
     check!().with_iterations(1000).with_type::<(ValidApiKey, bool)>().for_each(|(key, deleted)| {
         let result = DeleteResult {
             key: key.0.clone(),
-            deleted: *deleted,
+            is_deleted: *deleted,
         };
         let serialized = serde_json::to_string(&result).expect("serialize");
         let deserialized: DeleteResult = serde_json::from_str(&serialized).expect("deserialize");

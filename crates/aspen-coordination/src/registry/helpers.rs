@@ -1,5 +1,6 @@
 //! Internal helper methods for the service registry.
 
+use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::bail;
 use aspen_kv_types::KeyValueStoreError;
@@ -53,7 +54,8 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
                 if value.is_empty() {
                     Ok(None)
                 } else {
-                    let parsed = serde_json::from_str(&value)?;
+                    let parsed = serde_json::from_str(&value)
+                        .with_context(|| format!("failed to parse JSON for key '{}'", key))?;
                     Ok(Some(parsed))
                 }
             }

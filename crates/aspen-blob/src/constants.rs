@@ -84,3 +84,11 @@ const _: () = assert!(MAX_CONCURRENT_BLOB_UPLOADS > 0);
 
 // List size must be positive
 const _: () = assert!(MAX_BLOB_LIST_SIZE > 0);
+
+// Wait timeout ordering
+const _: () = assert!(DEFAULT_BLOB_WAIT_TIMEOUT.as_secs() > 0);
+const _: () = assert!(MAX_BLOB_WAIT_TIMEOUT.as_secs() >= DEFAULT_BLOB_WAIT_TIMEOUT.as_secs());
+
+// Poll interval must be smaller than default timeout
+const _: () = assert!(BLOB_WAIT_POLL_INTERVAL.as_millis() > 0);
+const _: () = assert!(BLOB_WAIT_POLL_INTERVAL.as_millis() < DEFAULT_BLOB_WAIT_TIMEOUT.as_millis());

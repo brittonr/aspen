@@ -676,7 +676,8 @@ impl FileSystem for AspenFs {
 
     fn statfs(&self, _ctx: &Context, _inode: u64) -> std::io::Result<libc::statvfs64> {
         // Return reasonable defaults for a network filesystem
-        // SAFETY: statvfs64 can be safely zero-initialized
+        // SAFETY: statvfs64 is a C struct that can be safely zero-initialized.
+        // All fields are primitive types (integers) with no invariants.
         let mut st: libc::statvfs64 = unsafe { std::mem::zeroed() };
 
         st.f_bsize = u64::from(BLOCK_SIZE); // Filesystem block size

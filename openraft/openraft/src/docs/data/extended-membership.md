@@ -5,10 +5,10 @@ membership to a specified `voter_list`. At each step, the log that it tries to
 commit is:
 
 - The `voter_list` itself, if it is **safe** to change from the previous
-    membership to `voter_list` directly.
+  membership to `voter_list` directly.
 
 - Otherwise, a **joint** config of the specified `voter_list` and the
-    config in the previous membership.
+  config in the previous membership.
 
 The algorithm used by OpenRaft is known as the **Extended membership change**.
 
@@ -35,8 +35,8 @@ Throughout this document, the following notation is used:
 The Extended membership change algorithm provides more flexibility than the original joint algorithm:
 
 - The original **Joint** algorithm in the Raft paper allows changing
-    membership in an alternate pattern of joint membership and uniform
-    membership. For example, the membership entry in a log history could be:
+  membership in an alternate pattern of joint membership and uniform
+  membership. For example, the membership entry in a log history could be:
 
   `c1` → `c1c2` → `c2` → `c2c3` → `c3` ...
 
@@ -48,8 +48,8 @@ The Extended membership change algorithm provides more flexibility than the orig
 
 - **Extended** algorithm:
 
-    Extended membership change algorithm allows changing membership in the
-    following way:
+  Extended membership change algorithm allows changing membership in the
+  following way:
 
     `c1`  →  `c1c2c3`  →  `c3c4`  →  `c4`.
 
@@ -110,28 +110,28 @@ Although `c1c3` and `c2c4` have no common nodes, neither leader can commit their
 This algorithm relies on four constraints for proper functioning:
 
 - (0) **use-at-once**:
-    The new membership appended to the log becomes effective immediately, meaning that OpenRaft
-    uses the last seen membership config in the log, regardless of whether it is committed or not.
+  The new membership appended to the log becomes effective immediately, meaning that OpenRaft
+  uses the last seen membership config in the log, regardless of whether it is committed or not.
 
 - (1) **propose-after-commit**:
-    A leader can propose new membership only after the previous one has been
-    committed.
+  A leader can propose new membership only after the previous one has been
+  committed.
 
 - (2) **old-new-intersect** (safe transition):
-    (This constraint is the only one loosened from the original Raft) Any
-    quorum in the new membership (`m'`) intersects with any quorum in the old
-    committed membership (`m`):
+  (This constraint is the only one loosened from the original Raft) Any
+  quorum in the new membership (`m'`) intersects with any quorum in the old
+  committed membership (`m`):
 
-    `∀qᵢ ∈ m, ∀qⱼ ∈ m'`: `qᵢ ∩ qⱼ ≠ ø`.
+  `∀qᵢ ∈ m, ∀qⱼ ∈ m'`: `qᵢ ∩ qⱼ ≠ ø`.
 
-    In plain terms: for every possible quorum in the old membership and every
-    possible quorum in the new membership, there must be at least one node
-    that appears in both quorums. This overlap ensures that information from
-    the old membership is preserved during the transition.
+  In plain terms: for every possible quorum in the old membership and every
+  possible quorum in the new membership, there must be at least one node
+  that appears in both quorums. This overlap ensures that information from
+  the old membership is preserved during the transition.
 
 - (3) **initial-log**:
-    A leader must replicate an initial empty log to a quorum in the last seen
-    membership to commit all previous logs.
+  A leader must replicate an initial empty log to a quorum in the last seen
+  membership to commit all previous logs.
 
 OpenRaft implements constraint (2) **old-new-intersect** by ensuring that
 the new membership includes a config entry identical to one in the last

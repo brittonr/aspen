@@ -134,34 +134,34 @@ pub const SNAPSHOT_INSTALL_TIMEOUT_MS: u64 = 5000;
 /// - `network.rs`: IrpcRaftNetworkFactory failure update channel
 pub const FAILURE_DETECTOR_CHANNEL_CAPACITY: usize = 100;
 
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Network message limits must be positive
+const _: () = assert!(MAX_RPC_MESSAGE_SIZE > 0);
+const _: () = assert!(MAX_SNAPSHOT_SIZE > 0);
+
+// Snapshots can be larger than single RPC messages (chunked transfer)
+const _: () = assert!(MAX_SNAPSHOT_SIZE > MAX_RPC_MESSAGE_SIZE as u64);
+
+// Connection limits must be positive
+const _: () = assert!(MAX_PEERS > 0);
+const _: () = assert!(MAX_CONCURRENT_CONNECTIONS > 0);
+const _: () = assert!(MAX_STREAMS_PER_CONNECTION > 0);
+
+// Concurrent connections should not exceed total peers (sanity check)
+const _: () = assert!(MAX_CONCURRENT_CONNECTIONS <= MAX_PEERS);
+
+// Failure detector channel must have capacity
+const _: () = assert!(FAILURE_DETECTOR_CHANNEL_CAPACITY > 0);
+
+// Snapshot install timeout must be positive
+const _: () = assert!(SNAPSHOT_INSTALL_TIMEOUT_MS > 0);
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_constants_are_reasonable() {
-        // Network constants should be positive
-        assert!(MAX_RPC_MESSAGE_SIZE > 0);
-        assert!(MAX_SNAPSHOT_SIZE > 0);
-
-        // Timeouts should be positive
-        assert!(!IROH_CONNECT_TIMEOUT.is_zero());
-        assert!(!IROH_STREAM_OPEN_TIMEOUT.is_zero());
-        assert!(!IROH_READ_TIMEOUT.is_zero());
-        assert!(!READ_INDEX_TIMEOUT.is_zero());
-        assert!(!MEMBERSHIP_OPERATION_TIMEOUT.is_zero());
-
-        // Connection limits should be positive
-        assert!(MAX_PEERS > 0);
-        assert!(MAX_CONCURRENT_CONNECTIONS > 0);
-        assert!(MAX_STREAMS_PER_CONNECTION > 0);
-    }
-
-    #[test]
-    fn test_snapshot_size_larger_than_rpc_message() {
-        // Snapshots can be larger than single RPC messages (chunked transfer)
-        assert!(MAX_SNAPSHOT_SIZE > u64::from(MAX_RPC_MESSAGE_SIZE));
-    }
 
     #[test]
     fn test_timeout_ordering() {
@@ -170,5 +170,11 @@ mod tests {
 
         // Stream timeout should be less than connect timeout
         assert!(IROH_STREAM_OPEN_TIMEOUT < IROH_CONNECT_TIMEOUT);
+
+        // ReadIndex should be reasonable relative to read timeout
+        assert!(READ_INDEX_TIMEOUT <= IROH_READ_TIMEOUT);
+
+        // Membership operations take longer due to consensus rounds
+        assert!(MEMBERSHIP_OPERATION_TIMEOUT > READ_INDEX_TIMEOUT);
     }
 }

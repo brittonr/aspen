@@ -22,7 +22,7 @@ use crate::error::Result;
 impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     /// Check and enforce run limits.
     pub(crate) async fn check_run_limits(&self, repo_id: &RepoId) -> Result<()> {
-        let active_count = self.active_runs.read().await.len();
+        let active_count = self.active_runs.read().await.len() as u32;
         if active_count >= self.config.max_total_runs {
             return Err(CiError::InvalidConfig {
                 reason: format!("Maximum total concurrent runs ({}) reached", self.config.max_total_runs),
@@ -31,7 +31,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
 
         let repo_count = self.runs_per_repo.read().await.get(repo_id).copied().unwrap_or(0);
 
-        if repo_count >= self.config.max_runs_per_repo {
+        if repo_count >= self.config.max_runs_per_repo as usize {
             return Err(CiError::InvalidConfig {
                 reason: format!("Maximum concurrent runs per repository ({}) reached", self.config.max_runs_per_repo),
             });

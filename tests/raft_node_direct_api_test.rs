@@ -344,7 +344,7 @@ async fn test_delete_existing_key() {
 
     let result = delete_result.unwrap();
     assert_eq!(result.key, "to_delete");
-    assert!(result.deleted);
+    assert!(result.is_deleted);
 
     // Verify key is gone
     let read_request = ReadRequest::new("to_delete".to_string());

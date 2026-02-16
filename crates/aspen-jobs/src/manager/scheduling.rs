@@ -31,7 +31,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             self.config.max_schedule_per_tick
         );
 
-        for job_id in scheduled.iter().take(self.config.max_schedule_per_tick) {
+        for job_id in scheduled.iter().take(self.config.max_schedule_per_tick as usize) {
             if let Some(mut job) = self.get_job(job_id).await? {
                 if let Some(scheduled_at) = job.scheduled_at {
                     if scheduled_at <= now {
@@ -106,7 +106,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             .store
             .scan(aspen_core::ScanRequest {
                 prefix: prefix.to_string(),
-                limit: Some(self.config.max_schedule_per_tick as u32),
+                limit: Some(self.config.max_schedule_per_tick),
                 continuation_token: None,
             })
             .await

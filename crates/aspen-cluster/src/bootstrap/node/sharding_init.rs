@@ -336,7 +336,9 @@ struct ShardLoopResults {
 /// - Sharding is not enabled in config
 /// - Base node bootstrap fails
 /// - Any shard's Raft instance fails to initialize
+///
 /// Build the final ShardedNodeHandle from all bootstrapped resources.
+#[allow(clippy::too_many_arguments)]
 fn bootstrap_sharded_node_build_handle(
     base: BaseNodeResources,
     sharding: ShardingResources,
@@ -346,7 +348,7 @@ fn bootstrap_sharded_node_build_handle(
     #[cfg(feature = "docs")] peer_manager: Option<Arc<aspen_docs::PeerManager>>,
     hooks: HookResources,
     supervisor: Arc<Supervisor>,
-    topology: Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>,
+    _topology: Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>,
 ) -> ShardedNodeHandle {
     let gossip_topic_id = base.discovery.gossip_topic_id;
     ShardedNodeHandle {
@@ -918,14 +920,16 @@ fn create_sharded_event_channels(
     config: &NodeConfig,
     shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
 ) -> (Option<broadcast::Sender<aspen_blob::BlobEvent>>, Option<broadcast::Sender<aspen_docs::DocsEvent>>) {
-    let blob_event_sender = if config.hooks.is_enabled && config.blobs.is_enabled && shard_nodes.contains_key(&0) {
+    let is_hooks_on_shard_0 = config.hooks.is_enabled && shard_nodes.contains_key(&0);
+
+    let blob_event_sender = if is_hooks_on_shard_0 && config.blobs.is_enabled {
         let (sender, _receiver) = create_blob_event_channel();
         Some(sender)
     } else {
         None
     };
 
-    let docs_event_sender = if config.hooks.is_enabled && config.docs.is_enabled && shard_nodes.contains_key(&0) {
+    let docs_event_sender = if is_hooks_on_shard_0 && config.docs.is_enabled {
         let (sender, _receiver) = create_docs_event_channel();
         Some(sender)
     } else {
@@ -997,17 +1001,24 @@ fn spawn_sharded_blob_announce(
     content_discovery: &Option<crate::content_discovery::ContentDiscoveryService>,
     shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
 ) {
-    if content_discovery.is_some() && blob_store.is_some() && shard_nodes.contains_key(&0) {
-        let config_clone = config.clone();
-        let blob_store_clone = blob_store.clone();
-        let content_discovery_clone = content_discovery.clone();
-        tokio::spawn(async move {
-            super::blob_init::auto_announce_local_blobs(
-                &config_clone,
-                blob_store_clone.as_ref(),
-                content_discovery_clone.as_ref(),
-            )
-            .await;
-        });
+    let Some(content_discovery_ref) = content_discovery else {
+        return;
+    };
+    let Some(blob_store_ref) = blob_store else {
+        return;
+    };
+    if !shard_nodes.contains_key(&0) {
+        return;
     }
+    let config_clone = config.clone();
+    let blob_store_clone = Some(Arc::clone(blob_store_ref));
+    let content_discovery_clone = Some(content_discovery_ref.clone());
+    tokio::spawn(async move {
+        super::blob_init::auto_announce_local_blobs(
+            &config_clone,
+            blob_store_clone.as_ref(),
+            content_discovery_clone.as_ref(),
+        )
+        .await;
+    });
 }

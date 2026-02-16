@@ -124,7 +124,7 @@ where S: aspen_blob::BlobStore + Clone + 'static
 pub struct IrohBlobWriter<S> {
     store: Arc<S>,
     buffer: Vec<u8>,
-    closed: bool,
+    is_closed: bool,
     digest: Option<B3Digest>,
 }
 
@@ -133,7 +133,7 @@ impl<S> IrohBlobWriter<S> {
         Self {
             store,
             buffer: Vec::new(),
-            closed: false,
+            is_closed: false,
             digest: None,
         }
     }
@@ -143,7 +143,7 @@ impl<S> AsyncWrite for IrohBlobWriter<S>
 where S: Send + Sync + 'static
 {
     fn poll_write(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
-        if self.closed {
+        if self.is_closed {
             return Poll::Ready(Err(io::Error::other("writer already closed")));
         }
 
@@ -175,7 +175,7 @@ impl<S> tokio::io::AsyncWrite for IrohBlobWriter<S>
 where S: Send + Sync + 'static
 {
     fn poll_write(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
-        if self.closed {
+        if self.is_closed {
             return Poll::Ready(Err(io::Error::other("writer already closed")));
         }
 
@@ -206,12 +206,12 @@ impl<S> BlobWriter for IrohBlobWriter<S>
 where S: aspen_blob::BlobStore + Send + Sync + 'static
 {
     async fn close(&mut self) -> io::Result<B3Digest> {
-        if self.closed {
+        if self.is_closed {
             // Return cached digest if already closed
             return self.digest.ok_or_else(|| io::Error::other("writer closed without digest"));
         }
 
-        self.closed = true;
+        self.is_closed = true;
 
         // Write to blob store
         let result = self

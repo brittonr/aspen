@@ -43,6 +43,11 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         ttl_ms: u64,
         timeout: Option<Duration>,
     ) -> Result<(u64, u64, u32)> {
+        // Tiger Style: argument validation
+        debug_assert!(!name.is_empty(), "RWLOCK: name must not be empty");
+        debug_assert!(!holder_id.is_empty(), "RWLOCK: holder_id must not be empty");
+        debug_assert!(ttl_ms > 0, "RWLOCK: ttl_ms must be positive");
+
         let deadline = timeout.map(|t| std::time::Instant::now() + t);
 
         loop {
@@ -167,11 +172,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
 
     /// Check if read acquisition is blocked.
     /// Returns Some(result) if blocked, None if acquisition can proceed.
-    fn try_acquire_read_check_blocked(
-        &self,
-        state: &RWLockState,
-        name: &str,
-    ) -> Result<Option<BlockingResult>> {
+    fn try_acquire_read_check_blocked(&self, state: &RWLockState, name: &str) -> Result<Option<BlockingResult>> {
         // Writer-preference: block if writer is waiting or holding
         if state.mode == RWLockMode::Write || state.writer.as_ref().is_some_and(|w| !w.is_expired()) {
             return Ok(Some(Ok(None)));
@@ -240,6 +241,11 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         ttl_ms: u64,
         timeout: Option<Duration>,
     ) -> Result<(u64, u64)> {
+        // Tiger Style: argument validation
+        debug_assert!(!name.is_empty(), "RWLOCK: name must not be empty for write");
+        debug_assert!(!holder_id.is_empty(), "RWLOCK: holder_id must not be empty for write");
+        debug_assert!(ttl_ms > 0, "RWLOCK: ttl_ms must be positive for write");
+
         let key = verified::rwlock_key(name);
         let deadline = timeout.map(|t| std::time::Instant::now() + t);
 

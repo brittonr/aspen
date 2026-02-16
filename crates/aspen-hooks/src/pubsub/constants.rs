@@ -55,17 +55,33 @@ pub const WILDCARD_SINGLE: &str = "*";
 /// Multi-segment wildcard character (matches zero or more segments).
 pub const WILDCARD_MULTI: &str = ">";
 
+// ============================================================================
+// Compile-Time Constant Assertions
+// ============================================================================
+
+// Topic limits must be positive and reasonable
+const _: () = assert!(MAX_TOPIC_SEGMENTS > 0);
+const _: () = assert!(MAX_TOPIC_SEGMENTS >= 4); // allow typical hierarchies
+const _: () = assert!(MAX_SEGMENT_LENGTH > 0);
+const _: () = assert!(MAX_SEGMENT_LENGTH >= 64); // allow descriptive names
+
+// Payload limits must be positive
+const _: () = assert!(MAX_PAYLOAD_SIZE > 0);
+const _: () = assert!(MAX_PAYLOAD_SIZE >= 1024); // allow typical payloads
+
+// Header limits must be positive
+const _: () = assert!(MAX_HEADERS > 0);
+const _: () = assert!(MAX_HEADERS >= 8); // allow common headers
+const _: () = assert!(MAX_HEADER_KEY_SIZE > 0);
+const _: () = assert!(MAX_HEADER_VALUE_SIZE > 0);
+const _: () = assert!(MAX_HEADER_KEY_SIZE < MAX_HEADER_VALUE_SIZE); // keys smaller than values
+
+// Batch size must be positive
+const _: () = assert!(MAX_PUBLISH_BATCH_SIZE > 0);
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // Compile-time constant assertions
-    const _: () = {
-        assert!(MAX_TOPIC_SEGMENTS >= 4); // should allow typical hierarchies
-        assert!(MAX_SEGMENT_LENGTH >= 64); // should allow descriptive names
-        assert!(MAX_PAYLOAD_SIZE >= 1024); // should allow typical payloads
-        assert!(MAX_HEADERS >= 8); // should allow common headers
-    };
 
     #[test]
     fn test_prefixes_are_valid() {

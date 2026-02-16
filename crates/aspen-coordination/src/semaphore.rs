@@ -8,6 +8,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::bail;
 use aspen_constants::coordination::MAX_SEMAPHORE_HOLDERS;
@@ -380,7 +381,8 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                 if value.is_empty() {
                     Ok(None)
                 } else {
-                    let state: SemaphoreState = serde_json::from_str(&value)?;
+                    let state: SemaphoreState = serde_json::from_str(&value)
+                        .with_context(|| format!("failed to parse semaphore state for key '{}'", key))?;
                     Ok(Some(state))
                 }
             }

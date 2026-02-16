@@ -1,5 +1,6 @@
 //! Internal helper methods for queue operations.
 
+use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::bail;
 use aspen_kv_types::KeyValueStoreError;
@@ -38,7 +39,8 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 if value_str.is_empty() {
                     Ok(None)
                 } else {
-                    let value: T = serde_json::from_str(&value_str)?;
+                    let value: T = serde_json::from_str(&value_str)
+                        .with_context(|| format!("failed to parse JSON for key '{}'", key))?;
                     Ok(Some(value))
                 }
             }

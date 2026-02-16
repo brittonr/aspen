@@ -231,7 +231,9 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> DurableTimerManager<S> {
 
         match response.kv {
             Some(kv) => {
-                let timer: DurableTimer = serde_json::from_str(&kv.value)?;
+                let timer: DurableTimer = serde_json::from_str(&kv.value).map_err(|e| JobError::ExecutionFailed {
+                    reason: format!("failed to parse timer '{}': {}", timer_id, e),
+                })?;
                 Ok(Some(timer))
             }
             None => Ok(None),

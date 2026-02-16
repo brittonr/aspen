@@ -40,7 +40,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         let metadata = ServiceInstanceMetadata {
             version: "1.0.0".to_string(),
             tags: info.tags.clone(),
-            weight: (info.max_concurrent as u32).max(1),
+            weight: info.max_concurrent.max(1),
             custom: HashMap::from([
                 ("capabilities".to_string(), info.capabilities.join(",")),
                 ("node_id".to_string(), info.node_id.clone()),

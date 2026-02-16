@@ -58,7 +58,7 @@ pub struct DistributedPoolConfig {
     /// Work steal check interval.
     pub steal_check_interval: Duration,
     /// Maximum jobs to migrate at once.
-    pub max_migration_batch: usize,
+    pub max_migration_batch: u32,
     /// Job types this pool specializes in.
     pub specializations: Vec<String>,
     /// Tags for worker routing.
@@ -75,7 +75,7 @@ impl Default for DistributedPoolConfig {
             enable_migration: true,
             enable_work_stealing: true,
             steal_check_interval: Duration::from_secs(5),
-            max_migration_batch: 10,
+            max_migration_batch: 10_u32,
             specializations: vec![],
             tags: vec![],
         }
@@ -227,7 +227,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
                 capabilities: self.config.specializations.clone(),
                 load: 0.0,
                 active_jobs: 0,
-                max_concurrent: self.config.worker_config.concurrency as u32,
+                max_concurrent: self.config.worker_config.concurrency,
                 queue_depth: 0,
                 health: HealthStatus::Healthy,
                 tags: self.config.tags.clone(),
@@ -592,14 +592,15 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
             "healthy_workers {healthy_workers} exceeds total_workers {total_workers}"
         );
 
+        // Tiger Style: Cast counts to u32 (worker/node counts are bounded)
         Ok(ClusterJobStats {
-            total_workers,
-            healthy_workers,
+            total_workers: total_workers as u32,
+            healthy_workers: healthy_workers as u32,
             total_capacity,
             total_active,
             total_queued,
             avg_load,
-            nodes: nodes.len(),
+            nodes: nodes.len() as u32,
         })
     }
 }
@@ -608,9 +609,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClusterJobStats {
     /// Total number of workers across the cluster.
-    pub total_workers: usize,
+    pub total_workers: u32,
     /// Number of healthy workers.
-    pub healthy_workers: usize,
+    pub healthy_workers: u32,
     /// Total capacity across all workers.
     pub total_capacity: u32,
     /// Total active jobs currently processing.
@@ -620,7 +621,7 @@ pub struct ClusterJobStats {
     /// Average load across workers (0.0-1.0).
     pub avg_load: f32,
     /// Number of nodes in the cluster.
-    pub nodes: usize,
+    pub nodes: u32,
 }
 
 /// Perform work stealing from overloaded workers.

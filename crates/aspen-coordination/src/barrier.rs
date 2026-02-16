@@ -12,6 +12,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::bail;
 use aspen_kv_types::KeyValueStoreError;
@@ -347,7 +348,8 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
                 if value.is_empty() {
                     Ok(None)
                 } else {
-                    let state: BarrierState = serde_json::from_str(&value)?;
+                    let state: BarrierState = serde_json::from_str(&value)
+                        .with_context(|| format!("failed to parse barrier state for key '{}'", key))?;
                     Ok(Some(state))
                 }
             }

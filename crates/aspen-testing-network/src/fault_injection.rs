@@ -71,7 +71,7 @@ pub struct NetworkPartition {
     /// IP addresses of nodes that the source is partitioned from.
     target_ips: Vec<String>,
     /// Whether the partition is currently active.
-    active: bool,
+    is_active: bool,
 }
 
 impl NetworkPartition {
@@ -89,11 +89,11 @@ impl NetworkPartition {
         let mut partition = Self {
             source_ip: source_ip.to_string(),
             target_ips: target_ips.iter().map(|s| s.to_string()).collect(),
-            active: false,
+            is_active: false,
         };
 
         partition.inject()?;
-        partition.active = true;
+        partition.is_active = true;
         Ok(partition)
     }
 
@@ -118,7 +118,7 @@ impl NetworkPartition {
 
     /// Heal the network partition.
     pub fn heal(&mut self) -> Result<(), FaultError> {
-        if !self.active {
+        if !self.is_active {
             return Ok(());
         }
 
@@ -135,19 +135,19 @@ impl NetworkPartition {
             let _ = run_iptables(&["-D", "FORWARD", "-s", target_ip, "-d", &self.source_ip, "-j", "DROP"]);
         }
 
-        self.active = false;
+        self.is_active = false;
         Ok(())
     }
 
     /// Check if the partition is currently active.
     pub fn is_active(&self) -> bool {
-        self.active
+        self.is_active
     }
 }
 
 impl Drop for NetworkPartition {
     fn drop(&mut self) {
-        if self.active
+        if self.is_active
             && let Err(e) = self.heal()
         {
             warn!(
@@ -186,7 +186,7 @@ pub struct AsymmetricPartition {
     /// Direction of traffic blocking.
     direction: PartitionDirection,
     /// Whether the partition is currently active.
-    active: bool,
+    is_active: bool,
 }
 
 impl AsymmetricPartition {
@@ -206,11 +206,11 @@ impl AsymmetricPartition {
             source_ip: source_ip.to_string(),
             target_ips: target_ips.iter().map(|s| s.to_string()).collect(),
             direction,
-            active: false,
+            is_active: false,
         };
 
         partition.inject()?;
-        partition.active = true;
+        partition.is_active = true;
         Ok(partition)
     }
 
@@ -241,7 +241,7 @@ impl AsymmetricPartition {
 
     /// Heal the asymmetric network partition.
     pub fn heal(&mut self) -> Result<(), FaultError> {
-        if !self.active {
+        if !self.is_active {
             return Ok(());
         }
 
@@ -263,13 +263,13 @@ impl AsymmetricPartition {
             }
         }
 
-        self.active = false;
+        self.is_active = false;
         Ok(())
     }
 
     /// Check if the partition is currently active.
     pub fn is_active(&self) -> bool {
-        self.active
+        self.is_active
     }
 
     /// Get the direction of the partition.
@@ -280,7 +280,7 @@ impl AsymmetricPartition {
 
 impl Drop for AsymmetricPartition {
     fn drop(&mut self) {
-        if self.active
+        if self.is_active
             && let Err(e) = self.heal()
         {
             warn!(
@@ -304,7 +304,7 @@ pub struct LatencyInjection {
     /// Jitter (variation) in milliseconds.
     jitter_ms: u32,
     /// Whether the injection is currently active.
-    active: bool,
+    is_active: bool,
 }
 
 impl LatencyInjection {
@@ -332,11 +332,11 @@ impl LatencyInjection {
             interface: interface.to_string(),
             latency_ms,
             jitter_ms,
-            active: false,
+            is_active: false,
         };
 
         injection.inject()?;
-        injection.active = true;
+        injection.is_active = true;
         Ok(injection)
     }
 
@@ -367,7 +367,7 @@ impl LatencyInjection {
 
     /// Remove the latency injection.
     pub fn heal(&mut self) -> Result<(), FaultError> {
-        if !self.active {
+        if !self.is_active {
             return Ok(());
         }
 
@@ -379,19 +379,19 @@ impl LatencyInjection {
         // Remove the qdisc
         let _ = run_tc(&["qdisc", "del", "dev", &self.interface, "root"]);
 
-        self.active = false;
+        self.is_active = false;
         Ok(())
     }
 
     /// Check if the injection is currently active.
     pub fn is_active(&self) -> bool {
-        self.active
+        self.is_active
     }
 }
 
 impl Drop for LatencyInjection {
     fn drop(&mut self) {
-        if self.active
+        if self.is_active
             && let Err(e) = self.heal()
         {
             warn!(
@@ -413,7 +413,7 @@ pub struct PacketLossInjection {
     /// Percentage of packets to drop (0-100).
     loss_percent: u8,
     /// Whether the injection is currently active.
-    active: bool,
+    is_active: bool,
 }
 
 impl PacketLossInjection {
@@ -439,11 +439,11 @@ impl PacketLossInjection {
         let mut injection = Self {
             interface: interface.to_string(),
             loss_percent,
-            active: false,
+            is_active: false,
         };
 
         injection.inject()?;
-        injection.active = true;
+        injection.is_active = true;
         Ok(injection)
     }
 
@@ -472,7 +472,7 @@ impl PacketLossInjection {
 
     /// Remove the packet loss injection.
     pub fn heal(&mut self) -> Result<(), FaultError> {
-        if !self.active {
+        if !self.is_active {
             return Ok(());
         }
 
@@ -484,19 +484,19 @@ impl PacketLossInjection {
         // Remove the qdisc
         let _ = run_tc(&["qdisc", "del", "dev", &self.interface, "root"]);
 
-        self.active = false;
+        self.is_active = false;
         Ok(())
     }
 
     /// Check if the injection is currently active.
     pub fn is_active(&self) -> bool {
-        self.active
+        self.is_active
     }
 }
 
 impl Drop for PacketLossInjection {
     fn drop(&mut self) {
-        if self.active
+        if self.is_active
             && let Err(e) = self.heal()
         {
             warn!(

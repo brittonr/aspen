@@ -47,7 +47,7 @@ pub struct CiConfig {
     ///
     /// Default: 3
     #[serde(default = "default_ci_max_concurrent_runs")]
-    pub max_concurrent_runs: usize,
+    pub max_concurrent_runs: u32,
 
     /// Default pipeline timeout in seconds.
     ///
@@ -120,7 +120,7 @@ pub struct CiConfig {
     pub max_job_memory_bytes: u64,
 }
 
-pub(crate) fn default_ci_max_concurrent_runs() -> usize {
+pub(crate) fn default_ci_max_concurrent_runs() -> u32 {
     3
 }
 

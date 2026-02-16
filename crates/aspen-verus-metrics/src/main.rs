@@ -232,12 +232,13 @@ fn find_root_dir(explicit: Option<PathBuf>) -> Result<PathBuf> {
     }
 
     // Try to find root by looking for Cargo.toml with workspace
-    let mut current = std::env::current_dir()?;
+    let mut current = std::env::current_dir().context("failed to get current directory")?;
 
     loop {
         let cargo_toml = current.join("Cargo.toml");
         if cargo_toml.exists() {
-            let content = fs::read_to_string(&cargo_toml)?;
+            let content =
+                fs::read_to_string(&cargo_toml).with_context(|| format!("failed to read {}", cargo_toml.display()))?;
             if content.contains("[workspace]") {
                 return Ok(current);
             }
@@ -249,7 +250,7 @@ fn find_root_dir(explicit: Option<PathBuf>) -> Result<PathBuf> {
     }
 
     // Fallback to current directory
-    Ok(std::env::current_dir()?)
+    Ok(std::env::current_dir().context("failed to get current directory")?)
 }
 
 /// Get the list of crates to check.

@@ -21,6 +21,7 @@ pub mod watch;
 use std::path::Path;
 use std::path::PathBuf;
 
+use anyhow::Context as _;
 use anyhow::Result;
 use serde::Deserialize;
 use serde::Serialize;
@@ -466,8 +467,9 @@ impl VerificationEngine {
     fn load_crate_config(&self, crate_dir: &Path) -> Result<CrateConfig> {
         let config_path = crate_dir.join(".verus-sync-config.toml");
         if config_path.exists() {
-            let content = std::fs::read_to_string(&config_path)?;
-            Ok(toml::from_str(&content)?)
+            let content = std::fs::read_to_string(&config_path)
+                .with_context(|| format!("failed to read {}", config_path.display()))?;
+            toml::from_str(&content).with_context(|| format!("failed to parse {}", config_path.display()))
         } else {
             Ok(CrateConfig::default())
         }
