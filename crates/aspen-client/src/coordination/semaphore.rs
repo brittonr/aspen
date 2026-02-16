@@ -75,7 +75,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
                 name: name.to_string(),
                 holder_id: holder_id.to_string(),
                 permits,
-                capacity,
+                capacity_permits: capacity,
                 ttl_ms,
                 timeout_ms,
             })
@@ -131,7 +131,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
                 name: name.to_string(),
                 holder_id: holder_id.to_string(),
                 permits,
-                capacity,
+                capacity_permits: capacity,
                 ttl_ms,
             })
             .await?;
@@ -217,7 +217,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
             ClientRpcResponse::SemaphoreStatusResult(SemaphoreResultResponse {
                 is_success,
                 available,
-                capacity,
+                capacity_permits: capacity,
                 error,
                 ..
             }) => {

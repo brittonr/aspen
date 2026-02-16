@@ -70,7 +70,7 @@ use super::types::SyncStatus;
 #[derive(Debug, Clone, Default)]
 pub struct CacheStats {
     /// Total number of cached records.
-    pub record_count: usize,
+    pub record_count: u32,
     /// Number of cache hits (successful lookups).
     pub hits: u64,
     /// Number of cache misses (record not found).
@@ -147,7 +147,7 @@ impl AspenDnsClient {
         let last_sync = self.last_sync.read().await;
 
         CacheStats {
-            record_count: cache.len(),
+            record_count: cache.len() as u32,
             hits: self.hits.load(Ordering::Relaxed),
             misses: self.misses.load(Ordering::Relaxed),
             sync_entries: self.sync_entries.load(Ordering::Relaxed),

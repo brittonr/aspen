@@ -110,7 +110,7 @@ pub(crate) async fn handle_rate_limiter_try_acquire(
     ctx: &ClientProtocolContext,
     key: String,
     tokens: u64,
-    capacity: u64,
+    capacity_tokens: u64,
     refill_rate: f64,
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
@@ -122,7 +122,7 @@ pub(crate) async fn handle_rate_limiter_try_acquire(
         }));
     }
 
-    let config = RateLimiterConfig::new(refill_rate, capacity);
+    let config = RateLimiterConfig::new(refill_rate, capacity_tokens);
     let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
 
     match limiter.try_acquire_n(tokens).await {
@@ -145,7 +145,7 @@ pub(crate) async fn handle_rate_limiter_acquire(
     ctx: &ClientProtocolContext,
     key: String,
     tokens: u64,
-    capacity: u64,
+    capacity_tokens: u64,
     refill_rate: f64,
     timeout_ms: u64,
 ) -> anyhow::Result<ClientRpcResponse> {
@@ -158,7 +158,7 @@ pub(crate) async fn handle_rate_limiter_acquire(
         }));
     }
 
-    let config = RateLimiterConfig::new(refill_rate, capacity);
+    let config = RateLimiterConfig::new(refill_rate, capacity_tokens);
     let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
     let timeout = std::time::Duration::from_millis(timeout_ms);
 
@@ -181,7 +181,7 @@ pub(crate) async fn handle_rate_limiter_acquire(
 pub(crate) async fn handle_rate_limiter_available(
     ctx: &ClientProtocolContext,
     key: String,
-    capacity: u64,
+    capacity_tokens: u64,
     refill_rate: f64,
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
@@ -193,7 +193,7 @@ pub(crate) async fn handle_rate_limiter_available(
         }));
     }
 
-    let config = RateLimiterConfig::new(refill_rate, capacity);
+    let config = RateLimiterConfig::new(refill_rate, capacity_tokens);
     let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
 
     match limiter.available().await {
@@ -215,7 +215,7 @@ pub(crate) async fn handle_rate_limiter_available(
 pub(crate) async fn handle_rate_limiter_reset(
     ctx: &ClientProtocolContext,
     key: String,
-    capacity: u64,
+    capacity_tokens: u64,
     refill_rate: f64,
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
@@ -227,13 +227,13 @@ pub(crate) async fn handle_rate_limiter_reset(
         }));
     }
 
-    let config = RateLimiterConfig::new(refill_rate, capacity);
+    let config = RateLimiterConfig::new(refill_rate, capacity_tokens);
     let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
 
     match limiter.reset().await {
         Ok(()) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
             is_success: true,
-            tokens_remaining: Some(capacity),
+            tokens_remaining: Some(capacity_tokens),
             retry_after_ms: None,
             error: None,
         })),
@@ -338,19 +338,19 @@ pub(crate) async fn handle_semaphore_acquire(
     name: String,
     holder_id: String,
     permits: u32,
-    capacity: u32,
+    capacity_permits: u32,
     ttl_ms: u64,
     timeout_ms: Option<u64>,
 ) -> anyhow::Result<ClientRpcResponse> {
     let manager = SemaphoreManager::new(ctx.kv_store.clone());
     let timeout = timeout_ms.map(std::time::Duration::from_millis);
 
-    match manager.acquire(&name, &holder_id, permits, capacity, ttl_ms, timeout).await {
+    match manager.acquire(&name, &holder_id, permits, capacity_permits, ttl_ms, timeout).await {
         Ok((acquired, available)) => Ok(ClientRpcResponse::SemaphoreAcquireResult(SemaphoreResultResponse {
             is_success: true,
             permits_acquired: Some(acquired),
             available: Some(available),
-            capacity: Some(capacity),
+            capacity_permits: Some(capacity_permits),
             retry_after_ms: None,
             error: None,
         })),
@@ -358,7 +358,7 @@ pub(crate) async fn handle_semaphore_acquire(
             is_success: false,
             permits_acquired: None,
             available: None,
-            capacity: Some(capacity),
+            capacity_permits: Some(capacity_permits),
             retry_after_ms: Some(100),
             error: Some(e.to_string()),
         })),
@@ -370,17 +370,17 @@ pub(crate) async fn handle_semaphore_try_acquire(
     name: String,
     holder_id: String,
     permits: u32,
-    capacity: u32,
+    capacity_permits: u32,
     ttl_ms: u64,
 ) -> anyhow::Result<ClientRpcResponse> {
     let manager = SemaphoreManager::new(ctx.kv_store.clone());
 
-    match manager.try_acquire(&name, &holder_id, permits, capacity, ttl_ms).await {
+    match manager.try_acquire(&name, &holder_id, permits, capacity_permits, ttl_ms).await {
         Ok(Some((acquired, available))) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
             is_success: true,
             permits_acquired: Some(acquired),
             available: Some(available),
-            capacity: Some(capacity),
+            capacity_permits: Some(capacity_permits),
             retry_after_ms: None,
             error: None,
         })),
@@ -388,7 +388,7 @@ pub(crate) async fn handle_semaphore_try_acquire(
             is_success: false,
             permits_acquired: None,
             available: None,
-            capacity: Some(capacity),
+            capacity_permits: Some(capacity_permits),
             retry_after_ms: Some(100),
             error: Some("no permits available".to_string()),
         })),
@@ -396,7 +396,7 @@ pub(crate) async fn handle_semaphore_try_acquire(
             is_success: false,
             permits_acquired: None,
             available: None,
-            capacity: Some(capacity),
+            capacity_permits: Some(capacity_permits),
             retry_after_ms: None,
             error: Some(e.to_string()),
         })),
@@ -416,7 +416,7 @@ pub(crate) async fn handle_semaphore_release(
             is_success: true,
             permits_acquired: None,
             available: Some(available),
-            capacity: None,
+            capacity_permits: None,
             retry_after_ms: None,
             error: None,
         })),
@@ -424,7 +424,7 @@ pub(crate) async fn handle_semaphore_release(
             is_success: false,
             permits_acquired: None,
             available: None,
-            capacity: None,
+            capacity_permits: None,
             retry_after_ms: None,
             error: Some(e.to_string()),
         })),
@@ -442,7 +442,7 @@ pub(crate) async fn handle_semaphore_status(
             is_success: true,
             permits_acquired: None,
             available: Some(available),
-            capacity: Some(capacity),
+            capacity_permits: Some(capacity),
             retry_after_ms: None,
             error: None,
         })),
@@ -450,7 +450,7 @@ pub(crate) async fn handle_semaphore_status(
             is_success: false,
             permits_acquired: None,
             available: None,
-            capacity: None,
+            capacity_permits: None,
             retry_after_ms: None,
             error: Some(e.to_string()),
         })),

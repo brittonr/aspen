@@ -193,7 +193,7 @@ pub struct KvWritePayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
     /// Size of the value in bytes.
-    pub value_size: usize,
+    pub value_size_bytes: u64,
     /// Whether this was a create or update operation.
     pub is_create: bool,
 }

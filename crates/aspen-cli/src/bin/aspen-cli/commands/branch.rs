@@ -57,8 +57,8 @@ pub struct BranchDeleteArgs {
     pub name: String,
 
     /// Force delete even if not fully merged.
-    #[arg(short, long)]
-    pub force: bool,
+    #[arg(short = 'f', long = "force")]
+    pub is_force: bool,
 }
 
 impl BranchCommand {

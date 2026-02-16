@@ -130,8 +130,8 @@ pub struct SemaphoreResultResponse {
     pub permits_acquired: Option<u32>,
     /// Number of permits currently available.
     pub available: Option<u32>,
-    /// Total capacity of the semaphore.
-    pub capacity: Option<u32>,
+    /// Total capacity of the semaphore (in permit count).
+    pub capacity_permits: Option<u32>,
     /// Suggested retry delay in milliseconds (if acquire failed due to no permits).
     pub retry_after_ms: Option<u64>,
     /// Error message if the operation failed.

@@ -249,7 +249,7 @@ impl MetricsCollector {
             sorted.sort_by(|a, b| a.total_cmp(b));
 
             HistogramStats {
-                count: sorted.len(),
+                count: sorted.len() as u64,
                 sum: sorted.iter().sum(),
                 mean: sorted.iter().sum::<f64>() / sorted.len() as f64,
                 min: sorted.first().copied().unwrap_or(0.0),
@@ -307,7 +307,7 @@ impl MetricsCollector {
 #[derive(Debug, Clone)]
 pub struct HistogramStats {
     /// Number of samples.
-    pub count: usize,
+    pub count: u64,
     /// Sum of all samples.
     pub sum: f64,
     /// Mean value.

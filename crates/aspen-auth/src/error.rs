@@ -57,7 +57,7 @@ pub enum AuthError {
     #[error("too many capabilities: {count} exceeds max {max}")]
     TooManyCapabilities {
         /// Number of capabilities in token.
-        count: usize,
+        count: u32,
         /// Maximum allowed.
         max: u32,
     },
@@ -83,12 +83,12 @@ pub enum AuthError {
     DelegationNotAllowed,
 
     /// Token exceeds maximum size.
-    #[error("token too large: {size} bytes exceeds max {max}")]
+    #[error("token too large: {size_bytes} bytes exceeds max {max_bytes}")]
     TokenTooLarge {
         /// Actual size in bytes.
-        size: usize,
+        size_bytes: u64,
         /// Maximum allowed.
-        max: u32,
+        max_bytes: u64,
     },
 
     /// Error encoding token.

@@ -166,192 +166,29 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
         I: IntoIterator<Item = <AppTypeConfig as openraft::RaftTypeConfig>::Entry> + OptionalSend,
         I::IntoIter: OptionalSend,
     {
-        // =========================================================================
-        // GHOST: Capture pre-state for verification
-        // =========================================================================
-        // When verus is enabled, this captures the abstract state before mutation.
-        // When verus is disabled, this compiles to nothing (zero runtime cost).
-        //
-        // ghost! {
-        //     let pre_chain_tip_hash = self.chain_tip.read().unwrap().hash;
-        //     let pre_chain_tip_index = self.chain_tip.read().unwrap().index;
-        //     let pre_last_applied = self.read_last_applied_index();
-        // }
         ghost! {
-            // Capture pre-state for invariant verification
             let _ghost_pre_chain_tip = Ghost::<[u8; 32]>::new([0u8; 32]);
             let _ghost_pre_last_applied = Ghost::<Option<u64>>::new(None);
         }
 
         ensure_disk_space_available(&self.path)?;
 
-        // Get current chain tip
-        let mut prev_hash = {
-            let chain_tip = self.chain_tip.read().map_err(|_| SharedStorageError::LockPoisoned {
-                context: "reading chain_tip for append".into(),
-            })?;
-            chain_tip.hash
-        };
-
+        let prev_hash = self.append_read_chain_tip()?;
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
-        let mut new_tip_hash = prev_hash;
-        let mut new_tip_index: u64 = 0;
-        let mut has_entries = false;
-        // Track last applied log and membership for future use (e.g., log broadcast)
-        let mut _last_applied_log_id: Option<LogIdOf<AppTypeConfig>> = None;
-        let mut _last_membership: Option<StoredMembership<AppTypeConfig>> = None;
-        // Collect responses to store after successful commit
-        let mut pending_response_batch: Vec<(u64, AppResponse)> = Vec::new();
 
-        {
-            let mut log_table = write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
-            let mut hash_table = write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
-            let mut kv_table = write_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
-            let mut index_table = write_txn.open_table(SM_INDEX_TABLE).context(OpenTableSnafu)?;
-            let mut leases_table = write_txn.open_table(SM_LEASES_TABLE).context(OpenTableSnafu)?;
-            let mut sm_meta_table = write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
+        let (new_tip_hash, new_tip_index, has_entries, pending_response_batch) =
+            self.append_process_entries(&write_txn, entries, prev_hash)?;
 
-            let mut prev_appended_index: Option<u64> = None;
-            for entry in entries {
-                let log_id = entry.log_id();
-                let index = log_id.index();
-                let term = log_id.leader_id.term;
-
-                // Tiger Style: appended log indices must be monotonically increasing
-                if let Some(prev_idx) = prev_appended_index {
-                    assert!(index > prev_idx, "APPEND: log index regression: {index} <= {prev_idx}");
-                }
-                prev_appended_index = Some(index);
-
-                // Tiger Style: term must be positive for normal entries
-                assert!(term > 0, "APPEND: entry at index {index} has zero term");
-
-                // Serialize and insert log entry
-                let data = bincode::serialize(&entry).context(SerializeSnafu)?;
-
-                // Compute chain hash
-                let entry_hash = compute_entry_hash(&prev_hash, index, term, &data);
-
-                log_table.insert(index, data.as_slice()).context(InsertSnafu)?;
-                hash_table.insert(index, entry_hash.as_slice()).context(InsertSnafu)?;
-
-                // Apply state mutation based on payload and collect response
-                let response = match &entry.payload {
-                    EntryPayload::Normal(request) => {
-                        // Apply the request to state machine tables with secondary index updates
-                        Self::apply_request_in_txn(
-                            &mut kv_table,
-                            &mut index_table,
-                            &self.index_registry,
-                            &mut leases_table,
-                            request,
-                            index,
-                        )?
-                    }
-                    EntryPayload::Membership(membership) => {
-                        // Store membership in state machine metadata
-                        let stored = StoredMembership::new(Some(log_id), membership.clone());
-                        let membership_bytes = bincode::serialize(&stored).context(SerializeSnafu)?;
-                        sm_meta_table.insert("last_membership", membership_bytes.as_slice()).context(InsertSnafu)?;
-                        _last_membership = Some(stored);
-                        AppResponse::default()
-                    }
-                    EntryPayload::Blank => {
-                        // No-op for blank entries
-                        AppResponse::default()
-                    }
-                };
-                pending_response_batch.push((index, response));
-
-                // Update last_applied
-                _last_applied_log_id = Some(log_id);
-                let log_id_bytes = bincode::serialize(&Some(log_id)).context(SerializeSnafu)?;
-                sm_meta_table.insert("last_applied_log", log_id_bytes.as_slice()).context(InsertSnafu)?;
-
-                prev_hash = entry_hash;
-                new_tip_hash = entry_hash;
-                new_tip_index = index;
-                has_entries = true;
-            }
-
-            // Update chain tip in integrity metadata
-            if has_entries {
-                let mut integrity_table = write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
-                integrity_table.insert("chain_tip_hash", new_tip_hash.as_slice()).context(InsertSnafu)?;
-                let index_bytes = bincode::serialize(&new_tip_index).context(SerializeSnafu)?;
-                integrity_table.insert("chain_tip_index", index_bytes.as_slice()).context(InsertSnafu)?;
-            }
-        }
-
-        // Single commit for both log and state mutations
-        // =========================================================================
-        // INVARIANT 1 (Crash Safety): This single commit ensures atomicity.
-        // Either all log entries AND their state mutations are durable, or none are.
-        // Crash before commit() -> clean rollback, Raft will re-propose
-        // Crash after commit() -> fully durable, no replay needed
-        // =========================================================================
+        // Single commit for both log and state mutations (INVARIANT 1: Crash Safety)
         write_txn.commit().context(CommitSnafu)?;
 
-        // Update cached chain tip after successful commit
-        if has_entries {
-            let mut chain_tip = self.chain_tip.write().map_err(|_| SharedStorageError::LockPoisoned {
-                context: "writing chain_tip after append".into(),
-            })?;
-            chain_tip.hash = new_tip_hash;
-            chain_tip.index = new_tip_index;
-        }
+        self.append_update_chain_tip(new_tip_hash, new_tip_index, has_entries)?;
+        self.append_store_pending_responses(pending_response_batch)?;
 
-        // Store collected responses for retrieval in apply()
-        if !pending_response_batch.is_empty() {
-            // Tiger Style: pending response count must match entries appended
-            assert!(
-                pending_response_batch.len() <= MAX_BATCH_SIZE as usize,
-                "APPEND: pending response count {} exceeds MAX_BATCH_SIZE {}",
-                pending_response_batch.len(),
-                MAX_BATCH_SIZE
-            );
-
-            let mut pending_responses =
-                self.pending_responses.write().map_err(|_| SharedStorageError::LockPoisoned {
-                    context: "writing pending_responses after append".into(),
-                })?;
-            for (index, response) in pending_response_batch {
-                pending_responses.insert(index, response);
-            }
-        }
-
-        // =========================================================================
-        // GHOST: Verify post-conditions
-        // =========================================================================
-        // When verus is enabled, this proof block verifies:
-        // 1. Chain continuity is preserved (new hashes correctly link to previous)
-        // 2. Chain tip is synchronized with the last appended entry
-        // 3. last_applied is monotonically increasing
-        //
-        // proof! {
-        //     // Link to standalone proofs in verus/append.rs
-        //     append_preserves_chain(pre_chain, pre_log, genesis, new_entries...);
-        //
-        //     // Verify invariants hold in post-state
-        //     let post_state = self.to_spec_state();
-        //     assert(chain_tip_synchronized(post_state));
-        //     assert(last_applied_monotonic(pre_state, post_state));
-        //     assert(storage_invariant(post_state));
-        // }
         proof! {
-            // INVARIANT 2 (Chain Continuity):
-            // Each entry_hash = compute_entry_hash(prev_hash, index, term, data)
-            // This is verified by construction in the loop above.
-            // The spec proof in verus/chain_hash.rs shows append_preserves_chain.
-
-            // INVARIANT 3 (Chain Tip Sync):
-            // chain_tip.hash = new_tip_hash = hash of last appended entry
-            // chain_tip.index = new_tip_index = index of last appended entry
-
-            // INVARIANT 5 (Monotonic last_applied):
-            // Each entry's index > previous entry's index (Raft log ordering)
-            // last_applied is set to each entry's log_id in order
-            // Therefore last_applied only increases
+            // INVARIANT 2 (Chain Continuity): verified by construction in append_process_entries
+            // INVARIANT 3 (Chain Tip Sync): chain_tip updated to last appended entry
+            // INVARIANT 5 (Monotonic last_applied): indices strictly increasing
         }
 
         callback.io_completed(Ok(()));
@@ -544,5 +381,197 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
 
     async fn get_log_reader(&mut self) -> Self::LogReader {
         self.clone()
+    }
+}
+
+// ====================================================================================
+// Append Helper Functions
+// ====================================================================================
+
+impl SharedRedbStorage {
+    /// Read the current chain tip hash for append operation.
+    fn append_read_chain_tip(&self) -> Result<[u8; 32], io::Error> {
+        let chain_tip = self.chain_tip.read().map_err(|_| SharedStorageError::LockPoisoned {
+            context: "reading chain_tip for append".into(),
+        })?;
+        Ok(chain_tip.hash)
+    }
+
+    /// Process all entries within the write transaction.
+    ///
+    /// Returns (new_tip_hash, new_tip_index, has_entries, pending_responses).
+    #[allow(clippy::type_complexity)]
+    fn append_process_entries<I>(
+        &self,
+        write_txn: &redb::WriteTransaction,
+        entries: I,
+        mut prev_hash: [u8; 32],
+    ) -> Result<([u8; 32], u64, bool, Vec<(u64, AppResponse)>), io::Error>
+    where
+        I: IntoIterator<Item = <AppTypeConfig as openraft::RaftTypeConfig>::Entry>,
+    {
+        let mut log_table = write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+        let mut hash_table = write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
+        let mut kv_table = write_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
+        let mut index_table = write_txn.open_table(SM_INDEX_TABLE).context(OpenTableSnafu)?;
+        let mut leases_table = write_txn.open_table(SM_LEASES_TABLE).context(OpenTableSnafu)?;
+        let mut sm_meta_table = write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
+
+        let mut new_tip_hash = prev_hash;
+        let mut new_tip_index: u64 = 0;
+        let mut has_entries = false;
+        let mut pending_response_batch: Vec<(u64, AppResponse)> = Vec::new();
+        let mut prev_appended_index: Option<u64> = None;
+
+        for entry in entries {
+            let (entry_hash, index) = self.append_process_single_entry(
+                &entry,
+                prev_hash,
+                prev_appended_index,
+                &mut log_table,
+                &mut hash_table,
+                &mut kv_table,
+                &mut index_table,
+                &mut leases_table,
+                &mut sm_meta_table,
+                &mut pending_response_batch,
+            )?;
+
+            prev_appended_index = Some(index);
+            prev_hash = entry_hash;
+            new_tip_hash = entry_hash;
+            new_tip_index = index;
+            has_entries = true;
+        }
+
+        if has_entries {
+            self.append_update_integrity_metadata(write_txn, new_tip_hash, new_tip_index)?;
+        }
+
+        Ok((new_tip_hash, new_tip_index, has_entries, pending_response_batch))
+    }
+
+    /// Process a single log entry: serialize, hash, store, and apply state mutation.
+    #[allow(clippy::too_many_arguments)]
+    fn append_process_single_entry(
+        &self,
+        entry: &<AppTypeConfig as openraft::RaftTypeConfig>::Entry,
+        prev_hash: [u8; 32],
+        prev_appended_index: Option<u64>,
+        log_table: &mut redb::Table<u64, &[u8]>,
+        hash_table: &mut redb::Table<u64, &[u8]>,
+        kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        leases_table: &mut redb::Table<u64, &[u8]>,
+        sm_meta_table: &mut redb::Table<&str, &[u8]>,
+        pending_response_batch: &mut Vec<(u64, AppResponse)>,
+    ) -> Result<([u8; 32], u64), io::Error> {
+        let log_id = entry.log_id();
+        let index = log_id.index();
+        let term = log_id.leader_id.term;
+
+        if let Some(prev_idx) = prev_appended_index {
+            assert!(index > prev_idx, "APPEND: log index regression: {index} <= {prev_idx}");
+        }
+        assert!(term > 0, "APPEND: entry at index {index} has zero term");
+
+        let data = bincode::serialize(entry).context(SerializeSnafu)?;
+        let entry_hash = compute_entry_hash(&prev_hash, index, term, &data);
+
+        log_table.insert(index, data.as_slice()).context(InsertSnafu)?;
+        hash_table.insert(index, entry_hash.as_slice()).context(InsertSnafu)?;
+
+        let response =
+            self.append_apply_entry_payload(entry, log_id, index, kv_table, index_table, leases_table, sm_meta_table)?;
+        pending_response_batch.push((index, response));
+
+        let log_id_bytes = bincode::serialize(&Some(log_id)).context(SerializeSnafu)?;
+        sm_meta_table.insert("last_applied_log", log_id_bytes.as_slice()).context(InsertSnafu)?;
+
+        Ok((entry_hash, index))
+    }
+
+    /// Apply the entry payload to state machine tables and return the response.
+    #[allow(clippy::too_many_arguments)]
+    fn append_apply_entry_payload(
+        &self,
+        entry: &<AppTypeConfig as openraft::RaftTypeConfig>::Entry,
+        log_id: LogIdOf<AppTypeConfig>,
+        index: u64,
+        kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        leases_table: &mut redb::Table<u64, &[u8]>,
+        sm_meta_table: &mut redb::Table<&str, &[u8]>,
+    ) -> Result<AppResponse, io::Error> {
+        match &entry.payload {
+            EntryPayload::Normal(request) => Ok(Self::apply_request_in_txn(
+                kv_table,
+                index_table,
+                &self.index_registry,
+                leases_table,
+                request,
+                index,
+            )?),
+            EntryPayload::Membership(membership) => {
+                let stored = StoredMembership::new(Some(log_id), membership.clone());
+                let membership_bytes = bincode::serialize(&stored).context(SerializeSnafu)?;
+                sm_meta_table.insert("last_membership", membership_bytes.as_slice()).context(InsertSnafu)?;
+                Ok(AppResponse::default())
+            }
+            EntryPayload::Blank => Ok(AppResponse::default()),
+        }
+    }
+
+    /// Update integrity metadata with new chain tip after processing entries.
+    fn append_update_integrity_metadata(
+        &self,
+        write_txn: &redb::WriteTransaction,
+        new_tip_hash: [u8; 32],
+        new_tip_index: u64,
+    ) -> Result<(), io::Error> {
+        let mut integrity_table = write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
+        integrity_table.insert("chain_tip_hash", new_tip_hash.as_slice()).context(InsertSnafu)?;
+        let index_bytes = bincode::serialize(&new_tip_index).context(SerializeSnafu)?;
+        integrity_table.insert("chain_tip_index", index_bytes.as_slice()).context(InsertSnafu)?;
+        Ok(())
+    }
+
+    /// Update the cached chain tip after successful transaction commit.
+    fn append_update_chain_tip(
+        &self,
+        new_tip_hash: [u8; 32],
+        new_tip_index: u64,
+        has_entries: bool,
+    ) -> Result<(), io::Error> {
+        if has_entries {
+            let mut chain_tip = self.chain_tip.write().map_err(|_| SharedStorageError::LockPoisoned {
+                context: "writing chain_tip after append".into(),
+            })?;
+            chain_tip.hash = new_tip_hash;
+            chain_tip.index = new_tip_index;
+        }
+        Ok(())
+    }
+
+    /// Store pending responses for retrieval in apply().
+    fn append_store_pending_responses(&self, pending_response_batch: Vec<(u64, AppResponse)>) -> Result<(), io::Error> {
+        if pending_response_batch.is_empty() {
+            return Ok(());
+        }
+
+        assert!(
+            pending_response_batch.len() <= MAX_BATCH_SIZE as usize,
+            "APPEND: pending response count {} exceeds MAX_BATCH_SIZE {}",
+            pending_response_batch.len(),
+            MAX_BATCH_SIZE
+        );
+
+        let mut pending_responses = self.pending_responses.write().map_err(|_| SharedStorageError::LockPoisoned {
+            context: "writing pending_responses after append".into(),
+        })?;
+        for (index, response) in pending_response_batch {
+            pending_responses.insert(index, response);
+        }
+        Ok(())
     }
 }

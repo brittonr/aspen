@@ -340,6 +340,7 @@ fn validate_log_monotonicity(db: &Database) -> Result<Option<u64>, StorageValida
 
     let mut prev_index: Option<u64> = None;
     let mut last_index: Option<u64> = None;
+    let mut entry_count: u64 = 0;
 
     // Iterate through all log entries in order
     for item in table.iter().context(TableReadFailedSnafu)? {
@@ -360,7 +361,14 @@ fn validate_log_monotonicity(db: &Database) -> Result<Option<u64>, StorageValida
 
         prev_index = Some(current_index);
         last_index = Some(current_index);
+        entry_count += 1;
     }
+
+    // Tiger Style: postcondition - entry count matches last_index if present
+    debug_assert!(
+        last_index.is_none_or(|_| entry_count > 0),
+        "LOG_MONOTONICITY: last_index present but entry_count is 0"
+    );
 
     Ok(last_index)
 }

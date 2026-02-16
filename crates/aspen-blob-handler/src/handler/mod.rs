@@ -79,10 +79,10 @@ impl RequestHandler for BlobHandler {
             // Replication operations
             ClientRpcRequest::BlobReplicatePull {
                 hash,
-                size,
+                size_bytes,
                 provider,
                 tag,
-            } => handle_blob_replicate_pull(ctx, hash, size, provider, tag).await,
+            } => handle_blob_replicate_pull(ctx, hash, size_bytes, provider, tag).await,
             ClientRpcRequest::GetBlobReplicationStatus { hash } => handle_get_blob_replication_status(ctx, hash).await,
             ClientRpcRequest::TriggerBlobReplication {
                 hash,

@@ -263,7 +263,7 @@ fn draw_worker_pool_summary(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(vec![
             Span::styled("Capacity: ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(format!("{} / {} used", pool.used_capacity, pool.total_capacity)),
+            Span::raw(format!("{} / {} used", pool.used_capacity_jobs, pool.total_capacity_jobs)),
         ]),
         Line::from(vec![
             Span::styled("Keys: ", Style::default().fg(Color::DarkGray)),

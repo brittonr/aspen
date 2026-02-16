@@ -381,8 +381,8 @@ pub struct WorkerStatusOutput {
     pub idle: u32,
     pub busy: u32,
     pub offline: u32,
-    pub total_capacity: u32,
-    pub used_capacity: u32,
+    pub total_capacity_jobs: u32,
+    pub used_capacity_jobs: u32,
     pub error: Option<String>,
 }
 
@@ -394,8 +394,8 @@ impl Outputable for WorkerStatusOutput {
             "idle_workers": self.idle,
             "busy_workers": self.busy,
             "offline_workers": self.offline,
-            "total_capacity": self.total_capacity,
-            "used_capacity": self.used_capacity,
+            "total_capacity_jobs": self.total_capacity_jobs,
+            "used_capacity_jobs": self.used_capacity_jobs,
             "error": self.error
         })
     }
@@ -409,7 +409,7 @@ impl Outputable for WorkerStatusOutput {
              Busy:           {}\n\
              Offline:        {}\n\
              Capacity:       {}/{}\n\n",
-            self.total_workers, self.idle, self.busy, self.offline, self.used_capacity, self.total_capacity
+            self.total_workers, self.idle, self.busy, self.offline, self.used_capacity_jobs, self.total_capacity_jobs
         );
 
         if !self.workers.is_empty() {
@@ -605,8 +605,8 @@ async fn worker_status(client: &AspenClient, json: bool) -> Result<()> {
                 idle: result.idle_workers,
                 busy: result.busy_workers,
                 offline: result.offline_workers,
-                total_capacity: result.total_capacity,
-                used_capacity: result.used_capacity,
+                total_capacity_jobs: result.total_capacity_jobs,
+                used_capacity_jobs: result.used_capacity_jobs,
                 error: result.error,
             };
             print_output(&output, json);

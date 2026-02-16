@@ -385,12 +385,12 @@ pub const MAX_CLIENT_STREAMS_PER_CONNECTION: u32 = 10;
 /// Default chunk size for git bridge chunked transfers (1 MB).
 ///
 /// Tiger Style: Bounded to prevent memory exhaustion while allowing efficient transfer.
-pub const DEFAULT_GIT_CHUNK_SIZE: usize = 1024 * 1024;
+pub const DEFAULT_GIT_CHUNK_SIZE_BYTES: u64 = 1024 * 1024;
 
 /// Maximum chunk size for git bridge chunked transfers (4 MB).
 ///
 /// Tiger Style: Upper bound to prevent abuse while supporting large objects.
-pub const MAX_GIT_CHUNK_SIZE: usize = 4 * 1024 * 1024;
+pub const MAX_GIT_CHUNK_SIZE_BYTES: u64 = 4 * 1024 * 1024;
 
 /// Authenticated request wrapper for client RPC.
 ///
@@ -722,7 +722,7 @@ pub enum ClientRpcRequest {
         /// BLAKE3 hash of the blob to replicate (hex-encoded).
         hash: String,
         /// Size of the blob in bytes.
-        size: u64,
+        size_bytes: u64,
         /// Public key of the provider node (hex-encoded).
         /// This is the source node that has the blob.
         provider: String,
@@ -1053,8 +1053,8 @@ pub enum ClientRpcRequest {
         key: String,
         /// Number of tokens to acquire.
         tokens: u64,
-        /// Maximum bucket capacity.
-        capacity: u64,
+        /// Maximum bucket capacity (in tokens).
+        capacity_tokens: u64,
         /// Token refill rate per second.
         refill_rate: f64,
     },
@@ -1067,8 +1067,8 @@ pub enum ClientRpcRequest {
         key: String,
         /// Number of tokens to acquire.
         tokens: u64,
-        /// Maximum bucket capacity.
-        capacity: u64,
+        /// Maximum bucket capacity (in tokens).
+        capacity_tokens: u64,
         /// Token refill rate per second.
         refill_rate: f64,
         /// Timeout in milliseconds.
@@ -1079,8 +1079,8 @@ pub enum ClientRpcRequest {
     RateLimiterAvailable {
         /// Rate limiter key.
         key: String,
-        /// Maximum bucket capacity.
-        capacity: u64,
+        /// Maximum bucket capacity (in tokens).
+        capacity_tokens: u64,
         /// Token refill rate per second.
         refill_rate: f64,
     },
@@ -1089,8 +1089,8 @@ pub enum ClientRpcRequest {
     RateLimiterReset {
         /// Rate limiter key.
         key: String,
-        /// Maximum bucket capacity.
-        capacity: u64,
+        /// Maximum bucket capacity (in tokens).
+        capacity_tokens: u64,
         /// Token refill rate per second.
         refill_rate: f64,
     },
@@ -1264,8 +1264,8 @@ pub enum ClientRpcRequest {
         holder_id: String,
         /// Number of permits to acquire.
         permits: u32,
-        /// Maximum permits (semaphore capacity).
-        capacity: u32,
+        /// Maximum permits (semaphore capacity in permit count).
+        capacity_permits: u32,
         /// TTL in milliseconds for automatic release.
         ttl_ms: u64,
         /// Timeout in milliseconds (0 = no timeout).
@@ -1280,8 +1280,8 @@ pub enum ClientRpcRequest {
         holder_id: String,
         /// Number of permits to acquire.
         permits: u32,
-        /// Maximum permits (semaphore capacity).
-        capacity: u32,
+        /// Maximum permits (semaphore capacity in permit count).
+        capacity_permits: u32,
         /// TTL in milliseconds for automatic release.
         ttl_ms: u64,
     },
@@ -2213,8 +2213,8 @@ pub enum ClientRpcRequest {
         worker_id: String,
         /// Worker capabilities (job types it can handle).
         capabilities: Vec<String>,
-        /// Worker capacity (concurrent jobs).
-        capacity: u32,
+        /// Worker capacity (concurrent job count).
+        capacity_jobs: u32,
     },
     /// Worker heartbeat (for workers).
     WorkerHeartbeat {

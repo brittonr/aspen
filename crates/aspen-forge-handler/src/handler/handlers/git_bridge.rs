@@ -392,7 +392,7 @@ pub(crate) async fn handle_git_bridge_push_start(
     refs: Vec<aspen_client_api::GitBridgeRefUpdate>,
     _metadata: Option<aspen_client_api::GitBridgePushMetadata>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_api::DEFAULT_GIT_CHUNK_SIZE;
+    use aspen_client_api::DEFAULT_GIT_CHUNK_SIZE_BYTES;
     use aspen_client_api::GitBridgePushStartResponse;
     use uuid::Uuid;
 
@@ -403,7 +403,7 @@ pub(crate) async fn handle_git_bridge_push_start(
     if total_objects > 100_000 {
         return Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
             session_id: session_id.clone(),
-            max_chunk_size: DEFAULT_GIT_CHUNK_SIZE,
+            max_chunk_size_bytes: DEFAULT_GIT_CHUNK_SIZE_BYTES,
             is_success: false,
             error: Some("Too many objects - maximum 100,000 allowed".to_string()),
         }));
@@ -413,7 +413,7 @@ pub(crate) async fn handle_git_bridge_push_start(
         // 1GB limit
         return Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
             session_id: session_id.clone(),
-            max_chunk_size: DEFAULT_GIT_CHUNK_SIZE,
+            max_chunk_size_bytes: DEFAULT_GIT_CHUNK_SIZE_BYTES,
             is_success: false,
             error: Some("Push too large - maximum 1GB allowed".to_string()),
         }));
@@ -450,7 +450,7 @@ pub(crate) async fn handle_git_bridge_push_start(
     if sessions.len() >= MAX_CONCURRENT_PUSH_SESSIONS {
         return Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
             session_id,
-            max_chunk_size: DEFAULT_GIT_CHUNK_SIZE,
+            max_chunk_size_bytes: DEFAULT_GIT_CHUNK_SIZE_BYTES,
             is_success: false,
             error: Some("Too many concurrent push sessions - try again later".to_string()),
         }));
@@ -460,7 +460,7 @@ pub(crate) async fn handle_git_bridge_push_start(
 
     Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
         session_id,
-        max_chunk_size: DEFAULT_GIT_CHUNK_SIZE,
+        max_chunk_size_bytes: DEFAULT_GIT_CHUNK_SIZE_BYTES,
         is_success: true,
         error: None,
     }))

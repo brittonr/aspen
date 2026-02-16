@@ -42,8 +42,8 @@ enum TryAcquireResult {
 pub struct SemaphoreState {
     /// Semaphore name.
     pub name: String,
-    /// Maximum permits (capacity).
-    pub capacity: u32,
+    /// Maximum permits (capacity in permit count).
+    pub capacity_permits: u32,
     /// Current permit holders.
     pub holders: Vec<SemaphoreHolder>,
 }
@@ -66,7 +66,7 @@ impl SemaphoreState {
     fn available_permits(&self) -> u32 {
         let now = now_unix_ms();
         crate::verified::calculate_available_permits(
-            self.capacity,
+            self.capacity_permits,
             self.holders.iter().map(|h| (h.permits, h.deadline_ms)),
             now,
         )
@@ -212,7 +212,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
         let now = now_unix_ms();
         let state = SemaphoreState {
             name: name.to_string(),
-            capacity,
+            capacity_permits: capacity,
             holders: vec![SemaphoreHolder {
                 holder_id: holder_id.to_string(),
                 permits,
@@ -426,7 +426,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
         match self.read_state(&key).await? {
             Some(mut state) => {
                 state.cleanup_expired();
-                Ok((state.available_permits(), state.capacity))
+                Ok((state.available_permits(), state.capacity_permits))
             }
             None => Ok((0, 0)),
         }

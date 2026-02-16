@@ -135,10 +135,16 @@ impl RequestHandler for JobHandler {
             ClientRpcRequest::WorkerRegister {
                 worker_id,
                 capabilities,
-                capacity,
+                capacity_jobs,
             } => {
-                handle_worker_register(ctx.worker_coordinator.as_ref(), ctx.node_id, worker_id, capabilities, capacity)
-                    .await
+                handle_worker_register(
+                    ctx.worker_coordinator.as_ref(),
+                    ctx.node_id,
+                    worker_id,
+                    capabilities,
+                    capacity_jobs,
+                )
+                .await
             }
 
             ClientRpcRequest::WorkerHeartbeat { worker_id, active_jobs } => {

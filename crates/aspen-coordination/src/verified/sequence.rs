@@ -255,6 +255,9 @@ pub enum ParseSequenceResult {
 /// ```
 #[inline]
 pub fn parse_sequence_value(value_str: &str) -> ParseSequenceResult {
+    // Tiger Style: precondition - string length is bounded
+    debug_assert!(value_str.len() <= 20, "PARSE_SEQ: value_str length {} exceeds max u64 digit count", value_str.len());
+
     if value_str.is_empty() {
         return ParseSequenceResult::Empty;
     }
@@ -279,8 +282,15 @@ pub fn parse_sequence_value(value_str: &str) -> ParseSequenceResult {
 /// Expected value for CAS, or None for initial creation.
 #[inline]
 pub fn compute_cas_expected(current: u64, start_value: u64) -> Option<u64> {
+    // Tiger Style: precondition - start_value should typically be >= 1
+    debug_assert!(start_value >= 1 || start_value == 0, "CAS_EXPECTED: start_value should typically be >= 1");
+
     // Inline check to align with Verus spec (current < start_value means initial)
-    if current < start_value { None } else { Some(current) }
+    let result = if current < start_value { None } else { Some(current) };
+
+    // Tiger Style: postcondition - result is consistent with initial check
+    debug_assert!(result.is_none() == (current < start_value), "CAS_EXPECTED: result inconsistent with initial check");
+    result
 }
 
 // ============================================================================

@@ -788,7 +788,7 @@ mod property_tests {
     #[test]
     fn prop_capacity_bounded() {
         check!().with_type::<(f32, bool)>().for_each(|(load, healthy)| {
-            let cap = calculate_available_capacity(*load, *healthy);
+            let cap = calculate_available_capacity_f32(*load, *healthy);
             assert!(cap >= 0.0 && cap <= 1.0);
         });
     }
@@ -796,7 +796,7 @@ mod property_tests {
     #[test]
     fn prop_unhealthy_zero_capacity() {
         check!().with_type::<f32>().for_each(|load| {
-            assert_eq!(calculate_available_capacity(*load, false), 0.0);
+            assert_eq!(calculate_available_capacity_f32(*load, false), 0.0);
         });
     }
 

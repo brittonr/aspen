@@ -809,7 +809,7 @@ impl RemoteHelper {
                     eprintln!(
                         "git-remote-aspen: session started: {}, max_chunk_size: {} MB",
                         resp.session_id,
-                        resp.max_chunk_size / (1024 * 1024)
+                        resp.max_chunk_size_bytes / (1024 * 1024)
                     );
                 }
                 resp.session_id.clone()

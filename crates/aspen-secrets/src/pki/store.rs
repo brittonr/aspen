@@ -228,8 +228,8 @@ impl DefaultPkiStore {
     fn validate_cn(cn: &str) -> Result<()> {
         if cn.is_empty() || cn.len() > MAX_COMMON_NAME_LENGTH {
             return Err(SecretsError::PathTooLong {
-                length: cn.len(),
-                max: MAX_COMMON_NAME_LENGTH,
+                length: cn.len() as u32,
+                max: MAX_COMMON_NAME_LENGTH as u32,
             });
         }
         Ok(())
@@ -239,8 +239,8 @@ impl DefaultPkiStore {
     fn validate_role_name(name: &str) -> Result<()> {
         if name.is_empty() || name.len() > MAX_ROLE_NAME_LENGTH {
             return Err(SecretsError::PathTooLong {
-                length: name.len(),
-                max: MAX_ROLE_NAME_LENGTH,
+                length: name.len() as u32,
+                max: MAX_ROLE_NAME_LENGTH as u32,
             });
         }
         Ok(())

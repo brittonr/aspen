@@ -160,24 +160,24 @@ fn test_rate_limiter_operations_roundtrip() {
         ClientRpcRequest::RateLimiterTryAcquire {
             key: "limiter1".to_string(),
             tokens: 1,
-            capacity: 100,
+            capacity_tokens: 100,
             refill_rate: 10.0,
         },
         ClientRpcRequest::RateLimiterAcquire {
             key: "limiter1".to_string(),
             tokens: 5,
-            capacity: 100,
+            capacity_tokens: 100,
             refill_rate: 10.0,
             timeout_ms: 5000,
         },
         ClientRpcRequest::RateLimiterAvailable {
             key: "limiter1".to_string(),
-            capacity: 100,
+            capacity_tokens: 100,
             refill_rate: 10.0,
         },
         ClientRpcRequest::RateLimiterReset {
             key: "limiter1".to_string(),
-            capacity: 100,
+            capacity_tokens: 100,
             refill_rate: 10.0,
         },
     ];

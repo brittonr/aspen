@@ -251,7 +251,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
     let register_request = ClientRpcRequest::WorkerRegister {
         worker_id: worker_id.clone(),
         capabilities: vec!["ci_vm".to_string()],
-        capacity: 1,
+        capacity_jobs: 1,
     };
 
     match rpc_client.send(register_request).await {

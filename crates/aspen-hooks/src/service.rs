@@ -261,13 +261,13 @@ impl DispatchResult {
     }
 
     /// Get the number of handlers that processed the event.
-    pub fn handler_count(&self) -> usize {
+    pub fn handler_count(&self) -> u32 {
         match self {
             DispatchResult::Disabled => 0,
             DispatchResult::Dispatched {
                 direct_results,
                 job_specs,
-            } => direct_results.len() + job_specs.len(),
+            } => (direct_results.len() + job_specs.len()) as u32,
         }
     }
 }

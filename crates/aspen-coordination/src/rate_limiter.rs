@@ -139,7 +139,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
             let new_state = BucketState {
                 tokens: available - (n as f64),
                 last_update_ms: now_ms,
-                capacity: self.config.capacity_tokens,
+                capacity_tokens: self.config.capacity_tokens,
                 refill_rate: self.config.refill_rate,
             };
 
@@ -345,7 +345,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
                 Ok(BucketState {
                     tokens: initial_tokens as f64,
                     last_update_ms: now_unix_ms(),
-                    capacity: self.config.capacity_tokens,
+                    capacity_tokens: self.config.capacity_tokens,
                     refill_rate: self.config.refill_rate,
                 })
             }

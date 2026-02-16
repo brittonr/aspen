@@ -133,19 +133,28 @@ pub enum JobError {
     },
 
     /// Binary too large.
-    #[snafu(display("Binary too large: {size} bytes (max: {max} bytes)"))]
+    #[snafu(display("Binary too large: {size_bytes} bytes (max: {max_bytes} bytes)"))]
     BinaryTooLarge {
         /// Actual size.
-        size: usize,
+        size_bytes: u64,
         /// Maximum allowed size.
-        max: usize,
+        max_bytes: u64,
+    },
+
+    /// File I/O error.
+    #[snafu(display("I/O error on {path}: {source}"))]
+    IoError {
+        /// Path that failed.
+        path: String,
+        /// Source error.
+        source: std::io::Error,
     },
 
     /// Decompressed data too large (compression bomb protection).
-    #[snafu(display("Decompressed data too large: exceeded {max} bytes limit"))]
+    #[snafu(display("Decompressed data too large: exceeded {max_bytes} bytes limit"))]
     DecompressionTooLarge {
         /// Maximum allowed decompressed size.
-        max: usize,
+        max_bytes: u64,
     },
 
     /// VM execution failed.
@@ -273,6 +282,7 @@ impl JobError {
             Self::JobCancelled { .. } => JobErrorKind::Permanent,
             Self::BuildFailed { .. } => JobErrorKind::Temporary,
             Self::BinaryTooLarge { .. } => JobErrorKind::Permanent,
+            Self::IoError { .. } => JobErrorKind::Temporary,
             Self::DecompressionTooLarge { .. } => JobErrorKind::Permanent,
             Self::VmExecutionFailed { .. } => JobErrorKind::Temporary,
             Self::CasConflict { .. } => JobErrorKind::Temporary,

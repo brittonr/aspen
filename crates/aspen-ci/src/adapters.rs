@@ -230,40 +230,13 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
             "Starting CI pipeline from trigger"
         );
 
-        // Build initial environment variables from trigger context
-        let mut env = HashMap::new();
-        env.insert("CI_TRIGGERED_BY".to_string(), event.pusher.to_string());
-        env.insert(
-            "CI_PREVIOUS_COMMIT".to_string(),
-            event.old_hash.map(hex::encode).unwrap_or_else(|| "none".to_string()),
-        );
-
-        // Create initial pipeline context (checkout_dir will be set after checkout)
-        let context = PipelineContext {
-            repo_id: event.repo_id,
-            commit_hash: event.commit_hash,
-            ref_name: event.ref_name.clone(),
-            triggered_by: event.pusher.to_string(),
-            env,
-            checkout_dir: None, // Will be updated after checkout
-            source_hash: None,  // Will be updated after checkout if blob store available
-        };
-
-        // Step 1: Create early run - persisted immediately so it can be queried
-        // even if checkout fails
+        let context = self.start_pipeline_build_initial_context(&event);
         let run = self.orchestrator.create_early_run(event.config.name.clone(), context).await?;
         let run_id = run.id.clone();
 
-        info!(
-            run_id = %run_id,
-            repo_id = %event.repo_id.to_hex(),
-            "Pipeline run created and persisted"
-        );
+        info!(run_id = %run_id, repo_id = %event.repo_id.to_hex(), "Pipeline run created and persisted");
 
-        // Step 2: Update status to CheckingOut
         self.orchestrator.update_run_status(&run_id, PipelineStatus::CheckingOut, None).await?;
-
-        // Generate checkout directory using the run ID
         let checkout_dir = crate::checkout::checkout_dir_for_run(&run_id);
 
         info!(
@@ -274,112 +247,13 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
             "Checking out repository for CI"
         );
 
-        // Step 3: Attempt checkout with error handling
-        if let Err(e) = crate::checkout::checkout_repository(&self.forge, &event.commit_hash, &checkout_dir).await {
-            let error_msg = format!("Repository checkout failed: {}", e);
-            warn!(
-                run_id = %run_id,
-                error = %error_msg,
-                "CI checkout failed"
-            );
+        self.start_pipeline_perform_checkout(&run_id, &event.commit_hash, &checkout_dir).await?;
+        self.start_pipeline_prepare_for_build(&run_id, &checkout_dir).await?;
 
-            // Clean up partial checkout directory (log failures but don't fail the operation)
-            if let Err(cleanup_err) = crate::checkout::cleanup_checkout(&checkout_dir).await {
-                warn!(
-                    run_id = %run_id,
-                    checkout_dir = %checkout_dir.display(),
-                    error = %cleanup_err,
-                    "Failed to clean up partial checkout directory after checkout failure"
-                );
-            }
-
-            // Update status to CheckoutFailed with error message
-            self.orchestrator
-                .update_run_status(&run_id, PipelineStatus::CheckoutFailed, Some(error_msg.clone()))
-                .await?;
-
-            return Err(CiError::Checkout { reason: error_msg });
-        }
-
-        // Step 4: Prepare checkout for CI build (removes path patches from .cargo/config.toml)
-        if let Err(e) = crate::checkout::prepare_for_ci_build(&checkout_dir).await {
-            let error_msg = format!("CI build preparation failed: {}", e);
-            warn!(
-                run_id = %run_id,
-                error = %error_msg,
-                "CI build preparation failed"
-            );
-
-            // Clean up failed checkout directory (log failures but don't fail the operation)
-            if let Err(cleanup_err) = crate::checkout::cleanup_checkout(&checkout_dir).await {
-                warn!(
-                    run_id = %run_id,
-                    checkout_dir = %checkout_dir.display(),
-                    error = %cleanup_err,
-                    "Failed to clean up checkout directory after CI build preparation failure"
-                );
-            }
-
-            // Update status to CheckoutFailed with error message
-            self.orchestrator
-                .update_run_status(&run_id, PipelineStatus::CheckoutFailed, Some(error_msg.clone()))
-                .await?;
-
-            return Err(CiError::Checkout { reason: error_msg });
-        }
-
-        // Step 5: Create source archive for VM jobs (if blob store available)
-        // This uploads the checkout as a tar.gz to the blob store, allowing VMs
-        // to download it since they can't access the host's checkout_dir directly.
-        let source_hash = if let Some(blob_store) = self.orchestrator.blob_store() {
-            match create_source_archive(&checkout_dir, &blob_store).await {
-                Ok(hash) => {
-                    info!(
-                        run_id = %run_id,
-                        source_hash = %hash,
-                        "Created source archive for VM jobs"
-                    );
-                    Some(hash)
-                }
-                Err(e) => {
-                    warn!(
-                        run_id = %run_id,
-                        error = %e,
-                        "Failed to create source archive (VM jobs may fail)"
-                    );
-                    None
-                }
-            }
-        } else {
-            debug!(
-                run_id = %run_id,
-                "No blob store configured - VM jobs will not have source archive"
-            );
-            None
-        };
-
-        // Step 6: Update context with checkout directory and source hash
-        let mut updated_env = HashMap::new();
-        updated_env.insert("CI_TRIGGERED_BY".to_string(), event.pusher.to_string());
-        updated_env.insert(
-            "CI_PREVIOUS_COMMIT".to_string(),
-            event.old_hash.map(hex::encode).unwrap_or_else(|| "none".to_string()),
-        );
-        updated_env.insert("CI_CHECKOUT_DIR".to_string(), checkout_dir.to_string_lossy().to_string());
-
-        let updated_context = PipelineContext {
-            repo_id: event.repo_id,
-            commit_hash: event.commit_hash,
-            ref_name: event.ref_name.clone(),
-            triggered_by: event.pusher.to_string(),
-            env: updated_env,
-            checkout_dir: Some(checkout_dir.clone()),
-            source_hash,
-        };
-
+        let source_hash = self.start_pipeline_create_source_archive(&run_id, &checkout_dir).await;
+        let updated_context = self.start_pipeline_build_updated_context(&event, &checkout_dir, source_hash);
         self.orchestrator.update_run_context(&run_id, updated_context).await?;
 
-        // Step 6: Execute the pipeline workflow
         let run = self.orchestrator.execute_existing_run(&run_id, event.config).await?;
 
         info!(
@@ -391,6 +265,126 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
         );
 
         Ok(run.id)
+    }
+}
+
+impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPipelineStarter<B, K> {
+    /// Build initial pipeline context before checkout.
+    fn start_pipeline_build_initial_context(&self, event: &TriggerEvent) -> PipelineContext {
+        let mut env = HashMap::new();
+        env.insert("CI_TRIGGERED_BY".to_string(), event.pusher.to_string());
+        env.insert(
+            "CI_PREVIOUS_COMMIT".to_string(),
+            event.old_hash.map(hex::encode).unwrap_or_else(|| "none".to_string()),
+        );
+
+        PipelineContext {
+            repo_id: event.repo_id,
+            commit_hash: event.commit_hash,
+            ref_name: event.ref_name.clone(),
+            triggered_by: event.pusher.to_string(),
+            env,
+            checkout_dir: None,
+            source_hash: None,
+        }
+    }
+
+    /// Perform repository checkout with error handling and cleanup.
+    async fn start_pipeline_perform_checkout(
+        &self,
+        run_id: &str,
+        commit_hash: &[u8; 32],
+        checkout_dir: &std::path::Path,
+    ) -> Result<()> {
+        if let Err(e) = crate::checkout::checkout_repository(&self.forge, commit_hash, checkout_dir).await {
+            let error_msg = format!("Repository checkout failed: {}", e);
+            warn!(run_id = %run_id, error = %error_msg, "CI checkout failed");
+
+            self.start_pipeline_cleanup_on_failure(run_id, checkout_dir).await;
+            self.orchestrator
+                .update_run_status(run_id, PipelineStatus::CheckoutFailed, Some(error_msg.clone()))
+                .await?;
+
+            return Err(CiError::Checkout { reason: error_msg });
+        }
+        Ok(())
+    }
+
+    /// Prepare checkout directory for CI build.
+    async fn start_pipeline_prepare_for_build(&self, run_id: &str, checkout_dir: &std::path::Path) -> Result<()> {
+        if let Err(e) = crate::checkout::prepare_for_ci_build(checkout_dir).await {
+            let error_msg = format!("CI build preparation failed: {}", e);
+            warn!(run_id = %run_id, error = %error_msg, "CI build preparation failed");
+
+            self.start_pipeline_cleanup_on_failure(run_id, checkout_dir).await;
+            self.orchestrator
+                .update_run_status(run_id, PipelineStatus::CheckoutFailed, Some(error_msg.clone()))
+                .await?;
+
+            return Err(CiError::Checkout { reason: error_msg });
+        }
+        Ok(())
+    }
+
+    /// Clean up checkout directory on failure (logs errors but does not fail).
+    async fn start_pipeline_cleanup_on_failure(&self, run_id: &str, checkout_dir: &std::path::Path) {
+        if let Err(cleanup_err) = crate::checkout::cleanup_checkout(checkout_dir).await {
+            warn!(
+                run_id = %run_id,
+                checkout_dir = %checkout_dir.display(),
+                error = %cleanup_err,
+                "Failed to clean up checkout directory after failure"
+            );
+        }
+    }
+
+    /// Create source archive for VM jobs if blob store is available.
+    async fn start_pipeline_create_source_archive(
+        &self,
+        run_id: &str,
+        checkout_dir: &std::path::Path,
+    ) -> Option<String> {
+        let Some(blob_store) = self.orchestrator.blob_store() else {
+            debug!(run_id = %run_id, "No blob store configured - VM jobs will not have source archive");
+            return None;
+        };
+
+        match create_source_archive(checkout_dir, &blob_store).await {
+            Ok(hash) => {
+                info!(run_id = %run_id, source_hash = %hash, "Created source archive for VM jobs");
+                Some(hash.to_string())
+            }
+            Err(e) => {
+                warn!(run_id = %run_id, error = %e, "Failed to create source archive (VM jobs may fail)");
+                None
+            }
+        }
+    }
+
+    /// Build updated context after successful checkout.
+    fn start_pipeline_build_updated_context(
+        &self,
+        event: &TriggerEvent,
+        checkout_dir: &std::path::Path,
+        source_hash: Option<String>,
+    ) -> PipelineContext {
+        let mut env = HashMap::new();
+        env.insert("CI_TRIGGERED_BY".to_string(), event.pusher.to_string());
+        env.insert(
+            "CI_PREVIOUS_COMMIT".to_string(),
+            event.old_hash.map(hex::encode).unwrap_or_else(|| "none".to_string()),
+        );
+        env.insert("CI_CHECKOUT_DIR".to_string(), checkout_dir.to_string_lossy().to_string());
+
+        PipelineContext {
+            repo_id: event.repo_id,
+            commit_hash: event.commit_hash,
+            ref_name: event.ref_name.clone(),
+            triggered_by: event.pusher.to_string(),
+            env,
+            checkout_dir: Some(checkout_dir.to_path_buf()),
+            source_hash,
+        }
     }
 }
 

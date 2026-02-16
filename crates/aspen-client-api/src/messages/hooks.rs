@@ -99,7 +99,7 @@ pub struct HookTriggerResultResponse {
     /// Whether the trigger was successful.
     pub is_success: bool,
     /// Number of handlers that matched and were dispatched to.
-    pub dispatched_count: usize,
+    pub dispatched_count: u32,
     /// Error message if the operation failed.
     pub error: Option<String>,
     /// Any handler failures (handler_name -> error message).

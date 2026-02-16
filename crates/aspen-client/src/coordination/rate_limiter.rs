@@ -50,7 +50,7 @@ impl<C: CoordinationRpc> RateLimiterClient<C> {
             .send_coordination_request(ClientRpcRequest::RateLimiterTryAcquire {
                 key: self.key.clone(),
                 tokens,
-                capacity: self.capacity,
+                capacity_tokens: self.capacity,
                 refill_rate: self.refill_rate,
             })
             .await?;
@@ -69,7 +69,7 @@ impl<C: CoordinationRpc> RateLimiterClient<C> {
             .send_coordination_request(ClientRpcRequest::RateLimiterAcquire {
                 key: self.key.clone(),
                 tokens,
-                capacity: self.capacity,
+                capacity_tokens: self.capacity,
                 refill_rate: self.refill_rate,
                 timeout_ms: timeout.as_millis() as u64,
             })
@@ -84,7 +84,7 @@ impl<C: CoordinationRpc> RateLimiterClient<C> {
             .client
             .send_coordination_request(ClientRpcRequest::RateLimiterAvailable {
                 key: self.key.clone(),
-                capacity: self.capacity,
+                capacity_tokens: self.capacity,
                 refill_rate: self.refill_rate,
             })
             .await?;
@@ -101,7 +101,7 @@ impl<C: CoordinationRpc> RateLimiterClient<C> {
             .client
             .send_coordination_request(ClientRpcRequest::RateLimiterReset {
                 key: self.key.clone(),
-                capacity: self.capacity,
+                capacity_tokens: self.capacity,
                 refill_rate: self.refill_rate,
             })
             .await?;

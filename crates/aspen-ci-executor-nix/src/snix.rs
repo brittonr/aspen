@@ -23,7 +23,7 @@ pub struct UploadedStorePathSnix {
     /// SHA256 hash of the NAR archive (Nix's native format).
     pub nar_sha256: String,
     /// Number of references this store path has.
-    pub references_count: usize,
+    pub references_count: u32,
     /// Whether this store path has a deriver.
     pub has_deriver: bool,
 }
@@ -164,7 +164,7 @@ impl NixBuildWorker {
                         store_path: store_path.clone(),
                         nar_size: actual_nar_size,
                         nar_sha256: hex::encode(nar_sha256),
-                        references_count: stored_path_info.references.len(),
+                        references_count: stored_path_info.references.len() as u32,
                         has_deriver: stored_path_info.deriver.is_some(),
                     });
                 }

@@ -119,7 +119,7 @@ impl TokenBuilder {
         // Validate capability count
         if self.capabilities.len() > MAX_CAPABILITIES_PER_TOKEN as usize {
             return Err(AuthError::TooManyCapabilities {
-                count: self.capabilities.len(),
+                count: self.capabilities.len() as u32,
                 max: MAX_CAPABILITIES_PER_TOKEN,
             });
         }

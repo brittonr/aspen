@@ -174,8 +174,8 @@ pub struct PushArgs {
     pub hash: String,
 
     /// Force push (skip conflict check).
-    #[arg(short, long)]
-    pub force: bool,
+    #[arg(short = 'f', long = "force")]
+    pub is_force: bool,
 
     /// Path to secret key file for signing (required for canonical refs).
     #[arg(short, long)]
@@ -564,7 +564,10 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
                 if let Some(content) = result.content {
                     // Write blob to objects directory
                     let blob_path = objects_dir.join(&blob_hash[..2]).join(&blob_hash[2..]);
-                    fs::create_dir_all(blob_path.parent().unwrap())?;
+                    // SAFETY: blob_path is constructed from objects_dir.join(...), so it always has a parent
+                    if let Some(parent) = blob_path.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
                     fs::write(&blob_path, &content)?;
 
                     // Store content for working directory extraction
@@ -826,7 +829,7 @@ async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()
     let repo_id = RepoId::from_hex(&args.repo).map_err(|e| anyhow::anyhow!("invalid repo_id: {}", e))?;
 
     // For non-force pushes, fetch current ref for CAS comparison
-    let current_hash = if !args.force {
+    let current_hash = if !args.is_force {
         fetch_current_ref_hash(client, &args.repo, &args.ref_name).await?
     } else {
         None
@@ -873,7 +876,7 @@ async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()
         (None, None, None)
     };
 
-    let response = if args.force {
+    let response = if args.is_force {
         client
             .send(ClientRpcRequest::ForgeSetRef {
                 repo_id: args.repo,

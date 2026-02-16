@@ -451,7 +451,7 @@ pub struct GitBridgePushStartResponse {
     /// Unique session ID for this chunked push operation.
     pub session_id: String,
     /// Maximum chunk size in bytes that the server will accept.
-    pub max_chunk_size: usize,
+    pub max_chunk_size_bytes: u64,
     /// Success indicator.
     pub is_success: bool,
     /// Error message if operation failed.

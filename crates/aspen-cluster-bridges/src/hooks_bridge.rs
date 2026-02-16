@@ -158,20 +158,20 @@ fn convert_to_hook_events(payload: &LogEntryPayload, node_id: u64) -> Vec<HookEv
     match &payload.operation {
         // Single key operations
         KvOperation::Set { key, value } => {
-            vec![create_write_event(payload, node_id, key, value.len(), false)]
+            vec![create_write_event(payload, node_id, key, value.len() as u64, false)]
         }
         KvOperation::SetWithTTL { key, value, .. } => {
-            vec![create_write_event(payload, node_id, key, value.len(), false)]
+            vec![create_write_event(payload, node_id, key, value.len() as u64, false)]
         }
         KvOperation::SetWithLease { key, value, .. } => {
-            vec![create_write_event(payload, node_id, key, value.len(), false)]
+            vec![create_write_event(payload, node_id, key, value.len() as u64, false)]
         }
         KvOperation::Delete { key } => {
             vec![create_delete_event(payload, node_id, key, true)]
         }
         KvOperation::CompareAndSwap { key, new_value, .. } => {
             // CAS succeeded, treat as write
-            vec![create_write_event(payload, node_id, key, new_value.len(), false)]
+            vec![create_write_event(payload, node_id, key, new_value.len() as u64, false)]
         }
         KvOperation::CompareAndDelete { key, .. } => {
             // CAD succeeded, treat as delete
@@ -181,15 +181,15 @@ fn convert_to_hook_events(payload: &LogEntryPayload, node_id: u64) -> Vec<HookEv
         // Multi-key operations - emit one event per key
         KvOperation::SetMulti { pairs } => pairs
             .iter()
-            .map(|(key, value)| create_write_event(payload, node_id, key, value.len(), false))
+            .map(|(key, value)| create_write_event(payload, node_id, key, value.len() as u64, false))
             .collect(),
         KvOperation::SetMultiWithTTL { pairs, .. } => pairs
             .iter()
-            .map(|(key, value)| create_write_event(payload, node_id, key, value.len(), false))
+            .map(|(key, value)| create_write_event(payload, node_id, key, value.len() as u64, false))
             .collect(),
         KvOperation::SetMultiWithLease { pairs, .. } => pairs
             .iter()
-            .map(|(key, value)| create_write_event(payload, node_id, key, value.len(), false))
+            .map(|(key, value)| create_write_event(payload, node_id, key, value.len() as u64, false))
             .collect(),
         KvOperation::DeleteMulti { keys } => {
             keys.iter().map(|key| create_delete_event(payload, node_id, key, true)).collect()
@@ -200,7 +200,7 @@ fn convert_to_hook_events(payload: &LogEntryPayload, node_id: u64) -> Vec<HookEv
             .iter()
             .map(|(is_set, key, value)| {
                 if *is_set {
-                    create_write_event(payload, node_id, key, value.len(), false)
+                    create_write_event(payload, node_id, key, value.len() as u64, false)
                 } else {
                     create_delete_event(payload, node_id, key, true)
                 }
@@ -210,7 +210,7 @@ fn convert_to_hook_events(payload: &LogEntryPayload, node_id: u64) -> Vec<HookEv
             .iter()
             .map(|(is_set, key, value)| {
                 if *is_set {
-                    create_write_event(payload, node_id, key, value.len(), false)
+                    create_write_event(payload, node_id, key, value.len() as u64, false)
                 } else {
                     create_delete_event(payload, node_id, key, true)
                 }
@@ -224,8 +224,8 @@ fn convert_to_hook_events(payload: &LogEntryPayload, node_id: u64) -> Vec<HookEv
                 .iter()
                 .filter_map(|(op_type, key, value)| {
                     match op_type {
-                        0 => Some(create_write_event(payload, node_id, key, value.len(), false)), // PUT
-                        1 => Some(create_delete_event(payload, node_id, key, true)),              // DELETE
+                        0 => Some(create_write_event(payload, node_id, key, value.len() as u64, false)), // PUT
+                        1 => Some(create_delete_event(payload, node_id, key, true)),                     // DELETE
                         _ => None,
                     }
                 })
@@ -235,7 +235,7 @@ fn convert_to_hook_events(payload: &LogEntryPayload, node_id: u64) -> Vec<HookEv
             .iter()
             .map(|(is_set, key, value)| {
                 if *is_set {
-                    create_write_event(payload, node_id, key, value.len(), false)
+                    create_write_event(payload, node_id, key, value.len() as u64, false)
                 } else {
                     create_delete_event(payload, node_id, key, true)
                 }
@@ -264,13 +264,13 @@ fn create_write_event(
     payload: &LogEntryPayload,
     node_id: u64,
     key: &[u8],
-    value_size: usize,
+    value_size_bytes: u64,
     is_create: bool,
 ) -> HookEvent {
     let kv_payload = KvWritePayload {
         key: String::from_utf8_lossy(key).to_string(),
         value: None, // Don't include value in hook event to avoid large payloads
-        value_size,
+        value_size_bytes,
         is_create,
     };
 

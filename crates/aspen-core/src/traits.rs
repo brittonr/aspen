@@ -194,7 +194,7 @@ mod tests {
         let result = arc_store.delete(DeleteRequest::new("key")).await;
 
         assert!(result.is_ok());
-        assert!(result.unwrap().deleted);
+        assert!(result.unwrap().is_deleted);
     }
 
     #[tokio::test]

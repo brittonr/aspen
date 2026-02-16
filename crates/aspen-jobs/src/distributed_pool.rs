@@ -570,7 +570,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
 
         let total_workers = workers.len();
         let healthy_workers = workers.iter().filter(|w| w.health == HealthStatus::Healthy).count();
-        let total_capacity: u32 = workers.iter().map(|w| w.max_concurrent).sum();
+        let total_capacity_jobs: u32 = workers.iter().map(|w| w.max_concurrent).sum();
         let total_active: u32 = workers.iter().map(|w| w.active_jobs).sum();
         let total_queued: u32 = workers.iter().map(|w| w.queue_depth).sum();
         let avg_load = if !workers.is_empty() {
@@ -583,8 +583,8 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
 
         // Tiger Style: active jobs must not exceed total capacity
         debug_assert!(
-            total_active <= total_capacity,
-            "total_active {total_active} exceeds total_capacity {total_capacity}"
+            total_active <= total_capacity_jobs,
+            "total_active {total_active} exceeds total_capacity_jobs {total_capacity_jobs}"
         );
         // Tiger Style: healthy workers cannot exceed total
         debug_assert!(
@@ -596,7 +596,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
         Ok(ClusterJobStats {
             total_workers: total_workers as u32,
             healthy_workers: healthy_workers as u32,
-            total_capacity,
+            total_capacity_jobs,
             total_active,
             total_queued,
             avg_load,
@@ -612,8 +612,8 @@ pub struct ClusterJobStats {
     pub total_workers: u32,
     /// Number of healthy workers.
     pub healthy_workers: u32,
-    /// Total capacity across all workers.
-    pub total_capacity: u32,
+    /// Total capacity across all workers (in job slots).
+    pub total_capacity_jobs: u32,
     /// Total active jobs currently processing.
     pub total_active: u32,
     /// Total jobs queued for processing.

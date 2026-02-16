@@ -236,7 +236,7 @@ async fn test_shell_command_worker_registered() {
             // If shell-worker feature is enabled and token auth is configured,
             // the worker should be registered
             // Note: This may show 0 workers if token auth is not configured
-            assert!(result.total_workers > 0 || result.total_capacity > 0, "should have workers registered");
+            assert!(result.total_workers > 0 || result.total_capacity_jobs > 0, "should have workers registered");
         }
         ClientRpcResponse::Error(e) => {
             panic!("worker status failed: {}: {}", e.code, e.message);

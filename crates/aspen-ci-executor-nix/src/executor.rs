@@ -77,7 +77,7 @@ impl NixBuildWorker {
 
         let cache_proxy = self.start_cache_proxy(&flake_ref).await?;
         let mut child = self.spawn_nix_build(payload, &flake_ref, cache_proxy.as_ref())?;
-        let readers = Self::spawn_output_readers(&mut child, &flake_ref, self.config.verbose)?;
+        let readers = Self::spawn_output_readers(&mut child, &flake_ref, self.config.is_verbose)?;
         let (output_paths, log, log_size) = Self::collect_output(readers).await?;
         Self::wait_for_build_completion(&mut child, payload.timeout_secs, &flake_ref, &log).await?;
 
@@ -156,7 +156,7 @@ impl NixBuildWorker {
             cmd.arg("--no-sandbox");
         }
 
-        if self.config.verbose {
+        if self.config.is_verbose {
             cmd.arg("-L");
         }
 

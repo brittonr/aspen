@@ -88,27 +88,27 @@ pub enum CoordinationRequest {
     RateLimiterTryAcquire {
         key: String,
         tokens: u64,
-        capacity: u64,
+        capacity_tokens: u64,
         refill_rate: f64,
     },
     /// Acquire tokens from a rate limiter with timeout.
     RateLimiterAcquire {
         key: String,
         tokens: u64,
-        capacity: u64,
+        capacity_tokens: u64,
         refill_rate: f64,
         timeout_ms: u64,
     },
     /// Check available tokens in a rate limiter without consuming.
     RateLimiterAvailable {
         key: String,
-        capacity: u64,
+        capacity_tokens: u64,
         refill_rate: f64,
     },
     /// Reset a rate limiter to full capacity.
     RateLimiterReset {
         key: String,
-        capacity: u64,
+        capacity_tokens: u64,
         refill_rate: f64,
     },
 
@@ -135,7 +135,7 @@ pub enum CoordinationRequest {
         name: String,
         holder_id: String,
         permits: u32,
-        capacity: u32,
+        capacity_permits: u32,
         ttl_ms: u64,
         timeout_ms: u64,
     },
@@ -144,7 +144,7 @@ pub enum CoordinationRequest {
         name: String,
         holder_id: String,
         permits: u32,
-        capacity: u32,
+        capacity_permits: u32,
         ttl_ms: u64,
     },
     /// Release permits back to a semaphore.

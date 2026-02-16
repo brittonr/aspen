@@ -569,7 +569,7 @@ impl MultiNodeClient {
                             worker_id: w.worker_id,
                             status: w.status,
                             capabilities: w.capabilities,
-                            capacity: w.capacity,
+                            capacity_jobs: w.capacity_jobs,
                             active_jobs: w.active_jobs,
                             active_job_ids: w.active_job_ids,
                             last_heartbeat: w.last_heartbeat,
@@ -581,8 +581,8 @@ impl MultiNodeClient {
                     idle_workers: result.idle_workers,
                     busy_workers: result.busy_workers,
                     offline_workers: result.offline_workers,
-                    total_capacity: result.total_capacity,
-                    used_capacity: result.used_capacity,
+                    total_capacity_jobs: result.total_capacity_jobs,
+                    used_capacity_jobs: result.used_capacity_jobs,
                 })
             }
             _ => anyhow::bail!("unexpected response type for WorkerStatus"),

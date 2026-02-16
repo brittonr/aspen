@@ -50,6 +50,11 @@ pub fn compute_exponential_retry_delay_ms(
     attempt: u32,
     max_delay_ms: Option<u64>,
 ) -> u64 {
+    // Tiger Style: preconditions
+    debug_assert!(initial_delay_ms > 0, "RETRY_DELAY: initial_delay_ms must be > 0");
+    debug_assert!(multiplier > 0.0, "RETRY_DELAY: multiplier must be > 0");
+    debug_assert!(!multiplier.is_nan(), "RETRY_DELAY: multiplier must not be NaN");
+
     if attempt == 0 {
         return initial_delay_ms;
     }
@@ -75,10 +80,19 @@ pub fn compute_exponential_retry_delay_ms(
     };
 
     // Apply final max cap
-    match max_delay_ms {
+    let result = match max_delay_ms {
         Some(max) => delay.min(max),
         None => delay,
-    }
+    };
+
+    // Tiger Style: postcondition
+    debug_assert!(
+        result >= initial_delay_ms || max_delay_ms.is_some_and(|m| m < initial_delay_ms),
+        "RETRY_DELAY: result {} < initial {} without max cap",
+        result,
+        initial_delay_ms
+    );
+    result
 }
 
 /// Compute fixed retry delay.

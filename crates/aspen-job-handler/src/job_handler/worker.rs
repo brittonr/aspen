@@ -24,8 +24,8 @@ pub(crate) async fn handle_worker_status(
             idle_workers: 0,
             busy_workers: 0,
             offline_workers: 0,
-            total_capacity: 0,
-            used_capacity: 0,
+            total_capacity_jobs: 0,
+            used_capacity_jobs: 0,
             error: Some("Worker service not available".to_string()),
         }));
     };
@@ -50,7 +50,7 @@ pub(crate) async fn handle_worker_status(
                 worker_id: w.id,
                 status: status.to_string(),
                 capabilities: w.job_types,
-                capacity: 1, // Each worker has capacity of 1 concurrent job by default
+                capacity_jobs: 1, // Each worker has capacity of 1 concurrent job by default
                 active_jobs: if w.current_job.is_some() { 1 } else { 0 },
                 active_job_ids: w.current_job.into_iter().collect(),
                 last_heartbeat: w.last_heartbeat.to_rfc3339(),
@@ -66,8 +66,8 @@ pub(crate) async fn handle_worker_status(
         idle_workers: stats.idle_workers,
         busy_workers: stats.processing_workers,
         offline_workers: stats.failed_workers,
-        total_capacity: stats.total_workers, // 1 job per worker
-        used_capacity: stats.processing_workers,
+        total_capacity_jobs: stats.total_workers, // 1 job per worker
+        used_capacity_jobs: stats.processing_workers,
         error: None,
     }))
 }

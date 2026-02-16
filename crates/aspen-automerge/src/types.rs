@@ -283,7 +283,7 @@ pub struct ApplyResult {
     pub changes_applied: bool,
 
     /// Number of changes applied.
-    pub change_count: usize,
+    pub change_count: u32,
 
     /// New heads after applying changes.
     pub new_heads: Vec<String>,

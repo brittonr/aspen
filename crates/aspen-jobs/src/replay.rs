@@ -112,8 +112,9 @@ impl JobReplaySystem {
         let json = serde_json::to_string_pretty(&data)
             .map_err(|e| crate::error::JobError::SerializationError { source: e })?;
 
-        std::fs::write(path, json).map_err(|_e| crate::error::JobError::InvalidJobSpec {
-            reason: format!("Failed to write replay file to {}", path),
+        std::fs::write(path, json).map_err(|e| crate::error::JobError::IoError {
+            path: path.to_string(),
+            source: e,
         })?;
 
         info!("saved replay to {}", path);
@@ -127,8 +128,9 @@ impl JobReplaySystem {
     /// Tiger Style: Validates file size before reading to prevent memory exhaustion.
     pub fn load(path: &str, node_id: &str) -> Result<Self> {
         // Tiger Style: Check file size before reading
-        let metadata = std::fs::metadata(path).map_err(|_e| crate::error::JobError::InvalidJobSpec {
-            reason: format!("Failed to stat replay file at {}", path),
+        let metadata = std::fs::metadata(path).map_err(|e| crate::error::JobError::IoError {
+            path: path.to_string(),
+            source: e,
         })?;
         if metadata.len() > MAX_JOB_SPEC_SIZE {
             return Err(crate::error::JobError::InvalidJobSpec {
@@ -136,8 +138,9 @@ impl JobReplaySystem {
             });
         }
 
-        let data = std::fs::read_to_string(path).map_err(|_e| crate::error::JobError::InvalidJobSpec {
-            reason: format!("Failed to read replay file from {}", path),
+        let data = std::fs::read_to_string(path).map_err(|e| crate::error::JobError::IoError {
+            path: path.to_string(),
+            source: e,
         })?;
 
         let replay_data: ReplayData =

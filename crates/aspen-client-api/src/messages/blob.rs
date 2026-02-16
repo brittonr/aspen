@@ -43,7 +43,7 @@ pub enum BlobRequest {
     /// Request this node to download a blob from a provider for replication.
     BlobReplicatePull {
         hash: String,
-        size: u64,
+        size_bytes: u64,
         provider: String,
         tag: Option<String>,
     },

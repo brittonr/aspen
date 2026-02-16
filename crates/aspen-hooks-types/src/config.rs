@@ -75,8 +75,8 @@ impl HooksConfig {
     pub fn validate(&self) -> Result<()> {
         if self.handlers.len() > MAX_HANDLERS {
             return TooManyHandlersSnafu {
-                count: self.handlers.len(),
-                max: MAX_HANDLERS,
+                count: self.handlers.len() as u32,
+                max: MAX_HANDLERS as u32,
             }
             .fail();
         }
@@ -101,8 +101,8 @@ impl HooksConfig {
         for pattern in &self.publish_topics {
             if pattern.len() > MAX_PATTERN_SIZE {
                 return PatternTooLongSnafu {
-                    length: pattern.len(),
-                    max: MAX_PATTERN_SIZE,
+                    length: pattern.len() as u32,
+                    max: MAX_PATTERN_SIZE as u32,
                 }
                 .fail();
             }
@@ -160,8 +160,8 @@ impl HookHandlerConfig {
         }
         if self.name.len() > MAX_HANDLER_NAME_SIZE {
             return HandlerNameTooLongSnafu {
-                length: self.name.len(),
-                max: MAX_HANDLER_NAME_SIZE,
+                length: self.name.len() as u32,
+                max: MAX_HANDLER_NAME_SIZE as u32,
             }
             .fail();
         }
@@ -169,8 +169,8 @@ impl HookHandlerConfig {
         // Validate pattern
         if self.pattern.len() > MAX_PATTERN_SIZE {
             return PatternTooLongSnafu {
-                length: self.pattern.len(),
-                max: MAX_PATTERN_SIZE,
+                length: self.pattern.len() as u32,
+                max: MAX_PATTERN_SIZE as u32,
             }
             .fail();
         }
@@ -287,8 +287,8 @@ impl HookHandlerType {
                 }
                 if command.len() > MAX_SHELL_COMMAND_SIZE {
                     return ShellCommandTooLongSnafu {
-                        length: command.len(),
-                        max: MAX_SHELL_COMMAND_SIZE,
+                        length: command.len() as u32,
+                        max: MAX_SHELL_COMMAND_SIZE as u32,
                     }
                     .fail();
                 }

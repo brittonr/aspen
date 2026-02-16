@@ -854,7 +854,7 @@ fn test_token_too_large_on_encode() {
     // Encoding should fail due to size limit
     let result = token.encode();
     assert!(
-        matches!(result, Err(AuthError::TokenTooLarge { size, max }) if max == MAX_TOKEN_SIZE && size > max as usize),
+        matches!(result, Err(AuthError::TokenTooLarge { size_bytes, max_bytes }) if max_bytes == MAX_TOKEN_SIZE as u64 && size_bytes > max_bytes),
         "Expected TokenTooLarge error, got {:?}",
         result
     );
@@ -869,7 +869,7 @@ fn test_token_too_large_on_decode() {
 
     let result = CapabilityToken::decode(&oversized_bytes);
     assert!(
-        matches!(result, Err(AuthError::TokenTooLarge { size, max }) if max == MAX_TOKEN_SIZE && size > max as usize),
+        matches!(result, Err(AuthError::TokenTooLarge { size_bytes, max_bytes }) if max_bytes == MAX_TOKEN_SIZE as u64 && size_bytes > max_bytes),
         "Expected TokenTooLarge error on decode, got {:?}",
         result
     );

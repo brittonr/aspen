@@ -119,8 +119,8 @@ impl DefaultKvStore {
         }
         if path.len() > MAX_SECRET_PATH_LENGTH {
             return Err(SecretsError::PathTooLong {
-                length: path.len(),
-                max: MAX_SECRET_PATH_LENGTH,
+                length: path.len() as u32,
+                max: MAX_SECRET_PATH_LENGTH as u32,
             });
         }
         Ok(())
@@ -130,16 +130,16 @@ impl DefaultKvStore {
     fn validate_data(data: &SecretData) -> Result<()> {
         if data.data.len() > MAX_KV_PAIRS_PER_SECRET {
             return Err(SecretsError::ValueTooLarge {
-                size: data.data.len(),
-                max: MAX_KV_PAIRS_PER_SECRET,
+                size_bytes: data.data.len() as u64,
+                max_bytes: MAX_KV_PAIRS_PER_SECRET as u64,
             });
         }
 
         for k in data.data.keys() {
             if k.len() > MAX_SECRET_KEY_NAME_LENGTH {
                 return Err(SecretsError::PathTooLong {
-                    length: k.len(),
-                    max: MAX_SECRET_KEY_NAME_LENGTH,
+                    length: k.len() as u32,
+                    max: MAX_SECRET_KEY_NAME_LENGTH as u32,
                 });
             }
         }
@@ -147,8 +147,8 @@ impl DefaultKvStore {
         let size = data.size_bytes();
         if size > MAX_KV_SECRET_SIZE {
             return Err(SecretsError::ValueTooLarge {
-                size,
-                max: MAX_KV_SECRET_SIZE,
+                size_bytes: size as u64,
+                max_bytes: MAX_KV_SECRET_SIZE as u64,
             });
         }
 

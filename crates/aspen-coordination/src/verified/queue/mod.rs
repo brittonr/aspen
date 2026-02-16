@@ -636,12 +636,13 @@ mod property_tests {
 
     #[test]
     fn prop_dlq_decision_consistent() {
-        check!().with_type::<(u32, u32, bool)>().for_each(|(attempts, max, explicit)| {
-            let decision = should_move_to_dlq(*attempts, *max, *explicit);
-            if decision.should_move {
-                assert!(decision.reason.is_some());
+        check!().with_type::<(u32, u32)>().for_each(|(attempts, max)| {
+            let should_move = should_move_to_dlq(*attempts, *max);
+            // DLQ decision is consistent: if max > 0 and attempts >= max, should move
+            if *max > 0 && *attempts >= *max {
+                assert!(should_move, "should move to DLQ when attempts >= max");
             } else {
-                assert!(decision.reason.is_none());
+                assert!(!should_move, "should not move to DLQ when max=0 or attempts < max");
             }
         });
     }

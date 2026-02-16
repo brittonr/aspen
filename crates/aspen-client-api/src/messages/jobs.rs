@@ -46,7 +46,7 @@ pub enum JobsRequest {
     WorkerRegister {
         worker_id: String,
         capabilities: Vec<String>,
-        capacity: u32,
+        capacity_jobs: u32,
     },
     /// Worker heartbeat.
     WorkerHeartbeat {

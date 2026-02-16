@@ -84,7 +84,19 @@ pub fn has_self_dependency(job_id: &str, dependencies: &[&str]) -> bool {
 /// ```
 #[inline]
 pub fn compute_dependency_depth(dependency_depths: &[u32]) -> u32 {
-    dependency_depths.iter().copied().max().unwrap_or(0).saturating_add(1)
+    let max_depth = dependency_depths.iter().copied().max().unwrap_or(0);
+    let result = max_depth.saturating_add(1);
+
+    // Tiger Style: postcondition - result is always >= 1
+    debug_assert!(result >= 1, "DEP_DEPTH: result must be >= 1");
+    // Tiger Style: postcondition - result is always > max input
+    debug_assert!(
+        dependency_depths.is_empty() || result > max_depth || max_depth == u32::MAX,
+        "DEP_DEPTH: result {} must be > max_depth {}",
+        result,
+        max_depth
+    );
+    result
 }
 
 /// Determine the initial dependency state for a job.

@@ -622,7 +622,7 @@ async fn initialize_job_system(
                     snix_pathinfo_service: snix_pathinfo_service.clone(),
                     output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
                     nix_binary: "nix".to_string(),
-                    verbose: false,
+                    is_verbose: false,
                     use_cluster_cache,
                     iroh_endpoint: iroh_endpoint.clone(),
                     gateway_node,

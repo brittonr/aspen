@@ -76,8 +76,8 @@ impl CapabilityToken {
         let bytes = postcard::to_allocvec(self).map_err(|e| AuthError::EncodingError(e.to_string()))?;
         if bytes.len() > MAX_TOKEN_SIZE as usize {
             return Err(AuthError::TokenTooLarge {
-                size: bytes.len(),
-                max: MAX_TOKEN_SIZE,
+                size_bytes: bytes.len() as u64,
+                max_bytes: MAX_TOKEN_SIZE as u64,
             });
         }
         Ok(bytes)
@@ -87,8 +87,8 @@ impl CapabilityToken {
     pub fn decode(bytes: &[u8]) -> Result<Self, AuthError> {
         if bytes.len() > MAX_TOKEN_SIZE as usize {
             return Err(AuthError::TokenTooLarge {
-                size: bytes.len(),
-                max: MAX_TOKEN_SIZE,
+                size_bytes: bytes.len() as u64,
+                max_bytes: MAX_TOKEN_SIZE as u64,
             });
         }
         Ok(postcard::from_bytes(bytes)?)

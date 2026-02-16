@@ -145,8 +145,8 @@ pub struct WorkerInfo {
     pub status: String,
     /// Job types this worker can handle.
     pub capabilities: Vec<String>,
-    /// Maximum concurrent jobs.
-    pub capacity: u32,
+    /// Maximum concurrent jobs (capacity in job count).
+    pub capacity_jobs: u32,
     /// Currently active job count.
     pub active_jobs: u32,
     /// Job IDs currently being processed.
@@ -172,10 +172,10 @@ pub struct WorkerStatusResultResponse {
     pub busy_workers: u32,
     /// Number of offline workers.
     pub offline_workers: u32,
-    /// Total capacity across all workers.
-    pub total_capacity: u32,
-    /// Currently used capacity.
-    pub used_capacity: u32,
+    /// Total capacity across all workers (in job slots).
+    pub total_capacity_jobs: u32,
+    /// Currently used capacity (in job slots).
+    pub used_capacity_jobs: u32,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }

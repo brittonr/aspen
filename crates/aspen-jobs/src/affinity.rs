@@ -181,6 +181,10 @@ pub struct WorkerMetadata {
 /// # Returns
 /// The shard ID (0..num_shards) that owns this key
 fn compute_shard_for_key(key: &str, num_shards: u32) -> u32 {
+    // Tiger Style: preconditions
+    debug_assert!(!key.is_empty(), "COMPUTE_SHARD: key must not be empty");
+    debug_assert!(num_shards > 0, "COMPUTE_SHARD: num_shards must be > 0");
+
     if num_shards <= 1 {
         return 0;
     }
@@ -203,7 +207,10 @@ fn compute_shard_for_key(key: &str, num_shards: u32) -> u32 {
         j = (((b.wrapping_add(1)) as f64) * ((1i64 << 31) as f64 / divisor)) as i64;
     }
 
-    b as u32
+    // Tiger Style: postcondition - result must be in valid range
+    let result = b as u32;
+    debug_assert!(result < num_shards, "COMPUTE_SHARD: result {} >= num_shards {}", result, num_shards);
+    result
 }
 
 /// Affinity-aware job manager extensions.

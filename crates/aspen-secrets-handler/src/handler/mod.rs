@@ -190,8 +190,8 @@ pub(crate) fn sanitize_secrets_error(error: &aspen_secrets::SecretsError) -> Str
         SecretsError::PathTooLong { length, max } => {
             format!("Path too long: {length} characters (max: {max})")
         }
-        SecretsError::ValueTooLarge { size, max } => {
-            format!("Secret too large: {size} bytes (max: {max})")
+        SecretsError::ValueTooLarge { size_bytes, max_bytes } => {
+            format!("Secret too large: {size_bytes} bytes (max: {max_bytes})")
         }
         SecretsError::TooManyVersions { count, max } => {
             format!("Too many versions: {count} (max: {max})")
@@ -203,8 +203,8 @@ pub(crate) fn sanitize_secrets_error(error: &aspen_secrets::SecretsError) -> Str
         SecretsError::TransitKeyNameTooLong { length, max } => {
             format!("Transit key name too long: {length} characters (max: {max})")
         }
-        SecretsError::PlaintextTooLarge { size, max } => {
-            format!("Plaintext too large: {size} bytes (max: {max})")
+        SecretsError::PlaintextTooLarge { size_bytes, max_bytes } => {
+            format!("Plaintext too large: {size_bytes} bytes (max: {max_bytes})")
         }
         SecretsError::InvalidCiphertext { reason } => format!("Invalid ciphertext: {reason}"),
         SecretsError::KeyVersionTooOld {

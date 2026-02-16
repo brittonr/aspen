@@ -239,7 +239,7 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
         // We need to use the client API types - import them via the messages module
         let request = aspen_client_api::ClientRpcRequest::BlobReplicatePull {
             hash: hash.to_hex(),
-            size,
+            size_bytes: size,
             provider: our_key.to_string(),
             tag: Some(format!("_replica:{}", hash.to_hex())),
         };

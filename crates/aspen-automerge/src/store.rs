@@ -313,11 +313,11 @@ impl<KV: KeyValueStore + ?Sized + 'static> DocumentStore for AspenAutomergeStore
         let mut doc = self.get(id).await?.unwrap_or_else(AutoCommit::new);
 
         // Apply each change
-        let mut applied_count = 0;
+        let mut applied_count: u32 = 0;
         for change in &changes {
             match doc.load_incremental(&change.bytes) {
                 Ok(count) => {
-                    applied_count += count;
+                    applied_count += count as u32;
                     debug!(changes_in_block = count, "applied change block");
                 }
                 Err(e) => {

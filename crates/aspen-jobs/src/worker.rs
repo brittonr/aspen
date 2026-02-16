@@ -497,125 +497,33 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
     concurrency_limiter: Arc<Semaphore>,
 ) -> Result<()> {
     info!(worker_id, "worker starting");
-
-    // Update status to idle
     run_worker_update_status(&worker_info, &worker_id, WorkerStatus::Idle, None).await;
 
-    // Collect excluded job types from all registered handlers
     let excluded_types = run_worker_collect_excluded_types(&workers).await;
     if !excluded_types.is_empty() {
         info!(worker_id, excluded_types = ?excluded_types, "worker excluding job types from dequeue");
     }
 
-    // Worker loop
     loop {
-        // Check shutdown
         if *shutdown.read().await {
             info!(worker_id, "worker shutting down");
             break;
         }
 
-        // Try to dequeue jobs, filtering out excluded types
         match manager.dequeue_jobs_filtered(&worker_id, 1, config.visibility_timeout, &excluded_types).await {
+            Ok(jobs) if jobs.is_empty() => tokio::time::sleep(config.poll_interval).await,
             Ok(jobs) => {
-                if jobs.is_empty() {
-                    tokio::time::sleep(config.poll_interval).await;
-                } else {
-                    for (queue_item, job) in jobs {
-                        // The semaphore is owned by the worker pool and should never be closed
-                        // while workers are running. If it is closed, treat it as a fatal error.
-                        let _permit = match concurrency_limiter.acquire().await {
-                            Ok(permit) => permit,
-                            Err(_) => {
-                                error!(worker_id, "concurrency limiter semaphore was closed unexpectedly");
-                                return Err(JobError::WorkerCommunicationFailed {
-                                    reason: "concurrency limiter semaphore closed".to_string(),
-                                });
-                            }
-                        };
-
-                        // Update worker status to processing
-                        run_worker_update_status(
-                            &worker_info,
-                            &worker_id,
-                            WorkerStatus::Processing,
-                            Some(job.id.to_string()),
-                        )
-                        .await;
-
-                        // Find appropriate handler
-                        let handler = run_worker_find_handler(&workers, &job.spec.job_type).await;
-
-                        if let Some(handler) = handler {
-                            // Mark job as started and get execution token
-                            let execution_token = match manager.mark_started(&job.id, worker_id.clone()).await {
-                                Ok(token) => token,
-                                Err(e) => {
-                                    error!(worker_id, job_id = %job.id, error = ?e, "failed to mark job as started");
-                                    continue;
-                                }
-                            };
-
-                            // Initial heartbeat
-                            if let Err(e) = manager.update_heartbeat(&job.id).await {
-                                warn!(worker_id, job_id = %job.id, error = ?e, "failed to send initial heartbeat");
-                            }
-
-                            let job_id = job.id.clone();
-                            let result = run_worker_execute_job(manager.clone(), &worker_id, job, handler).await;
-
-                            // Release concurrency permit early
-                            drop(_permit);
-
-                            // Process result
-                            if result.is_success() {
-                                run_worker_handle_success(
-                                    &manager,
-                                    &worker_id,
-                                    &job_id,
-                                    &queue_item.receipt_handle,
-                                    &execution_token,
-                                    result,
-                                )
-                                .await;
-                                run_worker_record_success(&worker_info, &worker_id).await;
-                                info!(worker_id, job_id = %job_id, "job completed successfully");
-                            } else {
-                                let error_msg = match &result {
-                                    JobResult::Failure(f) => f.reason.clone(),
-                                    _ => "unknown error".to_string(),
-                                };
-                                run_worker_handle_failure(
-                                    &manager,
-                                    &worker_id,
-                                    &job_id,
-                                    &queue_item.receipt_handle,
-                                    &execution_token,
-                                    error_msg.clone(),
-                                )
-                                .await;
-                                run_worker_record_failure(&worker_info, &worker_id).await;
-                                warn!(worker_id, job_id = %job_id, error = error_msg, "job failed");
-                            }
-                        } else {
-                            drop(_permit);
-                            warn!(worker_id, job_id = %job.id, job_type = job.spec.job_type, "no handler found for job type");
-
-                            if let Err(e) = manager
-                                .release_unhandled_job(
-                                    &job.id,
-                                    &queue_item.receipt_handle,
-                                    format!("no handler for job type: {}", job.spec.job_type),
-                                )
-                                .await
-                            {
-                                error!(worker_id, job_id = %job.id, error = ?e, "failed to release unhandled job");
-                            }
-                        }
-
-                        // Update worker status back to idle
-                        run_worker_update_status(&worker_info, &worker_id, WorkerStatus::Idle, None).await;
-                    }
+                for (queue_item, job) in jobs {
+                    run_worker_process_single_job(
+                        &worker_id,
+                        &manager,
+                        &workers,
+                        &worker_info,
+                        &concurrency_limiter,
+                        queue_item,
+                        job,
+                    )
+                    .await?;
                 }
             }
             Err(e) => {
@@ -624,19 +532,119 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
             }
         }
 
-        // Update heartbeat
-        {
-            let mut info = worker_info.write().await;
-            if let Some(w) = info.get_mut(&worker_id) {
-                w.last_heartbeat = Utc::now();
-            }
-        }
+        run_worker_update_heartbeat(&worker_info, &worker_id).await;
     }
 
-    // Update status to stopped
     run_worker_update_status(&worker_info, &worker_id, WorkerStatus::Stopped, None).await;
     info!(worker_id, "worker stopped");
     Ok(())
+}
+
+/// Process a single dequeued job.
+async fn run_worker_process_single_job<S: aspen_core::KeyValueStore + ?Sized + 'static>(
+    worker_id: &str,
+    manager: &Arc<JobManager<S>>,
+    workers: &Arc<RwLock<HashMap<String, Arc<dyn Worker>>>>,
+    worker_info: &Arc<RwLock<HashMap<String, WorkerInfo>>>,
+    concurrency_limiter: &Arc<Semaphore>,
+    queue_item: aspen_coordination::DequeuedItem,
+    job: Job,
+) -> Result<()> {
+    let _permit = concurrency_limiter.acquire().await.map_err(|_| {
+        error!(worker_id, "concurrency limiter semaphore was closed unexpectedly");
+        JobError::WorkerCommunicationFailed {
+            reason: "concurrency limiter semaphore closed".to_string(),
+        }
+    })?;
+
+    run_worker_update_status(worker_info, worker_id, WorkerStatus::Processing, Some(job.id.to_string())).await;
+
+    let handler = run_worker_find_handler(workers, &job.spec.job_type).await;
+
+    if let Some(handler) = handler {
+        run_worker_execute_with_handler(worker_id, manager, worker_info, &queue_item, job, handler).await;
+    } else {
+        run_worker_handle_no_handler(worker_id, manager, &queue_item, &job).await;
+    }
+
+    run_worker_update_status(worker_info, worker_id, WorkerStatus::Idle, None).await;
+    Ok(())
+}
+
+/// Execute job with handler, process result, and update stats.
+async fn run_worker_execute_with_handler<S: aspen_core::KeyValueStore + ?Sized + 'static>(
+    worker_id: &str,
+    manager: &Arc<JobManager<S>>,
+    worker_info: &Arc<RwLock<HashMap<String, WorkerInfo>>>,
+    queue_item: &aspen_coordination::DequeuedItem,
+    job: Job,
+    handler: Arc<dyn Worker>,
+) {
+    let execution_token = match manager.mark_started(&job.id, worker_id.to_string()).await {
+        Ok(token) => token,
+        Err(e) => {
+            error!(worker_id, job_id = %job.id, error = ?e, "failed to mark job as started");
+            return;
+        }
+    };
+
+    if let Err(e) = manager.update_heartbeat(&job.id).await {
+        warn!(worker_id, job_id = %job.id, error = ?e, "failed to send initial heartbeat");
+    }
+
+    let job_id = job.id.clone();
+    let result = run_worker_execute_job(manager.clone(), worker_id, job, handler).await;
+
+    if result.is_success() {
+        run_worker_handle_success(manager, worker_id, &job_id, &queue_item.receipt_handle, &execution_token, result)
+            .await;
+        run_worker_record_success(worker_info, worker_id).await;
+        info!(worker_id, job_id = %job_id, "job completed successfully");
+    } else {
+        let error_msg = match &result {
+            JobResult::Failure(f) => f.reason.clone(),
+            _ => "unknown error".to_string(),
+        };
+        run_worker_handle_failure(
+            manager,
+            worker_id,
+            &job_id,
+            &queue_item.receipt_handle,
+            &execution_token,
+            error_msg.clone(),
+        )
+        .await;
+        run_worker_record_failure(worker_info, worker_id).await;
+        warn!(worker_id, job_id = %job_id, error = error_msg, "job failed");
+    }
+}
+
+/// Handle job with no registered handler.
+async fn run_worker_handle_no_handler<S: aspen_core::KeyValueStore + ?Sized + 'static>(
+    worker_id: &str,
+    manager: &Arc<JobManager<S>>,
+    queue_item: &aspen_coordination::DequeuedItem,
+    job: &Job,
+) {
+    warn!(worker_id, job_id = %job.id, job_type = job.spec.job_type, "no handler found for job type");
+    if let Err(e) = manager
+        .release_unhandled_job(
+            &job.id,
+            &queue_item.receipt_handle,
+            format!("no handler for job type: {}", job.spec.job_type),
+        )
+        .await
+    {
+        error!(worker_id, job_id = %job.id, error = ?e, "failed to release unhandled job");
+    }
+}
+
+/// Update worker heartbeat timestamp.
+async fn run_worker_update_heartbeat(worker_info: &Arc<RwLock<HashMap<String, WorkerInfo>>>, worker_id: &str) {
+    let mut info = worker_info.write().await;
+    if let Some(w) = info.get_mut(worker_id) {
+        w.last_heartbeat = Utc::now();
+    }
 }
 
 /// A simple worker that logs the job.

@@ -161,7 +161,7 @@ mod tests {
         };
         let cloned = entry.clone();
         assert_eq!(entry.key, cloned.key);
-        assert_eq!(entry.size_bytes, cloned.size);
+        assert_eq!(entry.size_bytes, cloned.size_bytes);
         assert_eq!(entry.hash, cloned.hash);
     }
 
@@ -246,7 +246,7 @@ mod tests {
             replica_open: Some(true),
         };
         let cloned = status.clone();
-        assert_eq!(status.is_enabled, cloned.enabled);
+        assert_eq!(status.is_enabled, cloned.is_enabled);
         assert_eq!(status.namespace_id, cloned.namespace_id);
         assert_eq!(status.author_id, cloned.author_id);
         assert_eq!(status.entry_count, cloned.entry_count);

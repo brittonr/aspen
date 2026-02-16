@@ -251,7 +251,7 @@ impl JobBlobStorage {
             total_read = total_read.saturating_add(bytes_read);
             if total_read > MAX_DECOMPRESSED_SIZE {
                 return Err(JobError::DecompressionTooLarge {
-                    max: MAX_DECOMPRESSED_SIZE,
+                    max_bytes: MAX_DECOMPRESSED_SIZE as u64,
                 });
             }
 
@@ -542,8 +542,8 @@ mod tests {
         assert!(result.is_err(), "Compression bomb should be rejected");
 
         match result.unwrap_err() {
-            crate::error::JobError::DecompressionTooLarge { max } => {
-                assert_eq!(max, super::MAX_DECOMPRESSED_SIZE);
+            crate::error::JobError::DecompressionTooLarge { max_bytes } => {
+                assert_eq!(max_bytes, super::MAX_DECOMPRESSED_SIZE as u64);
             }
             other => panic!("Expected DecompressionTooLarge error, got: {:?}", other),
         }

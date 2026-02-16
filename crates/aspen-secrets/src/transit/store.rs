@@ -90,8 +90,8 @@ impl DefaultTransitStore {
         }
         if name.len() > MAX_TRANSIT_KEY_NAME_LENGTH {
             return Err(SecretsError::TransitKeyNameTooLong {
-                length: name.len(),
-                max: MAX_TRANSIT_KEY_NAME_LENGTH,
+                length: name.len() as u32,
+                max: MAX_TRANSIT_KEY_NAME_LENGTH as u32,
             });
         }
         Ok(())
@@ -460,8 +460,8 @@ impl TransitStore for DefaultTransitStore {
 
         if request.plaintext.len() > MAX_PLAINTEXT_SIZE {
             return Err(SecretsError::PlaintextTooLarge {
-                size: request.plaintext.len(),
-                max: MAX_PLAINTEXT_SIZE,
+                size_bytes: request.plaintext.len() as u64,
+                max_bytes: MAX_PLAINTEXT_SIZE as u64,
             });
         }
 
@@ -636,22 +636,22 @@ impl TransitStore for DefaultTransitStore {
         // Validate bits: must be multiple of 8 for byte alignment
         if !request.bits.is_multiple_of(8) {
             return Err(SecretsError::PlaintextTooLarge {
-                size: request.bits as usize,
-                max: 512,
+                size_bytes: request.bits as u64,
+                max_bytes: 512,
             });
         }
         // Validate bits: minimum 128 bits for security
         if request.bits < 128 {
             return Err(SecretsError::PlaintextTooLarge {
-                size: request.bits as usize,
-                max: 512,
+                size_bytes: request.bits as u64,
+                max_bytes: 512,
             });
         }
         // Validate bits: maximum 512 bits for reasonable key size
         if request.bits > 512 {
             return Err(SecretsError::PlaintextTooLarge {
-                size: request.bits as usize,
-                max: 512,
+                size_bytes: request.bits as u64,
+                max_bytes: 512,
             });
         }
 

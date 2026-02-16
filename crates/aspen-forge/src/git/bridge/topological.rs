@@ -84,6 +84,14 @@ pub struct TopologicalWaves {
 /// Uses Kahn's algorithm to produce an ordering where dependencies
 /// come before the objects that depend on them.
 pub fn topological_sort(objects: Vec<PendingObject>) -> BridgeResult<TopologicalOrder> {
+    // Tiger Style: validate input bounds
+    debug_assert!(
+        objects.len() <= MAX_PENDING_OBJECTS,
+        "TOPO_SORT: objects.len() {} exceeds MAX_PENDING_OBJECTS {}",
+        objects.len(),
+        MAX_PENDING_OBJECTS
+    );
+
     if objects.len() > MAX_PENDING_OBJECTS {
         return Err(BridgeError::ImportBatchExceeded {
             count: objects.len(),
@@ -93,6 +101,7 @@ pub fn topological_sort(objects: Vec<PendingObject>) -> BridgeResult<Topological
 
     // First pass: collect all hashes so we know which dependencies are internal
     let all_hashes: HashSet<Sha1Hash> = objects.iter().map(|obj| obj.sha1).collect();
+    debug_assert_eq!(all_hashes.len(), objects.len(), "TOPO_SORT: duplicate SHA-1 hashes detected in input");
 
     // Build adjacency list and in-degree count
     let mut in_degree: HashMap<Sha1Hash, usize> = HashMap::new();
@@ -148,6 +157,14 @@ pub fn topological_sort(objects: Vec<PendingObject>) -> BridgeResult<Topological
         return Err(BridgeError::CycleDetected);
     }
 
+    // Tiger Style: postcondition - all objects processed
+    debug_assert!(
+        processed.len() == result.len(),
+        "TOPO_SORT: processed {} != result {} - internal inconsistency",
+        processed.len(),
+        result.len()
+    );
+
     Ok(TopologicalOrder {
         objects: result,
         skipped: HashSet::new(),
@@ -163,6 +180,14 @@ pub fn topological_sort(objects: Vec<PendingObject>) -> BridgeResult<Topological
 /// This enables parallel import: instead of importing objects one at a time,
 /// we can import all objects in wave 0 concurrently, then wave 1, etc.
 pub fn topological_sort_waves(objects: Vec<PendingObject>) -> BridgeResult<TopologicalWaves> {
+    // Tiger Style: validate input bounds
+    debug_assert!(
+        objects.len() <= MAX_PENDING_OBJECTS,
+        "TOPO_SORT_WAVES: objects.len() {} exceeds MAX_PENDING_OBJECTS {}",
+        objects.len(),
+        MAX_PENDING_OBJECTS
+    );
+
     if objects.len() > MAX_PENDING_OBJECTS {
         return Err(BridgeError::ImportBatchExceeded {
             count: objects.len(),
@@ -246,6 +271,10 @@ pub fn topological_sort_waves(objects: Vec<PendingObject>) -> BridgeResult<Topol
         return Err(BridgeError::CycleDetected);
     }
 
+    // Tiger Style: postcondition - waves are non-empty and ordered
+    debug_assert!(!waves.is_empty() || processed.is_empty(), "TOPO_SORT_WAVES: non-empty processed set but no waves");
+    debug_assert!(waves.iter().all(|w| !w.is_empty()), "TOPO_SORT_WAVES: empty wave detected");
+
     Ok(TopologicalWaves {
         waves,
         skipped: HashSet::new(),
@@ -258,6 +287,13 @@ pub fn topological_sort_waves(objects: Vec<PendingObject>) -> BridgeResult<Topol
 /// Gitlinks (mode 160000) reference commits in external repositories and are not
 /// dependencies that exist in this repository's object store.
 pub fn extract_tree_dependencies(tree_content: &[u8]) -> BridgeResult<Vec<Sha1Hash>> {
+    // Tiger Style: precondition - tree content can be empty but not oversized
+    debug_assert!(
+        tree_content.len() <= 100 * 1024 * 1024,
+        "EXTRACT_TREE_DEPS: tree content {} bytes exceeds 100MB limit",
+        tree_content.len()
+    );
+
     let mut deps = Vec::new();
     let mut pos = 0;
 
@@ -302,6 +338,9 @@ pub fn extract_tree_dependencies(tree_content: &[u8]) -> BridgeResult<Vec<Sha1Ha
 ///
 /// Returns SHA-1 hashes of tree and parent commits.
 pub fn extract_commit_dependencies(commit_content: &str) -> BridgeResult<Vec<Sha1Hash>> {
+    // Tiger Style: precondition - commit content should not be empty
+    debug_assert!(!commit_content.is_empty(), "EXTRACT_COMMIT_DEPS: empty commit content");
+
     let mut deps = Vec::new();
 
     for line in commit_content.lines() {
@@ -322,6 +361,9 @@ pub fn extract_commit_dependencies(commit_content: &str) -> BridgeResult<Vec<Sha
 ///
 /// Returns SHA-1 hash of target object.
 pub fn extract_tag_dependencies(tag_content: &str) -> BridgeResult<Vec<Sha1Hash>> {
+    // Tiger Style: precondition - tag content should not be empty
+    debug_assert!(!tag_content.is_empty(), "EXTRACT_TAG_DEPS: empty tag content");
+
     for line in tag_content.lines() {
         if let Some(object_hex) = line.strip_prefix("object ") {
             return Ok(vec![Sha1Hash::from_hex(object_hex)?]);

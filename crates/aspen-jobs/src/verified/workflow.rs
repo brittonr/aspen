@@ -129,6 +129,16 @@ pub fn check_success_rate(
     completed_jobs: u32,
     threshold: f32,
 ) -> ConditionResult {
+    // Tiger Style: preconditions
+    debug_assert!(
+        succeeded_jobs <= completed_jobs,
+        "SUCCESS_RATE: succeeded {} > completed {}",
+        succeeded_jobs,
+        completed_jobs
+    );
+    debug_assert!(completed_jobs <= total_jobs, "SUCCESS_RATE: completed {} > total {}", completed_jobs, total_jobs);
+    debug_assert!((0.0..=1.0).contains(&threshold), "SUCCESS_RATE: threshold {} not in [0.0, 1.0]", threshold);
+
     if completed_jobs < total_jobs {
         return ConditionResult::Indeterminate;
     }
@@ -138,6 +148,9 @@ pub fn check_success_rate(
     }
 
     let rate = succeeded_jobs as f32 / total_jobs as f32;
+    // Tiger Style: rate must be in valid range
+    debug_assert!((0.0..=1.0).contains(&rate), "SUCCESS_RATE: computed rate {} not in [0.0, 1.0]", rate);
+
     if rate >= threshold {
         ConditionResult::Satisfied
     } else {

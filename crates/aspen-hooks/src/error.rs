@@ -16,9 +16,9 @@ pub enum HookError {
     #[snafu(display("handler name too long: {} bytes (max {})", length, max))]
     HandlerNameTooLong {
         /// Actual length of the handler name.
-        length: usize,
+        length: u32,
         /// Maximum allowed length.
-        max: usize,
+        max: u32,
     },
 
     /// Handler name is empty.
@@ -29,9 +29,9 @@ pub enum HookError {
     #[snafu(display("too many handlers: {} (max {})", count, max))]
     TooManyHandlers {
         /// Current number of handlers.
-        count: usize,
+        count: u32,
         /// Maximum allowed handlers.
-        max: usize,
+        max: u32,
     },
 
     /// Handler with this name already exists.
@@ -59,18 +59,18 @@ pub enum HookError {
     #[snafu(display("pattern too long: {} bytes (max {})", length, max))]
     PatternTooLong {
         /// Actual length of the pattern.
-        length: usize,
+        length: u32,
         /// Maximum allowed length.
-        max: usize,
+        max: u32,
     },
 
     /// Shell command exceeds maximum length.
     #[snafu(display("shell command too long: {} bytes (max {})", length, max))]
     ShellCommandTooLong {
         /// Actual length of the command.
-        length: usize,
+        length: u32,
         /// Maximum allowed length.
-        max: usize,
+        max: u32,
     },
 
     /// Shell command is empty.

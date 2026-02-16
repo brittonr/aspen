@@ -88,29 +88,29 @@ pub(super) async fn dispatch_primitives(
         ClientRpcRequest::RateLimiterTryAcquire {
             key,
             tokens,
-            capacity,
+            capacity_tokens,
             refill_rate,
-        } => handle_rate_limiter_try_acquire(ctx, key, tokens, capacity, refill_rate).await,
+        } => handle_rate_limiter_try_acquire(ctx, key, tokens, capacity_tokens, refill_rate).await,
 
         ClientRpcRequest::RateLimiterAcquire {
             key,
             tokens,
-            capacity,
+            capacity_tokens,
             refill_rate,
             timeout_ms,
-        } => handle_rate_limiter_acquire(ctx, key, tokens, capacity, refill_rate, timeout_ms).await,
+        } => handle_rate_limiter_acquire(ctx, key, tokens, capacity_tokens, refill_rate, timeout_ms).await,
 
         ClientRpcRequest::RateLimiterAvailable {
             key,
-            capacity,
+            capacity_tokens,
             refill_rate,
-        } => handle_rate_limiter_available(ctx, key, capacity, refill_rate).await,
+        } => handle_rate_limiter_available(ctx, key, capacity_tokens, refill_rate).await,
 
         ClientRpcRequest::RateLimiterReset {
             key,
-            capacity,
+            capacity_tokens,
             refill_rate,
-        } => handle_rate_limiter_reset(ctx, key, capacity, refill_rate).await,
+        } => handle_rate_limiter_reset(ctx, key, capacity_tokens, refill_rate).await,
 
         // Barrier operations
         ClientRpcRequest::BarrierEnter {
@@ -133,21 +133,29 @@ pub(super) async fn dispatch_primitives(
             name,
             holder_id,
             permits,
-            capacity,
+            capacity_permits,
             ttl_ms,
             timeout_ms,
         } => {
-            handle_semaphore_acquire(ctx, name, holder_id, permits, capacity, ttl_ms, normalize_timeout_ms(timeout_ms))
-                .await
+            handle_semaphore_acquire(
+                ctx,
+                name,
+                holder_id,
+                permits,
+                capacity_permits,
+                ttl_ms,
+                normalize_timeout_ms(timeout_ms),
+            )
+            .await
         }
 
         ClientRpcRequest::SemaphoreTryAcquire {
             name,
             holder_id,
             permits,
-            capacity,
+            capacity_permits,
             ttl_ms,
-        } => handle_semaphore_try_acquire(ctx, name, holder_id, permits, capacity, ttl_ms).await,
+        } => handle_semaphore_try_acquire(ctx, name, holder_id, permits, capacity_permits, ttl_ms).await,
 
         ClientRpcRequest::SemaphoreRelease {
             name,

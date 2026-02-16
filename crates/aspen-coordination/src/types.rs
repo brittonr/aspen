@@ -87,19 +87,19 @@ pub struct BucketState {
     pub tokens: f64,
     /// Last update timestamp (Unix milliseconds).
     pub last_update_ms: u64,
-    /// Maximum capacity.
-    pub capacity: u64,
+    /// Maximum capacity (in tokens).
+    pub capacity_tokens: u64,
     /// Refill rate (tokens per second).
     pub refill_rate: f64,
 }
 
 impl BucketState {
     /// Create a new bucket state with full capacity.
-    pub fn new(capacity: u64, refill_rate: f64) -> Self {
+    pub fn new(capacity_tokens: u64, refill_rate: f64) -> Self {
         Self {
-            tokens: capacity as f64,
+            tokens: capacity_tokens as f64,
             last_update_ms: now_unix_ms(),
-            capacity,
+            capacity_tokens,
             refill_rate,
         }
     }
@@ -111,7 +111,7 @@ impl BucketState {
             self.last_update_ms,
             now_unix_ms(),
             self.refill_rate,
-            self.capacity,
+            self.capacity_tokens,
         )
     }
 }
@@ -160,7 +160,7 @@ mod tests {
         let state = BucketState {
             tokens: 0.0,
             last_update_ms: now_unix_ms() - 1000, // 1 second ago
-            capacity: 10,
+            capacity_tokens: 10,
             refill_rate: 5.0, // 5 tokens per second
         };
         let available = state.available_tokens();

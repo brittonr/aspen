@@ -25,10 +25,14 @@ pub enum SecretsError {
 
     /// Secrets file is too large.
     #[error(
-        "secrets file at {path} is too large: {size} bytes (max: {max} bytes)\n\
+        "secrets file at {path} is too large: {size_bytes} bytes (max: {max_bytes} bytes)\n\
          Hint: Split secrets across multiple files or reduce secret count"
     )]
-    FileTooLarge { path: PathBuf, size: usize, max: usize },
+    FileTooLarge {
+        path: PathBuf,
+        size_bytes: u64,
+        max_bytes: u64,
+    },
 
     /// Failed to parse secrets file format.
     #[error(
@@ -116,11 +120,11 @@ pub enum SecretsError {
     // ========================================================================
     /// Secret path too long.
     #[error("secret path too long: {length} characters (max: {max})")]
-    PathTooLong { length: usize, max: usize },
+    PathTooLong { length: u32, max: u32 },
 
     /// Secret value too large.
-    #[error("secret value too large: {size} bytes (max: {max})")]
-    ValueTooLarge { size: usize, max: usize },
+    #[error("secret value too large: {size_bytes} bytes (max: {max_bytes})")]
+    ValueTooLarge { size_bytes: u64, max_bytes: u64 },
 
     /// Too many versions.
     #[error("too many versions for secret: {count} (max: {max})")]
@@ -151,11 +155,11 @@ pub enum SecretsError {
 
     /// Transit key name too long.
     #[error("transit key name too long: {length} characters (max: {max})")]
-    TransitKeyNameTooLong { length: usize, max: usize },
+    TransitKeyNameTooLong { length: u32, max: u32 },
 
     /// Plaintext too large for encryption.
-    #[error("plaintext too large: {size} bytes (max: {max})")]
-    PlaintextTooLarge { size: usize, max: usize },
+    #[error("plaintext too large: {size_bytes} bytes (max: {max_bytes})")]
+    PlaintextTooLarge { size_bytes: u64, max_bytes: u64 },
 
     /// Invalid ciphertext format.
     #[error(

@@ -692,7 +692,7 @@ pub struct SemaphoreResultResponse {
     pub success: bool,
     pub permits_acquired: Option<u32>,
     pub available: Option<u32>,
-    pub capacity: Option<u32>,
+    pub capacity_permits: Option<u32>,
     pub retry_after_ms: Option<u64>,
     pub error: Option<String>,
 }

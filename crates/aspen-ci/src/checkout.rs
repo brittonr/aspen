@@ -221,7 +221,6 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
     stats: &mut CheckoutStats,
     depth: u32,
 ) -> Result<()> {
-    // Tiger Style: Bounded recursion
     if depth > MAX_TREE_DEPTH {
         return CheckoutLimitExceededSnafu {
             reason: format!("Tree recursion depth exceeds limit of {}", MAX_TREE_DEPTH),
@@ -229,7 +228,6 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
         .fail();
     }
 
-    // Fetch tree with retry (handles replication latency)
     let tree_hash_str = tree_hash.to_hex().to_string();
     let tree = with_retry("tree", &tree_hash_str, || {
         let forge = forge.clone();
@@ -239,20 +237,10 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
     .await?;
 
     for entry in &tree.entries {
-        // Build the full path
-        let entry_path = if prefix.is_empty() {
-            entry.name.clone()
-        } else {
-            format!("{}/{}", prefix, entry.name)
-        };
+        let entry_path = checkout_tree_build_path(prefix, &entry.name);
 
-        // Tiger Style: Bounded path length
         if entry_path.len() > MAX_PATH_LENGTH {
-            warn!(
-                path = %entry_path,
-                "Skipping file with path exceeding {} bytes",
-                MAX_PATH_LENGTH
-            );
+            warn!(path = %entry_path, "Skipping file with path exceeding {} bytes", MAX_PATH_LENGTH);
             continue;
         }
 
@@ -260,86 +248,86 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
         let entry_hash = blake3::Hash::from_bytes(entry.hash);
 
         if entry.is_directory() {
-            // Create directory and recurse
             fs::create_dir_all(&full_path).await.context(CreateCheckoutDirSnafu {
                 path: full_path.clone(),
             })?;
-
             Box::pin(checkout_tree(forge, &entry_hash, base_dir, &entry_path, stats, depth + 1)).await?;
         } else if entry.is_file() {
-            // Tiger Style: Check limits before writing
-            if stats.files_written >= MAX_CHECKOUT_FILES {
-                return CheckoutLimitExceededSnafu {
-                    reason: format!("Checkout exceeds maximum file count of {}", MAX_CHECKOUT_FILES),
-                }
-                .fail();
-            }
-
-            // Get blob content with retry (handles replication latency)
-            let blob_hash_str = entry_hash.to_hex().to_string();
-            let content = with_retry("blob", &blob_hash_str, || {
-                let forge = forge.clone();
-                async move { forge.git.get_blob(&entry_hash).await }
-            })
-            .await?;
-
-            // Tiger Style: Check total size limit
-            let new_total = stats.bytes_written.saturating_add(content.len() as u64);
-            if new_total > MAX_CHECKOUT_SIZE_BYTES {
-                return CheckoutLimitExceededSnafu {
-                    reason: format!("Checkout exceeds maximum size of {} bytes", MAX_CHECKOUT_SIZE_BYTES),
-                }
-                .fail();
-            }
-
-            // Ensure parent directory exists
-            if let Some(parent) = full_path.parent() {
-                fs::create_dir_all(parent).await.context(CreateCheckoutDirSnafu {
-                    path: parent.to_path_buf(),
-                })?;
-            }
-
-            // Write file
-            fs::write(&full_path, &content).await.context(WriteCheckoutFileSnafu {
-                path: full_path.clone(),
-            })?;
-
-            // Set executable permission if needed
-            if entry.is_executable() {
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let perms = std::fs::Permissions::from_mode(0o755);
-                    fs::set_permissions(&full_path, perms).await.context(SetCheckoutPermissionsSnafu {
-                        path: full_path.clone(),
-                    })?;
-                }
-            }
-
-            stats.files_written += 1;
-            stats.bytes_written = new_total;
-
-            debug!(
-                path = %entry_path,
-                size = content.len(),
-                "Checked out file"
-            );
+            checkout_tree_write_file(forge, &entry_hash, &full_path, &entry_path, entry.is_executable(), stats).await?;
         } else if entry.mode == 0o120000 {
-            // Symlink mode (0o120000)
-            // Warn about skipped symlinks instead of silently ignoring them.
-            // Symlinks are intentionally not supported in CI checkouts for security reasons:
-            // - Prevents symlink attacks that could escape the checkout directory
-            // - Ensures deterministic builds (symlink targets may not exist)
-            // - Avoids issues with relative vs absolute paths in different environments
-            warn!(
-                path = %entry_path,
-                mode = entry.mode,
-                "Skipping symlink during checkout (symlinks are not supported in CI builds)"
-            );
+            warn!(path = %entry_path, mode = entry.mode, "Skipping symlink during checkout (symlinks are not supported in CI builds)");
             stats.symlinks_skipped += 1;
         }
-        // Note: Other entry types (submodules, etc.) are silently skipped
     }
+
+    Ok(())
+}
+
+/// Build entry path for checkout tree traversal.
+fn checkout_tree_build_path(prefix: &str, name: &str) -> String {
+    if prefix.is_empty() {
+        name.to_string()
+    } else {
+        format!("{}/{}", prefix, name)
+    }
+}
+
+/// Write a file during checkout with limits checking.
+async fn checkout_tree_write_file<B: BlobStore, K: KeyValueStore + ?Sized>(
+    forge: &Arc<ForgeNode<B, K>>,
+    entry_hash: &blake3::Hash,
+    full_path: &Path,
+    entry_path: &str,
+    is_executable: bool,
+    stats: &mut CheckoutStats,
+) -> Result<()> {
+    if stats.files_written >= MAX_CHECKOUT_FILES {
+        return CheckoutLimitExceededSnafu {
+            reason: format!("Checkout exceeds maximum file count of {}", MAX_CHECKOUT_FILES),
+        }
+        .fail();
+    }
+
+    let blob_hash_str = entry_hash.to_hex().to_string();
+    let content = with_retry("blob", &blob_hash_str, || {
+        let forge = forge.clone();
+        let hash = *entry_hash;
+        async move { forge.git.get_blob(&hash).await }
+    })
+    .await?;
+
+    let new_total = stats.bytes_written.saturating_add(content.len() as u64);
+    if new_total > MAX_CHECKOUT_SIZE_BYTES {
+        return CheckoutLimitExceededSnafu {
+            reason: format!("Checkout exceeds maximum size of {} bytes", MAX_CHECKOUT_SIZE_BYTES),
+        }
+        .fail();
+    }
+
+    if let Some(parent) = full_path.parent() {
+        fs::create_dir_all(parent).await.context(CreateCheckoutDirSnafu {
+            path: parent.to_path_buf(),
+        })?;
+    }
+
+    fs::write(full_path, &content).await.context(WriteCheckoutFileSnafu {
+        path: full_path.to_path_buf(),
+    })?;
+
+    if is_executable {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o755);
+            fs::set_permissions(full_path, perms).await.context(SetCheckoutPermissionsSnafu {
+                path: full_path.to_path_buf(),
+            })?;
+        }
+    }
+
+    stats.files_written += 1;
+    stats.bytes_written = new_total;
+    debug!(path = %entry_path, size = content.len(), "Checked out file");
 
     Ok(())
 }

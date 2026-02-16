@@ -40,8 +40,8 @@ pub async fn decrypt_secrets_file(path: &Path, identity: &age::x25519::Identity)
     if contents.len() > MAX_SECRETS_FILE_SIZE {
         return Err(SecretsError::FileTooLarge {
             path: path.to_path_buf(),
-            size: contents.len(),
-            max: MAX_SECRETS_FILE_SIZE,
+            size_bytes: contents.len() as u64,
+            max_bytes: MAX_SECRETS_FILE_SIZE as u64,
         });
     }
 

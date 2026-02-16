@@ -56,7 +56,16 @@ pub enum SagaPhase {
 /// );
 /// ```
 #[inline]
-pub const fn compute_next_phase_after_success(current_step: u32, total_steps: u32) -> SagaPhase {
+pub fn compute_next_phase_after_success(current_step: u32, total_steps: u32) -> SagaPhase {
+    // Tiger Style: preconditions
+    debug_assert!(total_steps > 0, "SAGA_NEXT_PHASE: total_steps must be > 0");
+    debug_assert!(
+        current_step < total_steps,
+        "SAGA_NEXT_PHASE: current_step {} >= total_steps {}",
+        current_step,
+        total_steps
+    );
+
     let next_step = current_step + 1;
     if next_step >= total_steps {
         SagaPhase::Completed
@@ -220,13 +229,20 @@ pub const fn is_saga_successful(phase: SagaPhase) -> bool {
 /// ```
 #[inline]
 pub fn compute_compensation_retry_delay_ms(attempt: u32, base_delay_ms: u64, max_attempts: u32) -> Option<u64> {
+    // Tiger Style: precondition
+    debug_assert!(base_delay_ms > 0, "COMP_RETRY: base_delay_ms must be > 0");
+
     if attempt >= max_attempts {
         return None;
     }
 
     // Exponential backoff: base * 2^attempt
     let multiplier = 1u64.checked_shl(attempt)?;
-    Some(base_delay_ms.saturating_mul(multiplier))
+    let result = base_delay_ms.saturating_mul(multiplier);
+
+    // Tiger Style: postcondition
+    debug_assert!(result >= base_delay_ms, "COMP_RETRY: result {} < base {}", result, base_delay_ms);
+    Some(result)
 }
 
 /// Count the number of steps requiring compensation.

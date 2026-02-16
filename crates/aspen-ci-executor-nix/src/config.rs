@@ -62,7 +62,7 @@ pub struct NixBuildWorkerConfig {
     pub nix_binary: String,
 
     /// Whether to enable verbose logging.
-    pub verbose: bool,
+    pub is_verbose: bool,
 
     // --- Cache Proxy Configuration (Phase 1) ---
     /// Whether to use the cluster's Nix binary cache as a substituter.
@@ -95,7 +95,7 @@ impl Default for NixBuildWorkerConfig {
             snix_pathinfo_service: None,
             output_dir: PathBuf::from("/tmp/aspen-ci/builds"),
             nix_binary: "nix".to_string(),
-            verbose: false,
+            is_verbose: false,
             // Cache proxy disabled by default until gateway is configured
             use_cluster_cache: false,
             iroh_endpoint: None,

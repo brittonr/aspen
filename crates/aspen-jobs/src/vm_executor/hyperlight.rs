@@ -84,8 +84,8 @@ impl HyperlightWorker {
         // Validate it's not too large
         if bytes.len() > MAX_BINARY_SIZE {
             return Err(JobError::BinaryTooLarge {
-                size: bytes.len(),
-                max: MAX_BINARY_SIZE,
+                size_bytes: bytes.len() as u64,
+                max_bytes: MAX_BINARY_SIZE as u64,
             });
         }
 
@@ -184,8 +184,8 @@ impl HyperlightWorker {
         // Check size
         if binary.len() > MAX_BINARY_SIZE {
             return Err(JobError::BinaryTooLarge {
-                size: binary.len(),
-                max: MAX_BINARY_SIZE,
+                size_bytes: binary.len() as u64,
+                max_bytes: MAX_BINARY_SIZE as u64,
             });
         }
 
@@ -335,8 +335,8 @@ impl HyperlightWorker {
         // Check size
         if binary.len() > MAX_BINARY_SIZE {
             return Err(JobError::BinaryTooLarge {
-                size: binary.len(),
-                max: MAX_BINARY_SIZE,
+                size_bytes: binary.len() as u64,
+                max_bytes: MAX_BINARY_SIZE as u64,
             });
         }
 

@@ -255,8 +255,17 @@ verus! {
 /// `compute_entry_hash_spec` specification above.
 #[cfg(not(feature = "verus"))]
 pub fn verify_chain_hash(prev_hash: &[u8; 32], index: u64, term: u64, data: &[u8], expected: &[u8; 32]) -> bool {
+    // Tiger Style: preconditions
+    debug_assert!(prev_hash.len() == 32, "CHAIN_HASH: prev_hash must be 32 bytes");
+    debug_assert!(expected.len() == 32, "CHAIN_HASH: expected must be 32 bytes");
+    debug_assert!(!data.is_empty() || index == 0, "CHAIN_HASH: non-genesis entry should have data");
+
     use crate::integrity::compute_entry_hash;
     let computed = compute_entry_hash(prev_hash, index, term, data);
+
+    // Tiger Style: postcondition - computed hash has correct length
+    debug_assert!(computed.len() == 32, "CHAIN_HASH: computed hash must be 32 bytes");
+
     computed == *expected
 }
 

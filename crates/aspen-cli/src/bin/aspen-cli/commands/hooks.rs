@@ -235,7 +235,7 @@ impl Outputable for HookMetricsOutput {
 /// Hook trigger output.
 pub struct HookTriggerOutput {
     pub is_success: bool,
-    pub dispatched_count: usize,
+    pub dispatched_count: u32,
     pub error: Option<String>,
     pub handler_failures: Vec<(String, String)>,
 }
@@ -276,7 +276,7 @@ pub struct HookCreateUrlOutput {
     pub cluster_id: String,
     pub event_type: String,
     pub expires: String,
-    pub peer_count: usize,
+    pub peer_count: u32,
 }
 
 impl Outputable for HookCreateUrlOutput {
@@ -310,7 +310,7 @@ pub struct HookTriggerUrlOutput {
     pub is_success: bool,
     pub cluster_id: String,
     pub event_type: String,
-    pub dispatched_count: usize,
+    pub dispatched_count: u32,
     pub error: Option<String>,
     pub handler_failures: Vec<(String, String)>,
 }
@@ -505,7 +505,7 @@ async fn hook_create_url(client: &AspenClient, args: CreateUrlArgs, json: bool) 
         cluster_id: parsed_ticket.cluster_id,
         event_type: args.event_type,
         expires: hook_ticket.expiry_string(),
-        peer_count: bootstrap_peers.len(),
+        peer_count: bootstrap_peers.len() as u32,
     };
 
     print_output(&output, json);
@@ -623,7 +623,7 @@ async fn send_hook_trigger(
 /// Result from a hook trigger operation.
 struct HookTriggerResult {
     is_success: bool,
-    dispatched_count: usize,
+    dispatched_count: u32,
     error: Option<String>,
     handler_failures: Vec<(String, String)>,
 }

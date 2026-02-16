@@ -69,7 +69,7 @@ pub struct TriggerResult {
     /// Whether all handlers executed successfully.
     pub is_success: bool,
     /// Number of handlers that received the event.
-    pub dispatched_count: usize,
+    pub dispatched_count: u32,
     /// Error message if the operation failed.
     pub error: Option<String>,
     /// List of handler failures (handler_name, error_message).
