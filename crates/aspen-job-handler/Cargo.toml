@@ -7,7 +7,7 @@ license = "AGPL-3.0-or-later"
 
 [dependencies]
 # RPC core abstractions (RequestHandler trait, ClientProtocolContext)
-aspen-rpc-core = { path = "../aspen-rpc-core", features = ["worker"] }
+aspen-rpc-core = { path = "../aspen-rpc-core", features = ["worker", "jobs"] }
 
 # Local crates
 aspen-client-api = { workspace = true }
