@@ -5,6 +5,7 @@
 The `LogId` itself is **not monotonic** when tracking I/O operations. A specific `LogId` can be appended, truncated, and then appended again by different leaders.
 
 For example, consider a follower that receives log entry `1-2` (term=1, index=2):
+
 1. Leader-1 appends logs `[1-1, 1-2, 1-3]` to the follower
 2. Leader-2 truncates `[1-2, 1-3]` and appends `[2-2]`
 3. Leader-3 truncates `[2-2]` and appends `[1-2]` again
@@ -49,12 +50,14 @@ N4 | 4-1
 ```
 
 If N1's logs are truncated and re-appended:
+
 - N3 becomes leader at term 5: `LogIOId = (Vote(term=5), LogId(3,1))`
 - N3 replicates to N1: N1's `LogIOId = (Vote(term=5), LogId(3,1))`
 - N2 becomes leader at term 6: `LogIOId = (Vote(term=6), LogId(1,2))`
 - N2 replicates to N1: N1's `LogIOId = (Vote(term=6), LogId(1,2))`
 
 Even though `LogId(1,2)` appears again, the `LogIOId` is different and strictly greater:
+
 - First append: `(Vote(term=1), LogId(1,2))`
 - Second append: `(Vote(term=6), LogId(1,2))`
 
@@ -63,6 +66,7 @@ Since `Vote(term=6) > Vote(term=1)`, the second `LogIOId` is strictly greater, m
 ## Local and Remote Leaders
 
 The leader that performs the log I/O operation can be either:
+
 - **Local leader**: When this node is the leader, it appends entries to its own log store
 - **Remote leader**: When this node is a follower, it receives and appends entries replicated from the remote leader
 

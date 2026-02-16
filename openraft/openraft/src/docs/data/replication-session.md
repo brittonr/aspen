@@ -10,6 +10,7 @@ membership modifications.
 When a Leader starts replicating log entries to a set of target nodes, it
 initiates a replication session that is uniquely identified by the
 `ReplicationSessionId`. The session comprises the following key elements:
+
 - The identity of the Leader (`leader_id`)
 - The set of replication targets (`targets: BTreeSet<NodeId>`)
 
@@ -20,6 +21,7 @@ matched=log_id(10)}`) with the corresponding `ReplicationSessionId` to track
 progress accurately.
 
 The conditions that trigger the creation of a new `ReplicationSessionId` include:
+
 - A change in the Leader’s identity.
 - A change in the cluster’s membership.
 

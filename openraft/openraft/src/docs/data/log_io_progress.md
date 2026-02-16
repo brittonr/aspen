@@ -3,6 +3,7 @@
 Openraft tracks the progress of log I/O operations through three distinct stages to maintain consistency and enable proper coordination between the Raft core and the storage layer.
 
 Each I/O operation is uniquely identified by `IOId` or `LogIOId`. See:
+
 - [IOId](crate::docs::data::io_id) - For tracking both vote and log I/O operations
 - [LogIOId](crate::docs::data::log_io_id) - For tracking log I/O operations only
 
@@ -41,6 +42,7 @@ t5   | (L1, 1-3)      | (L1, 1-3)      | (L1, 1-3)
 ```
 
 At each point, the system knows:
+
 - Which entries can be safely replicated (accepted)
 - Which entries are being written to storage (submitted but not flushed)
 - Which entries are durable and can contribute to commit index advancement (flushed)

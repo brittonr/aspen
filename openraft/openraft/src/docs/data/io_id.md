@@ -7,6 +7,7 @@
 In Openraft, `save_vote()` (persisting term) and `append()` (persisting log entries) I/O operations are **tightly coupled** and must not be reordered. This is why `IOId` encompasses both types of operations.
 
 When a follower receives log entries from a leader with a higher term:
+
 1. The follower must first persist the new term (vote)
 2. Then persist the log entries
 
@@ -16,6 +17,7 @@ For a detailed explanation of why vote and log I/O cannot be reordered, see:
 [I/O Ordering](crate::docs::protocol::io_ordering).
 
 Because of this tight coupling, Openraft treats vote and log entries as a **unified whole** when tracking I/O progress. This is why:
+
 - Both operations share the same `IOProgress` tracker
 - Both contribute to the monotonic I/O sequence
 - Both must respect strict ordering guarantees
@@ -46,15 +48,17 @@ Operations like `truncate()` just remove conflicting logs, and `purge()` removes
 ## IOId vs LogIOId: When to Use Each
 
 The key difference between `IOId` and `LogIOId`:
+
 - **IOId** can represent **non-committed vote** I/O (saving term without log entries) OR log I/O
 - **LogIOId** only represents **log I/O** with a committed vote (a leader appending entries)
 
 Both can track vote information, but:
+
 - `IOId::Vote(NonCommittedVote)` - saving term when voting for a candidate (no log entries)
 - `IOId::Log(LogIOId)` - saving log entries, where `LogIOId` contains a `CommittedVote`
 - `LogIOId` always contains a `CommittedVote` (never a non-committed vote)
 
-### Use IOId When:
+### Use IOId When
 
 Need to track **both non-committed vote I/O and log I/O operations**:
 
@@ -64,7 +68,7 @@ Need to track **both non-committed vote I/O and log I/O operations**:
 
 **Example**: `IOState.log_progress` uses `IOProgress<IOId<C>>` to track both vote-only I/O (when voting) and log I/O (when appending entries).
 
-### Use LogIOId When:
+### Use LogIOId When
 
 Need to track **only log I/O** (which always has a committed vote):
 
@@ -73,7 +77,7 @@ Need to track **only log I/O** (which always has a committed vote):
 
 **Example**: In replication tracking, use `LogIOId` directly since you're only tracking log entry replication, not vote persistence.
 
-### Use Plain LogId When:
+### Use Plain LogId When
 
 Don't need to track vote information at all, only which logs:
 
@@ -107,6 +111,7 @@ match io_id {
    - `IOId::Log` has an optional log id
 
 This ensures monotonic ordering across both vote and log I/O operations:
+
 - A vote I/O at term 5 is greater than any log I/O at term 4
 - Among log I/Os at the same term, they're ordered by log id
 
