@@ -164,6 +164,20 @@ pub enum JobError {
         reason: String,
     },
 
+    /// WASM fuel exhausted during execution.
+    #[snafu(display("WASM fuel exhausted after {instructions_executed} instructions"))]
+    WasmFuelExhausted {
+        /// Number of instructions executed before exhaustion.
+        instructions_executed: u64,
+    },
+
+    /// WASM component validation failed.
+    #[snafu(display("WASM component validation failed: {reason}"))]
+    WasmComponentInvalid {
+        /// Reason the component is invalid.
+        reason: String,
+    },
+
     /// Compare-and-swap conflict during workflow state update.
     #[snafu(display("CAS conflict for workflow {workflow_id}: expected version {expected_version}"))]
     CasConflict {
@@ -285,6 +299,8 @@ impl JobError {
             Self::IoError { .. } => JobErrorKind::Temporary,
             Self::DecompressionTooLarge { .. } => JobErrorKind::Permanent,
             Self::VmExecutionFailed { .. } => JobErrorKind::Temporary,
+            Self::WasmFuelExhausted { .. } => JobErrorKind::ResourceExhausted,
+            Self::WasmComponentInvalid { .. } => JobErrorKind::Permanent,
             Self::CasConflict { .. } => JobErrorKind::Temporary,
             Self::CasRetryExhausted { .. } => JobErrorKind::Temporary,
             Self::NotFound { .. } => JobErrorKind::Permanent,

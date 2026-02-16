@@ -424,42 +424,6 @@ impl HyperlightWorker {
 
         Ok(())
     }
-
-    /// Execute a WASM module in a micro-VM.
-    #[allow(dead_code)]
-    async fn execute_wasm(&self, module: Vec<u8>, job_config: &crate::job::JobConfig) -> Result<JobResult> {
-        // Create sandbox configuration
-        let config = SandboxConfiguration::default();
-
-        // Create sandbox with WASM module
-        let mut sandbox = UninitializedSandbox::new(GuestBinary::Buffer(&module), Some(config)).map_err(|e| {
-            JobError::VmExecutionFailed {
-                reason: format!("Failed to create WASM sandbox: {}", e),
-            }
-        })?;
-
-        // Register host functions
-        self.register_host_functions(&mut sandbox)?;
-
-        // Initialize sandbox
-        let mut sandbox: MultiUseSandbox = sandbox.evolve().map_err(|e| JobError::VmExecutionFailed {
-            reason: format!("Failed to initialize WASM sandbox: {}", e),
-        })?;
-
-        // Execute WASM function
-        let input = serde_json::to_vec(&job_config)?;
-        let output: Vec<u8> = sandbox.call("execute", input).map_err(|e| JobError::VmExecutionFailed {
-            reason: format!("WASM execution failed: {}", e),
-        })?;
-
-        let result: serde_json::Value = serde_json::from_slice(&output).unwrap_or_else(|_| {
-            serde_json::json!({
-                "raw_output": String::from_utf8_lossy(&output)
-            })
-        });
-
-        Ok(JobResult::success(result))
-    }
 }
 
 #[async_trait]
@@ -500,6 +464,12 @@ impl Worker for HyperlightWorker {
                     Ok(binary) => self.execute_binary(binary, &job.spec.config, input_data.as_ref()).await,
                     Err(e) => Err(e),
                 }
+            }
+
+            JobPayload::WasmComponent { .. } => {
+                return JobResult::failure(
+                    "HyperlightWorker does not handle WASM components; use WasmComponentWorker instead",
+                );
             }
         };
 

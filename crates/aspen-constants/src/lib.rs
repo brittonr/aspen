@@ -35,6 +35,7 @@ pub mod coordination;
 pub mod directory;
 pub mod network;
 pub mod raft;
+pub mod wasm;
 
 /// Prelude module for commonly used constants.
 pub mod prelude {

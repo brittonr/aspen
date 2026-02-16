@@ -13,6 +13,11 @@ categories = ["asynchronous", "concurrency", "network-programming"]
 default = []
 blob = ["dep:aspen-blob", "dep:iroh-blobs"]
 vm-executor = ["hyperlight-host", "blob"]
+# NOTE: hyperlight-wasm dep is optional and not yet required by the feature.
+# The WasmComponentWorker is fully structured but stubs out sandbox execution
+# until hyperlight-wasm's build toolchain (wasm32 sysroot) is integrated.
+# To wire up: change to wasm-component = ["hyperlight-wasm", "blob"]
+wasm-component = ["blob"]
 
 [dependencies]
 # Core dependencies
@@ -68,6 +73,7 @@ zstd = "0.13"
 
 # VM execution (optional)
 hyperlight-host = { version = "0.12", optional = true }
+hyperlight-wasm = { version = "0.12", optional = true }
 tempfile = "3.4"
 blake3 = "1.5"
 base64 = "0.22"

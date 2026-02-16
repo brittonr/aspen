@@ -164,3 +164,20 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 path = "junit-spec.xml"
 store-success-output = false
 store-failure-output = true
+
+# ============================================================================
+# KVM Profile - For tests requiring KVM (VM executor, WASM components)
+# ============================================================================
+# Usage: cargo nextest run -P kvm --run-ignored all
+# These tests require /dev/kvm access and are ignored by default.
+
+[profile.kvm]
+retries = 1
+fail-fast = false
+test-threads = 1
+slow-timeout = { period = "120s", terminate-after = 1 }
+
+[profile.kvm.junit]
+path = "junit-kvm.xml"
+store-success-output = false
+store-failure-output = true

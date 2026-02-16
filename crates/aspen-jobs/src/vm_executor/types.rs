@@ -31,6 +31,18 @@ pub enum JobPayload {
         /// Nix expression as a string.
         content: String,
     },
+
+    /// WASM Component stored in blob store.
+    WasmComponent {
+        /// BLAKE3 hash of the .wasm component (hex string).
+        hash: String,
+        /// Size of the component in bytes (for validation).
+        size: u64,
+        /// Fuel limit for execution (None = default).
+        fuel_limit: Option<u64>,
+        /// Memory limit in bytes (None = default).
+        memory_limit: Option<u64>,
+    },
 }
 
 /// Output from a Nix build operation.
@@ -64,6 +76,32 @@ impl JobPayload {
     pub fn nix_derivation(content: impl Into<String>) -> Self {
         Self::NixDerivation {
             content: content.into(),
+        }
+    }
+
+    /// Create a WASM component payload.
+    /// The component must already be uploaded to the blob store.
+    pub fn wasm_component(hash: impl Into<String>, size: u64) -> Self {
+        Self::WasmComponent {
+            hash: hash.into(),
+            size,
+            fuel_limit: None,
+            memory_limit: None,
+        }
+    }
+
+    /// Create a WASM component payload with resource limits.
+    pub fn wasm_component_with_limits(
+        hash: impl Into<String>,
+        size: u64,
+        fuel_limit: Option<u64>,
+        memory_limit: Option<u64>,
+    ) -> Self {
+        Self::WasmComponent {
+            hash: hash.into(),
+            size,
+            fuel_limit,
+            memory_limit,
         }
     }
 }

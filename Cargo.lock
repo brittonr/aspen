@@ -1662,6 +1662,7 @@ dependencies = [
  "glob",
  "hex",
  "hyperlight-host",
+ "hyperlight-wasm",
  "iroh",
  "iroh-blobs",
  "proptest",
@@ -3514,6 +3515,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo-hyperlight"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "090c25c7dc78090ca923e0910fc7d2b03926ab4315f31a55b8f5f2c2765f1899"
+dependencies = [
+ "anyhow",
+ "console 0.16.2",
+ "const_format",
+ "glob",
+ "libc",
+ "os_str_bytes",
+ "regex",
+ "semver",
+ "serde",
+ "serde_json",
+ "which",
+]
+
+[[package]]
 name = "cargo-nextest"
 version = "0.9.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4099,6 +4119,26 @@ dependencies = [
  "getrandom 0.2.16",
  "once_cell",
  "tiny-keccak",
+]
+
+[[package]]
+name = "const_format"
+version = "0.2.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7faa7469a93a566e9ccc1c73fe783b4a65c274c5ace346038dca9c39fe0030ad"
+dependencies = [
+ "const_format_proc_macros",
+]
+
+[[package]]
+name = "const_format_proc_macros"
+version = "0.2.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d57c2eccfb16dbac1f4e61e206105db5820c9d26c3c472bc17c774259ef7744"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-xid",
 ]
 
 [[package]]
@@ -7342,6 +7382,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperlight-wasm"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f2e95638da8eeab5f884f61609dfadbc41babd1611c3222ac61c2c8fc3cf911"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "built",
+ "cargo-hyperlight",
+ "cfg-if",
+ "cfg_aliases",
+ "chrono",
+ "env_logger 0.11.8",
+ "goblin",
+ "hyperlight-host",
+ "junction",
+ "libc",
+ "log",
+ "metrics",
+ "once_cell",
+ "page_size",
+ "tar",
+ "tracing",
+ "windows 0.62.2",
+]
+
+[[package]]
 name = "hyperlocal"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8339,6 +8406,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe0a2dc336065c75719cffd3c6c929e0ec4ed85b92b8248a7bbd999acb0e419c"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "junction"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "642883fdc81cf2da15ee8183fa1d2c7da452414dd41541a0f3e1428069345447"
+dependencies = [
+ "scopeguard",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10255,6 +10332,15 @@ checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "os_str_bytes"
+version = "7.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63eceb7b5d757011a87d08eb2123db15d87fb0c281f65d101ce30a1e96c3ad5c"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
@@ -15206,6 +15292,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fabb953106c3c8eea8306e4393700d7657561cb43122571b172bbfb7c7ba1d"
 dependencies = [
  "env_home",
+ "regex",
  "rustix 1.1.3",
  "winsafe",
 ]

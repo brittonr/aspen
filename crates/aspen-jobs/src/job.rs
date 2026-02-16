@@ -325,6 +325,17 @@ impl JobSpec {
             .unwrap_or_else(|_| Self::new("vm_execute"))
             .with_isolation(true)
     }
+
+    /// Helper method to create a job with a WASM component from the blob store.
+    #[cfg(any(feature = "vm-executor", feature = "wasm-component"))]
+    pub fn with_wasm_component(hash: impl Into<String>, size: u64) -> Self {
+        use crate::vm_executor::JobPayload;
+        let payload = JobPayload::wasm_component(hash, size);
+        Self::new("wasm_component")
+            .payload(payload)
+            .unwrap_or_else(|_| Self::new("wasm_component"))
+            .with_isolation(true)
+    }
 }
 
 impl JobSpec {
