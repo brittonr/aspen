@@ -19,7 +19,15 @@ impl LocalExecutorWorker {
         payload: &LocalExecutorPayload,
         job_workspace: &std::path::Path,
     ) -> (ArtifactCollectionResult, Option<ArtifactUploadResult>) {
-        if result.exit_code != 0 || result.error.is_some() || payload.artifacts.is_empty() {
+        // Early return: skip artifact collection on failure
+        if result.exit_code != 0 {
+            return (ArtifactCollectionResult::default(), None);
+        }
+        if result.error.is_some() {
+            return (ArtifactCollectionResult::default(), None);
+        }
+        // Early return: no artifacts requested
+        if payload.artifacts.is_empty() {
             return (ArtifactCollectionResult::default(), None);
         }
 

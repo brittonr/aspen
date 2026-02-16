@@ -404,7 +404,8 @@ impl<'a> JobClient<'a> {
         loop {
             if let Some(job) = self.get(&job_id).await? {
                 let status = job.status.as_str();
-                if status == "completed" || status == "failed" || status == "cancelled" {
+                let is_terminal = matches!(status, "completed" | "failed" | "cancelled");
+                if is_terminal {
                     return Ok(job);
                 }
             }

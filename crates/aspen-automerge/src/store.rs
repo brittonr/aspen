@@ -463,6 +463,8 @@ impl<KV: KeyValueStore + ?Sized + 'static> DocumentStore for AspenAutomergeStore
 fn base64_encode(bytes: &[u8]) -> String {
     use std::io::Write;
     let mut encoder = base64::write::EncoderStringWriter::new(&base64::engine::general_purpose::STANDARD);
+    // SAFETY: Writing to EncoderStringWriter always succeeds. It writes to an
+    // internal String buffer which cannot fail unless OOM (which panics anyway).
     encoder.write_all(bytes).expect("base64 encoding should not fail");
     encoder.into_inner()
 }

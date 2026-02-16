@@ -59,7 +59,7 @@ pub struct SyncResult {
     /// Objects that had conflicts (resolved by LWW).
     pub conflicts_resolved: usize,
     /// Whether the sync completed fully.
-    pub complete: bool,
+    pub is_complete: bool,
     /// Error message if sync failed.
     pub error: Option<String>,
 }
@@ -70,7 +70,7 @@ impl SyncResult {
         Self {
             received,
             conflicts_resolved,
-            complete: true,
+            is_complete: true,
             error: None,
         }
     }
@@ -80,14 +80,14 @@ impl SyncResult {
         Self {
             received: vec![],
             conflicts_resolved: 0,
-            complete: false,
+            is_complete: false,
             error: Some(error.into()),
         }
     }
 
     /// Check if the sync was successful.
     pub fn is_success(&self) -> bool {
-        self.error.is_none() && self.complete
+        self.error.is_none() && self.is_complete
     }
 }
 

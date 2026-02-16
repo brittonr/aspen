@@ -108,8 +108,8 @@ impl CacheEntry {
     pub fn with_references(mut self, references: Vec<String>) -> Result<Self> {
         if references.len() > MAX_REFERENCES {
             return Err(CacheError::TooManyReferences {
-                count: references.len(),
-                max: MAX_REFERENCES,
+                count: references.len() as u32,
+                max: MAX_REFERENCES as u32,
             });
         }
         self.references = references;
@@ -122,8 +122,8 @@ impl CacheEntry {
             && d.len() > MAX_DERIVER_LENGTH
         {
             return Err(CacheError::DeriverTooLong {
-                length: d.len(),
-                max: MAX_DERIVER_LENGTH,
+                length_bytes: d.len() as u64,
+                max_bytes: MAX_DERIVER_LENGTH as u64,
             });
         }
         self.deriver = deriver;

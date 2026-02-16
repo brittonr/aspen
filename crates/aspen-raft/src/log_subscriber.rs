@@ -321,12 +321,19 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
 }
 
 /// Handle a log subscriber connection.
+///
+/// Orchestrates the phases of subscriber connection handling:
+/// 1. Authentication handshake
+/// 2. Subscription request
+/// 3. Acceptance
+/// 4. Historical replay (if requested)
+/// 5. Live streaming
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(connection, auth_context, log_receiver, committed_index, historical_reader, hlc))]
 async fn handle_log_subscriber_connection(
     connection: Connection,
     auth_context: AuthContext,
-    mut log_receiver: broadcast::Receiver<LogEntryPayload>,
+    log_receiver: broadcast::Receiver<LogEntryPayload>,
     node_id: u64,
     subscriber_id: u64,
     committed_index: Arc<AtomicU64>,
@@ -339,6 +346,60 @@ async fn handle_log_subscriber_connection(
 
     // Accept the initial stream for authentication and subscription setup
     let (mut send, mut recv) = connection.accept_bi().await.context("failed to accept subscriber stream")?;
+
+    // Phase 1: Authenticate subscriber
+    handle_log_subscriber_authenticate(&auth_context, subscriber_id, &mut send, &mut recv).await?;
+
+    // Phase 2: Receive and validate subscription request
+    let sub_request = handle_log_subscriber_receive_request(subscriber_id, &mut send, &mut recv).await?;
+
+    debug!(
+        subscriber_id = subscriber_id,
+        start_index = sub_request.start_index,
+        prefix = ?sub_request.key_prefix,
+        "processing subscription request"
+    );
+
+    // Phase 3: Accept subscription
+    let current_committed_index = committed_index.load(Ordering::Acquire);
+    handle_log_subscriber_accept(node_id, subscriber_id, current_committed_index, &mut send).await?;
+
+    info!(
+        subscriber_id = subscriber_id,
+        remote = %remote_node_id,
+        start_index = sub_request.start_index,
+        current_index = current_committed_index,
+        "log subscription active"
+    );
+
+    // Phase 4: Historical replay if requested
+    handle_log_subscriber_replay(subscriber_id, &sub_request, current_committed_index, &historical_reader, &mut send)
+        .await?;
+
+    // Phase 5: Stream live log entries
+    handle_log_subscriber_stream(subscriber_id, sub_request.key_prefix, log_receiver, &committed_index, hlc, &mut send)
+        .await;
+
+    // Best-effort stream finish - log if it fails
+    if let Err(finish_err) = send.finish() {
+        debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish log subscription stream");
+    }
+
+    info!(subscriber_id = subscriber_id, "log subscription ended");
+
+    Ok(())
+}
+
+/// Authenticate a log subscriber connection.
+///
+/// Performs the challenge-response authentication handshake.
+async fn handle_log_subscriber_authenticate(
+    auth_context: &AuthContext,
+    subscriber_id: u64,
+    send: &mut iroh::endpoint::SendStream,
+    recv: &mut iroh::endpoint::RecvStream,
+) -> anyhow::Result<()> {
+    use anyhow::Context;
 
     // Step 1: Send challenge
     let challenge = auth_context.generate_challenge();
@@ -357,26 +418,12 @@ async fn handle_log_subscriber_connection(
         Ok(Ok(response)) => response,
         Ok(Err(err)) => {
             warn!(error = %err, subscriber_id = subscriber_id, "subscriber auth failed");
-            let result_bytes = postcard::to_stdvec(&AuthResult::Failed)?;
-            // Best-effort send of failure response - log if it fails
-            if let Err(write_err) = send.write_all(&result_bytes).await {
-                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send auth failure to subscriber");
-            }
-            if let Err(finish_err) = send.finish() {
-                debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscriber auth failure");
-            }
+            handle_log_subscriber_send_auth_failure(subscriber_id, send).await;
             return Err(err);
         }
         Err(_) => {
             warn!(subscriber_id = subscriber_id, "subscriber auth timed out");
-            let result_bytes = postcard::to_stdvec(&AuthResult::Failed)?;
-            // Best-effort send of failure response - log if it fails
-            if let Err(write_err) = send.write_all(&result_bytes).await {
-                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send auth timeout to subscriber");
-            }
-            if let Err(finish_err) = send.finish() {
-                debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscriber auth timeout");
-            }
+            handle_log_subscriber_send_auth_failure(subscriber_id, send).await;
             return Err(anyhow::anyhow!("authentication timeout"));
         }
     };
@@ -397,8 +444,29 @@ async fn handle_log_subscriber_connection(
     }
 
     debug!(subscriber_id = subscriber_id, "subscriber authenticated");
+    Ok(())
+}
 
-    // Step 5: Receive subscription request
+/// Send auth failure response (best-effort).
+async fn handle_log_subscriber_send_auth_failure(subscriber_id: u64, send: &mut iroh::endpoint::SendStream) {
+    if let Ok(result_bytes) = postcard::to_stdvec(&AuthResult::Failed)
+        && let Err(write_err) = send.write_all(&result_bytes).await
+    {
+        debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send auth failure to subscriber");
+    }
+    if let Err(finish_err) = send.finish() {
+        debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscriber auth failure");
+    }
+}
+
+/// Receive subscription request from authenticated subscriber.
+async fn handle_log_subscriber_receive_request(
+    subscriber_id: u64,
+    send: &mut iroh::endpoint::SendStream,
+    recv: &mut iroh::endpoint::RecvStream,
+) -> anyhow::Result<SubscribeRequest> {
+    use anyhow::Context;
+
     let sub_request_result = tokio::time::timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
         let buffer = recv
             .read_to_end(1024) // Subscription requests are small
@@ -410,47 +478,43 @@ async fn handle_log_subscriber_connection(
     })
     .await;
 
-    let sub_request = match sub_request_result {
-        Ok(Ok(request)) => request,
+    match sub_request_result {
+        Ok(Ok(request)) => Ok(request),
         Ok(Err(err)) => {
-            let response = SubscribeResponse::Rejected {
-                reason: SubscribeRejectReason::InternalError,
-            };
-            let response_bytes = postcard::to_stdvec(&response)?;
-            // Best-effort send of rejection - log if it fails
-            if let Err(write_err) = send.write_all(&response_bytes).await {
-                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send subscribe rejection");
-            }
-            if let Err(finish_err) = send.finish() {
-                debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscribe error");
-            }
-            return Err(err);
+            handle_log_subscriber_send_rejection(subscriber_id, send).await;
+            Err(err)
         }
         Err(_) => {
-            let response = SubscribeResponse::Rejected {
-                reason: SubscribeRejectReason::InternalError,
-            };
-            let response_bytes = postcard::to_stdvec(&response)?;
-            // Best-effort send of rejection - log if it fails
-            if let Err(write_err) = send.write_all(&response_bytes).await {
-                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send subscribe timeout rejection");
-            }
-            if let Err(finish_err) = send.finish() {
-                debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscribe timeout");
-            }
-            return Err(anyhow::anyhow!("subscribe request timeout"));
+            handle_log_subscriber_send_rejection(subscriber_id, send).await;
+            Err(anyhow::anyhow!("subscribe request timeout"))
         }
+    }
+}
+
+/// Send subscription rejection response (best-effort).
+async fn handle_log_subscriber_send_rejection(subscriber_id: u64, send: &mut iroh::endpoint::SendStream) {
+    let response = SubscribeResponse::Rejected {
+        reason: SubscribeRejectReason::InternalError,
     };
+    if let Ok(response_bytes) = postcard::to_stdvec(&response)
+        && let Err(write_err) = send.write_all(&response_bytes).await
+    {
+        debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send subscribe rejection");
+    }
+    if let Err(finish_err) = send.finish() {
+        debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscribe error");
+    }
+}
 
-    debug!(
-        subscriber_id = subscriber_id,
-        start_index = sub_request.start_index,
-        prefix = ?sub_request.key_prefix,
-        "processing subscription request"
-    );
+/// Accept subscription and send acceptance response.
+async fn handle_log_subscriber_accept(
+    node_id: u64,
+    subscriber_id: u64,
+    current_committed_index: u64,
+    send: &mut iroh::endpoint::SendStream,
+) -> anyhow::Result<()> {
+    use anyhow::Context;
 
-    // Step 6: Accept subscription
-    let current_committed_index = committed_index.load(Ordering::Acquire);
     let response = SubscribeResponse::Accepted {
         current_index: current_committed_index,
         node_id,
@@ -458,119 +522,129 @@ async fn handle_log_subscriber_connection(
     let response_bytes = postcard::to_stdvec(&response)?;
     send.write_all(&response_bytes).await.context("failed to send subscribe response")?;
 
-    info!(
-        subscriber_id = subscriber_id,
-        remote = %remote_node_id,
-        start_index = sub_request.start_index,
-        current_index = current_committed_index,
-        "log subscription active"
-    );
+    debug!(subscriber_id = subscriber_id, current_committed_index, "subscription accepted");
+    Ok(())
+}
 
-    // Step 6b: Historical replay if requested and available
-    let replay_end_index = if sub_request.start_index < current_committed_index && sub_request.start_index != u64::MAX {
-        if let Some(ref reader) = historical_reader {
-            debug!(
-                subscriber_id = subscriber_id,
-                start_index = sub_request.start_index,
-                end_index = current_committed_index,
-                "starting historical replay"
-            );
+/// Replay historical log entries if requested and available.
+async fn handle_log_subscriber_replay(
+    subscriber_id: u64,
+    sub_request: &SubscribeRequest,
+    current_committed_index: u64,
+    historical_reader: &Option<Arc<dyn HistoricalLogReader>>,
+    send: &mut iroh::endpoint::SendStream,
+) -> anyhow::Result<()> {
+    // Check if historical replay is needed
+    let needs_replay = sub_request.start_index < current_committed_index;
+    let is_not_latest_only = sub_request.start_index != u64::MAX;
+    if !needs_replay || !is_not_latest_only {
+        return Ok(());
+    }
 
-            // Replay in batches to avoid memory exhaustion
-            let mut current_start = sub_request.start_index;
-            let mut total_replayed = 0u64;
-
-            while current_start <= current_committed_index {
-                let batch_end = std::cmp::min(
-                    current_start.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64 - 1),
-                    current_committed_index,
-                );
-
-                match reader.read_entries(current_start, batch_end).await {
-                    Ok(entries) => {
-                        if entries.is_empty() {
-                            // No more entries available (may have been compacted)
-                            debug!(
-                                subscriber_id = subscriber_id,
-                                start = current_start,
-                                "no historical entries available, may have been compacted"
-                            );
-                            break;
-                        }
-
-                        for entry in entries {
-                            // Apply prefix filter
-                            if !sub_request.key_prefix.is_empty()
-                                && !entry.operation.matches_prefix(&sub_request.key_prefix)
-                            {
-                                continue;
-                            }
-
-                            let message = LogEntryMessage::Entry(entry.clone());
-                            let message_bytes = match postcard::to_stdvec(&message) {
-                                Ok(bytes) => bytes,
-                                Err(err) => {
-                                    error!(error = %err, "failed to serialize historical entry");
-                                    continue;
-                                }
-                            };
-
-                            if let Err(err) = send.write_all(&message_bytes).await {
-                                debug!(
-                                    subscriber_id = subscriber_id,
-                                    error = %err,
-                                    "subscriber disconnected during replay"
-                                );
-                                return Err(anyhow::anyhow!("subscriber disconnected during replay"));
-                            }
-
-                            total_replayed += 1;
-                            current_start = entry.index + 1;
-                        }
-                    }
-                    Err(err) => {
-                        warn!(
-                            subscriber_id = subscriber_id,
-                            error = %err,
-                            "failed to read historical entries, continuing with live stream"
-                        );
-                        break;
-                    }
-                }
-
-                // Check if we've finished
-                if current_start > current_committed_index {
-                    break;
-                }
-            }
-
-            info!(subscriber_id = subscriber_id, total_replayed = total_replayed, "historical replay complete");
-            current_start
-        } else {
+    let reader = match historical_reader {
+        Some(r) => r,
+        None => {
             debug!(subscriber_id = subscriber_id, "historical replay requested but no reader available");
-            current_committed_index
+            return Ok(());
         }
-    } else {
-        current_committed_index
     };
 
-    // Update the log receiver to skip entries we've already sent
-    // (entries between replay_end_index and any new entries that arrived during replay)
-    let _ = replay_end_index; // Used for logging context
+    debug!(
+        subscriber_id = subscriber_id,
+        start_index = sub_request.start_index,
+        end_index = current_committed_index,
+        "starting historical replay"
+    );
 
-    // Step 7: Stream log entries
-    let key_prefix = sub_request.key_prefix;
+    let mut current_start = sub_request.start_index;
+    let mut total_replayed = 0u64;
+
+    while current_start <= current_committed_index {
+        let batch_end =
+            std::cmp::min(current_start.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64 - 1), current_committed_index);
+
+        match reader.read_entries(current_start, batch_end).await {
+            Ok(entries) => {
+                if entries.is_empty() {
+                    debug!(
+                        subscriber_id = subscriber_id,
+                        start = current_start,
+                        "no historical entries available, may have been compacted"
+                    );
+                    break;
+                }
+
+                for entry in entries {
+                    // Apply prefix filter
+                    let has_prefix_filter = !sub_request.key_prefix.is_empty();
+                    let is_not_matching = !entry.operation.matches_prefix(&sub_request.key_prefix);
+                    if has_prefix_filter && is_not_matching {
+                        continue;
+                    }
+
+                    let message = LogEntryMessage::Entry(entry.clone());
+                    let message_bytes = match postcard::to_stdvec(&message) {
+                        Ok(bytes) => bytes,
+                        Err(err) => {
+                            error!(error = %err, "failed to serialize historical entry");
+                            continue;
+                        }
+                    };
+
+                    if let Err(err) = send.write_all(&message_bytes).await {
+                        debug!(
+                            subscriber_id = subscriber_id,
+                            error = %err,
+                            "subscriber disconnected during replay"
+                        );
+                        return Err(anyhow::anyhow!("subscriber disconnected during replay"));
+                    }
+
+                    total_replayed += 1;
+                    current_start = entry.index + 1;
+                }
+            }
+            Err(err) => {
+                warn!(
+                    subscriber_id = subscriber_id,
+                    error = %err,
+                    "failed to read historical entries, continuing with live stream"
+                );
+                break;
+            }
+        }
+
+        if current_start > current_committed_index {
+            break;
+        }
+    }
+
+    info!(subscriber_id = subscriber_id, total_replayed = total_replayed, "historical replay complete");
+    Ok(())
+}
+
+/// Stream live log entries to subscriber.
+async fn handle_log_subscriber_stream(
+    subscriber_id: u64,
+    key_prefix: Vec<u8>,
+    mut log_receiver: broadcast::Receiver<LogEntryPayload>,
+    committed_index: &Arc<AtomicU64>,
+    hlc: &aspen_core::hlc::HLC,
+    send: &mut iroh::endpoint::SendStream,
+) {
     let mut keepalive_interval = tokio::time::interval(SUBSCRIBE_KEEPALIVE_INTERVAL);
     keepalive_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     loop {
         tokio::select! {
-            // Receive log entry from broadcast channel
             entry_result = log_receiver.recv() => {
                 match entry_result {
                     Ok(entry) => {
                         // Apply prefix filter
-                        if !key_prefix.is_empty() && !entry.operation.matches_prefix(&key_prefix) {
+                        // Decomposed: check if filter is active first, then check match
+                        let has_prefix_filter = !key_prefix.is_empty();
+                        let is_not_matching = !entry.operation.matches_prefix(&key_prefix);
+                        if has_prefix_filter && is_not_matching {
                             continue;
                         }
 
@@ -594,34 +668,17 @@ async fn handle_log_subscriber_connection(
                             lagged_count = count,
                             "subscriber lagged, disconnecting"
                         );
-                        let end_message = LogEntryMessage::EndOfStream {
-                            reason: EndOfStreamReason::Lagged,
-                        };
-                        if let Ok(bytes) = postcard::to_stdvec(&end_message) {
-                            // Best-effort send of end-of-stream message
-                            if let Err(write_err) = send.write_all(&bytes).await {
-                                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send lagged end-of-stream");
-                            }
-                        }
+                        handle_log_subscriber_send_end_of_stream(subscriber_id, EndOfStreamReason::Lagged, send).await;
                         break;
                     }
                     Err(broadcast::error::RecvError::Closed) => {
                         info!(subscriber_id = subscriber_id, "log broadcast channel closed");
-                        let end_message = LogEntryMessage::EndOfStream {
-                            reason: EndOfStreamReason::ServerShutdown,
-                        };
-                        if let Ok(bytes) = postcard::to_stdvec(&end_message) {
-                            // Best-effort send of end-of-stream message
-                            if let Err(write_err) = send.write_all(&bytes).await {
-                                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send shutdown end-of-stream");
-                            }
-                        }
+                        handle_log_subscriber_send_end_of_stream(subscriber_id, EndOfStreamReason::ServerShutdown, send).await;
                         break;
                     }
                 }
             }
 
-            // Send keepalive on idle
             _ = keepalive_interval.tick() => {
                 let keepalive = LogEntryMessage::Keepalive {
                     committed_index: committed_index.load(Ordering::Acquire),
@@ -638,15 +695,20 @@ async fn handle_log_subscriber_connection(
             }
         }
     }
+}
 
-    // Best-effort stream finish - log if it fails
-    if let Err(finish_err) = send.finish() {
-        debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish log subscription stream");
+/// Send end-of-stream message (best-effort).
+async fn handle_log_subscriber_send_end_of_stream(
+    subscriber_id: u64,
+    reason: EndOfStreamReason,
+    send: &mut iroh::endpoint::SendStream,
+) {
+    let end_message = LogEntryMessage::EndOfStream { reason };
+    if let Ok(bytes) = postcard::to_stdvec(&end_message)
+        && let Err(write_err) = send.write_all(&bytes).await
+    {
+        debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send end-of-stream");
     }
-
-    info!(subscriber_id = subscriber_id, "log subscription ended");
-
-    Ok(())
 }
 
 // ============================================================================

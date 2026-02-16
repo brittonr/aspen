@@ -205,7 +205,7 @@ pub(crate) async fn handle_git_bridge_fetch(
 
     // Export commits for all wanted refs
     let mut objects = Vec::new();
-    let mut skipped: usize = 0;
+    let mut skipped: u32 = 0;
 
     for want_sha1 in &want_hashes {
         // Get the blake3 hash for this SHA-1 using the mapping
@@ -219,7 +219,7 @@ pub(crate) async fn handle_git_bridge_fetch(
                             data: obj.content,
                         });
                     }
-                    skipped += exported.objects_skipped;
+                    skipped += exported.objects_skipped as u32;
                 }
                 Err(e) => {
                     return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
@@ -303,7 +303,7 @@ pub(crate) async fn handle_git_bridge_push(
 
     // Import objects using batch import which handles topological ordering
     let (objects_imported, objects_skipped) = match importer.import_objects(&repo_id, import_objects).await {
-        Ok(result) => (result.objects_imported, result.objects_skipped),
+        Ok(result) => (result.objects_imported as u32, result.objects_skipped as u32),
         Err(e) => {
             return Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
                 success: false,

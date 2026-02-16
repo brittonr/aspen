@@ -575,7 +575,10 @@ impl NodeConfig {
                 }
 
                 // Warn if path exists but is a directory (should be a file)
-                if path.exists() && path.is_dir() {
+                // Decomposed: check existence first, then check type
+                let does_exist = path.exists();
+                let is_directory = path.is_dir();
+                if does_exist && is_directory {
                     return Err(ConfigError::Validation {
                         message: format!("{} path {} exists but is a directory, expected a file", name, path.display()),
                     });
@@ -656,7 +659,10 @@ impl NodeConfig {
             }
 
             // Warn if auto_trigger is enabled but no watched repos
-            if self.ci.auto_trigger && self.ci.watched_repos.is_empty() {
+            // Decomposed: check if auto_trigger is on, then check if repos are empty
+            let is_auto_trigger_enabled = self.ci.auto_trigger;
+            let has_no_repos = self.ci.watched_repos.is_empty();
+            if is_auto_trigger_enabled && has_no_repos {
                 warnings.push(
                     "CI auto_trigger is enabled but watched_repos is empty - no repositories will be automatically triggered"
                         .to_string(),

@@ -65,7 +65,22 @@ impl HttpRange {
 
         let end = self.end.unwrap_or(content_length - 1);
 
-        if self.start >= content_length || end >= content_length || self.start > end {
+        // Validate range start is within content bounds
+        if self.start >= content_length {
+            return Err(NixCacheError::RangeNotSatisfiable {
+                requested: format!("{}-{}", self.start, end),
+                blob_size: content_length,
+            });
+        }
+        // Validate range end is within content bounds
+        if end >= content_length {
+            return Err(NixCacheError::RangeNotSatisfiable {
+                requested: format!("{}-{}", self.start, end),
+                blob_size: content_length,
+            });
+        }
+        // Validate range is not inverted (start <= end)
+        if self.start > end {
             return Err(NixCacheError::RangeNotSatisfiable {
                 requested: format!("{}-{}", self.start, end),
                 blob_size: content_length,

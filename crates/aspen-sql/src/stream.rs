@@ -566,6 +566,8 @@ impl IndexRecordBatchStream {
             self.load_primary_keys()?;
         }
 
+        // SAFETY: load_primary_keys() sets self.primary_keys to Some on success.
+        // The if condition ensures we call it if None, so it's always Some here.
         let primary_keys = self.primary_keys.as_ref().unwrap();
 
         // Check if we've hit the limit

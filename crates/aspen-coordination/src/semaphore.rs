@@ -513,7 +513,11 @@ mod tests {
         let mut success_count = 0;
         while let Some(result) = tasks.join_next().await {
             let inner = result.unwrap();
-            if inner.is_ok() && inner.unwrap().is_some() {
+            // Decomposed: check Ok first, then check Option
+            let Ok(maybe_permit) = inner else {
+                continue;
+            };
+            if maybe_permit.is_some() {
                 success_count += 1;
             }
         }

@@ -571,7 +571,8 @@ pub struct CacheMigrationCancelResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheMigrationValidateResultResponse {
     /// Whether all entries are migrated.
-    pub complete: bool,
+    #[serde(alias = "complete")]
+    pub is_complete: bool,
     /// Number of entries validated.
     pub validated_count: u64,
     /// Number of entries missing from SNIX storage.

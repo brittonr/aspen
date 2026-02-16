@@ -69,6 +69,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Add a job to the schedule index.
     pub(crate) async fn add_to_schedule_index(&self, job_id: &JobId, scheduled_at: DateTime<Utc>) -> Result<()> {
+        // Tiger Style: job_id must not be empty
+        debug_assert!(!job_id.as_str().is_empty(), "job_id must not be empty");
+
         let key = format!("{}{}:{}", JOB_SCHEDULE_PREFIX, scheduled_at.timestamp(), job_id.as_str());
         let value = job_id.to_string();
 
@@ -84,6 +87,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Remove a job from the schedule index.
     pub(crate) async fn remove_from_schedule_index(&self, job_id: &JobId, scheduled_at: DateTime<Utc>) -> Result<()> {
+        // Tiger Style: job_id must not be empty
+        debug_assert!(!job_id.as_str().is_empty(), "job_id must not be empty");
+
         let key = format!("{}{}:{}", JOB_SCHEDULE_PREFIX, scheduled_at.timestamp(), job_id.as_str());
 
         self.store

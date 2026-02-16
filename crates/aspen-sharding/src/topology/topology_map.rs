@@ -166,7 +166,8 @@ impl ShardTopology {
             return Err(TopologyError::ShardAlreadyExists { shard_id: new_shard_id });
         }
 
-        // Perform the split
+        // SAFETY: We verified self.shards.contains_key(&source_shard_id) at the start
+        // of this function and returned early if false. No mutations remove this key.
         let source = self.shards.get_mut(&source_shard_id).unwrap();
         let (left_range, right_range) =
             source.key_range.split_at(&split_key).ok_or(TopologyError::InvalidSplitKey {
@@ -245,11 +246,13 @@ impl ShardTopology {
             target: target_range.clone(),
         })?;
 
-        // Update target shard with merged range
+        // SAFETY: We verified self.shards.contains_key(&target_shard_id) at the start
+        // and borrowed it immutably above. No mutations remove this key.
         let target = self.shards.get_mut(&target_shard_id).unwrap();
         target.key_range = merged_range.clone();
 
-        // Mark source as tombstone
+        // SAFETY: We verified self.shards.contains_key(&source_shard_id) at the start.
+        // No mutations remove this key between that check and here.
         let source = self.shards.get_mut(&source_shard_id).unwrap();
         source.state = ShardState::Tombstone {
             tombstoned_at: timestamp,

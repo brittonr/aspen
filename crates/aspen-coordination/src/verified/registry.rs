@@ -326,7 +326,14 @@ pub fn normalize_service_weight(weight: u32) -> u32 {
 /// `true` if registration parameters are valid.
 #[inline]
 pub fn is_valid_registration_params(ttl_ms: u64, current_time_ms: u64, max_fencing_token: u64) -> bool {
-    ttl_ms > 0 && ttl_ms <= MAX_REGISTRY_TTL_MS && current_time_ms <= u64::MAX - ttl_ms && max_fencing_token < u64::MAX
+    // TTL must be positive and within bounds
+    let ttl_in_bounds = ttl_ms > 0 && ttl_ms <= MAX_REGISTRY_TTL_MS;
+    // Deadline calculation must not overflow
+    let deadline_safe = current_time_ms <= u64::MAX - ttl_ms;
+    // Must be able to generate next fencing token
+    let can_increment_token = max_fencing_token < u64::MAX;
+
+    ttl_in_bounds && deadline_safe && can_increment_token
 }
 
 /// Check if a heartbeat is valid (fencing token matches).

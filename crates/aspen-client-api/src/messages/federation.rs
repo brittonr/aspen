@@ -177,9 +177,9 @@ pub struct ForgeFetchFederatedResultResponse {
     /// Remote cluster name.
     pub remote_cluster: Option<String>,
     /// Number of objects fetched.
-    pub fetched: usize,
+    pub fetched: u32,
     /// Number of objects already present locally.
-    pub already_present: usize,
+    pub already_present: u32,
     /// Errors encountered during fetch.
     pub errors: Vec<String>,
     /// Error message if operation failed.

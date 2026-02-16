@@ -77,7 +77,9 @@ pub(crate) async fn handle_get_job_logs(
             })
             .await;
 
-        if check_result.is_ok() && check_result.unwrap().entries.is_empty() {
+        if let Ok(scan_response) = check_result
+            && scan_response.entries.is_empty()
+        {
             // No logs exist for this job
             return Ok(ClientRpcResponse::CiGetJobLogsResult(CiGetJobLogsResponse {
                 found: false,

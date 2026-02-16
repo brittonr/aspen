@@ -99,6 +99,8 @@ impl Ticket for AspenClientTicket {
     const KIND: &'static str = CLIENT_TICKET_PREFIX;
 
     fn to_bytes(&self) -> Vec<u8> {
+        // SAFETY: postcard serialization of #[derive(Serialize)] types with only
+        // primitive fields and standard library types is infallible.
         postcard::to_stdvec(self).expect("AspenClientTicket serialization should not fail")
     }
 

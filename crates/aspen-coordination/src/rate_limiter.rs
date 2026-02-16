@@ -35,6 +35,11 @@ pub struct RateLimiterConfig {
 impl RateLimiterConfig {
     /// Create a config with the given rate per second and burst capacity.
     pub fn new(rate_per_second: f64, burst: u64) -> Self {
+        // Tiger Style: rate must be positive
+        debug_assert!(rate_per_second > 0.0, "rate_per_second must be positive, got {}", rate_per_second);
+        // Tiger Style: burst capacity must be positive
+        debug_assert!(burst > 0, "burst capacity must be positive, got {}", burst);
+
         Self {
             capacity: burst,
             refill_rate: rate_per_second,
@@ -44,6 +49,11 @@ impl RateLimiterConfig {
 
     /// Create a config with rate specified per minute.
     pub fn per_minute(rate_per_minute: u32, burst: u64) -> Self {
+        // Tiger Style: rate must be positive
+        debug_assert!(rate_per_minute > 0, "rate_per_minute must be positive, got {}", rate_per_minute);
+        // Tiger Style: burst capacity must be positive
+        debug_assert!(burst > 0, "burst capacity must be positive, got {}", burst);
+
         Self {
             capacity: burst,
             refill_rate: rate_per_minute as f64 / 60.0,
@@ -84,6 +94,11 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
     ///
     /// Returns `Ok(remaining)` if allowed, `Err(RateLimitError)` if rate limited.
     pub async fn try_acquire_n(&self, n: u64) -> Result<u64, RateLimitError> {
+        // Tiger Style: token count must be positive
+        debug_assert!(n > 0, "token count must be positive, got {}", n);
+        // Tiger Style: token count cannot exceed capacity
+        debug_assert!(n <= self.config.capacity, "token count {} cannot exceed capacity {}", n, self.config.capacity);
+
         let mut attempt = 0u32;
         let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
 
@@ -186,6 +201,11 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
 
     /// Block until N tokens are available (with timeout).
     pub async fn acquire_n(&self, n: u64, timeout: Duration) -> Result<u64, RateLimitError> {
+        // Tiger Style: token count must be positive
+        debug_assert!(n > 0, "token count must be positive, got {}", n);
+        // Tiger Style: timeout must not be zero
+        debug_assert!(!timeout.is_zero(), "timeout must not be zero");
+
         let deadline = Instant::now() + timeout;
 
         loop {

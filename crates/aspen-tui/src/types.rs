@@ -79,7 +79,7 @@ pub struct ClusterMetrics {
     /// Current Raft term.
     pub term: u64,
     /// Number of nodes in cluster.
-    pub node_count: usize,
+    pub node_count: u32,
     /// Last log index across cluster.
     pub last_log_index: Option<u64>,
     /// Last applied index across cluster.

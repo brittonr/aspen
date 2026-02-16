@@ -10,7 +10,7 @@ pub struct ClusterTicketResponse {
     pub topic_id: String,
     pub cluster_id: String,
     pub endpoint_id: String,
-    pub bootstrap_peers: Option<usize>,
+    pub bootstrap_peers: Option<u32>,
 }
 
 /// Init cluster result response.

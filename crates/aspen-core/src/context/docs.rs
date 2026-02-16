@@ -52,7 +52,7 @@ pub trait DocsSyncProvider: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct DocsEntry {
     pub key: String,
-    pub size: u64,
+    pub size_bytes: u64,
     pub hash: String,
 }
 
@@ -130,11 +130,11 @@ mod tests {
     fn docs_entry_construction() {
         let entry = DocsEntry {
             key: "users/alice".to_string(),
-            size: 1024,
+            size_bytes: 1024,
             hash: "abc123def456".to_string(),
         };
         assert_eq!(entry.key, "users/alice");
-        assert_eq!(entry.size, 1024);
+        assert_eq!(entry.size_bytes, 1024);
         assert_eq!(entry.hash, "abc123def456");
     }
 
@@ -142,7 +142,7 @@ mod tests {
     fn docs_entry_debug() {
         let entry = DocsEntry {
             key: "test-key".to_string(),
-            size: 500,
+            size_bytes: 500,
             hash: "hash123".to_string(),
         };
         let debug = format!("{:?}", entry);
@@ -156,12 +156,12 @@ mod tests {
     fn docs_entry_clone() {
         let entry = DocsEntry {
             key: "clone-test".to_string(),
-            size: 2048,
+            size_bytes: 2048,
             hash: "original-hash".to_string(),
         };
         let cloned = entry.clone();
         assert_eq!(entry.key, cloned.key);
-        assert_eq!(entry.size, cloned.size);
+        assert_eq!(entry.size_bytes, cloned.size);
         assert_eq!(entry.hash, cloned.hash);
     }
 
@@ -169,20 +169,20 @@ mod tests {
     fn docs_entry_zero_size() {
         let entry = DocsEntry {
             key: "empty".to_string(),
-            size: 0,
+            size_bytes: 0,
             hash: "empty-hash".to_string(),
         };
-        assert_eq!(entry.size, 0);
+        assert_eq!(entry.size_bytes, 0);
     }
 
     #[test]
     fn docs_entry_large_size() {
         let entry = DocsEntry {
             key: "large".to_string(),
-            size: u64::MAX,
+            size_bytes: u64::MAX,
             hash: "large-hash".to_string(),
         };
-        assert_eq!(entry.size, u64::MAX);
+        assert_eq!(entry.size_bytes, u64::MAX);
     }
 
     // ========================================================================

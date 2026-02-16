@@ -272,7 +272,10 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
                 current_compensation, ..
             } => {
                 let step = state.definition.get_step(*current_compensation)?;
-                if step.executed && step.requires_compensation {
+                // Decomposed: check if step was executed, then check if it needs compensation
+                let was_executed = step.executed;
+                let needs_compensation = step.requires_compensation;
+                if was_executed && needs_compensation {
                     Some(SagaAction::Compensate {
                         step_index: *current_compensation,
                     })

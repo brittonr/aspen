@@ -34,7 +34,7 @@ pub struct BlobUploadResult {
     /// BLAKE3 hash of the blob.
     pub hash: String,
     /// Size of the blob in bytes.
-    pub size: u64,
+    pub size_bytes: u64,
     /// Whether this was a new blob (false if already existed).
     pub was_new: bool,
 }
@@ -45,7 +45,7 @@ pub struct BlobDownloadResult {
     /// BLAKE3 hash of the blob.
     pub hash: String,
     /// Size of the blob in bytes.
-    pub size: u64,
+    pub size_bytes: u64,
     /// The blob data.
     pub data: Vec<u8>,
 }
@@ -56,9 +56,9 @@ pub struct BlobStatus {
     /// BLAKE3 hash of the blob.
     pub hash: String,
     /// Size of the blob in bytes.
-    pub size: Option<u64>,
-    /// Whether the blob is complete.
-    pub complete: bool,
+    pub size_bytes: Option<u64>,
+    /// Whether the blob is complete (Tiger Style: boolean prefix `is_`).
+    pub is_complete: bool,
     /// Protection tags applied to the blob.
     pub tags: Vec<String>,
 }
@@ -89,7 +89,7 @@ pub struct BlobEntry {
     /// BLAKE3 hash of the blob.
     pub hash: String,
     /// Size of the blob in bytes.
-    pub size: u64,
+    pub size_bytes: u64,
 }
 
 /// High-level blob storage client.
@@ -132,7 +132,7 @@ impl<'a> BlobClient<'a> {
                 if result.success {
                     Ok(BlobUploadResult {
                         hash: result.hash.context("Blob uploaded but no hash returned")?,
-                        size: result.size.context("Blob uploaded but no size returned")?,
+                        size_bytes: result.size.context("Blob uploaded but no size returned")?,
                         was_new: result.was_new.unwrap_or(true),
                     })
                 } else {
@@ -178,7 +178,7 @@ impl<'a> BlobClient<'a> {
                     let data = result.data.context("Blob found but no data returned")?;
                     Ok(Some(BlobDownloadResult {
                         hash: hash_str,
-                        size: data.len() as u64,
+                        size_bytes: data.len() as u64,
                         data,
                     }))
                 } else if let Some(error) = result.error {
@@ -291,7 +291,7 @@ impl<'a> BlobClient<'a> {
                             .into_iter()
                             .map(|e| BlobEntry {
                                 hash: e.hash,
-                                size: e.size_bytes,
+                                size_bytes: e.size_bytes,
                             })
                             .collect(),
                         has_more: result.has_more,
@@ -314,8 +314,8 @@ impl<'a> BlobClient<'a> {
                 if result.found {
                     Ok(Some(BlobStatus {
                         hash: result.hash.context("Status found but no hash returned")?,
-                        size: result.size,
-                        complete: result.complete.unwrap_or(false),
+                        size_bytes: result.size,
+                        is_complete: result.complete.unwrap_or(false),
                         tags: result.tags.unwrap_or_default(),
                     }))
                 } else if let Some(error) = result.error {

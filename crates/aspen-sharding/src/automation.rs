@@ -253,7 +253,8 @@ impl ShardAutomationManager {
             let common_len = start.chars().zip(end.chars()).take_while(|(a, b)| a == b).count();
 
             if common_len < start.len() && common_len < end.len() {
-                // Find midpoint between differing chars
+                // SAFETY: We verified common_len < start.len() && common_len < end.len()
+                // in the if condition, so chars().nth(common_len) is within bounds.
                 let start_char = start.chars().nth(common_len).unwrap() as u8;
                 let end_char = end.chars().nth(common_len).unwrap() as u8;
                 let mid_char = ((start_char + end_char) / 2) as char;

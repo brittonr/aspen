@@ -106,9 +106,18 @@ pub fn calculate_extended_deadline(current_time_ms: u64, extension_ms: u64) -> u
 }
 
 /// Check if visibility can be extended (production version).
+///
+/// Maximum extension is 1 hour (3,600,000 ms) to prevent indefinite lock-in.
 #[inline]
 pub fn can_extend_visibility(is_inflight: bool, receipt_matches: bool, additional_timeout_ms: u64) -> bool {
-    is_inflight && receipt_matches && additional_timeout_ms > 0 && additional_timeout_ms <= 3_600_000
+    const MAX_EXTENSION_MS: u64 = 3_600_000; // 1 hour
+
+    // Message must be inflight and receipt must match
+    let message_eligible = is_inflight && receipt_matches;
+    // Extension must be positive and bounded
+    let extension_valid = additional_timeout_ms > 0 && additional_timeout_ms <= MAX_EXTENSION_MS;
+
+    message_eligible && extension_valid
 }
 
 /// Check if extend visibility is valid (Verus-aligned version).

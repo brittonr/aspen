@@ -73,18 +73,18 @@ pub enum CacheError {
     #[snafu(display("Too many references: {count} (max: {max})"))]
     TooManyReferences {
         /// Actual count.
-        count: usize,
+        count: u32,
         /// Maximum allowed.
-        max: usize,
+        max: u32,
     },
 
     /// Deriver path too long.
-    #[snafu(display("Deriver path too long: {length} bytes (max: {max})"))]
+    #[snafu(display("Deriver path too long: {length_bytes} bytes (max: {max_bytes})"))]
     DeriverTooLong {
-        /// Actual length.
-        length: usize,
-        /// Maximum allowed.
-        max: usize,
+        /// Actual length in bytes.
+        length_bytes: u64,
+        /// Maximum allowed in bytes.
+        max_bytes: u64,
     },
 }
 

@@ -176,7 +176,10 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     /// Tiger Style: Bounded peer map to prevent Sybil attacks and memory exhaustion.
     pub async fn add_peer(&self, node_id: NodeId, addr: iroh::EndpointAddr) {
         let mut peers = self.peer_addrs.write().await;
-        if peers.len() >= MAX_PEERS as usize && !peers.contains_key(&node_id) {
+        // Decomposed: check capacity first, then check if key is new
+        let is_at_capacity = peers.len() >= MAX_PEERS as usize;
+        let is_new_key = !peers.contains_key(&node_id);
+        if is_at_capacity && is_new_key {
             warn!(
                 current_peers = peers.len(),
                 max_peers = MAX_PEERS,
@@ -195,7 +198,10 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     pub async fn update_peers(&self, new_peers: HashMap<NodeId, iroh::EndpointAddr>) {
         let mut peers = self.peer_addrs.write().await;
         for (node_id, addr) in new_peers {
-            if peers.len() >= MAX_PEERS as usize && !peers.contains_key(&node_id) {
+            // Decomposed: check capacity first, then check if key is new
+            let is_at_capacity = peers.len() >= MAX_PEERS as usize;
+            let is_new_key = !peers.contains_key(&node_id);
+            if is_at_capacity && is_new_key {
                 warn!(
                     current_peers = peers.len(),
                     max_peers = MAX_PEERS,

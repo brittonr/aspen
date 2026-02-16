@@ -468,7 +468,14 @@ pub fn can_acquire_read_lock(
     reader_count: u32,
     max_readers: u32,
 ) -> bool {
-    !matches!(mode, RWLockMode::Write) && !has_writer && pending_writers == 0 && reader_count < max_readers
+    // Cannot acquire read in write mode
+    let mode_allows_read = !matches!(mode, RWLockMode::Write);
+    // Writer starvation prevention: no reads while writers wait
+    let no_writers_waiting = !has_writer && pending_writers == 0;
+    // Bounded reader count for fairness
+    let under_reader_limit = reader_count < max_readers;
+
+    mode_allows_read && no_writers_waiting && under_reader_limit
 }
 
 /// Check if a write lock can be acquired (Verus-aligned).

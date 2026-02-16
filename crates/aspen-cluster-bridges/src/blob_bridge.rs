@@ -157,7 +157,7 @@ fn create_blob_added_event(blob_event: &BlobEvent, node_id: u64) -> HookEvent {
 
     let payload = BlobAddedPayload {
         hash: blob_event.hash.to_hex().to_string(),
-        size: blob_event.size_bytes,
+        size_bytes: blob_event.size_bytes,
         source,
         content_base64,
         blob_ticket,
@@ -178,7 +178,7 @@ fn create_blob_downloaded_event(blob_event: &BlobEvent, node_id: u64) -> HookEve
 
     let payload = BlobDownloadedPayload {
         hash: blob_event.hash.to_hex().to_string(),
-        size: blob_event.size_bytes,
+        size_bytes: blob_event.size_bytes,
         provider_id: blob_event.provider_id.clone().unwrap_or_else(|| "unknown".to_string()),
         duration_ms: blob_event.duration_ms,
         content_base64,

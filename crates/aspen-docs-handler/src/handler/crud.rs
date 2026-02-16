@@ -161,7 +161,7 @@ async fn handle_docs_list(
                 .into_iter()
                 .map(|entry| DocsListEntry {
                     key: entry.key,
-                    size_bytes: entry.size,
+                    size_bytes: entry.size_bytes,
                     hash: entry.hash,
                 })
                 .collect();

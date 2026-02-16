@@ -342,7 +342,12 @@ pub fn is_steal_target(
     active_jobs: u32,
     max_concurrent: u32,
 ) -> bool {
-    is_healthy && is_alive && load < steal_load_threshold && active_jobs < max_concurrent
+    // Worker must be operational
+    let is_operational = is_healthy && is_alive;
+    // Worker must have capacity to receive work
+    let has_capacity = load < steal_load_threshold && active_jobs < max_concurrent;
+
+    is_operational && has_capacity
 }
 
 /// Check if a worker should be considered as a steal source.
@@ -364,7 +369,12 @@ pub fn is_steal_target(
 /// `true` if the worker is a good steal source.
 #[inline]
 pub fn is_steal_source(is_healthy: bool, is_alive: bool, queue_depth: u32, steal_queue_threshold: u32) -> bool {
-    is_healthy && is_alive && queue_depth > steal_queue_threshold
+    // Worker must be operational
+    let is_operational = is_healthy && is_alive;
+    // Worker must have excess work to share
+    let has_excess_work = queue_depth > steal_queue_threshold;
+
+    is_operational && has_excess_work
 }
 
 /// Simple hash function for consistent hashing.

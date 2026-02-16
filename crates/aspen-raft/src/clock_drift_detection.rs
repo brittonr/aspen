@@ -173,7 +173,10 @@ impl ClockDriftDetector {
             calculate_ntp_clock_offset(client_send_ms, server_recv_ms, server_send_ms, client_recv_ms);
 
         // Tiger Style: Bounded storage
-        if self.observations.len() >= MAX_DRIFT_OBSERVATIONS as usize && !self.observations.contains_key(&node_id) {
+        // Decomposed: check capacity first, then check if key is new
+        let is_at_capacity = self.observations.len() >= MAX_DRIFT_OBSERVATIONS as usize;
+        let is_new_key = !self.observations.contains_key(&node_id);
+        if is_at_capacity && is_new_key {
             // Remove oldest observation to make room
             if let Some(oldest_id) = self.find_oldest_observation() {
                 self.observations.remove(&oldest_id);
@@ -197,7 +200,10 @@ impl ClockDriftDetector {
 
         // Only log on severity transitions (to avoid log spam)
         // Also require minimum observations to reduce false positives
-        if obs_count >= MIN_DRIFT_OBSERVATIONS as u64 && prev_severity != Some(new_severity) {
+        // Decomposed: check minimum observations first, then check severity change
+        let has_enough_observations = obs_count >= MIN_DRIFT_OBSERVATIONS as u64;
+        let is_severity_change = prev_severity != Some(new_severity);
+        if has_enough_observations && is_severity_change {
             match new_severity {
                 DriftSeverity::Alert => {
                     error!(

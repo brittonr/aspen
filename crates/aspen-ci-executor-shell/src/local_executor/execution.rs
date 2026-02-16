@@ -147,57 +147,60 @@ impl LocalExecutorWorker {
 
         // Phase 3: Upload nix store paths to SNIX (on successful nix builds)
         #[cfg(feature = "snix")]
-        if result.exit_code == 0 && result.error.is_none() && payload.command == "nix" {
-            info!(
-                job_id = %job_id,
-                command = %payload.command,
-                "checking for SNIX upload - nix build succeeded"
-            );
+        {
+            let is_nix_command = payload.command == "nix";
+            let is_successful = result.exit_code == 0 && result.error.is_none();
 
-            // Parse output paths from nix build output
-            let output_paths = self.parse_nix_output_paths(&result.stdout);
-            if !output_paths.is_empty() {
+            if is_nix_command && is_successful {
                 info!(
                     job_id = %job_id,
-                    output_paths = ?output_paths,
-                    count = output_paths.len(),
-                    "found nix output paths for SNIX upload"
+                    command = %payload.command,
+                    "checking for SNIX upload - nix build succeeded"
                 );
-                let uploaded = self.upload_store_paths_snix(&job_id, &output_paths).await;
-                if !uploaded.is_empty() {
+
+                // Parse output paths from nix build output
+                let output_paths = self.parse_nix_output_paths(&result.stdout);
+                if !output_paths.is_empty() {
                     info!(
                         job_id = %job_id,
-                        count = uploaded.len(),
-                        "Uploaded store paths to SNIX binary cache"
+                        output_paths = ?output_paths,
+                        count = output_paths.len(),
+                        "found nix output paths for SNIX upload"
                     );
+                    let uploaded = self.upload_store_paths_snix(&job_id, &output_paths).await;
+                    if !uploaded.is_empty() {
+                        info!(
+                            job_id = %job_id,
+                            count = uploaded.len(),
+                            "Uploaded store paths to SNIX binary cache"
+                        );
+                    } else {
+                        warn!(
+                            job_id = %job_id,
+                            paths_count = output_paths.len(),
+                            "SNIX upload returned empty - no paths were uploaded"
+                        );
+                    }
                 } else {
                     warn!(
                         job_id = %job_id,
-                        paths_count = output_paths.len(),
-                        "SNIX upload returned empty - no paths were uploaded"
+                        stdout_len = result.stdout.len(),
+                        "no nix output paths found in stdout (expected with --print-out-paths)"
+                    );
+                    debug!(
+                        job_id = %job_id,
+                        stdout = %result.stdout.chars().take(500).collect::<String>(),
+                        "stdout preview for SNIX path parsing"
                     );
                 }
-            } else {
-                warn!(
-                    job_id = %job_id,
-                    stdout_len = result.stdout.len(),
-                    "no nix output paths found in stdout (expected with --print-out-paths)"
-                );
+            } else if is_nix_command {
                 debug!(
                     job_id = %job_id,
-                    stdout = %result.stdout.chars().take(500).collect::<String>(),
-                    "stdout preview for SNIX path parsing"
+                    exit_code = result.exit_code,
+                    has_error = result.error.is_some(),
+                    "skipping SNIX upload - nix build did not succeed"
                 );
             }
-        }
-        #[cfg(feature = "snix")]
-        if (result.exit_code != 0 || result.error.is_some()) && payload.command == "nix" {
-            debug!(
-                job_id = %job_id,
-                exit_code = result.exit_code,
-                has_error = result.error.is_some(),
-                "skipping SNIX upload - nix build did not succeed"
-            );
         }
 
         // Phase 4: Collect artifacts (only on success)

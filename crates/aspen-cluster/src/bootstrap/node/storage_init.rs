@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use anyhow::Context;
 use anyhow::Result;
 use aspen_raft::StateMachineVariant;
 use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
@@ -93,7 +94,8 @@ pub(super) async fn create_raft_instance(
                     log_store.as_ref().clone(),
                     state_machine.clone(),
                 )
-                .await?,
+                .await
+                .context("failed to create in-memory Raft instance")?,
             );
             Ok((raft, StateMachineVariant::InMemory(state_machine), None))
         }
@@ -123,7 +125,8 @@ pub(super) async fn create_raft_instance(
                     shared_storage.as_ref().clone(),
                     shared_storage.as_ref().clone(),
                 )
-                .await?,
+                .await
+                .context("failed to create Redb-backed Raft instance")?,
             );
 
             let ttl_cancel = spawn_redb_ttl_cleanup_task(shared_storage.clone(), TtlCleanupConfig::default());

@@ -32,7 +32,7 @@ async fn main() -> Result<()> {
 
     println!("Upload successful!");
     println!("  Hash: {}", upload_result.hash);
-    println!("  Size: {} bytes", upload_result.size);
+    println!("  Size: {} bytes", upload_result.size_bytes);
     println!("  Was new: {}\n", upload_result.was_new);
 
     // Check if blob exists
@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
     // Download the blob
     println!("Downloading blob...");
     if let Some(download) = client.blobs().download(&upload_result.hash).await? {
-        println!("  Downloaded {} bytes", download.size);
+        println!("  Downloaded {} bytes", download.size_bytes);
         println!("  Content: {:?}\n", std::str::from_utf8(&download.data)?);
         assert_eq!(download.data, test_data);
     } else {
@@ -54,8 +54,8 @@ async fn main() -> Result<()> {
     println!("Getting blob status...");
     if let Some(status) = client.blobs().status(&upload_result.hash).await? {
         println!("  Hash: {}", status.hash);
-        println!("  Size: {:?} bytes", status.size);
-        println!("  Complete: {}", status.complete);
+        println!("  Size: {:?} bytes", status.size_bytes);
+        println!("  Complete: {}", status.is_complete);
         println!("  Tags: {:?}\n", status.tags);
     }
 
@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
     let list_result = client.blobs().list(Default::default()).await?;
     println!("  Found {} blobs", list_result.blobs.len());
     for blob in &list_result.blobs {
-        println!("    - {} ({} bytes)", &blob.hash[..16], blob.size);
+        println!("    - {} ({} bytes)", &blob.hash[..16], blob.size_bytes);
     }
 
     // Test deduplication

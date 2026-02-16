@@ -394,7 +394,7 @@ impl ClusterClient for ClientImpl {
             Self::MultiNode(client) => {
                 let metrics = client.get_raft_metrics().await.map_err(anyhow_to_eyre)?;
                 // Use discover_peers to get actual node count
-                let node_count = client.discover_peers().await.map(|peers| peers.len()).unwrap_or(1);
+                let node_count = client.discover_peers().await.map(|peers| peers.len() as u32).unwrap_or(1);
                 Ok(ClusterMetrics {
                     leader: metrics.current_leader,
                     term: metrics.current_term,

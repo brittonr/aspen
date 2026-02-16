@@ -70,6 +70,8 @@ impl Ticket for AspenClusterTicket {
     const KIND: &'static str = "aspen";
 
     fn to_bytes(&self) -> Vec<u8> {
+        // SAFETY: postcard serialization of #[derive(Serialize)] types with only
+        // primitive fields and standard library types is infallible.
         postcard::to_stdvec(self).expect("AspenClusterTicket postcard serialization failed")
     }
 

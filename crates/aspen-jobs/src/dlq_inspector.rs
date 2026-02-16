@@ -193,7 +193,10 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
         }
 
         // Check for high redrive failures
-        if analysis.redriven_jobs > 0 && analysis.avg_redrive_attempts > 3.0 {
+        // Decomposed: check if redrives exist first, then check average
+        let has_redrives = analysis.redriven_jobs > 0;
+        let has_high_avg_attempts = analysis.avg_redrive_attempts > 3.0;
+        if has_redrives && has_high_avg_attempts {
             recommendations.push(DLQRecommendation {
                 severity: RecommendationSeverity::High,
                 category: "Redrive Failures".to_string(),

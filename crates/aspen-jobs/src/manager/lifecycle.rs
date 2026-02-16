@@ -191,7 +191,10 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                         // Retrieve job from storage
                         if let Some(job) = self.get_job(&job_id).await? {
                             // Check if job type is excluded
-                            if !excluded_types.is_empty() && excluded_types.contains(&job.spec.job_type) {
+                            // Decomposed: check if filter is active, then check if type matches
+                            let has_exclusions = !excluded_types.is_empty();
+                            let is_excluded_type = excluded_types.contains(&job.spec.job_type);
+                            if has_exclusions && is_excluded_type {
                                 // Release the job back to the queue immediately so other workers can claim it.
                                 // Use nack with move_to_dlq=false to return it without marking as failed.
                                 info!(

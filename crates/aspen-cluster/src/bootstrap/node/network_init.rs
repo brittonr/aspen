@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use anyhow::Context;
 use anyhow::Result;
 use anyhow::ensure;
 use aspen_raft::types::NodeId;
@@ -81,9 +82,11 @@ pub(super) fn build_iroh_config_from_node_config(config: &NodeConfig) -> Result<
 
 /// Initialize Iroh endpoint manager.
 pub(super) async fn initialize_iroh_endpoint(config: &NodeConfig) -> Result<Arc<IrohEndpointManager>> {
-    let iroh_config = build_iroh_config_from_node_config(config)?;
+    let iroh_config =
+        build_iroh_config_from_node_config(config).context("failed to build Iroh config from NodeConfig")?;
 
-    let iroh_manager = Arc::new(IrohEndpointManager::new(iroh_config).await?);
+    let iroh_manager =
+        Arc::new(IrohEndpointManager::new(iroh_config).await.context("failed to create Iroh endpoint manager")?);
     info!(
         node_id = config.node_id,
         endpoint_id = %iroh_manager.node_addr().id,

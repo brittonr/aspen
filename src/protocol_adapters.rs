@@ -309,18 +309,18 @@ impl DocsSyncProvider for DocsSyncProviderAdapter {
                 Ok(Some(result)) => match result {
                     Ok(entry) => {
                         let key = String::from_utf8_lossy(entry.key()).to_string();
-                        let size = entry.content_len();
+                        let size_bytes = entry.content_len();
                         let hash = entry.content_hash().to_string();
 
                         // Skip tombstones
-                        if size == 1 {
+                        if size_bytes == 1 {
                             const TOMBSTONE: &[u8] = b"\x00";
                             if entry.content_hash() == iroh_blobs::Hash::new(TOMBSTONE) {
                                 continue;
                             }
                         }
 
-                        entries.push(DocsEntry { key, size, hash });
+                        entries.push(DocsEntry { key, size_bytes, hash });
 
                         if entries.len() >= limit {
                             break;

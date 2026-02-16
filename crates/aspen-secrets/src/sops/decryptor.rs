@@ -60,16 +60,14 @@ pub fn decrypt_secrets_string(contents: &str, path: &Path, identity: &age::x2551
     let sops_metadata = extract_sops_metadata(&raw_value)?;
 
     // If no SOPS metadata, treat as plaintext
-    if sops_metadata.is_none() {
+    let Some(sops) = sops_metadata else {
         debug!("No SOPS metadata found, treating as plaintext");
         let secrets: SecretsFile = toml::from_str(contents).map_err(|e| SecretsError::ParseFile {
             path: path.to_path_buf(),
             reason: e.to_string(),
         })?;
         return Ok(secrets);
-    }
-
-    let sops = sops_metadata.unwrap();
+    };
     debug!(
         version = ?sops.version,
         recipients = sops.age.len(),

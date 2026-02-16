@@ -633,8 +633,22 @@ impl TransitStore for DefaultTransitStore {
 
         Self::validate_key_name(&request.key_name)?;
 
-        // Validate bits (must be multiple of 8, reasonable size)
-        if !request.bits.is_multiple_of(8) || request.bits < 128 || request.bits > 512 {
+        // Validate bits: must be multiple of 8 for byte alignment
+        if !request.bits.is_multiple_of(8) {
+            return Err(SecretsError::PlaintextTooLarge {
+                size: request.bits as usize,
+                max: 512,
+            });
+        }
+        // Validate bits: minimum 128 bits for security
+        if request.bits < 128 {
+            return Err(SecretsError::PlaintextTooLarge {
+                size: request.bits as usize,
+                max: 512,
+            });
+        }
+        // Validate bits: maximum 512 bits for reasonable key size
+        if request.bits > 512 {
             return Err(SecretsError::PlaintextTooLarge {
                 size: request.bits as usize,
                 max: 512,

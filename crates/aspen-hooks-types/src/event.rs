@@ -287,7 +287,8 @@ pub struct BlobAddedPayload {
     /// BLAKE3 hash of the blob (hex-encoded).
     pub hash: String,
     /// Size of the blob in bytes.
-    pub size: u64,
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
     /// Source of the blob (add_bytes, add_path, download).
     pub source: String,
     /// Base64-encoded blob content (for small blobs under threshold).
@@ -315,7 +316,8 @@ pub struct BlobDownloadedPayload {
     /// BLAKE3 hash of the blob (hex-encoded).
     pub hash: String,
     /// Size of the blob in bytes.
-    pub size: u64,
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
     /// Public key of the provider peer (hex-encoded).
     pub provider_id: String,
     /// Download duration in milliseconds.
@@ -504,7 +506,7 @@ mod tests {
         // BlobAdded with inline content
         let blob_added = BlobAddedPayload {
             hash: "abc123".to_string(),
-            size: 1024,
+            size_bytes: 1024,
             source: "add_bytes".to_string(),
             content_base64: Some("SGVsbG8gV29ybGQ=".to_string()),
             blob_ticket: None,
@@ -519,7 +521,7 @@ mod tests {
         // BlobAdded with ticket (large blob)
         let blob_added_large = BlobAddedPayload {
             hash: "def456".to_string(),
-            size: 1_000_000,
+            size_bytes: 1_000_000,
             source: "add_path".to_string(),
             content_base64: None,
             blob_ticket: Some("aspenblob...".to_string()),
@@ -531,7 +533,7 @@ mod tests {
         // BlobDownloaded
         let blob_downloaded = BlobDownloadedPayload {
             hash: "ghi789".to_string(),
-            size: 2048,
+            size_bytes: 2048,
             provider_id: "peer123".to_string(),
             duration_ms: Some(150),
             content_base64: Some("dGVzdA==".to_string()),

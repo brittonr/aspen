@@ -175,7 +175,19 @@ impl ResourceLimiter {
     /// A new `ResourceLimiter` with the cgroup created and limits applied.
     pub fn create(job_id: &str, limits: &ResourceLimits) -> Result<Self> {
         // Validate job ID for safe path construction
-        if job_id.is_empty() || job_id.contains('/') || job_id.contains('\0') {
+        if job_id.is_empty() {
+            return Err(ResourceLimiterError::InvalidJobId {
+                job_id: job_id.to_string(),
+            });
+        }
+        // Reject path separators to prevent directory traversal
+        if job_id.contains('/') {
+            return Err(ResourceLimiterError::InvalidJobId {
+                job_id: job_id.to_string(),
+            });
+        }
+        // Reject null bytes which can truncate C strings
+        if job_id.contains('\0') {
             return Err(ResourceLimiterError::InvalidJobId {
                 job_id: job_id.to_string(),
             });

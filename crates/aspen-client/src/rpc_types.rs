@@ -47,7 +47,7 @@ pub struct ClusterTicketResponse {
     pub topic_id: String,
     pub cluster_id: String,
     pub endpoint_id: String,
-    pub bootstrap_peers: Option<usize>,
+    pub bootstrap_peers: Option<u32>,
 }
 
 /// Init cluster result response.
@@ -277,7 +277,8 @@ pub struct GetBlobTicketResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobListEntry {
     pub hash: String,
-    pub size: u64,
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -351,7 +352,8 @@ pub struct DocsDeleteResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsListEntry {
     pub key: String,
-    pub size: u64,
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
     pub hash: String,
 }
 
@@ -365,11 +367,13 @@ pub struct DocsListResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsStatusResultResponse {
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     pub namespace_id: Option<String>,
     pub author_id: Option<String>,
     pub entry_count: Option<u64>,
-    pub replica_open: Option<bool>,
+    #[serde(rename = "replica_open")]
+    pub is_replica_open: Option<bool>,
     pub error: Option<String>,
 }
 
@@ -402,7 +406,8 @@ pub struct PeerClusterInfo {
     pub name: String,
     pub state: String,
     pub priority: u32,
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     pub sync_count: u64,
     pub failure_count: u64,
 }
@@ -412,7 +417,8 @@ pub struct PeerClusterStatusResponse {
     pub found: bool,
     pub cluster_id: String,
     pub state: String,
-    pub syncing: bool,
+    #[serde(rename = "syncing")]
+    pub is_syncing: bool,
     pub entries_received: u64,
     pub entries_imported: u64,
     pub entries_skipped: u64,
@@ -941,7 +947,8 @@ pub struct DnsDeleteRecordResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsZoneResponse {
     pub name: String,
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     pub default_ttl: u32,
     pub serial: u32,
     pub last_modified_ms: u64,
@@ -1189,11 +1196,14 @@ pub struct ForgeKeyResultResponse {
 // Federation Response Structs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FederationStatusResponse {
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     pub cluster_name: String,
     pub cluster_key: String,
-    pub dht_enabled: bool,
-    pub gossip_enabled: bool,
+    #[serde(rename = "dht_enabled")]
+    pub is_dht_enabled: bool,
+    #[serde(rename = "gossip_enabled")]
+    pub is_gossip_enabled: bool,
     pub discovered_clusters: u32,
     pub federated_repos: u32,
     pub error: Option<String>,
@@ -1263,8 +1273,8 @@ pub struct FederatedRepositoriesResponse {
 pub struct ForgeFetchFederatedResultResponse {
     pub success: bool,
     pub remote_cluster: Option<String>,
-    pub fetched: usize,
-    pub already_present: usize,
+    pub fetched: u32,
+    pub already_present: u32,
     pub errors: Vec<String>,
     pub error: Option<String>,
 }
@@ -1303,15 +1313,15 @@ pub struct GitBridgeListRefsResponse {
 pub struct GitBridgeFetchResponse {
     pub success: bool,
     pub objects: Vec<GitBridgeObject>,
-    pub skipped: usize,
+    pub skipped: u32,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgePushResponse {
     pub success: bool,
-    pub objects_imported: usize,
-    pub objects_skipped: usize,
+    pub objects_imported: u32,
+    pub objects_skipped: u32,
     pub ref_results: Vec<GitBridgeRefResult>,
     pub error: Option<String>,
 }

@@ -64,7 +64,8 @@ pub struct BlobPayload {
     /// Format of the blob data.
     pub format: PayloadFormat,
     /// Size in bytes.
-    pub size: u64,
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
     /// Optional metadata.
     pub metadata: serde_json::Value,
 }
@@ -170,7 +171,7 @@ impl JobBlobStorage {
         Ok(BlobPayload {
             blob_hash: hash,
             format,
-            size: size as u64,
+            size_bytes: size as u64,
             metadata: serde_json::json!({
                 "job_id": job_id,
                 "stored_at": chrono::Utc::now().to_rfc3339(),
@@ -273,7 +274,7 @@ impl JobBlobStorage {
             "__blob": true,
             "hash": blob_payload.blob_hash.to_hex(),
             "format": blob_payload.format,
-            "size": blob_payload.size,
+            "size_bytes": blob_payload.size_bytes,
             "metadata": blob_payload.metadata,
         })
     }
@@ -302,14 +303,14 @@ impl JobBlobStorage {
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .unwrap_or(PayloadFormat::Json);
 
-        let size = value.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
+        let size_bytes = value.get("size_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
 
         let metadata = value.get("metadata").cloned().unwrap_or_else(|| serde_json::json!({}));
 
         Ok(BlobPayload {
             blob_hash: hash,
             format,
-            size,
+            size_bytes,
             metadata,
         })
     }
@@ -478,7 +479,7 @@ mod tests {
         let blob_payload = BlobPayload {
             blob_hash: hash.clone(),
             format: PayloadFormat::Json,
-            size: 1000,
+            size_bytes: 1000,
             metadata: serde_json::json!({}),
         };
 
@@ -487,7 +488,7 @@ mod tests {
 
         let extracted = JobBlobStorage::extract_blob_payload(&reference).unwrap();
         assert_eq!(extracted.blob_hash, hash);
-        assert_eq!(extracted.size, 1000);
+        assert_eq!(extracted.size_bytes, 1000);
     }
 
     #[tokio::test]

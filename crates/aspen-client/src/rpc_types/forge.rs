@@ -239,15 +239,15 @@ pub struct GitBridgeListRefsResponse {
 pub struct GitBridgeFetchResponse {
     pub success: bool,
     pub objects: Vec<GitBridgeObject>,
-    pub skipped: usize,
+    pub skipped: u32,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgePushResponse {
     pub success: bool,
-    pub objects_imported: usize,
-    pub objects_skipped: usize,
+    pub objects_imported: u32,
+    pub objects_skipped: u32,
     pub ref_results: Vec<GitBridgeRefResult>,
     pub error: Option<String>,
 }

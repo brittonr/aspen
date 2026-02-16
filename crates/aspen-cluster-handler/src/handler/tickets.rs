@@ -101,6 +101,6 @@ pub(crate) async fn handle_get_cluster_ticket_combined(
         topic_id: format!("{:?}", topic_id),
         cluster_id: ctx.cluster_cookie.clone(),
         endpoint_id: ctx.endpoint_manager.endpoint().id().to_string(),
-        bootstrap_peers: Some(added_peers as usize),
+        bootstrap_peers: Some(added_peers),
     }))
 }

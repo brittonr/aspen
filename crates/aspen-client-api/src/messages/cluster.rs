@@ -177,7 +177,7 @@ pub struct ClusterTicketResponse {
     /// This node's endpoint ID.
     pub endpoint_id: String,
     /// Number of bootstrap peers in ticket (for combined tickets).
-    pub bootstrap_peers: Option<usize>,
+    pub bootstrap_peers: Option<u32>,
 }
 
 /// Init cluster result response.

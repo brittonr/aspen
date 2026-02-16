@@ -205,12 +205,12 @@ async fn handle_migration_validate(
     // A full validation would scan the legacy cache and check SNIX for each entry.
     match load_progress(&ctx.kv_store).await? {
         Some(progress) => {
-            let complete = progress.is_complete && progress.failed_count == 0;
+            let is_complete = progress.is_complete && progress.failed_count == 0;
             let missing_count = progress.failed_count
                 + (progress.total_entries - progress.migrated_count - progress.skipped_count - progress.failed_count);
 
             Ok(ClientRpcResponse::CacheMigrationValidateResult(CacheMigrationValidateResultResponse {
-                complete,
+                is_complete,
                 validated_count: progress.migrated_count + progress.skipped_count,
                 missing_count,
                 missing_hashes: vec![], // Would need full scan to populate
@@ -218,7 +218,7 @@ async fn handle_migration_validate(
             }))
         }
         None => Ok(ClientRpcResponse::CacheMigrationValidateResult(CacheMigrationValidateResultResponse {
-            complete: false,
+            is_complete: false,
             validated_count: 0,
             missing_count: 0,
             missing_hashes: vec![],

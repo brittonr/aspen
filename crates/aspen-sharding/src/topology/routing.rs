@@ -25,6 +25,8 @@ pub(super) fn generate_hex_boundaries(num_shards: u32) -> Vec<(String, String)> 
                     "".to_string()
                 } else {
                     let idx = (i * step) as usize;
+                    // SAFETY: num_shards <= 16, step = 16/num_shards, i < num_shards,
+                    // so idx < 16 which is within bounds of hex_chars string.
                     hex_chars.chars().nth(idx).unwrap().to_string()
                 }
             })

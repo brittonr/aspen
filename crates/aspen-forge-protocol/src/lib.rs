@@ -399,7 +399,7 @@ pub struct GitBridgeFetchResponse {
     /// Objects in dependency order (dependencies before dependents).
     pub objects: Vec<GitBridgeObject>,
     /// Number of objects skipped (already in have list).
-    pub skipped: usize,
+    pub skipped: u32,
     /// Error message if operation failed.
     pub error: Option<String>,
 }
@@ -425,9 +425,9 @@ pub struct GitBridgePushResponse {
     /// Whether the operation succeeded.
     pub success: bool,
     /// Number of objects imported.
-    pub objects_imported: usize,
+    pub objects_imported: u32,
     /// Number of objects skipped (already existed).
-    pub objects_skipped: usize,
+    pub objects_skipped: u32,
     /// Results for each ref update.
     pub ref_results: Vec<GitBridgeRefResult>,
     /// Error message if operation failed.
@@ -479,9 +479,9 @@ pub struct GitBridgePushCompleteResponse {
     /// Whether the entire operation succeeded.
     pub success: bool,
     /// Number of objects imported.
-    pub objects_imported: usize,
+    pub objects_imported: u32,
     /// Number of objects skipped (already existed).
-    pub objects_skipped: usize,
+    pub objects_skipped: u32,
     /// Results for each ref update.
     pub ref_results: Vec<GitBridgeRefResult>,
     /// Error message if operation failed.

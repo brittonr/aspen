@@ -165,8 +165,8 @@ pub struct FederatedRepositoriesResponse {
 pub struct ForgeFetchFederatedResultResponse {
     pub success: bool,
     pub remote_cluster: Option<String>,
-    pub fetched: usize,
-    pub already_present: usize,
+    pub fetched: u32,
+    pub already_present: u32,
     pub errors: Vec<String>,
     pub error: Option<String>,
 }

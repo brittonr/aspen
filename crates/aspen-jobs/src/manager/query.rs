@@ -17,6 +17,9 @@ use crate::types::QueueStats;
 impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     /// Get a job by ID.
     pub async fn get_job(&self, id: &JobId) -> Result<Option<Job>> {
+        // Tiger Style: job ID must not be empty
+        debug_assert!(!id.as_str().is_empty(), "job ID must not be empty");
+
         let key = format!("{}{}", JOB_PREFIX, id.as_str());
 
         match self.store.read(ReadRequest::new(key)).await {
@@ -45,6 +48,10 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     pub async fn get_queue_stats(&self) -> Result<QueueStats> {
         // Ensure queues are initialized before getting stats
         self.ensure_initialized().await?;
+
+        // Tiger Style: queue_managers must not be empty after initialization
+        debug_assert!(!self.queue_managers.is_empty(), "queue_managers must be populated after initialization");
+
         let mut stats = QueueStats::default();
         let mut dlq_stats = DLQStats::default();
 

@@ -62,7 +62,10 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         // Check pool size limit (Tiger Style: bounded resources)
         {
             let connections = self.connections.read().await;
-            if connections.len() >= MAX_PEERS as usize && !connections.contains_key(&node_id) {
+            // Decomposed: check capacity first, then check if key is new
+            let is_at_capacity = connections.len() >= MAX_PEERS as usize;
+            let is_new_key = !connections.contains_key(&node_id);
+            if is_at_capacity && is_new_key {
                 return Err(anyhow::anyhow!(
                     "connection pool full ({} connections), cannot add node {}",
                     MAX_PEERS,

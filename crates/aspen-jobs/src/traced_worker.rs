@@ -53,6 +53,69 @@ impl<W: Worker> TracedWorker<W> {
             node_id,
         }
     }
+
+    /// Build initial job attributes for tracing.
+    fn execute_build_initial_attributes(
+        &self,
+        job: &Job,
+        job_type: &str,
+    ) -> std::collections::HashMap<String, AttributeValue> {
+        let mut attributes = std::collections::HashMap::new();
+        attributes.insert("job.type".to_string(), AttributeValue::String(job_type.to_string()));
+        attributes
+            .insert("job.priority".to_string(), AttributeValue::String(format!("{:?}", job.spec.config.priority)));
+        attributes.insert("job.retry_count".to_string(), AttributeValue::Int(job.attempts as i64));
+        attributes.insert("worker.id".to_string(), AttributeValue::String(self.worker_id.clone()));
+        attributes.insert("node.id".to_string(), AttributeValue::String(self.node_id.clone()));
+        attributes
+    }
+
+    /// Build metrics attributes after job execution.
+    fn execute_build_metrics_attributes(
+        &self,
+        result: &JobResult,
+        execution_time: std::time::Duration,
+    ) -> std::collections::HashMap<String, AttributeValue> {
+        let mut attributes = std::collections::HashMap::new();
+        attributes.insert("job.execution_time_ms".to_string(), AttributeValue::Int(execution_time.as_millis() as i64));
+        attributes.insert("job.success".to_string(), AttributeValue::Bool(result.is_success()));
+
+        if let JobResult::Failure(failure) = result {
+            attributes.insert("job.error".to_string(), AttributeValue::String(failure.reason.clone()));
+        }
+        attributes
+    }
+
+    /// Build job metrics for monitoring service.
+    fn execute_build_job_metrics(
+        &self,
+        job_id: &crate::job::JobId,
+        job_type: &str,
+        execution_time: std::time::Duration,
+        result: &JobResult,
+    ) -> JobMetrics {
+        JobMetrics {
+            job_id: job_id.clone(),
+            job_type: job_type.to_string(),
+            worker_id: self.worker_id.clone(),
+            node_id: self.node_id.clone(),
+            queue_time_ms: 0, // Would need queue time tracking
+            execution_time_ms: execution_time.as_millis() as u64,
+            total_time_ms: execution_time.as_millis() as u64,
+            cpu_usage: 0.0,  // Would need resource monitoring
+            memory_bytes: 0, // Would need resource monitoring
+            network_sent_bytes: 0,
+            network_recv_bytes: 0,
+            retry_count: 0,
+            success: result.is_success(),
+            error_message: if let JobResult::Failure(f) = result {
+                Some(f.reason.clone())
+            } else {
+                None
+            },
+            custom: std::collections::HashMap::new(),
+        }
+    }
 }
 
 #[async_trait]
@@ -62,29 +125,18 @@ impl<W: Worker> Worker for TracedWorker<W> {
         let job_id = job.id.clone();
         let job_type = job.spec.job_type.clone();
 
-        // Extract parent trace context from job
+        // Extract parent trace context and start execution span
         let parent_context = self.tracing_service.extract_context(&job);
-
-        // Start execution span
         let span_context = self
             .tracing_service
             .start_span(parent_context.as_ref(), &format!("job.execute.{}", job_type), SpanKind::Internal)
             .await;
 
-        // Set job and worker context
+        // Set job context and initial attributes
         self.tracing_service
             .set_job_context(&span_context.span_id, job_id.clone(), self.worker_id.clone())
             .await;
-
-        // Add initial attributes
-        let mut attributes = std::collections::HashMap::new();
-        attributes.insert("job.type".to_string(), AttributeValue::String(job_type.clone()));
-        attributes
-            .insert("job.priority".to_string(), AttributeValue::String(format!("{:?}", job.spec.config.priority)));
-        attributes.insert("job.retry_count".to_string(), AttributeValue::Int(job.attempts as i64));
-        attributes.insert("worker.id".to_string(), AttributeValue::String(self.worker_id.clone()));
-        attributes.insert("node.id".to_string(), AttributeValue::String(self.node_id.clone()));
-
+        let attributes = self.execute_build_initial_attributes(&job, &job_type);
         self.tracing_service.set_attributes(&span_context.span_id, attributes).await;
 
         // Record job start event
@@ -104,35 +156,21 @@ impl<W: Worker> Worker for TracedWorker<W> {
             "starting traced job execution"
         );
 
-        // Start profiling
+        // Execute the actual job with profiling
         let _ = self.monitoring_service.start_profiling(job_id.clone()).await;
-
-        // Execute the actual job
         let result = self.inner.execute(job).await;
-
-        // Calculate execution time
         let execution_time = start_time.elapsed();
 
-        // Determine span status
+        // Record execution results
         let span_status = if result.is_success() {
             SpanStatus::Ok
         } else {
             SpanStatus::Error
         };
-
-        // Add execution metrics
-        let mut metrics_attributes = std::collections::HashMap::new();
-        metrics_attributes
-            .insert("job.execution_time_ms".to_string(), AttributeValue::Int(execution_time.as_millis() as i64));
-        metrics_attributes.insert("job.success".to_string(), AttributeValue::Bool(result.is_success()));
-
-        if let JobResult::Failure(ref failure) = result {
-            metrics_attributes.insert("job.error".to_string(), AttributeValue::String(failure.reason.clone()));
-        }
-
+        let metrics_attributes = self.execute_build_metrics_attributes(&result, execution_time);
         self.tracing_service.set_attributes(&span_context.span_id, metrics_attributes).await;
 
-        // Record job completion event
+        // Record completion event
         let completion_event = SpanEvent {
             name: if result.is_success() {
                 "job.completed"
@@ -145,37 +183,13 @@ impl<W: Worker> Worker for TracedWorker<W> {
         };
         self.tracing_service.add_event(&span_context.span_id, completion_event).await;
 
-        // End the span
+        // End span and record metrics
         self.tracing_service.end_span(&span_context.span_id, span_status).await.unwrap_or_else(|e| {
             error!(error = %e, "failed to end trace span");
         });
 
-        // Record metrics
-        let metrics = JobMetrics {
-            job_id: job_id.clone(),
-            job_type: job_type.clone(),
-            worker_id: self.worker_id.clone(),
-            node_id: self.node_id.clone(),
-            queue_time_ms: 0, // Would need queue time tracking
-            execution_time_ms: execution_time.as_millis() as u64,
-            total_time_ms: execution_time.as_millis() as u64,
-            cpu_usage: 0.0,  // Would need resource monitoring
-            memory_bytes: 0, // Would need resource monitoring
-            network_sent_bytes: 0,
-            network_recv_bytes: 0,
-            retry_count: 0,
-            success: result.is_success(),
-            error_message: if let JobResult::Failure(ref f) = result {
-                Some(f.reason.clone())
-            } else {
-                None
-            },
-            custom: std::collections::HashMap::new(),
-        };
-
+        let metrics = self.execute_build_job_metrics(&job_id, &job_type, execution_time, &result);
         let _ = self.monitoring_service.record_metrics(metrics).await;
-
-        // Finish profiling
         let _ = self.monitoring_service.finish_profiling(&job_id).await;
 
         info!(

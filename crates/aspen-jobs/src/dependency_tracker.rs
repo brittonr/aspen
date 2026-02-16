@@ -306,7 +306,10 @@ impl DependencyGraph {
         let info = nodes.get_mut(job_id).ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
         info.last_check = Some(Utc::now());
 
-        if !failed_deps.is_empty() && matches!(info.failure_policy, DependencyFailurePolicy::FailCascade) {
+        // Decomposed: check if there are failed deps, then check policy
+        let has_failed_deps = !failed_deps.is_empty();
+        let should_cascade = matches!(info.failure_policy, DependencyFailurePolicy::FailCascade);
+        if has_failed_deps && should_cascade {
             info.state = DependencyState::Failed(format!("Dependency failed: {:?}", failed_deps));
             Ok(false)
         } else if all_satisfied {

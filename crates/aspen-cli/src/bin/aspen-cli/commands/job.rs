@@ -732,7 +732,8 @@ async fn job_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resul
 
                             // Check if job is in terminal state
                             let status = job.status.as_str();
-                            if status == "completed" || status == "failed" || status == "cancelled" {
+                            let is_terminal = matches!(status, "completed" | "failed" | "cancelled");
+                            if is_terminal {
                                 if let Some(result) = &job.result {
                                     println!("\nResult: {}", serde_json::to_string_pretty(result)?);
                                 }
@@ -746,7 +747,8 @@ async fn job_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resul
                             println!("{}", serde_json::to_string(&job)?);
 
                             let status = job.status.as_str();
-                            if status == "completed" || status == "failed" || status == "cancelled" {
+                            let is_terminal = matches!(status, "completed" | "failed" | "cancelled");
+                            if is_terminal {
                                 return Ok(());
                             }
                         }
