@@ -199,13 +199,13 @@ pub async fn start_dns_server(_config: &NodeConfig) {
 pub fn print_cluster_ticket(config: &NodeConfig, endpoint_addr: &iroh::EndpointAddr) {
     use std::io::Write;
 
-    use aspen::cluster::ticket::AspenClusterTicketV2;
+    use aspen::cluster::ticket::AspenClusterTicket;
     use iroh_gossip::proto::TopicId;
 
     let hash = blake3::hash(config.cookie.as_bytes());
     let topic_id = TopicId::from_bytes(*hash.as_bytes());
 
-    let cluster_ticket = AspenClusterTicketV2::with_bootstrap_addr(topic_id, config.cookie.clone(), endpoint_addr);
+    let cluster_ticket = AspenClusterTicket::with_bootstrap_addr(topic_id, config.cookie.clone(), endpoint_addr);
 
     let ticket_str = cluster_ticket.serialize();
     let direct_addrs: Vec<_> = endpoint_addr
@@ -220,7 +220,7 @@ pub fn print_cluster_ticket(config: &NodeConfig, endpoint_addr: &iroh::EndpointA
         ticket = %ticket_str,
         endpoint_id = %endpoint_addr.id,
         direct_addrs = ?direct_addrs,
-        "cluster ticket generated (V2 with direct addresses)"
+        "cluster ticket generated with direct addresses"
     );
 
     // Write ticket to a well-known file location for automated scripts

@@ -69,7 +69,7 @@ fn test_ticket_serialization_roundtrip() {
     assert_eq!(deserialized.topic_id, topic_id);
     assert_eq!(deserialized.cluster_id, "test-cluster");
     assert_eq!(deserialized.bootstrap.len(), 1);
-    assert!(deserialized.bootstrap.contains(&endpoint_id));
+    assert!(deserialized.endpoint_ids().contains(&endpoint_id));
 }
 
 #[test]

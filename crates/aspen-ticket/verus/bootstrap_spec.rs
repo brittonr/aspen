@@ -4,8 +4,8 @@
 //!
 //! # Operations
 //!
-//! - `add_bootstrap`: Add peer to V1 ticket
-//! - `add_bootstrap_addr`: Add peer with addresses to V2 ticket
+//! - `add_bootstrap`: Add peer with no addresses
+//! - `add_bootstrap_addr`: Add peer with direct addresses
 //! - `inject_direct_addr`: Inject address into all peers
 //!
 //! # Verify with:
@@ -19,7 +19,7 @@ use super::ticket_state_spec::*;
 
 verus! {
     // ========================================================================
-    // add_bootstrap Operation (V1)
+    // add_bootstrap Operation
     // ========================================================================
 
     /// Precondition for add_bootstrap
@@ -36,6 +36,8 @@ verus! {
         post.bootstrap_count == pre.bootstrap_count + 1 &&
         // Cluster ID unchanged
         post.cluster_id_len == pre.cluster_id_len &&
+        // Max addresses unchanged (add_bootstrap adds peer with no addresses)
+        post.max_addrs_per_peer == pre.max_addrs_per_peer &&
         // Invariant preserved
         ticket_invariant(post)
     }
@@ -56,18 +58,18 @@ verus! {
     }
 
     // ========================================================================
-    // add_bootstrap_addr Operation (V2)
+    // add_bootstrap_addr Operation
     // ========================================================================
 
     /// Precondition for add_bootstrap_addr
-    pub open spec fn add_bootstrap_addr_pre(ticket: TicketV2State) -> bool {
+    pub open spec fn add_bootstrap_addr_pre(ticket: TicketState) -> bool {
         ticket.bootstrap_count < MAX_BOOTSTRAP_PEERS
     }
 
     /// Postcondition for add_bootstrap_addr
     pub open spec fn add_bootstrap_addr_post(
-        pre: TicketV2State,
-        post: TicketV2State,
+        pre: TicketState,
+        post: TicketState,
         incoming_addr_count: u64,
     ) -> bool {
         // Bootstrap count increased by 1
@@ -77,16 +79,16 @@ verus! {
         // Addresses truncated if needed
         post.max_addrs_per_peer <= MAX_DIRECT_ADDRS_PER_PEER &&
         // Invariant preserved
-        ticket_v2_invariant(post)
+        ticket_invariant(post)
     }
 
     /// Proof: add_bootstrap_addr operation is correct
     pub proof fn add_bootstrap_addr_correct(
-        pre: TicketV2State,
+        pre: TicketState,
         incoming_addr_count: u64,
     )
         requires
-            ticket_v2_invariant(pre),
+            ticket_invariant(pre),
             add_bootstrap_addr_pre(pre),
         ensures {
             let post = add_bootstrap_addr_effect(pre, incoming_addr_count).unwrap();
@@ -114,7 +116,7 @@ verus! {
 
     /// Effect of inject_direct_addr
     pub open spec fn inject_addr_effect(
-        ticket: TicketV2State,
+        ticket: TicketState,
         peers_with_addr: u64,  // How many peers already have this address
     ) -> InjectState {
         InjectState {
@@ -131,13 +133,13 @@ verus! {
 
     /// Idempotency: Injecting same address twice has same effect as once
     pub open spec fn inject_addr_idempotent(
-        ticket: TicketV2State,
+        ticket: TicketState,
         peers_with_addr_before: u64,
     ) -> bool {
         let after_first = inject_addr_effect(ticket, peers_with_addr_before);
         // After first injection, all peers have the address
         let after_second = inject_addr_effect(
-            TicketV2State {
+            TicketState {
                 bootstrap_count: ticket.bootstrap_count,
                 max_addrs_per_peer: after_first.max_addrs_after,
                 cluster_id_len: ticket.cluster_id_len,
@@ -150,7 +152,7 @@ verus! {
 
     /// Proof: inject_direct_addr is idempotent
     pub proof fn inject_is_idempotent(
-        ticket: TicketV2State,
+        ticket: TicketState,
         peers_with_addr: u64,
     )
         requires peers_with_addr <= ticket.bootstrap_count
@@ -166,7 +168,7 @@ verus! {
     // ========================================================================
 
     /// inject_direct_addr on empty bootstrap is no-op
-    pub open spec fn inject_empty_is_noop(ticket: TicketV2State) -> bool {
+    pub open spec fn inject_empty_is_noop(ticket: TicketState) -> bool {
         ticket.bootstrap_count == 0 ==> {
             let after = inject_addr_effect(ticket, 0);
             after.max_addrs_after == ticket.max_addrs_per_peer
@@ -174,7 +176,7 @@ verus! {
     }
 
     /// Proof: Injection on empty ticket does nothing
-    pub proof fn inject_empty_ticket(ticket: TicketV2State)
+    pub proof fn inject_empty_ticket(ticket: TicketState)
         requires ticket.bootstrap_count == 0
         ensures inject_empty_is_noop(ticket)
     {
@@ -183,33 +185,16 @@ verus! {
     }
 
     // ========================================================================
-    // Peer Deduplication
+    // Peer Handling
     // ========================================================================
 
-    /// V1 tickets use BTreeSet, so duplicate peers are deduplicated
-    pub open spec fn v1_deduplicates_peers(
+    /// Tickets use Vec, so duplicate peers are NOT deduplicated at add time
+    pub open spec fn allows_duplicate_peers(
         pre: TicketState,
-        peer_already_present: bool,
-    ) -> TicketState {
-        if peer_already_present {
-            // BTreeSet.insert returns false, count unchanged
-            pre
-        } else {
-            // New peer added
-            TicketState {
-                bootstrap_count: pre.bootstrap_count + 1,
-                cluster_id_len: pre.cluster_id_len,
-            }
-        }
-    }
-
-    /// V2 tickets use Vec, so duplicate peers are NOT deduplicated
-    pub open spec fn v2_allows_duplicate_peers(
-        pre: TicketV2State,
         incoming_addr_count: u64,
-    ) -> TicketV2State {
+    ) -> TicketState {
         // Always adds, regardless of whether peer already exists
-        TicketV2State {
+        TicketState {
             bootstrap_count: pre.bootstrap_count + 1,
             max_addrs_per_peer: if incoming_addr_count > pre.max_addrs_per_peer {
                 incoming_addr_count
@@ -220,7 +205,7 @@ verus! {
         }
     }
 
-    /// endpoint_ids() deduplicates V2 peers via BTreeSet
+    /// endpoint_ids() deduplicates peers via BTreeSet
     pub open spec fn endpoint_ids_deduplicates(
         actual_peer_count: u64,
         unique_peer_count: u64,
@@ -232,8 +217,8 @@ verus! {
     // Bootstrap Count Properties
     // ========================================================================
 
-    /// Adding N peers to empty ticket results in N peers (V1)
-    pub proof fn add_n_peers_v1(n: u64)
+    /// Adding N peers to empty ticket results in N peers
+    pub proof fn add_n_peers(n: u64)
         requires n <= MAX_BOOTSTRAP_PEERS
         ensures {
             // Start with empty ticket

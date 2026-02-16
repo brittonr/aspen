@@ -111,6 +111,7 @@ pub use cache::LocalCache;
 pub use client::AspenClient;
 pub use client::AspenClusterTicket;
 pub use client::AuthToken;
+pub use client::BootstrapPeer;
 pub use constants::CLIENT_ALPN;
 pub use constants::MAX_CLIENT_MESSAGE_SIZE;
 pub use coordination::BarrierClient;

@@ -360,17 +360,13 @@ impl RemoteHelper {
             // V2 tickets include direct socket addresses for relay-less connectivity.
             // V1 tickets only have node IDs (requires discovery/relay).
             let bootstrap_addrs: Vec<EndpointAddr> = match &self.url.target {
-                ConnectionTarget::TicketV2(t) => {
-                    // V2 ticket: use full endpoint addresses with direct socket addresses
+                ConnectionTarget::Ticket(t) => {
+                    // Ticket includes direct socket addresses for relay-less connectivity
                     t.endpoint_addrs()
                 }
-                ConnectionTarget::Ticket(t) => {
-                    // V1 ticket: only node IDs available (no direct addresses)
-                    t.bootstrap.iter().map(|id| EndpointAddr::new(*id)).collect()
-                }
                 ConnectionTarget::SignedTicket(s) => {
-                    // Signed ticket: only node IDs available
-                    s.ticket.bootstrap.iter().map(|id| EndpointAddr::new(*id)).collect()
+                    // Signed ticket: use endpoint addresses from inner ticket
+                    s.ticket.endpoint_addrs()
                 }
                 ConnectionTarget::NodeId(_) => {
                     return Err(io::Error::new(

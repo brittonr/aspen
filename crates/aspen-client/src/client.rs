@@ -2,7 +2,6 @@
 //!
 //! Handles Iroh P2P connections and RPC communication with Aspen nodes.
 
-use std::collections::BTreeSet;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -10,12 +9,12 @@ use anyhow::Result;
 use aspen_client_api::AuthenticatedRequest;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+// Re-export ticket types for convenience
+pub use aspen_ticket::AspenClusterTicket;
+pub use aspen_ticket::BootstrapPeer;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
-use iroh::EndpointId;
 use iroh::endpoint::VarInt;
-use iroh_gossip::proto::TopicId;
-use iroh_tickets::Ticket;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::timeout;
@@ -26,60 +25,6 @@ use crate::constants::CLIENT_ALPN;
 use crate::constants::MAX_CLIENT_MESSAGE_SIZE;
 use crate::constants::MAX_RETRIES;
 use crate::constants::RETRY_DELAY_MS;
-
-/// Cluster ticket for gossip-based node discovery.
-///
-/// This is a local copy to keep aspen-client independent of aspen-cluster.
-/// The ticket format uses base32 encoding with prefix "aspen" (no colon),
-/// matching the format used by aspen-cluster for compatibility.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct AspenClusterTicket {
-    pub topic_id: TopicId,
-    pub bootstrap: BTreeSet<EndpointId>,
-    pub cluster_id: String,
-}
-
-impl AspenClusterTicket {
-    /// Create a new ticket with a topic ID and cluster identifier.
-    pub fn new(topic_id: TopicId, cluster_id: String) -> Self {
-        Self {
-            topic_id,
-            bootstrap: BTreeSet::new(),
-            cluster_id,
-        }
-    }
-
-    /// Serialize the ticket to a base32-encoded string.
-    ///
-    /// Format: `aspen{base32-encoded-postcard-payload}` (no colon).
-    /// This matches the format used by aspen-cluster.
-    pub fn serialize(&self) -> String {
-        <Self as Ticket>::serialize(self)
-    }
-
-    /// Deserialize a ticket from a base32-encoded string.
-    ///
-    /// Accepts format: `aspen{base32-encoded-postcard-payload}` (no colon).
-    /// This matches the format used by aspen-cluster.
-    pub fn deserialize(input: &str) -> anyhow::Result<Self> {
-        <Self as Ticket>::deserialize(input).context("Invalid ticket format")
-    }
-}
-
-impl Ticket for AspenClusterTicket {
-    const KIND: &'static str = "aspen";
-
-    fn to_bytes(&self) -> Vec<u8> {
-        // SAFETY: postcard serialization of #[derive(Serialize)] types with only
-        // primitive fields and standard library types is infallible.
-        postcard::to_stdvec(self).expect("AspenClusterTicket postcard serialization failed")
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {
-        let ticket = postcard::from_bytes(bytes)?;
-        Ok(ticket)
-    }
-}
 
 /// Opaque authentication token for client requests.
 ///
@@ -264,11 +209,10 @@ impl AspenClient {
     /// Send a single RPC request without retry.
     async fn send_once(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         // Get a bootstrap peer to connect to
-        let peer_id =
-            *self.ticket.bootstrap.iter().next().ok_or_else(|| anyhow::anyhow!("no bootstrap peers in ticket"))?;
+        let peer = self.ticket.bootstrap.first().ok_or_else(|| anyhow::anyhow!("no bootstrap peers in ticket"))?;
 
-        // Build endpoint address
-        let target_addr = EndpointAddr::new(peer_id);
+        // Build endpoint address with direct socket addresses for connection
+        let target_addr = peer.to_endpoint_addr();
 
         self.send_to_addr(&target_addr, request).await
     }

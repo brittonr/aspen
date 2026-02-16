@@ -16,8 +16,9 @@ pub(crate) async fn handle_get_cluster_ticket(ctx: &ClientProtocolContext) -> an
     let hash = blake3::hash(ctx.cluster_cookie.as_bytes());
     let topic_id = TopicId::from_bytes(*hash.as_bytes());
 
-    let ticket =
-        AspenClusterTicket::with_bootstrap(topic_id, ctx.cluster_cookie.clone(), ctx.endpoint_manager.endpoint().id());
+    // Use full endpoint address with direct socket addresses for better connectivity
+    let endpoint_addr = ctx.endpoint_manager.endpoint().addr();
+    let ticket = AspenClusterTicket::with_bootstrap_addr(topic_id, ctx.cluster_cookie.clone(), &endpoint_addr);
 
     let ticket_str = ticket.serialize();
 
@@ -37,9 +38,9 @@ pub(crate) async fn handle_get_cluster_ticket_combined(
     let hash = blake3::hash(ctx.cluster_cookie.as_bytes());
     let topic_id = TopicId::from_bytes(*hash.as_bytes());
 
-    // Start with this node as the first bootstrap peer
-    let mut ticket =
-        AspenClusterTicket::with_bootstrap(topic_id, ctx.cluster_cookie.clone(), ctx.endpoint_manager.endpoint().id());
+    // Start with this node as the first bootstrap peer (use full address for better connectivity)
+    let endpoint_addr = ctx.endpoint_manager.endpoint().addr();
+    let mut ticket = AspenClusterTicket::with_bootstrap_addr(topic_id, ctx.cluster_cookie.clone(), &endpoint_addr);
 
     // Collect additional peers from:
     // 1. Explicit endpoint_ids parameter (comma-separated EndpointId strings)
@@ -50,7 +51,7 @@ pub(crate) async fn handle_get_cluster_ticket_combined(
     if let Some(ids_str) = &endpoint_ids {
         for id_str in ids_str.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
             // Skip if we've hit the limit (Tiger Style: MAX_BOOTSTRAP_PEERS = 16)
-            if added_peers >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS {
+            if added_peers as usize >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS {
                 debug!(
                     max_peers = AspenClusterTicket::MAX_BOOTSTRAP_PEERS,
                     "GetClusterTicketCombined: reached max bootstrap peers, skipping remaining"
@@ -70,10 +71,10 @@ pub(crate) async fn handle_get_cluster_ticket_combined(
         }
     }
 
-    // Also try to add peers from cluster state
+    // Also try to add peers from cluster state (using full addresses for better connectivity)
     if let Ok(cluster_state) = ctx.controller.current_state().await {
-        for node in cluster_state.nodes.iter().take(AspenClusterTicket::MAX_BOOTSTRAP_PEERS as usize) {
-            if added_peers >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS {
+        for node in cluster_state.nodes.iter().take(AspenClusterTicket::MAX_BOOTSTRAP_PEERS) {
+            if added_peers as usize >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS {
                 break;
             }
 
@@ -82,7 +83,8 @@ pub(crate) async fn handle_get_cluster_ticket_combined(
                 if iroh_addr.id == ctx.endpoint_manager.endpoint().id() {
                     continue;
                 }
-                if ticket.add_bootstrap(iroh_addr.id).is_ok() {
+                // Use full endpoint address with direct socket addresses
+                if ticket.add_bootstrap_addr(iroh_addr).is_ok() {
                     added_peers += 1;
                 }
             }

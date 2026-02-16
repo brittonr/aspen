@@ -4,7 +4,6 @@
 //!
 //! Tiger Style: All operations use proper error handling with context.
 
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
@@ -21,6 +20,7 @@ use aspen::api::WriteRequest;
 use aspen::client_rpc::ClientRpcRequest;
 use aspen::client_rpc::ClientRpcResponse;
 use aspen::cluster::ticket::AspenClusterTicket;
+use aspen::cluster::ticket::BootstrapPeer;
 use iroh_gossip::proto::TopicId;
 
 fn main() -> Result<()> {
@@ -262,11 +262,7 @@ fn generate_ticket_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_cluster_ticket");
     fs::create_dir_all(&dir).context("failed to create fuzz_cluster_ticket directory")?;
 
-    let ticket = AspenClusterTicket {
-        topic_id: TopicId::from_bytes([0u8; 32]),
-        bootstrap: BTreeSet::new(),
-        cluster_id: "test-cluster".to_string(),
-    };
+    let ticket = AspenClusterTicket::new(TopicId::from_bytes([0u8; 32]), "test-cluster".to_string());
 
     if let Ok(bytes) = postcard::to_stdvec(&ticket) {
         fs::write(dir.join("empty_ticket"), &bytes).context("failed to write empty_ticket")?;
@@ -276,12 +272,9 @@ fn generate_ticket_corpus(corpus_dir: &Path) -> Result<()> {
     // Generate a ticket with a bootstrap peer
     let secret_key = iroh::SecretKey::from([42u8; 32]);
     let endpoint_id = secret_key.public();
-    let mut ticket_with_peer = AspenClusterTicket {
-        topic_id: TopicId::from_bytes([1u8; 32]),
-        bootstrap: BTreeSet::new(),
-        cluster_id: "test-cluster-with-peer".to_string(),
-    };
-    ticket_with_peer.bootstrap.insert(endpoint_id);
+    let mut ticket_with_peer =
+        AspenClusterTicket::new(TopicId::from_bytes([1u8; 32]), "test-cluster-with-peer".to_string());
+    ticket_with_peer.bootstrap.push(BootstrapPeer::new(endpoint_id));
 
     if let Ok(bytes) = postcard::to_stdvec(&ticket_with_peer) {
         fs::write(dir.join("ticket_with_peer"), &bytes).context("failed to write ticket_with_peer")?;
@@ -622,11 +615,7 @@ fn generate_roundtrip_corpus(corpus_dir: &Path) -> Result<()> {
     }
 
     // Cluster ticket for roundtrip
-    let ticket = AspenClusterTicket {
-        topic_id: TopicId::from_bytes([0u8; 32]),
-        bootstrap: BTreeSet::new(),
-        cluster_id: "roundtrip-test".to_string(),
-    };
+    let ticket = AspenClusterTicket::new(TopicId::from_bytes([0u8; 32]), "roundtrip-test".to_string());
 
     if let Ok(bytes) = postcard::to_stdvec(&ticket) {
         fs::write(dir.join("cluster_ticket"), &bytes).context("failed to write cluster_ticket")?;

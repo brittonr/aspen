@@ -11,7 +11,6 @@
 //! - Resource cleanup: TempDir and node handles are properly cleaned up
 //! - Explicit error handling: All errors are wrapped with context
 
-use std::collections::BTreeSet;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -196,13 +195,7 @@ impl RealClusterTester {
         // Create cluster ticket for client connections
         let hash = blake3::hash(config.cookie.as_bytes());
         let topic_id = TopicId::from_bytes(*hash.as_bytes());
-        let mut bootstrap = BTreeSet::new();
-        bootstrap.insert(node1.endpoint_addr().id);
-        let ticket = AspenClusterTicket {
-            topic_id,
-            bootstrap,
-            cluster_id: config.cookie.clone(),
-        };
+        let ticket = AspenClusterTicket::with_bootstrap_addr(topic_id, config.cookie.clone(), &node1.endpoint_addr());
 
         // Create client for RPC operations
         let client = AspenClient::connect_with_ticket(ticket.clone(), RPC_TIMEOUT, None)
@@ -270,13 +263,8 @@ impl RealClusterTester {
         // Create a ticket for this specific node
         let hash = blake3::hash(self.config.cookie.as_bytes());
         let topic_id = TopicId::from_bytes(*hash.as_bytes());
-        let mut bootstrap = BTreeSet::new();
-        bootstrap.insert(node.endpoint_addr().id);
-        let node_ticket = AspenClusterTicket {
-            topic_id,
-            bootstrap,
-            cluster_id: self.config.cookie.clone(),
-        };
+        let node_ticket =
+            AspenClusterTicket::with_bootstrap_addr(topic_id, self.config.cookie.clone(), &node.endpoint_addr());
 
         // Connect to the specific node
         let node_client = AspenClient::connect_with_ticket(node_ticket, RPC_TIMEOUT, None)
@@ -310,13 +298,8 @@ impl RealClusterTester {
         // Create a ticket for this specific node
         let hash = blake3::hash(self.config.cookie.as_bytes());
         let topic_id = TopicId::from_bytes(*hash.as_bytes());
-        let mut bootstrap = BTreeSet::new();
-        bootstrap.insert(node.endpoint_addr().id);
-        let node_ticket = AspenClusterTicket {
-            topic_id,
-            bootstrap,
-            cluster_id: self.config.cookie.clone(),
-        };
+        let node_ticket =
+            AspenClusterTicket::with_bootstrap_addr(topic_id, self.config.cookie.clone(), &node.endpoint_addr());
 
         // Connect to the specific node
         let node_client = AspenClient::connect_with_ticket(node_ticket, RPC_TIMEOUT, None)

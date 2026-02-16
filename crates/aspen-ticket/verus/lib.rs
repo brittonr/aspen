@@ -54,15 +54,6 @@
 //!    - version <= SIGNED_TICKET_VERSION accepted
 //!    - Future versions fail verification
 //!
-//! ## V1/V2 Compatibility
-//!
-//! 8. **COMPAT-1: V1 Roundtrip**: V1 -> V2 -> V1 preserves data
-//!    - topic_id, cluster_id, bootstrap IDs preserved
-//!    - Addresses lost (expected for V1)
-//!
-//! 9. **COMPAT-2: V2 Preserves V1 Subset**: V2 contains all V1 data
-//!    - endpoint_ids() returns all V1 bootstrap IDs
-//!
 //! # Trusted Axioms
 //!
 //! The specifications assume:
@@ -76,12 +67,10 @@ use vstd::prelude::*;
 verus! {
     // Re-export ticket state specifications
     pub use ticket_state_spec::TicketState;
-    pub use ticket_state_spec::TicketV2State;
     pub use ticket_state_spec::BootstrapPeerSpec;
     pub use ticket_state_spec::bootstrap_bounds;
     pub use ticket_state_spec::address_bounds;
     pub use ticket_state_spec::ticket_invariant;
-    pub use ticket_state_spec::ticket_v2_invariant;
 
     // Re-export signature specifications
     pub use signature_spec::SignedTicketState;
@@ -99,14 +88,9 @@ verus! {
     pub use bootstrap_spec::add_bootstrap_pre;
     pub use bootstrap_spec::add_bootstrap_post;
     pub use bootstrap_spec::inject_addr_idempotent;
-
-    // Re-export compatibility specifications
-    pub use compat_spec::v1_v2_roundtrip;
-    pub use compat_spec::v2_preserves_v1_ids;
 }
 
 mod bootstrap_spec;
-mod compat_spec;
 mod signature_spec;
 mod ticket_state_spec;
 mod timestamp_spec;

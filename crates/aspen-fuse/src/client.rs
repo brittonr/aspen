@@ -102,13 +102,14 @@ impl FuseSyncClient {
     pub fn from_ticket(ticket: &str) -> Result<Self> {
         let parsed = AspenClusterTicket::deserialize(ticket).context("failed to parse cluster ticket")?;
 
-        if parsed.bootstrap.is_empty() {
+        // Get endpoint addresses with direct socket addresses
+        let addrs = parsed.endpoint_addrs();
+        if addrs.is_empty() {
             anyhow::bail!("no bootstrap peers in ticket");
         }
 
         // Use the first bootstrap peer
-        let first_peer = parsed.bootstrap.iter().next().context("no bootstrap peers in ticket")?;
-        let target_addr = EndpointAddr::new(*first_peer);
+        let target_addr = addrs.into_iter().next().context("no bootstrap peers in ticket")?;
 
         Self::new(target_addr)
     }

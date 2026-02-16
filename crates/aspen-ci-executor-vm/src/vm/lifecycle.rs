@@ -71,8 +71,8 @@ impl ManagedCiVm {
             // If bridge socket address is configured, inject it into the ticket
             // so VMs can reach the host's Iroh endpoint via the bridge IP.
             let final_ticket = if let Some(bridge_addr) = self.config.bridge_socket_addr() {
-                // Parse V2 ticket, inject bridge address, re-serialize
-                match aspen_ticket::AspenClusterTicketV2::deserialize(&ticket_str) {
+                // Parse ticket, inject bridge address, re-serialize
+                match aspen_ticket::AspenClusterTicket::deserialize(&ticket_str) {
                     Ok(mut ticket) => {
                         info!(
                             vm_id = %self.id,
@@ -84,7 +84,6 @@ impl ManagedCiVm {
                     }
                     Err(e) => {
                         // Fall back to original ticket if parsing fails
-                        // (might be V1 ticket or invalid format)
                         warn!(
                             vm_id = %self.id,
                             error = %e,

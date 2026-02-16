@@ -1051,6 +1051,7 @@ dependencies = [
  "aspen-client-api",
  "aspen-core",
  "aspen-raft",
+ "aspen-ticket",
  "aspen-transport",
  "async-trait",
  "base64 0.22.1",

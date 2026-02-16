@@ -1,4 +1,4 @@
-//! V2 Aspen cluster tickets with direct address support.
+//! Aspen cluster tickets with direct address support.
 
 use std::collections::BTreeSet;
 use std::net::SocketAddr;
@@ -13,11 +13,9 @@ use iroh_tickets::Ticket;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::AspenClusterTicket;
-
 /// Bootstrap peer information including direct socket addresses.
 ///
-/// Unlike the V1 ticket which only stores EndpointId (public key), this struct
+/// Unlike legacy tickets which only stored EndpointId (public key), this struct
 /// includes the direct socket addresses needed to establish connections without
 /// relying on discovery mechanisms (mDNS, DNS, DHT, or relay).
 ///
@@ -84,7 +82,12 @@ impl From<EndpointId> for BootstrapPeer {
     }
 }
 
-/// Aspen cluster ticket V2 with direct address support.
+/// Aspen cluster ticket for gossip-based peer discovery.
+///
+/// Contains all information needed to join an Aspen cluster via iroh-gossip:
+/// - `topic_id`: The gossip topic for cluster membership announcements
+/// - `bootstrap`: List of initial peers with direct socket addresses
+/// - `cluster_id`: Human-readable cluster identifier
 ///
 /// This ticket format includes direct socket addresses for bootstrap peers,
 /// enabling connection without discovery mechanisms. Use this for:
@@ -92,12 +95,9 @@ impl From<EndpointId> for BootstrapPeer {
 /// - Relay-disabled environments
 /// - Air-gapped deployments
 ///
-/// The ticket is backward-compatible: clients that only support V1 can fall back
-/// to discovery-based connection using just the endpoint IDs.
-///
 /// Tiger Style: Fixed limits on peers and addresses.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AspenClusterTicketV2 {
+pub struct AspenClusterTicket {
     /// Gossip topic ID for cluster membership.
     pub topic_id: TopicId,
     /// Bootstrap peers with direct addresses (max 16 peers).
@@ -106,14 +106,19 @@ pub struct AspenClusterTicketV2 {
     pub cluster_id: String,
 }
 
-impl AspenClusterTicketV2 {
+impl AspenClusterTicket {
     /// Maximum number of bootstrap peers in a ticket.
+    ///
+    /// Tiger Style: Fixed limit to prevent unbounded ticket size.
     pub const MAX_BOOTSTRAP_PEERS: usize = 16;
 
     /// Maximum direct addresses per peer.
     pub const MAX_DIRECT_ADDRS_PER_PEER: usize = 8;
 
-    /// Create a new V2 ticket with a topic ID and cluster identifier.
+    /// Create a new ticket with a topic ID and cluster identifier.
+    ///
+    /// The bootstrap peer list is initially empty. Use `with_bootstrap_addr()` or
+    /// `add_bootstrap_addr()` to add peers.
     pub fn new(topic_id: TopicId, cluster_id: String) -> Self {
         Self {
             topic_id,
@@ -129,9 +134,18 @@ impl AspenClusterTicketV2 {
         ticket
     }
 
+    /// Create a ticket with a single bootstrap peer from just an EndpointId (no addresses).
+    pub fn with_bootstrap(topic_id: TopicId, cluster_id: String, bootstrap_peer: EndpointId) -> Self {
+        let mut ticket = Self::new(topic_id, cluster_id);
+        ticket.bootstrap.push(BootstrapPeer::new(bootstrap_peer));
+        ticket
+    }
+
     /// Add a bootstrap peer from an EndpointAddr.
     ///
     /// Returns `Err` if the maximum number of bootstrap peers is reached.
+    ///
+    /// Tiger Style: Fail fast on limit violation.
     pub fn add_bootstrap_addr(&mut self, addr: &EndpointAddr) -> Result<()> {
         if self.bootstrap.len() >= Self::MAX_BOOTSTRAP_PEERS {
             anyhow::bail!("cannot add more than {} bootstrap peers to ticket", Self::MAX_BOOTSTRAP_PEERS);
@@ -143,45 +157,69 @@ impl AspenClusterTicketV2 {
         Ok(())
     }
 
+    /// Add a bootstrap peer from just an EndpointId (no direct addresses).
+    ///
+    /// Returns `Err` if the maximum number of bootstrap peers (16) is reached.
+    ///
+    /// Tiger Style: Fail fast on limit violation.
+    pub fn add_bootstrap(&mut self, peer: EndpointId) -> Result<()> {
+        if self.bootstrap.len() >= Self::MAX_BOOTSTRAP_PEERS {
+            anyhow::bail!("cannot add more than {} bootstrap peers to ticket", Self::MAX_BOOTSTRAP_PEERS);
+        }
+        self.bootstrap.push(BootstrapPeer::new(peer));
+        Ok(())
+    }
+
     /// Get all endpoint addresses for direct connection.
     pub fn endpoint_addrs(&self) -> Vec<EndpointAddr> {
         self.bootstrap.iter().map(|p| p.to_endpoint_addr()).collect()
     }
 
-    /// Get just the endpoint IDs (for V1 compatibility).
+    /// Get just the endpoint IDs.
     pub fn endpoint_ids(&self) -> BTreeSet<EndpointId> {
         self.bootstrap.iter().map(|p| p.endpoint_id).collect()
     }
 
-    /// Convert to a V1 ticket (loses direct address information).
-    pub fn to_v1(&self) -> AspenClusterTicket {
-        let mut ticket = AspenClusterTicket::new(self.topic_id, self.cluster_id.clone());
-        for peer in &self.bootstrap {
-            // Ignore errors from max peers limit
-            let _ = ticket.add_bootstrap(peer.endpoint_id);
-        }
-        ticket
-    }
-
-    /// Create from a V1 ticket (no direct addresses).
-    pub fn from_v1(v1: &AspenClusterTicket) -> Self {
-        Self {
-            topic_id: v1.topic_id,
-            bootstrap: v1.bootstrap.iter().map(|id| BootstrapPeer::new(*id)).collect(),
-            cluster_id: v1.cluster_id.clone(),
-        }
-    }
-
     /// Serialize the ticket to a base32-encoded string.
     ///
-    /// The format is: `aspenv2{base32-encoded-postcard-payload}`
+    /// The format is: `aspen{base32-encoded-postcard-payload}`
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use aspen_ticket::AspenClusterTicket;
+    /// # use iroh_gossip::proto::TopicId;
+    /// let ticket = AspenClusterTicket::new(
+    ///     TopicId::from_bytes([1u8; 32]),
+    ///     "test-cluster".into(),
+    /// );
+    /// let serialized = ticket.serialize();
+    /// assert!(serialized.starts_with("aspen"));
+    /// ```
     pub fn serialize(&self) -> String {
         <Self as Ticket>::serialize(self)
     }
 
     /// Deserialize a ticket from a base32-encoded string.
+    ///
+    /// Returns an error if the string is not a valid Aspen ticket.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use aspen_ticket::AspenClusterTicket;
+    /// # use iroh_gossip::proto::TopicId;
+    /// let ticket = AspenClusterTicket::new(
+    ///     TopicId::from_bytes([1u8; 32]),
+    ///     "test-cluster".into(),
+    /// );
+    /// let serialized = ticket.serialize();
+    /// let deserialized = AspenClusterTicket::deserialize(&serialized)?;
+    /// assert_eq!(ticket, deserialized);
+    /// # Ok::<(), anyhow::Error>(())
+    /// ```
     pub fn deserialize(input: &str) -> Result<Self> {
-        <Self as Ticket>::deserialize(input).context("failed to deserialize Aspen V2 ticket")
+        <Self as Ticket>::deserialize(input).context("failed to deserialize Aspen ticket")
     }
 
     /// Inject an additional direct address into all bootstrap peers.
@@ -205,8 +243,8 @@ impl AspenClusterTicketV2 {
     }
 }
 
-impl Ticket for AspenClusterTicketV2 {
-    const KIND: &'static str = "aspenv2";
+impl Ticket for AspenClusterTicket {
+    const KIND: &'static str = "aspen";
 
     fn to_bytes(&self) -> Vec<u8> {
         // Tiger Style: .expect() required by iroh_tickets::Ticket trait - cannot return Result.
@@ -215,7 +253,7 @@ impl Ticket for AspenClusterTicketV2 {
         // WHY safe: All fields are bounded (MAX_BOOTSTRAP_PEERS=16, MAX_DIRECT_ADDRS_PER_PEER=8)
         //   with deterministic serialization of primitive types (TopicId, Vec<BootstrapPeer>, String).
         postcard::to_stdvec(&self).expect(
-            "AspenClusterTicketV2 postcard serialization failed - \
+            "AspenClusterTicket postcard serialization failed - \
              indicates library bug or memory corruption",
         )
     }

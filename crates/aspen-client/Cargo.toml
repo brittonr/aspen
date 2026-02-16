@@ -11,6 +11,7 @@ aspen-auth = { path = "../aspen-auth" }
 aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-raft = { path = "../aspen-raft" }
+aspen-ticket = { path = "../aspen-ticket" }
 aspen-transport = { path = "../aspen-transport" }
 
 # P2P networking for Iroh connections

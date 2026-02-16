@@ -10,8 +10,6 @@
 
 mod support;
 
-use std::collections::BTreeSet;
-
 use aspen::cluster::config::NodeConfig;
 use aspen::cluster::ticket::AspenClusterTicket;
 use bolero::check;
@@ -31,36 +29,32 @@ fn test_cluster_ticket_roundtrip() {
             // Generate topic and bootstrap peers
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async {
-                let mut bootstrap = BTreeSet::new();
+                let topic = TopicId::from_bytes([0u8; 32]);
+                let mut ticket = AspenClusterTicket::new(topic, cluster_id.0.clone());
+
                 for i in 0..num_bootstrap {
                     let bytes: [u8; 32] = std::array::from_fn(|j| (i * 32 + j) as u8);
                     let secret = iroh::SecretKey::from(bytes);
-                    bootstrap.insert(secret.public());
+                    ticket.add_bootstrap(secret.public()).unwrap();
                 }
 
-                let topic = TopicId::from_bytes([0u8; 32]);
-
-                let original = AspenClusterTicket {
-                    topic_id: topic,
-                    bootstrap,
-                    cluster_id: cluster_id.0.clone(),
-                };
-
                 // Serialize with postcard
-                let bytes = postcard::to_stdvec(&original).expect("Failed to serialize ticket");
+                let bytes = postcard::to_stdvec(&ticket).expect("Failed to serialize ticket");
 
                 // Deserialize
                 let roundtripped: AspenClusterTicket =
                     postcard::from_bytes(&bytes).expect("Failed to deserialize ticket");
 
                 // Verify equality
-                assert_eq!(original.topic_id, roundtripped.topic_id);
-                assert_eq!(original.cluster_id, roundtripped.cluster_id);
-                assert_eq!(original.bootstrap.len(), roundtripped.bootstrap.len());
+                assert_eq!(ticket.topic_id, roundtripped.topic_id);
+                assert_eq!(ticket.cluster_id, roundtripped.cluster_id);
+                assert_eq!(ticket.bootstrap.len(), roundtripped.bootstrap.len());
 
                 // Verify bootstrap peers match
-                for peer in &original.bootstrap {
-                    assert!(roundtripped.bootstrap.contains(peer), "Missing bootstrap peer after roundtrip");
+                let original_ids = ticket.endpoint_ids();
+                let roundtripped_ids = roundtripped.endpoint_ids();
+                for peer in &original_ids {
+                    assert!(roundtripped_ids.contains(peer), "Missing bootstrap peer after roundtrip");
                 }
             });
         });
@@ -72,19 +66,15 @@ fn test_cluster_ticket_empty_bootstrap() {
     check!().with_iterations(20).with_type::<ValidClusterId>().for_each(|cluster_id| {
         let topic = TopicId::from_bytes([0u8; 32]);
 
-        let original = AspenClusterTicket {
-            topic_id: topic,
-            bootstrap: BTreeSet::new(),
-            cluster_id: cluster_id.0.clone(),
-        };
+        let ticket = AspenClusterTicket::new(topic, cluster_id.0.clone());
 
-        let bytes = postcard::to_stdvec(&original).expect("Failed to serialize empty ticket");
+        let bytes = postcard::to_stdvec(&ticket).expect("Failed to serialize empty ticket");
 
         let roundtripped: AspenClusterTicket =
             postcard::from_bytes(&bytes).expect("Failed to deserialize empty ticket");
 
         assert!(roundtripped.bootstrap.is_empty());
-        assert_eq!(original.cluster_id, roundtripped.cluster_id);
+        assert_eq!(ticket.cluster_id, roundtripped.cluster_id);
     });
 }
 
@@ -159,28 +149,24 @@ fn test_cluster_id_format() {
 fn test_bootstrap_peer_uniqueness() {
     check!().with_iterations(30).with_type::<u8>().for_each(|num_peers| {
         let num_peers = 1 + (*num_peers % 9) as usize;
-        let mut bootstrap = BTreeSet::new();
+
+        let topic = TopicId::from_bytes([0u8; 32]);
+        let mut ticket = AspenClusterTicket::new(topic, "test".to_string());
 
         // Generate unique peers
         for i in 0..num_peers {
             let bytes: [u8; 32] = std::array::from_fn(|j| (i * 32 + j) as u8);
             let secret = iroh::SecretKey::from(bytes);
-            bootstrap.insert(secret.public());
+            ticket.add_bootstrap(secret.public()).unwrap();
         }
 
-        // BTreeSet guarantees uniqueness - verify we have at least 1 peer
-        // and no more than requested
-        assert!(!bootstrap.is_empty());
-        assert!(bootstrap.len() <= num_peers);
-
-        // Create ticket and verify
-        let ticket = AspenClusterTicket {
-            topic_id: TopicId::from_bytes([0u8; 32]),
-            bootstrap,
-            cluster_id: "test".to_string(),
-        };
-
+        // Verify we have at least 1 peer and no more than requested
         assert!(!ticket.bootstrap.is_empty());
+        assert!(ticket.bootstrap.len() <= num_peers);
+
+        // endpoint_ids() returns unique IDs via BTreeSet
+        let unique_ids = ticket.endpoint_ids();
+        assert!(!unique_ids.is_empty());
     });
 }
 

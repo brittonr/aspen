@@ -470,8 +470,8 @@ async fn hook_create_url(client: &AspenClient, args: CreateUrlArgs, json: bool) 
     let parsed_ticket = aspen_cluster::ticket::AspenClusterTicket::deserialize(&ticket_response.ticket)
         .context("failed to parse cluster ticket")?;
 
-    // Convert EndpointIds to EndpointAddrs
-    let bootstrap_peers: Vec<EndpointAddr> = parsed_ticket.bootstrap.iter().map(|id| EndpointAddr::from(*id)).collect();
+    // Convert BootstrapPeers to EndpointAddrs
+    let bootstrap_peers: Vec<EndpointAddr> = parsed_ticket.bootstrap.iter().map(|p| p.to_endpoint_addr()).collect();
 
     if bootstrap_peers.is_empty() {
         anyhow::bail!("no bootstrap peers available in cluster ticket");

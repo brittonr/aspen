@@ -108,14 +108,12 @@ impl IrohClient {
 /// Parse an Aspen cluster ticket into a list of EndpointAddrs.
 ///
 /// Tickets have the format: "aspen{base32-encoded-data}"
-/// Returns all bootstrap peers in the ticket.
+/// Returns all bootstrap peers in the ticket with their direct socket addresses.
 pub fn parse_cluster_ticket(ticket: &str) -> Result<Vec<EndpointAddr>> {
-    // AspenClusterTicket is imported at the top of the module
-
     let ticket = AspenClusterTicket::deserialize(ticket)?;
 
-    // Extract ALL bootstrap peer endpoint IDs
-    let endpoints: Vec<EndpointAddr> = ticket.bootstrap.iter().map(|peer_id| EndpointAddr::new(*peer_id)).collect();
+    // Extract all bootstrap peer endpoint addresses (includes direct socket addrs)
+    let endpoints = ticket.endpoint_addrs();
 
     if endpoints.is_empty() {
         anyhow::bail!("no bootstrap peers in ticket");

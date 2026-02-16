@@ -30,7 +30,6 @@ use crate::signals::shutdown_signal;
 
 #[cfg(feature = "ci")]
 pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
-    use std::collections::BTreeSet;
     use std::time::Duration;
 
     use aspen::cluster::ticket::parse_ticket_to_addrs;
@@ -38,6 +37,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
     use aspen_ci::LocalExecutorWorkerConfig;
     use aspen_client::AspenClient;
     use aspen_client::AspenClusterTicket;
+    use aspen_client::BootstrapPeer;
     use aspen_client::RpcBlobStore;
     use aspen_client_api::ClientRpcRequest;
     use aspen_client_api::ClientRpcResponse;
@@ -198,14 +198,11 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
     info!(worker_id, "registering ephemeral worker with cluster");
 
     // Create AspenClient using the existing endpoint
-    let mut bootstrap_ids = BTreeSet::new();
-    for addr in &bootstrap_addrs {
-        bootstrap_ids.insert(addr.id);
-    }
+    let bootstrap_peers: Vec<BootstrapPeer> = bootstrap_addrs.iter().map(BootstrapPeer::from_endpoint_addr).collect();
 
     let client_ticket = AspenClusterTicket {
         topic_id,
-        bootstrap: bootstrap_ids.clone(),
+        bootstrap: bootstrap_peers,
         cluster_id: cluster_id.clone(),
     };
 
