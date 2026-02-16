@@ -196,7 +196,7 @@ fn create_entry_imported_event(docs_event: &DocsEvent, node_id: u64) -> HookEven
         key,
         source_cluster: docs_event.cluster_id.clone(),
         priority: docs_event.priority.unwrap_or(0),
-        value_size: docs_event.value_size.unwrap_or(0),
+        value_size_bytes: docs_event.value_size.unwrap_or(0),
         is_update,
     };
 
@@ -206,7 +206,7 @@ fn create_entry_imported_event(docs_event: &DocsEvent, node_id: u64) -> HookEven
 /// Create a DocsEntryExported hook event.
 fn create_entry_exported_event(docs_event: &DocsEvent, node_id: u64) -> HookEvent {
     let payload = DocsEntryExportedPayload {
-        batch_size: docs_event.batch_size.unwrap_or(0),
+        batch_entry_count: docs_event.batch_size.unwrap_or(0),
         total_exported: docs_event.entry_count.unwrap_or(0),
         duration_ms: docs_event.duration_ms.unwrap_or(0),
     };
@@ -261,7 +261,7 @@ mod tests {
         assert_eq!(payload.key, "test/key");
         assert_eq!(payload.source_cluster, "cluster-c");
         assert_eq!(payload.priority, 5);
-        assert_eq!(payload.value_size, 1024);
+        assert_eq!(payload.value_size_bytes, 1024);
         assert!(payload.is_update); // Imported entries are updates
     }
 
@@ -285,7 +285,7 @@ mod tests {
         assert_eq!(hook_event.event_type, HookEventType::DocsEntryExported);
 
         let payload: DocsEntryExportedPayload = serde_json::from_value(hook_event.payload).unwrap();
-        assert_eq!(payload.batch_size, 50);
+        assert_eq!(payload.batch_entry_count, 50);
         assert_eq!(payload.total_exported, 45);
     }
 }

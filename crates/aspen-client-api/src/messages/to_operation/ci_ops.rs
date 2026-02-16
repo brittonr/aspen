@@ -3,8 +3,11 @@ use aspen_auth::Operation;
 use super::super::ClientRpcRequest;
 
 pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operation>> {
+    to_operation_ci_pipeline(request).or_else(|| to_operation_cache_snix(request))
+}
+
+fn to_operation_ci_pipeline(request: &ClientRpcRequest) -> Option<Option<Operation>> {
     match request {
-        // CI/CD operations
         ClientRpcRequest::CiGetStatus { run_id } => Some(Some(Operation::Read {
             key: format!("_ci:runs:{}", run_id),
         })),
@@ -37,7 +40,12 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             key: format!("_ci:runs:{}:{}", run_id, job_id),
         })),
 
-        // Cache operations (read-only, no writes from client)
+        _ => None,
+    }
+}
+
+fn to_operation_cache_snix(request: &ClientRpcRequest) -> Option<Option<Operation>> {
+    match request {
         ClientRpcRequest::CacheQuery { store_hash } | ClientRpcRequest::CacheDownload { store_hash } => {
             Some(Some(Operation::Read {
                 key: format!("_cache:narinfo:{store_hash}"),
@@ -47,7 +55,6 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             key: "_cache:stats".to_string(),
         })),
 
-        // Cache migration operations (admin only)
         #[cfg(feature = "ci")]
         ClientRpcRequest::CacheMigrationStart { .. } | ClientRpcRequest::CacheMigrationCancel => {
             Some(Some(Operation::ClusterAdmin {
@@ -61,7 +68,6 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             }))
         }
 
-        // SNIX operations (for remote workers)
         ClientRpcRequest::SnixDirectoryGet { digest } => Some(Some(Operation::Read {
             key: format!("snix:dir:{digest}"),
         })),

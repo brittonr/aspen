@@ -427,12 +427,12 @@ async fn ci_run(client: &AspenClient, args: RunArgs, json: bool) -> Result<()> {
     match response {
         ClientRpcResponse::CiTriggerPipelineResult(result) => {
             let output = CiTriggerOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 run_id: result.run_id,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -444,119 +444,105 @@ async fn ci_run(client: &AspenClient, args: RunArgs, json: bool) -> Result<()> {
 
 async fn ci_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result<()> {
     if args.follow {
-        // Follow mode: poll every second
-        loop {
-            let response = client
-                .send(ClientRpcRequest::CiGetStatus {
-                    run_id: args.run_id.clone(),
-                })
-                .await?;
-
-            match response {
-                ClientRpcResponse::CiGetStatusResult(result) => {
-                    let stages: Vec<StageInfo> = result
-                        .stages
-                        .iter()
-                        .map(|s| StageInfo {
-                            name: s.name.clone(),
-                            status: s.status.clone(),
-                            jobs: s
-                                .jobs
-                                .iter()
-                                .map(|j| JobInfo {
-                                    id: j.id.clone(),
-                                    name: j.name.clone(),
-                                    status: j.status.clone(),
-                                })
-                                .collect(),
-                        })
-                        .collect();
-
-                    let output = CiStatusOutput {
-                        was_found: result.found,
-                        run_id: result.run_id,
-                        repo_id: result.repo_id,
-                        ref_name: result.ref_name,
-                        status: result.status.clone(),
-                        stages,
-                        created_at_ms: result.created_at_ms,
-                        completed_at_ms: result.completed_at_ms,
-                        error: result.error,
-                    };
-
-                    if !json {
-                        // Clear screen and show status
-                        print!("\x1B[2J\x1B[1;1H");
-                        println!("{}", output.to_human());
-
-                        // Check terminal states
-                        if let Some(status) = &result.status {
-                            let is_terminal = matches!(status.as_str(), "success" | "failed" | "cancelled");
-                            if is_terminal {
-                                return Ok(());
-                            }
-                        }
-                    } else {
-                        println!("{}", serde_json::to_string(&output.to_json())?);
-                        if let Some(status) = &result.status {
-                            let is_terminal = matches!(status.as_str(), "success" | "failed" | "cancelled");
-                            if is_terminal {
-                                return Ok(());
-                            }
-                        }
-                    }
-                }
-                ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-                _ => anyhow::bail!("unexpected response type"),
-            }
-
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        }
+        ci_status_follow(client, &args.run_id, json).await
     } else {
-        // Single status check
-        let response = client.send(ClientRpcRequest::CiGetStatus { run_id: args.run_id }).await?;
+        ci_status_single(client, &args.run_id, json).await
+    }
+}
+
+/// Follow mode: poll status every second until a terminal state is reached.
+async fn ci_status_follow(client: &AspenClient, run_id: &str, json: bool) -> Result<()> {
+    loop {
+        let response = client
+            .send(ClientRpcRequest::CiGetStatus {
+                run_id: run_id.to_string(),
+            })
+            .await?;
 
         match response {
             ClientRpcResponse::CiGetStatusResult(result) => {
-                let stages: Vec<StageInfo> = result
-                    .stages
-                    .iter()
-                    .map(|s| StageInfo {
-                        name: s.name.clone(),
-                        status: s.status.clone(),
-                        jobs: s
-                            .jobs
-                            .iter()
-                            .map(|j| JobInfo {
-                                id: j.id.clone(),
-                                name: j.name.clone(),
-                                status: j.status.clone(),
-                            })
-                            .collect(),
-                    })
-                    .collect();
+                let output = ci_status_build_output(&result);
 
-                let output = CiStatusOutput {
-                    found: result.found,
-                    run_id: result.run_id,
-                    repo_id: result.repo_id,
-                    ref_name: result.ref_name,
-                    status: result.status,
-                    stages,
-                    created_at_ms: result.created_at_ms,
-                    completed_at_ms: result.completed_at_ms,
-                    error: result.error,
-                };
-                print_output(&output, json);
-                if !result.found {
-                    std::process::exit(1);
+                let is_terminal = ci_status_is_terminal(&result.status);
+
+                if !json {
+                    print!("\x1B[2J\x1B[1;1H");
+                    println!("{}", output.to_human());
+                } else {
+                    println!("{}", serde_json::to_string(&output.to_json())?);
                 }
-                Ok(())
+
+                if is_terminal {
+                    return Ok(());
+                }
             }
             ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
             _ => anyhow::bail!("unexpected response type"),
         }
+
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
+}
+
+/// Single status check (non-follow mode).
+async fn ci_status_single(client: &AspenClient, run_id: &str, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::CiGetStatus {
+            run_id: run_id.to_string(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::CiGetStatusResult(result) => {
+            let was_found = result.was_found;
+            let output = ci_status_build_output(&result);
+            print_output(&output, json);
+            if !was_found {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+/// Build a CiStatusOutput from a CiGetStatusResponse.
+fn ci_status_build_output(result: &aspen_client_api::CiGetStatusResponse) -> CiStatusOutput {
+    let stages: Vec<StageInfo> = result
+        .stages
+        .iter()
+        .map(|s| StageInfo {
+            name: s.name.clone(),
+            status: s.status.clone(),
+            jobs: s
+                .jobs
+                .iter()
+                .map(|j| JobInfo {
+                    id: j.id.clone(),
+                    name: j.name.clone(),
+                    status: j.status.clone(),
+                })
+                .collect(),
+        })
+        .collect();
+
+    CiStatusOutput {
+        was_found: result.was_found,
+        run_id: result.run_id.clone(),
+        repo_id: result.repo_id.clone(),
+        ref_name: result.ref_name.clone(),
+        status: result.status.clone(),
+        stages,
+        created_at_ms: result.created_at_ms,
+        completed_at_ms: result.completed_at_ms,
+        error: result.error.clone(),
+    }
+}
+
+/// Check if a pipeline status is terminal (no more polling needed).
+fn ci_status_is_terminal(status: &Option<String>) -> bool {
+    status.as_ref().map(|s| matches!(s.as_str(), "success" | "failed" | "cancelled")).unwrap_or(false)
 }
 
 async fn ci_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()> {
@@ -602,11 +588,11 @@ async fn ci_cancel(client: &AspenClient, args: CancelArgs, json: bool) -> Result
     match response {
         ClientRpcResponse::CiCancelRunResult(result) => {
             let output = CiCancelOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -622,11 +608,11 @@ async fn ci_watch(client: &AspenClient, args: WatchArgs, json: bool) -> Result<(
     match response {
         ClientRpcResponse::CiWatchRepoResult(result) => {
             let output = CiWatchOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -642,11 +628,11 @@ async fn ci_unwatch(client: &AspenClient, args: UnwatchArgs, json: bool) -> Resu
     match response {
         ClientRpcResponse::CiUnwatchRepoResult(result) => {
             let output = CiWatchOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -676,7 +662,7 @@ async fn ci_output(client: &AspenClient, args: OutputArgs, json: bool) -> Result
             };
 
             let output = CiOutputOutput {
-                was_found: result.found,
+                was_found: result.was_found,
                 stdout,
                 stderr,
                 stdout_was_blob: result.stdout_was_blob,
@@ -686,7 +672,7 @@ async fn ci_output(client: &AspenClient, args: OutputArgs, json: bool) -> Result
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.found {
+            if !result.was_found {
                 std::process::exit(1);
             }
             Ok(())

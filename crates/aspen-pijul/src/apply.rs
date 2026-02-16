@@ -28,13 +28,17 @@ use libpijul::change::Change;
 use libpijul::changestore::filesystem::FileSystem as LibpijulFileSystem;
 use libpijul::pristine::Hash;
 use libpijul::pristine::Merkle;
+use snafu::ResultExt;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
 
 use super::change_store::AspenChangeStore;
+use super::error::CreateDirSnafu;
 use super::error::PijulError;
 use super::error::PijulResult;
+use super::error::ReadFileSnafu;
+use super::error::WriteFileSnafu;
 use super::pristine::PristineHandle;
 use super::types::ChangeHash;
 
@@ -97,8 +101,8 @@ impl<B: BlobStore> ChangeDirectory<B> {
 
     /// Ensure the changes directory exists.
     pub fn ensure_dir(&self) -> PijulResult<()> {
-        std::fs::create_dir_all(&self.base_dir).map_err(|e| PijulError::Io {
-            message: format!("failed to create changes directory: {}", e),
+        std::fs::create_dir_all(&self.base_dir).context(CreateDirSnafu {
+            path: self.base_dir.clone(),
         })
     }
 
@@ -137,15 +141,13 @@ impl<B: BlobStore> ChangeDirectory<B> {
 
         // Ensure parent directory exists
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| PijulError::Io {
-                message: format!("failed to create change directory: {}", e),
+            std::fs::create_dir_all(parent).context(CreateDirSnafu {
+                path: parent.to_path_buf(),
             })?;
         }
 
         // Write to disk
-        std::fs::write(&path, &bytes).map_err(|e| PijulError::Io {
-            message: format!("failed to write change file: {}", e),
-        })?;
+        std::fs::write(&path, &bytes).context(WriteFileSnafu { path: path.clone() })?;
 
         info!(hash = %hash, path = %path.display(), size = bytes.len(), "cached change from blobs");
         Ok(path)
@@ -163,14 +165,12 @@ impl<B: BlobStore> ChangeDirectory<B> {
         // Cache locally using our path format
         let path = self.change_path(&hash);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| PijulError::Io {
-                message: format!("failed to create change directory: {}", e),
+            std::fs::create_dir_all(parent).context(CreateDirSnafu {
+                path: parent.to_path_buf(),
             })?;
         }
 
-        std::fs::write(&path, bytes).map_err(|e| PijulError::Io {
-            message: format!("failed to write change file: {}", e),
-        })?;
+        std::fs::write(&path, bytes).context(WriteFileSnafu { path: path.clone() })?;
 
         // Also save using libpijul's path format so apply_change can find it
         // We need to deserialize to get the pijul hash, then save with that hash
@@ -181,17 +181,18 @@ impl<B: BlobStore> ChangeDirectory<B> {
             })?,
             None,
         )
-        .map_err(|e| PijulError::Deserialization {
-            message: format!("failed to deserialize change for hash extraction: {:?}", e),
+        .map_err(|e| PijulError::DeserializeChange {
+            path: path.clone(),
+            message: format!("{:?}", e),
         })?;
-        let pijul_hash = change.hash().map_err(|e| PijulError::Deserialization {
-            message: format!("failed to compute pijul hash: {:?}", e),
+        let pijul_hash = change.hash().map_err(|e| PijulError::ComputeChangeHash {
+            message: format!("{:?}", e),
         })?;
 
         let store = self.libpijul_store();
-        store.save_from_buf_unchecked(bytes, &pijul_hash, None).map_err(|e| PijulError::Io {
-            message: format!("failed to save change in libpijul format: {}", e),
-        })?;
+        store
+            .save_from_buf_unchecked(bytes, &pijul_hash, None)
+            .map_err(|e| PijulError::SaveLibpijulChange { message: e.to_string() })?;
 
         info!(hash = %hash, path = %path.display(), size = bytes.len(), "stored change");
         Ok(hash)
@@ -260,26 +261,25 @@ impl<B: BlobStore> ChangeApplicator<B> {
 
         // Read the change from our storage to get the actual pijul hash
         let our_path = self.changes.change_path(hash);
-        let bytes = std::fs::read(&our_path).map_err(|e| PijulError::Io {
-            message: format!("failed to read change file: {}", e),
-        })?;
+        let bytes = std::fs::read(&our_path).context(ReadFileSnafu { path: our_path.clone() })?;
         let change = Change::deserialize(
             our_path.to_str().ok_or_else(|| PijulError::Io {
                 message: "change file path is not valid UTF-8".to_string(),
             })?,
             None,
         )
-        .map_err(|e| PijulError::Deserialization {
-            message: format!("failed to deserialize change: {:?}", e),
+        .map_err(|e| PijulError::DeserializeChange {
+            path: our_path.clone(),
+            message: format!("{:?}", e),
         })?;
-        let pijul_hash = change.hash().map_err(|e| PijulError::Deserialization {
-            message: format!("failed to compute pijul hash: {:?}", e),
+        let pijul_hash = change.hash().map_err(|e| PijulError::ComputeChangeHash {
+            message: format!("{:?}", e),
         })?;
 
         // Save in libpijul format so apply_change can find it
-        store.save_from_buf_unchecked(&bytes, &pijul_hash, None).map_err(|e| PijulError::Io {
-            message: format!("failed to save change in libpijul format: {}", e),
-        })?;
+        store
+            .save_from_buf_unchecked(&bytes, &pijul_hash, None)
+            .map_err(|e| PijulError::SaveLibpijulChange { message: e.to_string() })?;
 
         // Start a mutable transaction
         let mut txn = self.pristine.mut_txn_begin()?;
@@ -358,8 +358,9 @@ impl<B: BlobStore> ChangeApplicator<B> {
         let channel_guard = channel_ref.read();
 
         // Get the log iterator
-        let log = txn.txn().log(&channel_guard, 0u64).map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to read channel log: {:?}", e),
+        let log = txn.txn().log(&channel_guard, 0u64).map_err(|e| PijulError::ReadChannelLog {
+            channel: channel.to_string(),
+            message: format!("{:?}", e),
         })?;
 
         // Collect all change hashes
@@ -401,9 +402,7 @@ impl<B: BlobStore> ChangeApplicator<B> {
             "aspen-conflict-check-{}",
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()
         ));
-        std::fs::create_dir_all(&temp_dir).map_err(|e| PijulError::Io {
-            message: format!("failed to create temp directory: {}", e),
-        })?;
+        std::fs::create_dir_all(&temp_dir).context(CreateDirSnafu { path: temp_dir.clone() })?;
 
         // Create outputter using our pristine and change directory
         let outputter = WorkingDirOutput::new(self.pristine.clone(), self.changes.clone(), temp_dir.clone());
@@ -511,6 +510,10 @@ mod tests {
         // Should fail with deserialization error
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, PijulError::Deserialization { .. }), "expected Deserialization error, got: {:?}", err);
+        assert!(
+            matches!(err, PijulError::DeserializeChange { .. }),
+            "expected DeserializeChange error, got: {:?}",
+            err
+        );
     }
 }

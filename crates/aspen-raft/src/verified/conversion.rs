@@ -263,10 +263,10 @@ pub fn encode_batch_op(op: &CompactBatchOp) -> (bool, String, String) {
 /// Error when batch size exceeds maximum.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BatchSizeError {
-    /// Actual batch size.
-    pub size: u32,
-    /// Maximum allowed size.
-    pub max: u32,
+    /// Actual batch size in bytes.
+    pub size_bytes: u32,
+    /// Maximum allowed size in bytes.
+    pub max_bytes: u32,
 }
 
 /// Validate that a batch size is within limits.
@@ -293,8 +293,8 @@ pub struct BatchSizeError {
 pub fn validate_batch_size(batch_size: u32, max_allowed: u32) -> Result<(), BatchSizeError> {
     if batch_size > max_allowed {
         Err(BatchSizeError {
-            size: batch_size,
-            max: max_allowed,
+            size_bytes: batch_size,
+            max_bytes: max_allowed,
         })
     } else {
         Ok(())
@@ -503,8 +503,8 @@ mod tests {
     #[test]
     fn test_validate_batch_size_exceeded() {
         let err = validate_batch_size(150, 100).unwrap_err();
-        assert_eq!(err.size, 150);
-        assert_eq!(err.max, 100);
+        assert_eq!(err.size_bytes, 150);
+        assert_eq!(err.max_bytes, 100);
     }
 
     #[test]

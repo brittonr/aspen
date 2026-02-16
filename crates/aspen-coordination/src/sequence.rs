@@ -41,7 +41,7 @@ use crate::verified::sequence::should_refill_batch;
 #[derive(Debug, Clone)]
 pub struct SequenceConfig {
     /// Number of IDs to reserve in each batch.
-    pub batch_size: u64,
+    pub batch_size_ids: u64,
     /// Start value for new sequences.
     pub start_value: u64,
 }
@@ -49,7 +49,7 @@ pub struct SequenceConfig {
 impl Default for SequenceConfig {
     fn default() -> Self {
         Self {
-            batch_size: 100,
+            batch_size_ids: 100,
             start_value: 1,
         }
     }
@@ -82,7 +82,7 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
         let key_str = key.into();
         // Tiger Style: argument validation
         assert!(!key_str.is_empty(), "SEQUENCE: key must not be empty");
-        assert!(config.batch_size > 0, "SEQUENCE: batch_size must be positive");
+        assert!(config.batch_size_ids > 0, "SEQUENCE: batch_size must be positive");
         assert!(config.start_value > 0, "SEQUENCE: start_value must be positive");
 
         Self {
@@ -114,13 +114,13 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
         }
 
         // Slow path: reserve new batch
-        let batch_start = self.reserve(self.config.batch_size).await?;
+        let batch_start = self.reserve(self.config.batch_size_ids).await?;
 
         // Update local state using pure functions
         let mut state = self.state.lock().await;
         state.next = compute_next_after_refill(batch_start)
             .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
-        state.batch_end = compute_batch_end(batch_start, self.config.batch_size)
+        state.batch_end = compute_batch_end(batch_start, self.config.batch_size_ids)
             .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
 
         debug!(
@@ -367,7 +367,7 @@ mod tests {
     async fn test_sequence_batch_efficiency() {
         let store = Arc::new(DeterministicKeyValueStore::new());
         let config = SequenceConfig {
-            batch_size: 10,
+            batch_size_ids: 10,
             start_value: 1,
         };
         let seq = SequenceGenerator::new(store.clone(), "test_seq", config);
@@ -386,7 +386,7 @@ mod tests {
     async fn test_sequence_concurrent() {
         let store = Arc::new(DeterministicKeyValueStore::new());
         let seq = Arc::new(SequenceGenerator::new(store, "test_seq", SequenceConfig {
-            batch_size: 10,
+            batch_size_ids: 10,
             ..Default::default()
         }));
 

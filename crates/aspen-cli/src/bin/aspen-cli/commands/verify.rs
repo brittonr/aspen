@@ -291,6 +291,54 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
 
     // Step 1: Write test keys
     let write_start = Instant::now();
+    verify_kv_write_test_keys(client, &test_keys, &mut errors).await;
+    timing.write_ms = write_start.elapsed().as_millis() as u64;
+
+    // Brief pause for replication
+    let replicate_start = Instant::now();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    timing.replicate_ms = replicate_start.elapsed().as_millis() as u64;
+
+    // Step 2: Check replication status from leader
+    let replication_ok =
+        verify_kv_check_replication(client, &mut errors, &mut replication_details, &mut node_status_list).await;
+
+    // Step 3: Read back and verify
+    let read_start = Instant::now();
+    let read_success = verify_kv_read_and_verify(client, &test_keys, &mut errors).await;
+    timing.read_ms = read_start.elapsed().as_millis() as u64;
+
+    // Step 4: Cleanup (unless --no-cleanup)
+    let cleanup_start = Instant::now();
+    if !args.no_cleanup {
+        for key in &test_keys {
+            let _ = client.send(ClientRpcRequest::DeleteKey { key: key.clone() }).await;
+        }
+    }
+    timing.cleanup_ms = cleanup_start.elapsed().as_millis() as u64;
+
+    let result = verify_kv_build_result(
+        args.count,
+        read_success,
+        replication_ok,
+        &errors,
+        &replication_details,
+        start.elapsed().as_millis() as u64,
+        timing,
+        node_status_list,
+    );
+
+    print_output(&result, json);
+
+    if !result.passed {
+        anyhow::bail!("KV verification failed");
+    }
+
+    Ok(())
+}
+
+/// Write test keys and collect errors.
+async fn verify_kv_write_test_keys(client: &AspenClient, test_keys: &[String], errors: &mut Vec<String>) {
     for (i, key) in test_keys.iter().enumerate() {
         let value = format!("verify_value_{}", i);
         let response = client
@@ -309,20 +357,20 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
             Err(e) => errors.push(format!("Write {} error: {}", key, e)),
         }
     }
-    timing.write_ms = write_start.elapsed().as_millis() as u64;
+}
 
-    // Brief pause for replication
-    let replicate_start = Instant::now();
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    timing.replicate_ms = replicate_start.elapsed().as_millis() as u64;
-
-    // Step 2: Check replication status from leader
-    let replication_ok = match client.send(ClientRpcRequest::GetRaftMetrics).await {
+/// Check replication status from leader, collecting per-node details.
+async fn verify_kv_check_replication(
+    client: &AspenClient,
+    errors: &mut Vec<String>,
+    replication_details: &mut Vec<String>,
+    node_status_list: &mut Vec<NodeReplicationStatus>,
+) -> bool {
+    match client.send(ClientRpcRequest::GetRaftMetrics).await {
         Ok(ClientRpcResponse::RaftMetrics(metrics)) => {
             let last_applied = metrics.last_applied_index.unwrap_or(0);
 
             if let Some(replication) = &metrics.replication {
-                // This node is leader - check all followers caught up
                 let mut all_caught_up = true;
                 for progress in replication {
                     let matched = progress.matched_index.unwrap_or(0);
@@ -334,7 +382,6 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
                         "BEHIND".to_string()
                     };
 
-                    // Capture per-node status
                     node_status_list.push(NodeReplicationStatus {
                         node_id: progress.node_id,
                         matched_index: matched,
@@ -350,13 +397,12 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
                 }
                 all_caught_up
             } else {
-                // Not leader or single-node cluster
                 replication_details.push(format!(
                     "leader: {}, last_applied: {}",
                     metrics.current_leader.map(|l| l.to_string()).unwrap_or_else(|| "none".to_string()),
                     last_applied
                 ));
-                true // Can't verify replication from follower, assume OK
+                true
             }
         }
         Ok(ClientRpcResponse::Error(e)) => {
@@ -367,11 +413,12 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
             errors.push("Unexpected response from GetRaftMetrics".to_string());
             false
         }
-    };
+    }
+}
 
-    // Step 3: Read back and verify
-    let read_start = Instant::now();
-    let mut read_success = 0;
+/// Read back test keys and verify values, returning the count of successes.
+async fn verify_kv_read_and_verify(client: &AspenClient, test_keys: &[String], errors: &mut Vec<String>) -> u32 {
+    let mut read_success = 0u32;
     for (i, key) in test_keys.iter().enumerate() {
         let expected = format!("verify_value_{}", i);
         let response = client.send(ClientRpcRequest::ReadKey { key: key.clone() }).await;
@@ -395,21 +442,22 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
             Err(e) => errors.push(format!("Read {} error: {}", key, e)),
         }
     }
-    timing.read_ms = read_start.elapsed().as_millis() as u64;
+    read_success
+}
 
-    // Step 4: Cleanup (unless --no-cleanup)
-    let cleanup_start = Instant::now();
-    if !args.no_cleanup {
-        for key in &test_keys {
-            let _ = client.send(ClientRpcRequest::DeleteKey { key: key.clone() }).await;
-        }
-    }
-    timing.cleanup_ms = cleanup_start.elapsed().as_millis() as u64;
+/// Build the final VerifyResult from collected data.
+fn verify_kv_build_result(
+    count: u32,
+    read_success: u32,
+    replication_ok: bool,
+    errors: &[String],
+    replication_details: &[String],
+    duration_ms: u64,
+    timing: VerifyTiming,
+    node_status_list: Vec<NodeReplicationStatus>,
+) -> VerifyResult {
+    let passed = errors.is_empty() && read_success == count && replication_ok;
 
-    let duration_ms = start.elapsed().as_millis() as u64;
-    let passed = errors.is_empty() && read_success == args.count && replication_ok;
-
-    // Combine all details
     let mut all_details = Vec::new();
     if !replication_details.is_empty() {
         all_details.push(format!("replication: {}", replication_details.join(", ")));
@@ -418,15 +466,15 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
         all_details.push(format!("errors: {}", errors.join("; ")));
     }
 
-    let result = VerifyResult {
+    VerifyResult {
         name: "kv-replication".to_string(),
         passed,
         message: if passed {
-            format!("{}/{} keys verified, replication OK", read_success, args.count)
+            format!("{}/{} keys verified, replication OK", read_success, count)
         } else if !replication_ok {
-            format!("{}/{} keys verified, replication BEHIND", read_success, args.count)
+            format!("{}/{} keys verified, replication BEHIND", read_success, count)
         } else {
-            format!("{}/{} keys verified, {} errors", read_success, args.count, errors.len())
+            format!("{}/{} keys verified, {} errors", read_success, count, errors.len())
         },
         duration_ms,
         details: if all_details.is_empty() {
@@ -440,15 +488,7 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
         } else {
             Some(node_status_list)
         },
-    };
-
-    print_output(&result, json);
-
-    if !passed {
-        anyhow::bail!("KV verification failed");
     }
-
-    Ok(())
 }
 
 /// Verify iroh-docs sync status.
@@ -457,59 +497,10 @@ async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> 
     let mut details = Vec::new();
 
     // Get docs status
-    let response = client.send(ClientRpcRequest::DocsStatus).await;
-
-    let (enabled, namespace_id) = match response {
-        Ok(ClientRpcResponse::DocsStatusResult(status)) => {
-            if let Some(ref ns_id) = status.namespace_id {
-                details.push(format!("namespace: {}", ns_id));
-            }
-            if let Some(count) = status.entry_count {
-                details.push(format!("entries: {}", count));
-            }
-            (true, status.namespace_id.clone())
-        }
-        Ok(ClientRpcResponse::Error(e)) => {
-            if e.message.contains("not enabled") || e.message.contains("disabled") {
-                (false, None)
-            } else {
-                let result = VerifyResult {
-                    name: "docs-sync".to_string(),
-                    passed: false,
-                    message: format!("Status check failed: {}", e.message),
-                    duration_ms: start.elapsed().as_millis() as u64,
-                    details: None,
-                    timing: None,
-                    node_status: None,
-                };
-                print_output(&result, json);
-                anyhow::bail!("Docs verification failed");
-            }
-        }
-        Ok(_) => {
-            let result = VerifyResult {
-                name: "docs-sync".to_string(),
-                passed: false,
-                message: "Unexpected response from docs status".to_string(),
-                duration_ms: start.elapsed().as_millis() as u64,
-                details: None,
-                timing: None,
-                node_status: None,
-            };
-            print_output(&result, json);
-            anyhow::bail!("Docs verification failed");
-        }
-        Err(e) => {
-            let result = VerifyResult {
-                name: "docs-sync".to_string(),
-                passed: false,
-                message: format!("Error: {}", e),
-                duration_ms: start.elapsed().as_millis() as u64,
-                details: None,
-                timing: None,
-                node_status: None,
-            };
-            print_output(&result, json);
+    let (enabled, namespace_id) = match verify_docs_check_status(client, &mut details).await {
+        Ok(result) => result,
+        Err(fail_result) => {
+            print_output(&fail_result, json);
             anyhow::bail!("Docs verification failed");
         }
     };
@@ -530,54 +521,7 @@ async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> 
 
     // Optionally write and verify a test entry
     if args.write_test {
-        let timestamp =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
-        let test_key = format!("__verify_docs_{}", timestamp);
-        let test_value = "docs_verify_value";
-
-        // Write via docs
-        let write_response = client
-            .send(ClientRpcRequest::DocsSet {
-                key: test_key.clone(),
-                value: test_value.as_bytes().to_vec(),
-            })
-            .await;
-
-        match write_response {
-            Ok(ClientRpcResponse::DocsSetResult(_)) => {
-                details.push("write: OK".to_string());
-            }
-            Ok(ClientRpcResponse::Error(e)) => {
-                details.push(format!("write: FAIL ({})", e.message));
-            }
-            _ => {
-                details.push("write: FAIL (unexpected response)".to_string());
-            }
-        }
-
-        // Read back
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        let read_response = client.send(ClientRpcRequest::DocsGet { key: test_key.clone() }).await;
-
-        match read_response {
-            Ok(ClientRpcResponse::DocsGetResult(result)) => {
-                if result.was_found && result.value.as_deref() == Some(test_value.as_bytes()) {
-                    details.push("read: OK".to_string());
-                } else {
-                    details.push("read: FAIL (value mismatch)".to_string());
-                }
-            }
-            Ok(ClientRpcResponse::Error(e)) => {
-                details.push(format!("read: FAIL ({})", e.message));
-            }
-            _ => {
-                details.push("read: FAIL (unexpected response)".to_string());
-            }
-        }
-
-        // Cleanup
-        let _ = client.send(ClientRpcRequest::DocsDelete { key: test_key }).await;
+        verify_docs_write_read_test(client, &mut details).await;
     }
 
     // Wait a bit more for sync to propagate before cross-node check
@@ -586,10 +530,131 @@ async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> 
     // Cross-node verification: check entry counts across all nodes
     let cross_node_ok = verify_docs_cross_node(client, &mut details).await;
 
-    let duration_ms = start.elapsed().as_millis() as u64;
+    let result = verify_docs_build_result(&namespace_id, &details, cross_node_ok, start.elapsed().as_millis() as u64);
+
+    print_output(&result, json);
+
+    if !result.passed {
+        anyhow::bail!("Docs verification failed");
+    }
+
+    Ok(())
+}
+
+/// Check docs status. Returns Ok((enabled, namespace_id)) or Err(VerifyResult) on failure.
+async fn verify_docs_check_status(
+    client: &AspenClient,
+    details: &mut Vec<String>,
+) -> std::result::Result<(bool, Option<String>), VerifyResult> {
+    let response = client.send(ClientRpcRequest::DocsStatus).await;
+
+    match response {
+        Ok(ClientRpcResponse::DocsStatusResult(status)) => {
+            if let Some(ref ns_id) = status.namespace_id {
+                details.push(format!("namespace: {}", ns_id));
+            }
+            if let Some(count) = status.entry_count {
+                details.push(format!("entries: {}", count));
+            }
+            Ok((true, status.namespace_id.clone()))
+        }
+        Ok(ClientRpcResponse::Error(e)) => {
+            if e.message.contains("not enabled") || e.message.contains("disabled") {
+                Ok((false, None))
+            } else {
+                Err(VerifyResult {
+                    name: "docs-sync".to_string(),
+                    passed: false,
+                    message: format!("Status check failed: {}", e.message),
+                    duration_ms: 0,
+                    details: None,
+                    timing: None,
+                    node_status: None,
+                })
+            }
+        }
+        Ok(_) => Err(VerifyResult {
+            name: "docs-sync".to_string(),
+            passed: false,
+            message: "Unexpected response from docs status".to_string(),
+            duration_ms: 0,
+            details: None,
+            timing: None,
+            node_status: None,
+        }),
+        Err(e) => Err(VerifyResult {
+            name: "docs-sync".to_string(),
+            passed: false,
+            message: format!("Error: {}", e),
+            duration_ms: 0,
+            details: None,
+            timing: None,
+            node_status: None,
+        }),
+    }
+}
+
+/// Write a test entry via docs and read it back, collecting results into details.
+async fn verify_docs_write_read_test(client: &AspenClient, details: &mut Vec<String>) {
+    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+    let test_key = format!("__verify_docs_{}", timestamp);
+    let test_value = "docs_verify_value";
+
+    // Write via docs
+    let write_response = client
+        .send(ClientRpcRequest::DocsSet {
+            key: test_key.clone(),
+            value: test_value.as_bytes().to_vec(),
+        })
+        .await;
+
+    match write_response {
+        Ok(ClientRpcResponse::DocsSetResult(_)) => {
+            details.push("write: OK".to_string());
+        }
+        Ok(ClientRpcResponse::Error(e)) => {
+            details.push(format!("write: FAIL ({})", e.message));
+        }
+        _ => {
+            details.push("write: FAIL (unexpected response)".to_string());
+        }
+    }
+
+    // Read back
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let read_response = client.send(ClientRpcRequest::DocsGet { key: test_key.clone() }).await;
+
+    match read_response {
+        Ok(ClientRpcResponse::DocsGetResult(result)) => {
+            if result.was_found && result.value.as_deref() == Some(test_value.as_bytes()) {
+                details.push("read: OK".to_string());
+            } else {
+                details.push("read: FAIL (value mismatch)".to_string());
+            }
+        }
+        Ok(ClientRpcResponse::Error(e)) => {
+            details.push(format!("read: FAIL ({})", e.message));
+        }
+        _ => {
+            details.push("read: FAIL (unexpected response)".to_string());
+        }
+    }
+
+    // Cleanup
+    let _ = client.send(ClientRpcRequest::DocsDelete { key: test_key }).await;
+}
+
+/// Build the final VerifyResult for docs verification.
+fn verify_docs_build_result(
+    namespace_id: &Option<String>,
+    details: &[String],
+    cross_node_ok: bool,
+    duration_ms: u64,
+) -> VerifyResult {
     let passed = !details.iter().any(|d| d.contains("FAIL") || d.contains("MISMATCH")) && cross_node_ok;
 
-    let result = VerifyResult {
+    VerifyResult {
         name: "docs-sync".to_string(),
         passed,
         message: if passed {
@@ -605,15 +670,7 @@ async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> 
         },
         timing: None,
         node_status: None,
-    };
-
-    print_output(&result, json);
-
-    if !passed {
-        anyhow::bail!("Docs verification failed");
     }
-
-    Ok(())
 }
 
 /// Verify blob storage.
@@ -624,148 +681,26 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
     // Generate test data
     let test_data: Vec<u8> = (0..args.size).map(|i| (i % 256) as u8).collect();
 
-    // Add blob
-    let add_response = client
-        .send(ClientRpcRequest::AddBlob {
-            data: test_data.clone(),
-            tag: Some("__verify_blob".to_string()),
-        })
-        .await;
-
-    let hash = match add_response {
-        Ok(ClientRpcResponse::AddBlobResult(result)) => {
-            if result.is_success {
-                details.push(format!("add: OK ({} bytes)", result.size.unwrap_or(0)));
-                result.hash
-            } else {
-                let result = VerifyResult {
-                    name: "blob-storage".to_string(),
-                    passed: false,
-                    message: format!("Add blob failed: {}", result.error.unwrap_or_default()),
-                    duration_ms: start.elapsed().as_millis() as u64,
-                    details: None,
-                    timing: None,
-                    node_status: None,
-                };
-                print_output(&result, json);
-                anyhow::bail!("Blob verification failed");
-            }
-        }
-        Ok(ClientRpcResponse::Error(e)) => {
-            if e.message.contains("not enabled") || e.message.contains("disabled") {
-                let result = VerifyResult {
-                    name: "blob-storage".to_string(),
-                    passed: true,
-                    message: "Blob storage not enabled (skipped)".to_string(),
-                    duration_ms: start.elapsed().as_millis() as u64,
-                    details: None,
-                    timing: None,
-                    node_status: None,
-                };
-                print_output(&result, json);
-                return Ok(());
-            }
-
-            let result = VerifyResult {
-                name: "blob-storage".to_string(),
-                passed: false,
-                message: format!("Add blob failed: {}", e.message),
-                duration_ms: start.elapsed().as_millis() as u64,
-                details: None,
-                timing: None,
-                node_status: None,
-            };
+    // Add blob and get hash
+    let hash = match verify_blob_add(client, &test_data, &mut details).await {
+        VerifyBlobAddResult::Hash(h) => h,
+        VerifyBlobAddResult::Skipped(result) => {
             print_output(&result, json);
-            anyhow::bail!("Blob verification failed");
+            return Ok(());
         }
-        Ok(_) => {
-            let result = VerifyResult {
-                name: "blob-storage".to_string(),
-                passed: false,
-                message: "Unexpected response from add blob".to_string(),
-                duration_ms: start.elapsed().as_millis() as u64,
-                details: None,
-                timing: None,
-                node_status: None,
-            };
-            print_output(&result, json);
-            anyhow::bail!("Blob verification failed");
-        }
-        Err(e) => {
-            let result = VerifyResult {
-                name: "blob-storage".to_string(),
-                passed: false,
-                message: format!("Error: {}", e),
-                duration_ms: start.elapsed().as_millis() as u64,
-                details: None,
-                timing: None,
-                node_status: None,
-            };
-            print_output(&result, json);
-            anyhow::bail!("Blob verification failed");
-        }
-    };
-
-    let hash = match hash {
-        Some(h) => h,
-        None => {
-            let result = VerifyResult {
-                name: "blob-storage".to_string(),
-                passed: false,
-                message: "Add blob returned no hash".to_string(),
-                duration_ms: start.elapsed().as_millis() as u64,
-                details: None,
-                timing: None,
-                node_status: None,
-            };
+        VerifyBlobAddResult::Failed(result) => {
             print_output(&result, json);
             anyhow::bail!("Blob verification failed");
         }
     };
 
     // Check blob exists
-    let has_response = client.send(ClientRpcRequest::HasBlob { hash: hash.clone() }).await;
-
-    match has_response {
-        Ok(ClientRpcResponse::HasBlobResult(result)) => {
-            if result.does_exist {
-                details.push("has: OK".to_string());
-            } else {
-                details.push("has: FAIL (not found)".to_string());
-            }
-        }
-        Ok(ClientRpcResponse::Error(e)) => {
-            details.push(format!("has: FAIL ({})", e.message));
-        }
-        _ => {
-            details.push("has: FAIL (unexpected response)".to_string());
-        }
-    }
+    verify_blob_check_exists(client, &hash, &mut details).await;
 
     // Get blob and verify content
-    let get_response = client.send(ClientRpcRequest::GetBlob { hash: hash.clone() }).await;
+    verify_blob_verify_content(client, &hash, &test_data, &mut details).await;
 
-    match get_response {
-        Ok(ClientRpcResponse::GetBlobResult(result)) => {
-            if result.was_found && result.data.as_ref() == Some(&test_data) {
-                details.push("get: OK (content verified)".to_string());
-            } else if result.was_found {
-                details.push("get: FAIL (content mismatch)".to_string());
-            } else {
-                details.push("get: FAIL (not found)".to_string());
-            }
-        }
-        Ok(ClientRpcResponse::Error(e)) => {
-            details.push(format!("get: FAIL ({})", e.message));
-        }
-        _ => {
-            details.push("get: FAIL (unexpected response)".to_string());
-        }
-    }
-
-    // Cross-node verification: check if blob exists on all cluster nodes
-    // Note: Blob replication is eventual via iroh-blobs P2P, so we check
-    // before cleanup to give time for propagation
+    // Cross-node verification
     let cross_node_ok = verify_blob_cross_node(client, &hash, &mut details).await;
 
     // Cleanup (unless --no-cleanup)
@@ -802,6 +737,112 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
     }
 
     Ok(())
+}
+
+/// Result of attempting to add a blob for verification.
+enum VerifyBlobAddResult {
+    /// Successfully added, contains the blob hash.
+    Hash(String),
+    /// Blob storage not enabled, contains skip result.
+    Skipped(VerifyResult),
+    /// Add failed, contains failure result.
+    Failed(VerifyResult),
+}
+
+/// Create a blob VerifyResult with the given passed/message.
+fn verify_blob_result(passed: bool, message: impl Into<String>) -> VerifyResult {
+    VerifyResult {
+        name: "blob-storage".to_string(),
+        passed,
+        message: message.into(),
+        duration_ms: 0,
+        details: None,
+        timing: None,
+        node_status: None,
+    }
+}
+
+/// Add a test blob and return the hash, or a result if it failed/was skipped.
+async fn verify_blob_add(client: &AspenClient, test_data: &[u8], details: &mut Vec<String>) -> VerifyBlobAddResult {
+    let add_response = client
+        .send(ClientRpcRequest::AddBlob {
+            data: test_data.to_vec(),
+            tag: Some("__verify_blob".to_string()),
+        })
+        .await;
+
+    let hash = match add_response {
+        Ok(ClientRpcResponse::AddBlobResult(result)) => {
+            if result.is_success {
+                details.push(format!("add: OK ({} bytes)", result.size.unwrap_or(0)));
+                result.hash
+            } else {
+                let msg = format!("Add blob failed: {}", result.error.unwrap_or_default());
+                return VerifyBlobAddResult::Failed(verify_blob_result(false, msg));
+            }
+        }
+        Ok(ClientRpcResponse::Error(e)) => {
+            if e.message.contains("not enabled") || e.message.contains("disabled") {
+                return VerifyBlobAddResult::Skipped(verify_blob_result(true, "Blob storage not enabled (skipped)"));
+            }
+            return VerifyBlobAddResult::Failed(verify_blob_result(false, format!("Add blob failed: {}", e.message)));
+        }
+        Ok(_) => {
+            return VerifyBlobAddResult::Failed(verify_blob_result(false, "Unexpected response from add blob"));
+        }
+        Err(e) => {
+            return VerifyBlobAddResult::Failed(verify_blob_result(false, format!("Error: {}", e)));
+        }
+    };
+
+    match hash {
+        Some(h) => VerifyBlobAddResult::Hash(h),
+        None => VerifyBlobAddResult::Failed(verify_blob_result(false, "Add blob returned no hash")),
+    }
+}
+
+/// Check if a blob exists by hash, appending result to details.
+async fn verify_blob_check_exists(client: &AspenClient, hash: &str, details: &mut Vec<String>) {
+    let has_response = client.send(ClientRpcRequest::HasBlob { hash: hash.to_string() }).await;
+
+    match has_response {
+        Ok(ClientRpcResponse::HasBlobResult(result)) => {
+            if result.does_exist {
+                details.push("has: OK".to_string());
+            } else {
+                details.push("has: FAIL (not found)".to_string());
+            }
+        }
+        Ok(ClientRpcResponse::Error(e)) => {
+            details.push(format!("has: FAIL ({})", e.message));
+        }
+        _ => {
+            details.push("has: FAIL (unexpected response)".to_string());
+        }
+    }
+}
+
+/// Get a blob by hash and verify its content matches test_data.
+async fn verify_blob_verify_content(client: &AspenClient, hash: &str, test_data: &[u8], details: &mut Vec<String>) {
+    let get_response = client.send(ClientRpcRequest::GetBlob { hash: hash.to_string() }).await;
+
+    match get_response {
+        Ok(ClientRpcResponse::GetBlobResult(result)) => {
+            if result.was_found && result.data.as_deref() == Some(test_data) {
+                details.push("get: OK (content verified)".to_string());
+            } else if result.was_found {
+                details.push("get: FAIL (content mismatch)".to_string());
+            } else {
+                details.push("get: FAIL (not found)".to_string());
+            }
+        }
+        Ok(ClientRpcResponse::Error(e)) => {
+            details.push(format!("get: FAIL ({})", e.message));
+        }
+        _ => {
+            details.push("get: FAIL (unexpected response)".to_string());
+        }
+    }
 }
 
 /// Run all verification tests.

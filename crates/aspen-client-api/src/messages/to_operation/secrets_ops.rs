@@ -3,15 +3,17 @@ use aspen_auth::Operation;
 use super::super::ClientRpcRequest;
 
 pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operation>> {
+    to_operation_kv_transit(request).or_else(|| to_operation_pki_nix_cache(request))
+}
+
+fn to_operation_kv_transit(request: &ClientRpcRequest) -> Option<Option<Operation>> {
     match request {
-        // Secrets KV v2 read operations
         ClientRpcRequest::SecretsKvRead { mount, path, .. }
         | ClientRpcRequest::SecretsKvList { mount, path }
         | ClientRpcRequest::SecretsKvMetadata { mount, path } => Some(Some(Operation::Read {
             key: format!("_secrets:{}:{}", mount, path),
         })),
 
-        // Secrets KV v2 write operations
         ClientRpcRequest::SecretsKvWrite { mount, path, .. }
         | ClientRpcRequest::SecretsKvDelete { mount, path, .. }
         | ClientRpcRequest::SecretsKvDestroy { mount, path, .. }
@@ -22,7 +24,6 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             value: vec![],
         })),
 
-        // Secrets Transit operations
         ClientRpcRequest::SecretsTransitListKeys { mount } => Some(Some(Operation::Read {
             key: format!("_secrets:{}:", mount),
         })),
@@ -40,7 +41,12 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             key: format!("_secrets:{}:{}", mount, name),
         })),
 
-        // Secrets PKI operations
+        _ => None,
+    }
+}
+
+fn to_operation_pki_nix_cache(request: &ClientRpcRequest) -> Option<Option<Operation>> {
+    match request {
         ClientRpcRequest::SecretsPkiGetCrl { mount }
         | ClientRpcRequest::SecretsPkiListCerts { mount }
         | ClientRpcRequest::SecretsPkiListRoles { mount } => Some(Some(Operation::Read {
@@ -59,7 +65,6 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             value: vec![],
         })),
 
-        // Nix cache signing key operations
         ClientRpcRequest::SecretsNixCacheGetPublicKey { mount, .. } => Some(Some(Operation::Read {
             key: format!("_secrets:{}:", mount),
         })),

@@ -7,7 +7,8 @@ use serde::Serialize;
 pub struct DocsSetResultResponse {
     pub success: bool,
     pub key: Option<String>,
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     pub error: Option<String>,
 }
 
@@ -15,7 +16,8 @@ pub struct DocsSetResultResponse {
 pub struct DocsGetResultResponse {
     pub found: bool,
     pub value: Option<Vec<u8>>,
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     pub error: Option<String>,
 }
 
@@ -28,7 +30,8 @@ pub struct DocsDeleteResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsListEntry {
     pub key: String,
-    pub size: u64,
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
     pub hash: String,
 }
 

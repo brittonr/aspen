@@ -39,14 +39,17 @@ use libpijul::pristine::sanakirja::MutTxn;
 use libpijul::pristine::sanakirja::Pristine;
 use libpijul::pristine::sanakirja::Txn;
 use parking_lot::RwLock;
+use snafu::ResultExt;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
 
 use super::constants::MAX_PRISTINE_SIZE_BYTES;
 use super::constants::PRISTINE_CACHE_SIZE;
+use super::error::CreateDirSnafu;
 use super::error::PijulError;
 use super::error::PijulResult;
+use super::error::RemoveDirSnafu;
 
 // ============================================================================
 // PristineManager
@@ -142,15 +145,14 @@ impl PristineManager {
 
         // Create directory if needed
         let dir = self.pristine_dir(repo_id);
-        std::fs::create_dir_all(&dir).map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to create pristine directory: {}", e),
-        })?;
+        std::fs::create_dir_all(&dir).context(CreateDirSnafu { path: dir.clone() })?;
 
         // Open or create the pristine database file with a reasonable size
         let path = self.pristine_path(repo_id);
         let pristine =
-            Pristine::new_with_size(&path, MAX_PRISTINE_SIZE_BYTES).map_err(|e| PijulError::PristineStorage {
-                message: format!("failed to open pristine: {}", e),
+            Pristine::new_with_size(&path, MAX_PRISTINE_SIZE_BYTES).map_err(|e| PijulError::OpenPristine {
+                path: path.clone(),
+                message: e.to_string(),
             })?;
 
         let pristine = Arc::new(pristine);
@@ -214,9 +216,7 @@ impl PristineManager {
         // Delete on-disk data (delete the entire pristine directory)
         let dir = self.pristine_dir(repo_id);
         if dir.exists() {
-            std::fs::remove_dir_all(&dir).map_err(|e| PijulError::PristineStorage {
-                message: format!("failed to delete pristine: {}", e),
-            })?;
+            std::fs::remove_dir_all(&dir).context(RemoveDirSnafu { path: dir.clone() })?;
             info!(repo_id = %repo_id, path = %dir.display(), "deleted pristine");
         }
 
@@ -266,8 +266,10 @@ impl PristineHandle {
     /// Read transactions can be used to query the pristine state
     /// without modifying it.
     pub fn txn_begin(&self) -> PijulResult<ReadTxn> {
-        let txn = self.pristine.txn_begin().map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to begin transaction: {}", e),
+        let txn = self.pristine.txn_begin().map_err(|e| PijulError::BeginTransaction {
+            repo_id: self.repo_id.to_string(),
+            txn_kind: "read".to_string(),
+            message: e.to_string(),
         })?;
 
         Ok(ReadTxn {
@@ -281,8 +283,10 @@ impl PristineHandle {
     /// Mutable transactions allow modifying the pristine state.
     /// Changes are only persisted when `commit()` is called.
     pub fn mut_txn_begin(&self) -> PijulResult<WriteTxn> {
-        let txn = self.pristine.mut_txn_begin().map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to begin mutable transaction: {}", e),
+        let txn = self.pristine.mut_txn_begin().map_err(|e| PijulError::BeginTransaction {
+            repo_id: self.repo_id.to_string(),
+            txn_kind: "mutable".to_string(),
+            message: e.to_string(),
         })?;
 
         Ok(WriteTxn {
@@ -297,8 +301,10 @@ impl PristineHandle {
     /// which requires shared ownership of the transaction across
     /// multiple operations.
     pub fn arc_txn_begin(&self) -> PijulResult<ArcTxn<MutTxn<()>>> {
-        self.pristine.arc_txn_begin().map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to begin arc transaction: {}", e),
+        self.pristine.arc_txn_begin().map_err(|e| PijulError::BeginTransaction {
+            repo_id: self.repo_id.to_string(),
+            txn_kind: "arc".to_string(),
+            message: e.to_string(),
         })
     }
 
@@ -335,8 +341,9 @@ impl PristineHandle {
 
         // Collect change hashes from channel1
         let mut ch1_changes = std::collections::HashSet::new();
-        let log1 = txn.txn().log(&ch1_guard, 0u64).map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to read log for channel1: {:?}", e),
+        let log1 = txn.txn().log(&ch1_guard, 0u64).map_err(|e| PijulError::ReadChannelLog {
+            channel: channel1.to_string(),
+            message: format!("{:?}", e),
         })?;
         for change_result in log1 {
             if let Ok((_, (h, _))) = change_result {
@@ -346,8 +353,9 @@ impl PristineHandle {
 
         // Find changes in channel2 that are not in channel1
         let mut hunks = Vec::new();
-        let log2 = txn.txn().log(&ch2_guard, 0u64).map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to read log for channel2: {:?}", e),
+        let log2 = txn.txn().log(&ch2_guard, 0u64).map_err(|e| PijulError::ReadChannelLog {
+            channel: channel2.to_string(),
+            message: format!("{:?}", e),
         })?;
         for change_result in log2 {
             if let Ok((_, (h, _))) = change_result {
@@ -393,15 +401,16 @@ impl ReadTxn {
     ///
     /// Returns `None` if the channel does not exist.
     pub fn load_channel(&self, name: &str) -> PijulResult<Option<ChannelRef<Txn>>> {
-        self.txn.load_channel(name).map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to load channel '{}': {}", name, e),
+        self.txn.load_channel(name).map_err(|e| PijulError::LoadChannel {
+            channel: name.to_string(),
+            message: e.to_string(),
         })
     }
 
     /// List all channels in the repository.
     pub fn list_channels(&self) -> PijulResult<Vec<String>> {
-        let channel_refs = self.txn.channels("").map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to list channels: {:?}", e),
+        let channel_refs = self.txn.channels("").map_err(|e| PijulError::ListChannels {
+            message: format!("{:?}", e),
         })?;
 
         let mut channels = Vec::with_capacity(channel_refs.len());
@@ -450,8 +459,9 @@ impl WriteTxn {
     /// If the channel exists, it is returned. Otherwise, a new empty
     /// channel is created.
     pub fn open_or_create_channel(&mut self, name: &str) -> PijulResult<ChannelRef<MutTxn<()>>> {
-        self.txn.open_or_create_channel(name).map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to open/create channel '{}': {}", name, e),
+        self.txn.open_or_create_channel(name).map_err(|e| PijulError::OpenOrCreateChannel {
+            channel: name.to_string(),
+            message: e.to_string(),
         })
     }
 
@@ -459,8 +469,9 @@ impl WriteTxn {
     ///
     /// Returns `None` if the channel does not exist.
     pub fn load_channel(&self, name: &str) -> PijulResult<Option<ChannelRef<MutTxn<()>>>> {
-        self.txn.load_channel(name).map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to load channel '{}': {}", name, e),
+        self.txn.load_channel(name).map_err(|e| PijulError::LoadChannel {
+            channel: name.to_string(),
+            message: e.to_string(),
         })
     }
 
@@ -472,8 +483,10 @@ impl WriteTxn {
             channel: source.to_string(),
         })?;
 
-        self.txn.fork(&source_channel, dest).map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to fork channel '{}' to '{}': {}", source, dest, e),
+        self.txn.fork(&source_channel, dest).map_err(|e| PijulError::ForkChannel {
+            source_channel: source.to_string(),
+            dest_channel: dest.to_string(),
+            message: e.to_string(),
         })
     }
 
@@ -483,22 +496,25 @@ impl WriteTxn {
             channel: old_name.to_string(),
         })?;
 
-        self.txn.rename_channel(&mut channel, new_name).map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to rename channel '{}' to '{}': {}", old_name, new_name, e),
+        self.txn.rename_channel(&mut channel, new_name).map_err(|e| PijulError::RenameChannel {
+            old_name: old_name.to_string(),
+            new_name: new_name.to_string(),
+            message: e.to_string(),
         })
     }
 
     /// Delete a channel.
     pub fn drop_channel(&mut self, name: &str) -> PijulResult<bool> {
-        self.txn.drop_channel(name).map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to drop channel '{}': {}", name, e),
+        self.txn.drop_channel(name).map_err(|e| PijulError::DropChannel {
+            channel: name.to_string(),
+            message: e.to_string(),
         })
     }
 
     /// List all channels in the repository.
     pub fn list_channels(&self) -> PijulResult<Vec<String>> {
-        let channel_refs = self.txn.channels("").map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to list channels: {:?}", e),
+        let channel_refs = self.txn.channels("").map_err(|e| PijulError::ListChannels {
+            message: format!("{:?}", e),
         })?;
 
         let mut channels = Vec::with_capacity(channel_refs.len());
@@ -515,9 +531,7 @@ impl WriteTxn {
     /// This persists all changes made in this transaction.
     /// After commit, the transaction is consumed.
     pub fn commit(self) -> PijulResult<()> {
-        self.txn.commit().map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to commit transaction: {}", e),
-        })
+        self.txn.commit().map_err(|e| PijulError::CommitTransaction { message: e.to_string() })
     }
 
     /// Get a mutable reference to the underlying transaction.

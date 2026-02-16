@@ -237,7 +237,7 @@ mod tests {
         assert_eq!(hook_event.node_id, 1);
 
         let payload: BlobAddedPayload = serde_json::from_value(hook_event.payload).unwrap();
-        assert_eq!(payload.size, 5);
+        assert_eq!(payload.size_bytes, 5);
         assert_eq!(payload.source, "add_bytes");
         assert!(payload.content_base64.is_some());
         assert!(payload.blob_ticket.is_none());

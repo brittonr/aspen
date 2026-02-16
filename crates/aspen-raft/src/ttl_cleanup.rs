@@ -36,7 +36,7 @@ pub struct TtlCleanupConfig {
     /// Interval between cleanup runs (default: 60 seconds).
     pub cleanup_interval: Duration,
     /// Maximum keys to delete per batch (default: 1000).
-    pub batch_size: u32,
+    pub batch_size_keys: u32,
     /// Maximum batches per cleanup run (default: 100).
     /// Prevents the cleanup from running indefinitely if there are many expired keys.
     pub max_batches_per_run: u32,
@@ -46,7 +46,7 @@ impl Default for TtlCleanupConfig {
     fn default() -> Self {
         Self {
             cleanup_interval: Duration::from_secs(60),
-            batch_size: 1000,
+            batch_size_keys: 1000,
             max_batches_per_run: 100,
         }
     }
@@ -77,7 +77,7 @@ async fn run_redb_ttl_cleanup_loop(
 
     info!(
         interval_secs = config.cleanup_interval.as_secs(),
-        batch_size = config.batch_size,
+        batch_size = config.batch_size_keys,
         max_batches = config.max_batches_per_run,
         "Redb TTL cleanup task started"
     );
@@ -112,7 +112,7 @@ async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &TtlCle
             break;
         }
 
-        match storage.delete_expired_keys(config.batch_size) {
+        match storage.delete_expired_keys(config.batch_size_keys) {
             Ok(deleted) => {
                 total_deleted += deleted as u64;
                 batches_run += 1;
@@ -122,7 +122,7 @@ async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &TtlCle
                     break;
                 }
 
-                if deleted < config.batch_size {
+                if deleted < config.batch_size_keys {
                     // Deleted fewer than batch size, so we're done
                     break;
                 }
@@ -159,7 +159,7 @@ mod tests {
     fn test_default_config() {
         let config = TtlCleanupConfig::default();
         assert_eq!(config.cleanup_interval, Duration::from_secs(60));
-        assert_eq!(config.batch_size, 1000);
+        assert_eq!(config.batch_size_keys, 1000);
         assert_eq!(config.max_batches_per_run, 100);
     }
 
@@ -167,11 +167,11 @@ mod tests {
     fn test_config_custom_values() {
         let config = TtlCleanupConfig {
             cleanup_interval: Duration::from_secs(30),
-            batch_size: 500,
+            batch_size_keys: 500,
             max_batches_per_run: 50,
         };
         assert_eq!(config.cleanup_interval, Duration::from_secs(30));
-        assert_eq!(config.batch_size, 500);
+        assert_eq!(config.batch_size_keys, 500);
         assert_eq!(config.max_batches_per_run, 50);
     }
 
@@ -180,7 +180,7 @@ mod tests {
         let config = TtlCleanupConfig::default();
         let cloned = config.clone();
         assert_eq!(config.cleanup_interval, cloned.cleanup_interval);
-        assert_eq!(config.batch_size, cloned.batch_size);
+        assert_eq!(config.batch_size_keys, cloned.batch_size_keys);
         assert_eq!(config.max_batches_per_run, cloned.max_batches_per_run);
     }
 
@@ -190,7 +190,7 @@ mod tests {
         let debug_str = format!("{:?}", config);
         assert!(debug_str.contains("TtlCleanupConfig"));
         assert!(debug_str.contains("cleanup_interval"));
-        assert!(debug_str.contains("batch_size"));
+        assert!(debug_str.contains("batch_size_keys"));
         assert!(debug_str.contains("max_batches_per_run"));
     }
 
@@ -198,7 +198,7 @@ mod tests {
     fn test_cleanup_capacity_calculation() {
         // Verify the default config can handle reasonable workloads
         let config = TtlCleanupConfig::default();
-        let keys_per_run = config.batch_size as u64 * config.max_batches_per_run as u64;
+        let keys_per_run = config.batch_size_keys as u64 * config.max_batches_per_run as u64;
         // Default: 1000 * 100 = 100,000 keys per run
         assert_eq!(keys_per_run, 100_000);
 
@@ -212,10 +212,10 @@ mod tests {
         // Config for high-throughput TTL workloads
         let config = TtlCleanupConfig {
             cleanup_interval: Duration::from_secs(10),
-            batch_size: 5000,
+            batch_size_keys: 5000,
             max_batches_per_run: 200,
         };
-        let keys_per_run = config.batch_size as u64 * config.max_batches_per_run as u64;
+        let keys_per_run = config.batch_size_keys as u64 * config.max_batches_per_run as u64;
         // 5000 * 200 = 1,000,000 keys per run
         assert_eq!(keys_per_run, 1_000_000);
     }
@@ -225,10 +225,10 @@ mod tests {
         // Config for low-throughput scenarios
         let config = TtlCleanupConfig {
             cleanup_interval: Duration::from_secs(300), // 5 minutes
-            batch_size: 100,
+            batch_size_keys: 100,
             max_batches_per_run: 10,
         };
-        let keys_per_run = config.batch_size as u64 * config.max_batches_per_run as u64;
+        let keys_per_run = config.batch_size_keys as u64 * config.max_batches_per_run as u64;
         // 100 * 10 = 1,000 keys per run
         assert_eq!(keys_per_run, 1_000);
     }
@@ -259,10 +259,10 @@ mod tests {
         // Zero batch size is technically valid but useless
         let config = TtlCleanupConfig {
             cleanup_interval: Duration::from_secs(60),
-            batch_size: 0,
+            batch_size_keys: 0,
             max_batches_per_run: 100,
         };
-        let keys_per_run = config.batch_size as u64 * config.max_batches_per_run as u64;
+        let keys_per_run = config.batch_size_keys as u64 * config.max_batches_per_run as u64;
         assert_eq!(keys_per_run, 0);
     }
 
@@ -271,7 +271,7 @@ mod tests {
         // Zero max_batches means no cleanup happens per run
         let config = TtlCleanupConfig {
             cleanup_interval: Duration::from_secs(60),
-            batch_size: 1000,
+            batch_size_keys: 1000,
             max_batches_per_run: 0,
         };
         // This is a valid but useless config - cleanup will do nothing

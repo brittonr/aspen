@@ -393,7 +393,8 @@ pub struct DocsEntryImportedPayload {
     /// Priority of the import (lower wins in conflicts).
     pub priority: u32,
     /// Size of the imported value in bytes.
-    pub value_size: u64,
+    #[serde(rename = "value_size")]
+    pub value_size_bytes: u64,
     /// Whether this was a new key or an update.
     pub is_update: bool,
 }
@@ -402,7 +403,8 @@ pub struct DocsEntryImportedPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsEntryExportedPayload {
     /// Number of entries in the exported batch.
-    pub batch_size: u32,
+    #[serde(rename = "batch_size")]
+    pub batch_entry_count: u32,
     /// Total entries exported so far.
     pub total_exported: u64,
     /// Duration to flush the batch in milliseconds.
@@ -482,7 +484,7 @@ mod tests {
         let write_payload = KvWritePayload {
             key: "test/key".to_string(),
             value: Some("value".to_string()),
-            value_size: 5,
+            value_size_bytes: 5,
             is_create: true,
         };
         let json = serde_json::to_value(&write_payload).unwrap();
@@ -565,7 +567,7 @@ mod tests {
             key: "user/123".to_string(),
             source_cluster: "remote-cluster".to_string(),
             priority: 1,
-            value_size: 256,
+            value_size_bytes: 256,
             is_update: false,
         };
         let json = serde_json::to_value(&entry_imported).unwrap();

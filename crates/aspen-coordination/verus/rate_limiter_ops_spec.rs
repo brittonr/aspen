@@ -35,7 +35,7 @@ verus! {
         // Amount is positive
         amount > 0 &&
         // Amount doesn't exceed capacity (would never succeed)
-        amount <= state.capacity &&
+        amount <= state.capacity_tokens &&
         // Enough tokens available
         has_tokens(state, amount)
     }
@@ -207,17 +207,17 @@ verus! {
             }
         } else {
             // Calculate tokens to add using int arithmetic
-            let tokens_to_add_int = intervals_int * (pre.refill_amount as int);
+            let tokens_to_add_int = intervals_int * (pre.refill_tokens as int);
             // Cap at capacity to prevent exceeding bounds
-            let capped_tokens_to_add = if tokens_to_add_int > (pre.capacity as int) {
-                pre.capacity
+            let capped_tokens_to_add = if tokens_to_add_int > (pre.capacity_tokens as int) {
+                pre.capacity_tokens
             } else {
                 tokens_to_add_int as u64
             };
 
             // Saturating add: cap at capacity
-            let new_tokens = if (pre.tokens as int) + (capped_tokens_to_add as int) > (pre.capacity as int) {
-                pre.capacity
+            let new_tokens = if (pre.tokens as int) + (capped_tokens_to_add as int) > (pre.capacity_tokens as int) {
+                pre.capacity_tokens
             } else {
                 (pre.tokens + capped_tokens_to_add) as u64
             };
@@ -359,8 +359,8 @@ verus! {
     )
         requires
             rate_limiter_invariant(state),
-            state.tokens == state.capacity,
-        ensures can_handle_burst(state, state.capacity)
+            state.tokens == state.capacity_tokens,
+        ensures can_handle_burst(state, state.capacity_tokens)
     {
         // tokens == capacity >= capacity
     }
@@ -388,7 +388,7 @@ verus! {
             0
         } else {
             // Use int arithmetic to prevent overflow
-            let rate_int = ((state.refill_amount as int) * 1000) / (state.refill_interval_ms as int);
+            let rate_int = ((state.refill_tokens as int) * 1000) / (state.refill_interval_ms as int);
             if rate_int > 0xFFFF_FFFF_FFFF_FFFF {
                 0xFFFF_FFFF_FFFF_FFFFu64  // Saturate at MAX
             } else {
@@ -413,12 +413,12 @@ verus! {
         ensures ({
             // Max tokens available over duration is bounded by initial + refills
             let num_refills = duration_ms / state.refill_interval_ms;
-            let max_refill_tokens = num_refills * state.refill_amount;
+            let max_refill_tokens = num_refills * state.refill_tokens;
             // Upper bound: initial tokens + all refills, capped at capacity
             let theoretical_max = state.tokens as int + max_refill_tokens as int;
             // But actual is bounded by capacity (saturation)
-            theoretical_max >= state.capacity as int ==>
-                state.capacity <= state.capacity  // trivially true when saturated
+            theoretical_max >= state.capacity_tokens as int ==>
+                state.capacity_tokens <= state.capacity_tokens  // trivially true when saturated
         })
     {
         // When theoretical_max >= capacity, we saturate at capacity

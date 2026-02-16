@@ -210,7 +210,7 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
         let start = Instant::now();
 
         // First verify we have the blob locally
-        if !self.blob_store.has(hash).await.map_err(|e| anyhow::anyhow!("{}", e))? {
+        if !self.blob_store.has(hash).await.context("failed to check local blob availability")? {
             return Err(anyhow::anyhow!("cannot transfer blob {}: not available locally", hash.to_hex()));
         }
 
@@ -219,7 +219,7 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
             .blob_store
             .status(hash)
             .await
-            .map_err(|e| anyhow::anyhow!("{}", e))?
+            .context("failed to get blob status for transfer")?
             .and_then(|s| s.size_bytes)
             .unwrap_or(0);
 
@@ -313,18 +313,12 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
     }
 
     async fn has_locally(&self, hash: &Hash) -> Result<bool> {
-        self.blob_store
-            .has(hash)
-            .await
-            .map_err(|e| anyhow::anyhow!("failed to check blob availability: {}", e))
+        self.blob_store.has(hash).await.context("failed to check blob availability")
     }
 
     async fn get_size(&self, hash: &Hash) -> Result<Option<u64>> {
-        match self.blob_store.status(hash).await {
-            Ok(Some(status)) => Ok(status.size_bytes),
-            Ok(None) => Ok(None),
-            Err(e) => Err(anyhow::anyhow!("failed to get blob status: {}", e)),
-        }
+        let status = self.blob_store.status(hash).await.context("failed to get blob status")?;
+        Ok(status.and_then(|s| s.size_bytes))
     }
 }
 

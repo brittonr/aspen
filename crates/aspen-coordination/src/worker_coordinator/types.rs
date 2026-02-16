@@ -111,7 +111,7 @@ pub struct StealHint {
     /// Source worker ID (the worker to steal from).
     pub source_worker_id: String,
     /// Suggested batch size for stealing.
-    pub batch_size: u32,
+    pub batch_size_tasks: u32,
     /// When this hint was created (Unix ms).
     pub created_at_ms: u64,
     /// When this hint expires (Unix ms).
@@ -122,12 +122,12 @@ pub struct StealHint {
 
 impl StealHint {
     /// Create a new steal hint with TTL.
-    pub fn new(target_worker_id: String, source_worker_id: String, batch_size: u32, source_index: u32) -> Self {
+    pub fn new(target_worker_id: String, source_worker_id: String, batch_size_tasks: u32, source_index: u32) -> Self {
         let now = now_unix_ms();
         Self {
             target_worker_id,
             source_worker_id,
-            batch_size,
+            batch_size_tasks,
             created_at_ms: now,
             expires_at_ms: now + STEAL_HINT_TTL_MS,
             source_index,

@@ -224,7 +224,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
                 if is_success {
                     Ok(SemaphoreStatusResult {
                         available: available.unwrap_or(0),
-                        capacity: capacity.unwrap_or(0),
+                        capacity_permits: capacity.unwrap_or(0),
                     })
                 } else {
                     bail!("semaphore status failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
@@ -249,6 +249,6 @@ pub struct SemaphoreAcquireResult {
 pub struct SemaphoreStatusResult {
     /// Available permits.
     pub available: u32,
-    /// Total capacity.
-    pub capacity: u32,
+    /// Total capacity (in permit count).
+    pub capacity_permits: u32,
 }

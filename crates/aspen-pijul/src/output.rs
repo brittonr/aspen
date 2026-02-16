@@ -31,11 +31,13 @@ use libpijul::output::Conflict;
 use libpijul::output::output_repository_no_pending;
 use libpijul::pristine::MutTxnT;
 use libpijul::working_copy::filesystem::FileSystem as WorkingCopyFs;
+use snafu::ResultExt;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
 
 use super::apply::ChangeDirectory;
+use super::error::CreateDirSnafu;
 use super::error::PijulError;
 use super::error::PijulResult;
 use super::pristine::PristineHandle;
@@ -112,8 +114,8 @@ impl<B: BlobStore> WorkingDirOutput<B> {
         self.changes.ensure_dir()?;
 
         // Ensure working directory exists
-        std::fs::create_dir_all(&self.working_dir).map_err(|e| PijulError::Io {
-            message: format!("failed to create working directory: {}", e),
+        std::fs::create_dir_all(&self.working_dir).context(CreateDirSnafu {
+            path: self.working_dir.clone(),
         })?;
 
         // Create the working copy wrapper
@@ -128,8 +130,9 @@ impl<B: BlobStore> WorkingDirOutput<B> {
         // Open the channel
         let channel_ref = {
             let mut txn = arc_txn.write();
-            txn.open_or_create_channel(channel).map_err(|e| PijulError::PristineStorage {
-                message: format!("failed to open channel: {:?}", e),
+            txn.open_or_create_channel(channel).map_err(|e| PijulError::OpenOrCreateChannel {
+                channel: channel.to_string(),
+                message: format!("{:?}", e),
             })?
         };
 
@@ -147,13 +150,14 @@ impl<B: BlobStore> WorkingDirOutput<B> {
             self.n_workers as usize,
             0, // salt: used for conflict naming
         )
-        .map_err(|e| PijulError::OutputFailed {
+        .map_err(|e| PijulError::OutputChannel {
+            channel: channel.to_string(),
             message: format!("{:?}", e),
         })?;
 
         // Commit the arc transaction to save any inode updates
-        arc_txn.commit().map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to commit transaction: {:?}", e),
+        arc_txn.commit().map_err(|e| PijulError::CommitTransaction {
+            message: format!("{:?}", e),
         })?;
 
         let conflict_count = conflicts.len();
@@ -183,8 +187,8 @@ impl<B: BlobStore> WorkingDirOutput<B> {
         self.changes.ensure_dir()?;
 
         // Ensure working directory exists
-        std::fs::create_dir_all(&self.working_dir).map_err(|e| PijulError::Io {
-            message: format!("failed to create working directory: {}", e),
+        std::fs::create_dir_all(&self.working_dir).context(CreateDirSnafu {
+            path: self.working_dir.clone(),
         })?;
 
         // Create the working copy wrapper
@@ -199,8 +203,9 @@ impl<B: BlobStore> WorkingDirOutput<B> {
         // Open the channel
         let channel_ref = {
             let mut txn = arc_txn.write();
-            txn.open_or_create_channel(channel).map_err(|e| PijulError::PristineStorage {
-                message: format!("failed to open channel: {:?}", e),
+            txn.open_or_create_channel(channel).map_err(|e| PijulError::OpenOrCreateChannel {
+                channel: channel.to_string(),
+                message: format!("{:?}", e),
             })?
         };
 
@@ -223,13 +228,14 @@ impl<B: BlobStore> WorkingDirOutput<B> {
             self.n_workers as usize,
             0,
         )
-        .map_err(|e| PijulError::OutputFailed {
+        .map_err(|e| PijulError::OutputChannel {
+            channel: channel.to_string(),
             message: format!("{:?}", e),
         })?;
 
         // Commit the transaction
-        arc_txn.commit().map_err(|e| PijulError::PristineStorage {
-            message: format!("failed to commit transaction: {:?}", e),
+        arc_txn.commit().map_err(|e| PijulError::CommitTransaction {
+            message: format!("{:?}", e),
         })?;
 
         let conflict_count = conflicts.len();

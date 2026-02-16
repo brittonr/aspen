@@ -626,55 +626,15 @@ async fn job_submit_vm(client: &AspenClient, args: SubmitVmArgs, json: bool) -> 
     }
 
     // Upload binary to blob storage
-    let blob_response = client
-        .send(ClientRpcRequest::AddBlob {
-            data: binary_data.clone(),
-            tag: Some(args.blob_tag),
-        })
-        .await?;
-
-    let blob_hash = match blob_response {
-        ClientRpcResponse::AddBlobResult(result) if result.success => {
-            result.hash.ok_or_else(|| anyhow::anyhow!("Blob uploaded but no hash returned"))?
-        }
-        ClientRpcResponse::AddBlobResult(result) => {
-            anyhow::bail!("Failed to upload binary: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
-        }
-        ClientRpcResponse::Error(e) => anyhow::bail!("Blob upload error: {}: {}", e.code, e.message),
-        _ => anyhow::bail!("unexpected response type for blob upload"),
-    };
+    let blob_hash = job_submit_vm_upload_binary(client, &binary_data, &args.blob_tag).await?;
 
     if !json {
         println!("Binary uploaded with hash: {}", blob_hash);
         println!("Submitting VM job...");
     }
 
-    // Prepare job payload with blob reference
-    let mut payload = json!({
-        "type": "BlobBinary",
-        "hash": blob_hash,
-        "size": binary_data.len(),
-        "format": "elf"
-    });
-
-    // Add input data if provided
-    if let Some(input) = args.input {
-        payload["input"] = json!(input.into_bytes());
-    }
-
-    // Parse tags
-    let tags = args
-        .tags
-        .map(|t| {
-            let mut tags: Vec<String> = t.split(',').map(|s| s.trim().to_string()).collect();
-            tags.push("vm-job".to_string());
-            tags
-        })
-        .unwrap_or_else(|| vec!["vm-job".to_string()]);
-
-    // Submit the job - serialize payload to JSON string
-    let payload_str =
-        serde_json::to_string(&payload).map_err(|e| anyhow::anyhow!("Failed to serialize payload: {}", e))?;
+    // Build payload and tags
+    let (payload_str, tags) = job_submit_vm_build_payload(&blob_hash, binary_data.len(), args.input, args.tags)?;
 
     let response = client
         .send(ClientRpcRequest::JobSubmit {
@@ -705,6 +665,59 @@ async fn job_submit_vm(client: &AspenClient, args: SubmitVmArgs, json: bool) -> 
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
     }
+}
+
+/// Upload a binary to blob storage and return the hash.
+async fn job_submit_vm_upload_binary(client: &AspenClient, binary_data: &[u8], blob_tag: &str) -> Result<String> {
+    let blob_response = client
+        .send(ClientRpcRequest::AddBlob {
+            data: binary_data.to_vec(),
+            tag: Some(blob_tag.to_string()),
+        })
+        .await?;
+
+    match blob_response {
+        ClientRpcResponse::AddBlobResult(result) if result.is_success => {
+            result.hash.ok_or_else(|| anyhow::anyhow!("Blob uploaded but no hash returned"))
+        }
+        ClientRpcResponse::AddBlobResult(result) => {
+            anyhow::bail!("Failed to upload binary: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("Blob upload error: {}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type for blob upload"),
+    }
+}
+
+/// Build the VM job payload JSON string and tags list.
+fn job_submit_vm_build_payload(
+    blob_hash: &str,
+    binary_size: usize,
+    input: Option<String>,
+    tags_arg: Option<String>,
+) -> Result<(String, Vec<String>)> {
+    let mut payload = json!({
+        "type": "BlobBinary",
+        "hash": blob_hash,
+        "size": binary_size,
+        "format": "elf"
+    });
+
+    if let Some(input) = input {
+        payload["input"] = json!(input.into_bytes());
+    }
+
+    let tags = tags_arg
+        .map(|t| {
+            let mut tags: Vec<String> = t.split(',').map(|s| s.trim().to_string()).collect();
+            tags.push("vm-job".to_string());
+            tags
+        })
+        .unwrap_or_else(|| vec!["vm-job".to_string()]);
+
+    let payload_str =
+        serde_json::to_string(&payload).map_err(|e| anyhow::anyhow!("Failed to serialize payload: {}", e))?;
+
+    Ok((payload_str, tags))
 }
 
 async fn job_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result<()> {
@@ -795,55 +808,21 @@ async fn job_result(client: &AspenClient, args: ResultArgs, json: bool) -> Resul
         match response {
             ClientRpcResponse::JobGetResult(result) => {
                 if let Some(job) = result.job {
-                    let status = job.status.as_str();
-
-                    if status == "completed" {
-                        if !json {
-                            println!("Job completed successfully!");
-                            if let Some(result) = &job.result {
-                                println!("Result: {}", serde_json::to_string_pretty(result)?);
+                    match job_result_handle_terminal(&job, json)? {
+                        Some(should_exit) => {
+                            if should_exit {
+                                std::process::exit(1);
                             }
-                        } else {
-                            let output = json!({
-                                "status": "completed",
-                                "result": job.result,
-                                "duration": job.completed_at.as_ref()
-                                    .and_then(|_c| job.started_at.as_ref().map(|_s| {
-                                        // Simple duration calculation (would need proper parsing)
-                                        "unknown"
-                                    }))
-                            });
-                            println!("{}", serde_json::to_string(&output)?);
+                            return Ok(());
                         }
-                        return Ok(());
-                    } else if status == "failed" {
-                        if !json {
-                            println!("Job failed!");
-                            if let Some(error) = &job.error_message {
-                                println!("Error: {}", error);
+                        None => {
+                            // Job still running, show progress
+                            if !json && job.progress > 0 {
+                                print!("\rProgress: {}%", job.progress);
+                                use std::io::Write;
+                                std::io::stdout().flush()?;
                             }
-                        } else {
-                            let output = json!({
-                                "status": "failed",
-                                "error": job.error_message
-                            });
-                            println!("{}", serde_json::to_string(&output)?);
                         }
-                        std::process::exit(1);
-                    } else if status == "cancelled" {
-                        if !json {
-                            println!("Job was cancelled");
-                        } else {
-                            println!("{{\"status\": \"cancelled\"}}");
-                        }
-                        std::process::exit(1);
-                    }
-
-                    // Job still running, continue polling
-                    if !json && job.progress > 0 {
-                        print!("\rProgress: {}%", job.progress);
-                        use std::io::Write;
-                        std::io::stdout().flush()?;
                     }
                 } else {
                     anyhow::bail!("Job not found: {}", args.job_id);
@@ -855,4 +834,55 @@ async fn job_result(client: &AspenClient, args: ResultArgs, json: bool) -> Resul
 
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
+}
+
+/// Handle a terminal job state (completed/failed/cancelled).
+/// Returns Some(should_exit) if terminal, None if still running.
+fn job_result_handle_terminal(job: &JobDetails, json: bool) -> Result<Option<bool>> {
+    let status = job.status.as_str();
+
+    if status == "completed" {
+        if !json {
+            println!("Job completed successfully!");
+            if let Some(result) = &job.result {
+                println!("Result: {}", serde_json::to_string_pretty(result)?);
+            }
+        } else {
+            let output = json!({
+                "status": "completed",
+                "result": job.result,
+                "duration": job.completed_at.as_ref()
+                    .and_then(|_c| job.started_at.as_ref().map(|_s| "unknown"))
+            });
+            println!("{}", serde_json::to_string(&output)?);
+        }
+        return Ok(Some(false));
+    }
+
+    if status == "failed" {
+        if !json {
+            println!("Job failed!");
+            if let Some(error) = &job.error_message {
+                println!("Error: {}", error);
+            }
+        } else {
+            let output = json!({
+                "status": "failed",
+                "error": job.error_message
+            });
+            println!("{}", serde_json::to_string(&output)?);
+        }
+        return Ok(Some(true));
+    }
+
+    if status == "cancelled" {
+        if !json {
+            println!("Job was cancelled");
+        } else {
+            println!("{{\"status\": \"cancelled\"}}");
+        }
+        return Ok(Some(true));
+    }
+
+    Ok(None)
 }

@@ -89,6 +89,10 @@ pub enum CiRequest {
 impl CiRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        self.to_operation_pipeline().or_else(|| self.to_operation_cache_snix())
+    }
+
+    fn to_operation_pipeline(&self) -> Option<aspen_auth::Operation> {
         use aspen_auth::Operation;
         match self {
             Self::CiGetStatus { run_id } => Some(Operation::Read {
@@ -123,7 +127,13 @@ impl CiRequest {
                 key: format!("_ci:runs:{}:{}", run_id, job_id),
             }),
 
-            // Cache operations
+            _ => None,
+        }
+    }
+
+    fn to_operation_cache_snix(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
             Self::CacheQuery { store_hash } | Self::CacheDownload { store_hash } => Some(Operation::Read {
                 key: format!("_cache:narinfo:{store_hash}"),
             }),
@@ -131,7 +141,6 @@ impl CiRequest {
                 key: "_cache:stats".to_string(),
             }),
 
-            // SNIX operations
             Self::SnixDirectoryGet { digest } => Some(Operation::Read {
                 key: format!("snix:dir:{digest}"),
             }),
@@ -147,7 +156,6 @@ impl CiRequest {
                 value: vec![],
             }),
 
-            // Cache migration operations
             #[cfg(feature = "ci")]
             Self::CacheMigrationStart { .. } | Self::CacheMigrationCancel => Some(Operation::ClusterAdmin {
                 action: "cache_migration".to_string(),
@@ -156,6 +164,8 @@ impl CiRequest {
             Self::CacheMigrationStatus | Self::CacheMigrationValidate { .. } => Some(Operation::Read {
                 key: "_cache:migration:".to_string(),
             }),
+
+            _ => None,
         }
     }
 }

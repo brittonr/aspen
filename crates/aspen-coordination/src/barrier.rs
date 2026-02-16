@@ -33,7 +33,7 @@ pub struct BarrierState {
     /// Barrier name.
     pub name: String,
     /// Number of participants required.
-    pub required_count: u32,
+    pub required_participant_count: u32,
     /// Current participants.
     pub participants: Vec<String>,
     /// Current phase.
@@ -162,7 +162,7 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
 
         let state = BarrierState {
             name: name.to_string(),
-            required_count,
+            required_participant_count: required_count,
             participants: vec![participant_id.to_string()],
             phase: initial_phase,
             created_at_ms: crate::types::now_unix_ms(),
@@ -203,10 +203,10 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
         state: &BarrierState,
     ) -> Result<EnterResult> {
         debug_assert!(
-            state.participants.len() as u32 <= state.required_count * 2,
+            state.participants.len() as u32 <= state.required_participant_count * 2,
             "BARRIER: participant count ({}) far exceeds required ({})",
             state.participants.len(),
-            state.required_count
+            state.required_participant_count
         );
 
         // Check if already in barrier
@@ -404,9 +404,11 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
         let key = format!("{}{}", BARRIER_PREFIX, name);
 
         match self.read_state(&key).await? {
-            Some(state) => {
-                Ok((state.participants.len() as u32, state.required_count, state.phase.as_str().to_string()))
-            }
+            Some(state) => Ok((
+                state.participants.len() as u32,
+                state.required_participant_count,
+                state.phase.as_str().to_string(),
+            )),
             None => Ok((0, 0, "none".to_string())),
         }
     }

@@ -13,5 +13,13 @@ pub(crate) fn sanitize_blob_error(err: &BlobStoreError) -> String {
         BlobStoreError::Storage { .. } => "storage error".to_string(),
         BlobStoreError::Download { .. } => "download failed".to_string(),
         BlobStoreError::InvalidTicket { .. } => "invalid ticket".to_string(),
+        BlobStoreError::DeleteTag { .. } | BlobStoreError::ListTags { .. } | BlobStoreError::SetTag { .. } => {
+            "tag operation failed".to_string()
+        }
+        BlobStoreError::AddBytes { .. } | BlobStoreError::AddPath { .. } => "failed to add blob".to_string(),
+        BlobStoreError::ReadFileMetadata { .. } => "failed to read file".to_string(),
+        BlobStoreError::CheckExistence { .. } => "storage error".to_string(),
+        BlobStoreError::ListBlobs { .. } => "failed to list blobs".to_string(),
+        BlobStoreError::DownloadBlob { .. } => "download failed".to_string(),
     }
 }

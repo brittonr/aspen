@@ -3,8 +3,15 @@ use aspen_auth::Operation;
 use super::super::ClientRpcRequest;
 
 pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operation>> {
+    to_operation_lock_counter(request)
+        .or_else(|| to_operation_ratelimiter_barrier(request))
+        .or_else(|| to_operation_semaphore_rwlock(request))
+        .or_else(|| to_operation_queue(request))
+        .or_else(|| to_operation_service(request))
+}
+
+fn to_operation_lock_counter(request: &ClientRpcRequest) -> Option<Option<Operation>> {
     match request {
-        // Lock operations
         ClientRpcRequest::LockAcquire { key, .. }
         | ClientRpcRequest::LockTryAcquire { key, .. }
         | ClientRpcRequest::LockRelease { key, .. }
@@ -13,14 +20,12 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             value: vec![],
         })),
 
-        // Counter read operations
         ClientRpcRequest::CounterGet { key }
         | ClientRpcRequest::SignedCounterGet { key }
         | ClientRpcRequest::SequenceCurrent { key } => Some(Some(Operation::Read {
             key: format!("_counter:{key}"),
         })),
 
-        // Counter write operations
         ClientRpcRequest::CounterIncrement { key }
         | ClientRpcRequest::CounterDecrement { key }
         | ClientRpcRequest::CounterAdd { key, .. }
@@ -34,7 +39,12 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             value: vec![],
         })),
 
-        // Rate limiter operations
+        _ => None,
+    }
+}
+
+fn to_operation_ratelimiter_barrier(request: &ClientRpcRequest) -> Option<Option<Operation>> {
+    match request {
         ClientRpcRequest::RateLimiterTryAcquire { key, .. }
         | ClientRpcRequest::RateLimiterAcquire { key, .. }
         | ClientRpcRequest::RateLimiterReset { key, .. } => Some(Some(Operation::Write {
@@ -45,7 +55,6 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             key: format!("_ratelimit:{key}"),
         })),
 
-        // Barrier operations
         ClientRpcRequest::BarrierEnter { name, .. } | ClientRpcRequest::BarrierLeave { name, .. } => {
             Some(Some(Operation::Write {
                 key: format!("_barrier:{name}"),
@@ -56,7 +65,12 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             key: format!("_barrier:{name}"),
         })),
 
-        // Semaphore operations
+        _ => None,
+    }
+}
+
+fn to_operation_semaphore_rwlock(request: &ClientRpcRequest) -> Option<Option<Operation>> {
+    match request {
         ClientRpcRequest::SemaphoreAcquire { name, .. }
         | ClientRpcRequest::SemaphoreTryAcquire { name, .. }
         | ClientRpcRequest::SemaphoreRelease { name, .. } => Some(Some(Operation::Write {
@@ -67,7 +81,6 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             key: format!("_semaphore:{name}"),
         })),
 
-        // RWLock operations
         ClientRpcRequest::RWLockAcquireRead { name, .. }
         | ClientRpcRequest::RWLockTryAcquireRead { name, .. }
         | ClientRpcRequest::RWLockAcquireWrite { name, .. }
@@ -82,7 +95,12 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             key: format!("_rwlock:{name}"),
         })),
 
-        // Queue operations
+        _ => None,
+    }
+}
+
+fn to_operation_queue(request: &ClientRpcRequest) -> Option<Option<Operation>> {
+    match request {
         ClientRpcRequest::QueueCreate { queue_name, .. }
         | ClientRpcRequest::QueueDelete { queue_name }
         | ClientRpcRequest::QueueEnqueue { queue_name, .. }
@@ -102,7 +120,12 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             key: format!("_queue:{queue_name}"),
         })),
 
-        // Service registry operations
+        _ => None,
+    }
+}
+
+fn to_operation_service(request: &ClientRpcRequest) -> Option<Option<Operation>> {
+    match request {
         ClientRpcRequest::ServiceRegister { service_name, .. }
         | ClientRpcRequest::ServiceDeregister { service_name, .. }
         | ClientRpcRequest::ServiceHeartbeat { service_name, .. }

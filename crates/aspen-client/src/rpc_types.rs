@@ -249,7 +249,8 @@ pub struct DocsTicketResponse {
 pub struct AddBlobResultResponse {
     pub success: bool,
     pub hash: Option<String>,
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     pub was_new: Option<bool>,
     pub error: Option<String>,
 }
@@ -312,7 +313,8 @@ pub struct DeleteBlobResultResponse {
 pub struct DownloadBlobResultResponse {
     pub success: bool,
     pub hash: Option<String>,
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     pub error: Option<String>,
 }
 
@@ -320,7 +322,8 @@ pub struct DownloadBlobResultResponse {
 pub struct GetBlobStatusResultResponse {
     pub found: bool,
     pub hash: Option<String>,
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     pub complete: Option<bool>,
     pub tags: Option<Vec<String>>,
     pub error: Option<String>,
@@ -331,7 +334,8 @@ pub struct GetBlobStatusResultResponse {
 pub struct DocsSetResultResponse {
     pub success: bool,
     pub key: Option<String>,
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     pub error: Option<String>,
 }
 
@@ -339,7 +343,8 @@ pub struct DocsSetResultResponse {
 pub struct DocsGetResultResponse {
     pub found: bool,
     pub value: Option<Vec<u8>>,
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     pub error: Option<String>,
 }
 

@@ -86,7 +86,7 @@ pub struct TicketArgs {
 pub struct DocsSetOutput {
     pub is_success: bool,
     pub key: Option<String>,
-    pub size: Option<u64>,
+    pub size_bytes: Option<u64>,
     pub error: Option<String>,
 }
 
@@ -95,7 +95,7 @@ impl Outputable for DocsSetOutput {
         serde_json::json!({
             "is_success": self.is_success,
             "key": self.key,
-            "size": self.size,
+            "size_bytes": self.size_bytes,
             "error": self.error,
         })
     }
@@ -105,7 +105,7 @@ impl Outputable for DocsSetOutput {
             format!("error: {e}")
         } else if self.is_success {
             let key = self.key.as_deref().unwrap_or("?");
-            let size = self.size.unwrap_or(0);
+            let size = self.size_bytes.unwrap_or(0);
             format!("{key} ({size} bytes)")
         } else {
             "failed".to_string()
@@ -117,7 +117,7 @@ impl Outputable for DocsSetOutput {
 pub struct DocsGetOutput {
     pub was_found: bool,
     pub value: Option<Vec<u8>>,
-    pub size: Option<u64>,
+    pub size_bytes: Option<u64>,
     pub error: Option<String>,
 }
 
@@ -127,7 +127,7 @@ impl Outputable for DocsGetOutput {
         serde_json::json!({
             "was_found": self.was_found,
             "value": value_str,
-            "size": self.size,
+            "size_bytes": self.size_bytes,
             "error": self.error,
         })
     }
@@ -139,7 +139,7 @@ impl Outputable for DocsGetOutput {
             if let Some(ref v) = self.value {
                 String::from_utf8_lossy(v).to_string()
             } else {
-                let size = self.size.unwrap_or(0);
+                let size = self.size_bytes.unwrap_or(0);
                 format!("(found, {size} bytes, content not available)")
             }
         } else {
@@ -184,7 +184,7 @@ pub struct DocsListOutput {
 /// Single docs list entry.
 pub struct DocsListEntry {
     pub key: String,
-    pub size: u64,
+    pub size_bytes: u64,
     pub hash: String,
 }
 
@@ -196,7 +196,7 @@ impl Outputable for DocsListOutput {
             .map(|e| {
                 serde_json::json!({
                     "key": e.key,
-                    "size": e.size,
+                    "size_bytes": e.size_bytes,
                     "hash": e.hash,
                 })
             })
@@ -220,7 +220,7 @@ impl Outputable for DocsListOutput {
 
         let mut lines: Vec<String> = Vec::new();
         for entry in &self.entries {
-            lines.push(format!("{} ({} bytes, {})", entry.key, entry.size, &entry.hash[..16]));
+            lines.push(format!("{} ({} bytes, {})", entry.key, entry.size_bytes, &entry.hash[..16]));
         }
         if self.has_more {
             lines.push(format!("... ({} shown, more available)", self.count));
@@ -345,13 +345,13 @@ async fn docs_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()>
         ClientRpcResponse::DocsSetResult(r) => DocsSetOutput {
             is_success: r.is_success,
             key: r.key,
-            size: r.size,
+            size_bytes: r.size,
             error: r.error,
         },
         other => DocsSetOutput {
             is_success: false,
             key: None,
-            size: None,
+            size_bytes: None,
             error: Some(format!("unexpected response: {other:?}")),
         },
     };
@@ -369,13 +369,13 @@ async fn docs_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
         ClientRpcResponse::DocsGetResult(r) => DocsGetOutput {
             was_found: r.was_found,
             value: r.value,
-            size: r.size,
+            size_bytes: r.size,
             error: r.error,
         },
         other => DocsGetOutput {
             was_found: false,
             value: None,
-            size: None,
+            size_bytes: None,
             error: Some(format!("unexpected response: {other:?}")),
         },
     };
@@ -419,7 +419,7 @@ async fn docs_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<(
                 .into_iter()
                 .map(|e| DocsListEntry {
                     key: e.key,
-                    size: e.size,
+                    size_bytes: e.size_bytes,
                     hash: e.hash,
                 })
                 .collect();

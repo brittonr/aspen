@@ -42,9 +42,9 @@ pub struct TryAcquireArgs {
     #[arg(long, default_value = "1")]
     pub tokens: u64,
 
-    /// Maximum bucket capacity.
-    #[arg(long)]
-    pub capacity: u64,
+    /// Maximum bucket capacity (in tokens).
+    #[arg(long = "capacity")]
+    pub capacity_tokens: u64,
 
     /// Token refill rate per second.
     #[arg(long)]
@@ -60,9 +60,9 @@ pub struct AcquireArgs {
     #[arg(long, default_value = "1")]
     pub tokens: u64,
 
-    /// Maximum bucket capacity.
-    #[arg(long)]
-    pub capacity: u64,
+    /// Maximum bucket capacity (in tokens).
+    #[arg(long = "capacity")]
+    pub capacity_tokens: u64,
 
     /// Token refill rate per second.
     #[arg(long)]
@@ -78,9 +78,9 @@ pub struct AvailableArgs {
     /// Rate limiter key.
     pub key: String,
 
-    /// Maximum bucket capacity.
-    #[arg(long)]
-    pub capacity: u64,
+    /// Maximum bucket capacity (in tokens).
+    #[arg(long = "capacity")]
+    pub capacity_tokens: u64,
 
     /// Token refill rate per second.
     #[arg(long)]
@@ -92,9 +92,9 @@ pub struct ResetArgs {
     /// Rate limiter key.
     pub key: String,
 
-    /// Maximum bucket capacity.
-    #[arg(long)]
-    pub capacity: u64,
+    /// Maximum bucket capacity (in tokens).
+    #[arg(long = "capacity")]
+    pub capacity_tokens: u64,
 
     /// Token refill rate per second.
     #[arg(long)]
@@ -158,7 +158,7 @@ async fn ratelimit_try_acquire(client: &AspenClient, args: TryAcquireArgs, json:
         .send(ClientRpcRequest::RateLimiterTryAcquire {
             key: args.key.clone(),
             tokens: args.tokens,
-            capacity: args.capacity,
+            capacity_tokens: args.capacity_tokens,
             refill_rate: args.rate,
         })
         .await?;
@@ -189,7 +189,7 @@ async fn ratelimit_acquire(client: &AspenClient, args: AcquireArgs, json: bool) 
         .send(ClientRpcRequest::RateLimiterAcquire {
             key: args.key.clone(),
             tokens: args.tokens,
-            capacity: args.capacity,
+            capacity_tokens: args.capacity_tokens,
             refill_rate: args.rate,
             timeout_ms: args.timeout_ms,
         })
@@ -220,7 +220,7 @@ async fn ratelimit_available(client: &AspenClient, args: AvailableArgs, json: bo
     let response = client
         .send(ClientRpcRequest::RateLimiterAvailable {
             key: args.key.clone(),
-            capacity: args.capacity,
+            capacity_tokens: args.capacity_tokens,
             refill_rate: args.rate,
         })
         .await?;
@@ -250,7 +250,7 @@ async fn ratelimit_reset(client: &AspenClient, args: ResetArgs, json: bool) -> R
     let response = client
         .send(ClientRpcRequest::RateLimiterReset {
             key: args.key.clone(),
-            capacity: args.capacity,
+            capacity_tokens: args.capacity_tokens,
             refill_rate: args.rate,
         })
         .await?;

@@ -77,7 +77,7 @@ async fn run_ttl_events_bridge(
     info!(
         node_id,
         interval_secs = config.cleanup_interval.as_secs(),
-        batch_size = config.batch_size,
+        batch_size_keys = config.batch_size_keys,
         max_batches = config.max_batches_per_run,
         "TTL events bridge started"
     );
@@ -133,7 +133,7 @@ async fn run_cleanup_iteration_with_events(
         }
 
         // Get expired keys with their metadata before deletion
-        match storage.get_expired_keys_with_metadata(config.batch_size) {
+        match storage.get_expired_keys_with_metadata(config.batch_size_keys) {
             Ok(expired_keys) => {
                 if expired_keys.is_empty() {
                     break;
@@ -165,12 +165,12 @@ async fn run_cleanup_iteration_with_events(
                 }
 
                 // Delete the expired keys
-                match storage.delete_expired_keys(config.batch_size) {
+                match storage.delete_expired_keys(config.batch_size_keys) {
                     Ok(deleted) => {
                         total_deleted += deleted as u64;
                         batches_run += 1;
 
-                        if deleted < config.batch_size {
+                        if deleted < config.batch_size_keys {
                             break;
                         }
                     }
@@ -180,18 +180,18 @@ async fn run_cleanup_iteration_with_events(
                     }
                 }
 
-                if batch_count < config.batch_size as usize {
+                if batch_count < config.batch_size_keys as usize {
                     break;
                 }
             }
             Err(e) => {
                 // Fallback to standard delete without events if metadata query fails
                 warn!(node_id, error = %e, "failed to get expired keys metadata, falling back to standard delete");
-                match storage.delete_expired_keys(config.batch_size) {
+                match storage.delete_expired_keys(config.batch_size_keys) {
                     Ok(deleted) => {
                         total_deleted += deleted as u64;
                         batches_run += 1;
-                        if deleted == 0 || deleted < config.batch_size {
+                        if deleted == 0 || deleted < config.batch_size_keys {
                             break;
                         }
                     }
@@ -346,7 +346,7 @@ mod tests {
     fn test_ttl_cleanup_config_defaults() {
         let config = TtlCleanupConfig::default();
         // Verify we have sensible defaults
-        assert!(config.batch_size > 0);
+        assert!(config.batch_size_keys > 0);
         assert!(config.max_batches_per_run > 0);
         assert!(config.cleanup_interval.as_secs() > 0);
     }

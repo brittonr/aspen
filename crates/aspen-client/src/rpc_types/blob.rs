@@ -7,7 +7,8 @@ use serde::Serialize;
 pub struct AddBlobResultResponse {
     pub success: bool,
     pub hash: Option<String>,
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     pub was_new: Option<bool>,
     pub error: Option<String>,
 }
@@ -35,7 +36,8 @@ pub struct GetBlobTicketResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobListEntry {
     pub hash: String,
-    pub size: u64,
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,7 +71,8 @@ pub struct DeleteBlobResultResponse {
 pub struct DownloadBlobResultResponse {
     pub success: bool,
     pub hash: Option<String>,
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     pub error: Option<String>,
 }
 
@@ -77,7 +80,8 @@ pub struct DownloadBlobResultResponse {
 pub struct GetBlobStatusResultResponse {
     pub found: bool,
     pub hash: Option<String>,
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     pub complete: Option<bool>,
     pub tags: Option<Vec<String>>,
     pub error: Option<String>,

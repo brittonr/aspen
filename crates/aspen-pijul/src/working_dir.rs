@@ -58,6 +58,7 @@ use std::path::PathBuf;
 use aspen_forge::identity::RepoId;
 use serde::Deserialize;
 use serde::Serialize;
+use snafu::ResultExt;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
@@ -70,8 +71,14 @@ use super::constants::WORKING_DIR_CONFIG_FILE;
 use super::constants::WORKING_DIR_METADATA_DIR;
 use super::constants::WORKING_DIR_PRISTINE_DIR;
 use super::constants::WORKING_DIR_STAGED_FILE;
+use super::error::CreateDirSnafu;
 use super::error::PijulError;
 use super::error::PijulResult;
+use super::error::ReadDirEntrySnafu;
+use super::error::ReadDirSnafu;
+use super::error::ReadFileToStringSnafu;
+use super::error::StatFileSnafu;
+use super::error::WriteFileSnafu;
 use super::pristine::PristineHandle;
 use super::pristine::PristineManager;
 
@@ -218,30 +225,29 @@ impl WorkingDirectory {
         }
 
         // Create metadata directory
-        std::fs::create_dir_all(&metadata_dir).map_err(|e| PijulError::Io {
-            message: format!("failed to create metadata directory: {}", e),
+        std::fs::create_dir_all(&metadata_dir).context(CreateDirSnafu {
+            path: metadata_dir.clone(),
         })?;
 
         // Create pristine subdirectory
         let pristine_dir = metadata_dir.join(WORKING_DIR_PRISTINE_DIR);
-        std::fs::create_dir_all(&pristine_dir).map_err(|e| PijulError::Io {
-            message: format!("failed to create pristine directory: {}", e),
+        std::fs::create_dir_all(&pristine_dir).context(CreateDirSnafu {
+            path: pristine_dir.clone(),
         })?;
 
         // Create empty staged file
         let staged_path = metadata_dir.join(WORKING_DIR_STAGED_FILE);
-        std::fs::write(&staged_path, "").map_err(|e| PijulError::Io {
-            message: format!("failed to create staged file: {}", e),
+        std::fs::write(&staged_path, "").context(WriteFileSnafu {
+            path: staged_path.clone(),
         })?;
 
         // Create configuration
         let config = WorkingDirectoryConfig::new(repo_id, channel, remote);
         let config_path = metadata_dir.join(WORKING_DIR_CONFIG_FILE);
-        let config_toml = toml::to_string_pretty(&config).map_err(|e| PijulError::Serialization {
-            message: format!("failed to serialize config: {}", e),
-        })?;
-        std::fs::write(&config_path, config_toml).map_err(|e| PijulError::Io {
-            message: format!("failed to write config file: {}", e),
+        let config_toml =
+            toml::to_string_pretty(&config).map_err(|e| PijulError::SerializeConfig { message: e.to_string() })?;
+        std::fs::write(&config_path, config_toml).context(WriteFileSnafu {
+            path: config_path.clone(),
         })?;
 
         info!(path = %root.display(), repo_id = %repo_id, channel = channel, "initialized working directory");
@@ -274,19 +280,20 @@ impl WorkingDirectory {
 
         // Read configuration with size limit (Tiger Style)
         let config_path = metadata_dir.join(WORKING_DIR_CONFIG_FILE);
-        let metadata = std::fs::metadata(&config_path).map_err(|e| PijulError::Io {
-            message: format!("failed to stat config file: {}", e),
+        let metadata = std::fs::metadata(&config_path).context(StatFileSnafu {
+            path: config_path.clone(),
         })?;
         if metadata.len() > MAX_WORKING_DIR_FILE_SIZE {
             return Err(PijulError::Io {
                 message: format!("config file too large: {} bytes (max {})", metadata.len(), MAX_WORKING_DIR_FILE_SIZE),
             });
         }
-        let config_toml = std::fs::read_to_string(&config_path).map_err(|e| PijulError::Io {
-            message: format!("failed to read config file: {}", e),
+        let config_toml = std::fs::read_to_string(&config_path).context(ReadFileToStringSnafu {
+            path: config_path.clone(),
         })?;
-        let config: WorkingDirectoryConfig = toml::from_str(&config_toml).map_err(|e| PijulError::Deserialization {
-            message: format!("failed to parse config file: {}", e),
+        let config: WorkingDirectoryConfig = toml::from_str(&config_toml).map_err(|e| PijulError::ParseConfig {
+            path: config_path.clone(),
+            message: e.to_string(),
         })?;
 
         debug!(path = %root.display(), repo_id = %config.repo_id, "opened working directory");
@@ -381,18 +388,14 @@ impl WorkingDirectory {
         }
 
         // Tiger Style: Check file size before reading
-        let metadata = std::fs::metadata(&path).map_err(|e| PijulError::Io {
-            message: format!("failed to stat staged file: {}", e),
-        })?;
+        let metadata = std::fs::metadata(&path).context(StatFileSnafu { path: path.clone() })?;
         if metadata.len() > MAX_WORKING_DIR_FILE_SIZE {
             return Err(PijulError::Io {
                 message: format!("staged file too large: {} bytes (max {})", metadata.len(), MAX_WORKING_DIR_FILE_SIZE),
             });
         }
 
-        let content = std::fs::read_to_string(&path).map_err(|e| PijulError::Io {
-            message: format!("failed to read staged file: {}", e),
-        })?;
+        let content = std::fs::read_to_string(&path).context(ReadFileToStringSnafu { path: path.clone() })?;
 
         Ok(content.lines().filter(|line| !line.is_empty()).map(|s| s.to_string()).collect())
     }
@@ -402,9 +405,7 @@ impl WorkingDirectory {
         let path = self.staged_path();
         let content = files.join("\n");
 
-        std::fs::write(&path, content).map_err(|e| PijulError::Io {
-            message: format!("failed to write staged file: {}", e),
-        })?;
+        std::fs::write(&path, content).context(WriteFileSnafu { path })?;
 
         Ok(())
     }
@@ -501,13 +502,13 @@ impl WorkingDirectory {
         staged: &mut Vec<String>,
         added: &mut Vec<String>,
     ) -> PijulResult<()> {
-        let entries = std::fs::read_dir(dir).map_err(|e| PijulError::Io {
-            message: format!("failed to read directory: {}", e),
+        let entries = std::fs::read_dir(dir).context(ReadDirSnafu {
+            path: dir.to_path_buf(),
         })?;
 
         for entry in entries {
-            let entry = entry.map_err(|e| PijulError::Io {
-                message: format!("failed to read directory entry: {}", e),
+            let entry = entry.context(ReadDirEntrySnafu {
+                path: dir.to_path_buf(),
             })?;
 
             let path = entry.path();
@@ -632,12 +633,9 @@ impl WorkingDirectory {
     /// Save configuration to disk.
     fn save_config(&self) -> PijulResult<()> {
         let config_path = self.metadata_dir.join(WORKING_DIR_CONFIG_FILE);
-        let config_toml = toml::to_string_pretty(&self.config).map_err(|e| PijulError::Serialization {
-            message: format!("failed to serialize config: {}", e),
-        })?;
-        std::fs::write(&config_path, config_toml).map_err(|e| PijulError::Io {
-            message: format!("failed to write config file: {}", e),
-        })?;
+        let config_toml =
+            toml::to_string_pretty(&self.config).map_err(|e| PijulError::SerializeConfig { message: e.to_string() })?;
+        std::fs::write(&config_path, config_toml).context(WriteFileSnafu { path: config_path })?;
         Ok(())
     }
 }

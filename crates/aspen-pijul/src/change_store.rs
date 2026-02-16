@@ -67,8 +67,7 @@ impl<B: BlobStore> AspenChangeStore<B> {
         }
 
         // Store in iroh-blobs
-        let result =
-            self.blobs.add_bytes(data).await.map_err(|e| PijulError::BlobStorage { message: e.to_string() })?;
+        let result = self.blobs.add_bytes(data).await.map_err(|e| PijulError::AddBlob { message: e.to_string() })?;
 
         // The BLAKE3 hash from iroh-blobs IS the change hash
         let hash = ChangeHash::from_iroh_hash(result.blob_ref.hash);
@@ -100,11 +99,10 @@ impl<B: BlobStore> AspenChangeStore<B> {
 
         // Fetch from blob store
         let iroh_hash = hash.to_iroh_hash();
-        let bytes = self
-            .blobs
-            .get_bytes(&iroh_hash)
-            .await
-            .map_err(|e| PijulError::BlobStorage { message: e.to_string() })?;
+        let bytes = self.blobs.get_bytes(&iroh_hash).await.map_err(|e| PijulError::GetBlob {
+            hash: hash.to_hex(),
+            message: e.to_string(),
+        })?;
 
         match bytes {
             Some(data) => {
@@ -139,7 +137,10 @@ impl<B: BlobStore> AspenChangeStore<B> {
 
         // Check blob store
         let iroh_hash = hash.to_iroh_hash();
-        self.blobs.has(&iroh_hash).await.map_err(|e| PijulError::BlobStorage { message: e.to_string() })
+        self.blobs.has(&iroh_hash).await.map_err(|e| PijulError::CheckBlobExists {
+            hash: hash.to_hex(),
+            message: e.to_string(),
+        })
     }
 
     /// Download a change from a remote peer.
@@ -165,16 +166,19 @@ impl<B: BlobStore> AspenChangeStore<B> {
     #[instrument(skip(self))]
     pub async fn protect(&self, hash: &ChangeHash, tag_name: &str) -> PijulResult<()> {
         let iroh_hash = hash.to_iroh_hash();
-        self.blobs
-            .protect(&iroh_hash, tag_name)
-            .await
-            .map_err(|e| PijulError::BlobStorage { message: e.to_string() })
+        self.blobs.protect(&iroh_hash, tag_name).await.map_err(|e| PijulError::ProtectBlob {
+            tag: tag_name.to_string(),
+            message: e.to_string(),
+        })
     }
 
     /// Remove protection from a change.
     #[instrument(skip(self))]
     pub async fn unprotect(&self, tag_name: &str) -> PijulResult<()> {
-        self.blobs.unprotect(tag_name).await.map_err(|e| PijulError::BlobStorage { message: e.to_string() })
+        self.blobs.unprotect(tag_name).await.map_err(|e| PijulError::UnprotectBlob {
+            tag: tag_name.to_string(),
+            message: e.to_string(),
+        })
     }
 
     /// Clear the change cache.

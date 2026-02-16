@@ -37,7 +37,7 @@ pub struct LeaseCleanupConfig {
     /// Leases typically have shorter TTLs so we check more frequently.
     pub cleanup_interval: Duration,
     /// Maximum leases to delete per batch (default: 100).
-    pub batch_size: u32,
+    pub batch_size_leases: u32,
     /// Maximum batches per cleanup run (default: 10).
     /// Prevents the cleanup from running indefinitely if there are many expired leases.
     pub max_batches_per_run: u32,
@@ -47,7 +47,7 @@ impl Default for LeaseCleanupConfig {
     fn default() -> Self {
         Self {
             cleanup_interval: Duration::from_secs(10),
-            batch_size: 100,
+            batch_size_leases: 100,
             max_batches_per_run: 10,
         }
     }
@@ -78,7 +78,7 @@ async fn run_redb_lease_cleanup_loop(
 
     info!(
         interval_secs = config.cleanup_interval.as_secs(),
-        batch_size = config.batch_size,
+        batch_size_leases = config.batch_size_leases,
         max_batches = config.max_batches_per_run,
         "Redb lease cleanup task started"
     );
@@ -113,7 +113,7 @@ async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &LeaseC
             break;
         }
 
-        match storage.delete_expired_leases(config.batch_size) {
+        match storage.delete_expired_leases(config.batch_size_leases) {
             Ok(deleted) => {
                 total_deleted += deleted as u64;
                 batches_run += 1;
@@ -123,7 +123,7 @@ async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &LeaseC
                     break;
                 }
 
-                if deleted < config.batch_size {
+                if deleted < config.batch_size_leases {
                     // Deleted fewer than batch size, so we're done
                     break;
                 }
@@ -160,7 +160,7 @@ mod tests {
     fn test_default_config() {
         let config = LeaseCleanupConfig::default();
         assert_eq!(config.cleanup_interval, Duration::from_secs(10));
-        assert_eq!(config.batch_size, 100);
+        assert_eq!(config.batch_size_leases, 100);
         assert_eq!(config.max_batches_per_run, 10);
     }
 
@@ -168,11 +168,11 @@ mod tests {
     fn test_config_custom_values() {
         let config = LeaseCleanupConfig {
             cleanup_interval: Duration::from_secs(5),
-            batch_size: 50,
+            batch_size_leases: 50,
             max_batches_per_run: 20,
         };
         assert_eq!(config.cleanup_interval, Duration::from_secs(5));
-        assert_eq!(config.batch_size, 50);
+        assert_eq!(config.batch_size_leases, 50);
         assert_eq!(config.max_batches_per_run, 20);
     }
 
@@ -181,7 +181,7 @@ mod tests {
         let config = LeaseCleanupConfig::default();
         let cloned = config.clone();
         assert_eq!(config.cleanup_interval, cloned.cleanup_interval);
-        assert_eq!(config.batch_size, cloned.batch_size);
+        assert_eq!(config.batch_size_leases, cloned.batch_size_leases);
         assert_eq!(config.max_batches_per_run, cloned.max_batches_per_run);
     }
 
@@ -191,7 +191,7 @@ mod tests {
         let debug_str = format!("{:?}", config);
         assert!(debug_str.contains("LeaseCleanupConfig"));
         assert!(debug_str.contains("cleanup_interval"));
-        assert!(debug_str.contains("batch_size"));
+        assert!(debug_str.contains("batch_size_leases"));
         assert!(debug_str.contains("max_batches_per_run"));
     }
 
@@ -199,7 +199,7 @@ mod tests {
     fn test_cleanup_capacity_calculation() {
         // Verify the default config can handle reasonable workloads
         let config = LeaseCleanupConfig::default();
-        let leases_per_run = config.batch_size as u64 * config.max_batches_per_run as u64;
+        let leases_per_run = config.batch_size_leases as u64 * config.max_batches_per_run as u64;
         // Default: 100 * 10 = 1,000 leases per run
         assert_eq!(leases_per_run, 1_000);
 
@@ -213,10 +213,10 @@ mod tests {
         // Config for high-throughput lease workloads
         let config = LeaseCleanupConfig {
             cleanup_interval: Duration::from_secs(1),
-            batch_size: 500,
+            batch_size_leases: 500,
             max_batches_per_run: 100,
         };
-        let leases_per_run = config.batch_size as u64 * config.max_batches_per_run as u64;
+        let leases_per_run = config.batch_size_leases as u64 * config.max_batches_per_run as u64;
         // 500 * 100 = 50,000 leases per run
         assert_eq!(leases_per_run, 50_000);
     }
@@ -226,10 +226,10 @@ mod tests {
         // Config for low-throughput scenarios
         let config = LeaseCleanupConfig {
             cleanup_interval: Duration::from_secs(60),
-            batch_size: 10,
+            batch_size_leases: 10,
             max_batches_per_run: 5,
         };
-        let leases_per_run = config.batch_size as u64 * config.max_batches_per_run as u64;
+        let leases_per_run = config.batch_size_leases as u64 * config.max_batches_per_run as u64;
         // 10 * 5 = 50 leases per run
         assert_eq!(leases_per_run, 50);
     }
@@ -260,10 +260,10 @@ mod tests {
         // Zero batch size is technically valid but useless
         let config = LeaseCleanupConfig {
             cleanup_interval: Duration::from_secs(10),
-            batch_size: 0,
+            batch_size_leases: 0,
             max_batches_per_run: 10,
         };
-        let leases_per_run = config.batch_size as u64 * config.max_batches_per_run as u64;
+        let leases_per_run = config.batch_size_leases as u64 * config.max_batches_per_run as u64;
         assert_eq!(leases_per_run, 0);
     }
 
@@ -272,7 +272,7 @@ mod tests {
         // Zero max_batches means no cleanup happens per run
         let config = LeaseCleanupConfig {
             cleanup_interval: Duration::from_secs(10),
-            batch_size: 100,
+            batch_size_leases: 100,
             max_batches_per_run: 0,
         };
         // This is a valid but useless config - cleanup will do nothing

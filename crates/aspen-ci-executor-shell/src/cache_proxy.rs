@@ -102,6 +102,29 @@ pub enum CacheProxyError {
         reason: String,
     },
 
+    /// H3 client connection error.
+    #[snafu(display("failed to create H3 client connection: {source}"))]
+    H3ClientConnection {
+        /// The underlying H3 connection error.
+        source: h3::error::ConnectionError,
+    },
+
+    /// H3 stream error (send, finish, receive).
+    #[snafu(display("H3 stream error during {operation}: {source}"))]
+    H3Stream {
+        /// The operation that failed.
+        operation: String,
+        /// The underlying H3 stream error.
+        source: h3::error::StreamError,
+    },
+
+    /// Failed to build HTTP request.
+    #[snafu(display("failed to build HTTP request: {source}"))]
+    RequestBuild {
+        /// The underlying HTTP error.
+        source: http::Error,
+    },
+
     /// Failed to build HTTP response.
     #[snafu(display("failed to build HTTP response: {message}"))]
     ResponseBuild {
@@ -371,8 +394,7 @@ async fn forward_get_request(state: &ProxyState, path: &str) -> ProxyResult<Byte
     let h3_conn = h3_iroh::Connection::new(conn);
 
     // Create H3 client connection
-    let (mut driver, mut send_request) =
-        h3::client::new(h3_conn).await.map_err(|e| CacheProxyError::H3Protocol { reason: e.to_string() })?;
+    let (mut driver, mut send_request) = h3::client::new(h3_conn).await.context(H3ClientConnectionSnafu {})?;
 
     // Drive the connection in the background
     // We use a channel to signal when we're done so the driver can close cleanly
@@ -395,19 +417,25 @@ async fn forward_get_request(state: &ProxyState, path: &str) -> ProxyResult<Byte
         .uri(path)
         .header("host", "aspen-cache")
         .body(())
-        .map_err(|e| CacheProxyError::H3Protocol { reason: e.to_string() })?;
+        .context(RequestBuildSnafu)?;
 
     // Send request
-    let mut stream = send_request
-        .send_request(req)
-        .await
-        .map_err(|e| CacheProxyError::H3Protocol { reason: e.to_string() })?;
+    let mut stream = send_request.send_request(req).await.map_err(|e| CacheProxyError::H3Stream {
+        operation: "send_request".to_string(),
+        source: e,
+    })?;
 
     // Finish sending (no body)
-    stream.finish().await.map_err(|e| CacheProxyError::H3Protocol { reason: e.to_string() })?;
+    stream.finish().await.map_err(|e| CacheProxyError::H3Stream {
+        operation: "finish".to_string(),
+        source: e,
+    })?;
 
     // Receive response
-    let resp = stream.recv_response().await.map_err(|e| CacheProxyError::H3Protocol { reason: e.to_string() })?;
+    let resp = stream.recv_response().await.map_err(|e| CacheProxyError::H3Stream {
+        operation: "recv_response".to_string(),
+        source: e,
+    })?;
 
     debug!(status = %resp.status(), "received response from gateway");
 
@@ -424,9 +452,10 @@ async fn forward_get_request(state: &ProxyState, path: &str) -> ProxyResult<Byte
 
     // Collect response body
     let mut body = Vec::new();
-    while let Some(chunk) =
-        stream.recv_data().await.map_err(|e| CacheProxyError::H3Protocol { reason: e.to_string() })?
-    {
+    while let Some(chunk) = stream.recv_data().await.map_err(|e| CacheProxyError::H3Stream {
+        operation: "recv_data".to_string(),
+        source: e,
+    })? {
         // Use Buf trait to get the bytes
         body.extend_from_slice(chunk.chunk());
 

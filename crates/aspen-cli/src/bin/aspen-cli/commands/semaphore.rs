@@ -43,8 +43,8 @@ pub struct AcquireArgs {
     pub permits: u32,
 
     /// Maximum permits (semaphore capacity).
-    #[arg(long)]
-    pub capacity: u32,
+    #[arg(long = "capacity")]
+    pub capacity_permits: u32,
 
     /// TTL in milliseconds for automatic release.
     #[arg(long = "ttl", default_value = "30000")]
@@ -69,8 +69,8 @@ pub struct TryAcquireArgs {
     pub permits: u32,
 
     /// Maximum permits (semaphore capacity).
-    #[arg(long)]
-    pub capacity: u32,
+    #[arg(long = "capacity")]
+    pub capacity_permits: u32,
 
     /// TTL in milliseconds for automatic release.
     #[arg(long = "ttl", default_value = "30000")]
@@ -104,7 +104,7 @@ pub struct SemaphoreOutput {
     pub is_success: bool,
     pub permits_acquired: Option<u32>,
     pub available: Option<u32>,
-    pub capacity: Option<u32>,
+    pub capacity_permits: Option<u32>,
     pub retry_after_ms: Option<u64>,
     pub error: Option<String>,
 }
@@ -117,7 +117,7 @@ impl Outputable for SemaphoreOutput {
             "is_success": self.is_success,
             "permits_acquired": self.permits_acquired,
             "available": self.available,
-            "capacity": self.capacity,
+            "capacity_permits": self.capacity_permits,
             "retry_after_ms": self.retry_after_ms,
             "error": self.error
         })
@@ -129,17 +129,17 @@ impl Outputable for SemaphoreOutput {
                 "acquire" | "try_acquire" => {
                     let acquired = self.permits_acquired.unwrap_or(0);
                     let available = self.available.unwrap_or(0);
-                    let capacity = self.capacity.unwrap_or(0);
+                    let capacity = self.capacity_permits.unwrap_or(0);
                     format!("Acquired {} permits ({}/{} available)", acquired, available, capacity)
                 }
                 "release" => {
                     let available = self.available.unwrap_or(0);
-                    let capacity = self.capacity.unwrap_or(0);
+                    let capacity = self.capacity_permits.unwrap_or(0);
                     format!("Released ({}/{} available)", available, capacity)
                 }
                 "status" => {
                     let available = self.available.unwrap_or(0);
-                    let capacity = self.capacity.unwrap_or(0);
+                    let capacity = self.capacity_permits.unwrap_or(0);
                     format!("Available: {}/{}", available, capacity)
                 }
                 _ => "OK".to_string(),
@@ -174,7 +174,7 @@ async fn semaphore_acquire(client: &AspenClient, args: AcquireArgs, json: bool) 
             name: args.name.clone(),
             holder_id: args.holder,
             permits: args.permits,
-            capacity: args.capacity,
+            capacity_permits: args.capacity_permits,
             ttl_ms: args.ttl_ms,
             timeout_ms: args.timeout_ms,
         })
@@ -188,7 +188,7 @@ async fn semaphore_acquire(client: &AspenClient, args: AcquireArgs, json: bool) 
                 is_success: result.is_success,
                 permits_acquired: result.permits_acquired,
                 available: result.available,
-                capacity: result.capacity,
+                capacity_permits: result.capacity_permits,
                 retry_after_ms: result.retry_after_ms,
                 error: result.error,
             };
@@ -209,7 +209,7 @@ async fn semaphore_try_acquire(client: &AspenClient, args: TryAcquireArgs, json:
             name: args.name.clone(),
             holder_id: args.holder,
             permits: args.permits,
-            capacity: args.capacity,
+            capacity_permits: args.capacity_permits,
             ttl_ms: args.ttl_ms,
         })
         .await?;
@@ -222,7 +222,7 @@ async fn semaphore_try_acquire(client: &AspenClient, args: TryAcquireArgs, json:
                 is_success: result.is_success,
                 permits_acquired: result.permits_acquired,
                 available: result.available,
-                capacity: result.capacity,
+                capacity_permits: result.capacity_permits,
                 retry_after_ms: result.retry_after_ms,
                 error: result.error,
             };
@@ -254,7 +254,7 @@ async fn semaphore_release(client: &AspenClient, args: ReleaseArgs, json: bool) 
                 is_success: result.is_success,
                 permits_acquired: None,
                 available: result.available,
-                capacity: result.capacity,
+                capacity_permits: result.capacity_permits,
                 retry_after_ms: None,
                 error: result.error,
             };
@@ -284,7 +284,7 @@ async fn semaphore_status(client: &AspenClient, args: StatusArgs, json: bool) ->
                 is_success: result.is_success,
                 permits_acquired: None,
                 available: result.available,
-                capacity: result.capacity,
+                capacity_permits: result.capacity_permits,
                 retry_after_ms: None,
                 error: result.error,
             };

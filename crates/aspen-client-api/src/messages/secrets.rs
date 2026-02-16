@@ -160,15 +160,17 @@ pub enum SecretsRequest {
 impl SecretsRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        self.to_operation_kv_transit().or_else(|| self.to_operation_pki_nix_cache())
+    }
+
+    fn to_operation_kv_transit(&self) -> Option<aspen_auth::Operation> {
         use aspen_auth::Operation;
         match self {
-            // KV v2 read operations
             Self::SecretsKvRead { mount, path, .. }
             | Self::SecretsKvList { mount, path }
             | Self::SecretsKvMetadata { mount, path } => Some(Operation::Read {
                 key: format!("_secrets:{}:{}", mount, path),
             }),
-            // KV v2 write operations
             Self::SecretsKvWrite { mount, path, .. }
             | Self::SecretsKvDelete { mount, path, .. }
             | Self::SecretsKvDestroy { mount, path, .. }
@@ -179,7 +181,6 @@ impl SecretsRequest {
                 value: vec![],
             }),
 
-            // Transit read operations
             Self::SecretsTransitListKeys { mount } => Some(Operation::Read {
                 key: format!("_secrets:{}:", mount),
             }),
@@ -198,7 +199,13 @@ impl SecretsRequest {
                 key: format!("_secrets:{}:{}", mount, name),
             }),
 
-            // PKI read operations
+            _ => None,
+        }
+    }
+
+    fn to_operation_pki_nix_cache(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
             Self::SecretsPkiGetCrl { mount }
             | Self::SecretsPkiListCerts { mount }
             | Self::SecretsPkiListRoles { mount } => Some(Operation::Read {
@@ -207,7 +214,6 @@ impl SecretsRequest {
             Self::SecretsPkiGetRole { mount, name } => Some(Operation::Read {
                 key: format!("_secrets:{}:{}", mount, name),
             }),
-            // PKI write operations
             Self::SecretsPkiGenerateRoot { mount, .. }
             | Self::SecretsPkiGenerateIntermediate { mount, .. }
             | Self::SecretsPkiSetSignedIntermediate { mount, .. }
@@ -218,7 +224,6 @@ impl SecretsRequest {
                 value: vec![],
             }),
 
-            // Nix cache signing key operations
             Self::SecretsNixCacheGetPublicKey { mount, .. } => Some(Operation::Read {
                 key: format!("_secrets:{}:", mount),
             }),
@@ -231,6 +236,8 @@ impl SecretsRequest {
                 key: format!("_secrets:{}:", mount),
                 value: vec![],
             }),
+
+            _ => None,
         }
     }
 }

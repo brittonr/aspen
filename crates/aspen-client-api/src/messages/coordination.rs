@@ -322,9 +322,16 @@ pub enum CoordinationRequest {
 impl CoordinationRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        self.to_operation_lock_counter()
+            .or_else(|| self.to_operation_ratelimiter_barrier())
+            .or_else(|| self.to_operation_semaphore_rwlock())
+            .or_else(|| self.to_operation_queue())
+            .or_else(|| self.to_operation_service())
+    }
+
+    fn to_operation_lock_counter(&self) -> Option<aspen_auth::Operation> {
         use aspen_auth::Operation;
         match self {
-            // Lock operations
             Self::LockAcquire { key, .. }
             | Self::LockTryAcquire { key, .. }
             | Self::LockRelease { key, .. }
@@ -333,7 +340,6 @@ impl CoordinationRequest {
                 value: vec![],
             }),
 
-            // Counter operations
             Self::CounterGet { key } | Self::SignedCounterGet { key } | Self::SequenceCurrent { key } => {
                 Some(Operation::Read {
                     key: format!("_counter:{key}"),
@@ -352,7 +358,13 @@ impl CoordinationRequest {
                 value: vec![],
             }),
 
-            // Rate limiter operations
+            _ => None,
+        }
+    }
+
+    fn to_operation_ratelimiter_barrier(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
             Self::RateLimiterTryAcquire { key, .. }
             | Self::RateLimiterAcquire { key, .. }
             | Self::RateLimiterReset { key, .. } => Some(Operation::Write {
@@ -363,7 +375,6 @@ impl CoordinationRequest {
                 key: format!("_ratelimit:{key}"),
             }),
 
-            // Barrier operations
             Self::BarrierEnter { name, .. } | Self::BarrierLeave { name, .. } => Some(Operation::Write {
                 key: format!("_barrier:{name}"),
                 value: vec![],
@@ -372,7 +383,13 @@ impl CoordinationRequest {
                 key: format!("_barrier:{name}"),
             }),
 
-            // Semaphore operations
+            _ => None,
+        }
+    }
+
+    fn to_operation_semaphore_rwlock(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
             Self::SemaphoreAcquire { name, .. }
             | Self::SemaphoreTryAcquire { name, .. }
             | Self::SemaphoreRelease { name, .. } => Some(Operation::Write {
@@ -383,7 +400,6 @@ impl CoordinationRequest {
                 key: format!("_semaphore:{name}"),
             }),
 
-            // RWLock operations
             Self::RWLockAcquireRead { name, .. }
             | Self::RWLockTryAcquireRead { name, .. }
             | Self::RWLockAcquireWrite { name, .. }
@@ -398,7 +414,13 @@ impl CoordinationRequest {
                 key: format!("_rwlock:{name}"),
             }),
 
-            // Queue operations
+            _ => None,
+        }
+    }
+
+    fn to_operation_queue(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
             Self::QueueCreate { queue_name, .. }
             | Self::QueueDelete { queue_name }
             | Self::QueueEnqueue { queue_name, .. }
@@ -418,7 +440,13 @@ impl CoordinationRequest {
                 key: format!("_queue:{queue_name}"),
             }),
 
-            // Service registry operations
+            _ => None,
+        }
+    }
+
+    fn to_operation_service(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
             Self::ServiceRegister { service_name, .. }
             | Self::ServiceDeregister { service_name, .. }
             | Self::ServiceHeartbeat { service_name, .. }
@@ -435,6 +463,8 @@ impl CoordinationRequest {
             Self::ServiceList { prefix, .. } => Some(Operation::Read {
                 key: format!("_service:{prefix}"),
             }),
+
+            _ => None,
         }
     }
 }

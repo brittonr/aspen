@@ -41,7 +41,7 @@ verus! {
     /// Complete barrier state
     pub struct BarrierStateSpec {
         /// Number of participants required
-        pub required_count: u32,
+        pub required_participant_count: u32,
         /// Current number of participants
         pub participant_count: u32,
         /// Current phase
@@ -85,7 +85,7 @@ verus! {
     /// The barrier is in Ready phase if and only if
     /// participant_count >= required_count.
     pub open spec fn ready_condition_holds(state: BarrierStateSpec) -> bool {
-        is_ready(state) <==> (state.participant_count >= state.required_count)
+        is_ready(state) <==> (state.participant_count >= state.required_participant_count)
     }
 
     // ========================================================================
@@ -96,15 +96,15 @@ verus! {
     pub open spec fn phase_consistent(state: BarrierStateSpec) -> bool {
         match state.phase {
             BarrierPhaseSpec::Waiting => {
-                state.participant_count < state.required_count
+                state.participant_count < state.required_participant_count
             }
             BarrierPhaseSpec::Ready => {
-                state.participant_count >= state.required_count
+                state.participant_count >= state.required_participant_count
             }
             BarrierPhaseSpec::Leaving => {
                 // In Leaving phase, participant count is bounded by required_count
                 // (can't have more participants than were required to enter)
-                state.participant_count <= state.required_count
+                state.participant_count <= state.required_participant_count
             }
         }
     }
@@ -123,7 +123,7 @@ verus! {
         // - Waiting: building up to required, so <= required
         // - Ready: exactly at required (or could be equal)
         // - Leaving: count decreases from Ready, so <= required
-        state.participant_count <= state.required_count
+        state.participant_count <= state.required_participant_count
     }
 
     // ========================================================================
@@ -134,7 +134,7 @@ verus! {
     pub open spec fn barrier_invariant(state: BarrierStateSpec) -> bool {
         phase_consistent(state) &&
         participant_bounded(state) &&
-        state.required_count > 0
+        state.required_participant_count > 0
     }
 
     // ========================================================================
@@ -146,7 +146,7 @@ verus! {
     /// Assumes: required_count > 0
     pub open spec fn initial_barrier_state(required_count: u32) -> BarrierStateSpec {
         BarrierStateSpec {
-            required_count,
+            required_participant_count: required_count,
             participant_count: 1,
             phase: if required_count <= 1 {
                 BarrierPhaseSpec::Ready
@@ -181,7 +181,7 @@ verus! {
     pub open spec fn enter_pre(state: BarrierStateSpec) -> bool {
         !is_leaving(state) &&
         state.participant_count < 0xFFFF_FFFFu32 &&  // Prevent overflow on increment
-        state.participant_count < state.required_count  // Preserve participant_bounded invariant
+        state.participant_count < state.required_participant_count  // Preserve participant_bounded invariant
     }
 
     /// Result of entering barrier
@@ -189,13 +189,13 @@ verus! {
     /// Assumes: enter_pre(pre)
     pub open spec fn enter_post(pre: BarrierStateSpec) -> BarrierStateSpec {
         let new_count = (pre.participant_count + 1) as u32;
-        let new_phase = if new_count >= pre.required_count {
+        let new_phase = if new_count >= pre.required_participant_count {
             BarrierPhaseSpec::Ready
         } else {
             BarrierPhaseSpec::Waiting
         };
         BarrierStateSpec {
-            required_count: pre.required_count,
+            required_participant_count: pre.required_participant_count,
             participant_count: new_count,
             phase: new_phase,
         }
@@ -222,12 +222,12 @@ verus! {
         // participant_bounded: new_count <= required_count
         // enter_pre requires pre.participant_count < required_count
         // So new_count = pre.participant_count + 1 <= required_count
-        assert(new_count <= pre.required_count);
-        assert(post.participant_count <= post.required_count);
+        assert(new_count <= pre.required_participant_count);
+        assert(post.participant_count <= post.required_participant_count);
 
         // required_count > 0: unchanged from pre
-        assert(post.required_count == pre.required_count);
-        assert(post.required_count > 0);
+        assert(post.required_participant_count == pre.required_participant_count);
+        assert(post.required_participant_count > 0);
     }
 
     /// Proof: Enter may transition to Ready
@@ -238,14 +238,14 @@ verus! {
         requires
             enter_pre(pre),
             barrier_invariant(pre),
-            (pre.participant_count + 1) as u32 >= pre.required_count,
+            (pre.participant_count + 1) as u32 >= pre.required_participant_count,
         ensures
             is_ready(enter_post(pre))
     {
         let post = enter_post(pre);
         let new_count = (pre.participant_count + 1) as u32;
         // new_count >= required => new_phase is Ready
-        assert(new_count >= pre.required_count);
+        assert(new_count >= pre.required_participant_count);
     }
 
     // ========================================================================
@@ -273,7 +273,7 @@ verus! {
     pub open spec fn leave_post(pre: BarrierStateSpec) -> BarrierStateSpec {
         let new_count = (pre.participant_count - 1) as u32;
         BarrierStateSpec {
-            required_count: pre.required_count,
+            required_participant_count: pre.required_participant_count,
             participant_count: new_count,
             phase: BarrierPhaseSpec::Leaving,
         }
@@ -379,8 +379,8 @@ verus! {
         // is_ready(pre) means pre.count >= required (from phase_consistent)
         // So new_count = pre.count + 1 >= required
         // Therefore post phase is Ready
-        assert(pre.participant_count >= pre.required_count);
-        assert(new_count >= pre.required_count);
+        assert(pre.participant_count >= pre.required_participant_count);
+        assert(new_count >= pre.required_participant_count);
     }
 
     /// Proof: Leave produces valid transition

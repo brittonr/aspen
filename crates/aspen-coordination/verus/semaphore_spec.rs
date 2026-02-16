@@ -40,7 +40,7 @@ verus! {
     /// Complete semaphore state
     pub struct SemaphoreStateSpec {
         /// Maximum permits (capacity)
-        pub capacity: u32,
+        pub capacity_permits: u32,
         /// Number of permits currently used (sum of all holders)
         pub used_permits: u32,
         /// Number of current holders
@@ -55,10 +55,10 @@ verus! {
 
     /// Calculate available permits
     pub open spec fn available_permits(state: SemaphoreStateSpec) -> u32 {
-        if state.used_permits > state.capacity {
+        if state.used_permits > state.capacity_permits {
             0
         } else {
-            (state.capacity - state.used_permits) as u32
+            (state.capacity_permits - state.used_permits) as u32
         }
     }
 
@@ -74,7 +74,7 @@ verus! {
 
     /// SEM-1: Total permits held <= capacity
     pub open spec fn capacity_bound(state: SemaphoreStateSpec) -> bool {
-        state.used_permits <= state.capacity
+        state.used_permits <= state.capacity_permits
     }
 
     // ========================================================================
@@ -103,7 +103,7 @@ verus! {
     /// Initial semaphore state (empty)
     pub open spec fn initial_semaphore_state(capacity: u32, max_holders: u32) -> SemaphoreStateSpec {
         SemaphoreStateSpec {
-            capacity,
+            capacity_permits: capacity,
             used_permits: 0,
             holder_count: 0,
             max_holders,
@@ -118,7 +118,7 @@ verus! {
         let state = initial_semaphore_state(capacity, max_holders);
         // used_permits = 0 <= capacity (capacity_bound)
         assert(state.used_permits == 0);
-        assert(state.used_permits <= state.capacity);
+        assert(state.used_permits <= state.capacity_permits);
         // holder_count = 0 <= max_holders (holder_limit)
         assert(state.holder_count == 0);
         assert(state.holder_count <= state.max_holders);
@@ -149,7 +149,7 @@ verus! {
     /// - acquire_pre(pre, permits)
     pub open spec fn acquire_post(pre: SemaphoreStateSpec, permits: u32) -> SemaphoreStateSpec {
         SemaphoreStateSpec {
-            capacity: pre.capacity,
+            capacity_permits: pre.capacity_permits,
             used_permits: (pre.used_permits + permits) as u32,
             holder_count: (pre.holder_count + 1) as u32,
             max_holders: pre.max_holders,
@@ -238,7 +238,7 @@ verus! {
     /// - release_pre(pre, permits)
     pub open spec fn release_post(pre: SemaphoreStateSpec, permits: u32) -> SemaphoreStateSpec {
         SemaphoreStateSpec {
-            capacity: pre.capacity,
+            capacity_permits: pre.capacity_permits,
             used_permits: (pre.used_permits - permits) as u32,
             holder_count: (pre.holder_count - 1) as u32,
             max_holders: pre.max_holders,
@@ -323,7 +323,7 @@ verus! {
         expired_holders: u32,
     ) -> SemaphoreStateSpec {
         SemaphoreStateSpec {
-            capacity: pre.capacity,
+            capacity_permits: pre.capacity_permits,
             used_permits: (pre.used_permits - expired_permits) as u32,
             holder_count: (pre.holder_count - expired_holders) as u32,
             max_holders: pre.max_holders,

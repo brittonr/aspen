@@ -150,6 +150,26 @@ pub enum PijulError {
     // ========================================================================
     // Storage Errors
     // ========================================================================
+    /// Blob storage error during add.
+    #[snafu(display("failed to add blob: {message}"))]
+    AddBlob { message: String },
+
+    /// Blob storage error during get.
+    #[snafu(display("failed to get blob {hash}: {message}"))]
+    GetBlob { hash: String, message: String },
+
+    /// Blob storage error during existence check.
+    #[snafu(display("failed to check blob existence for {hash}: {message}"))]
+    CheckBlobExists { hash: String, message: String },
+
+    /// Blob storage error during protect.
+    #[snafu(display("failed to protect blob {tag}: {message}"))]
+    ProtectBlob { tag: String, message: String },
+
+    /// Blob storage error during unprotect.
+    #[snafu(display("failed to unprotect blob {tag}: {message}"))]
+    UnprotectBlob { tag: String, message: String },
+
     /// Blob storage error.
     #[snafu(display("blob storage error: {message}"))]
     BlobStorage { message: String },
@@ -194,6 +214,117 @@ pub enum PijulError {
         path: std::path::PathBuf,
         source: std::io::Error,
     },
+
+    /// Failed to read directory entries.
+    #[snafu(display("failed to read directory {}: {source}", path.display()))]
+    ReadDir {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
+
+    /// Failed to read directory entry.
+    #[snafu(display("failed to read directory entry in {}: {source}", path.display()))]
+    ReadDirEntry {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
+
+    /// Failed to stat file.
+    #[snafu(display("failed to stat {}: {source}", path.display()))]
+    StatFile {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
+
+    /// Failed to read file to string.
+    #[snafu(display("failed to read file to string {}: {source}", path.display()))]
+    ReadFileToString {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
+
+    /// Failed to remove directory.
+    #[snafu(display("failed to remove directory {}: {source}", path.display()))]
+    RemoveDir {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
+
+    /// Failed to begin pristine transaction.
+    #[snafu(display("failed to begin {txn_kind} transaction for {repo_id}: {message}"))]
+    BeginTransaction {
+        repo_id: String,
+        txn_kind: String,
+        message: String,
+    },
+
+    /// Failed to open or create pristine database.
+    #[snafu(display("failed to open pristine at {}: {message}", path.display()))]
+    OpenPristine { path: std::path::PathBuf, message: String },
+
+    /// Failed to load channel from pristine.
+    #[snafu(display("failed to load channel '{channel}': {message}"))]
+    LoadChannel { channel: String, message: String },
+
+    /// Failed to list channels.
+    #[snafu(display("failed to list channels: {message}"))]
+    ListChannels { message: String },
+
+    /// Failed to open or create channel.
+    #[snafu(display("failed to open/create channel '{channel}': {message}"))]
+    OpenOrCreateChannel { channel: String, message: String },
+
+    /// Failed to fork channel.
+    #[snafu(display("failed to fork channel '{source_channel}' to '{dest_channel}': {message}"))]
+    ForkChannel {
+        source_channel: String,
+        dest_channel: String,
+        message: String,
+    },
+
+    /// Failed to rename channel.
+    #[snafu(display("failed to rename channel '{old_name}' to '{new_name}': {message}"))]
+    RenameChannel {
+        old_name: String,
+        new_name: String,
+        message: String,
+    },
+
+    /// Failed to drop channel.
+    #[snafu(display("failed to drop channel '{channel}': {message}"))]
+    DropChannel { channel: String, message: String },
+
+    /// Failed to commit pristine transaction.
+    #[snafu(display("failed to commit transaction: {message}"))]
+    CommitTransaction { message: String },
+
+    /// Failed to read channel log.
+    #[snafu(display("failed to read channel log for '{channel}': {message}"))]
+    ReadChannelLog { channel: String, message: String },
+
+    /// Failed to deserialize change file.
+    #[snafu(display("failed to deserialize change at {}: {message}", path.display()))]
+    DeserializeChange { path: std::path::PathBuf, message: String },
+
+    /// Failed to compute change hash.
+    #[snafu(display("failed to compute pijul hash: {message}"))]
+    ComputeChangeHash { message: String },
+
+    /// Failed to save change in libpijul format.
+    #[snafu(display("failed to save change in libpijul format: {message}"))]
+    SaveLibpijulChange { message: String },
+
+    /// Failed to parse config TOML.
+    #[snafu(display("failed to parse config at {}: {message}", path.display()))]
+    ParseConfig { path: std::path::PathBuf, message: String },
+
+    /// Failed to serialize config TOML.
+    #[snafu(display("failed to serialize config: {message}"))]
+    SerializeConfig { message: String },
+
+    /// Failed to output repository to working directory.
+    #[snafu(display("failed to output channel '{channel}' to working directory: {message}"))]
+    OutputChannel { channel: String, message: String },
 
     // ========================================================================
     // Working Directory Errors

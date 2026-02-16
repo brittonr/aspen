@@ -384,175 +384,241 @@ async fn git_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()
 
 async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<()> {
     use std::collections::HashSet;
-    use std::fs;
-    use std::io::Write;
 
-    // Step 1: Get repository info
-    let repo_response = client
-        .send(ClientRpcRequest::ForgeGetRepo {
-            repo_id: args.repo_id.clone(),
-        })
-        .await?;
-
-    let repo_info = match repo_response {
-        ClientRpcResponse::ForgeRepoResult(result) => {
-            if result.is_success {
-                result.repo.ok_or_else(|| anyhow::anyhow!("Repository not found"))?
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
-            }
-        }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-        _ => anyhow::bail!("unexpected response type"),
-    };
-
-    // Determine target directory
+    let repo_info = git_clone_fetch_repo_info(client, &args.repo_id).await?;
     let target_dir = args.path.unwrap_or_else(|| std::path::PathBuf::from(&repo_info.name));
 
     if target_dir.exists() {
         anyhow::bail!("Directory '{}' already exists", target_dir.display());
     }
 
-    // Create directory structure
-    fs::create_dir_all(&target_dir)?;
-    fs::create_dir_all(target_dir.join(".aspen"))?;
-    fs::create_dir_all(target_dir.join(".aspen/objects"))?;
-    fs::create_dir_all(target_dir.join(".aspen/refs/heads"))?;
+    git_clone_setup_directories(&target_dir)?;
 
-    // Determine which branch to clone
     let branch_name = args.branch.unwrap_or_else(|| repo_info.default_branch.clone());
     let ref_name = format!("heads/{}", branch_name);
 
-    // Step 2: Get the ref value
-    let ref_response = client
-        .send(ClientRpcRequest::ForgeGetRef {
-            repo_id: args.repo_id.clone(),
-            ref_name: ref_name.clone(),
+    let head_hash = match git_clone_resolve_head_ref(client, &args.repo_id, &ref_name, &branch_name).await? {
+        Some(hash) => hash,
+        None => {
+            git_clone_write_empty_repo_config(&target_dir, &args.repo_id, &repo_info, json)?;
+            return Ok(());
+        }
+    };
+
+    let commits = git_clone_fetch_commits(client, &args.repo_id, &ref_name).await?;
+    let head_tree_hash = commits.first().map(|c| c.tree.clone()).unwrap_or_default();
+
+    let mut file_entries: Vec<CloneFileEntry> = Vec::new();
+    let mut blob_hashes: HashSet<String> = HashSet::new();
+    if !head_tree_hash.is_empty() {
+        git_clone_fetch_tree_entries(
+            client,
+            &head_tree_hash,
+            std::path::Path::new(""),
+            &mut file_entries,
+            &mut blob_hashes,
+        )
+        .await?;
+    }
+
+    let blob_contents = git_clone_fetch_blobs(client, &blob_hashes, &target_dir).await?;
+    git_clone_extract_files(&target_dir, &file_entries, &blob_contents)?;
+    git_clone_write_manifests(&target_dir, &args.repo_id, &repo_info, &branch_name, &head_hash, &commits)?;
+    git_clone_print_result(
+        json,
+        &target_dir,
+        &args.repo_id,
+        &repo_info.name,
+        &branch_name,
+        &head_hash,
+        &commits,
+        &blob_hashes,
+        &file_entries,
+    );
+
+    Ok(())
+}
+
+/// A file entry discovered during tree traversal for clone.
+struct CloneFileEntry {
+    hash: String,
+    #[allow(dead_code)]
+    name: String,
+    mode: u32,
+    path: std::path::PathBuf,
+}
+
+/// Fetch repository info from the server.
+async fn git_clone_fetch_repo_info(client: &AspenClient, repo_id: &str) -> Result<aspen_client_api::ForgeRepoInfo> {
+    let response = client
+        .send(ClientRpcRequest::ForgeGetRepo {
+            repo_id: repo_id.to_string(),
         })
         .await?;
 
-    let head_hash = match ref_response {
-        ClientRpcResponse::ForgeRefResult(result) => {
+    match response {
+        ClientRpcResponse::ForgeRepoResult(result) => {
             if result.is_success {
-                result
-                    .ref_info
-                    .map(|r| r.hash)
-                    .ok_or_else(|| anyhow::anyhow!("Branch '{}' not found", branch_name))?
+                result.repo.ok_or_else(|| anyhow::anyhow!("Repository not found"))
             } else {
-                // Branch might not exist yet (empty repo)
-                if !json {
-                    println!("Created empty repository at '{}'", target_dir.display());
-                }
-                // Write repo config
-                let config = serde_json::json!({
-                    "repo_id": args.repo_id,
-                    "name": repo_info.name,
-                    "default_branch": repo_info.default_branch,
-                });
-                let config_path = target_dir.join(".aspen/config.json");
-                let mut file = fs::File::create(&config_path)
-                    .with_context(|| format!("failed to create {}", config_path.display()))?;
-                file.write_all(serde_json::to_string_pretty(&config)?.as_bytes())
-                    .with_context(|| format!("failed to write {}", config_path.display()))?;
-                return Ok(());
+                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
             }
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
-    };
+    }
+}
 
-    // Step 3: Walk commit history and fetch commits
-    let log_response = client
-        .send(ClientRpcRequest::ForgeLog {
-            repo_id: args.repo_id.clone(),
-            ref_name: Some(ref_name.clone()),
-            limit: Some(1000), // Fetch up to 1000 commits
+/// Create the .aspen directory structure for a clone.
+fn git_clone_setup_directories(target_dir: &std::path::Path) -> Result<()> {
+    use std::fs;
+    fs::create_dir_all(target_dir)?;
+    fs::create_dir_all(target_dir.join(".aspen"))?;
+    fs::create_dir_all(target_dir.join(".aspen/objects"))?;
+    fs::create_dir_all(target_dir.join(".aspen/refs/heads"))?;
+    Ok(())
+}
+
+/// Resolve the HEAD ref for the branch. Returns None if the branch does not exist (empty repo).
+async fn git_clone_resolve_head_ref(
+    client: &AspenClient,
+    repo_id: &str,
+    ref_name: &str,
+    branch_name: &str,
+) -> Result<Option<String>> {
+    let response = client
+        .send(ClientRpcRequest::ForgeGetRef {
+            repo_id: repo_id.to_string(),
+            ref_name: ref_name.to_string(),
         })
         .await?;
 
-    let commits = match log_response {
+    match response {
+        ClientRpcResponse::ForgeRefResult(result) => {
+            if result.is_success {
+                let hash = result
+                    .ref_info
+                    .map(|r| r.hash)
+                    .ok_or_else(|| anyhow::anyhow!("Branch '{}' not found", branch_name))?;
+                Ok(Some(hash))
+            } else {
+                Ok(None)
+            }
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+/// Write config for an empty repository (no commits yet).
+fn git_clone_write_empty_repo_config(
+    target_dir: &std::path::Path,
+    repo_id: &str,
+    repo_info: &aspen_client_api::ForgeRepoInfo,
+    json: bool,
+) -> Result<()> {
+    use std::fs;
+    use std::io::Write;
+
+    if !json {
+        println!("Created empty repository at '{}'", target_dir.display());
+    }
+    let config = serde_json::json!({
+        "repo_id": repo_id,
+        "name": repo_info.name,
+        "default_branch": repo_info.default_branch,
+    });
+    let config_path = target_dir.join(".aspen/config.json");
+    let mut file =
+        fs::File::create(&config_path).with_context(|| format!("failed to create {}", config_path.display()))?;
+    file.write_all(serde_json::to_string_pretty(&config)?.as_bytes())
+        .with_context(|| format!("failed to write {}", config_path.display()))?;
+    Ok(())
+}
+
+/// Fetch commit history from the server.
+async fn git_clone_fetch_commits(
+    client: &AspenClient,
+    repo_id: &str,
+    ref_name: &str,
+) -> Result<Vec<aspen_client_api::ForgeCommitInfo>> {
+    let response = client
+        .send(ClientRpcRequest::ForgeLog {
+            repo_id: repo_id.to_string(),
+            ref_name: Some(ref_name.to_string()),
+            limit: Some(1000),
+        })
+        .await?;
+
+    match response {
         ClientRpcResponse::ForgeLogResult(result) => {
             if result.is_success {
-                result.commits
+                Ok(result.commits)
             } else {
                 anyhow::bail!("{}", result.error.unwrap_or_else(|| "failed to get log".to_string()))
             }
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
-    };
-
-    // Step 4: Get the HEAD commit's tree to extract working directory
-    let head_tree_hash = if let Some(head_commit) = commits.first() {
-        head_commit.tree.clone()
-    } else {
-        String::new()
-    };
-
-    // Step 5: Fetch trees and collect blob entries with their paths
-    // We store (hash, mode, path) for the HEAD tree to extract to working dir
-    struct FileEntry {
-        hash: String,
-        #[allow(dead_code)]
-        name: String, // Keep for potential future use (e.g., symlink targets)
-        mode: u32,
-        path: std::path::PathBuf,
     }
-    let mut file_entries: Vec<FileEntry> = Vec::new();
-    let mut blob_hashes: HashSet<String> = HashSet::new();
+}
 
-    // Helper function to recursively fetch tree entries
-    async fn fetch_tree_entries(
-        client: &AspenClient,
-        tree_hash: &str,
-        base_path: &std::path::Path,
-        file_entries: &mut Vec<FileEntry>,
-        blob_hashes: &mut HashSet<String>,
-    ) -> Result<()> {
-        let tree_response = client
-            .send(ClientRpcRequest::ForgeGetTree {
-                hash: tree_hash.to_string(),
-            })
-            .await?;
+/// Recursively fetch tree entries, collecting file entries and blob hashes.
+async fn git_clone_fetch_tree_entries(
+    client: &AspenClient,
+    tree_hash: &str,
+    base_path: &std::path::Path,
+    file_entries: &mut Vec<CloneFileEntry>,
+    blob_hashes: &mut std::collections::HashSet<String>,
+) -> Result<()> {
+    let tree_response = client
+        .send(ClientRpcRequest::ForgeGetTree {
+            hash: tree_hash.to_string(),
+        })
+        .await?;
 
-        if let ClientRpcResponse::ForgeTreeResult(result) = tree_response {
-            if result.is_success {
-                if let Some(entries) = result.entries {
-                    for entry in entries {
-                        let entry_path = base_path.join(&entry.name);
-                        // Mode >= 0o100000 = blob (file), < 0o100000 = tree (directory)
-                        // 0o100644 = regular file, 0o100755 = executable, 0o040000 = tree
-                        if entry.mode >= 0o100000 {
-                            blob_hashes.insert(entry.hash.clone());
-                            file_entries.push(FileEntry {
-                                hash: entry.hash,
-                                name: entry.name,
-                                mode: entry.mode,
-                                path: entry_path,
-                            });
-                        } else if entry.mode == 0o040000 {
-                            // Recursively fetch subtree
-                            Box::pin(fetch_tree_entries(client, &entry.hash, &entry_path, file_entries, blob_hashes))
-                                .await?;
-                        }
+    if let ClientRpcResponse::ForgeTreeResult(result) = tree_response {
+        if result.is_success {
+            if let Some(entries) = result.entries {
+                for entry in entries {
+                    let entry_path = base_path.join(&entry.name);
+                    if entry.mode >= 0o100000 {
+                        blob_hashes.insert(entry.hash.clone());
+                        file_entries.push(CloneFileEntry {
+                            hash: entry.hash,
+                            name: entry.name,
+                            mode: entry.mode,
+                            path: entry_path,
+                        });
+                    } else if entry.mode == 0o040000 {
+                        Box::pin(git_clone_fetch_tree_entries(
+                            client,
+                            &entry.hash,
+                            &entry_path,
+                            file_entries,
+                            blob_hashes,
+                        ))
+                        .await?;
                     }
                 }
             }
         }
-        Ok(())
     }
+    Ok(())
+}
 
-    // Fetch the HEAD tree entries for working directory extraction
-    if !head_tree_hash.is_empty() {
-        fetch_tree_entries(client, &head_tree_hash, std::path::Path::new(""), &mut file_entries, &mut blob_hashes)
-            .await?;
-    }
+/// Fetch all blobs, writing them to the objects directory.
+async fn git_clone_fetch_blobs(
+    client: &AspenClient,
+    blob_hashes: &std::collections::HashSet<String>,
+    target_dir: &std::path::Path,
+) -> Result<std::collections::HashMap<String, Vec<u8>>> {
+    use std::fs;
 
-    // Step 7: Fetch blobs and write to both objects directory and working directory
     let objects_dir = target_dir.join(".aspen/objects");
     let mut blob_contents: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
 
-    for blob_hash in &blob_hashes {
+    for blob_hash in blob_hashes {
         let blob_response = client
             .send(ClientRpcRequest::ForgeGetBlob {
                 hash: blob_hash.clone(),
@@ -562,24 +628,28 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
         if let ClientRpcResponse::ForgeBlobResult(result) = blob_response {
             if result.is_success {
                 if let Some(content) = result.content {
-                    // Write blob to objects directory
                     let blob_path = objects_dir.join(&blob_hash[..2]).join(&blob_hash[2..]);
-                    // SAFETY: blob_path is constructed from objects_dir.join(...), so it always has a parent
                     if let Some(parent) = blob_path.parent() {
                         fs::create_dir_all(parent)?;
                     }
                     fs::write(&blob_path, &content)?;
-
-                    // Store content for working directory extraction
                     blob_contents.insert(blob_hash.clone(), content);
                 }
             }
         }
     }
+    Ok(blob_contents)
+}
 
-    // Step 8: Extract files to working directory
-    let mut files_extracted = 0;
-    for entry in &file_entries {
+/// Extract fetched blobs to the working directory.
+fn git_clone_extract_files(
+    target_dir: &std::path::Path,
+    file_entries: &[CloneFileEntry],
+    blob_contents: &std::collections::HashMap<String, Vec<u8>>,
+) -> Result<()> {
+    use std::fs;
+
+    for entry in file_entries {
         if let Some(content) = blob_contents.get(&entry.hash) {
             let file_path = target_dir.join(&entry.path);
             if let Some(parent) = file_path.parent() {
@@ -587,7 +657,6 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
             }
             fs::write(&file_path, content)?;
 
-            // Set executable permission if mode indicates executable
             #[cfg(unix)]
             if entry.mode == 0o100755 {
                 use std::os::unix::fs::PermissionsExt;
@@ -595,13 +664,23 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
                 perms.set_mode(0o755);
                 fs::set_permissions(&file_path, perms)?;
             }
-
-            files_extracted += 1;
         }
     }
-    let _ = files_extracted; // Silence unused warning on non-unix
+    Ok(())
+}
 
-    // Step 7: Write commits manifest
+/// Write commits manifest, HEAD ref, and repo config to the .aspen directory.
+fn git_clone_write_manifests(
+    target_dir: &std::path::Path,
+    repo_id: &str,
+    repo_info: &aspen_client_api::ForgeRepoInfo,
+    branch_name: &str,
+    head_hash: &str,
+    commits: &[aspen_client_api::ForgeCommitInfo],
+) -> Result<()> {
+    use std::fs;
+    use std::io::Write;
+
     let commits_manifest: Vec<serde_json::Value> = commits
         .iter()
         .map(|c| {
@@ -622,14 +701,11 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
     file.write_all(serde_json::to_string_pretty(&commits_manifest)?.as_bytes())
         .with_context(|| format!("failed to write {}", commits_path.display()))?;
 
-    // Step 8: Write HEAD ref
-    let head_path = target_dir.join(".aspen/refs/heads").join(&branch_name);
-    fs::write(&head_path, &head_hash)
-        .with_context(|| format!("failed to write HEAD ref at {}", head_path.display()))?;
+    let head_path = target_dir.join(".aspen/refs/heads").join(branch_name);
+    fs::write(&head_path, head_hash).with_context(|| format!("failed to write HEAD ref at {}", head_path.display()))?;
 
-    // Step 9: Write repo config
     let config = serde_json::json!({
-        "repo_id": args.repo_id,
+        "repo_id": repo_id,
         "name": repo_info.name,
         "default_branch": repo_info.default_branch,
         "cloned_branch": branch_name,
@@ -641,27 +717,43 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
     file.write_all(serde_json::to_string_pretty(&config)?.as_bytes())
         .with_context(|| format!("failed to write {}", config_path.display()))?;
 
+    Ok(())
+}
+
+/// Print the clone result summary.
+fn git_clone_print_result(
+    json: bool,
+    target_dir: &std::path::Path,
+    repo_id: &str,
+    repo_name: &str,
+    branch_name: &str,
+    head_hash: &str,
+    commits: &[aspen_client_api::ForgeCommitInfo],
+    blob_hashes: &std::collections::HashSet<String>,
+    file_entries: &[CloneFileEntry],
+) {
     if json {
         let output = serde_json::json!({
             "success": true,
             "path": target_dir.display().to_string(),
-            "repo_id": args.repo_id,
+            "repo_id": repo_id,
             "branch": branch_name,
             "head": head_hash,
             "commits": commits.len(),
             "blobs": blob_hashes.len(),
             "files": file_entries.len(),
         });
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        // JSON serialization of a json! value will not fail
+        if let Ok(s) = serde_json::to_string_pretty(&output) {
+            println!("{}", s);
+        }
     } else {
-        println!("Cloned '{}' to '{}'", repo_info.name, target_dir.display());
+        println!("Cloned '{}' to '{}'", repo_name, target_dir.display());
         println!("  Branch:  {}", branch_name);
         println!("  HEAD:    {}", &head_hash[..16]);
         println!("  Commits: {}", commits.len());
         println!("  Files:   {}", file_entries.len());
     }
-
-    Ok(())
 }
 
 async fn git_show(client: &AspenClient, args: ShowArgs, json: bool) -> Result<()> {
@@ -814,94 +906,121 @@ async fn fetch_current_ref_hash(client: &AspenClient, repo_id: &str, ref_name: &
 
 async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()> {
     use aspen_forge::identity::RepoId;
-    use aspen_forge::refs::SignedRefUpdate;
 
-    // Parse the hash
-    let hash_bytes = hex::decode(&args.hash).map_err(|e| anyhow::anyhow!("invalid hash: {}", e))?;
-    if hash_bytes.len() != 32 {
-        anyhow::bail!("hash must be 32 bytes");
-    }
-    let mut hash_arr = [0u8; 32];
-    hash_arr.copy_from_slice(&hash_bytes);
-    let new_hash = blake3::Hash::from_bytes(hash_arr);
-
-    // Parse repo_id
+    let new_hash = git_push_parse_hash(&args.hash)?;
     let repo_id = RepoId::from_hex(&args.repo).map_err(|e| anyhow::anyhow!("invalid repo_id: {}", e))?;
 
-    // For non-force pushes, fetch current ref for CAS comparison
     let current_hash = if !args.is_force {
         fetch_current_ref_hash(client, &args.repo, &args.ref_name).await?
     } else {
         None
     };
 
-    // Parse current hash for signing if available
-    let old_hash = if let Some(ref hash_str) = current_hash {
-        let old_bytes = hex::decode(hash_str).ok();
-        old_bytes.and_then(|b| {
-            if b.len() == 32 {
-                let mut arr = [0u8; 32];
-                arr.copy_from_slice(&b);
-                Some(blake3::Hash::from_bytes(arr))
-            } else {
-                None
-            }
-        })
+    let old_hash = git_push_parse_old_hash(&current_hash);
+    let (signer, signature, timestamp_ms) =
+        git_push_sign_update(&args.key, repo_id, &args.ref_name, new_hash, old_hash)?;
+
+    let response = git_push_send_request(client, &args, current_hash, signer, signature, timestamp_ms).await?;
+
+    git_push_handle_response(response, &args.ref_name, json)
+}
+
+/// Parse and validate a hex-encoded 32-byte blake3 hash.
+fn git_push_parse_hash(hash_hex: &str) -> Result<blake3::Hash> {
+    let hash_bytes = hex::decode(hash_hex).map_err(|e| anyhow::anyhow!("invalid hash: {}", e))?;
+    if hash_bytes.len() != 32 {
+        anyhow::bail!("hash must be 32 bytes");
+    }
+    let mut hash_arr = [0u8; 32];
+    hash_arr.copy_from_slice(&hash_bytes);
+    Ok(blake3::Hash::from_bytes(hash_arr))
+}
+
+/// Parse the current ref hash string into a blake3::Hash for signing.
+fn git_push_parse_old_hash(current_hash: &Option<String>) -> Option<blake3::Hash> {
+    let hash_str = current_hash.as_ref()?;
+    let old_bytes = hex::decode(hash_str).ok()?;
+    if old_bytes.len() == 32 {
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&old_bytes);
+        Some(blake3::Hash::from_bytes(arr))
     } else {
         None
+    }
+}
+
+/// Load a signing key and produce a signed ref update, if a key path is provided.
+fn git_push_sign_update(
+    key_path: &Option<std::path::PathBuf>,
+    repo_id: aspen_forge::identity::RepoId,
+    ref_name: &str,
+    new_hash: blake3::Hash,
+    old_hash: Option<blake3::Hash>,
+) -> Result<(Option<String>, Option<String>, Option<u64>)> {
+    use aspen_forge::refs::SignedRefUpdate;
+
+    let Some(key_path) = key_path else {
+        return Ok((None, None, None));
     };
 
-    // Load and sign if key provided
-    let (signer, signature, timestamp_ms) = if let Some(key_path) = &args.key {
-        let key_data =
-            std::fs::read_to_string(key_path).map_err(|e| anyhow::anyhow!("failed to read key file: {}", e))?;
-        let key_bytes =
-            hex::decode(key_data.trim()).map_err(|e| anyhow::anyhow!("failed to decode key (expected hex): {}", e))?;
-        if key_bytes.len() != 32 {
-            anyhow::bail!("secret key must be 32 bytes");
-        }
-        let mut key_arr = [0u8; 32];
-        key_arr.copy_from_slice(&key_bytes);
-        let secret_key = iroh::SecretKey::from_bytes(&key_arr);
+    let key_data = std::fs::read_to_string(key_path).map_err(|e| anyhow::anyhow!("failed to read key file: {}", e))?;
+    let key_bytes =
+        hex::decode(key_data.trim()).map_err(|e| anyhow::anyhow!("failed to decode key (expected hex): {}", e))?;
+    if key_bytes.len() != 32 {
+        anyhow::bail!("secret key must be 32 bytes");
+    }
+    let mut key_arr = [0u8; 32];
+    key_arr.copy_from_slice(&key_bytes);
+    let secret_key = iroh::SecretKey::from_bytes(&key_arr);
 
-        // Create signed update with old_hash for proper CAS signing
-        let update = SignedRefUpdate::sign(repo_id, &args.ref_name, new_hash, old_hash, &secret_key);
+    let update = SignedRefUpdate::sign(repo_id, ref_name, new_hash, old_hash, &secret_key);
 
-        (
-            Some(update.signer.to_string()),
-            Some(hex::encode(update.signature.to_bytes())),
-            Some(update.timestamp_ms),
-        )
-    } else {
-        (None, None, None)
-    };
+    Ok((
+        Some(update.signer.to_string()),
+        Some(hex::encode(update.signature.to_bytes())),
+        Some(update.timestamp_ms),
+    ))
+}
 
-    let response = if args.is_force {
+/// Send the push request (force set or CAS) to the server.
+async fn git_push_send_request(
+    client: &AspenClient,
+    args: &PushArgs,
+    current_hash: Option<String>,
+    signer: Option<String>,
+    signature: Option<String>,
+    timestamp_ms: Option<u64>,
+) -> Result<ClientRpcResponse> {
+    if args.is_force {
         client
             .send(ClientRpcRequest::ForgeSetRef {
-                repo_id: args.repo,
+                repo_id: args.repo.clone(),
                 ref_name: args.ref_name.clone(),
-                hash: args.hash,
+                hash: args.hash.clone(),
                 signer,
                 signature,
                 timestamp_ms,
             })
-            .await?
+            .await
+            .map_err(Into::into)
     } else {
-        // Use CAS for safe push with current ref value as expected
         client
             .send(ClientRpcRequest::ForgeCasRef {
-                repo_id: args.repo,
+                repo_id: args.repo.clone(),
                 ref_name: args.ref_name.clone(),
                 expected: current_hash,
-                new_hash: args.hash,
+                new_hash: args.hash.clone(),
                 signer,
                 signature,
                 timestamp_ms,
             })
-            .await?
-    };
+            .await
+            .map_err(Into::into)
+    }
+}
 
+/// Handle the push response, printing the result.
+fn git_push_handle_response(response: ClientRpcResponse, ref_name: &str, json: bool) -> Result<()> {
     match response {
         ClientRpcResponse::ForgeRefResult(result) => {
             if result.is_success {
@@ -912,7 +1031,7 @@ async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()
                     };
                     print_output(&output, json);
                 } else if !json {
-                    println!("Ref {} updated", args.ref_name);
+                    println!("Ref {} updated", ref_name);
                 }
                 Ok(())
             } else {
@@ -922,7 +1041,7 @@ async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.is_success {
                 if !json {
-                    println!("Ref {} updated", args.ref_name);
+                    println!("Ref {} updated", ref_name);
                 }
                 Ok(())
             } else {
@@ -985,7 +1104,7 @@ async fn git_store_blob(client: &AspenClient, args: StoreBlobArgs, json: bool) -
                         "{}",
                         serde_json::json!({
                             "hash": result.hash,
-                            "size": result.size
+                            "size_bytes": result.size
                         })
                     );
                 } else if let Some(hash) = result.hash {

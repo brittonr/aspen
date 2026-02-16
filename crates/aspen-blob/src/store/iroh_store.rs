@@ -8,7 +8,6 @@ use std::pin::Pin;
 use std::time::Duration;
 use std::time::Instant;
 
-use anyhow::Context;
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -70,7 +69,7 @@ impl IrohBlobStore {
     /// Create a new blob store at the given path.
     #[instrument(skip_all, fields(path = %data_dir.display()))]
     pub async fn new(data_dir: &Path, endpoint: Endpoint) -> Result<Self> {
-        let store = FsStore::load(data_dir).await.context("failed to create blob store")?;
+        let store = anyhow::Context::context(FsStore::load(data_dir).await, "failed to create blob store")?;
 
         info!("blob store initialized at {}", data_dir.display());
 
@@ -134,7 +133,7 @@ impl IrohBlobStore {
 
     /// Shutdown the blob store.
     pub async fn shutdown(&self) -> Result<()> {
-        self.store.shutdown().await.context("failed to shutdown blob store")?;
+        anyhow::Context::context(self.store.shutdown().await, "failed to shutdown blob store")?;
         Ok(())
     }
 
@@ -160,11 +159,10 @@ impl IrohBlobStore {
             None
         };
 
-        self.store
-            .tags()
-            .delete(tag_name)
-            .await
-            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
+        self.store.tags().delete(tag_name).await.map_err(|e| BlobStoreError::DeleteTag {
+            tag: tag_name.to_string(),
+            message: e.to_string(),
+        })?;
 
         debug!(tag = tag_name, reason = %reason, "blob protection removed");
 
@@ -197,12 +195,11 @@ impl IrohBlobStore {
         use futures::StreamExt;
 
         // List all tags with user prefix
-        let tags_stream = self
-            .store
-            .tags()
-            .list_prefix(USER_TAG_PREFIX)
-            .await
-            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
+        let tags_stream =
+            self.store.tags().list_prefix(USER_TAG_PREFIX).await.map_err(|e| BlobStoreError::ListTags {
+                prefix: USER_TAG_PREFIX.to_string(),
+                message: e.to_string(),
+            })?;
 
         // Collect tags that match the target hash
         let tags_to_delete: Vec<String> = tags_stream
@@ -259,7 +256,10 @@ impl IrohBlobStore {
         let progress = downloader.download(HashAndFormat::raw(*hash), vec![provider]);
 
         // Wait for completion
-        progress.await.map_err(|e| BlobStoreError::Download { message: e.to_string() })?;
+        progress.await.map_err(|e| BlobStoreError::DownloadBlob {
+            hash: hash.to_string(),
+            message: e.to_string(),
+        })?;
 
         // Get size and verify blob was stored
         let bytes = self.get_bytes(hash).await?.ok_or_else(|| BlobStoreError::Download {
@@ -308,7 +308,7 @@ impl BlobWrite for IrohBlobStore {
             .add_bytes(Bytes::copy_from_slice(data))
             .with_tag()
             .await
-            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
+            .map_err(|e| BlobStoreError::AddBytes { message: e.to_string() })?;
 
         let blob_ref = BlobRef::new(tag_info.hash, size, tag_info.format);
 
@@ -327,8 +327,9 @@ impl BlobWrite for IrohBlobStore {
 
     #[instrument(skip(self), fields(path = %path.display()))]
     async fn add_path(&self, path: &Path) -> Result<AddBlobResult, BlobStoreError> {
-        let metadata = tokio::fs::metadata(path).await.map_err(|e| BlobStoreError::Storage {
-            message: format!("failed to read file metadata: {}", e),
+        let metadata = tokio::fs::metadata(path).await.map_err(|e| BlobStoreError::ReadFileMetadata {
+            path: path.to_path_buf(),
+            source: e,
         })?;
 
         let size = metadata.len();
@@ -345,7 +346,7 @@ impl BlobWrite for IrohBlobStore {
             .add_path(path)
             .with_tag()
             .await
-            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
+            .map_err(|e| BlobStoreError::AddPath { message: e.to_string() })?;
 
         let blob_ref = BlobRef::new(tag_info.hash, size, tag_info.format);
 
@@ -375,11 +376,10 @@ impl BlobWrite for IrohBlobStore {
     #[instrument(skip(self))]
     async fn protect(&self, hash: &Hash, tag_name: &str) -> Result<(), BlobStoreError> {
         let haf = HashAndFormat::raw(*hash);
-        self.store
-            .tags()
-            .set(tag_name, haf)
-            .await
-            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
+        self.store.tags().set(tag_name, haf).await.map_err(|e| BlobStoreError::SetTag {
+            tag: tag_name.to_string(),
+            message: e.to_string(),
+        })?;
 
         debug!(hash = %hash, tag = tag_name, "blob protected");
 
@@ -404,11 +404,10 @@ impl BlobWrite for IrohBlobStore {
             None
         };
 
-        self.store
-            .tags()
-            .delete(tag_name)
-            .await
-            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
+        self.store.tags().delete(tag_name).await.map_err(|e| BlobStoreError::DeleteTag {
+            tag: tag_name.to_string(),
+            message: e.to_string(),
+        })?;
 
         debug!(tag = tag_name, "blob protection removed");
 
@@ -444,7 +443,10 @@ impl BlobRead for IrohBlobStore {
 
     #[instrument(skip(self))]
     async fn has(&self, hash: &Hash) -> Result<bool, BlobStoreError> {
-        self.store.blobs().has(*hash).await.map_err(|e| BlobStoreError::Storage { message: e.to_string() })
+        self.store.blobs().has(*hash).await.map_err(|e| BlobStoreError::CheckExistence {
+            hash: hash.to_string(),
+            message: e.to_string(),
+        })
     }
 
     #[instrument(skip(self))]
@@ -521,7 +523,10 @@ impl BlobTransfer for IrohBlobStore {
         let progress = downloader.download(HashAndFormat::new(hash, format), vec![provider]);
 
         // Wait for completion
-        progress.await.map_err(|e| BlobStoreError::Download { message: e.to_string() })?;
+        progress.await.map_err(|e| BlobStoreError::DownloadBlob {
+            hash: hash.to_string(),
+            message: e.to_string(),
+        })?;
 
         // Get size
         let bytes = self.get_bytes(&hash).await?.ok_or_else(|| BlobStoreError::Download {
@@ -564,7 +569,7 @@ impl BlobQuery for IrohBlobStore {
             .list()
             .stream()
             .await
-            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
+            .map_err(|e| BlobStoreError::ListBlobs { message: e.to_string() })?;
 
         // Parse continuation token to get last seen hash
         let skip_until = if let Some(token) = continuation_token {

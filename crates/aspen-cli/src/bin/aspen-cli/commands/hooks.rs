@@ -433,7 +433,31 @@ async fn hook_trigger(client: &AspenClient, args: TriggerArgs, json: bool) -> Re
 }
 
 async fn hook_create_url(client: &AspenClient, args: CreateUrlArgs, json: bool) -> Result<()> {
-    // Validate the event type
+    // Validate inputs
+    hook_create_url_validate_inputs(&args)?;
+
+    // Get cluster ticket and extract bootstrap peers
+    let (parsed_ticket, bootstrap_peers) = hook_create_url_get_cluster_info(client).await?;
+
+    // Build the hook ticket with optional fields
+    let hook_ticket = hook_create_url_build_ticket(&parsed_ticket.cluster_id, bootstrap_peers.clone(), &args)?;
+
+    let url = hook_ticket.serialize();
+
+    let output = HookCreateUrlOutput {
+        url,
+        cluster_id: parsed_ticket.cluster_id,
+        event_type: args.event_type,
+        expires: hook_ticket.expiry_string(),
+        peer_count: bootstrap_peers.len() as u32,
+    };
+
+    print_output(&output, json);
+    Ok(())
+}
+
+/// Validate the event type and optional payload JSON for hook URL creation.
+fn hook_create_url_validate_inputs(args: &CreateUrlArgs) -> Result<()> {
     let valid_types = [
         "write_committed",
         "delete_committed",
@@ -451,13 +475,18 @@ async fn hook_create_url(client: &AspenClient, args: CreateUrlArgs, json: bool) 
         anyhow::bail!("Invalid event type: '{}'. Valid types: {}", args.event_type, valid_types.join(", "));
     }
 
-    // Validate payload JSON if provided
     if let Some(ref payload) = args.payload {
         let _: serde_json::Value =
             serde_json::from_str(payload).map_err(|e| anyhow::anyhow!("Invalid payload JSON: {}", e))?;
     }
 
-    // Get cluster info from the server
+    Ok(())
+}
+
+/// Fetch the cluster ticket and extract bootstrap peers.
+async fn hook_create_url_get_cluster_info(
+    client: &AspenClient,
+) -> Result<(aspen_cluster::ticket::AspenClusterTicket, Vec<EndpointAddr>)> {
     let response = client.send(ClientRpcRequest::GetClusterTicket).await?;
 
     let ticket_response = match response {
@@ -466,50 +495,41 @@ async fn hook_create_url(client: &AspenClient, args: CreateUrlArgs, json: bool) 
         _ => anyhow::bail!("unexpected response type"),
     };
 
-    // Parse the cluster ticket to extract bootstrap peers
     let parsed_ticket = aspen_cluster::ticket::AspenClusterTicket::deserialize(&ticket_response.ticket)
         .context("failed to parse cluster ticket")?;
 
-    // Convert BootstrapPeers to EndpointAddrs
     let bootstrap_peers: Vec<EndpointAddr> = parsed_ticket.bootstrap.iter().map(|p| p.to_endpoint_addr()).collect();
 
     if bootstrap_peers.is_empty() {
         anyhow::bail!("no bootstrap peers available in cluster ticket");
     }
 
-    // Build the hook ticket
-    let mut hook_ticket =
-        AspenHookTicket::new(&parsed_ticket.cluster_id, bootstrap_peers.clone()).with_event_type(&args.event_type);
+    Ok((parsed_ticket, bootstrap_peers))
+}
 
-    // Add optional fields
-    if let Some(payload) = args.payload {
-        hook_ticket = hook_ticket.with_default_payload(payload);
+/// Build an AspenHookTicket with the given parameters.
+fn hook_create_url_build_ticket(
+    cluster_id: &str,
+    bootstrap_peers: Vec<EndpointAddr>,
+    args: &CreateUrlArgs,
+) -> Result<AspenHookTicket> {
+    let mut hook_ticket = AspenHookTicket::new(cluster_id, bootstrap_peers).with_event_type(&args.event_type);
+
+    if let Some(ref payload) = args.payload {
+        hook_ticket = hook_ticket.with_default_payload(payload.clone());
     }
 
     if args.expires > 0 {
         hook_ticket = hook_ticket.with_expiry_hours(args.expires);
     }
 
-    if let Some(relay_url) = args.relay_url {
-        hook_ticket = hook_ticket.with_relay_url(relay_url);
+    if let Some(ref relay_url) = args.relay_url {
+        hook_ticket = hook_ticket.with_relay_url(relay_url.clone());
     }
 
-    // Validate before serializing
     hook_ticket.validate()?;
 
-    // Serialize to URL
-    let url = hook_ticket.serialize();
-
-    let output = HookCreateUrlOutput {
-        url,
-        cluster_id: parsed_ticket.cluster_id,
-        event_type: args.event_type,
-        expires: hook_ticket.expiry_string(),
-        peer_count: bootstrap_peers.len() as u32,
-    };
-
-    print_output(&output, json);
-    Ok(())
+    Ok(hook_ticket)
 }
 
 async fn hook_trigger_url(args: TriggerUrlArgs, json: bool) -> Result<()> {

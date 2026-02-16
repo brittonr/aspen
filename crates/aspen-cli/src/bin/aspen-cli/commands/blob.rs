@@ -226,7 +226,7 @@ pub struct RepairArgs {
 pub struct AddBlobOutput {
     pub is_success: bool,
     pub hash: Option<String>,
-    pub size: Option<u64>,
+    pub size_bytes: Option<u64>,
     pub was_new: Option<bool>,
     pub error: Option<String>,
 }
@@ -236,7 +236,7 @@ impl Outputable for AddBlobOutput {
         serde_json::json!({
             "is_success": self.is_success,
             "hash": self.hash,
-            "size": self.size,
+            "size_bytes": self.size_bytes,
             "was_new": self.was_new,
             "error": self.error
         })
@@ -245,7 +245,7 @@ impl Outputable for AddBlobOutput {
     fn to_human(&self) -> String {
         if self.is_success {
             let hash = self.hash.as_deref().unwrap_or("unknown");
-            let size = self.size.unwrap_or(0);
+            let size = self.size_bytes.unwrap_or(0);
             let status = if self.was_new.unwrap_or(false) {
                 "added"
             } else {
@@ -269,7 +269,7 @@ impl Outputable for GetBlobOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "was_found": self.was_found,
-            "size": self.data.as_ref().map(|d| d.len()),
+            "size_bytes": self.data.as_ref().map(|d| d.len()),
             "error": self.error
         })
     }
@@ -349,7 +349,7 @@ pub struct ListBlobsOutput {
 
 pub struct BlobEntry {
     pub hash: String,
-    pub size: u64,
+    pub size_bytes: u64,
 }
 
 impl Outputable for ListBlobsOutput {
@@ -358,7 +358,7 @@ impl Outputable for ListBlobsOutput {
             "blobs": self.blobs.iter().map(|b| {
                 serde_json::json!({
                     "hash": b.hash,
-                    "size": b.size
+                    "size_bytes": b.size_bytes
                 })
             }).collect::<Vec<_>>(),
             "count": self.count,
@@ -382,7 +382,7 @@ impl Outputable for ListBlobsOutput {
         output.push_str("-----------------------------------------------------------------+----------\n");
 
         for blob in &self.blobs {
-            output.push_str(&format!("{} | {:>8}\n", &blob.hash[..64.min(blob.hash.len())], blob.size));
+            output.push_str(&format!("{} | {:>8}\n", &blob.hash[..64.min(blob.hash.len())], blob.size_bytes));
         }
 
         if self.has_more {
@@ -447,7 +447,7 @@ impl Outputable for DeleteBlobOutput {
 pub struct DownloadBlobOutput {
     pub is_success: bool,
     pub hash: Option<String>,
-    pub size: Option<u64>,
+    pub size_bytes: Option<u64>,
     pub error: Option<String>,
 }
 
@@ -456,7 +456,7 @@ impl Outputable for DownloadBlobOutput {
         serde_json::json!({
             "is_success": self.is_success,
             "hash": self.hash,
-            "size": self.size,
+            "size_bytes": self.size_bytes,
             "error": self.error
         })
     }
@@ -464,7 +464,7 @@ impl Outputable for DownloadBlobOutput {
     fn to_human(&self) -> String {
         if self.is_success {
             let hash = self.hash.as_deref().unwrap_or("unknown");
-            let size = self.size.unwrap_or(0);
+            let size = self.size_bytes.unwrap_or(0);
             format!("Downloaded {} ({} bytes)", hash, size)
         } else {
             format!("Download failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -476,7 +476,7 @@ impl Outputable for DownloadBlobOutput {
 pub struct BlobStatusOutput {
     pub was_found: bool,
     pub hash: Option<String>,
-    pub size: Option<u64>,
+    pub size_bytes: Option<u64>,
     pub complete: Option<bool>,
     pub tags: Option<Vec<String>>,
     pub error: Option<String>,
@@ -487,7 +487,7 @@ impl Outputable for BlobStatusOutput {
         serde_json::json!({
             "was_found": self.was_found,
             "hash": self.hash,
-            "size": self.size,
+            "size_bytes": self.size_bytes,
             "complete": self.complete,
             "tags": self.tags,
             "error": self.error
@@ -503,7 +503,7 @@ impl Outputable for BlobStatusOutput {
         }
 
         let hash = self.hash.as_deref().unwrap_or("unknown");
-        let size = self.size.map(|s| format!("{} bytes", s)).unwrap_or_else(|| "unknown size".to_string());
+        let size = self.size_bytes.map(|s| format!("{} bytes", s)).unwrap_or_else(|| "unknown size".to_string());
         let complete = if self.complete.unwrap_or(false) {
             "complete"
         } else {
@@ -523,7 +523,7 @@ impl Outputable for BlobStatusOutput {
 pub struct BlobReplicationStatusOutput {
     pub was_found: bool,
     pub hash: Option<String>,
-    pub size: Option<u64>,
+    pub size_bytes: Option<u64>,
     pub replica_nodes: Option<Vec<u64>>,
     pub replication_factor: Option<u32>,
     pub min_replicas: Option<u32>,
@@ -538,7 +538,7 @@ impl Outputable for BlobReplicationStatusOutput {
         serde_json::json!({
             "was_found": self.was_found,
             "hash": self.hash,
-            "size": self.size,
+            "size_bytes": self.size_bytes,
             "replica_nodes": self.replica_nodes,
             "replication_factor": self.replication_factor,
             "min_replicas": self.min_replicas,
@@ -558,7 +558,7 @@ impl Outputable for BlobReplicationStatusOutput {
         }
 
         let hash = self.hash.as_deref().unwrap_or("unknown");
-        let size = self.size.map(|s| format!("{} bytes", s)).unwrap_or_else(|| "unknown".to_string());
+        let size = self.size_bytes.map(|s| format!("{} bytes", s)).unwrap_or_else(|| "unknown".to_string());
         let status = self.status.as_deref().unwrap_or("unknown");
         let factor = self.replication_factor.unwrap_or(0);
         let min = self.min_replicas.unwrap_or(0);
@@ -705,7 +705,7 @@ async fn blob_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()>
             let output = AddBlobOutput {
                 is_success: result.success,
                 hash: result.hash,
-                size: result.size,
+                size_bytes: result.size,
                 was_new: result.was_new,
                 error: result.error,
             };
@@ -812,7 +812,7 @@ async fn blob_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<(
                 .into_iter()
                 .map(|b| BlobEntry {
                     hash: b.hash,
-                    size: b.size,
+                    size_bytes: b.size_bytes,
                 })
                 .collect();
 
@@ -916,7 +916,7 @@ async fn blob_download(client: &AspenClient, args: DownloadArgs, json: bool) -> 
             let output = DownloadBlobOutput {
                 is_success: result.success,
                 hash: result.hash,
-                size: result.size,
+                size_bytes: result.size,
                 error: result.error,
             };
             print_output(&output, json);
@@ -943,7 +943,7 @@ async fn blob_download_by_hash(client: &AspenClient, args: DownloadByHashArgs, j
             let output = DownloadBlobOutput {
                 is_success: result.success,
                 hash: result.hash,
-                size: result.size,
+                size_bytes: result.size,
                 error: result.error,
             };
             print_output(&output, json);
@@ -971,7 +971,7 @@ async fn blob_download_by_provider(client: &AspenClient, args: DownloadByProvide
             let output = DownloadBlobOutput {
                 is_success: result.success,
                 hash: result.hash,
-                size: result.size,
+                size_bytes: result.size,
                 error: result.error,
             };
             print_output(&output, json);
@@ -993,7 +993,7 @@ async fn blob_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resu
             let output = BlobStatusOutput {
                 was_found: result.found,
                 hash: result.hash,
-                size: result.size,
+                size_bytes: result.size,
                 complete: result.complete,
                 tags: result.tags,
                 error: result.error,
@@ -1017,7 +1017,7 @@ async fn blob_replication_status(client: &AspenClient, args: ReplicationStatusAr
             let output = BlobReplicationStatusOutput {
                 was_found: result.found,
                 hash: result.hash,
-                size: result.size,
+                size_bytes: result.size,
                 replica_nodes: result.replica_nodes,
                 replication_factor: result.replication_factor,
                 min_replicas: result.min_replicas,
