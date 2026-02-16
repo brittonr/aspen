@@ -22,7 +22,7 @@ pub struct ProviderInfo {
     /// Timestamp when this provider was discovered (microseconds since epoch).
     pub discovered_at: u64,
     /// Whether this provider has been verified (we successfully connected).
-    pub verified: bool,
+    pub is_verified: bool,
 }
 
 /// Announce record stored in the DHT.

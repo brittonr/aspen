@@ -437,13 +437,13 @@ impl MultiNodeClient {
         &self,
         learner_id: u64,
         replace_node: Option<u64>,
-        force: bool,
+        is_force: bool,
     ) -> Result<PromoteLearnerResultResponse> {
         let response = self
             .send_rpc_primary(ClientRpcRequest::PromoteLearner {
                 learner_id,
                 replace_node,
-                force,
+                is_force,
             })
             .await?;
 
@@ -600,7 +600,7 @@ impl MultiNodeClient {
 
         match response {
             ClientRpcResponse::JobCancelResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     anyhow::bail!(
@@ -652,7 +652,7 @@ impl MultiNodeClient {
 
         match response {
             ClientRpcResponse::CiGetStatusResult(result) => {
-                if !result.found {
+                if !result.was_found {
                     anyhow::bail!("Pipeline run not found: {}", run_id);
                 }
                 Ok(CiPipelineDetail {
@@ -707,7 +707,7 @@ impl MultiNodeClient {
 
         match response {
             ClientRpcResponse::CiTriggerPipelineResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result.run_id.unwrap_or_default())
                 } else {
                     anyhow::bail!(
@@ -731,7 +731,7 @@ impl MultiNodeClient {
 
         match response {
             ClientRpcResponse::CiCancelRunResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     anyhow::bail!(
@@ -769,7 +769,7 @@ impl MultiNodeClient {
                     anyhow::bail!("Failed to get job logs: {}", error);
                 }
                 Ok(crate::client_trait::CiJobLogsResult {
-                    found: result.found,
+                    was_found: result.was_found,
                     chunks: result
                         .chunks
                         .into_iter()

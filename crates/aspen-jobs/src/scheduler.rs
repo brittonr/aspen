@@ -113,7 +113,7 @@ pub struct ScheduledJob {
     /// Missed execution count.
     pub missed_count: u64,
     /// Is schedule paused.
-    pub paused: bool,
+    pub is_paused: bool,
     /// Catch-up policy for missed executions.
     pub catch_up_policy: CatchUpPolicy,
     /// Conflict policy.
@@ -130,7 +130,7 @@ impl ScheduledJob {
 
     /// Check if job is due for execution.
     pub fn is_due(&self, now: DateTime<Utc>) -> bool {
-        !self.paused && self.next_execution <= now
+        !self.is_paused && self.next_execution <= now
     }
 
     /// Update after execution.
@@ -511,7 +511,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
             last_execution: None,
             execution_count: 0,
             missed_count: 0,
-            paused: false,
+            is_paused: false,
             catch_up_policy: CatchUpPolicy::RunImmediately,
             conflict_policy: ConflictPolicy::Skip,
             timezone: None,
@@ -577,7 +577,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
         let mut jobs = self.jobs.write().await;
 
         if let Some(scheduled_job) = jobs.get_mut(job_id) {
-            scheduled_job.paused = true;
+            scheduled_job.is_paused = true;
             info!(job_id = %job_id, "scheduled job paused");
             Ok(())
         } else {
@@ -590,7 +590,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
         let mut jobs = self.jobs.write().await;
 
         if let Some(scheduled_job) = jobs.get_mut(job_id) {
-            scheduled_job.paused = false;
+            scheduled_job.is_paused = false;
 
             // Recalculate next execution if needed
             if let Some(next) = scheduled_job.calculate_next_execution() {

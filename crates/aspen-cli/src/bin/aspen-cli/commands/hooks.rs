@@ -121,7 +121,7 @@ pub struct HookListOutput {
 impl Outputable for HookListOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "enabled": self.is_enabled,
+            "is_enabled": self.is_enabled,
             "handlers": self.handlers
         })
     }
@@ -184,7 +184,7 @@ pub struct HookMetricsOutput {
 impl Outputable for HookMetricsOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "enabled": self.is_enabled,
+            "is_enabled": self.is_enabled,
             "total_events_processed": self.total_events_processed,
             "handlers": self.handlers
         })
@@ -234,7 +234,7 @@ impl Outputable for HookMetricsOutput {
 
 /// Hook trigger output.
 pub struct HookTriggerOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub dispatched_count: usize,
     pub error: Option<String>,
     pub handler_failures: Vec<(String, String)>,
@@ -243,7 +243,7 @@ pub struct HookTriggerOutput {
 impl Outputable for HookTriggerOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "dispatched_count": self.dispatched_count,
             "error": self.error,
             "handler_failures": self.handler_failures
@@ -307,7 +307,7 @@ impl Outputable for HookCreateUrlOutput {
 
 /// Hook URL trigger output.
 pub struct HookTriggerUrlOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub cluster_id: String,
     pub event_type: String,
     pub dispatched_count: usize,
@@ -318,7 +318,7 @@ pub struct HookTriggerUrlOutput {
 impl Outputable for HookTriggerUrlOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "cluster_id": self.cluster_id,
             "event_type": self.event_type,
             "dispatched_count": self.dispatched_count,
@@ -416,13 +416,13 @@ async fn hook_trigger(client: &AspenClient, args: TriggerArgs, json: bool) -> Re
     match response {
         ClientRpcResponse::HookTriggerResult(result) => {
             let output = HookTriggerOutput {
-                success: result.success,
+                is_success: result.is_success,
                 dispatched_count: result.dispatched_count,
                 error: result.error,
                 handler_failures: result.handler_failures,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -540,7 +540,7 @@ async fn hook_trigger_url(args: TriggerUrlArgs, json: bool) -> Result<()> {
         match send_hook_trigger(&endpoint, peer_addr, &ticket.event_type, &payload, rpc_timeout).await {
             Ok(result) => {
                 let output = HookTriggerUrlOutput {
-                    success: result.success,
+                    is_success: result.is_success,
                     cluster_id: ticket.cluster_id.clone(),
                     event_type: ticket.event_type.clone(),
                     dispatched_count: result.dispatched_count,
@@ -548,7 +548,7 @@ async fn hook_trigger_url(args: TriggerUrlArgs, json: bool) -> Result<()> {
                     handler_failures: result.handler_failures,
                 };
                 print_output(&output, json);
-                if !result.success {
+                if !result.is_success {
                     std::process::exit(1);
                 }
                 return Ok(());
@@ -610,7 +610,7 @@ async fn send_hook_trigger(
     // Handle response
     match response {
         ClientRpcResponse::HookTriggerResult(result) => Ok(HookTriggerResult {
-            success: result.success,
+            is_success: result.is_success,
             dispatched_count: result.dispatched_count,
             error: result.error,
             handler_failures: result.handler_failures,
@@ -622,7 +622,7 @@ async fn send_hook_trigger(
 
 /// Result from a hook trigger operation.
 struct HookTriggerResult {
-    success: bool,
+    is_success: bool,
     dispatched_count: usize,
     error: Option<String>,
     handler_failures: Vec<(String, String)>,

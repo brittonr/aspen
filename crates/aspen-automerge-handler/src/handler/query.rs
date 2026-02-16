@@ -28,14 +28,14 @@ pub(crate) async fn handle_list(
 
     match store.list(options).await {
         Ok(result) => Ok(ClientRpcResponse::AutomergeListResult(AutomergeListResultResponse {
-            success: true,
+            is_success: true,
             documents: result.documents.into_iter().map(convert_metadata).collect(),
             has_more: result.has_more,
             continuation_token: result.continuation_token,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::AutomergeListResult(AutomergeListResultResponse {
-            success: false,
+            is_success: false,
             documents: vec![],
             has_more: false,
             continuation_token: None,
@@ -53,8 +53,8 @@ pub(crate) async fn handle_get_metadata(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeGetMetadataResult(AutomergeGetMetadataResultResponse {
-                success: false,
-                found: false,
+                is_success: false,
+                was_found: false,
                 metadata: None,
                 error: Some(format!("Invalid document ID: {}", e)),
             }));
@@ -63,20 +63,20 @@ pub(crate) async fn handle_get_metadata(
 
     match store.get_metadata(&id).await {
         Ok(Some(metadata)) => Ok(ClientRpcResponse::AutomergeGetMetadataResult(AutomergeGetMetadataResultResponse {
-            success: true,
-            found: true,
+            is_success: true,
+            was_found: true,
             metadata: Some(convert_metadata(metadata)),
             error: None,
         })),
         Ok(None) => Ok(ClientRpcResponse::AutomergeGetMetadataResult(AutomergeGetMetadataResultResponse {
-            success: true,
-            found: false,
+            is_success: true,
+            was_found: false,
             metadata: None,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::AutomergeGetMetadataResult(AutomergeGetMetadataResultResponse {
-            success: false,
-            found: false,
+            is_success: false,
+            was_found: false,
             metadata: None,
             error: Some(e.to_string()),
         })),
@@ -89,22 +89,22 @@ pub(crate) async fn handle_exists(store: &DynAutomergeStore, document_id: String
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeExistsResult(AutomergeExistsResultResponse {
-                success: false,
-                exists: false,
+                is_success: false,
+                does_exist: false,
                 error: Some(format!("Invalid document ID: {}", e)),
             }));
         }
     };
 
     match store.exists(&id).await {
-        Ok(exists) => Ok(ClientRpcResponse::AutomergeExistsResult(AutomergeExistsResultResponse {
-            success: true,
-            exists,
+        Ok(does_exist) => Ok(ClientRpcResponse::AutomergeExistsResult(AutomergeExistsResultResponse {
+            is_success: true,
+            does_exist,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::AutomergeExistsResult(AutomergeExistsResultResponse {
-            success: false,
-            exists: false,
+            is_success: false,
+            does_exist: false,
             error: Some(e.to_string()),
         })),
     }

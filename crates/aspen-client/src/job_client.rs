@@ -236,7 +236,7 @@ impl<'a> JobClient<'a> {
 
         match response {
             ClientRpcResponse::JobSubmitResult(result) => {
-                if result.success {
+                if result.is_success {
                     result.job_id.context("Job submitted successfully but no ID returned")
                 } else {
                     Err(anyhow::anyhow!(
@@ -306,7 +306,7 @@ impl<'a> JobClient<'a> {
 
         match response {
             ClientRpcResponse::JobCancelResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result.previous_status.unwrap_or_else(|| "unknown".to_string()))
                 } else {
                     Err(anyhow::anyhow!(
@@ -337,7 +337,7 @@ impl<'a> JobClient<'a> {
 
         match response {
             ClientRpcResponse::JobUpdateProgressResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     Err(anyhow::anyhow!(

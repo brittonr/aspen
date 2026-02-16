@@ -45,9 +45,10 @@ impl RequestHandler for LeaseHandler {
             }
             ClientRpcRequest::LeaseRevoke { lease_id } => handle_lease_revoke(ctx, lease_id).await,
             ClientRpcRequest::LeaseKeepalive { lease_id } => handle_lease_keepalive(ctx, lease_id).await,
-            ClientRpcRequest::LeaseTimeToLive { lease_id, include_keys } => {
-                handle_lease_time_to_live(ctx, lease_id, include_keys).await
-            }
+            ClientRpcRequest::LeaseTimeToLive {
+                lease_id,
+                should_include_keys,
+            } => handle_lease_time_to_live(ctx, lease_id, should_include_keys).await,
             ClientRpcRequest::LeaseList => handle_lease_list(ctx).await,
             ClientRpcRequest::WriteKeyWithLease { key, value, lease_id } => {
                 handle_write_key_with_lease(ctx, key, value, lease_id).await
@@ -84,13 +85,13 @@ async fn handle_lease_grant(
 
     match result {
         Ok(response) => Ok(ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
-            success: true,
+            is_success: true,
             lease_id: response.lease_id,
             ttl_seconds: response.ttl_seconds,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
-            success: false,
+            is_success: false,
             lease_id: None,
             ttl_seconds: None,
             error: Some(e.to_string()),
@@ -108,12 +109,12 @@ async fn handle_lease_revoke(ctx: &ClientProtocolContext, lease_id: u64) -> anyh
 
     match result {
         Ok(response) => Ok(ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
-            success: true,
+            is_success: true,
             keys_deleted: response.keys_deleted,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
-            success: false,
+            is_success: false,
             keys_deleted: None,
             error: Some(e.to_string()),
         })),
@@ -130,13 +131,13 @@ async fn handle_lease_keepalive(ctx: &ClientProtocolContext, lease_id: u64) -> a
 
     match result {
         Ok(response) => Ok(ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
-            success: true,
+            is_success: true,
             lease_id: response.lease_id,
             ttl_seconds: response.ttl_seconds,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
-            success: false,
+            is_success: false,
             lease_id: None,
             ttl_seconds: None,
             error: Some(e.to_string()),
@@ -147,21 +148,21 @@ async fn handle_lease_keepalive(ctx: &ClientProtocolContext, lease_id: u64) -> a
 async fn handle_lease_time_to_live(
     ctx: &ClientProtocolContext,
     lease_id: u64,
-    include_keys: bool,
+    should_include_keys: bool,
 ) -> anyhow::Result<ClientRpcResponse> {
     // Query state machine for lease info
     match &ctx.state_machine {
         Some(sm) => match sm.get_lease(lease_id) {
             Some((granted_ttl, remaining_ttl)) => {
                 // Optionally include attached keys
-                let keys = if include_keys {
+                let keys = if should_include_keys {
                     Some(sm.get_lease_keys(lease_id))
                 } else {
                     None
                 };
 
                 Ok(ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
-                    success: true,
+                    is_success: true,
                     lease_id: Some(lease_id),
                     granted_ttl_seconds: Some(granted_ttl),
                     remaining_ttl_seconds: Some(remaining_ttl),
@@ -170,7 +171,7 @@ async fn handle_lease_time_to_live(
                 }))
             }
             None => Ok(ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
-                success: false,
+                is_success: false,
                 lease_id: Some(lease_id),
                 granted_ttl_seconds: None,
                 remaining_ttl_seconds: None,
@@ -179,7 +180,7 @@ async fn handle_lease_time_to_live(
             })),
         },
         None => Ok(ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
-            success: false,
+            is_success: false,
             lease_id: Some(lease_id),
             granted_ttl_seconds: None,
             remaining_ttl_seconds: None,
@@ -200,19 +201,19 @@ async fn handle_lease_list(ctx: &ClientProtocolContext) -> anyhow::Result<Client
                     lease_id,
                     granted_ttl_seconds: granted_ttl,
                     remaining_ttl_seconds: remaining_ttl,
-                    // Use LeaseTimeToLive with include_keys=true for key counts
+                    // Use LeaseTimeToLive with should_include_keys=true for key counts
                     attached_keys: 0,
                 })
                 .collect();
 
             Ok(ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
-                success: true,
+                is_success: true,
                 leases: Some(leases),
                 error: None,
             }))
         }
         None => Ok(ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
-            success: false,
+            is_success: false,
             leases: None,
             error: Some("State machine not available".to_string()),
         })),
@@ -241,11 +242,11 @@ async fn handle_write_key_with_lease(
 
     match result {
         Ok(_) => Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
-            success: false,
+            is_success: false,
             error: Some(e.to_string()),
         })),
     }
@@ -281,7 +282,7 @@ mod tests {
         let handler = LeaseHandler;
         assert!(handler.can_handle(&ClientRpcRequest::LeaseTimeToLive {
             lease_id: 1,
-            include_keys: false,
+            should_include_keys: false,
         }));
     }
 

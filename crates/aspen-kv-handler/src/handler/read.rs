@@ -43,19 +43,19 @@ async fn handle_read_key(ctx: &ClientProtocolContext, key: String) -> anyhow::Re
             let value = resp.kv.map(|kv| kv.value.into_bytes());
             Ok(ClientRpcResponse::ReadResult(ReadResultResponse {
                 value,
-                found: true,
+                was_found: true,
                 error: None,
             }))
         }
         Err(e) => {
             // HIGH-4: Sanitize error messages to prevent information leakage
-            let (found, error) = match &e {
+            let (was_found, error) = match &e {
                 KeyValueStoreError::NotFound { .. } => (false, None),
                 other => (false, Some(sanitize_kv_error(other))),
             };
             Ok(ClientRpcResponse::ReadResult(ReadResultResponse {
                 value: None,
-                found,
+                was_found,
                 error,
             }))
         }
@@ -73,7 +73,7 @@ async fn handle_batch_read(ctx: &ClientProtocolContext, keys: Vec<String>) -> an
     for key in &keys {
         if let Err(e) = validate_client_key(key) {
             return Ok(ClientRpcResponse::BatchReadResult(BatchReadResultResponse {
-                success: false,
+                is_success: false,
                 values: None,
                 error: Some(e.to_string()),
             }));
@@ -97,7 +97,7 @@ async fn handle_batch_read(ctx: &ClientProtocolContext, keys: Vec<String>) -> an
             Err(e) => {
                 // Real error - fail the entire batch
                 return Ok(ClientRpcResponse::BatchReadResult(BatchReadResultResponse {
-                    success: false,
+                    is_success: false,
                     values: None,
                     error: Some(e.to_string()),
                 }));
@@ -114,7 +114,7 @@ async fn handle_batch_read(ctx: &ClientProtocolContext, keys: Vec<String>) -> an
     );
 
     Ok(ClientRpcResponse::BatchReadResult(BatchReadResultResponse {
-        success: true,
+        is_success: true,
         values: Some(values),
         error: None,
     }))

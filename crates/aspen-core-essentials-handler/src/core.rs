@@ -213,7 +213,7 @@ fn handle_checkpoint_wal() -> anyhow::Result<ClientRpcResponse> {
     // WAL checkpoint requires direct access to the SQLite state machine,
     // which is not exposed through the ClusterController/KeyValueStore traits.
     Ok(ClientRpcResponse::CheckpointWalResult(CheckpointWalResultResponse {
-        success: false,
+        is_success: false,
         pages_checkpointed: None,
         wal_size_before_bytes: None,
         wal_size_after_bytes: None,
@@ -415,7 +415,7 @@ mod tests {
         match result.unwrap() {
             ClientRpcResponse::CheckpointWalResult(response) => {
                 // WAL checkpoint is not supported via trait interface
-                assert!(!response.success);
+                assert!(!response.is_success);
                 assert!(response.error.is_some());
             }
             other => panic!("expected CheckpointWalResult, got {:?}", other),

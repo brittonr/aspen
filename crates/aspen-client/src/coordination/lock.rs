@@ -56,7 +56,7 @@ impl<C: CoordinationRpc> LockClient<C> {
 
         match response {
             ClientRpcResponse::LockResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(RemoteLockGuard {
                         client: self.client.clone(),
                         key: self.key.clone(),
@@ -93,7 +93,7 @@ impl<C: CoordinationRpc> LockClient<C> {
 
         match response {
             ClientRpcResponse::LockResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(Some(RemoteLockGuard {
                         client: self.client.clone(),
                         key: self.key.clone(),
@@ -154,7 +154,7 @@ impl<C: CoordinationRpc> RemoteLockGuard<C> {
 
         match response {
             ClientRpcResponse::LockResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     bail!("lock release failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -178,7 +178,7 @@ impl<C: CoordinationRpc> RemoteLockGuard<C> {
 
         match response {
             ClientRpcResponse::LockResult(result) => {
-                if result.success {
+                if result.is_success {
                     if let Some(deadline) = result.deadline_ms {
                         self.deadline_ms = deadline;
                     }

@@ -23,7 +23,7 @@ pub(crate) async fn handle_watch_repo(
 
     let Some(trigger_service) = &ctx.ci_trigger_service else {
         return Ok(ClientRpcResponse::CiWatchRepoResult(CiWatchRepoResponse {
-            success: false,
+            is_success: false,
             error: Some("CI trigger service not available".to_string()),
         }));
     };
@@ -35,7 +35,7 @@ pub(crate) async fn handle_watch_repo(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::CiWatchRepoResult(CiWatchRepoResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid repo_id: {}", e)),
             }));
         }
@@ -44,7 +44,7 @@ pub(crate) async fn handle_watch_repo(
     // Step 1: Register with TriggerService (in-memory watch list)
     if let Err(e) = trigger_service.watch_repo(repo_id_parsed).await {
         return Ok(ClientRpcResponse::CiWatchRepoResult(CiWatchRepoResponse {
-            success: false,
+            is_success: false,
             error: Some(format!("Failed to watch repository: {}", e)),
         }));
     }
@@ -75,7 +75,7 @@ pub(crate) async fn handle_watch_repo(
     );
 
     Ok(ClientRpcResponse::CiWatchRepoResult(CiWatchRepoResponse {
-        success: true,
+        is_success: true,
         error: None,
     }))
 }
@@ -95,7 +95,7 @@ pub(crate) async fn handle_unwatch_repo(
 
     let Some(trigger_service) = &ctx.ci_trigger_service else {
         return Ok(ClientRpcResponse::CiUnwatchRepoResult(CiUnwatchRepoResponse {
-            success: false,
+            is_success: false,
             error: Some("CI trigger service not available".to_string()),
         }));
     };
@@ -107,7 +107,7 @@ pub(crate) async fn handle_unwatch_repo(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::CiUnwatchRepoResult(CiUnwatchRepoResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid repo_id: {}", e)),
             }));
         }
@@ -134,7 +134,7 @@ pub(crate) async fn handle_unwatch_repo(
     info!(repo_id = %repo_id, "CI watch removed");
 
     Ok(ClientRpcResponse::CiUnwatchRepoResult(CiUnwatchRepoResponse {
-        success: true,
+        is_success: true,
         error: None,
     }))
 }

@@ -32,8 +32,12 @@ impl<C: CoordinationRpc> BatchClient<C> {
         let response = self.client.send_coordination_request(ClientRpcRequest::BatchRead { keys }).await?;
 
         match response {
-            ClientRpcResponse::BatchReadResult(BatchReadResultResponse { success, values, error }) => {
-                if success {
+            ClientRpcResponse::BatchReadResult(BatchReadResultResponse {
+                is_success,
+                values,
+                error,
+            }) => {
+                if is_success {
                     Ok(values.unwrap_or_default())
                 } else {
                     bail!("batch read failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
@@ -63,11 +67,11 @@ impl<C: CoordinationRpc> BatchClient<C> {
 
         match response {
             ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
-                success,
+                is_success,
                 operations_applied,
                 error,
             }) => {
-                if success {
+                if is_success {
                     Ok(operations_applied.unwrap_or(0))
                 } else {
                     bail!("batch write failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
@@ -117,7 +121,7 @@ impl<C: CoordinationRpc> BatchClient<C> {
 
         match response {
             ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
-                success: _,
+                is_success: _,
                 conditions_met,
                 operations_applied,
                 failed_condition_index,

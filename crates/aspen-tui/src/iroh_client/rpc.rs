@@ -50,8 +50,8 @@ impl IrohClient {
         }
 
         // Mark as connected on successful RPC
-        let mut connected = self.connected.write().await;
-        *connected = true;
+        let mut is_connected = self.is_connected.write().await;
+        *is_connected = true;
 
         Ok(response)
     }

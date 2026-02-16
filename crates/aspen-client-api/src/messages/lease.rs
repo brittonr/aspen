@@ -15,7 +15,7 @@ pub enum LeaseRequest {
     /// Refresh a lease's TTL (keepalive).
     LeaseKeepalive { lease_id: u64 },
     /// Get lease information including TTL and attached keys.
-    LeaseTimeToLive { lease_id: u64, include_keys: bool },
+    LeaseTimeToLive { lease_id: u64, should_include_keys: bool },
     /// List all active leases.
     LeaseList,
 }
@@ -42,7 +42,7 @@ impl LeaseRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseGrantResultResponse {
     /// Whether the lease was granted.
-    pub success: bool,
+    pub is_success: bool,
     /// Unique lease ID.
     pub lease_id: Option<u64>,
     /// Granted TTL in seconds.
@@ -55,7 +55,7 @@ pub struct LeaseGrantResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseRevokeResultResponse {
     /// Whether the lease was revoked.
-    pub success: bool,
+    pub is_success: bool,
     /// Number of keys deleted with the lease.
     pub keys_deleted: Option<u32>,
     /// Error message if revoke failed.
@@ -66,7 +66,7 @@ pub struct LeaseRevokeResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseKeepaliveResultResponse {
     /// Whether the keepalive succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Lease ID that was refreshed.
     pub lease_id: Option<u64>,
     /// New TTL in seconds.
@@ -79,7 +79,7 @@ pub struct LeaseKeepaliveResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseTimeToLiveResultResponse {
     /// Whether the query succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Lease ID queried.
     pub lease_id: Option<u64>,
     /// Original TTL in seconds.
@@ -96,7 +96,7 @@ pub struct LeaseTimeToLiveResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseListResultResponse {
     /// Whether the query succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of active leases.
     pub leases: Option<Vec<LeaseInfo>>,
     /// Error message if query failed.

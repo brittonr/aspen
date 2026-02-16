@@ -169,7 +169,7 @@ pub struct ResultArgs {
 
 /// Job submit output.
 pub struct JobSubmitOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub job_id: Option<String>,
     pub error: Option<String>,
 }
@@ -177,14 +177,14 @@ pub struct JobSubmitOutput {
 impl Outputable for JobSubmitOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "job_id": self.job_id,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!("Job submitted: {}", self.job_id.as_deref().unwrap_or("unknown"))
         } else {
             format!("Submit failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -194,7 +194,7 @@ impl Outputable for JobSubmitOutput {
 
 /// Job get output.
 pub struct JobGetOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub job: Option<JobDetails>,
     pub error: Option<String>,
 }
@@ -202,7 +202,7 @@ pub struct JobGetOutput {
 impl Outputable for JobGetOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "job": self.job,
             "error": self.error
         })
@@ -304,7 +304,7 @@ impl Outputable for JobListOutput {
 
 /// Job cancel output.
 pub struct JobCancelOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub previous_status: Option<String>,
     pub error: Option<String>,
 }
@@ -312,14 +312,14 @@ pub struct JobCancelOutput {
 impl Outputable for JobCancelOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "previous_status": self.previous_status,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!("Job cancelled (was: {})", self.previous_status.as_deref().unwrap_or("unknown"))
         } else {
             format!("Cancel failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -481,12 +481,12 @@ async fn job_submit(client: &AspenClient, args: SubmitArgs, json: bool) -> Resul
     match response {
         ClientRpcResponse::JobSubmitResult(result) => {
             let output = JobSubmitOutput {
-                success: result.success,
+                is_success: result.is_success,
                 job_id: result.job_id,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -502,12 +502,12 @@ async fn job_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> 
     match response {
         ClientRpcResponse::JobGetResult(result) => {
             let output = JobGetOutput {
-                found: result.found,
+                was_found: result.was_found,
                 job: result.job,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.found {
+            if !result.was_found {
                 std::process::exit(1);
             }
             Ok(())
@@ -557,12 +557,12 @@ async fn job_cancel(client: &AspenClient, args: CancelArgs, json: bool) -> Resul
     match response {
         ClientRpcResponse::JobCancelResult(result) => {
             let output = JobCancelOutput {
-                success: result.success,
+                is_success: result.is_success,
                 previous_status: result.previous_status,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -692,12 +692,12 @@ async fn job_submit_vm(client: &AspenClient, args: SubmitVmArgs, json: bool) -> 
     match response {
         ClientRpcResponse::JobSubmitResult(result) => {
             let output = JobSubmitOutput {
-                success: result.success,
+                is_success: result.is_success,
                 job_id: result.job_id,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

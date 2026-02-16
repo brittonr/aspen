@@ -114,7 +114,7 @@ async fn handle_pki_generate_root(
 
     match store.generate_root(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse {
-            success: true,
+            is_success: true,
             certificate: Some(response.certificate),
             private_key: None, // Root CA private key is stored internally
             serial: Some(response.serial),
@@ -124,7 +124,7 @@ async fn handle_pki_generate_root(
         Err(e) => {
             warn!(error = %e, "PKI generate root failed");
             Ok(ClientRpcResponse::SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse {
-                success: false,
+                is_success: false,
                 certificate: None,
                 private_key: None,
                 serial: None,
@@ -147,7 +147,7 @@ async fn handle_pki_generate_intermediate(
 
     match store.generate_intermediate(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse {
-            success: true,
+            is_success: true,
             certificate: None,
             private_key: None,
             serial: None,
@@ -157,7 +157,7 @@ async fn handle_pki_generate_intermediate(
         Err(e) => {
             warn!(error = %e, "PKI generate intermediate failed");
             Ok(ClientRpcResponse::SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse {
-                success: false,
+                is_success: false,
                 certificate: None,
                 private_key: None,
                 serial: None,
@@ -182,7 +182,7 @@ async fn handle_pki_set_signed_intermediate(
 
     match store.set_signed_intermediate(request).await {
         Ok(()) => Ok(ClientRpcResponse::SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse {
-            success: true,
+            is_success: true,
             certificate: Some(certificate),
             private_key: None,
             serial: None,
@@ -192,7 +192,7 @@ async fn handle_pki_set_signed_intermediate(
         Err(e) => {
             warn!(error = %e, "PKI set signed intermediate failed");
             Ok(ClientRpcResponse::SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse {
-                success: false,
+                is_success: false,
                 certificate: None,
                 private_key: None,
                 serial: None,
@@ -231,7 +231,7 @@ async fn handle_pki_create_role(
 
     match store.create_role(request).await {
         Ok(created_role) => Ok(ClientRpcResponse::SecretsPkiRoleResult(SecretsPkiRoleResultResponse {
-            success: true,
+            is_success: true,
             role: Some(SecretsPkiRoleConfig {
                 name: created_role.name,
                 allowed_domains: created_role.allowed_domains,
@@ -244,7 +244,7 @@ async fn handle_pki_create_role(
         Err(e) => {
             warn!(error = %e, "PKI create role failed");
             Ok(ClientRpcResponse::SecretsPkiRoleResult(SecretsPkiRoleResultResponse {
-                success: false,
+                is_success: false,
                 role: None,
                 error: Some(sanitize_secrets_error(&e)),
             }))
@@ -275,7 +275,7 @@ async fn handle_pki_issue(
 
     match store.issue(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse {
-            success: true,
+            is_success: true,
             certificate: Some(response.certificate),
             private_key: response.private_key,
             serial: Some(response.serial),
@@ -285,7 +285,7 @@ async fn handle_pki_issue(
         Err(e) => {
             warn!(error = %e, "PKI issue failed");
             Ok(ClientRpcResponse::SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse {
-                success: false,
+                is_success: false,
                 certificate: None,
                 private_key: None,
                 serial: None,
@@ -304,14 +304,14 @@ async fn handle_pki_revoke(service: &SecretsService, mount: &str, serial: String
 
     match store.revoke(request).await {
         Ok(()) => Ok(ClientRpcResponse::SecretsPkiRevokeResult(SecretsPkiRevokeResultResponse {
-            success: true,
+            is_success: true,
             serial: Some(serial),
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "PKI revoke failed");
             Ok(ClientRpcResponse::SecretsPkiRevokeResult(SecretsPkiRevokeResultResponse {
-                success: false,
+                is_success: false,
                 serial: None,
                 error: Some(sanitize_secrets_error(&e)),
             }))
@@ -333,7 +333,7 @@ async fn handle_pki_get_crl(service: &SecretsService, mount: &str) -> anyhow::Re
                 crl_state.next_update_unix_ms
             );
             Ok(ClientRpcResponse::SecretsPkiCrlResult(SecretsPkiCrlResultResponse {
-                success: true,
+                is_success: true,
                 crl: Some(crl_pem),
                 error: None,
             }))
@@ -341,7 +341,7 @@ async fn handle_pki_get_crl(service: &SecretsService, mount: &str) -> anyhow::Re
         Err(e) => {
             warn!(error = %e, "PKI get CRL failed");
             Ok(ClientRpcResponse::SecretsPkiCrlResult(SecretsPkiCrlResultResponse {
-                success: false,
+                is_success: false,
                 crl: None,
                 error: Some(sanitize_secrets_error(&e)),
             }))
@@ -355,14 +355,14 @@ async fn handle_pki_list_certs(service: &SecretsService, mount: &str) -> anyhow:
     let store = service.get_pki_store(mount).await?;
     match store.list_certificates().await {
         Ok(serials) => Ok(ClientRpcResponse::SecretsPkiListResult(SecretsPkiListResultResponse {
-            success: true,
+            is_success: true,
             items: serials,
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "PKI list certs failed");
             Ok(ClientRpcResponse::SecretsPkiListResult(SecretsPkiListResultResponse {
-                success: false,
+                is_success: false,
                 items: vec![],
                 error: Some(sanitize_secrets_error(&e)),
             }))
@@ -376,7 +376,7 @@ async fn handle_pki_get_role(service: &SecretsService, mount: &str, name: String
     let store = service.get_pki_store(mount).await?;
     match store.read_role(&name).await {
         Ok(Some(role)) => Ok(ClientRpcResponse::SecretsPkiRoleResult(SecretsPkiRoleResultResponse {
-            success: true,
+            is_success: true,
             role: Some(SecretsPkiRoleConfig {
                 name: role.name,
                 allowed_domains: role.allowed_domains,
@@ -387,14 +387,14 @@ async fn handle_pki_get_role(service: &SecretsService, mount: &str, name: String
             error: None,
         })),
         Ok(None) => Ok(ClientRpcResponse::SecretsPkiRoleResult(SecretsPkiRoleResultResponse {
-            success: false,
+            is_success: false,
             role: None,
             error: Some("Role not found".to_string()),
         })),
         Err(e) => {
             warn!(error = %e, "PKI get role failed");
             Ok(ClientRpcResponse::SecretsPkiRoleResult(SecretsPkiRoleResultResponse {
-                success: false,
+                is_success: false,
                 role: None,
                 error: Some(sanitize_secrets_error(&e)),
             }))
@@ -408,14 +408,14 @@ async fn handle_pki_list_roles(service: &SecretsService, mount: &str) -> anyhow:
     let store = service.get_pki_store(mount).await?;
     match store.list_roles().await {
         Ok(roles) => Ok(ClientRpcResponse::SecretsPkiListResult(SecretsPkiListResultResponse {
-            success: true,
+            is_success: true,
             items: roles,
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "PKI list roles failed");
             Ok(ClientRpcResponse::SecretsPkiListResult(SecretsPkiListResultResponse {
-                success: false,
+                is_success: false,
                 items: vec![],
                 error: Some(sanitize_secrets_error(&e)),
             }))

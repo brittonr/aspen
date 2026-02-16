@@ -73,7 +73,7 @@ pub struct SyncStatus {
     /// Current connection state.
     pub state: PeerConnectionState,
     /// Whether sync is currently in progress.
-    pub syncing: bool,
+    pub is_syncing: bool,
     /// Entries received in current/last sync.
     pub entries_received: u64,
     /// Entries imported in current/last sync.
@@ -215,7 +215,7 @@ mod tests {
         assert_eq!(info.name, cloned.name);
         assert_eq!(info.state, cloned.state);
         assert_eq!(info.priority, cloned.priority);
-        assert_eq!(info.is_enabled, cloned.enabled);
+        assert_eq!(info.is_enabled, cloned.is_enabled);
         assert_eq!(info.sync_count, cloned.sync_count);
         assert_eq!(info.failure_count, cloned.failure_count);
     }
@@ -229,7 +229,7 @@ mod tests {
         let status = SyncStatus {
             cluster_id: "cluster-sync".to_string(),
             state: PeerConnectionState::Connected,
-            syncing: true,
+            is_syncing: true,
             entries_received: 1000,
             entries_imported: 950,
             entries_skipped: 30,
@@ -237,7 +237,7 @@ mod tests {
         };
         assert_eq!(status.cluster_id, "cluster-sync");
         assert_eq!(status.state, PeerConnectionState::Connected);
-        assert!(status.syncing);
+        assert!(status.is_syncing);
         assert_eq!(status.entries_received, 1000);
         assert_eq!(status.entries_imported, 950);
         assert_eq!(status.entries_skipped, 30);
@@ -249,7 +249,7 @@ mod tests {
         let status = SyncStatus {
             cluster_id: "test".to_string(),
             state: PeerConnectionState::Connected,
-            syncing: false,
+            is_syncing: false,
             entries_received: 100,
             entries_imported: 80,
             entries_skipped: 10,
@@ -264,7 +264,7 @@ mod tests {
         let status = SyncStatus {
             cluster_id: "debug-test".to_string(),
             state: PeerConnectionState::Connecting,
-            syncing: true,
+            is_syncing: true,
             entries_received: 500,
             entries_imported: 400,
             entries_skipped: 50,
@@ -281,7 +281,7 @@ mod tests {
         let status = SyncStatus {
             cluster_id: "clone-test".to_string(),
             state: PeerConnectionState::Failed,
-            syncing: false,
+            is_syncing: false,
             entries_received: 0,
             entries_imported: 0,
             entries_skipped: 0,
@@ -290,7 +290,7 @@ mod tests {
         let cloned = status.clone();
         assert_eq!(status.cluster_id, cloned.cluster_id);
         assert_eq!(status.state, cloned.state);
-        assert_eq!(status.syncing, cloned.syncing);
+        assert_eq!(status.is_syncing, cloned.is_syncing);
     }
 
     // ========================================================================

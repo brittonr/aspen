@@ -67,7 +67,7 @@ const RETRY_DELAY_MS: u64 = 500;
 #[derive(Debug, Clone)]
 pub struct TriggerResult {
     /// Whether all handlers executed successfully.
-    pub success: bool,
+    pub is_success: bool,
     /// Number of handlers that received the event.
     pub dispatched_count: usize,
     /// Error message if the operation failed.
@@ -177,7 +177,7 @@ impl HookClient {
     ///
     /// ```ignore
     /// let result = client.trigger().await?;
-    /// if result.success {
+    /// if result.is_success {
     ///     println!("Hook dispatched to {} handlers", result.dispatched_count);
     /// }
     /// ```
@@ -323,7 +323,7 @@ impl HookClient {
         // Handle response
         match response {
             ClientRpcResponse::HookTriggerResult(result) => Ok(TriggerResult {
-                success: result.success,
+                is_success: result.is_success,
                 dispatched_count: result.dispatched_count,
                 error: result.error,
                 handler_failures: result.handler_failures,

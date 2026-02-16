@@ -65,20 +65,20 @@ pub(crate) async fn handle_job_get(
             };
 
             Ok(ClientRpcResponse::JobGetResult(JobGetResultResponse {
-                found: true,
+                was_found: true,
                 job: Some(details),
                 error: None,
             }))
         }
         Ok(None) => Ok(ClientRpcResponse::JobGetResult(JobGetResultResponse {
-            found: false,
+            was_found: false,
             job: None,
             error: None,
         })),
         Err(e) => {
             warn!("Failed to get job: {}", e);
             Ok(ClientRpcResponse::JobGetResult(JobGetResultResponse {
-                found: false,
+                was_found: false,
                 job: None,
                 error: Some(e.to_string()),
             }))

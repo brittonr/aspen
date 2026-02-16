@@ -135,29 +135,29 @@ async fn test_client_response_serialization() {
             bootstrap_peers: Some(1),
         }),
         ClientRpcResponse::InitResult(InitResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         }),
         ClientRpcResponse::ReadResult(ReadResultResponse {
             value: Some(b"test-value".to_vec()),
-            found: true,
+            was_found: true,
             error: None,
         }),
         ClientRpcResponse::WriteResult(WriteResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         }),
         ClientRpcResponse::SnapshotResult(SnapshotResultResponse {
-            success: true,
+            is_success: true,
             snapshot_index: Some(100),
             error: None,
         }),
         ClientRpcResponse::AddLearnerResult(AddLearnerResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         }),
         ClientRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         }),
         ClientRpcResponse::ClusterState(ClusterStateResponse {

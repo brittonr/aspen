@@ -17,9 +17,9 @@ pub(crate) async fn handle_get_topology(
                 && cv == topo.version
             {
                 return Ok(ClientRpcResponse::TopologyResult(TopologyResultResponse {
-                    success: true,
+                    is_success: true,
                     version: topo.version,
-                    updated: false,
+                    was_updated: false,
                     topology_data: None,
                     shard_count: topo.shard_count() as u32,
                     error: None,
@@ -31,18 +31,18 @@ pub(crate) async fn handle_get_topology(
                 serde_json::to_string(&*topo).map_err(|e| anyhow::anyhow!("failed to serialize topology: {}", e))?;
 
             Ok(ClientRpcResponse::TopologyResult(TopologyResultResponse {
-                success: true,
+                is_success: true,
                 version: topo.version,
-                updated: true,
+                was_updated: true,
                 topology_data: Some(topology_data),
                 shard_count: topo.shard_count() as u32,
                 error: None,
             }))
         }
         None => Ok(ClientRpcResponse::TopologyResult(TopologyResultResponse {
-            success: false,
+            is_success: false,
             version: 0,
-            updated: false,
+            was_updated: false,
             topology_data: None,
             shard_count: 0,
             error: Some("topology not available".to_string()),

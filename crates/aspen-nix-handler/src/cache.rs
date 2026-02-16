@@ -67,7 +67,7 @@ async fn handle_cache_query(ctx: &ClientProtocolContext, store_hash: String) -> 
     // Validate store hash format (32-64 lowercase alphanumeric)
     if !is_valid_store_hash(&store_hash) {
         return Ok(ClientRpcResponse::CacheQueryResult(CacheQueryResultResponse {
-            found: false,
+            was_found: false,
             entry: None,
             error: Some("Invalid store hash format".to_string()),
         }));
@@ -80,7 +80,7 @@ async fn handle_cache_query(ctx: &ClientProtocolContext, store_hash: String) -> 
         Ok(Some(entry)) => {
             debug!(store_hash = %store_hash, blob_hash = %entry.blob_hash, "cache hit");
             Ok(ClientRpcResponse::CacheQueryResult(CacheQueryResultResponse {
-                found: true,
+                was_found: true,
                 entry: Some(cache_entry_to_response(&entry)),
                 error: None,
             }))
@@ -88,7 +88,7 @@ async fn handle_cache_query(ctx: &ClientProtocolContext, store_hash: String) -> 
         Ok(None) => {
             debug!(store_hash = %store_hash, "cache miss");
             Ok(ClientRpcResponse::CacheQueryResult(CacheQueryResultResponse {
-                found: false,
+                was_found: false,
                 entry: None,
                 error: None,
             }))
@@ -96,7 +96,7 @@ async fn handle_cache_query(ctx: &ClientProtocolContext, store_hash: String) -> 
         Err(e) => {
             warn!(store_hash = %store_hash, error = %e, "cache query failed");
             Ok(ClientRpcResponse::CacheQueryResult(CacheQueryResultResponse {
-                found: false,
+                was_found: false,
                 entry: None,
                 error: Some(format!("Cache query failed: {}", e)),
             }))
@@ -146,7 +146,7 @@ async fn handle_cache_download(ctx: &ClientProtocolContext, store_hash: String) 
     // Validate store hash format
     if !is_valid_store_hash(&store_hash) {
         return Ok(ClientRpcResponse::CacheDownloadResult(CacheDownloadResultResponse {
-            found: false,
+            was_found: false,
             blob_ticket: None,
             blob_hash: None,
             nar_size: None,
@@ -162,7 +162,7 @@ async fn handle_cache_download(ctx: &ClientProtocolContext, store_hash: String) 
         Ok(Some(e)) => e,
         Ok(None) => {
             return Ok(ClientRpcResponse::CacheDownloadResult(CacheDownloadResultResponse {
-                found: false,
+                was_found: false,
                 blob_ticket: None,
                 blob_hash: None,
                 nar_size: None,
@@ -171,7 +171,7 @@ async fn handle_cache_download(ctx: &ClientProtocolContext, store_hash: String) 
         }
         Err(e) => {
             return Ok(ClientRpcResponse::CacheDownloadResult(CacheDownloadResultResponse {
-                found: false,
+                was_found: false,
                 blob_ticket: None,
                 blob_hash: None,
                 nar_size: None,
@@ -183,7 +183,7 @@ async fn handle_cache_download(ctx: &ClientProtocolContext, store_hash: String) 
     // Get blob store for ticket generation
     let Some(blob_store) = &ctx.blob_store else {
         return Ok(ClientRpcResponse::CacheDownloadResult(CacheDownloadResultResponse {
-            found: true,
+            was_found: true,
             blob_ticket: None,
             blob_hash: Some(entry.blob_hash.clone()),
             nar_size: Some(entry.nar_size),
@@ -196,7 +196,7 @@ async fn handle_cache_download(ctx: &ClientProtocolContext, store_hash: String) 
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::CacheDownloadResult(CacheDownloadResultResponse {
-                found: true,
+                was_found: true,
                 blob_ticket: None,
                 blob_hash: Some(entry.blob_hash.clone()),
                 nar_size: Some(entry.nar_size),
@@ -210,7 +210,7 @@ async fn handle_cache_download(ctx: &ClientProtocolContext, store_hash: String) 
         Ok(ticket) => {
             let ticket_str = ticket.to_string();
             Ok(ClientRpcResponse::CacheDownloadResult(CacheDownloadResultResponse {
-                found: true,
+                was_found: true,
                 blob_ticket: Some(ticket_str),
                 blob_hash: Some(entry.blob_hash),
                 nar_size: Some(entry.nar_size),
@@ -218,7 +218,7 @@ async fn handle_cache_download(ctx: &ClientProtocolContext, store_hash: String) 
             }))
         }
         Err(e) => Ok(ClientRpcResponse::CacheDownloadResult(CacheDownloadResultResponse {
-            found: true,
+            was_found: true,
             blob_ticket: None,
             blob_hash: Some(entry.blob_hash),
             nar_size: Some(entry.nar_size),

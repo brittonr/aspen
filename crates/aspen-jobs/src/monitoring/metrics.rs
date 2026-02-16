@@ -40,7 +40,7 @@ pub struct JobMetrics {
     /// Retry count.
     pub retry_count: u32,
     /// Success flag.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if failed.
     pub error_message: Option<String>,
     /// Custom metrics.
@@ -101,7 +101,7 @@ impl MetricsAggregator {
     pub(crate) fn add_metrics(&mut self, metrics: &JobMetrics) {
         self.total_count += 1;
 
-        if metrics.success {
+        if metrics.is_success {
             self.success_count += 1;
         }
 

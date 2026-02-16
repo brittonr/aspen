@@ -119,7 +119,7 @@ pub struct MergeArgs {
 
 /// Create document output.
 pub struct CreateOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub document_id: Option<String>,
     pub error: Option<String>,
 }
@@ -127,7 +127,7 @@ pub struct CreateOutput {
 impl Outputable for CreateOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "document_id": self.document_id,
             "error": self.error,
         })
@@ -136,7 +136,7 @@ impl Outputable for CreateOutput {
     fn to_human(&self) -> String {
         if let Some(ref e) = self.error {
             format!("error: {e}")
-        } else if self.success {
+        } else if self.is_success {
             format!("created: {}", self.document_id.as_deref().unwrap_or("?"))
         } else {
             "failed".to_string()
@@ -146,7 +146,7 @@ impl Outputable for CreateOutput {
 
 /// Get document output.
 pub struct GetOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub document_id: Option<String>,
     pub content: Option<serde_json::Value>,
     pub size_bytes: Option<u64>,
@@ -156,7 +156,7 @@ pub struct GetOutput {
 impl Outputable for GetOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "document_id": self.document_id,
             "content": self.content,
             "size_bytes": self.size_bytes,
@@ -169,7 +169,7 @@ impl Outputable for GetOutput {
             return format!("error: {e}");
         }
 
-        if !self.found {
+        if !self.was_found {
             return "(not found)".to_string();
         }
 
@@ -184,7 +184,7 @@ impl Outputable for GetOutput {
 
 /// Delete document output.
 pub struct DeleteOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub existed: bool,
     pub error: Option<String>,
 }
@@ -192,7 +192,7 @@ pub struct DeleteOutput {
 impl Outputable for DeleteOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "existed": self.existed,
             "error": self.error,
         })
@@ -201,9 +201,9 @@ impl Outputable for DeleteOutput {
     fn to_human(&self) -> String {
         if let Some(ref e) = self.error {
             format!("error: {e}")
-        } else if self.success && self.existed {
+        } else if self.is_success && self.existed {
             "deleted".to_string()
-        } else if self.success {
+        } else if self.is_success {
             "not found".to_string()
         } else {
             "failed".to_string()
@@ -281,7 +281,7 @@ impl Outputable for ListOutput {
 
 /// Metadata output.
 pub struct MetaOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub id: Option<String>,
     pub namespace: Option<String>,
     pub title: Option<String>,
@@ -298,7 +298,7 @@ pub struct MetaOutput {
 impl Outputable for MetaOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "id": self.id,
             "namespace": self.namespace,
             "title": self.title,
@@ -318,7 +318,7 @@ impl Outputable for MetaOutput {
             return format!("error: {e}");
         }
 
-        if !self.found {
+        if !self.was_found {
             return "(not found)".to_string();
         }
 
@@ -359,14 +359,14 @@ impl Outputable for MetaOutput {
 
 /// Exists output.
 pub struct ExistsOutput {
-    pub exists: bool,
+    pub does_exist: bool,
     pub error: Option<String>,
 }
 
 impl Outputable for ExistsOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "exists": self.exists,
+            "does_exist": self.does_exist,
             "error": self.error,
         })
     }
@@ -374,7 +374,7 @@ impl Outputable for ExistsOutput {
     fn to_human(&self) -> String {
         if let Some(ref e) = self.error {
             format!("error: {e}")
-        } else if self.exists {
+        } else if self.does_exist {
             "exists".to_string()
         } else {
             "not found".to_string()
@@ -384,7 +384,7 @@ impl Outputable for ExistsOutput {
 
 /// Merge output.
 pub struct MergeOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub changes_applied: Option<u64>,
     pub new_heads: Vec<String>,
     pub error: Option<String>,
@@ -393,7 +393,7 @@ pub struct MergeOutput {
 impl Outputable for MergeOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "changes_applied": self.changes_applied,
             "new_heads": self.new_heads,
             "error": self.error,
@@ -403,7 +403,7 @@ impl Outputable for MergeOutput {
     fn to_human(&self) -> String {
         if let Some(ref e) = self.error {
             format!("error: {e}")
-        } else if self.success {
+        } else if self.is_success {
             let changes = self.changes_applied.unwrap_or(0);
             format!("merged ({changes} changes applied)")
         } else {
@@ -444,12 +444,12 @@ async fn automerge_create(client: &AspenClient, args: CreateArgs, json: bool) ->
 
     let output = match response {
         ClientRpcResponse::AutomergeCreateResult(r) => CreateOutput {
-            success: r.success,
+            is_success: r.is_success,
             document_id: r.document_id,
             error: r.error,
         },
         other => CreateOutput {
-            success: false,
+            is_success: false,
             document_id: None,
             error: Some(format!("unexpected response: {other:?}")),
         },
@@ -472,7 +472,7 @@ async fn automerge_get(client: &AspenClient, args: GetArgs, json: bool) -> Resul
             // The actual content would need to be decoded and read via Automerge API
             let size_bytes = r.metadata.as_ref().map(|m| m.size_bytes);
             GetOutput {
-                found: r.found,
+                was_found: r.was_found,
                 document_id: r.document_id,
                 content: None, // Document content requires Automerge to parse
                 size_bytes,
@@ -480,7 +480,7 @@ async fn automerge_get(client: &AspenClient, args: GetArgs, json: bool) -> Resul
             }
         }
         other => GetOutput {
-            found: false,
+            was_found: false,
             document_id: None,
             content: None,
             size_bytes: None,
@@ -499,12 +499,12 @@ async fn automerge_delete(client: &AspenClient, args: DeleteArgs, json: bool) ->
 
     let output = match response {
         ClientRpcResponse::AutomergeDeleteResult(r) => DeleteOutput {
-            success: r.success,
+            is_success: r.is_success,
             existed: r.existed,
             error: r.error,
         },
         other => DeleteOutput {
-            success: false,
+            is_success: false,
             existed: false,
             error: Some(format!("unexpected response: {other:?}")),
         },
@@ -581,7 +581,7 @@ async fn automerge_meta(client: &AspenClient, args: MetaArgs, json: bool) -> Res
         ClientRpcResponse::AutomergeGetMetadataResult(r) => {
             if let Some(meta) = r.metadata {
                 MetaOutput {
-                    found: true,
+                    was_found: true,
                     id: Some(meta.document_id),
                     namespace: meta.namespace,
                     title: meta.title,
@@ -596,7 +596,7 @@ async fn automerge_meta(client: &AspenClient, args: MetaArgs, json: bool) -> Res
                 }
             } else {
                 MetaOutput {
-                    found: false,
+                    was_found: false,
                     id: Some(args.id),
                     namespace: None,
                     title: None,
@@ -612,7 +612,7 @@ async fn automerge_meta(client: &AspenClient, args: MetaArgs, json: bool) -> Res
             }
         }
         other => MetaOutput {
-            found: false,
+            was_found: false,
             id: None,
             namespace: None,
             title: None,
@@ -638,11 +638,11 @@ async fn automerge_exists(client: &AspenClient, args: ExistsArgs, json: bool) ->
 
     let output = match response {
         ClientRpcResponse::AutomergeExistsResult(r) => ExistsOutput {
-            exists: r.exists,
+            does_exist: r.does_exist,
             error: r.error,
         },
         other => ExistsOutput {
-            exists: false,
+            does_exist: false,
             error: Some(format!("unexpected response: {other:?}")),
         },
     };
@@ -661,13 +661,13 @@ async fn automerge_merge(client: &AspenClient, args: MergeArgs, json: bool) -> R
 
     let output = match response {
         ClientRpcResponse::AutomergeMergeResult(r) => MergeOutput {
-            success: r.success,
+            is_success: r.is_success,
             changes_applied: r.change_count,
             new_heads: r.new_heads,
             error: r.error,
         },
         other => MergeOutput {
-            success: false,
+            is_success: false,
             changes_applied: None,
             new_heads: vec![],
             error: Some(format!("unexpected response: {other:?}")),

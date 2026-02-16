@@ -308,7 +308,7 @@ async fn dns_set_record(client: &AspenClient, args: SetRecordArgs, json: bool) -
 
     match response {
         ClientRpcResponse::DnsSetRecordResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(record) = result.record {
                     let output = DnsRecordOutput::from_response(record);
                     print_output(&output, json);
@@ -337,8 +337,8 @@ async fn dns_get_record(client: &AspenClient, args: GetRecordArgs, json: bool) -
 
     match response {
         ClientRpcResponse::DnsGetRecordResult(result) => {
-            if result.success {
-                if result.found {
+            if result.is_success {
+                if result.was_found {
                     if let Some(record) = result.record {
                         let output = DnsRecordOutput::from_response(record);
                         print_output(&output, json);
@@ -347,7 +347,7 @@ async fn dns_get_record(client: &AspenClient, args: GetRecordArgs, json: bool) -
                     println!(
                         "{}",
                         serde_json::json!({
-                            "found": false,
+                            "was_found": false,
                             "domain": args.domain,
                             "record_type": args.record_type
                         })
@@ -376,7 +376,7 @@ async fn dns_get_all_records(client: &AspenClient, args: GetAllRecordsArgs, json
 
     match response {
         ClientRpcResponse::DnsGetRecordsResult(result) => {
-            if result.success {
+            if result.is_success {
                 let output = DnsRecordsOutput::from_responses(result.records);
                 print_output(&output, json);
             } else {
@@ -401,18 +401,18 @@ async fn dns_delete_record(client: &AspenClient, args: DeleteRecordArgs, json: b
 
     match response {
         ClientRpcResponse::DnsDeleteRecordResult(result) => {
-            if result.success {
+            if result.is_success {
                 if json {
                     println!(
                         "{}",
                         serde_json::json!({
                             "status": "success",
-                            "deleted": result.deleted,
+                            "was_deleted": result.was_deleted,
                             "domain": args.domain,
                             "record_type": args.record_type
                         })
                     );
-                } else if result.deleted {
+                } else if result.was_deleted {
                     println!("Deleted {} {} record", args.domain, args.record_type);
                 } else {
                     println!("Record not found: {} {}", args.domain, args.record_type);
@@ -442,7 +442,7 @@ async fn dns_resolve(client: &AspenClient, args: ResolveArgs, json: bool) -> Res
 
     match response {
         ClientRpcResponse::DnsResolveResult(result) => {
-            if result.success {
+            if result.is_success {
                 let output = DnsRecordsOutput::from_responses(result.records);
                 print_output(&output, json);
             } else {
@@ -467,7 +467,7 @@ async fn dns_scan_records(client: &AspenClient, args: ScanRecordsArgs, json: boo
 
     match response {
         ClientRpcResponse::DnsScanRecordsResult(result) => {
-            if result.success {
+            if result.is_success {
                 let output = DnsRecordsOutput::from_responses(result.records);
                 print_output(&output, json);
             } else {
@@ -494,7 +494,7 @@ async fn dns_set_zone(client: &AspenClient, args: SetZoneArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::DnsSetZoneResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(zone) = result.zone {
                     let output = DnsZoneOutput::from_response(zone);
                     print_output(&output, json);
@@ -522,8 +522,8 @@ async fn dns_get_zone(client: &AspenClient, args: GetZoneArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::DnsGetZoneResult(result) => {
-            if result.success {
-                if result.found {
+            if result.is_success {
+                if result.was_found {
                     if let Some(zone) = result.zone {
                         let output = DnsZoneOutput::from_response(zone);
                         print_output(&output, json);
@@ -532,7 +532,7 @@ async fn dns_get_zone(client: &AspenClient, args: GetZoneArgs, json: bool) -> Re
                     println!(
                         "{}",
                         serde_json::json!({
-                            "found": false,
+                            "was_found": false,
                             "name": args.name
                         })
                     );
@@ -556,7 +556,7 @@ async fn dns_list_zones(client: &AspenClient, json: bool) -> Result<()> {
 
     match response {
         ClientRpcResponse::DnsListZonesResult(result) => {
-            if result.success {
+            if result.is_success {
                 let output = DnsZonesOutput::from_responses(result.zones);
                 print_output(&output, json);
             } else {
@@ -581,18 +581,18 @@ async fn dns_delete_zone(client: &AspenClient, args: DeleteZoneArgs, json: bool)
 
     match response {
         ClientRpcResponse::DnsDeleteZoneResult(result) => {
-            if result.success {
+            if result.is_success {
                 if json {
                     println!(
                         "{}",
                         serde_json::json!({
                             "status": "success",
-                            "deleted": result.deleted,
+                            "was_deleted": result.was_deleted,
                             "records_deleted": result.records_deleted,
                             "name": args.name
                         })
                     );
-                } else if result.deleted {
+                } else if result.was_deleted {
                     if result.records_deleted > 0 {
                         println!("Deleted zone '{}' and {} record(s)", args.name, result.records_deleted);
                     } else {

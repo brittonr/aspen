@@ -87,9 +87,9 @@ pub struct DnsRecordResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsRecordResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether a record was found (for get operations).
-    pub found: bool,
+    pub was_found: bool,
     /// The record (if found or created).
     pub record: Option<DnsRecordResponse>,
     /// Error message if the operation failed.
@@ -100,7 +100,7 @@ pub struct DnsRecordResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsRecordsResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of records.
     pub records: Vec<DnsRecordResponse>,
     /// Number of records returned.
@@ -113,9 +113,9 @@ pub struct DnsRecordsResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsDeleteRecordResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether the record existed and was deleted.
-    pub deleted: bool,
+    pub was_deleted: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -143,9 +143,9 @@ pub struct DnsZoneResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsZoneResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether a zone was found (for get operations).
-    pub found: bool,
+    pub was_found: bool,
     /// The zone (if found or created).
     pub zone: Option<DnsZoneResponse>,
     /// Error message if the operation failed.
@@ -156,7 +156,7 @@ pub struct DnsZoneResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsZonesResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of zones.
     pub zones: Vec<DnsZoneResponse>,
     /// Number of zones returned.
@@ -169,9 +169,9 @@ pub struct DnsZonesResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsDeleteZoneResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether the zone existed and was deleted.
-    pub deleted: bool,
+    pub was_deleted: bool,
     /// Number of records deleted (if delete_records was true).
     pub records_deleted: u32,
     /// Error message if the operation failed.

@@ -422,7 +422,7 @@ fn test_list_resources_request_serialization() {
 #[test]
 fn test_resource_state_response_serialization() {
     let response = FederationResponse::ResourceState {
-        found: true,
+        was_found: true,
         heads: {
             let mut h = HashMap::new();
             h.insert("heads/main".to_string(), [0xef; 32]);
@@ -435,8 +435,8 @@ fn test_resource_state_response_serialization() {
     let parsed: FederationResponse = postcard::from_bytes(&bytes).unwrap();
 
     match parsed {
-        FederationResponse::ResourceState { found, heads, .. } => {
-            assert!(found);
+        FederationResponse::ResourceState { was_found, heads, .. } => {
+            assert!(was_found);
             assert!(heads.contains_key("heads/main"));
         }
         _ => panic!("expected ResourceState"),

@@ -88,7 +88,7 @@ impl AutomergeRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomergeCreateResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Created document ID.
     pub document_id: Option<String>,
     /// Error message if failed.
@@ -99,9 +99,9 @@ pub struct AutomergeCreateResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomergeGetResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether the document was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Document ID.
     pub document_id: Option<String>,
     /// Serialized Automerge document bytes (base64-encoded).
@@ -116,7 +116,7 @@ pub struct AutomergeGetResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomergeSaveResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Document size in bytes.
     pub size_bytes: Option<u64>,
     /// Number of changes in document.
@@ -129,7 +129,7 @@ pub struct AutomergeSaveResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomergeDeleteResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether the document existed before deletion.
     pub existed: bool,
     /// Error message if failed.
@@ -140,7 +140,7 @@ pub struct AutomergeDeleteResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomergeApplyChangesResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether any changes were applied.
     pub changes_applied: bool,
     /// Number of changes applied.
@@ -157,7 +157,7 @@ pub struct AutomergeApplyChangesResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomergeMergeResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether any changes were applied from merge.
     pub changes_applied: bool,
     /// Number of changes applied.
@@ -174,7 +174,7 @@ pub struct AutomergeMergeResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomergeListResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of document metadata.
     pub documents: Vec<AutomergeDocumentMetadata>,
     /// Whether there are more results.
@@ -189,9 +189,9 @@ pub struct AutomergeListResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomergeGetMetadataResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether the document was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Document metadata.
     pub metadata: Option<AutomergeDocumentMetadata>,
     /// Error message if failed.
@@ -202,9 +202,9 @@ pub struct AutomergeGetMetadataResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomergeExistsResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether the document exists.
-    pub exists: bool,
+    pub does_exist: bool,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -213,7 +213,7 @@ pub struct AutomergeExistsResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomergeGenerateSyncMessageResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether a sync message was generated (None means peer is up-to-date).
     pub has_message: bool,
     /// Sync message bytes (base64-encoded), if generated.
@@ -228,7 +228,7 @@ pub struct AutomergeGenerateSyncMessageResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomergeReceiveSyncMessageResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether any changes were applied from the sync message.
     pub changes_applied: bool,
     /// Updated sync state (base64-encoded) for persistence.

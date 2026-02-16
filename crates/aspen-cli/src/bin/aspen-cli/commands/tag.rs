@@ -83,7 +83,7 @@ async fn tag_list(client: &AspenClient, args: TagListArgs, json: bool) -> Result
 
     match response {
         ClientRpcResponse::ForgeRefListResult(result) => {
-            if result.success {
+            if result.is_success {
                 let refs: Vec<RefOutput> = result
                     .refs
                     .into_iter()
@@ -170,7 +170,7 @@ async fn tag_create(client: &AspenClient, args: TagCreateArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::ForgeRefResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(ref_info) = result.ref_info {
                     let output = RefOutput {
                         name: ref_info.name,
@@ -186,7 +186,7 @@ async fn tag_create(client: &AspenClient, args: TagCreateArgs, json: bool) -> Re
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Tag {} created", args.name);
                 }
@@ -212,7 +212,7 @@ async fn tag_delete(client: &AspenClient, args: TagDeleteArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::ForgeRefResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Tag {} deleted", args.name);
                 } else {
@@ -224,7 +224,7 @@ async fn tag_delete(client: &AspenClient, args: TagDeleteArgs, json: bool) -> Re
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Tag {} deleted", args.name);
                 }

@@ -31,7 +31,7 @@ pub(crate) async fn handle_blob_replicate_pull(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
-            success: false,
+            is_success: false,
             hash: None,
             size: None,
             duration_ms: None,
@@ -44,7 +44,7 @@ pub(crate) async fn handle_blob_replicate_pull(
         Ok(h) => h,
         Err(_) => {
             return Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
-                success: false,
+                is_success: false,
                 hash: None,
                 size: None,
                 duration_ms: None,
@@ -58,7 +58,7 @@ pub(crate) async fn handle_blob_replicate_pull(
         Ok(k) => k,
         Err(_) => {
             return Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
-                success: false,
+                is_success: false,
                 hash: Some(hash.to_string()),
                 size: None,
                 duration_ms: None,
@@ -75,7 +75,7 @@ pub(crate) async fn handle_blob_replicate_pull(
                 "blob already exists locally, skipping download"
             );
             return Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
-                success: true,
+                is_success: true,
                 hash: Some(hash.to_string()),
                 size: Some(size),
                 duration_ms: Some(0),
@@ -117,7 +117,7 @@ pub(crate) async fn handle_blob_replicate_pull(
             }
 
             Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
-                success: true,
+                is_success: true,
                 hash: Some(blob_ref.hash.to_string()),
                 size: Some(blob_ref.size_bytes),
                 duration_ms: Some(duration_ms),
@@ -134,7 +134,7 @@ pub(crate) async fn handle_blob_replicate_pull(
                 "blob replication failed"
             );
             Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
-                success: false,
+                is_success: false,
                 hash: Some(hash.to_string()),
                 size: None,
                 duration_ms: Some(duration_ms),
@@ -157,7 +157,7 @@ pub(crate) async fn handle_get_blob_replication_status(
         Ok(h) => h,
         Err(_) => {
             return Ok(ClientRpcResponse::GetBlobReplicationStatusResult(GetBlobReplicationStatusResultResponse {
-                found: false,
+                was_found: false,
                 hash: None,
                 size: None,
                 replica_nodes: None,
@@ -218,7 +218,7 @@ pub(crate) async fn handle_get_blob_replication_status(
                         };
 
                         Ok(ClientRpcResponse::GetBlobReplicationStatusResult(GetBlobReplicationStatusResultResponse {
-                            found: true,
+                            was_found: true,
                             hash: Some(hash.to_string()),
                             size,
                             replica_nodes: nodes,
@@ -232,7 +232,7 @@ pub(crate) async fn handle_get_blob_replication_status(
                     }
                     Err(e) => {
                         Ok(ClientRpcResponse::GetBlobReplicationStatusResult(GetBlobReplicationStatusResultResponse {
-                            found: false,
+                            was_found: false,
                             hash: Some(hash.to_string()),
                             size: None,
                             replica_nodes: None,
@@ -248,7 +248,7 @@ pub(crate) async fn handle_get_blob_replication_status(
             } else {
                 // No replication metadata exists for this blob
                 Ok(ClientRpcResponse::GetBlobReplicationStatusResult(GetBlobReplicationStatusResultResponse {
-                    found: false,
+                    was_found: false,
                     hash: Some(hash.to_string()),
                     size: None,
                     replica_nodes: None,
@@ -262,7 +262,7 @@ pub(crate) async fn handle_get_blob_replication_status(
             }
         }
         Err(e) => Ok(ClientRpcResponse::GetBlobReplicationStatusResult(GetBlobReplicationStatusResultResponse {
-            found: false,
+            was_found: false,
             hash: Some(hash.to_string()),
             size: None,
             replica_nodes: None,
@@ -293,7 +293,7 @@ pub(crate) async fn handle_trigger_blob_replication(
         Ok(h) => h,
         Err(_) => {
             return Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
-                success: false,
+                is_success: false,
                 hash: None,
                 successful_nodes: None,
                 failed_nodes: None,
@@ -309,7 +309,7 @@ pub(crate) async fn handle_trigger_blob_replication(
             match blob_store.has(&hash).await {
                 Ok(false) => {
                     return Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
-                        success: false,
+                        is_success: false,
                         hash: Some(hash.to_string()),
                         successful_nodes: None,
                         failed_nodes: None,
@@ -319,7 +319,7 @@ pub(crate) async fn handle_trigger_blob_replication(
                 }
                 Err(e) => {
                     return Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
-                        success: false,
+                        is_success: false,
                         hash: Some(hash.to_string()),
                         successful_nodes: None,
                         failed_nodes: None,
@@ -335,7 +335,7 @@ pub(crate) async fn handle_trigger_blob_replication(
                             None => {
                                 return Ok(ClientRpcResponse::TriggerBlobReplicationResult(
                                     TriggerBlobReplicationResultResponse {
-                                        success: false,
+                                        is_success: false,
                                         hash: Some(hash.to_string()),
                                         successful_nodes: None,
                                         failed_nodes: None,
@@ -348,7 +348,7 @@ pub(crate) async fn handle_trigger_blob_replication(
                         Ok(None) => {
                             return Ok(ClientRpcResponse::TriggerBlobReplicationResult(
                                 TriggerBlobReplicationResultResponse {
-                                    success: false,
+                                    is_success: false,
                                     hash: Some(hash.to_string()),
                                     successful_nodes: None,
                                     failed_nodes: None,
@@ -360,7 +360,7 @@ pub(crate) async fn handle_trigger_blob_replication(
                         Err(e) => {
                             return Ok(ClientRpcResponse::TriggerBlobReplicationResult(
                                 TriggerBlobReplicationResultResponse {
-                                    success: false,
+                                    is_success: false,
                                     hash: Some(hash.to_string()),
                                     successful_nodes: None,
                                     failed_nodes: None,
@@ -375,7 +375,7 @@ pub(crate) async fn handle_trigger_blob_replication(
         }
         None => {
             return Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
-                success: false,
+                is_success: false,
                 hash: Some(hash.to_string()),
                 successful_nodes: None,
                 failed_nodes: None,
@@ -390,7 +390,7 @@ pub(crate) async fn handle_trigger_blob_replication(
         Some(manager) => manager,
         None => {
             return Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
-                success: false,
+                is_success: false,
                 hash: Some(hash.to_string()),
                 successful_nodes: None,
                 failed_nodes: None,
@@ -407,7 +407,7 @@ pub(crate) async fn handle_trigger_blob_replication(
     // Trigger replication through the manager
     match replication_manager.replicate(request).await {
         Ok(result) => {
-            let success = result.failed.is_empty();
+            let is_success = result.failed.is_empty();
             let failed_nodes: Option<Vec<(u64, String)>> = if result.failed.is_empty() {
                 None
             } else {
@@ -423,7 +423,7 @@ pub(crate) async fn handle_trigger_blob_replication(
             );
 
             Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
-                success,
+                is_success,
                 hash: Some(hash.to_string()),
                 successful_nodes: Some(result.successful),
                 failed_nodes,
@@ -434,7 +434,7 @@ pub(crate) async fn handle_trigger_blob_replication(
         Err(e) => {
             warn!(hash = %hash.to_hex(), error = %e, "blob replication failed");
             Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
-                success: false,
+                is_success: false,
                 hash: Some(hash.to_string()),
                 successful_nodes: None,
                 failed_nodes: None,
@@ -460,7 +460,7 @@ pub(crate) async fn handle_run_blob_repair_cycle(ctx: &ClientProtocolContext) ->
         Some(manager) => manager,
         None => {
             return Ok(ClientRpcResponse::RunBlobRepairCycleResult(RunBlobRepairCycleResultResponse {
-                success: false,
+                is_success: false,
                 error: Some("blob replication not enabled on this node".to_string()),
             }));
         }
@@ -471,14 +471,14 @@ pub(crate) async fn handle_run_blob_repair_cycle(ctx: &ClientProtocolContext) ->
         Ok(()) => {
             info!("blob repair cycle initiated via RPC");
             Ok(ClientRpcResponse::RunBlobRepairCycleResult(RunBlobRepairCycleResultResponse {
-                success: true,
+                is_success: true,
                 error: None,
             }))
         }
         Err(e) => {
             warn!(error = %e, "failed to initiate blob repair cycle");
             Ok(ClientRpcResponse::RunBlobRepairCycleResult(RunBlobRepairCycleResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("repair cycle initiation failed: {}", e)),
             }))
         }

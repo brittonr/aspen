@@ -130,7 +130,7 @@ pub(crate) async fn handle_get_discovered_cluster(
             Some(d) => d,
             None => {
                 return Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
-                    found: false,
+                    was_found: false,
                     cluster_key: None,
                     name: None,
                     node_count: None,
@@ -150,7 +150,7 @@ pub(crate) async fn handle_get_discovered_cluster(
             }
             _ => {
                 return Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
-                    found: false,
+                    was_found: false,
                     cluster_key: None,
                     name: None,
                     node_count: None,
@@ -165,7 +165,7 @@ pub(crate) async fn handle_get_discovered_cluster(
             Ok(pk) => pk,
             Err(_) => {
                 return Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
-                    found: false,
+                    was_found: false,
                     cluster_key: None,
                     name: None,
                     node_count: None,
@@ -179,7 +179,7 @@ pub(crate) async fn handle_get_discovered_cluster(
         // Try to discover the cluster (will check cache first, then DHT if not found)
         match discovery.discover_cluster(&public_key).await {
             Some(cluster) => Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
-                found: true,
+                was_found: true,
                 cluster_key: Some(cluster.cluster_key.to_string()),
                 name: Some(cluster.name),
                 node_count: Some(cluster.node_keys.len() as u32),
@@ -188,7 +188,7 @@ pub(crate) async fn handle_get_discovered_cluster(
                 discovered_at: Some(format!("{:?}", cluster.discovered_at.elapsed())),
             })),
             None => Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
-                found: false,
+                was_found: false,
                 cluster_key: Some(cluster_key),
                 name: None,
                 node_count: None,
@@ -203,7 +203,7 @@ pub(crate) async fn handle_get_discovered_cluster(
     {
         let _ = (ctx, cluster_key); // Suppress unused warnings
         Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
-            found: false,
+            was_found: false,
             cluster_key: None,
             name: None,
             node_count: None,
@@ -224,7 +224,7 @@ pub(crate) async fn handle_trust_cluster(
         Some(tm) => tm,
         None => {
             return Ok(ClientRpcResponse::TrustClusterResult(TrustClusterResultResponse {
-                success: false,
+                is_success: false,
                 error: Some("Trust management not available - federation not configured".to_string()),
             }));
         }
@@ -239,7 +239,7 @@ pub(crate) async fn handle_trust_cluster(
         }
         _ => {
             return Ok(ClientRpcResponse::TrustClusterResult(TrustClusterResultResponse {
-                success: false,
+                is_success: false,
                 error: Some("Invalid cluster key format (expected 64-character hex string)".to_string()),
             }));
         }
@@ -249,7 +249,7 @@ pub(crate) async fn handle_trust_cluster(
         Ok(pk) => pk,
         Err(_) => {
             return Ok(ClientRpcResponse::TrustClusterResult(TrustClusterResultResponse {
-                success: false,
+                is_success: false,
                 error: Some("Invalid cluster public key".to_string()),
             }));
         }
@@ -259,7 +259,7 @@ pub(crate) async fn handle_trust_cluster(
     trust_manager.add_trusted(public_key, format!("trusted-{}", &cluster_key[..8]), None);
 
     Ok(ClientRpcResponse::TrustClusterResult(TrustClusterResultResponse {
-        success: true,
+        is_success: true,
         error: None,
     }))
 }
@@ -274,7 +274,7 @@ pub(crate) async fn handle_untrust_cluster(
         Some(tm) => tm,
         None => {
             return Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {
-                success: false,
+                is_success: false,
                 error: Some("Trust management not available - federation not configured".to_string()),
             }));
         }
@@ -289,7 +289,7 @@ pub(crate) async fn handle_untrust_cluster(
         }
         _ => {
             return Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {
-                success: false,
+                is_success: false,
                 error: Some("Invalid cluster key format (expected 64-character hex string)".to_string()),
             }));
         }
@@ -299,7 +299,7 @@ pub(crate) async fn handle_untrust_cluster(
         Ok(pk) => pk,
         Err(_) => {
             return Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {
-                success: false,
+                is_success: false,
                 error: Some("Invalid cluster public key".to_string()),
             }));
         }
@@ -308,12 +308,12 @@ pub(crate) async fn handle_untrust_cluster(
     // Remove from trusted clusters
     if trust_manager.remove_trusted(&public_key) {
         Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         }))
     } else {
         Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {
-            success: false,
+            is_success: false,
             error: Some("Cluster was not in trusted list".to_string()),
         }))
     }
@@ -328,7 +328,7 @@ pub(crate) async fn handle_federate_repository(
 
     // Federation integration is handled separately from ForgeNode
     Ok(ClientRpcResponse::FederateRepositoryResult(FederateRepositoryResultResponse {
-        success: false,
+        is_success: false,
         fed_id: None,
         error: Some("Federation not available through RPC".to_string()),
     }))
@@ -383,7 +383,7 @@ pub(crate) async fn handle_fetch_federated(
 
     // Federation integration is handled separately from ForgeNode
     Ok(ClientRpcResponse::ForgeFetchResult(ForgeFetchFederatedResultResponse {
-        success: false,
+        is_success: false,
         remote_cluster: None,
         fetched: 0,
         already_present: 0,
@@ -403,7 +403,7 @@ pub(crate) async fn handle_get_delegate_key(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeKeyResult(ForgeKeyResultResponse {
-                success: false,
+                is_success: false,
                 public_key: None,
                 secret_key: None,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -416,14 +416,14 @@ pub(crate) async fn handle_get_delegate_key(
         Ok(_identity) => {
             // Return the node's key as the delegate key
             Ok(ClientRpcResponse::ForgeKeyResult(ForgeKeyResultResponse {
-                success: true,
+                is_success: true,
                 public_key: Some(forge_node.public_key().to_string()),
                 secret_key: Some(hex::encode(forge_node.secret_key().to_bytes())),
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgeKeyResult(ForgeKeyResultResponse {
-            success: false,
+            is_success: false,
             public_key: None,
             secret_key: None,
             error: Some(e.to_string()),

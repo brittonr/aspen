@@ -35,14 +35,14 @@ impl Worker for NixBuildWorker {
         };
 
         // Upload store paths to blob store if requested (legacy)
-        let uploaded_store_paths = if payload.upload_result {
+        let uploaded_store_paths = if payload.should_upload_result {
             self.upload_store_paths(&build_output.output_paths, payload.job_name.as_deref()).await
         } else {
             vec![]
         };
 
         // Upload store paths to SNIX storage if requested and configured
-        let uploaded_store_paths_snix = if payload.upload_result {
+        let uploaded_store_paths_snix = if payload.should_upload_result {
             self.upload_store_paths_snix(&build_output.output_paths).await
         } else {
             vec![]

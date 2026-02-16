@@ -197,14 +197,14 @@ fn test_rate_limiter_operations_roundtrip() {
 fn test_lock_result_response_roundtrip() {
     let responses = vec![
         ClientRpcResponse::LockResult(LockResultResponse {
-            success: true,
+            is_success: true,
             fencing_token: Some(42),
             holder_id: Some("client_1".to_string()),
             deadline_ms: Some(1234567890),
             error: None,
         }),
         ClientRpcResponse::LockResult(LockResultResponse {
-            success: false,
+            is_success: false,
             fencing_token: None,
             holder_id: Some("other_client".to_string()),
             deadline_ms: Some(9999999999),
@@ -223,12 +223,12 @@ fn test_lock_result_response_roundtrip() {
 fn test_counter_result_response_roundtrip() {
     let responses = vec![
         ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(42),
             error: None,
         }),
         ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some("storage error".to_string()),
         }),
@@ -245,12 +245,12 @@ fn test_counter_result_response_roundtrip() {
 fn test_signed_counter_result_response_roundtrip() {
     let responses = vec![
         ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(-42),
             error: None,
         }),
         ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(i64::MAX),
             error: None,
         }),
@@ -266,7 +266,7 @@ fn test_signed_counter_result_response_roundtrip() {
 #[test]
 fn test_sequence_result_response_roundtrip() {
     let response = ClientRpcResponse::SequenceResult(SequenceResultResponse {
-        success: true,
+        is_success: true,
         value: Some(12345),
         error: None,
     });
@@ -274,7 +274,7 @@ fn test_sequence_result_response_roundtrip() {
     let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
     match deserialized {
         ClientRpcResponse::SequenceResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             assert_eq!(r.value, Some(12345));
         }
         _ => panic!("Wrong variant"),
@@ -285,13 +285,13 @@ fn test_sequence_result_response_roundtrip() {
 fn test_rate_limiter_result_response_roundtrip() {
     let responses = vec![
         ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: true,
+            is_success: true,
             tokens_remaining: Some(95),
             retry_after_ms: None,
             error: None,
         }),
         ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: false,
+            is_success: false,
             tokens_remaining: Some(0),
             retry_after_ms: Some(500),
             error: None,
@@ -815,7 +815,7 @@ fn test_conditional_batch_write_request_roundtrip() {
 #[test]
 fn test_batch_read_result_response_roundtrip() {
     let response = ClientRpcResponse::BatchReadResult(BatchReadResultResponse {
-        success: true,
+        is_success: true,
         values: Some(vec![Some(b"value1".to_vec()), None, Some(b"value3".to_vec())]),
         error: None,
     });
@@ -823,7 +823,7 @@ fn test_batch_read_result_response_roundtrip() {
     let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
     match deserialized {
         ClientRpcResponse::BatchReadResult(result) => {
-            assert!(result.success);
+            assert!(result.is_success);
             let values = result.values.unwrap();
             assert_eq!(values.len(), 3);
             assert_eq!(values[0], Some(b"value1".to_vec()));
@@ -837,7 +837,7 @@ fn test_batch_read_result_response_roundtrip() {
 #[test]
 fn test_batch_write_result_response_roundtrip() {
     let response = ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
-        success: true,
+        is_success: true,
         operations_applied: Some(5),
         error: None,
     });
@@ -845,7 +845,7 @@ fn test_batch_write_result_response_roundtrip() {
     let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
     match deserialized {
         ClientRpcResponse::BatchWriteResult(result) => {
-            assert!(result.success);
+            assert!(result.is_success);
             assert_eq!(result.operations_applied, Some(5));
         }
         _ => panic!("Wrong variant"),
@@ -856,7 +856,7 @@ fn test_batch_write_result_response_roundtrip() {
 fn test_conditional_batch_write_result_response_roundtrip() {
     // Test success case
     let response = ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
-        success: true,
+        is_success: true,
         conditions_met: true,
         operations_applied: Some(3),
         failed_condition_index: None,
@@ -867,7 +867,7 @@ fn test_conditional_batch_write_result_response_roundtrip() {
     let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
     match deserialized {
         ClientRpcResponse::ConditionalBatchWriteResult(result) => {
-            assert!(result.success);
+            assert!(result.is_success);
             assert!(result.conditions_met);
             assert_eq!(result.operations_applied, Some(3));
         }
@@ -876,7 +876,7 @@ fn test_conditional_batch_write_result_response_roundtrip() {
 
     // Test failure case
     let response_fail = ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
-        success: false,
+        is_success: false,
         conditions_met: false,
         operations_applied: None,
         failed_condition_index: Some(1),
@@ -887,7 +887,7 @@ fn test_conditional_batch_write_result_response_roundtrip() {
     let deserialized_fail: ClientRpcResponse = postcard::from_bytes(&serialized_fail).expect("deserialize");
     match deserialized_fail {
         ClientRpcResponse::ConditionalBatchWriteResult(result) => {
-            assert!(!result.success);
+            assert!(!result.is_success);
             assert!(!result.conditions_met);
             assert_eq!(result.failed_condition_index, Some(1));
             assert_eq!(result.failed_condition_reason, Some("value mismatch".to_string()));

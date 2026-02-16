@@ -77,7 +77,7 @@ async fn test_blob_protection_lifecycle() {
 
     let hash = match add_response {
         ClientRpcResponse::AddBlobResult(result) => {
-            assert!(result.success, "add blob should succeed: {:?}", result.error);
+            assert!(result.is_success, "add blob should succeed: {:?}", result.error);
             result.hash.expect("should return hash")
         }
         ClientRpcResponse::Error(e) => panic!("add blob failed: {}: {}", e.code, e.message),
@@ -93,7 +93,7 @@ async fn test_blob_protection_lifecycle() {
 
     match get_response {
         ClientRpcResponse::GetBlobResult(result) => {
-            assert!(result.found, "protected blob should be accessible");
+            assert!(result.was_found, "protected blob should be accessible");
             assert_eq!(result.data.as_deref(), Some(SMALL_BLOB_CONTENT));
         }
         _ => panic!("unexpected response"),
@@ -111,7 +111,7 @@ async fn test_blob_protection_lifecycle() {
 
     match protect_response {
         ClientRpcResponse::ProtectBlobResult(result) => {
-            assert!(result.success, "protect blob should succeed: {:?}", result.error);
+            assert!(result.is_success, "protect blob should succeed: {:?}", result.error);
         }
         _ => panic!("unexpected response"),
     }
@@ -127,7 +127,7 @@ async fn test_blob_protection_lifecycle() {
 
     match unprotect_response {
         ClientRpcResponse::UnprotectBlobResult(result) => {
-            assert!(result.success, "unprotect blob should succeed: {:?}", result.error);
+            assert!(result.is_success, "unprotect blob should succeed: {:?}", result.error);
         }
         _ => panic!("unexpected response"),
     }
@@ -141,7 +141,7 @@ async fn test_blob_protection_lifecycle() {
 
     match get_response2 {
         ClientRpcResponse::GetBlobResult(result) => {
-            assert!(result.found, "blob should still be accessible with remaining tag");
+            assert!(result.was_found, "blob should still be accessible with remaining tag");
         }
         _ => panic!("unexpected response"),
     }
@@ -179,7 +179,7 @@ async fn test_blob_status_accuracy() {
 
     let hash = match add_response {
         ClientRpcResponse::AddBlobResult(result) => {
-            assert!(result.success);
+            assert!(result.is_success);
             result.hash.expect("should return hash")
         }
         _ => panic!("unexpected response"),
@@ -194,7 +194,7 @@ async fn test_blob_status_accuracy() {
 
     match status_response {
         ClientRpcResponse::GetBlobStatusResult(result) => {
-            assert!(result.found, "blob should be found");
+            assert!(result.was_found, "blob should be found");
             assert!(result.complete.unwrap_or(false), "blob should be complete");
             assert_eq!(result.size, Some(SMALL_BLOB_CONTENT.len() as u64), "size should match");
         }
@@ -237,7 +237,7 @@ async fn test_blob_list_pagination() {
 
         match add_response {
             ClientRpcResponse::AddBlobResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 hashes.push(result.hash.expect("should return hash"));
             }
             _ => panic!("unexpected response"),
@@ -307,7 +307,7 @@ async fn test_concurrent_blob_adds() {
 
             match response {
                 ClientRpcResponse::AddBlobResult(result) => {
-                    assert!(result.success, "concurrent add should succeed");
+                    assert!(result.is_success, "concurrent add should succeed");
                     (content, result.hash.expect("should return hash"))
                 }
                 _ => panic!("unexpected response"),
@@ -336,7 +336,7 @@ async fn test_concurrent_blob_adds() {
 
         match get_response {
             ClientRpcResponse::GetBlobResult(result) => {
-                assert!(result.found, "blob should be found");
+                assert!(result.was_found, "blob should be found");
                 assert_eq!(result.data.as_deref(), Some(content.as_bytes()), "content should match");
             }
             _ => panic!("unexpected response"),
@@ -378,7 +378,7 @@ async fn test_content_addressing_deduplication() {
 
     let hash1 = match add_response1 {
         ClientRpcResponse::AddBlobResult(result) => {
-            assert!(result.success);
+            assert!(result.is_success);
             result.hash.expect("should return hash")
         }
         _ => panic!("unexpected response"),
@@ -395,7 +395,7 @@ async fn test_content_addressing_deduplication() {
 
     let hash2 = match add_response2 {
         ClientRpcResponse::AddBlobResult(result) => {
-            assert!(result.success);
+            assert!(result.is_success);
             result.hash.expect("should return hash")
         }
         _ => panic!("unexpected response"),

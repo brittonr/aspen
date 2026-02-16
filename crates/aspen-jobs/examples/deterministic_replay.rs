@@ -208,7 +208,7 @@ async fn run_deterministic_replay(replay_path: &str, seed: u64) -> anyhow::Resul
         chaos_enabled: true,
         failure_rate: 0.1,
         network_delay: (10, 50),
-        deterministic: true,
+        is_deterministic: true,
         max_duration_ms: 10_000,
     };
 

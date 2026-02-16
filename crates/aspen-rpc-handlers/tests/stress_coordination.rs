@@ -65,7 +65,7 @@ async fn test_stress_lock_contention() {
         let acquire_resp = handler.handle(acquire_req, &ctx).await.unwrap();
 
         if let ClientRpcResponse::LockResult(result) = acquire_resp {
-            assert!(result.success, "Lock should be acquired on iteration {}", i);
+            assert!(result.is_success, "Lock should be acquired on iteration {}", i);
             let fencing_token = result.fencing_token.expect("Should have fencing token");
 
             // Verify fencing token is valid
@@ -80,7 +80,7 @@ async fn test_stress_lock_contention() {
             let release_resp = handler.handle(release_req, &ctx).await.unwrap();
 
             if let ClientRpcResponse::LockResult(result) = release_resp {
-                assert!(result.success, "Lock should be released on iteration {}", i);
+                assert!(result.is_success, "Lock should be released on iteration {}", i);
             }
         }
     }
@@ -108,7 +108,7 @@ async fn test_stress_fencing_token_monotonicity() {
         let acquire_resp = handler.handle(acquire_req, &ctx).await.unwrap();
 
         if let ClientRpcResponse::LockResult(result) = acquire_resp {
-            assert!(result.success);
+            assert!(result.is_success);
             let current_token = result.fencing_token.expect("Should have fencing token");
 
             // Verify strict monotonicity
@@ -149,7 +149,7 @@ async fn test_stress_lock_expiry_reacquisition() {
     let acquire_resp = handler.handle(acquire_req, &ctx).await.unwrap();
 
     if let ClientRpcResponse::LockResult(result) = acquire_resp {
-        assert!(result.success);
+        assert!(result.is_success);
     }
 
     // Wait for expiration
@@ -164,7 +164,7 @@ async fn test_stress_lock_expiry_reacquisition() {
     let acquire_resp_2 = handler.handle(acquire_req_2, &ctx).await.unwrap();
 
     if let ClientRpcResponse::LockResult(result) = acquire_resp_2 {
-        assert!(result.success, "New holder should acquire lock after TTL expiry");
+        assert!(result.is_success, "New holder should acquire lock after TTL expiry");
     }
 }
 
@@ -188,7 +188,7 @@ async fn test_stress_counter_increments() {
         let inc_resp = handler.handle(inc_req, &ctx).await.unwrap();
 
         if let ClientRpcResponse::CounterResult(result) = inc_resp {
-            assert!(result.success, "Increment {} should succeed", i);
+            assert!(result.is_success, "Increment {} should succeed", i);
             assert_eq!(result.value, Some((i + 1) as u64), "Counter value should be {} after increment {}", i + 1, i);
         }
     }
@@ -198,7 +198,7 @@ async fn test_stress_counter_increments() {
     let get_resp = handler.handle(get_req, &ctx).await.unwrap();
 
     if let ClientRpcResponse::CounterResult(result) = get_resp {
-        assert!(result.success);
+        assert!(result.is_success);
         assert_eq!(result.value, Some(num_increments as u64));
     }
 }
@@ -231,7 +231,7 @@ async fn test_stress_counter_decrements() {
         let dec_resp = handler.handle(dec_req, &ctx).await.unwrap();
 
         if let ClientRpcResponse::CounterResult(result) = dec_resp {
-            assert!(result.success, "Decrement {} should succeed", i);
+            assert!(result.is_success, "Decrement {} should succeed", i);
             let expected = 10 - (i as u64 + 1);
             assert_eq!(result.value, Some(expected), "Counter should be {} after decrement {}", expected, i);
         }
@@ -242,7 +242,7 @@ async fn test_stress_counter_decrements() {
     let get_resp = handler.handle(get_req, &ctx).await.unwrap();
 
     if let ClientRpcResponse::CounterResult(result) = get_resp {
-        assert!(result.success);
+        assert!(result.is_success);
         assert_eq!(result.value, Some(0));
     }
 }
@@ -263,7 +263,7 @@ async fn test_stress_signed_counter_operations() {
     let add_resp = handler.handle(add_req, &ctx).await.unwrap();
 
     if let ClientRpcResponse::SignedCounterResult(result) = add_resp {
-        assert!(result.success, "Initial add should succeed");
+        assert!(result.is_success, "Initial add should succeed");
         assert_eq!(result.value, Some(100));
     }
 
@@ -275,7 +275,7 @@ async fn test_stress_signed_counter_operations() {
     let sub_resp = handler.handle(sub_req, &ctx).await.unwrap();
 
     if let ClientRpcResponse::SignedCounterResult(result) = sub_resp {
-        assert!(result.success, "Subtract should succeed");
+        assert!(result.is_success, "Subtract should succeed");
         assert_eq!(result.value, Some(-50), "Value should be -50");
     }
 
@@ -287,7 +287,7 @@ async fn test_stress_signed_counter_operations() {
     let add_resp2 = handler.handle(add_req2, &ctx).await.unwrap();
 
     if let ClientRpcResponse::SignedCounterResult(result) = add_resp2 {
-        assert!(result.success, "Add back should succeed");
+        assert!(result.is_success, "Add back should succeed");
         assert_eq!(result.value, Some(25), "Value should be 25");
     }
 }
@@ -314,7 +314,7 @@ async fn test_stress_counter_add_variations() {
         expected += amount;
 
         if let ClientRpcResponse::CounterResult(result) = add_resp {
-            assert!(result.success);
+            assert!(result.is_success);
             assert_eq!(result.value, Some(expected));
         }
     }
@@ -349,7 +349,7 @@ async fn test_stress_many_keys() {
         let get_resp = handler.handle(get_req, &ctx).await.unwrap();
 
         if let ClientRpcResponse::CounterResult(result) = get_resp {
-            assert!(result.success, "Counter {} should exist", i);
+            assert!(result.is_success, "Counter {} should exist", i);
             assert_eq!(result.value, Some((i + 1) as u64), "Counter {} should have value {}", i, i + 1);
         }
     }
@@ -364,7 +364,7 @@ async fn test_stress_many_keys() {
         let set_resp = handler.handle(set_req, &ctx).await.unwrap();
 
         if let ClientRpcResponse::CounterResult(result) = set_resp {
-            assert!(result.success, "Counter {} should be updated", i);
+            assert!(result.is_success, "Counter {} should be updated", i);
         }
     }
 
@@ -375,7 +375,7 @@ async fn test_stress_many_keys() {
         let get_resp = handler.handle(get_req, &ctx).await.unwrap();
 
         if let ClientRpcResponse::CounterResult(result) = get_resp {
-            assert!(result.success);
+            assert!(result.is_success);
             assert_eq!(result.value, Some(((i + 1) * 2) as u64), "Counter {} should be doubled", i);
         }
     }
@@ -405,7 +405,7 @@ async fn test_stress_rate_limiter() {
         let acquire_resp = handler.handle(acquire_req, &ctx).await.unwrap();
 
         if let ClientRpcResponse::RateLimiterResult(result) = acquire_resp {
-            if result.success {
+            if result.is_success {
                 allowed_count += 1;
             }
         }
@@ -453,7 +453,7 @@ async fn test_stress_lock_wrong_token_release() {
     let acquire_resp = handler.handle(acquire_req, &ctx).await.unwrap();
 
     if let ClientRpcResponse::LockResult(result) = acquire_resp {
-        assert!(result.success);
+        assert!(result.is_success);
         let correct_token = result.fencing_token.expect("Should have token");
 
         // Try to release with wrong token
@@ -465,7 +465,7 @@ async fn test_stress_lock_wrong_token_release() {
         let wrong_resp = handler.handle(wrong_release, &ctx).await.unwrap();
 
         if let ClientRpcResponse::LockResult(result) = wrong_resp {
-            assert!(!result.success, "Wrong token should not release lock");
+            assert!(!result.is_success, "Wrong token should not release lock");
         }
 
         // Lock should still be held
@@ -477,7 +477,7 @@ async fn test_stress_lock_wrong_token_release() {
         let check_resp = handler.handle(check_req, &ctx).await.unwrap();
 
         if let ClientRpcResponse::LockResult(result) = check_resp {
-            assert!(!result.success, "Lock should still be held after failed release");
+            assert!(!result.is_success, "Lock should still be held after failed release");
         }
     }
 }
@@ -500,7 +500,7 @@ async fn test_stress_lock_wrong_holder_release() {
     let acquire_resp = handler.handle(acquire_req, &ctx).await.unwrap();
 
     if let ClientRpcResponse::LockResult(result) = acquire_resp {
-        assert!(result.success);
+        assert!(result.is_success);
         let token = result.fencing_token.expect("Should have token");
 
         // Try to release with wrong holder
@@ -512,7 +512,7 @@ async fn test_stress_lock_wrong_holder_release() {
         let wrong_resp = handler.handle(wrong_release, &ctx).await.unwrap();
 
         if let ClientRpcResponse::LockResult(result) = wrong_resp {
-            assert!(!result.success, "Wrong holder should not release lock");
+            assert!(!result.is_success, "Wrong holder should not release lock");
         }
     }
 }

@@ -77,7 +77,7 @@ async fn branch_list(client: &AspenClient, args: BranchListArgs, json: bool) -> 
 
     match response {
         ClientRpcResponse::ForgeRefListResult(result) => {
-            if result.success {
+            if result.is_success {
                 let refs: Vec<RefOutput> = result
                     .refs
                     .into_iter()
@@ -121,7 +121,7 @@ async fn branch_create(client: &AspenClient, args: BranchCreateArgs, json: bool)
 
     match response {
         ClientRpcResponse::ForgeRefResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(ref_info) = result.ref_info {
                     let output = RefOutput {
                         name: ref_info.name,
@@ -137,7 +137,7 @@ async fn branch_create(client: &AspenClient, args: BranchCreateArgs, json: bool)
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Branch {} created", args.name);
                 }
@@ -163,7 +163,7 @@ async fn branch_delete(client: &AspenClient, args: BranchDeleteArgs, json: bool)
 
     match response {
         ClientRpcResponse::ForgeRefResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Branch {} deleted", args.name);
                 } else {
@@ -175,7 +175,7 @@ async fn branch_delete(client: &AspenClient, args: BranchDeleteArgs, json: bool)
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Branch {} deleted", args.name);
                 }

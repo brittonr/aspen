@@ -17,8 +17,8 @@ pub(crate) async fn handle_get_ref(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                success: false,
-                found: false,
+                is_success: false,
+                was_found: false,
                 ref_info: None,
                 previous_hash: None,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -28,8 +28,8 @@ pub(crate) async fn handle_get_ref(
 
     match forge_node.refs.get(&repo_id, &ref_name).await {
         Ok(Some(hash)) => Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-            success: true,
-            found: true,
+            is_success: true,
+            was_found: true,
             ref_info: Some(ForgeRefInfo {
                 name: ref_name,
                 hash: hash.to_hex().to_string(),
@@ -38,15 +38,15 @@ pub(crate) async fn handle_get_ref(
             error: None,
         })),
         Ok(None) => Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-            success: true,
-            found: false,
+            is_success: true,
+            was_found: false,
             ref_info: None,
             previous_hash: None,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-            success: false,
-            found: false,
+            is_success: false,
+            was_found: false,
             ref_info: None,
             previous_hash: None,
             error: Some(e.to_string()),
@@ -68,8 +68,8 @@ pub(crate) async fn handle_set_ref(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                success: false,
-                found: false,
+                is_success: false,
+                was_found: false,
                 ref_info: None,
                 previous_hash: None,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -81,8 +81,8 @@ pub(crate) async fn handle_set_ref(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                success: false,
-                found: false,
+                is_success: false,
+                was_found: false,
                 ref_info: None,
                 previous_hash: None,
                 error: Some(format!("Invalid hash: {}", e)),
@@ -95,8 +95,8 @@ pub(crate) async fn handle_set_ref(
 
     match forge_node.refs.set(&repo_id, &ref_name, hash).await {
         Ok(()) => Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-            success: true,
-            found: true,
+            is_success: true,
+            was_found: true,
             ref_info: Some(ForgeRefInfo {
                 name: ref_name,
                 hash: hash.to_hex().to_string(),
@@ -105,8 +105,8 @@ pub(crate) async fn handle_set_ref(
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-            success: false,
-            found: false,
+            is_success: false,
+            was_found: false,
             ref_info: None,
             previous_hash: None,
             error: Some(e.to_string()),
@@ -126,8 +126,8 @@ pub(crate) async fn handle_delete_ref(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                success: false,
-                found: false,
+                is_success: false,
+                was_found: false,
                 ref_info: None,
                 previous_hash: None,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -140,15 +140,15 @@ pub(crate) async fn handle_delete_ref(
 
     match forge_node.refs.delete(&repo_id, &ref_name).await {
         Ok(()) => Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-            success: true,
-            found: previous.is_some(),
+            is_success: true,
+            was_found: previous.is_some(),
             ref_info: None,
             previous_hash: previous.map(|h| h.to_hex().to_string()),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-            success: false,
-            found: false,
+            is_success: false,
+            was_found: false,
             ref_info: None,
             previous_hash: None,
             error: Some(e.to_string()),
@@ -177,8 +177,8 @@ pub(crate) async fn handle_cas_ref(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                success: false,
-                found: false,
+                is_success: false,
+                was_found: false,
                 ref_info: None,
                 previous_hash: None,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -191,8 +191,8 @@ pub(crate) async fn handle_cas_ref(
             Ok(hash) => Some(hash),
             Err(e) => {
                 return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                    success: false,
-                    found: false,
+                    is_success: false,
+                    was_found: false,
                     ref_info: None,
                     previous_hash: None,
                     error: Some(format!("Invalid expected hash: {}", e)),
@@ -206,8 +206,8 @@ pub(crate) async fn handle_cas_ref(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                success: false,
-                found: false,
+                is_success: false,
+                was_found: false,
                 ref_info: None,
                 previous_hash: None,
                 error: Some(format!("Invalid new hash: {}", e)),
@@ -224,8 +224,8 @@ pub(crate) async fn handle_cas_ref(
             Ok(id) => id,
             Err(e) => {
                 return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                    success: false,
-                    found: false,
+                    is_success: false,
+                    was_found: false,
                     ref_info: None,
                     previous_hash: None,
                     error: Some(format!("Failed to get repository: {}", e)),
@@ -240,8 +240,8 @@ pub(crate) async fn handle_cas_ref(
                 Ok(b) if b.len() == 32 => b,
                 _ => {
                     return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                        success: false,
-                        found: false,
+                        is_success: false,
+                        was_found: false,
                         ref_info: None,
                         previous_hash: None,
                         error: Some("Invalid signer key: must be 32 bytes hex".to_string()),
@@ -254,8 +254,8 @@ pub(crate) async fn handle_cas_ref(
                 Ok(k) => k,
                 Err(e) => {
                     return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                        success: false,
-                        found: false,
+                        is_success: false,
+                        was_found: false,
                         ref_info: None,
                         previous_hash: None,
                         error: Some(format!("Invalid signer key: {}", e)),
@@ -268,8 +268,8 @@ pub(crate) async fn handle_cas_ref(
                 Ok(b) if b.len() == 64 => b,
                 _ => {
                     return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                        success: false,
-                        found: false,
+                        is_success: false,
+                        was_found: false,
                         ref_info: None,
                         previous_hash: None,
                         error: Some("Invalid signature: must be 64 bytes hex".to_string()),
@@ -294,8 +294,8 @@ pub(crate) async fn handle_cas_ref(
             // Verify the signature and delegate authorization
             if let Err(e) = DelegateVerifier::verify_update(&signed_update, &identity) {
                 return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                    success: false,
-                    found: false,
+                    is_success: false,
+                    was_found: false,
                     ref_info: None,
                     previous_hash: None,
                     error: Some(format!("Authorization failed: {}", e)),
@@ -306,8 +306,8 @@ pub(crate) async fn handle_cas_ref(
 
     match forge_node.refs.compare_and_set(&repo_id, &ref_name, expected_hash, new_hash).await {
         Ok(()) => Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-            success: true,
-            found: true,
+            is_success: true,
+            was_found: true,
             ref_info: Some(ForgeRefInfo {
                 name: ref_name,
                 hash: new_hash.to_hex().to_string(),
@@ -318,8 +318,8 @@ pub(crate) async fn handle_cas_ref(
         Err(e) => {
             // CAS failure or other error
             Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
-                success: false,
-                found: false,
+                is_success: false,
+                was_found: false,
                 ref_info: None,
                 previous_hash: None,
                 error: Some(e.to_string()),
@@ -340,7 +340,7 @@ pub(crate) async fn handle_list_branches(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
-                success: false,
+                is_success: false,
                 refs: vec![],
                 count: 0,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -359,14 +359,14 @@ pub(crate) async fn handle_list_branches(
                 .collect();
             let count = refs.len() as u32;
             Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
-                success: true,
+                is_success: true,
                 refs,
                 count,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
-            success: false,
+            is_success: false,
             refs: vec![],
             count: 0,
             error: Some(e.to_string()),
@@ -383,7 +383,7 @@ pub(crate) async fn handle_list_tags(forge_node: &ForgeNodeRef, repo_id: String)
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
-                success: false,
+                is_success: false,
                 refs: vec![],
                 count: 0,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -402,14 +402,14 @@ pub(crate) async fn handle_list_tags(forge_node: &ForgeNodeRef, repo_id: String)
                 .collect();
             let count = refs.len() as u32;
             Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
-                success: true,
+                is_success: true,
                 refs,
                 count,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
-            success: false,
+            is_success: false,
             refs: vec![],
             count: 0,
             error: Some(e.to_string()),

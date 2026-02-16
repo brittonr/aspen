@@ -9,7 +9,7 @@ use serde_json::json;
 use crate::output::Outputable;
 
 pub(crate) struct KvReadOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) data: Option<HashMap<String, String>>,
     pub(crate) version: Option<u64>,
     pub(crate) error: Option<String>,
@@ -18,7 +18,7 @@ pub(crate) struct KvReadOutput {
 impl Outputable for KvReadOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "data": self.data,
             "version": self.version,
             "error": self.error
@@ -45,7 +45,7 @@ impl Outputable for KvReadOutput {
 }
 
 pub(crate) struct KvWriteOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) version: Option<u64>,
     pub(crate) error: Option<String>,
 }
@@ -53,7 +53,7 @@ pub(crate) struct KvWriteOutput {
 impl Outputable for KvWriteOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "version": self.version,
             "error": self.error
         })
@@ -72,7 +72,7 @@ impl Outputable for KvWriteOutput {
 }
 
 pub(crate) struct KvListOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) keys: Vec<String>,
     pub(crate) error: Option<String>,
 }
@@ -80,7 +80,7 @@ pub(crate) struct KvListOutput {
 impl Outputable for KvListOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "keys": self.keys,
             "error": self.error
         })
@@ -104,7 +104,7 @@ impl Outputable for KvListOutput {
 }
 
 pub(crate) struct SimpleSuccessOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) message: String,
     pub(crate) error: Option<String>,
 }
@@ -112,7 +112,7 @@ pub(crate) struct SimpleSuccessOutput {
 impl Outputable for SimpleSuccessOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "message": self.message,
             "error": self.error
         })
@@ -128,7 +128,7 @@ impl Outputable for SimpleSuccessOutput {
 }
 
 pub(crate) struct TransitEncryptOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) ciphertext: Option<String>,
     pub(crate) error: Option<String>,
 }
@@ -136,7 +136,7 @@ pub(crate) struct TransitEncryptOutput {
 impl Outputable for TransitEncryptOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "ciphertext": self.ciphertext,
             "error": self.error
         })
@@ -155,7 +155,7 @@ impl Outputable for TransitEncryptOutput {
 }
 
 pub(crate) struct TransitDecryptOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) plaintext: Option<String>,
     pub(crate) error: Option<String>,
 }
@@ -163,7 +163,7 @@ pub(crate) struct TransitDecryptOutput {
 impl Outputable for TransitDecryptOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "plaintext": self.plaintext,
             "error": self.error
         })
@@ -182,7 +182,7 @@ impl Outputable for TransitDecryptOutput {
 }
 
 pub(crate) struct TransitSignOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) signature: Option<String>,
     pub(crate) error: Option<String>,
 }
@@ -190,7 +190,7 @@ pub(crate) struct TransitSignOutput {
 impl Outputable for TransitSignOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "signature": self.signature,
             "error": self.error
         })
@@ -209,16 +209,16 @@ impl Outputable for TransitSignOutput {
 }
 
 pub(crate) struct TransitVerifyOutput {
-    pub(crate) success: bool,
-    pub(crate) valid: Option<bool>,
+    pub(crate) is_success: bool,
+    pub(crate) is_valid: Option<bool>,
     pub(crate) error: Option<String>,
 }
 
 impl Outputable for TransitVerifyOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
-            "valid": self.valid,
+            "is_success": self.is_success,
+            "is_valid": self.is_valid,
             "error": self.error
         })
     }
@@ -227,7 +227,7 @@ impl Outputable for TransitVerifyOutput {
         if let Some(err) = &self.error {
             return format!("Error: {}", err);
         }
-        match self.valid {
+        match self.is_valid {
             Some(true) => "Signature is VALID".to_string(),
             Some(false) => "Signature is INVALID".to_string(),
             None => "Verification failed".to_string(),
@@ -236,7 +236,7 @@ impl Outputable for TransitVerifyOutput {
 }
 
 pub(crate) struct TransitListOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) keys: Vec<String>,
     pub(crate) error: Option<String>,
 }
@@ -244,7 +244,7 @@ pub(crate) struct TransitListOutput {
 impl Outputable for TransitListOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "keys": self.keys,
             "error": self.error
         })
@@ -268,7 +268,7 @@ impl Outputable for TransitListOutput {
 }
 
 pub(crate) struct PkiCertificateOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) certificate: Option<String>,
     pub(crate) private_key: Option<String>,
     pub(crate) serial: Option<String>,
@@ -278,7 +278,7 @@ pub(crate) struct PkiCertificateOutput {
 impl Outputable for PkiCertificateOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "certificate": self.certificate,
             "private_key": self.private_key,
             "serial": self.serial,
@@ -310,7 +310,7 @@ impl Outputable for PkiCertificateOutput {
 }
 
 pub(crate) struct PkiListOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) items: Vec<String>,
     pub(crate) error: Option<String>,
 }
@@ -318,7 +318,7 @@ pub(crate) struct PkiListOutput {
 impl Outputable for PkiListOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "items": self.items,
             "error": self.error
         })
@@ -342,7 +342,7 @@ impl Outputable for PkiListOutput {
 }
 
 pub(crate) struct NixCacheKeyOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) public_key: Option<String>,
     pub(crate) error: Option<String>,
 }
@@ -350,7 +350,7 @@ pub(crate) struct NixCacheKeyOutput {
 impl Outputable for NixCacheKeyOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "public_key": self.public_key,
             "error": self.error
         })
@@ -369,14 +369,14 @@ impl Outputable for NixCacheKeyOutput {
 }
 
 pub(crate) struct NixCacheDeleteOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) error: Option<String>,
 }
 
 impl Outputable for NixCacheDeleteOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "error": self.error
         })
     }
@@ -384,7 +384,7 @@ impl Outputable for NixCacheDeleteOutput {
     fn to_human(&self) -> String {
         if let Some(err) = &self.error {
             format!("Error: {}", err)
-        } else if self.success {
+        } else if self.is_success {
             "Signing key deleted successfully".to_string()
         } else {
             "Failed to delete signing key".to_string()
@@ -393,7 +393,7 @@ impl Outputable for NixCacheDeleteOutput {
 }
 
 pub(crate) struct NixCacheListOutput {
-    pub(crate) success: bool,
+    pub(crate) is_success: bool,
     pub(crate) cache_names: Option<Vec<String>>,
     pub(crate) error: Option<String>,
 }
@@ -401,7 +401,7 @@ pub(crate) struct NixCacheListOutput {
 impl Outputable for NixCacheListOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "cache_names": self.cache_names,
             "error": self.error
         })

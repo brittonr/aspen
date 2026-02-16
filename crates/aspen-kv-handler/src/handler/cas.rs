@@ -64,7 +64,7 @@ async fn handle_compare_and_swap(
     // Validate key against reserved _system: prefix
     if let Err(vault_err) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
-            success: false,
+            is_success: false,
             actual_value: None,
             error: Some(vault_err.to_string()),
         }));
@@ -83,19 +83,19 @@ async fn handle_compare_and_swap(
 
     match result {
         Ok(_) => Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
-            success: true,
+            is_success: true,
             actual_value: None,
             error: None,
         })),
         Err(KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => {
             Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
-                success: false,
+                is_success: false,
                 actual_value: actual.map(|v| v.into_bytes()),
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
-            success: false,
+            is_success: false,
             actual_value: None,
             // HIGH-4: Sanitize error messages to prevent information leakage
             error: Some(sanitize_kv_error(&e)),
@@ -111,7 +111,7 @@ async fn handle_compare_and_delete(
     // Validate key against reserved _system: prefix
     if let Err(vault_err) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
-            success: false,
+            is_success: false,
             actual_value: None,
             error: Some(vault_err.to_string()),
         }));
@@ -129,19 +129,19 @@ async fn handle_compare_and_delete(
 
     match result {
         Ok(_) => Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
-            success: true,
+            is_success: true,
             actual_value: None,
             error: None,
         })),
         Err(KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => {
             Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
-                success: false,
+                is_success: false,
                 actual_value: actual.map(|v| v.into_bytes()),
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
-            success: false,
+            is_success: false,
             actual_value: None,
             // HIGH-4: Sanitize error messages to prevent information leakage
             error: Some(sanitize_kv_error(&e)),
@@ -163,7 +163,7 @@ async fn handle_conditional_batch_write(
         };
         if let Err(e) = validate_client_key(key) {
             return Ok(ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
-                success: false,
+                is_success: false,
                 conditions_met: false,
                 operations_applied: None,
                 failed_condition_index: None,
@@ -181,7 +181,7 @@ async fn handle_conditional_batch_write(
         };
         if let Err(e) = validate_client_key(key) {
             return Ok(ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
-                success: false,
+                is_success: false,
                 conditions_met: false,
                 operations_applied: None,
                 failed_condition_index: None,
@@ -227,7 +227,7 @@ async fn handle_conditional_batch_write(
         Ok(result) => {
             let conditions_met = result.conditions_met.unwrap_or(false);
             Ok(ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
-                success: conditions_met,
+                is_success: conditions_met,
                 conditions_met,
                 operations_applied: result.batch_applied,
                 failed_condition_index: result.failed_condition_index,
@@ -236,7 +236,7 @@ async fn handle_conditional_batch_write(
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
-            success: false,
+            is_success: false,
             conditions_met: false,
             operations_applied: None,
             failed_condition_index: None,

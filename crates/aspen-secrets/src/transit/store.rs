@@ -591,7 +591,7 @@ impl TransitStore for DefaultTransitStore {
             }
         })?;
 
-        let valid = match key.key_type {
+        let is_valid = match key.key_type {
             KeyType::Ed25519 => Self::verify_ed25519(public_key, &request.input, &signature)?,
             _ => {
                 return Err(SecretsError::UnsupportedKeyType {
@@ -600,13 +600,13 @@ impl TransitStore for DefaultTransitStore {
             }
         };
 
-        if !valid {
+        if !is_valid {
             return Err(SecretsError::SignatureVerificationFailed { name: request.key_name });
         }
 
-        debug!(key = %request.key_name, version = version, valid = valid, "Verified signature");
+        debug!(key = %request.key_name, version = version, is_valid = is_valid, "Verified signature");
 
-        Ok(VerifyResponse { valid })
+        Ok(VerifyResponse { is_valid })
     }
 
     async fn rewrap(&self, request: RewrapRequest) -> Result<RewrapResponse> {
@@ -764,7 +764,7 @@ mod tests {
         assert!(sign_res.signature.starts_with("aspen:v1:"));
 
         let verify_res = store.verify(VerifyRequest::new("sign-key", message, sign_res.signature)).await.unwrap();
-        assert!(verify_res.valid);
+        assert!(verify_res.is_valid);
     }
 
     #[tokio::test]

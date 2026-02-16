@@ -468,7 +468,7 @@ fn test_resource_state_response_serialization() {
     heads.insert("heads/develop".to_string(), [0xfe; 32]);
 
     let response = FederationResponse::ResourceState {
-        found: true,
+        was_found: true,
         heads,
         metadata: None,
     };
@@ -477,8 +477,8 @@ fn test_resource_state_response_serialization() {
     let parsed: FederationResponse = postcard::from_bytes(&bytes).unwrap();
 
     match parsed {
-        FederationResponse::ResourceState { found, heads, .. } => {
-            assert!(found);
+        FederationResponse::ResourceState { was_found, heads, .. } => {
+            assert!(was_found);
             assert_eq!(heads.len(), 2);
             assert!(heads.contains_key("heads/main"));
         }

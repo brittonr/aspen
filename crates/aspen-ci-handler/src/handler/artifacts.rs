@@ -63,7 +63,7 @@ pub(crate) async fn handle_list_artifacts(
         Err(e) => {
             warn!(job_id = %job_id, error = %e, "failed to scan artifacts");
             return Ok(ClientRpcResponse::CiListArtifactsResult(CiListArtifactsResponse {
-                success: false,
+                is_success: false,
                 artifacts: vec![],
                 error: Some(format!("Failed to list artifacts: {}", e)),
             }));
@@ -96,7 +96,7 @@ pub(crate) async fn handle_list_artifacts(
     info!(job_id = %job_id, count = artifacts.len(), "found artifacts");
 
     Ok(ClientRpcResponse::CiListArtifactsResult(CiListArtifactsResponse {
-        success: true,
+        is_success: true,
         artifacts,
         error: None,
     }))
@@ -129,7 +129,7 @@ pub(crate) async fn handle_get_artifact(
         Err(e) => {
             warn!(blob_hash = %blob_hash, error = %e, "failed to scan for artifact");
             return Ok(ClientRpcResponse::CiGetArtifactResult(CiGetArtifactResponse {
-                success: false,
+                is_success: false,
                 artifact: None,
                 blob_ticket: None,
                 error: Some(format!("Failed to find artifact: {}", e)),
@@ -157,7 +157,7 @@ pub(crate) async fn handle_get_artifact(
 
     let Some(artifact) = found_artifact else {
         return Ok(ClientRpcResponse::CiGetArtifactResult(CiGetArtifactResponse {
-            success: false,
+            is_success: false,
             artifact: None,
             blob_ticket: None,
             error: Some(format!("Artifact not found: {}", blob_hash)),
@@ -195,7 +195,7 @@ pub(crate) async fn handle_get_artifact(
     info!(blob_hash = %blob_hash, has_ticket = blob_ticket.is_some(), "artifact found");
 
     Ok(ClientRpcResponse::CiGetArtifactResult(CiGetArtifactResponse {
-        success: true,
+        is_success: true,
         artifact: Some(artifact),
         blob_ticket,
         error: None,

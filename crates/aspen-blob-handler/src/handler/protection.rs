@@ -20,7 +20,7 @@ pub(crate) async fn handle_protect_blob(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::ProtectBlobResult(ProtectBlobResultResponse {
-            success: false,
+            is_success: false,
             error: Some("blob store not enabled".to_string()),
         }));
     };
@@ -30,7 +30,7 @@ pub(crate) async fn handle_protect_blob(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ProtectBlobResult(ProtectBlobResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("invalid hash: {}", e)),
             }));
         }
@@ -39,13 +39,13 @@ pub(crate) async fn handle_protect_blob(
     let tag_name = IrohBlobStore::user_tag(&tag);
     match blob_store.protect(&hash, &tag_name).await {
         Ok(()) => Ok(ClientRpcResponse::ProtectBlobResult(ProtectBlobResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "blob protect failed");
             Ok(ClientRpcResponse::ProtectBlobResult(ProtectBlobResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(sanitize_blob_error(&e)),
             }))
         }
@@ -58,7 +58,7 @@ pub(crate) async fn handle_unprotect_blob(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::UnprotectBlobResult(UnprotectBlobResultResponse {
-            success: false,
+            is_success: false,
             error: Some("blob store not enabled".to_string()),
         }));
     };
@@ -66,13 +66,13 @@ pub(crate) async fn handle_unprotect_blob(
     let tag_name = IrohBlobStore::user_tag(&tag);
     match blob_store.unprotect(&tag_name).await {
         Ok(()) => Ok(ClientRpcResponse::UnprotectBlobResult(UnprotectBlobResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "blob unprotect failed");
             Ok(ClientRpcResponse::UnprotectBlobResult(UnprotectBlobResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(sanitize_blob_error(&e)),
             }))
         }
@@ -86,7 +86,7 @@ pub(crate) async fn handle_delete_blob(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::DeleteBlobResult(DeleteBlobResultResponse {
-            success: false,
+            is_success: false,
             error: Some("blob store not enabled".to_string()),
         }));
     };
@@ -96,7 +96,7 @@ pub(crate) async fn handle_delete_blob(
         Ok(h) => h,
         Err(_) => {
             return Ok(ClientRpcResponse::DeleteBlobResult(DeleteBlobResultResponse {
-                success: false,
+                is_success: false,
                 error: Some("invalid hash".to_string()),
             }));
         }
@@ -121,14 +121,14 @@ pub(crate) async fn handle_delete_blob(
                 info!(hash = %hash, "no user tags found for blob (may have KV tags or be unprotected)");
             }
             Ok(ClientRpcResponse::DeleteBlobResult(DeleteBlobResultResponse {
-                success: true,
+                is_success: true,
                 error: None,
             }))
         }
         Err(e) => {
             warn!(hash = %hash, error = %e, "failed to delete blob tags");
             Ok(ClientRpcResponse::DeleteBlobResult(DeleteBlobResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(sanitize_blob_error(&e)),
             }))
         }

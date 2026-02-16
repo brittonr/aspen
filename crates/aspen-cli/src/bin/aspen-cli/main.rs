@@ -71,10 +71,10 @@ fn init_tracing(quiet: bool, verbose: bool) {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    init_tracing(cli.global.quiet, cli.global.verbose);
+    init_tracing(cli.global.is_quiet, cli.global.is_verbose);
 
     // Display version info with git hash when not in quiet mode
-    if !cli.global.quiet {
+    if !cli.global.is_quiet {
         let git_hash = env!("GIT_HASH", "GIT_HASH not set");
         let build_time = env!("BUILD_TIME", "BUILD_TIME not set");
         eprintln!("aspen-cli v{} ({}) built at {}", env!("CARGO_PKG_VERSION"), git_hash, build_time);

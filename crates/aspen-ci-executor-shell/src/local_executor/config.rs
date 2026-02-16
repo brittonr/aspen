@@ -21,7 +21,7 @@ pub struct LocalExecutorWorkerConfig {
     pub workspace_dir: PathBuf,
 
     /// Whether to clean up job workspaces after completion.
-    pub cleanup_workspaces: bool,
+    pub should_cleanup_workspaces: bool,
 
     // --- SNIX services for Nix binary cache integration ---
     /// SNIX blob service for decomposed content-addressed storage.
@@ -69,7 +69,7 @@ impl Default for LocalExecutorWorkerConfig {
     fn default() -> Self {
         Self {
             workspace_dir: PathBuf::from("/workspace"),
-            cleanup_workspaces: true,
+            should_cleanup_workspaces: true,
             #[cfg(feature = "snix")]
             snix_blob_service: None,
             #[cfg(feature = "snix")]

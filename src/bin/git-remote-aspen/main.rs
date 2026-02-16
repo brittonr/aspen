@@ -455,12 +455,12 @@ impl RemoteHelper {
 
         match response {
             ClientRpcResponse::GitBridgeListRefs(GitBridgeListRefsResponse {
-                success,
+                is_success,
                 refs,
                 head,
                 error,
             }) => {
-                if !success {
+                if !is_success {
                     let msg = error.unwrap_or_else(|| "unknown error".to_string());
                     eprintln!("git-remote-aspen: list failed: {}", msg);
                     return writer.write_end();
@@ -521,12 +521,12 @@ impl RemoteHelper {
 
         match response {
             ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
-                success,
+                is_success,
                 objects,
                 skipped: _,
                 error,
             }) => {
-                if !success {
+                if !is_success {
                     let msg = error.unwrap_or_else(|| "unknown error".to_string());
                     eprintln!("git-remote-aspen: fetch failed: {}", msg);
                     return writer.write_fetch_done();
@@ -776,7 +776,7 @@ impl RemoteHelper {
             ref_name: dst.to_string(),
             old_sha1: old_sha1.clone(),
             new_sha1: commit_sha1.clone(),
-            force,
+            is_force: force,
         }];
 
         let total_size_bytes: u64 =
@@ -801,7 +801,7 @@ impl RemoteHelper {
         let start_response = client.send(start_request).await?;
         let session_id = match start_response {
             ClientRpcResponse::GitBridgePushStart(ref resp) => {
-                if !resp.success {
+                if !resp.is_success {
                     let msg = resp.error.as_deref().unwrap_or("failed to start chunked push session");
                     return writer.write_push_error(dst, msg);
                 }
@@ -855,7 +855,7 @@ impl RemoteHelper {
             let chunk_response = client.send(chunk_request).await?;
             match chunk_response {
                 ClientRpcResponse::GitBridgePushChunk(ref resp) => {
-                    if !resp.success {
+                    if !resp.is_success {
                         let msg = resp.error.as_deref().unwrap_or("chunk upload failed");
                         return writer.write_push_error(dst, msg);
                     }
@@ -881,7 +881,7 @@ impl RemoteHelper {
         // Handle the final GitBridgePushComplete response
         match response {
             ClientRpcResponse::GitBridgePushComplete(ref resp) => {
-                if !resp.success {
+                if !resp.is_success {
                     let msg = resp.error.as_deref().unwrap_or("chunked push failed");
                     return writer.write_push_error(dst, msg);
                 }
@@ -895,7 +895,7 @@ impl RemoteHelper {
 
                 // Report results for each ref
                 for result in &resp.ref_results {
-                    if result.success {
+                    if result.is_success {
                         writer.write_push_ok(&result.ref_name)?;
                     } else {
                         let msg = result.error.as_deref().unwrap_or("unknown error");

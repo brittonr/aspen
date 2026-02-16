@@ -19,7 +19,7 @@ pub(crate) async fn handle_create_issue(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
-                success: false,
+                is_success: false,
                 issue: None,
                 comments: None,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -35,7 +35,7 @@ pub(crate) async fn handle_create_issue(
                 .unwrap_or(0);
 
             Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
-                success: true,
+                is_success: true,
                 issue: Some(ForgeIssueInfo {
                     id: issue_hash.to_hex().to_string(),
                     title,
@@ -52,7 +52,7 @@ pub(crate) async fn handle_create_issue(
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
-            success: false,
+            is_success: false,
             issue: None,
             comments: None,
             error: Some(e.to_string()),
@@ -74,7 +74,7 @@ pub(crate) async fn handle_list_issues(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeIssueListResult(ForgeIssueListResultResponse {
-                success: false,
+                is_success: false,
                 issues: vec![],
                 count: 0,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -121,14 +121,14 @@ pub(crate) async fn handle_list_issues(
 
             let count = issues.len() as u32;
             Ok(ClientRpcResponse::ForgeIssueListResult(ForgeIssueListResultResponse {
-                success: true,
+                is_success: true,
                 issues,
                 count,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgeIssueListResult(ForgeIssueListResultResponse {
-            success: false,
+            is_success: false,
             issues: vec![],
             count: 0,
             error: Some(e.to_string()),
@@ -150,7 +150,7 @@ pub(crate) async fn handle_get_issue(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
-                success: false,
+                is_success: false,
                 issue: None,
                 comments: None,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -162,7 +162,7 @@ pub(crate) async fn handle_get_issue(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
-                success: false,
+                is_success: false,
                 issue: None,
                 comments: None,
                 error: Some(format!("Invalid issue ID: {}", e)),
@@ -184,7 +184,7 @@ pub(crate) async fn handle_get_issue(
                 .collect();
 
             Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
-                success: true,
+                is_success: true,
                 issue: Some(ForgeIssueInfo {
                     id: issue_id,
                     title: issue.title,
@@ -205,7 +205,7 @@ pub(crate) async fn handle_get_issue(
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
-            success: false,
+            is_success: false,
             issue: None,
             comments: None,
             error: Some(e.to_string()),
@@ -226,7 +226,7 @@ pub(crate) async fn handle_comment_issue(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid repo ID: {}", e)),
             }));
         }
@@ -236,7 +236,7 @@ pub(crate) async fn handle_comment_issue(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid issue ID: {}", e)),
             }));
         }
@@ -244,11 +244,11 @@ pub(crate) async fn handle_comment_issue(
 
     match forge_node.cobs.add_comment(&repo_id, &issue_hash, &body).await {
         Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: false,
+            is_success: false,
             error: Some(e.to_string()),
         })),
     }
@@ -267,7 +267,7 @@ pub(crate) async fn handle_close_issue(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid repo ID: {}", e)),
             }));
         }
@@ -277,7 +277,7 @@ pub(crate) async fn handle_close_issue(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid issue ID: {}", e)),
             }));
         }
@@ -285,11 +285,11 @@ pub(crate) async fn handle_close_issue(
 
     match forge_node.cobs.close_issue(&repo_id, &issue_hash, reason).await {
         Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: false,
+            is_success: false,
             error: Some(e.to_string()),
         })),
     }
@@ -307,7 +307,7 @@ pub(crate) async fn handle_reopen_issue(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid repo ID: {}", e)),
             }));
         }
@@ -317,7 +317,7 @@ pub(crate) async fn handle_reopen_issue(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid issue ID: {}", e)),
             }));
         }
@@ -325,11 +325,11 @@ pub(crate) async fn handle_reopen_issue(
 
     match forge_node.cobs.reopen_issue(&repo_id, &issue_hash).await {
         Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: false,
+            is_success: false,
             error: Some(e.to_string()),
         })),
     }

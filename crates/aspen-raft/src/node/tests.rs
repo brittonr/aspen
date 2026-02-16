@@ -252,7 +252,7 @@ async fn test_raft_node_health_creation() {
     let health = RaftNodeHealth::new(node.clone());
     // Health check on uninitialized node
     let status = health.status().await;
-    assert!(!status.healthy); // Not healthy because no membership
+    assert!(!status.is_healthy); // Not healthy because no membership
     assert!(!status.has_membership);
 }
 

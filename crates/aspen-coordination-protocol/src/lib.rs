@@ -17,7 +17,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LockResultResponse {
     /// Whether the lock operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Fencing token for the lock (if acquired).
     pub fencing_token: Option<u64>,
     /// Current holder ID (useful when lock is already held).
@@ -38,7 +38,7 @@ pub struct LockResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CounterResultResponse {
     /// Whether the counter operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Current counter value after operation.
     pub value: Option<u64>,
     /// Error message if operation failed.
@@ -51,7 +51,7 @@ pub struct CounterResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedCounterResultResponse {
     /// Whether the counter operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Current counter value after operation (can be negative).
     pub value: Option<i64>,
     /// Error message if operation failed.
@@ -68,7 +68,7 @@ pub struct SignedCounterResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SequenceResultResponse {
     /// Whether the sequence operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Sequence value (next ID or start of reserved range).
     pub value: Option<u64>,
     /// Error message if operation failed.
@@ -85,7 +85,7 @@ pub struct SequenceResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RateLimiterResultResponse {
     /// Whether the rate limit operation succeeded (tokens acquired).
-    pub success: bool,
+    pub is_success: bool,
     /// Remaining tokens after operation.
     pub tokens_remaining: Option<u64>,
     /// Milliseconds to wait before retrying (when rate limited).
@@ -104,7 +104,7 @@ pub struct RateLimiterResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BarrierResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Current number of participants at the barrier.
     pub current_count: Option<u32>,
     /// Required number of participants to release the barrier.
@@ -125,7 +125,7 @@ pub struct BarrierResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SemaphoreResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Number of permits acquired (for acquire operations).
     pub permits_acquired: Option<u32>,
     /// Number of permits currently available.
@@ -149,7 +149,7 @@ pub struct SemaphoreResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RWLockResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Current lock mode: "free", "read", or "write".
     pub mode: Option<String>,
     /// Fencing token (for write locks and downgrade).
@@ -185,9 +185,9 @@ pub struct QueueEnqueueItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueCreateResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// True if queue was created, false if it already existed.
-    pub created: bool,
+    pub was_created: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -196,7 +196,7 @@ pub struct QueueCreateResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueDeleteResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Number of items deleted.
     pub items_deleted: Option<u64>,
     /// Error message if the operation failed.
@@ -207,7 +207,7 @@ pub struct QueueDeleteResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueEnqueueResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Item ID assigned to the enqueued item.
     pub item_id: Option<u64>,
     /// Error message if the operation failed.
@@ -218,7 +218,7 @@ pub struct QueueEnqueueResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueEnqueueBatchResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Item IDs assigned to the enqueued items.
     pub item_ids: Vec<u64>,
     /// Error message if the operation failed.
@@ -246,7 +246,7 @@ pub struct QueueDequeuedItemResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueDequeueResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Dequeued items.
     pub items: Vec<QueueDequeuedItemResponse>,
     /// Error message if the operation failed.
@@ -272,7 +272,7 @@ pub struct QueueItemResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueuePeekResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Peeked items.
     pub items: Vec<QueueItemResponse>,
     /// Error message if the operation failed.
@@ -283,7 +283,7 @@ pub struct QueuePeekResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueAckResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -292,7 +292,7 @@ pub struct QueueAckResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueNackResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -301,7 +301,7 @@ pub struct QueueNackResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueExtendVisibilityResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// New visibility deadline (Unix ms).
     pub new_deadline_ms: Option<u64>,
     /// Error message if the operation failed.
@@ -312,9 +312,9 @@ pub struct QueueExtendVisibilityResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueStatusResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether the queue exists.
-    pub exists: bool,
+    pub does_exist: bool,
     /// Approximate number of visible items.
     pub visible_count: Option<u64>,
     /// Approximate number of pending items.
@@ -352,7 +352,7 @@ pub struct QueueDLQItemResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueGetDLQResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// DLQ items.
     pub items: Vec<QueueDLQItemResponse>,
     /// Error message if the operation failed.
@@ -363,7 +363,7 @@ pub struct QueueGetDLQResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueRedriveDLQResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -376,7 +376,7 @@ pub struct QueueRedriveDLQResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceRegisterResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Fencing token for this registration.
     pub fencing_token: Option<u64>,
     /// Registration deadline (Unix ms).
@@ -389,7 +389,7 @@ pub struct ServiceRegisterResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceDeregisterResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether the instance was registered before removal.
     pub was_registered: bool,
     /// Error message if the operation failed.
@@ -431,7 +431,7 @@ pub struct ServiceInstanceResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceDiscoverResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of matching instances.
     pub instances: Vec<ServiceInstanceResponse>,
     /// Number of instances returned.
@@ -444,7 +444,7 @@ pub struct ServiceDiscoverResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceListResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of service names.
     pub services: Vec<String>,
     /// Number of services returned.
@@ -457,9 +457,9 @@ pub struct ServiceListResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceGetInstanceResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether the instance was found.
-    pub found: bool,
+    pub was_found: bool,
     /// The instance (if found).
     pub instance: Option<ServiceInstanceResponse>,
     /// Error message if the operation failed.
@@ -470,7 +470,7 @@ pub struct ServiceGetInstanceResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceHeartbeatResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// New deadline (Unix ms).
     pub new_deadline_ms: Option<u64>,
     /// Current health status.
@@ -483,7 +483,7 @@ pub struct ServiceHeartbeatResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceUpdateHealthResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -492,7 +492,7 @@ pub struct ServiceUpdateHealthResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceUpdateMetadataResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }

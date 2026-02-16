@@ -17,7 +17,7 @@ pub(crate) async fn handle_rwlock_acquire_read(
 
     match manager.acquire_read(&name, &holder_id, ttl_ms, timeout).await {
         Ok((token, deadline, count)) => Ok(ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
-            success: true,
+            is_success: true,
             mode: Some("read".to_string()),
             fencing_token: Some(token),
             deadline_ms: Some(deadline),
@@ -26,7 +26,7 @@ pub(crate) async fn handle_rwlock_acquire_read(
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
-            success: false,
+            is_success: false,
             mode: None,
             fencing_token: None,
             deadline_ms: None,
@@ -47,7 +47,7 @@ pub(crate) async fn handle_rwlock_try_acquire_read(
 
     match manager.try_acquire_read(&name, &holder_id, ttl_ms).await {
         Ok(Some((token, deadline, count))) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
-            success: true,
+            is_success: true,
             mode: Some("read".to_string()),
             fencing_token: Some(token),
             deadline_ms: Some(deadline),
@@ -56,7 +56,7 @@ pub(crate) async fn handle_rwlock_try_acquire_read(
             error: None,
         })),
         Ok(None) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
-            success: false,
+            is_success: false,
             mode: None,
             fencing_token: None,
             deadline_ms: None,
@@ -65,7 +65,7 @@ pub(crate) async fn handle_rwlock_try_acquire_read(
             error: Some("lock unavailable".to_string()),
         })),
         Err(e) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
-            success: false,
+            is_success: false,
             mode: None,
             fencing_token: None,
             deadline_ms: None,
@@ -88,7 +88,7 @@ pub(crate) async fn handle_rwlock_acquire_write(
 
     match manager.acquire_write(&name, &holder_id, ttl_ms, timeout).await {
         Ok((token, deadline)) => Ok(ClientRpcResponse::RWLockAcquireWriteResult(RWLockResultResponse {
-            success: true,
+            is_success: true,
             mode: Some("write".to_string()),
             fencing_token: Some(token),
             deadline_ms: Some(deadline),
@@ -97,7 +97,7 @@ pub(crate) async fn handle_rwlock_acquire_write(
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::RWLockAcquireWriteResult(RWLockResultResponse {
-            success: false,
+            is_success: false,
             mode: None,
             fencing_token: None,
             deadline_ms: None,
@@ -118,7 +118,7 @@ pub(crate) async fn handle_rwlock_try_acquire_write(
 
     match manager.try_acquire_write(&name, &holder_id, ttl_ms).await {
         Ok(Some((token, deadline))) => Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
-            success: true,
+            is_success: true,
             mode: Some("write".to_string()),
             fencing_token: Some(token),
             deadline_ms: Some(deadline),
@@ -127,7 +127,7 @@ pub(crate) async fn handle_rwlock_try_acquire_write(
             error: None,
         })),
         Ok(None) => Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
-            success: false,
+            is_success: false,
             mode: None,
             fencing_token: None,
             deadline_ms: None,
@@ -136,7 +136,7 @@ pub(crate) async fn handle_rwlock_try_acquire_write(
             error: Some("lock unavailable".to_string()),
         })),
         Err(e) => Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
-            success: false,
+            is_success: false,
             mode: None,
             fencing_token: None,
             deadline_ms: None,
@@ -156,7 +156,7 @@ pub(crate) async fn handle_rwlock_release_read(
 
     match manager.release_read(&name, &holder_id).await {
         Ok(()) => Ok(ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse {
-            success: true,
+            is_success: true,
             mode: None,
             fencing_token: None,
             deadline_ms: None,
@@ -165,7 +165,7 @@ pub(crate) async fn handle_rwlock_release_read(
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse {
-            success: false,
+            is_success: false,
             mode: None,
             fencing_token: None,
             deadline_ms: None,
@@ -186,7 +186,7 @@ pub(crate) async fn handle_rwlock_release_write(
 
     match manager.release_write(&name, &holder_id, fencing_token).await {
         Ok(()) => Ok(ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse {
-            success: true,
+            is_success: true,
             mode: Some("free".to_string()),
             fencing_token: None,
             deadline_ms: None,
@@ -195,7 +195,7 @@ pub(crate) async fn handle_rwlock_release_write(
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse {
-            success: false,
+            is_success: false,
             mode: None,
             fencing_token: None,
             deadline_ms: None,
@@ -217,7 +217,7 @@ pub(crate) async fn handle_rwlock_downgrade(
 
     match manager.downgrade(&name, &holder_id, fencing_token, ttl_ms).await {
         Ok((token, deadline, count)) => Ok(ClientRpcResponse::RWLockDowngradeResult(RWLockResultResponse {
-            success: true,
+            is_success: true,
             mode: Some("read".to_string()),
             fencing_token: Some(token),
             deadline_ms: Some(deadline),
@@ -226,7 +226,7 @@ pub(crate) async fn handle_rwlock_downgrade(
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::RWLockDowngradeResult(RWLockResultResponse {
-            success: false,
+            is_success: false,
             mode: None,
             fencing_token: None,
             deadline_ms: None,
@@ -246,7 +246,7 @@ pub(crate) async fn handle_rwlock_status(
     match manager.status(&name).await {
         Ok((mode, reader_count, writer_holder, token)) => {
             Ok(ClientRpcResponse::RWLockStatusResult(RWLockResultResponse {
-                success: true,
+                is_success: true,
                 mode: Some(mode),
                 fencing_token: Some(token),
                 deadline_ms: None,
@@ -256,7 +256,7 @@ pub(crate) async fn handle_rwlock_status(
             }))
         }
         Err(e) => Ok(ClientRpcResponse::RWLockStatusResult(RWLockResultResponse {
-            success: false,
+            is_success: false,
             mode: None,
             fencing_token: None,
             deadline_ms: None,

@@ -107,7 +107,7 @@ impl<W: Worker> TracedWorker<W> {
             network_sent_bytes: 0,
             network_recv_bytes: 0,
             retry_count: 0,
-            success: result.is_success(),
+            is_success: result.is_success(),
             error_message: if let JobResult::Failure(f) = result {
                 Some(f.reason.clone())
             } else {

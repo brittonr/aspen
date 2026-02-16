@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
 
     match client.send(request).await {
         Ok(ClientRpcResponse::JobSubmitResult(result)) => {
-            if result.success {
+            if result.is_success {
                 println!("✓ Job submitted successfully!");
                 println!("  Job ID: {}", result.job_id.unwrap_or_else(|| "unknown".to_string()));
             } else {

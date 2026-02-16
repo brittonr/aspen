@@ -562,7 +562,7 @@ async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> 
 
         match read_response {
             Ok(ClientRpcResponse::DocsGetResult(result)) => {
-                if result.found && result.value.as_deref() == Some(test_value.as_bytes()) {
+                if result.was_found && result.value.as_deref() == Some(test_value.as_bytes()) {
                     details.push("read: OK".to_string());
                 } else {
                     details.push("read: FAIL (value mismatch)".to_string());
@@ -634,7 +634,7 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
 
     let hash = match add_response {
         Ok(ClientRpcResponse::AddBlobResult(result)) => {
-            if result.success {
+            if result.is_success {
                 details.push(format!("add: OK ({} bytes)", result.size.unwrap_or(0)));
                 result.hash
             } else {
@@ -728,7 +728,7 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
 
     match has_response {
         Ok(ClientRpcResponse::HasBlobResult(result)) => {
-            if result.exists {
+            if result.does_exist {
                 details.push("has: OK".to_string());
             } else {
                 details.push("has: FAIL (not found)".to_string());
@@ -747,9 +747,9 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
 
     match get_response {
         Ok(ClientRpcResponse::GetBlobResult(result)) => {
-            if result.found && result.data.as_ref() == Some(&test_data) {
+            if result.was_found && result.data.as_ref() == Some(&test_data) {
                 details.push("get: OK (content verified)".to_string());
-            } else if result.found {
+            } else if result.was_found {
                 details.push("get: FAIL (content mismatch)".to_string());
             } else {
                 details.push("get: FAIL (not found)".to_string());
@@ -773,7 +773,7 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
         let _ = client
             .send(ClientRpcRequest::DeleteBlob {
                 hash: hash.clone(),
-                force: true,
+                is_force: true,
             })
             .await;
     }
@@ -1005,7 +1005,7 @@ async fn run_verify_blob(client: &AspenClient, no_cleanup: bool) -> VerifyResult
         .await;
 
     let hash = match add_result {
-        Ok(ClientRpcResponse::AddBlobResult(r)) if r.success => r.hash,
+        Ok(ClientRpcResponse::AddBlobResult(r)) if r.is_success => r.hash,
         Ok(ClientRpcResponse::Error(e)) => {
             if e.message.contains("not enabled") || e.message.contains("disabled") {
                 return VerifyResult {
@@ -1058,14 +1058,14 @@ async fn run_verify_blob(client: &AspenClient, no_cleanup: bool) -> VerifyResult
 
     // Verify exists
     let has_result = client.send(ClientRpcRequest::HasBlob { hash: hash.clone() }).await;
-    let exists = matches!(has_result, Ok(ClientRpcResponse::HasBlobResult(r)) if r.exists);
+    let exists = matches!(has_result, Ok(ClientRpcResponse::HasBlobResult(r)) if r.does_exist);
 
     // Cleanup
     if !no_cleanup {
         let _ = client
             .send(ClientRpcRequest::DeleteBlob {
                 hash: hash.clone(),
-                force: true,
+                is_force: true,
             })
             .await;
     }
@@ -1270,7 +1270,7 @@ async fn verify_blob_cross_node(client: &AspenClient, hash: &str, details: &mut 
 
         match client.send_to(&addr, ClientRpcRequest::HasBlob { hash: hash.to_string() }).await {
             Ok(ClientRpcResponse::HasBlobResult(result)) => {
-                if result.exists {
+                if result.does_exist {
                     nodes_with_blob.push(node.node_id);
                 } else {
                     nodes_without_blob.push(node.node_id);

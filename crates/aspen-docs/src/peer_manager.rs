@@ -82,7 +82,7 @@ pub struct SyncStatus {
     /// Current connection state.
     pub state: PeerConnectionState,
     /// Whether sync is currently in progress.
-    pub syncing: bool,
+    pub is_syncing: bool,
     /// Entries received in current/last sync.
     pub entries_received: u64,
     /// Entries imported in current/last sync.
@@ -106,7 +106,7 @@ struct PeerConnection {
     /// Number of connection failures.
     failure_count: u64,
     /// Whether a sync is currently in progress.
-    syncing: bool,
+    is_syncing: bool,
 }
 
 impl PeerConnection {
@@ -117,7 +117,7 @@ impl PeerConnection {
             last_sync: None,
             sync_count: 0,
             failure_count: 0,
-            syncing: false,
+            is_syncing: false,
         }
     }
 }
@@ -256,7 +256,7 @@ impl PeerManager {
         Some(SyncStatus {
             cluster_id: cluster_id.to_string(),
             state: conn.state,
-            syncing: conn.syncing,
+            is_syncing: conn.is_syncing,
             entries_received: import_status
                 .as_ref()
                 .map(|s| s.entries_imported + s.entries_skipped + s.entries_filtered)
@@ -296,7 +296,7 @@ impl PeerManager {
     pub async fn mark_sync_started(&self, cluster_id: &str) {
         let mut peers = self.peers.write().await;
         if let Some(conn) = peers.get_mut(cluster_id) {
-            conn.syncing = true;
+            conn.is_syncing = true;
             debug!(cluster_id, "sync started");
         }
     }
@@ -305,7 +305,7 @@ impl PeerManager {
     pub async fn mark_sync_completed(&self, cluster_id: &str) {
         let mut peers = self.peers.write().await;
         if let Some(conn) = peers.get_mut(cluster_id) {
-            conn.syncing = false;
+            conn.is_syncing = false;
             conn.last_sync = Some(Instant::now());
             conn.sync_count += 1;
             debug!(cluster_id, sync_count = conn.sync_count, "sync completed");
@@ -428,12 +428,12 @@ mod tests {
         // Start sync
         manager.mark_sync_started("cluster-a").await;
         let status = manager.sync_status("cluster-a").await.unwrap();
-        assert!(status.syncing);
+        assert!(status.is_syncing);
 
         // Complete sync
         manager.mark_sync_completed("cluster-a").await;
         let status = manager.sync_status("cluster-a").await.unwrap();
-        assert!(!status.syncing);
+        assert!(!status.is_syncing);
 
         let peers = manager.list_peers().await;
         assert_eq!(peers[0].sync_count, 1);

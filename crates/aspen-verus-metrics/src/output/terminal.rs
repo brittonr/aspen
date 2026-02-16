@@ -8,13 +8,13 @@ use crate::Severity;
 use crate::VerificationReport;
 
 /// Render a report for terminal display.
-pub fn render(report: &VerificationReport, verbose: bool, min_severity: Severity) -> String {
+pub fn render(report: &VerificationReport, is_verbose: bool, min_severity: Severity) -> String {
     let mut output = String::new();
 
     output.push_str(&format!("{}\n\n", "=== Verus Sync Validation ===".bold()));
 
     for crate_report in &report.crates {
-        output.push_str(&render_crate(crate_report, verbose, min_severity));
+        output.push_str(&render_crate(crate_report, is_verbose, min_severity));
     }
 
     output.push_str(&render_summary(report, min_severity));
@@ -22,7 +22,7 @@ pub fn render(report: &VerificationReport, verbose: bool, min_severity: Severity
     output
 }
 
-fn render_crate(report: &CrateReport, verbose: bool, min_severity: Severity) -> String {
+fn render_crate(report: &CrateReport, is_verbose: bool, min_severity: Severity) -> String {
     let mut output = String::new();
 
     output.push_str(&format!("Checking {}...\n", report.name.cyan()));
@@ -32,26 +32,26 @@ fn render_crate(report: &CrateReport, verbose: bool, min_severity: Severity) -> 
     for comparison in &report.comparisons {
         let severity = comparison.result.severity();
 
-        // Skip items below minimum severity unless verbose
-        if severity < min_severity && !verbose {
+        // Skip items below minimum severity unless is_verbose
+        if severity < min_severity && !is_verbose {
             continue;
         }
 
         match &comparison.result {
             ComparisonResult::Match => {
-                if verbose {
+                if is_verbose {
                     output.push_str(&format!("  {} {}\n", "OK:".green(), comparison.function_name));
                 }
             }
             ComparisonResult::SkippedExternalBody => {
-                if verbose {
+                if is_verbose {
                     output.push_str(&format!("  {} {} (external_body)\n", "SKIP:".yellow(), comparison.function_name));
                 }
             }
             ComparisonResult::SignatureDrift { production, verus } => {
                 has_issues = true;
                 output.push_str(&format!("  {} {} - signature mismatch\n", "DRIFT:".red(), comparison.function_name));
-                if verbose {
+                if is_verbose {
                     output.push_str(&format!("    Production: {:?}\n", production.params));
                     output.push_str(&format!("    Verus:      {:?}\n", verus.params));
                 }
@@ -63,7 +63,7 @@ fn render_crate(report: &CrateReport, verbose: bool, min_severity: Severity) -> 
             } => {
                 has_issues = true;
                 output.push_str(&format!("  {} {} - body mismatch\n", "DRIFT:".red(), comparison.function_name));
-                if verbose {
+                if is_verbose {
                     output.push_str("    Diff:\n");
                     for line in diff.lines() {
                         let colored_line = if line.starts_with('-') {
@@ -83,7 +83,7 @@ fn render_crate(report: &CrateReport, verbose: bool, min_severity: Severity) -> 
             } => {
                 has_issues = true;
                 output.push_str(&format!("  {} {} - missing from src/verified/\n", "MISSING:".red(), verus_function));
-                if verbose {
+                if is_verbose {
                     output.push_str(&format!("    Defined in: {}\n", verus_file.display()));
                 }
             }
@@ -92,7 +92,7 @@ fn render_crate(report: &CrateReport, verbose: bool, min_severity: Severity) -> 
                 production_file: _,
             } => {
                 // This is informational, not an error
-                if verbose || min_severity == Severity::Info {
+                if is_verbose || min_severity == Severity::Info {
                     output.push_str(&format!(
                         "  {} {} - no Verus spec (may be intentional)\n",
                         "INFO:".blue(),

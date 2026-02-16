@@ -68,7 +68,7 @@ impl RequestHandler for CiHandler {
             #[cfg(not(all(feature = "forge", feature = "blob")))]
             ClientRpcRequest::CiTriggerPipeline { .. } => {
                 Ok(ClientRpcResponse::CiTriggerPipelineResult(aspen_client_api::CiTriggerPipelineResponse {
-                    success: false,
+                    is_success: false,
                     run_id: None,
                     error: Some("CI trigger requires forge and blob features".to_string()),
                 }))
@@ -90,7 +90,7 @@ impl RequestHandler for CiHandler {
             #[cfg(not(feature = "forge"))]
             ClientRpcRequest::CiWatchRepo { .. } => {
                 Ok(ClientRpcResponse::CiWatchRepoResult(aspen_client_api::CiWatchRepoResponse {
-                    success: false,
+                    is_success: false,
                     error: Some("CI watch requires forge feature".to_string()),
                 }))
             }
@@ -99,7 +99,7 @@ impl RequestHandler for CiHandler {
             #[cfg(not(feature = "forge"))]
             ClientRpcRequest::CiUnwatchRepo { .. } => {
                 Ok(ClientRpcResponse::CiUnwatchRepoResult(aspen_client_api::CiUnwatchRepoResponse {
-                    success: false,
+                    is_success: false,
                     error: Some("CI unwatch requires forge feature".to_string()),
                 }))
             }

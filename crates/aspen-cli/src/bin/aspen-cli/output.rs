@@ -172,14 +172,14 @@ impl Outputable for ClusterStateOutput {
 pub struct KvReadOutput {
     pub key: String,
     pub value: Option<Vec<u8>>,
-    pub exists: bool,
+    pub does_exist: bool,
 }
 
 impl Outputable for KvReadOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "key": self.key,
-            "exists": self.exists,
+            "does_exist": self.does_exist,
             "value": self.value.as_ref().map(|v| {
                 // Try to decode as UTF-8, fall back to base64
                 String::from_utf8(v.clone())
@@ -190,7 +190,7 @@ impl Outputable for KvReadOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.exists {
+        if !self.does_exist {
             return format!("Key '{}' not found", self.key);
         }
 
@@ -279,7 +279,7 @@ impl Outputable for KvBatchReadOutput {
             .map(|(key, value)| {
                 serde_json::json!({
                     "key": key,
-                    "exists": value.is_some(),
+                    "does_exist": value.is_some(),
                     "value": value.as_ref().map(|v| {
                         String::from_utf8(v.clone())
                             .map(serde_json::Value::String)
@@ -326,20 +326,20 @@ impl Outputable for KvBatchReadOutput {
 
 /// Batch write result output.
 pub struct KvBatchWriteOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub operations_applied: u32,
 }
 
 impl Outputable for KvBatchWriteOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "operations_applied": self.operations_applied
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!("OK: {} operation(s) applied", self.operations_applied)
         } else {
             "Batch write failed".to_string()

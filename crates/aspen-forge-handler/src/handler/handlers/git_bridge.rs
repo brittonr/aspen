@@ -86,7 +86,7 @@ pub(crate) async fn handle_git_bridge_list_refs(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::GitBridgeListRefs(GitBridgeListRefsResponse {
-                success: false,
+                is_success: false,
                 refs: vec![],
                 head: None,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -124,14 +124,14 @@ pub(crate) async fn handle_git_bridge_list_refs(
                 .map(|(name, _)| format!("refs/{}", name));
 
             Ok(ClientRpcResponse::GitBridgeListRefs(GitBridgeListRefsResponse {
-                success: true,
+                is_success: true,
                 refs,
                 head,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::GitBridgeListRefs(GitBridgeListRefsResponse {
-            success: false,
+            is_success: false,
             refs: vec![],
             head: None,
             error: Some(e.to_string()),
@@ -157,7 +157,7 @@ pub(crate) async fn handle_git_bridge_fetch(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
-                success: false,
+                is_success: false,
                 objects: vec![],
                 skipped: 0,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -171,7 +171,7 @@ pub(crate) async fn handle_git_bridge_fetch(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
-                success: false,
+                is_success: false,
                 objects: vec![],
                 skipped: 0,
                 error: Some(format!("Invalid want hash: {}", e)),
@@ -184,7 +184,7 @@ pub(crate) async fn handle_git_bridge_fetch(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
-                success: false,
+                is_success: false,
                 objects: vec![],
                 skipped: 0,
                 error: Some(format!("Invalid have hash: {}", e)),
@@ -223,7 +223,7 @@ pub(crate) async fn handle_git_bridge_fetch(
                 }
                 Err(e) => {
                     return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
-                        success: false,
+                        is_success: false,
                         objects: vec![],
                         skipped: 0,
                         error: Some(e.to_string()),
@@ -234,7 +234,7 @@ pub(crate) async fn handle_git_bridge_fetch(
     }
 
     Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
-        success: true,
+        is_success: true,
         objects,
         skipped,
         error: None,
@@ -260,7 +260,7 @@ pub(crate) async fn handle_git_bridge_push(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
-                success: false,
+                is_success: false,
                 objects_imported: 0,
                 objects_skipped: 0,
                 ref_results: vec![],
@@ -306,7 +306,7 @@ pub(crate) async fn handle_git_bridge_push(
         Ok(result) => (result.objects_imported as u32, result.objects_skipped as u32),
         Err(e) => {
             return Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
-                success: false,
+                is_success: false,
                 objects_imported: 0,
                 objects_skipped: 0,
                 ref_results: vec![],
@@ -324,7 +324,7 @@ pub(crate) async fn handle_git_bridge_push(
             Err(e) => {
                 ref_results.push(GitBridgeRefResult {
                     ref_name: ref_update.ref_name.clone(),
-                    success: false,
+                    is_success: false,
                     error: Some(format!("Invalid SHA-1: {}", e)),
                 });
                 continue;
@@ -337,7 +337,7 @@ pub(crate) async fn handle_git_bridge_push(
             Ok(None) => {
                 ref_results.push(GitBridgeRefResult {
                     ref_name: ref_update.ref_name.clone(),
-                    success: false,
+                    is_success: false,
                     error: Some("Object not found in mapping".to_string()),
                 });
                 continue;
@@ -345,7 +345,7 @@ pub(crate) async fn handle_git_bridge_push(
             Err(e) => {
                 ref_results.push(GitBridgeRefResult {
                     ref_name: ref_update.ref_name.clone(),
-                    success: false,
+                    is_success: false,
                     error: Some(e.to_string()),
                 });
                 continue;
@@ -359,23 +359,23 @@ pub(crate) async fn handle_git_bridge_push(
             Ok(()) => {
                 ref_results.push(GitBridgeRefResult {
                     ref_name: ref_update.ref_name.clone(),
-                    success: true,
+                    is_success: true,
                     error: None,
                 });
             }
             Err(e) => {
                 ref_results.push(GitBridgeRefResult {
                     ref_name: ref_update.ref_name.clone(),
-                    success: false,
+                    is_success: false,
                     error: Some(e.to_string()),
                 });
             }
         }
     }
 
-    let all_success = ref_results.iter().all(|r| r.success);
+    let all_success = ref_results.iter().all(|r| r.is_success);
     Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
-        success: all_success,
+        is_success: all_success,
         objects_imported,
         objects_skipped,
         ref_results,
@@ -404,7 +404,7 @@ pub(crate) async fn handle_git_bridge_push_start(
         return Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
             session_id: session_id.clone(),
             max_chunk_size: DEFAULT_GIT_CHUNK_SIZE,
-            success: false,
+            is_success: false,
             error: Some("Too many objects - maximum 100,000 allowed".to_string()),
         }));
     }
@@ -414,7 +414,7 @@ pub(crate) async fn handle_git_bridge_push_start(
         return Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
             session_id: session_id.clone(),
             max_chunk_size: DEFAULT_GIT_CHUNK_SIZE,
-            success: false,
+            is_success: false,
             error: Some("Push too large - maximum 1GB allowed".to_string()),
         }));
     }
@@ -451,7 +451,7 @@ pub(crate) async fn handle_git_bridge_push_start(
         return Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
             session_id,
             max_chunk_size: DEFAULT_GIT_CHUNK_SIZE,
-            success: false,
+            is_success: false,
             error: Some("Too many concurrent push sessions - try again later".to_string()),
         }));
     }
@@ -461,7 +461,7 @@ pub(crate) async fn handle_git_bridge_push_start(
     Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
         session_id,
         max_chunk_size: DEFAULT_GIT_CHUNK_SIZE,
-        success: true,
+        is_success: true,
         error: None,
     }))
 }
@@ -497,7 +497,7 @@ pub(crate) async fn handle_git_bridge_push_chunk(
         return Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
             session_id,
             chunk_id,
-            success: false,
+            is_success: false,
             error: Some("Chunk integrity check failed - hash mismatch".to_string()),
         }));
     }
@@ -521,7 +521,7 @@ pub(crate) async fn handle_git_bridge_push_chunk(
             return Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
                 session_id,
                 chunk_id,
-                success: false,
+                is_success: false,
                 error: Some("Session not found or expired".to_string()),
             }));
         }
@@ -534,7 +534,7 @@ pub(crate) async fn handle_git_bridge_push_chunk(
         return Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
             session_id: sid,
             chunk_id,
-            success: false,
+            is_success: false,
             error: Some("Session expired".to_string()),
         }));
     }
@@ -545,7 +545,7 @@ pub(crate) async fn handle_git_bridge_push_chunk(
             return Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
                 session_id,
                 chunk_id,
-                success: false,
+                is_success: false,
                 error: Some("Inconsistent total_chunks value".to_string()),
             }));
         }
@@ -558,7 +558,7 @@ pub(crate) async fn handle_git_bridge_push_chunk(
         return Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
             session_id,
             chunk_id,
-            success: false,
+            is_success: false,
             error: Some("Duplicate chunk received".to_string()),
         }));
     }
@@ -570,7 +570,7 @@ pub(crate) async fn handle_git_bridge_push_chunk(
     Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
         session_id,
         chunk_id,
-        success: true,
+        is_success: true,
         error: None,
     }))
 }
@@ -599,7 +599,7 @@ pub(crate) async fn handle_git_bridge_push_complete(
             None => {
                 return Ok(ClientRpcResponse::GitBridgePushComplete(GitBridgePushCompleteResponse {
                     session_id,
-                    success: false,
+                    is_success: false,
                     objects_imported: 0,
                     objects_skipped: 0,
                     ref_results: vec![],
@@ -614,7 +614,7 @@ pub(crate) async fn handle_git_bridge_push_complete(
     if session.chunks_received.len() as u64 != total_chunks {
         return Ok(ClientRpcResponse::GitBridgePushComplete(GitBridgePushCompleteResponse {
             session_id,
-            success: false,
+            is_success: false,
             objects_imported: 0,
             objects_skipped: 0,
             ref_results: vec![],
@@ -639,7 +639,7 @@ pub(crate) async fn handle_git_bridge_push_complete(
         );
         return Ok(ClientRpcResponse::GitBridgePushComplete(GitBridgePushCompleteResponse {
             session_id,
-            success: false,
+            is_success: false,
             objects_imported: 0,
             objects_skipped: 0,
             ref_results: vec![],
@@ -663,7 +663,7 @@ pub(crate) async fn handle_git_bridge_push_complete(
         ClientRpcResponse::GitBridgePush(resp) => {
             Ok(ClientRpcResponse::GitBridgePushComplete(GitBridgePushCompleteResponse {
                 session_id,
-                success: resp.success,
+                is_success: resp.is_success,
                 objects_imported: resp.objects_imported,
                 objects_skipped: resp.objects_skipped,
                 ref_results: resp.ref_results,
@@ -672,7 +672,7 @@ pub(crate) async fn handle_git_bridge_push_complete(
         }
         _ => Ok(ClientRpcResponse::GitBridgePushComplete(GitBridgePushCompleteResponse {
             session_id,
-            success: false,
+            is_success: false,
             objects_imported: 0,
             objects_skipped: 0,
             ref_results: vec![],

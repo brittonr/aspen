@@ -9,7 +9,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobSubmitResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Job ID assigned to the submitted job.
     pub job_id: Option<String>,
     /// Error message if the operation failed.
@@ -55,7 +55,7 @@ pub struct JobDetails {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobGetResultResponse {
     /// Whether the job was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Job details if found.
     pub job: Option<JobDetails>,
     /// Error message if the operation failed.
@@ -79,7 +79,7 @@ pub struct JobListResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobCancelResultResponse {
     /// Whether the cancellation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Previous status of the job.
     pub previous_status: Option<String>,
     /// Error message if the operation failed.
@@ -90,7 +90,7 @@ pub struct JobCancelResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobUpdateProgressResultResponse {
     /// Whether the update succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -184,7 +184,7 @@ pub struct WorkerStatusResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerRegisterResultResponse {
     /// Whether registration succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Assigned worker token for authentication.
     pub worker_token: Option<String>,
     /// Error message if the operation failed.
@@ -195,7 +195,7 @@ pub struct WorkerRegisterResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerHeartbeatResultResponse {
     /// Whether heartbeat was accepted.
-    pub success: bool,
+    pub is_success: bool,
     /// Jobs to dequeue (job IDs).
     pub jobs_to_process: Vec<String>,
     /// Error message if the operation failed.
@@ -206,7 +206,7 @@ pub struct WorkerHeartbeatResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerDeregisterResultResponse {
     /// Whether deregistration succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -240,7 +240,7 @@ pub struct WorkerJobInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerPollJobsResultResponse {
     /// Whether polling was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Worker ID that polled for jobs.
     pub worker_id: String,
     /// Jobs assigned to this worker.
@@ -253,7 +253,7 @@ pub struct WorkerPollJobsResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerCompleteJobResultResponse {
     /// Whether the job completion was recorded successfully.
-    pub success: bool,
+    pub is_success: bool,
     /// Worker ID that completed the job.
     pub worker_id: String,
     /// Job ID that was completed.

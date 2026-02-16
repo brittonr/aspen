@@ -54,7 +54,7 @@ pub(crate) async fn handle_get_job_logs(
         Err(e) => {
             warn!(run_id = %run_id, job_id = %job_id, error = %e, "failed to scan job logs");
             return Ok(ClientRpcResponse::CiGetJobLogsResult(CiGetJobLogsResponse {
-                found: false,
+                was_found: false,
                 chunks: vec![],
                 last_index: 0,
                 has_more: false,
@@ -82,7 +82,7 @@ pub(crate) async fn handle_get_job_logs(
         {
             // No logs exist for this job
             return Ok(ClientRpcResponse::CiGetJobLogsResult(CiGetJobLogsResponse {
-                found: false,
+                was_found: false,
                 chunks: vec![],
                 last_index: 0,
                 has_more: false,
@@ -151,7 +151,7 @@ pub(crate) async fn handle_get_job_logs(
     );
 
     Ok(ClientRpcResponse::CiGetJobLogsResult(CiGetJobLogsResponse {
-        found: true,
+        was_found: true,
         chunks,
         last_index,
         has_more,
@@ -220,7 +220,7 @@ pub(crate) async fn handle_subscribe_logs(
 
     // Check if the job exists at all
     let check_prefix = format!("{}{}:{}:", CI_LOG_KV_PREFIX, run_id, job_id);
-    let found = match ctx
+    let was_found = match ctx
         .kv_store
         .scan(ScanRequest {
             prefix: check_prefix,
@@ -239,12 +239,12 @@ pub(crate) async fn handle_subscribe_logs(
         watch_prefix = %watch_prefix,
         current_index = current_index,
         is_running = is_running,
-        found = found,
+        was_found = was_found,
         "CI log subscription info prepared"
     );
 
     Ok(ClientRpcResponse::CiSubscribeLogsResult(CiSubscribeLogsResponse {
-        found,
+        was_found,
         watch_prefix,
         current_index,
         is_running,
@@ -278,7 +278,7 @@ pub(crate) async fn handle_get_job_output(
             Some(kv) => kv.value,
             None => {
                 return Ok(ClientRpcResponse::CiGetJobOutputResult(CiGetJobOutputResponse {
-                    found: false,
+                    was_found: false,
                     stdout: None,
                     stderr: None,
                     stdout_was_blob: false,
@@ -291,7 +291,7 @@ pub(crate) async fn handle_get_job_output(
         },
         Err(e) => {
             return Ok(ClientRpcResponse::CiGetJobOutputResult(CiGetJobOutputResponse {
-                found: false,
+                was_found: false,
                 stdout: None,
                 stderr: None,
                 stdout_was_blob: false,
@@ -308,7 +308,7 @@ pub(crate) async fn handle_get_job_output(
         Ok(v) => v,
         Err(e) => {
             return Ok(ClientRpcResponse::CiGetJobOutputResult(CiGetJobOutputResponse {
-                found: false,
+                was_found: false,
                 stdout: None,
                 stderr: None,
                 stdout_was_blob: false,
@@ -338,7 +338,7 @@ pub(crate) async fn handle_get_job_output(
                 format!("Job {} not completed successfully (status: {})", job_id, status)
             };
             return Ok(ClientRpcResponse::CiGetJobOutputResult(CiGetJobOutputResponse {
-                found: false,
+                was_found: false,
                 stdout: None,
                 stderr: None,
                 stdout_was_blob: false,
@@ -417,7 +417,7 @@ pub(crate) async fn handle_get_job_output(
     );
 
     Ok(ClientRpcResponse::CiGetJobOutputResult(CiGetJobOutputResponse {
-        found: true,
+        was_found: true,
         stdout,
         stderr,
         stdout_was_blob,

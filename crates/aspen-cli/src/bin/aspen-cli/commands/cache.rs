@@ -48,7 +48,7 @@ pub struct DownloadArgs {
 
 /// Cache query output.
 pub struct CacheQueryOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub store_path: Option<String>,
     pub store_hash: Option<String>,
     pub blob_hash: Option<String>,
@@ -62,7 +62,7 @@ pub struct CacheQueryOutput {
 impl Outputable for CacheQueryOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "store_path": self.store_path,
             "store_hash": self.store_hash,
             "blob_hash": self.blob_hash,
@@ -75,7 +75,7 @@ impl Outputable for CacheQueryOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.found {
+        if !self.was_found {
             return format!(
                 "Store path not found in cache{}",
                 self.error.as_ref().map(|e| format!(": {}", e)).unwrap_or_default()
@@ -167,7 +167,7 @@ impl Outputable for CacheStatsOutput {
 
 /// Cache download output.
 pub struct CacheDownloadOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub blob_ticket: Option<String>,
     pub blob_hash: Option<String>,
     pub nar_size: Option<u64>,
@@ -177,7 +177,7 @@ pub struct CacheDownloadOutput {
 impl Outputable for CacheDownloadOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "blob_ticket": self.blob_ticket,
             "blob_hash": self.blob_hash,
             "nar_size": self.nar_size,
@@ -186,7 +186,7 @@ impl Outputable for CacheDownloadOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.found {
+        if !self.was_found {
             return "Store path not found in cache".to_string();
         }
 
@@ -228,7 +228,7 @@ async fn cache_query(client: &AspenClient, args: QueryArgs, json: bool) -> Resul
     match response {
         ClientRpcResponse::CacheQueryResult(result) => {
             let output = CacheQueryOutput {
-                found: result.found,
+                was_found: result.found,
                 store_path: result.entry.as_ref().map(|e| e.store_path.clone()),
                 store_hash: result.entry.as_ref().map(|e| e.store_hash.clone()),
                 blob_hash: result.entry.as_ref().map(|e| e.blob_hash.clone()),
@@ -288,7 +288,7 @@ async fn cache_download(client: &AspenClient, args: DownloadArgs, json: bool) ->
             }
 
             let output = CacheDownloadOutput {
-                found: result.found,
+                was_found: result.found,
                 blob_ticket: result.blob_ticket,
                 blob_hash: result.blob_hash,
                 nar_size: result.nar_size,

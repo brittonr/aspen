@@ -82,14 +82,14 @@ impl<C: CoordinationRpc> RWLockClient<C> {
 
         match response {
             ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
-                success,
+                is_success,
                 fencing_token,
                 deadline_ms,
                 reader_count,
                 error,
                 ..
             }) => {
-                if success {
+                if is_success {
                     Ok(RWLockReadResult {
                         fencing_token: fencing_token.unwrap_or(0),
                         deadline_ms: deadline_ms.unwrap_or(0),
@@ -127,14 +127,14 @@ impl<C: CoordinationRpc> RWLockClient<C> {
 
         match response {
             ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
-                success,
+                is_success,
                 fencing_token,
                 deadline_ms,
                 reader_count,
                 error,
                 ..
             }) => {
-                if success {
+                if is_success {
                     Ok(Some(RWLockReadResult {
                         fencing_token: fencing_token.unwrap_or(0),
                         deadline_ms: deadline_ms.unwrap_or(0),
@@ -178,13 +178,13 @@ impl<C: CoordinationRpc> RWLockClient<C> {
 
         match response {
             ClientRpcResponse::RWLockAcquireWriteResult(RWLockResultResponse {
-                success,
+                is_success,
                 fencing_token,
                 deadline_ms,
                 error,
                 ..
             }) => {
-                if success {
+                if is_success {
                     Ok(RWLockWriteResult {
                         fencing_token: fencing_token.unwrap_or(0),
                         deadline_ms: deadline_ms.unwrap_or(0),
@@ -221,13 +221,13 @@ impl<C: CoordinationRpc> RWLockClient<C> {
 
         match response {
             ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
-                success,
+                is_success,
                 fencing_token,
                 deadline_ms,
                 error,
                 ..
             }) => {
-                if success {
+                if is_success {
                     Ok(Some(RWLockWriteResult {
                         fencing_token: fencing_token.unwrap_or(0),
                         deadline_ms: deadline_ms.unwrap_or(0),
@@ -255,8 +255,8 @@ impl<C: CoordinationRpc> RWLockClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse { success, error, .. }) => {
-                if success {
+            ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse { is_success, error, .. }) => {
+                if is_success {
                     Ok(())
                 } else {
                     bail!("release_read failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
@@ -282,8 +282,8 @@ impl<C: CoordinationRpc> RWLockClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse { success, error, .. }) => {
-                if success {
+            ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse { is_success, error, .. }) => {
+                if is_success {
                     Ok(())
                 } else {
                     bail!("release_write failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
@@ -320,14 +320,14 @@ impl<C: CoordinationRpc> RWLockClient<C> {
 
         match response {
             ClientRpcResponse::RWLockDowngradeResult(RWLockResultResponse {
-                success,
+                is_success,
                 fencing_token: new_token,
                 deadline_ms,
                 reader_count,
                 error,
                 ..
             }) => {
-                if success {
+                if is_success {
                     Ok(RWLockReadResult {
                         fencing_token: new_token.unwrap_or(fencing_token),
                         deadline_ms: deadline_ms.unwrap_or(0),
@@ -352,7 +352,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
 
         match response {
             ClientRpcResponse::RWLockStatusResult(RWLockResultResponse {
-                success,
+                is_success,
                 mode,
                 fencing_token,
                 reader_count,
@@ -360,7 +360,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
                 error,
                 ..
             }) => {
-                if success {
+                if is_success {
                     Ok(RWLockStatusResult {
                         mode: mode.unwrap_or_else(|| "free".to_string()),
                         fencing_token: fencing_token.unwrap_or(0),

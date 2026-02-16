@@ -60,7 +60,7 @@ fn draw_sql_editor(frame: &mut Frame, app: &App, area: Rect) {
 /// Draw SQL results table.
 fn draw_sql_results(frame: &mut Frame, app: &App, area: Rect) {
     if let Some(result) = &app.sql_state.last_result {
-        if !result.success {
+        if !result.is_success {
             let error_msg = result.error.as_deref().unwrap_or("Unknown error");
             let paragraph = Paragraph::new(error_msg)
                 .style(Style::default().fg(Color::Red))
@@ -133,7 +133,7 @@ fn draw_sql_results(frame: &mut Frame, app: &App, area: Rect) {
 /// Draw SQL info bar with execution stats.
 fn draw_sql_info_bar(frame: &mut Frame, app: &App, area: Rect) {
     let info = if let Some(result) = &app.sql_state.last_result {
-        if result.success {
+        if result.is_success {
             let truncated = if result.is_truncated { "Yes" } else { "No" };
             format!(
                 " Rows: {} | Time: {}ms | Truncated: {} | Consistency: {} ",

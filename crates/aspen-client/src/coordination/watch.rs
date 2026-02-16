@@ -43,8 +43,13 @@ impl<C: CoordinationRpc> WatchClient<C> {
     /// # Arguments
     /// * `prefix` - Key prefix to watch (empty string watches all keys)
     /// * `start_index` - Starting log index (0 = from beginning, u64::MAX = latest only)
-    /// * `include_prev_value` - Include previous value in events
-    pub async fn create(&self, prefix: String, start_index: u64, include_prev_value: bool) -> Result<WatchHandle> {
+    /// * `should_include_prev_value` - Include previous value in events
+    pub async fn create(
+        &self,
+        prefix: String,
+        start_index: u64,
+        should_include_prev_value: bool,
+    ) -> Result<WatchHandle> {
         use aspen_client_api::WatchCreateResultResponse;
 
         let response = self
@@ -52,18 +57,18 @@ impl<C: CoordinationRpc> WatchClient<C> {
             .send_coordination_request(ClientRpcRequest::WatchCreate {
                 prefix,
                 start_index,
-                include_prev_value,
+                should_include_prev_value,
             })
             .await?;
 
         match response {
             ClientRpcResponse::WatchCreateResult(WatchCreateResultResponse {
-                success,
+                is_success,
                 watch_id,
                 current_index,
                 error,
             }) => {
-                if success {
+                if is_success {
                     Ok(WatchHandle {
                         watch_id: watch_id.unwrap_or(0),
                         current_index: current_index.unwrap_or(0),
@@ -86,8 +91,8 @@ impl<C: CoordinationRpc> WatchClient<C> {
         let response = self.client.send_coordination_request(ClientRpcRequest::WatchCancel { watch_id }).await?;
 
         match response {
-            ClientRpcResponse::WatchCancelResult(WatchCancelResultResponse { success, error, .. }) => {
-                if success {
+            ClientRpcResponse::WatchCancelResult(WatchCancelResultResponse { is_success, error, .. }) => {
+                if is_success {
                     Ok(())
                 } else {
                     bail!("watch cancel failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
@@ -108,11 +113,11 @@ impl<C: CoordinationRpc> WatchClient<C> {
 
         match response {
             ClientRpcResponse::WatchStatusResult(WatchStatusResultResponse {
-                success,
+                is_success,
                 watches,
                 error,
             }) => {
-                if success {
+                if is_success {
                     Ok(watches
                         .unwrap_or_default()
                         .into_iter()
@@ -122,7 +127,7 @@ impl<C: CoordinationRpc> WatchClient<C> {
                             last_sent_index: w.last_sent_index,
                             events_sent: w.events_sent,
                             created_at_ms: w.created_at_ms,
-                            include_prev_value: w.include_prev_value,
+                            should_include_prev_value: w.should_include_prev_value,
                         })
                         .collect())
                 } else {
@@ -157,5 +162,5 @@ pub struct WatchInfoLocal {
     /// Watch creation timestamp (ms since epoch).
     pub created_at_ms: u64,
     /// Whether the watch includes previous values.
-    pub include_prev_value: bool,
+    pub should_include_prev_value: bool,
 }

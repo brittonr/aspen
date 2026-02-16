@@ -67,7 +67,7 @@ async fn handle_watch_create() -> anyhow::Result<ClientRpcResponse> {
     // The ClientRpcRequest::WatchCreate is for documentation completeness,
     // but actual watch functionality is handled by LogSubscriberProtocolHandler.
     Ok(ClientRpcResponse::WatchCreateResult(WatchCreateResultResponse {
-        success: false,
+        is_success: false,
         watch_id: None,
         current_index: None,
         error: Some(
@@ -82,7 +82,7 @@ async fn handle_watch_create() -> anyhow::Result<ClientRpcResponse> {
 async fn handle_watch_cancel(watch_id: u64) -> anyhow::Result<ClientRpcResponse> {
     // Same as WatchCreate - streaming protocol required
     Ok(ClientRpcResponse::WatchCancelResult(WatchCancelResultResponse {
-        success: false,
+        is_success: false,
         watch_id,
         error: Some(
             "Watch operations require the streaming protocol. \
@@ -104,7 +104,7 @@ async fn handle_watch_status(watch_id: Option<u64>, ctx: &ClientProtocolContext)
                     last_sent_index: info.last_sent_index,
                     events_sent: info.events_sent,
                     created_at_ms: info.created_at_ms,
-                    include_prev_value: info.include_prev_value,
+                    should_include_prev_value: info.should_include_prev_value,
                 }],
                 None => vec![],
             }
@@ -120,13 +120,13 @@ async fn handle_watch_status(watch_id: Option<u64>, ctx: &ClientProtocolContext)
                     last_sent_index: info.last_sent_index,
                     events_sent: info.events_sent,
                     created_at_ms: info.created_at_ms,
-                    include_prev_value: info.include_prev_value,
+                    should_include_prev_value: info.should_include_prev_value,
                 })
                 .collect()
         };
 
         return Ok(ClientRpcResponse::WatchStatusResult(WatchStatusResultResponse {
-            success: true,
+            is_success: true,
             watches: Some(watches),
             error: None,
         }));
@@ -134,7 +134,7 @@ async fn handle_watch_status(watch_id: Option<u64>, ctx: &ClientProtocolContext)
 
     // No watch registry configured - return informative message
     Ok(ClientRpcResponse::WatchStatusResult(WatchStatusResultResponse {
-        success: true,
+        is_success: true,
         watches: Some(vec![]),
         error: Some(
             "Watch registry not configured. Watches are created via the streaming \
@@ -154,7 +154,7 @@ mod tests {
         assert!(handler.can_handle(&ClientRpcRequest::WatchCreate {
             prefix: "test:".to_string(),
             start_index: 0,
-            include_prev_value: false,
+            should_include_prev_value: false,
         }));
     }
 

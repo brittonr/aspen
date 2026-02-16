@@ -45,7 +45,7 @@ pub struct WriteResult {
     /// The subscription that handled the write.
     pub source: String,
     /// Whether the write was successful.
-    pub success: bool,
+    pub is_success: bool,
 }
 
 /// Errors that can occur during overlay operations.
@@ -257,14 +257,14 @@ impl ClientOverlay {
         let sub_id = write_sub.id.clone();
 
         // Perform write
-        let success = if let Some(handler) = &self.write_handler {
+        let is_success = if let Some(handler) = &self.write_handler {
             handler(&sub_id, key, value)
         } else {
             warn!(subscription = %sub_id, "no write handler configured");
             false
         };
 
-        if success {
+        if is_success {
             // Invalidate cache for this key across all subscriptions
             let caches = self.caches.read().await;
             for cache in caches.values() {
@@ -274,7 +274,7 @@ impl ClientOverlay {
 
         Ok(WriteResult {
             source: sub_id,
-            success,
+            is_success,
         })
     }
 
@@ -453,7 +453,7 @@ mod tests {
         // Write should go to readwrite subscription (first with write access)
         let result = overlay.write("key1", "value1").await.unwrap();
         assert_eq!(result.source, "readwrite");
-        assert!(result.success);
+        assert!(result.is_success);
 
         let recorded = writes.lock().unwrap();
         assert_eq!(recorded.len(), 1);

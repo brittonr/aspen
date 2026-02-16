@@ -129,7 +129,7 @@ pub struct JobInput {
 #[derive(Debug, Serialize)]
 pub struct JobOutput {
     /// Indicates if the job succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Result data.
     pub data: serde_json::Value,
     /// Optional error message.
@@ -140,7 +140,7 @@ impl JobOutput {
     /// Create a successful output.
     pub fn success(data: serde_json::Value) -> Self {
         Self {
-            success: true,
+            is_success: true,
             data,
             error: None,
         }
@@ -149,7 +149,7 @@ impl JobOutput {
     /// Create a failure output.
     pub fn failure(error: String) -> Self {
         Self {
-            success: false,
+            is_success: false,
             data: serde_json::Value::Null,
             error: Some(error),
         }

@@ -172,12 +172,12 @@ impl BlobService for RpcBlobService {
         let response = self.send_rpc(request).await?;
 
         match response {
-            ClientRpcResponse::HasBlobResult(HasBlobResultResponse { exists, error }) => {
+            ClientRpcResponse::HasBlobResult(HasBlobResultResponse { does_exist, error }) => {
                 if let Some(err) = error {
                     return Err(io::Error::other(format!("RPC error: {}", err)));
                 }
-                debug!(hash = %hash_hex, exists, "blob has check completed");
-                Ok(exists)
+                debug!(hash = %hash_hex, does_exist, "blob has check completed");
+                Ok(does_exist)
             }
             ClientRpcResponse::Error(err) => Err(io::Error::other(format!("RPC error: {}", err.message))),
             other => Err(io::Error::other(format!("unexpected RPC response: {:?}", other))),
@@ -193,12 +193,14 @@ impl BlobService for RpcBlobService {
         let response = self.send_rpc(request).await?;
 
         match response {
-            ClientRpcResponse::GetBlobResult(GetBlobResultResponse { found, data, error, .. }) => {
+            ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+                was_found, data, error, ..
+            }) => {
                 if let Some(err) = error {
                     return Err(io::Error::other(format!("RPC error: {}", err)));
                 }
 
-                if !found {
+                if !was_found {
                     debug!(hash = %hash_hex, "blob not found");
                     return Ok(None);
                 }

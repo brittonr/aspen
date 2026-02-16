@@ -160,7 +160,7 @@ pub trait ClusterClient: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct CiJobLogsResult {
     /// Whether the job was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Log chunks in order.
     pub chunks: Vec<CiLogChunkResult>,
     /// Index of the last chunk returned.
@@ -425,7 +425,7 @@ impl ClusterClient for ClientImpl {
         match self {
             Self::Iroh(client) => {
                 let result = client.init_cluster().await.map_err(anyhow_to_eyre)?;
-                if !result.success {
+                if !result.is_success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to initialize cluster: {}", error));
                     } else {
@@ -436,7 +436,7 @@ impl ClusterClient for ClientImpl {
             }
             Self::MultiNode(client) => {
                 let result = client.init_cluster().await.map_err(anyhow_to_eyre)?;
-                if !result.success {
+                if !result.is_success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to initialize cluster: {}", error));
                     } else {
@@ -453,7 +453,7 @@ impl ClusterClient for ClientImpl {
         match self {
             Self::Iroh(client) => {
                 let result = client.add_learner(node_id, addr).await.map_err(anyhow_to_eyre)?;
-                if !result.success {
+                if !result.is_success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to add learner: {}", error));
                     } else {
@@ -464,7 +464,7 @@ impl ClusterClient for ClientImpl {
             }
             Self::MultiNode(client) => {
                 let result = client.add_learner(node_id, addr).await.map_err(anyhow_to_eyre)?;
-                if !result.success {
+                if !result.is_success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to add learner: {}", error));
                     } else {
@@ -481,7 +481,7 @@ impl ClusterClient for ClientImpl {
         match self {
             Self::Iroh(client) => {
                 let result = client.change_membership(members).await.map_err(anyhow_to_eyre)?;
-                if !result.success {
+                if !result.is_success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to change membership: {}", error));
                     } else {
@@ -492,7 +492,7 @@ impl ClusterClient for ClientImpl {
             }
             Self::MultiNode(client) => {
                 let result = client.change_membership(members).await.map_err(anyhow_to_eyre)?;
-                if !result.success {
+                if !result.is_success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to change membership: {}", error));
                     } else {
@@ -509,7 +509,7 @@ impl ClusterClient for ClientImpl {
         match self {
             Self::Iroh(client) => {
                 let result = client.write_key(key, value).await.map_err(anyhow_to_eyre)?;
-                if !result.success {
+                if !result.is_success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to write key: {}", error));
                     } else {
@@ -520,7 +520,7 @@ impl ClusterClient for ClientImpl {
             }
             Self::MultiNode(client) => {
                 let result = client.write_key(key, value).await.map_err(anyhow_to_eyre)?;
-                if !result.success {
+                if !result.is_success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to write key: {}", error));
                     } else {
@@ -557,7 +557,7 @@ impl ClusterClient for ClientImpl {
         match self {
             Self::Iroh(client) => {
                 let result = client.trigger_snapshot().await.map_err(anyhow_to_eyre)?;
-                if !result.success {
+                if !result.is_success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to trigger snapshot: {}", error));
                     } else {
@@ -568,7 +568,7 @@ impl ClusterClient for ClientImpl {
             }
             Self::MultiNode(client) => {
                 let result = client.trigger_snapshot().await.map_err(anyhow_to_eyre)?;
-                if !result.success {
+                if !result.is_success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to trigger snapshot: {}", error));
                     } else {

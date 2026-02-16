@@ -113,7 +113,7 @@ impl<C: CoordinationRpc> CounterClient<C> {
     fn extract_value(response: ClientRpcResponse) -> Result<u64> {
         match response {
             ClientRpcResponse::CounterResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result.value.unwrap_or(0))
                 } else {
                     bail!("counter operation failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -165,7 +165,7 @@ impl<C: CoordinationRpc> SignedCounterClient<C> {
     fn extract_value(response: ClientRpcResponse) -> Result<i64> {
         match response {
             ClientRpcResponse::SignedCounterResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result.value.unwrap_or(0))
                 } else {
                     bail!(

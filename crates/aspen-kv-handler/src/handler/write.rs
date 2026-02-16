@@ -46,7 +46,7 @@ async fn handle_write_key(
     // Validate key against reserved _system: prefix
     if let Err(vault_err) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
-            success: false,
+            is_success: false,
             error: Some(vault_err.to_string()),
         }));
     }
@@ -62,7 +62,7 @@ async fn handle_write_key(
         .await;
 
     Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
-        success: result.is_ok(),
+        is_success: result.is_ok(),
         // HIGH-4: Sanitize error messages to prevent information leakage
         error: result.err().map(|e| sanitize_kv_error(&e)),
     }))
@@ -86,7 +86,7 @@ async fn handle_batch_write(
         };
         if let Err(e) = validate_client_key(key) {
             return Ok(ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
-                success: false,
+                is_success: false,
                 operations_applied: None,
                 error: Some(e.to_string()),
             }));
@@ -111,12 +111,12 @@ async fn handle_batch_write(
 
     match ctx.kv_store.write(request).await {
         Ok(result) => Ok(ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
-            success: true,
+            is_success: true,
             operations_applied: result.batch_applied,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
-            success: false,
+            is_success: false,
             operations_applied: None,
             error: Some(e.to_string()),
         })),

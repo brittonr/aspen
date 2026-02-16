@@ -85,14 +85,14 @@ async fn handle_nix_cache_create_key(
                             let public_key_b64 = base64::engine::general_purpose::STANDARD.encode(public_key_bytes);
                             let public_key = format!("{}:{}", cache_name, public_key_b64);
                             Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                                success: true,
+                                is_success: true,
                                 public_key: Some(public_key),
                                 error: None,
                             }))
                         } else {
                             let error = "Key does not have a public key (not an asymmetric key)".to_string();
                             Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                                success: false,
+                                is_success: false,
                                 public_key: None,
                                 error: Some(error),
                             }))
@@ -100,7 +100,7 @@ async fn handle_nix_cache_create_key(
                     } else {
                         let error = format!("Current version {} not found for key", transit_key.current_version);
                         Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                            success: false,
+                            is_success: false,
                             public_key: None,
                             error: Some(error),
                         }))
@@ -109,7 +109,7 @@ async fn handle_nix_cache_create_key(
                 Ok(None) => {
                     let error = "Key not found".to_string();
                     Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                        success: false,
+                        is_success: false,
                         public_key: None,
                         error: Some(error),
                     }))
@@ -117,7 +117,7 @@ async fn handle_nix_cache_create_key(
                 Err(e) => {
                     let error = format!("Failed to read public key: {}", sanitize_secrets_error(&e));
                     Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                        success: false,
+                        is_success: false,
                         public_key: None,
                         error: Some(error),
                     }))
@@ -127,7 +127,7 @@ async fn handle_nix_cache_create_key(
         Err(e) => {
             let error = format!("Failed to create key: {}", sanitize_secrets_error(&e));
             Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                success: false,
+                is_success: false,
                 public_key: None,
                 error: Some(error),
             }))
@@ -153,7 +153,7 @@ async fn handle_nix_cache_get_public_key(
                 if public_key.starts_with(&format!("{}:", cache_name)) {
                     debug!(cache_name = %cache_name, "Public key retrieved from KV store");
                     Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                        success: true,
+                        is_success: true,
                         public_key: Some(public_key),
                         error: None,
                     }))
@@ -196,14 +196,14 @@ async fn read_from_transit(
                     let public_key_b64 = base64::engine::general_purpose::STANDARD.encode(public_key_bytes);
                     let public_key = format!("{}:{}", cache_name, public_key_b64);
                     Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                        success: true,
+                        is_success: true,
                         public_key: Some(public_key),
                         error: None,
                     }))
                 } else {
                     let error = "Key does not have a public key (not an asymmetric key)".to_string();
                     Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                        success: false,
+                        is_success: false,
                         public_key: None,
                         error: Some(error),
                     }))
@@ -211,7 +211,7 @@ async fn read_from_transit(
             } else {
                 let error = format!("Current version {} not found for key", transit_key.current_version);
                 Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                    success: false,
+                    is_success: false,
                     public_key: None,
                     error: Some(error),
                 }))
@@ -220,7 +220,7 @@ async fn read_from_transit(
         Ok(None) => {
             let error = "Key not found".to_string();
             Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                success: false,
+                is_success: false,
                 public_key: None,
                 error: Some(error),
             }))
@@ -228,7 +228,7 @@ async fn read_from_transit(
         Err(e) => {
             let error = format!("Key not found or read failed: {}", sanitize_secrets_error(&e));
             Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                success: false,
+                is_success: false,
                 public_key: None,
                 error: Some(error),
             }))
@@ -255,14 +255,14 @@ async fn handle_nix_cache_rotate_key(
                             let public_key_b64 = base64::engine::general_purpose::STANDARD.encode(public_key_bytes);
                             let public_key = format!("{}:{}", cache_name, public_key_b64);
                             Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                                success: true,
+                                is_success: true,
                                 public_key: Some(public_key),
                                 error: None,
                             }))
                         } else {
                             let error = "Rotated key does not have a public key".to_string();
                             Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                                success: false,
+                                is_success: false,
                                 public_key: None,
                                 error: Some(error),
                             }))
@@ -270,7 +270,7 @@ async fn handle_nix_cache_rotate_key(
                     } else {
                         let error = format!("Rotated key version {} not found", transit_key.current_version);
                         Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                            success: false,
+                            is_success: false,
                             public_key: None,
                             error: Some(error),
                         }))
@@ -279,7 +279,7 @@ async fn handle_nix_cache_rotate_key(
                 Ok(None) => {
                     let error = "Rotated key not found".to_string();
                     Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                        success: false,
+                        is_success: false,
                         public_key: None,
                         error: Some(error),
                     }))
@@ -287,7 +287,7 @@ async fn handle_nix_cache_rotate_key(
                 Err(e) => {
                     let error = format!("Rotated key but failed to read public key: {}", sanitize_secrets_error(&e));
                     Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                        success: false,
+                        is_success: false,
                         public_key: None,
                         error: Some(error),
                     }))
@@ -297,7 +297,7 @@ async fn handle_nix_cache_rotate_key(
         Err(e) => {
             let error = format!("Failed to rotate key: {}", sanitize_secrets_error(&e));
             Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
-                success: false,
+                is_success: false,
                 public_key: None,
                 error: Some(error),
             }))
@@ -316,13 +316,13 @@ async fn handle_nix_cache_delete_key(
 
     match store.delete_key(&cache_name).await {
         Ok(_) => Ok(ClientRpcResponse::SecretsNixCacheDeleteResult(SecretsNixCacheDeleteResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => {
             let error = format!("Failed to delete key: {}", sanitize_secrets_error(&e));
             Ok(ClientRpcResponse::SecretsNixCacheDeleteResult(SecretsNixCacheDeleteResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(error),
             }))
         }
@@ -336,14 +336,14 @@ async fn handle_nix_cache_list_keys(service: &SecretsService, mount: &str) -> an
 
     match store.list_keys().await {
         Ok(keys) => Ok(ClientRpcResponse::SecretsNixCacheListResult(SecretsNixCacheListResultResponse {
-            success: true,
+            is_success: true,
             cache_names: Some(keys),
             error: None,
         })),
         Err(e) => {
             let error = format!("Failed to list keys: {}", sanitize_secrets_error(&e));
             Ok(ClientRpcResponse::SecretsNixCacheListResult(SecretsNixCacheListResultResponse {
-                success: false,
+                is_success: false,
                 cache_names: None,
                 error: Some(error),
             }))

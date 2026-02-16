@@ -258,7 +258,7 @@ pub struct PijulBlameResponse {
     /// List of changes that contributed to this file.
     pub attributions: Vec<PijulBlameEntry>,
     /// Whether the file currently exists in the channel.
-    pub file_exists: bool,
+    pub does_file_exist: bool,
 }
 
 /// A single attribution entry in blame output.

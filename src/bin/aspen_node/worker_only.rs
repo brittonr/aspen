@@ -227,7 +227,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
     // Create LocalExecutorWorker config with RPC-based SNIX services
     let worker_config = LocalExecutorWorkerConfig {
         workspace_dir: workspace_dir.clone(),
-        cleanup_workspaces: true,
+        should_cleanup_workspaces: true,
         snix_blob_service,
         snix_directory_service,
         snix_pathinfo_service,
@@ -256,7 +256,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
 
     match rpc_client.send(register_request).await {
         Ok(ClientRpcResponse::WorkerRegisterResult(result)) => {
-            if result.success {
+            if result.is_success {
                 info!(worker_id, "worker registered with cluster");
             } else {
                 warn!(worker_id, error = ?result.error, "worker registration failed");
@@ -300,13 +300,13 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                         Ok(ClientRpcResponse::WorkerPollJobsResult(result)) => {
                             debug!(
                                 worker_id = %worker_id_clone,
-                                success = result.success,
+                                is_success = result.is_success,
                                 jobs_count = result.jobs.len(),
                                 error = ?result.error,
                                 "poll result received"
                             );
 
-                            if !result.success {
+                            if !result.is_success {
                                 warn!(
                                     worker_id = %worker_id_clone,
                                     error = ?result.error,
@@ -338,7 +338,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                             job_id: job_info.job_id.clone(),
                                             receipt_handle: job_info.receipt_handle.clone(),
                                             execution_token: job_info.execution_token.clone(),
-                                            success: false,
+                                            is_success: false,
                                             error_message: Some(format!("Failed to parse job spec: {}", e)),
                                             output_data: None,
                                             processing_time_ms: 0,
@@ -379,7 +379,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                 let job_result = worker_for_executor.execute(job).await;
                                 let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
-                                let (success, error_message, output_data) = match &job_result {
+                                let (is_success, error_message, output_data) = match &job_result {
                                     aspen_jobs::JobResult::Success(output) => {
                                         let data = serde_json::to_vec(&output.data).ok();
                                         (true, None, data)
@@ -397,7 +397,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                     job_id: job_info.job_id.clone(),
                                     receipt_handle: job_info.receipt_handle,
                                     execution_token: job_info.execution_token,
-                                    success,
+                                    is_success,
                                     error_message,
                                     output_data,
                                     processing_time_ms,
@@ -405,7 +405,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
 
                                 match rpc_for_poll.send(complete_request).await {
                                     Ok(ClientRpcResponse::WorkerCompleteJobResult(result)) => {
-                                        if result.success {
+                                        if result.is_success {
                                             info!(
                                                 worker_id = %worker_id_clone,
                                                 job_id = %job_info.job_id,
@@ -438,7 +438,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                 }
 
                                 active_jobs.retain(|id| id != &job_info.job_id);
-                                if success {
+                                if is_success {
                                     total_processed += 1;
                                 } else {
                                     total_failed += 1;

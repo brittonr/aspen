@@ -112,7 +112,7 @@ pub struct DeleteResultResponse {
     /// The key that was targeted.
     pub key: String,
     /// True if key existed and was deleted, false if not found.
-    pub deleted: bool,
+    pub was_deleted: bool,
     /// Error message if operation failed.
     pub error: Option<String>,
 }

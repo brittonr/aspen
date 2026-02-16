@@ -97,7 +97,7 @@ pub struct HookMetricsResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HookTriggerResultResponse {
     /// Whether the trigger was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Number of handlers that matched and were dispatched to.
     pub dispatched_count: usize,
     /// Error message if the operation failed.

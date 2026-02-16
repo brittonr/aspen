@@ -544,7 +544,7 @@ pub enum ClientRpcRequest {
         /// Optional voter to replace.
         replace_node: Option<u64>,
         /// Skip safety checks if true.
-        force: bool,
+        is_force: bool,
     },
 
     /// Manually checkpoint SQLite WAL file.
@@ -660,7 +660,7 @@ pub enum ClientRpcRequest {
         /// BLAKE3 hash of the blob (hex-encoded).
         hash: String,
         /// Force deletion even if protected.
-        force: bool,
+        is_force: bool,
     },
 
     /// Download a blob from a remote peer using a ticket.
@@ -1143,7 +1143,7 @@ pub enum ClientRpcRequest {
         /// Useful for resuming watches after disconnect.
         start_index: u64,
         /// Include previous value in events (like etcd's prev_kv).
-        include_prev_value: bool,
+        should_include_prev_value: bool,
     },
 
     /// Cancel an active watch.
@@ -1197,7 +1197,7 @@ pub enum ClientRpcRequest {
         /// Lease ID to query.
         lease_id: u64,
         /// Include list of keys attached to the lease.
-        include_keys: bool,
+        should_include_keys: bool,
     },
 
     /// List all active leases.
@@ -3177,7 +3177,7 @@ pub enum ClientRpcRequest {
         /// Execution token from the job polling response.
         execution_token: String,
         /// Job execution result (success or failure).
-        success: bool,
+        is_success: bool,
         /// Error message if job failed.
         error_message: Option<String>,
         /// Job output data (logs, artifacts, etc.).

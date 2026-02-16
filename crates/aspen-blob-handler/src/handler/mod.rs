@@ -67,7 +67,7 @@ impl RequestHandler for BlobHandler {
             // Protection operations
             ClientRpcRequest::ProtectBlob { hash, tag } => handle_protect_blob(ctx, hash, tag).await,
             ClientRpcRequest::UnprotectBlob { tag } => handle_unprotect_blob(ctx, tag).await,
-            ClientRpcRequest::DeleteBlob { hash, force } => handle_delete_blob(ctx, hash, force).await,
+            ClientRpcRequest::DeleteBlob { hash, is_force } => handle_delete_blob(ctx, hash, is_force).await,
 
             // Download operations
             ClientRpcRequest::DownloadBlob { ticket, tag } => handle_download_blob(ctx, ticket, tag).await,

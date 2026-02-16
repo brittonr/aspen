@@ -814,11 +814,11 @@ fn test_kv_store_delete_idempotent() {
 
             // Delete non-existent key (first time)
             let result1 = store.delete(DeleteRequest { key: key.0.clone() }).await.unwrap();
-            assert!(!result1.deleted);
+            assert!(!result1.is_deleted);
 
             // Delete again (second time)
             let result2 = store.delete(DeleteRequest { key: key.0.clone() }).await.unwrap();
-            assert!(!result2.deleted);
+            assert!(!result2.is_deleted);
         });
     });
 }

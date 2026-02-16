@@ -119,7 +119,7 @@ pub struct OutputArgs {
 
 /// Pipeline trigger output.
 pub struct CiTriggerOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub run_id: Option<String>,
     pub error: Option<String>,
 }
@@ -127,14 +127,14 @@ pub struct CiTriggerOutput {
 impl Outputable for CiTriggerOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "run_id": self.run_id,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!("Pipeline triggered: {}", self.run_id.as_deref().unwrap_or("unknown"))
         } else {
             format!("Trigger failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -144,7 +144,7 @@ impl Outputable for CiTriggerOutput {
 
 /// Pipeline status output.
 pub struct CiStatusOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub run_id: Option<String>,
     pub repo_id: Option<String>,
     pub ref_name: Option<String>,
@@ -170,7 +170,7 @@ pub struct JobInfo {
 impl Outputable for CiStatusOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "run_id": self.run_id,
             "repo_id": self.repo_id,
             "ref_name": self.ref_name,
@@ -191,7 +191,7 @@ impl Outputable for CiStatusOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.found {
+        if !self.was_found {
             return format!(
                 "Pipeline not found{}",
                 self.error.as_ref().map(|e| format!(": {}", e)).unwrap_or_default()
@@ -284,20 +284,20 @@ impl Outputable for CiListOutput {
 
 /// Pipeline cancel output.
 pub struct CiCancelOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 impl Outputable for CiCancelOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             "Pipeline cancelled".to_string()
         } else {
             format!("Cancel failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -307,20 +307,20 @@ impl Outputable for CiCancelOutput {
 
 /// Watch repo output.
 pub struct CiWatchOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 impl Outputable for CiWatchOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             "Repository watching enabled".to_string()
         } else {
             format!("Watch failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -330,7 +330,7 @@ impl Outputable for CiWatchOutput {
 
 /// CI job output response.
 pub struct CiOutputOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
     pub stdout_was_blob: bool,
@@ -343,7 +343,7 @@ pub struct CiOutputOutput {
 impl Outputable for CiOutputOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "stdout": self.stdout,
             "stderr": self.stderr,
             "stdout_was_blob": self.stdout_was_blob,
@@ -355,7 +355,7 @@ impl Outputable for CiOutputOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.found {
+        if !self.was_found {
             return format!("Job not found{}", self.error.as_ref().map(|e| format!(": {}", e)).unwrap_or_default());
         }
 
@@ -427,7 +427,7 @@ async fn ci_run(client: &AspenClient, args: RunArgs, json: bool) -> Result<()> {
     match response {
         ClientRpcResponse::CiTriggerPipelineResult(result) => {
             let output = CiTriggerOutput {
-                success: result.success,
+                is_success: result.success,
                 run_id: result.run_id,
                 error: result.error,
             };
@@ -473,7 +473,7 @@ async fn ci_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result
                         .collect();
 
                     let output = CiStatusOutput {
-                        found: result.found,
+                        was_found: result.found,
                         run_id: result.run_id,
                         repo_id: result.repo_id,
                         ref_name: result.ref_name,
@@ -602,7 +602,7 @@ async fn ci_cancel(client: &AspenClient, args: CancelArgs, json: bool) -> Result
     match response {
         ClientRpcResponse::CiCancelRunResult(result) => {
             let output = CiCancelOutput {
-                success: result.success,
+                is_success: result.success,
                 error: result.error,
             };
             print_output(&output, json);
@@ -622,7 +622,7 @@ async fn ci_watch(client: &AspenClient, args: WatchArgs, json: bool) -> Result<(
     match response {
         ClientRpcResponse::CiWatchRepoResult(result) => {
             let output = CiWatchOutput {
-                success: result.success,
+                is_success: result.success,
                 error: result.error,
             };
             print_output(&output, json);
@@ -642,7 +642,7 @@ async fn ci_unwatch(client: &AspenClient, args: UnwatchArgs, json: bool) -> Resu
     match response {
         ClientRpcResponse::CiUnwatchRepoResult(result) => {
             let output = CiWatchOutput {
-                success: result.success,
+                is_success: result.success,
                 error: result.error,
             };
             print_output(&output, json);
@@ -676,7 +676,7 @@ async fn ci_output(client: &AspenClient, args: OutputArgs, json: bool) -> Result
             };
 
             let output = CiOutputOutput {
-                found: result.found,
+                was_found: result.found,
                 stdout,
                 stderr,
                 stdout_was_blob: result.stdout_was_blob,

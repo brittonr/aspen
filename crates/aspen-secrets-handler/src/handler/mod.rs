@@ -666,7 +666,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsKvWriteResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert_eq!(resp.version, Some(1));
                 assert!(resp.error.is_none());
             }
@@ -685,7 +685,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsKvReadResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 let data = resp.data.expect("should have data");
                 assert_eq!(data.get("username"), Some(&"admin".to_string()));
                 assert_eq!(data.get("password"), Some(&"secret123".to_string()));
@@ -710,7 +710,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsKvReadResult(resp) => {
-                assert!(!resp.success);
+                assert!(!resp.is_success);
                 assert!(resp.data.is_none());
                 assert!(resp.error.is_some());
             }
@@ -752,7 +752,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsKvWriteResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert_eq!(resp.version, Some(2));
             }
             other => panic!("expected SecretsKvWriteResult, got {:?}", other),
@@ -770,7 +770,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsKvReadResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 let data = resp.data.expect("should have data");
                 assert_eq!(data.get("value"), Some(&"v1".to_string()));
             }
@@ -812,7 +812,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsKvWriteResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert_eq!(resp.version, Some(2));
             }
             other => panic!("expected SecretsKvWriteResult, got {:?}", other),
@@ -853,7 +853,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsKvWriteResult(resp) => {
-                assert!(!resp.success);
+                assert!(!resp.is_success);
                 assert!(resp.error.is_some());
                 let error = resp.error.unwrap();
                 assert!(error.contains("CAS conflict"), "error should mention CAS: {}", error);
@@ -892,7 +892,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsKvDeleteResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert!(resp.error.is_none());
             }
             other => panic!("expected SecretsKvDeleteResult, got {:?}", other),
@@ -930,7 +930,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsKvListResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert!(!resp.keys.is_empty());
             }
             other => panic!("expected SecretsKvListResult, got {:?}", other),
@@ -966,7 +966,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsKvMetadataResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert_eq!(resp.current_version, Some(1));
                 assert!(!resp.versions.is_empty());
             }
@@ -994,7 +994,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsTransitKeyResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert_eq!(resp.name, Some("test-aes".to_string()));
                 assert_eq!(resp.version, Some(1));
             }
@@ -1018,7 +1018,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsTransitKeyResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert_eq!(resp.name, Some("test-ed25519".to_string()));
             }
             other => panic!("expected SecretsTransitKeyResult, got {:?}", other),
@@ -1041,7 +1041,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsTransitKeyResult(resp) => {
-                assert!(!resp.success);
+                assert!(!resp.is_success);
                 assert!(resp.error.is_some());
                 let error = resp.error.unwrap();
                 assert!(error.contains("Invalid key type"), "error should mention invalid: {}", error);
@@ -1077,7 +1077,7 @@ mod tests {
 
         let ciphertext = match result.unwrap() {
             ClientRpcResponse::SecretsTransitEncryptResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 resp.ciphertext.expect("should have ciphertext")
             }
             other => panic!("expected SecretsTransitEncryptResult, got {:?}", other),
@@ -1096,7 +1096,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsTransitDecryptResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert_eq!(resp.plaintext, Some(plaintext));
             }
             other => panic!("expected SecretsTransitDecryptResult, got {:?}", other),
@@ -1120,7 +1120,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsTransitEncryptResult(resp) => {
-                assert!(!resp.success);
+                assert!(!resp.is_success);
                 assert!(resp.error.is_some());
                 let error = resp.error.unwrap();
                 assert!(error.contains("Transit key not found"), "error: {}", error);
@@ -1155,7 +1155,7 @@ mod tests {
 
         let signature = match result.unwrap() {
             ClientRpcResponse::SecretsTransitSignResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 resp.signature.expect("should have signature")
             }
             other => panic!("expected SecretsTransitSignResult, got {:?}", other),
@@ -1174,8 +1174,8 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsTransitVerifyResult(resp) => {
-                assert!(resp.success);
-                assert_eq!(resp.valid, Some(true));
+                assert!(resp.is_success);
+                assert_eq!(resp.is_valid, Some(true));
             }
             other => panic!("expected SecretsTransitVerifyResult, got {:?}", other),
         }
@@ -1208,8 +1208,8 @@ mod tests {
         match result.unwrap() {
             ClientRpcResponse::SecretsTransitVerifyResult(resp) => {
                 // Either valid=false or an error is acceptable
-                if resp.success {
-                    assert_eq!(resp.valid, Some(false));
+                if resp.is_success {
+                    assert_eq!(resp.is_valid, Some(false));
                 } else {
                     assert!(resp.error.is_some());
                 }
@@ -1242,7 +1242,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsTransitKeyResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert_eq!(resp.version, Some(2)); // Version should be 2 after rotation
             }
             other => panic!("expected SecretsTransitKeyResult, got {:?}", other),
@@ -1274,7 +1274,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsTransitListResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert!(resp.keys.len() >= 3);
             }
             other => panic!("expected SecretsTransitListResult, got {:?}", other),
@@ -1306,7 +1306,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsTransitDatakeyResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert!(resp.plaintext.is_some());
                 assert!(resp.ciphertext.is_some());
             }
@@ -1334,7 +1334,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsPkiCertificateResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert!(resp.certificate.is_some());
                 assert!(resp.serial.is_some());
             }
@@ -1371,7 +1371,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsPkiRoleResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 let role = resp.role.expect("should have role");
                 assert_eq!(role.name, "web-servers");
                 assert!(role.allowed_domains.contains(&"example.com".to_string()));
@@ -1393,7 +1393,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsPkiCertificateResult(resp) => {
-                assert!(resp.success, "PKI issue failed: {:?}", resp.error);
+                assert!(resp.is_success, "PKI issue failed: {:?}", resp.error);
                 assert!(resp.certificate.is_some());
                 assert!(resp.serial.is_some());
             }
@@ -1428,7 +1428,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsPkiCertificateResult(resp) => {
-                assert!(!resp.success);
+                assert!(!resp.is_success);
                 assert!(resp.error.is_some());
                 let error = resp.error.unwrap();
                 assert!(error.contains("role not found") || error.contains("Role not found"), "error: {}", error);
@@ -1472,7 +1472,7 @@ mod tests {
         let issue_result = handler.handle(issue, &ctx).await.unwrap();
         let serial = match issue_result {
             ClientRpcResponse::SecretsPkiCertificateResult(resp) => {
-                assert!(resp.success, "PKI issue failed: {:?}", resp.error);
+                assert!(resp.is_success, "PKI issue failed: {:?}", resp.error);
                 resp.serial.expect("should have serial")
             }
             other => panic!("expected SecretsPkiCertificateResult, got {:?}", other),
@@ -1489,7 +1489,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsPkiRevokeResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert_eq!(resp.serial, Some(serial));
             }
             other => panic!("expected SecretsPkiRevokeResult, got {:?}", other),
@@ -1533,7 +1533,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsPkiListResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert!(resp.items.len() >= 3);
             }
             other => panic!("expected SecretsPkiListResult, got {:?}", other),
@@ -1563,7 +1563,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::SecretsPkiCrlResult(resp) => {
-                assert!(resp.success);
+                assert!(resp.is_success);
                 assert!(resp.crl.is_some());
             }
             other => panic!("expected SecretsPkiCrlResult, got {:?}", other),

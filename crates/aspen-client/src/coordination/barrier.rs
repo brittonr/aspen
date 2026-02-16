@@ -80,13 +80,13 @@ impl<C: CoordinationRpc> BarrierClient<C> {
 
         match response {
             ClientRpcResponse::BarrierEnterResult(BarrierResultResponse {
-                success,
+                is_success,
                 current_count,
                 required_count: returned_required,
                 phase,
                 error,
             }) => {
-                if success {
+                if is_success {
                     Ok(BarrierEnterResult {
                         current_count: current_count.unwrap_or(0),
                         required_count: returned_required.unwrap_or(required_count),
@@ -130,13 +130,13 @@ impl<C: CoordinationRpc> BarrierClient<C> {
 
         match response {
             ClientRpcResponse::BarrierLeaveResult(BarrierResultResponse {
-                success,
+                is_success,
                 current_count,
                 phase,
                 error,
                 ..
             }) => {
-                if success {
+                if is_success {
                     Ok(BarrierLeaveResult {
                         remaining_count: current_count.unwrap_or(0),
                         phase: phase.unwrap_or_else(|| "unknown".to_string()),
@@ -166,13 +166,13 @@ impl<C: CoordinationRpc> BarrierClient<C> {
 
         match response {
             ClientRpcResponse::BarrierStatusResult(BarrierResultResponse {
-                success,
+                is_success,
                 current_count,
                 required_count,
                 phase,
                 error,
             }) => {
-                if success {
+                if is_success {
                     Ok(BarrierStatusResult {
                         current_count: current_count.unwrap_or(0),
                         required_count: required_count.unwrap_or(0),

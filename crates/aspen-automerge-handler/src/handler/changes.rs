@@ -20,7 +20,7 @@ pub(crate) async fn handle_apply_changes(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeApplyChangesResult(AutomergeApplyChangesResultResponse {
-                success: false,
+                is_success: false,
                 changes_applied: false,
                 change_count: None,
                 new_heads: vec![],
@@ -37,7 +37,7 @@ pub(crate) async fn handle_apply_changes(
             Ok(bytes) => decoded_changes.push(DocumentChange::new(bytes)),
             Err(e) => {
                 return Ok(ClientRpcResponse::AutomergeApplyChangesResult(AutomergeApplyChangesResultResponse {
-                    success: false,
+                    is_success: false,
                     changes_applied: false,
                     change_count: None,
                     new_heads: vec![],
@@ -50,7 +50,7 @@ pub(crate) async fn handle_apply_changes(
 
     match store.apply_changes(&id, decoded_changes).await {
         Ok(result) => Ok(ClientRpcResponse::AutomergeApplyChangesResult(AutomergeApplyChangesResultResponse {
-            success: true,
+            is_success: true,
             changes_applied: result.changes_applied,
             change_count: Some(result.change_count as u64),
             new_heads: result.new_heads,
@@ -58,7 +58,7 @@ pub(crate) async fn handle_apply_changes(
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::AutomergeApplyChangesResult(AutomergeApplyChangesResultResponse {
-            success: false,
+            is_success: false,
             changes_applied: false,
             change_count: None,
             new_heads: vec![],
@@ -78,7 +78,7 @@ pub(crate) async fn handle_merge(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeMergeResult(AutomergeMergeResultResponse {
-                success: false,
+                is_success: false,
                 changes_applied: false,
                 change_count: None,
                 new_heads: vec![],
@@ -92,7 +92,7 @@ pub(crate) async fn handle_merge(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeMergeResult(AutomergeMergeResultResponse {
-                success: false,
+                is_success: false,
                 changes_applied: false,
                 change_count: None,
                 new_heads: vec![],
@@ -104,7 +104,7 @@ pub(crate) async fn handle_merge(
 
     match store.merge(&target_id, &source_id).await {
         Ok(result) => Ok(ClientRpcResponse::AutomergeMergeResult(AutomergeMergeResultResponse {
-            success: true,
+            is_success: true,
             changes_applied: result.changes_applied,
             change_count: Some(result.change_count as u64),
             new_heads: result.new_heads,
@@ -112,7 +112,7 @@ pub(crate) async fn handle_merge(
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::AutomergeMergeResult(AutomergeMergeResultResponse {
-            success: false,
+            is_success: false,
             changes_applied: false,
             change_count: None,
             new_heads: vec![],

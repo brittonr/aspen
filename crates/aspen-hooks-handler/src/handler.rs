@@ -198,7 +198,7 @@ async fn handle_hook_trigger(
         "snapshot_created" => HookEventType::SnapshotCreated,
         _ => {
             return Ok(ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
-                success: false,
+                is_success: false,
                 dispatched_count: 0,
                 error: Some(format!("unknown event type: {event_type}")),
                 handler_failures: vec![],
@@ -209,7 +209,7 @@ async fn handle_hook_trigger(
     let Some(service) = hook_service else {
         // When hook service is unavailable, return failure with clear error
         return Ok(ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
-            success: false,
+            is_success: false,
             dispatched_count: 0,
             error: Some("hooks not enabled".to_string()),
             handler_failures: vec![],
@@ -219,7 +219,7 @@ async fn handle_hook_trigger(
     if !service.is_enabled() {
         // When hook service is disabled, return failure with clear error
         return Ok(ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
-            success: false,
+            is_success: false,
             dispatched_count: 0,
             error: Some("hooks not enabled".to_string()),
             handler_failures: vec![],
@@ -251,17 +251,17 @@ async fn handle_hook_trigger(
                     .collect(),
             };
 
-            let success = handler_failures.is_empty();
+            let is_success = handler_failures.is_empty();
 
             Ok(ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
-                success,
+                is_success,
                 dispatched_count,
                 error: None,
                 handler_failures,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
-            success: false,
+            is_success: false,
             dispatched_count: 0,
             error: Some(e.to_string()),
             handler_failures: vec![],

@@ -25,7 +25,7 @@
 //!
 //! let config = LocalExecutorWorkerConfig {
 //!     workspace_dir: PathBuf::from("/tmp/ci-workspace"),
-//!     cleanup_workspaces: true,
+//!     should_cleanup_workspaces: true,
 //!     ..Default::default()
 //! };
 //!

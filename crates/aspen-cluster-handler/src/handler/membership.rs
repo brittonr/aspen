@@ -60,7 +60,7 @@ pub(crate) async fn handle_add_learner(
     }
 
     Ok(ClientRpcResponse::AddLearnerResult(AddLearnerResultResponse {
-        success: result.is_ok(),
+        is_success: result.is_ok(),
         error: result.err().map(|e| sanitize_control_error(&e)),
     }))
 }
@@ -72,7 +72,7 @@ pub(crate) async fn handle_change_membership(
     let result = ctx.controller.change_membership(ChangeMembershipRequest { members }).await;
 
     Ok(ClientRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
-        success: result.is_ok(),
+        is_success: result.is_ok(),
         error: result.err().map(|e| sanitize_control_error(&e)),
     }))
 }
@@ -109,7 +109,7 @@ pub(crate) async fn handle_promote_learner(
         .await;
 
     Ok(ClientRpcResponse::PromoteLearnerResult(PromoteLearnerResultResponse {
-        success: result.is_ok(),
+        is_success: result.is_ok(),
         learner_id,
         previous_voters,
         new_voters: new_members,

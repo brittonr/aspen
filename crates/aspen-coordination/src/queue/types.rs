@@ -197,7 +197,7 @@ pub struct DequeuedItem {
 #[derive(Debug, Clone, Default)]
 pub struct QueueStatus {
     /// Whether the queue exists.
-    pub exists: bool,
+    pub does_exist: bool,
     /// Approximate number of visible items.
     pub visible_count: u64,
     /// Approximate number of pending items.

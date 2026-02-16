@@ -85,7 +85,7 @@ async fn test_blob_add_and_get() {
 
     let hash = match add_response {
         ClientRpcResponse::AddBlobResult(result) => {
-            assert!(result.success, "add blob should succeed: {:?}", result.error);
+            assert!(result.is_success, "add blob should succeed: {:?}", result.error);
             assert!(result.hash.is_some(), "should return hash");
             assert_eq!(result.size, Some(TEST_BLOB_CONTENT.len() as u64));
             tracing::info!(hash = ?result.hash, size = result.size, "blob added");
@@ -106,7 +106,7 @@ async fn test_blob_add_and_get() {
 
     match get_response {
         ClientRpcResponse::GetBlobResult(result) => {
-            assert!(result.found, "blob should be found");
+            assert!(result.was_found, "blob should be found");
             assert_eq!(result.data.as_deref(), Some(TEST_BLOB_CONTENT));
             tracing::info!("blob retrieved successfully");
         }
@@ -144,7 +144,7 @@ async fn test_blob_has_blob() {
 
     let hash = match add_response {
         ClientRpcResponse::AddBlobResult(result) => {
-            assert!(result.success);
+            assert!(result.is_success);
             result.hash.unwrap()
         }
         _ => panic!("unexpected response"),
@@ -159,7 +159,7 @@ async fn test_blob_has_blob() {
 
     match has_response {
         ClientRpcResponse::HasBlobResult(result) => {
-            assert!(result.exists, "blob should exist");
+            assert!(result.does_exist, "blob should exist");
         }
         _ => panic!("unexpected response"),
     }
@@ -174,7 +174,7 @@ async fn test_blob_has_blob() {
 
     match has_response {
         ClientRpcResponse::HasBlobResult(result) => {
-            assert!(!result.exists, "fake blob should not exist");
+            assert!(!result.does_exist, "fake blob should not exist");
         }
         _ => panic!("unexpected response"),
     }
@@ -214,7 +214,7 @@ async fn test_blob_trigger_replication() {
 
     let hash = match add_response {
         ClientRpcResponse::AddBlobResult(result) => {
-            assert!(result.success, "add blob should succeed: {:?}", result.error);
+            assert!(result.is_success, "add blob should succeed: {:?}", result.error);
             tracing::info!(hash = ?result.hash, "blob added for replication");
             result.hash.unwrap()
         }
@@ -237,7 +237,7 @@ async fn test_blob_trigger_replication() {
 
     match replicate_response {
         ClientRpcResponse::TriggerBlobReplicationResult(result) => {
-            assert!(result.success, "replication should succeed: {:?}", result.error);
+            assert!(result.is_success, "replication should succeed: {:?}", result.error);
             tracing::info!(
                 successful = ?result.successful_nodes,
                 failed = ?result.failed_nodes,
@@ -287,7 +287,7 @@ async fn test_blob_replication_status() {
 
     let hash = match add_response {
         ClientRpcResponse::AddBlobResult(result) => {
-            assert!(result.success);
+            assert!(result.is_success);
             result.hash.unwrap()
         }
         _ => panic!("unexpected response"),
@@ -320,7 +320,7 @@ async fn test_blob_replication_status() {
     match status_response {
         ClientRpcResponse::GetBlobReplicationStatusResult(result) => {
             tracing::info!(
-                found = result.found,
+                was_found = result.was_found,
                 replica_nodes = ?result.replica_nodes,
                 status = ?result.status,
                 replicas_needed = result.replicas_needed,
@@ -328,7 +328,7 @@ async fn test_blob_replication_status() {
             );
 
             // Blob should be tracked (either auto-replicated or explicitly)
-            if result.found {
+            if result.was_found {
                 assert!(result.hash.is_some());
                 assert!(result.size.is_some());
                 // Status should be one of the valid states
@@ -376,7 +376,7 @@ async fn test_blob_status() {
 
     let hash = match add_response {
         ClientRpcResponse::AddBlobResult(result) => {
-            assert!(result.success);
+            assert!(result.is_success);
             result.hash.unwrap()
         }
         _ => panic!("unexpected response"),
@@ -391,7 +391,7 @@ async fn test_blob_status() {
 
     match status_response {
         ClientRpcResponse::GetBlobStatusResult(result) => {
-            assert!(result.found, "blob should be found");
+            assert!(result.was_found, "blob should be found");
             assert_eq!(result.hash.as_deref(), Some(hash.as_str()));
             assert_eq!(result.size, Some(TEST_BLOB_CONTENT.len() as u64));
             assert!(result.complete.unwrap_or(false), "blob should be complete");
@@ -439,7 +439,7 @@ async fn test_blob_multi_node_availability() {
 
     let hash = match add_response {
         ClientRpcResponse::AddBlobResult(result) => {
-            assert!(result.success);
+            assert!(result.is_success);
             result.hash.unwrap()
         }
         _ => panic!("unexpected response"),
@@ -458,7 +458,7 @@ async fn test_blob_multi_node_availability() {
 
     if let ClientRpcResponse::TriggerBlobReplicationResult(result) = replicate_response {
         tracing::info!(
-            success = result.success,
+            is_success = result.is_success,
             successful_nodes = ?result.successful_nodes,
             "replication triggered"
         );
@@ -476,7 +476,7 @@ async fn test_blob_multi_node_availability() {
 
     match has_response {
         ClientRpcResponse::HasBlobResult(result) => {
-            assert!(result.exists, "blob should exist on source node");
+            assert!(result.does_exist, "blob should exist on source node");
         }
         _ => panic!("unexpected response"),
     }
@@ -511,7 +511,7 @@ async fn test_blob_large_replication() {
 
     let hash = match add_response {
         ClientRpcResponse::AddBlobResult(result) => {
-            assert!(result.success, "large blob add should succeed");
+            assert!(result.is_success, "large blob add should succeed");
             assert_eq!(result.size, Some(1024 * 1024));
             tracing::info!(hash = ?result.hash, size = result.size, "large blob added");
             result.hash.unwrap()
@@ -531,7 +531,11 @@ async fn test_blob_large_replication() {
         .expect("failed to trigger large blob replication");
 
     if let ClientRpcResponse::TriggerBlobReplicationResult(result) = replicate_response {
-        tracing::info!(success = result.success, duration_ms = result.duration_ms, "large blob replication completed");
+        tracing::info!(
+            is_success = result.is_success,
+            duration_ms = result.duration_ms,
+            "large blob replication completed"
+        );
     }
 
     // Verify blob integrity by reading back
@@ -540,7 +544,7 @@ async fn test_blob_large_replication() {
 
     match get_response {
         ClientRpcResponse::GetBlobResult(result) => {
-            assert!(result.found, "large blob should be retrievable");
+            assert!(result.was_found, "large blob should be retrievable");
             assert_eq!(result.data.as_ref().map(|d| d.len()), Some(1024 * 1024));
             // Verify content integrity
             if let Some(data) = result.data {
@@ -585,7 +589,7 @@ async fn test_blob_replication_nonexistent() {
 
     match replicate_response {
         ClientRpcResponse::TriggerBlobReplicationResult(result) => {
-            assert!(!result.success, "replication of nonexistent blob should fail");
+            assert!(!result.is_success, "replication of nonexistent blob should fail");
             assert!(result.error.is_some(), "should have error message");
             tracing::info!(error = ?result.error, "expected error for nonexistent blob");
         }
@@ -622,7 +626,7 @@ async fn test_blob_replication_status_not_found() {
 
     match status_response {
         ClientRpcResponse::GetBlobReplicationStatusResult(result) => {
-            assert!(!result.found, "unreplicated blob should not have status");
+            assert!(!result.was_found, "unreplicated blob should not have status");
             tracing::info!("correctly reported no replication status");
         }
         ClientRpcResponse::Error(e) => {
@@ -661,7 +665,7 @@ async fn test_blob_list_after_replication() {
             .expect("failed to add blob");
 
         if let ClientRpcResponse::AddBlobResult(result) = add_response {
-            assert!(result.success);
+            assert!(result.is_success);
             hashes.push(result.hash.unwrap());
         }
     }
@@ -719,7 +723,7 @@ async fn test_blob_protection() {
 
     let hash = match add_response {
         ClientRpcResponse::AddBlobResult(result) => {
-            assert!(result.success);
+            assert!(result.is_success);
             result.hash.unwrap()
         }
         _ => panic!("unexpected response"),
@@ -737,7 +741,7 @@ async fn test_blob_protection() {
 
     match protect_response {
         ClientRpcResponse::ProtectBlobResult(result) => {
-            assert!(result.success, "protection should succeed");
+            assert!(result.is_success, "protection should succeed");
         }
         _ => panic!("unexpected response"),
     }
@@ -751,7 +755,7 @@ async fn test_blob_protection() {
 
     match status_response {
         ClientRpcResponse::GetBlobStatusResult(result) => {
-            assert!(result.found);
+            assert!(result.was_found);
             if let Some(tags) = &result.tags {
                 assert!(!tags.is_empty(), "should have at least one protection tag");
                 tracing::info!(tags = ?tags, "blob protection tags");
@@ -771,7 +775,7 @@ async fn test_blob_protection() {
 
     match unprotect_response {
         ClientRpcResponse::UnprotectBlobResult(result) => {
-            assert!(result.success, "unprotection should succeed");
+            assert!(result.is_success, "unprotection should succeed");
         }
         _ => panic!("unexpected response"),
     }

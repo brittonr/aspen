@@ -23,7 +23,7 @@ pub(crate) async fn handle_add_blob(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
-            success: false,
+            is_success: false,
             hash: None,
             size: None,
             was_new: None,
@@ -60,7 +60,7 @@ pub(crate) async fn handle_add_blob(
             }
 
             Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
-                success: true,
+                is_success: true,
                 hash: Some(result.blob_ref.hash.to_string()),
                 size: Some(result.blob_ref.size_bytes),
                 was_new: Some(result.was_new),
@@ -70,7 +70,7 @@ pub(crate) async fn handle_add_blob(
         Err(e) => {
             warn!(error = %e, "blob add failed");
             Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
-                success: false,
+                is_success: false,
                 hash: None,
                 size: None,
                 was_new: None,
@@ -83,7 +83,7 @@ pub(crate) async fn handle_add_blob(
 pub(crate) async fn handle_get_blob(ctx: &ClientProtocolContext, hash: String) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
-            found: false,
+            was_found: false,
             data: None,
             error: Some("blob store not enabled".to_string()),
         }));
@@ -94,7 +94,7 @@ pub(crate) async fn handle_get_blob(ctx: &ClientProtocolContext, hash: String) -
         Ok(h) => h,
         Err(_) => {
             return Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
-                found: false,
+                was_found: false,
                 data: None,
                 error: Some("invalid hash".to_string()),
             }));
@@ -103,19 +103,19 @@ pub(crate) async fn handle_get_blob(ctx: &ClientProtocolContext, hash: String) -
 
     match blob_store.get_bytes(&hash).await {
         Ok(Some(data)) => Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
-            found: true,
+            was_found: true,
             data: Some(data.to_vec()),
             error: None,
         })),
         Ok(None) => Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
-            found: false,
+            was_found: false,
             data: None,
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "blob get failed");
             Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
-                found: false,
+                was_found: false,
                 data: None,
                 error: Some(sanitize_blob_error(&e)),
             }))
@@ -126,7 +126,7 @@ pub(crate) async fn handle_get_blob(ctx: &ClientProtocolContext, hash: String) -
 pub(crate) async fn handle_has_blob(ctx: &ClientProtocolContext, hash: String) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
-            exists: false,
+            does_exist: false,
             error: Some("blob store not enabled".to_string()),
         }));
     };
@@ -136,18 +136,21 @@ pub(crate) async fn handle_has_blob(ctx: &ClientProtocolContext, hash: String) -
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
-                exists: false,
+                does_exist: false,
                 error: Some(format!("invalid hash: {}", e)),
             }));
         }
     };
 
     match blob_store.has(&hash).await {
-        Ok(exists) => Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse { exists, error: None })),
+        Ok(does_exist) => Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
+            does_exist,
+            error: None,
+        })),
         Err(e) => {
             warn!(error = %e, "blob has check failed");
             Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
-                exists: false,
+                does_exist: false,
                 error: Some(sanitize_blob_error(&e)),
             }))
         }
@@ -160,7 +163,7 @@ pub(crate) async fn handle_get_blob_ticket(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::GetBlobTicketResult(GetBlobTicketResultResponse {
-            success: false,
+            is_success: false,
             ticket: None,
             error: Some("blob store not enabled".to_string()),
         }));
@@ -171,7 +174,7 @@ pub(crate) async fn handle_get_blob_ticket(
         Ok(h) => h,
         Err(_) => {
             return Ok(ClientRpcResponse::GetBlobTicketResult(GetBlobTicketResultResponse {
-                success: false,
+                is_success: false,
                 ticket: None,
                 error: Some("invalid hash".to_string()),
             }));
@@ -180,14 +183,14 @@ pub(crate) async fn handle_get_blob_ticket(
 
     match blob_store.ticket(&hash).await {
         Ok(ticket) => Ok(ClientRpcResponse::GetBlobTicketResult(GetBlobTicketResultResponse {
-            success: true,
+            is_success: true,
             ticket: Some(ticket.to_string()),
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "blob ticket generation failed");
             Ok(ClientRpcResponse::GetBlobTicketResult(GetBlobTicketResultResponse {
-                success: false,
+                is_success: false,
                 ticket: None,
                 error: Some(sanitize_blob_error(&e)),
             }))
@@ -252,7 +255,7 @@ pub(crate) async fn handle_get_blob_status(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::GetBlobStatusResult(GetBlobStatusResultResponse {
-            found: false,
+            was_found: false,
             hash: None,
             size: None,
             complete: None,
@@ -266,7 +269,7 @@ pub(crate) async fn handle_get_blob_status(
         Ok(h) => h,
         Err(_) => {
             return Ok(ClientRpcResponse::GetBlobStatusResult(GetBlobStatusResultResponse {
-                found: false,
+                was_found: false,
                 hash: None,
                 size: None,
                 complete: None,
@@ -278,7 +281,7 @@ pub(crate) async fn handle_get_blob_status(
 
     match blob_store.status(&hash).await {
         Ok(Some(status)) => Ok(ClientRpcResponse::GetBlobStatusResult(GetBlobStatusResultResponse {
-            found: true,
+            was_found: true,
             hash: Some(status.hash.to_string()),
             size: status.size_bytes,
             complete: Some(status.is_complete),
@@ -286,7 +289,7 @@ pub(crate) async fn handle_get_blob_status(
             error: None,
         })),
         Ok(None) => Ok(ClientRpcResponse::GetBlobStatusResult(GetBlobStatusResultResponse {
-            found: false,
+            was_found: false,
             hash: Some(hash.to_string()),
             size: None,
             complete: None,
@@ -296,7 +299,7 @@ pub(crate) async fn handle_get_blob_status(
         Err(e) => {
             warn!(error = %e, "blob status check failed");
             Ok(ClientRpcResponse::GetBlobStatusResult(GetBlobStatusResultResponse {
-                found: false,
+                was_found: false,
                 hash: None,
                 size: None,
                 complete: None,

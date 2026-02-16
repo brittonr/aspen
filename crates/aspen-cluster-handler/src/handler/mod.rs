@@ -63,8 +63,8 @@ impl RequestHandler for ClusterHandler {
             ClientRpcRequest::PromoteLearner {
                 learner_id,
                 replace_node,
-                force,
-            } => membership::handle_promote_learner(ctx, learner_id, replace_node, force).await,
+                is_force,
+            } => membership::handle_promote_learner(ctx, learner_id, replace_node, is_force).await,
 
             ClientRpcRequest::TriggerSnapshot => snapshot::handle_trigger_snapshot(ctx).await,
 
@@ -137,7 +137,7 @@ async fn handle_add_peer(
                 "AddPeer: failed to parse endpoint_addr as JSON EndpointAddr"
             );
             return Ok(ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
-                success: false,
+                is_success: false,
                 error: Some("invalid endpoint_addr: expected JSON-serialized EndpointAddr".to_string()),
             }));
         }
@@ -149,7 +149,7 @@ async fn handle_add_peer(
         None => {
             warn!(node_id = node_id, "AddPeer: network_factory not available in context");
             return Ok(ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
-                success: false,
+                is_success: false,
                 error: Some("network_factory not configured for this node".to_string()),
             }));
         }
@@ -168,7 +168,7 @@ async fn handle_add_peer(
     );
 
     Ok(ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
-        success: true,
+        is_success: true,
         error: None,
     }))
 }
@@ -225,7 +225,7 @@ mod tests {
         assert!(handler.can_handle(&ClientRpcRequest::PromoteLearner {
             learner_id: 2,
             replace_node: None,
-            force: false,
+            is_force: false,
         }));
     }
 
@@ -442,7 +442,7 @@ mod tests {
         match result.unwrap() {
             ClientRpcResponse::TopologyResult(response) => {
                 // Topology not configured in test context
-                assert!(!response.success);
+                assert!(!response.is_success);
                 assert!(response.error.is_some());
             }
             other => panic!("expected TopologyResult, got {:?}", other),
@@ -466,7 +466,7 @@ mod tests {
         match result.unwrap() {
             ClientRpcResponse::AddPeerResult(response) => {
                 // network_factory is not available in test context
-                assert!(!response.success);
+                assert!(!response.is_success);
                 assert!(response.error.is_some());
             }
             other => panic!("expected AddPeerResult, got {:?}", other),
@@ -488,7 +488,7 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::AddPeerResult(response) => {
-                assert!(!response.success);
+                assert!(!response.is_success);
                 assert!(response.error.is_some());
                 assert!(response.error.unwrap().contains("invalid endpoint_addr"));
             }

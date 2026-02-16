@@ -153,7 +153,7 @@ mod tests {
     #[tokio::test]
     async fn test_counter_client_increment() {
         let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(42),
             error: None,
         })]));
@@ -166,7 +166,7 @@ mod tests {
     #[tokio::test]
     async fn test_sequence_client_next() {
         let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::SequenceResult(SequenceResultResponse {
-            success: true,
+            is_success: true,
             value: Some(1001),
             error: None,
         })]));
@@ -180,7 +180,7 @@ mod tests {
     async fn test_rate_limiter_acquired() {
         let client =
             Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-                success: true,
+                is_success: true,
                 tokens_remaining: Some(99),
                 retry_after_ms: None,
                 error: None,
@@ -196,7 +196,7 @@ mod tests {
     async fn test_rate_limiter_rate_limited() {
         let client =
             Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-                success: false,
+                is_success: false,
                 tokens_remaining: Some(0),
                 retry_after_ms: Some(500),
                 error: None,
@@ -211,7 +211,7 @@ mod tests {
     #[tokio::test]
     async fn test_lock_client_acquire() {
         let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LockResult(LockResultResponse {
-            success: true,
+            is_success: true,
             fencing_token: Some(42),
             holder_id: Some("holder-1".to_string()),
             deadline_ms: Some(1234567890),
@@ -233,7 +233,7 @@ mod tests {
     async fn test_lease_grant_success() {
         let client =
             Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
-                success: true,
+                is_success: true,
                 lease_id: Some(12345),
                 ttl_seconds: Some(60),
                 error: None,
@@ -250,7 +250,7 @@ mod tests {
     async fn test_lease_grant_with_id_success() {
         let client =
             Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
-                success: true,
+                is_success: true,
                 lease_id: Some(99999),
                 ttl_seconds: Some(300),
                 error: None,
@@ -267,7 +267,7 @@ mod tests {
     async fn test_lease_grant_failure() {
         let client =
             Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
-                success: false,
+                is_success: false,
                 lease_id: None,
                 ttl_seconds: None,
                 error: Some("Lease ID already exists".to_string()),
@@ -285,7 +285,7 @@ mod tests {
     async fn test_lease_revoke_success() {
         let client =
             Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
-                success: true,
+                is_success: true,
                 keys_deleted: Some(5),
                 error: None,
             })]));
@@ -300,7 +300,7 @@ mod tests {
     async fn test_lease_revoke_not_found() {
         let client =
             Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
-                success: false,
+                is_success: false,
                 keys_deleted: None,
                 error: Some("Lease not found".to_string()),
             })]));
@@ -317,7 +317,7 @@ mod tests {
     async fn test_lease_keepalive_success() {
         let client =
             Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
-                success: true,
+                is_success: true,
                 lease_id: Some(12345),
                 ttl_seconds: Some(60),
                 error: None,
@@ -334,7 +334,7 @@ mod tests {
     async fn test_lease_keepalive_expired() {
         let client =
             Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
-                success: false,
+                is_success: false,
                 lease_id: None,
                 ttl_seconds: None,
                 error: Some("Lease expired or not found".to_string()),
@@ -352,7 +352,7 @@ mod tests {
     async fn test_lease_time_to_live_success() {
         let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseTimeToLiveResult(
             LeaseTimeToLiveResultResponse {
-                success: true,
+                is_success: true,
                 lease_id: Some(12345),
                 granted_ttl_seconds: Some(60),
                 remaining_ttl_seconds: Some(45),
@@ -374,7 +374,7 @@ mod tests {
     async fn test_lease_time_to_live_without_keys() {
         let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseTimeToLiveResult(
             LeaseTimeToLiveResultResponse {
-                success: true,
+                is_success: true,
                 lease_id: Some(12345),
                 granted_ttl_seconds: Some(60),
                 remaining_ttl_seconds: Some(45),
@@ -394,7 +394,7 @@ mod tests {
     async fn test_lease_time_to_live_not_found() {
         let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseTimeToLiveResult(
             LeaseTimeToLiveResultResponse {
-                success: false,
+                is_success: false,
                 lease_id: None,
                 granted_ttl_seconds: None,
                 remaining_ttl_seconds: None,
@@ -414,7 +414,7 @@ mod tests {
     #[tokio::test]
     async fn test_lease_list_success() {
         let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
-            success: true,
+            is_success: true,
             leases: Some(vec![
                 LeaseInfo {
                     lease_id: 100,
@@ -443,7 +443,7 @@ mod tests {
     #[tokio::test]
     async fn test_lease_list_empty() {
         let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
-            success: true,
+            is_success: true,
             leases: Some(vec![]),
             error: None,
         })]));
@@ -457,7 +457,7 @@ mod tests {
     #[tokio::test]
     async fn test_lease_put_with_lease_success() {
         let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::WriteResult(WriteResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })]));
 
@@ -470,7 +470,7 @@ mod tests {
     #[tokio::test]
     async fn test_lease_put_with_lease_failure() {
         let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::WriteResult(WriteResultResponse {
-            success: false,
+            is_success: false,
             error: Some("Lease not found".to_string()),
         })]));
 
@@ -516,7 +516,7 @@ mod tests {
                     ClientRpcRequest::LeaseKeepalive { .. } => {
                         self.keepalive_count.fetch_add(1, Ordering::SeqCst);
                         Ok(ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
-                            success: true,
+                            is_success: true,
                             lease_id: Some(12345),
                             ttl_seconds: Some(60),
                             error: None,

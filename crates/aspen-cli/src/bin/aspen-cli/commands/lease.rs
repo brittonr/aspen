@@ -66,7 +66,7 @@ pub struct TtlArgs {
 
 /// Lease grant output.
 pub struct LeaseGrantOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub lease_id: Option<u64>,
     pub ttl_seconds: Option<u32>,
     pub error: Option<String>,
@@ -75,7 +75,7 @@ pub struct LeaseGrantOutput {
 impl Outputable for LeaseGrantOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "lease_id": self.lease_id,
             "ttl_seconds": self.ttl_seconds,
             "error": self.error
@@ -83,7 +83,7 @@ impl Outputable for LeaseGrantOutput {
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!(
                 "Lease {} granted with TTL {}s",
                 self.lease_id.map(|id| id.to_string()).unwrap_or_else(|| "N/A".to_string()),
@@ -97,7 +97,7 @@ impl Outputable for LeaseGrantOutput {
 
 /// Lease revoke output.
 pub struct LeaseRevokeOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub keys_deleted: Option<u32>,
     pub error: Option<String>,
 }
@@ -105,14 +105,14 @@ pub struct LeaseRevokeOutput {
 impl Outputable for LeaseRevokeOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "keys_deleted": self.keys_deleted,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!("Lease revoked. {} key(s) deleted.", self.keys_deleted.unwrap_or(0))
         } else {
             format!("Revoke failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -122,7 +122,7 @@ impl Outputable for LeaseRevokeOutput {
 
 /// Lease keepalive output.
 pub struct LeaseKeepaliveOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub lease_id: Option<u64>,
     pub ttl_seconds: Option<u32>,
     pub error: Option<String>,
@@ -131,7 +131,7 @@ pub struct LeaseKeepaliveOutput {
 impl Outputable for LeaseKeepaliveOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "lease_id": self.lease_id,
             "ttl_seconds": self.ttl_seconds,
             "error": self.error
@@ -139,7 +139,7 @@ impl Outputable for LeaseKeepaliveOutput {
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!("Lease {} renewed. TTL: {}s", self.lease_id.unwrap_or(0), self.ttl_seconds.unwrap_or(0))
         } else {
             format!("Keepalive failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -149,7 +149,7 @@ impl Outputable for LeaseKeepaliveOutput {
 
 /// Lease TTL output.
 pub struct LeaseTtlOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub lease_id: Option<u64>,
     pub granted_ttl_seconds: Option<u32>,
     pub remaining_ttl_seconds: Option<u32>,
@@ -160,7 +160,7 @@ pub struct LeaseTtlOutput {
 impl Outputable for LeaseTtlOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "lease_id": self.lease_id,
             "granted_ttl_seconds": self.granted_ttl_seconds,
             "remaining_ttl_seconds": self.remaining_ttl_seconds,
@@ -170,7 +170,7 @@ impl Outputable for LeaseTtlOutput {
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             let mut output = format!(
                 "Lease {}\n  Granted TTL: {}s\n  Remaining: {}s",
                 self.lease_id.unwrap_or(0),
@@ -192,7 +192,7 @@ impl Outputable for LeaseTtlOutput {
 
 /// Lease list output.
 pub struct LeaseListOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub leases: Vec<LeaseInfoDisplay>,
     pub error: Option<String>,
 }
@@ -207,7 +207,7 @@ pub struct LeaseInfoDisplay {
 impl Outputable for LeaseListOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "leases": self.leases.iter().map(|l| {
                 serde_json::json!({
                     "lease_id": l.lease_id,
@@ -221,7 +221,7 @@ impl Outputable for LeaseListOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.success {
+        if !self.is_success {
             return format!("List failed: {}", self.error.as_deref().unwrap_or("unknown error"));
         }
 
@@ -268,7 +268,7 @@ async fn lease_grant(client: &AspenClient, args: GrantArgs, json: bool) -> Resul
     match response {
         ClientRpcResponse::LeaseGrantResult(result) => {
             let output = LeaseGrantOutput {
-                success: result.success,
+                is_success: result.success,
                 lease_id: result.lease_id,
                 ttl_seconds: result.ttl_seconds,
                 error: result.error,
@@ -294,7 +294,7 @@ async fn lease_revoke(client: &AspenClient, args: RevokeArgs, json: bool) -> Res
     match response {
         ClientRpcResponse::LeaseRevokeResult(result) => {
             let output = LeaseRevokeOutput {
-                success: result.success,
+                is_success: result.success,
                 keys_deleted: result.keys_deleted,
                 error: result.error,
             };
@@ -319,7 +319,7 @@ async fn lease_keepalive(client: &AspenClient, args: KeepaliveArgs, json: bool) 
     match response {
         ClientRpcResponse::LeaseKeepaliveResult(result) => {
             let output = LeaseKeepaliveOutput {
-                success: result.success,
+                is_success: result.success,
                 lease_id: result.lease_id,
                 ttl_seconds: result.ttl_seconds,
                 error: result.error,
@@ -346,7 +346,7 @@ async fn lease_ttl(client: &AspenClient, args: TtlArgs, json: bool) -> Result<()
     match response {
         ClientRpcResponse::LeaseTimeToLiveResult(result) => {
             let output = LeaseTtlOutput {
-                success: result.success,
+                is_success: result.success,
                 lease_id: result.lease_id,
                 granted_ttl_seconds: result.granted_ttl_seconds,
                 remaining_ttl_seconds: result.remaining_ttl_seconds,
@@ -382,7 +382,7 @@ async fn lease_list(client: &AspenClient, json: bool) -> Result<()> {
                 .collect();
 
             let output = LeaseListOutput {
-                success: result.success,
+                is_success: result.success,
                 leases,
                 error: result.error,
             };

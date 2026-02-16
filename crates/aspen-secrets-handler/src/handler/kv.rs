@@ -103,17 +103,17 @@ async fn handle_kv_read(
                 version: response.metadata.version,
                 created_time_unix_ms: response.metadata.created_time_unix_ms,
                 deletion_time_unix_ms: response.metadata.deletion_time_unix_ms,
-                destroyed: response.metadata.destroyed,
+                was_destroyed: response.metadata.destroyed,
             };
             Ok(ClientRpcResponse::SecretsKvReadResult(SecretsKvReadResultResponse {
-                success: true,
+                is_success: true,
                 data: Some(response.data.data),
                 metadata: Some(metadata),
                 error: None,
             }))
         }
         Ok(None) => Ok(ClientRpcResponse::SecretsKvReadResult(SecretsKvReadResultResponse {
-            success: false,
+            is_success: false,
             data: None,
             metadata: None,
             error: Some("Secret not found".to_string()),
@@ -121,7 +121,7 @@ async fn handle_kv_read(
         Err(e) => {
             warn!(error = %e, "KV read failed");
             Ok(ClientRpcResponse::SecretsKvReadResult(SecretsKvReadResultResponse {
-                success: false,
+                is_success: false,
                 data: None,
                 metadata: None,
                 error: Some(sanitize_secrets_error(&e)),
@@ -147,14 +147,14 @@ async fn handle_kv_write(
     };
     match store.write(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsKvWriteResult(SecretsKvWriteResultResponse {
-            success: true,
+            is_success: true,
             version: Some(response.version),
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "KV write failed");
             Ok(ClientRpcResponse::SecretsKvWriteResult(SecretsKvWriteResultResponse {
-                success: false,
+                is_success: false,
                 version: None,
                 error: Some(sanitize_secrets_error(&e)),
             }))
@@ -174,13 +174,13 @@ async fn handle_kv_delete(
     let request = DeleteSecretRequest { path, versions };
     match store.delete(request).await {
         Ok(()) => Ok(ClientRpcResponse::SecretsKvDeleteResult(SecretsKvDeleteResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "KV delete failed");
             Ok(ClientRpcResponse::SecretsKvDeleteResult(SecretsKvDeleteResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(sanitize_secrets_error(&e)),
             }))
         }
@@ -199,13 +199,13 @@ async fn handle_kv_destroy(
     let request = DestroySecretRequest { path, versions };
     match store.destroy(request).await {
         Ok(()) => Ok(ClientRpcResponse::SecretsKvDeleteResult(SecretsKvDeleteResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "KV destroy failed");
             Ok(ClientRpcResponse::SecretsKvDeleteResult(SecretsKvDeleteResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(sanitize_secrets_error(&e)),
             }))
         }
@@ -224,13 +224,13 @@ async fn handle_kv_undelete(
     let request = UndeleteSecretRequest { path, versions };
     match store.undelete(request).await {
         Ok(()) => Ok(ClientRpcResponse::SecretsKvDeleteResult(SecretsKvDeleteResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "KV undelete failed");
             Ok(ClientRpcResponse::SecretsKvDeleteResult(SecretsKvDeleteResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(sanitize_secrets_error(&e)),
             }))
         }
@@ -244,14 +244,14 @@ async fn handle_kv_list(service: &SecretsService, mount: &str, path: String) -> 
     let request = ListSecretsRequest { path };
     match store.list(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsKvListResult(SecretsKvListResultResponse {
-            success: true,
+            is_success: true,
             keys: response.keys,
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "KV list failed");
             Ok(ClientRpcResponse::SecretsKvListResult(SecretsKvListResultResponse {
-                success: false,
+                is_success: false,
                 keys: vec![],
                 error: Some(sanitize_secrets_error(&e)),
             }))
@@ -272,13 +272,13 @@ async fn handle_kv_metadata(service: &SecretsService, mount: &str, path: String)
                 .map(|(&version, info)| SecretsKvVersionInfo {
                     version,
                     created_time_unix_ms: info.created_time_unix_ms,
-                    deleted: info.deletion_time_unix_ms.is_some(),
-                    destroyed: info.destroyed,
+                    was_deleted: info.deletion_time_unix_ms.is_some(),
+                    was_destroyed: info.destroyed,
                 })
                 .collect();
 
             Ok(ClientRpcResponse::SecretsKvMetadataResult(SecretsKvMetadataResultResponse {
-                success: true,
+                is_success: true,
                 current_version: Some(metadata.current_version),
                 max_versions: Some(metadata.max_versions),
                 cas_required: Some(metadata.cas_required),
@@ -290,7 +290,7 @@ async fn handle_kv_metadata(service: &SecretsService, mount: &str, path: String)
             }))
         }
         Ok(None) => Ok(ClientRpcResponse::SecretsKvMetadataResult(SecretsKvMetadataResultResponse {
-            success: false,
+            is_success: false,
             current_version: None,
             max_versions: None,
             cas_required: None,
@@ -303,7 +303,7 @@ async fn handle_kv_metadata(service: &SecretsService, mount: &str, path: String)
         Err(e) => {
             warn!(error = %e, "KV metadata read failed");
             Ok(ClientRpcResponse::SecretsKvMetadataResult(SecretsKvMetadataResultResponse {
-                success: false,
+                is_success: false,
                 current_version: None,
                 max_versions: None,
                 cas_required: None,
@@ -337,7 +337,7 @@ async fn handle_kv_update_metadata(
     };
     match store.update_metadata(request).await {
         Ok(metadata) => Ok(ClientRpcResponse::SecretsKvMetadataResult(SecretsKvMetadataResultResponse {
-            success: true,
+            is_success: true,
             current_version: Some(metadata.current_version),
             max_versions: Some(metadata.max_versions),
             cas_required: Some(metadata.cas_required),
@@ -350,7 +350,7 @@ async fn handle_kv_update_metadata(
         Err(e) => {
             warn!(error = %e, "KV update metadata failed");
             Ok(ClientRpcResponse::SecretsKvMetadataResult(SecretsKvMetadataResultResponse {
-                success: false,
+                is_success: false,
                 current_version: None,
                 max_versions: None,
                 cas_required: None,
@@ -374,13 +374,13 @@ async fn handle_kv_delete_metadata(
     let store = service.get_kv_store(mount).await?;
     match store.delete_metadata(&path).await {
         Ok(_deleted) => Ok(ClientRpcResponse::SecretsKvDeleteResult(SecretsKvDeleteResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "KV delete metadata failed");
             Ok(ClientRpcResponse::SecretsKvDeleteResult(SecretsKvDeleteResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(sanitize_secrets_error(&e)),
             }))
         }

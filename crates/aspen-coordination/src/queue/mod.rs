@@ -218,7 +218,7 @@ mod tests {
         manager.enqueue("test", b"item2".to_vec(), EnqueueOptions::default()).await.unwrap();
 
         let status = manager.status("test").await.unwrap();
-        assert!(status.exists);
+        assert!(status.does_exist);
         assert_eq!(status.visible_count, 2);
         assert_eq!(status.pending_count, 0);
         assert_eq!(status.total_enqueued, 2);

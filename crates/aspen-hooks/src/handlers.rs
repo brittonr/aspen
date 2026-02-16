@@ -440,7 +440,7 @@ impl HookHandler for ForwardHandler {
         // Handle the response
         match response {
             ClientRpcResponse::HookTriggerResult(result) => {
-                if result.success {
+                if result.is_success {
                     tracing::info!(
                         handler = %self.name,
                         target_cluster = %self.target_cluster,

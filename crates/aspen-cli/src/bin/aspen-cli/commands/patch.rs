@@ -156,7 +156,7 @@ async fn patch_list(client: &AspenClient, args: PatchListArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::ForgePatchListResult(result) => {
-            if result.success {
+            if result.is_success {
                 let patches: Vec<PatchOutput> = result
                     .patches
                     .into_iter()
@@ -204,7 +204,7 @@ async fn patch_create(client: &AspenClient, args: PatchCreateArgs, json: bool) -
 
     match response {
         ClientRpcResponse::ForgePatchResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(patch) = result.patch {
                     let output = PatchOutput {
                         id: patch.id,
@@ -226,7 +226,7 @@ async fn patch_create(client: &AspenClient, args: PatchCreateArgs, json: bool) -
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Patch created");
                 }
@@ -250,7 +250,7 @@ async fn patch_show(client: &AspenClient, args: PatchShowArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::ForgePatchResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(patch) = result.patch {
                     let output = PatchDetailOutput {
                         id: patch.id,
@@ -348,7 +348,7 @@ async fn patch_approve(client: &AspenClient, args: PatchApproveArgs, json: bool)
 
     match response {
         ClientRpcResponse::ForgePatchResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Patch {} approved", args.patch);
                 } else {
@@ -360,7 +360,7 @@ async fn patch_approve(client: &AspenClient, args: PatchApproveArgs, json: bool)
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Patch {} approved", args.patch);
                 }
@@ -385,7 +385,7 @@ async fn patch_merge(client: &AspenClient, args: PatchMergeArgs, json: bool) -> 
 
     match response {
         ClientRpcResponse::ForgePatchResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Patch {} merged", args.patch);
                 } else {
@@ -397,7 +397,7 @@ async fn patch_merge(client: &AspenClient, args: PatchMergeArgs, json: bool) -> 
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Patch {} merged", args.patch);
                 }
@@ -422,7 +422,7 @@ async fn patch_close(client: &AspenClient, args: PatchCloseArgs, json: bool) -> 
 
     match response {
         ClientRpcResponse::ForgePatchResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Patch {} closed", args.patch);
                 } else {
@@ -434,7 +434,7 @@ async fn patch_close(client: &AspenClient, args: PatchCloseArgs, json: bool) -> 
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Patch {} closed", args.patch);
                 }

@@ -106,13 +106,13 @@ mod tests {
             blob_size: 4096,
             blob_format: BlobFormat::Raw,
             discovered_at: 1234567890,
-            verified: false,
+            is_verified: false,
         };
 
         assert_eq!(provider.blob_size, 4096);
         assert_eq!(provider.blob_format, BlobFormat::Raw);
         assert_eq!(provider.discovered_at, 1234567890);
-        assert!(!provider.verified);
+        assert!(!provider.is_verified);
     }
 
     #[test]
@@ -123,10 +123,10 @@ mod tests {
             blob_size: 0,
             blob_format: BlobFormat::HashSeq,
             discovered_at: 0,
-            verified: true,
+            is_verified: true,
         };
 
-        assert!(provider.verified);
+        assert!(provider.is_verified);
         assert_eq!(provider.blob_format, BlobFormat::HashSeq);
     }
 

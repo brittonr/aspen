@@ -106,7 +106,7 @@ pub struct RenewArgs {
 pub struct LockOutput {
     pub operation: String,
     pub key: String,
-    pub success: bool,
+    pub is_success: bool,
     pub fencing_token: Option<u64>,
     pub holder_id: Option<String>,
     pub deadline_ms: Option<u64>,
@@ -118,7 +118,7 @@ impl Outputable for LockOutput {
         serde_json::json!({
             "operation": self.operation,
             "key": self.key,
-            "success": self.success,
+            "is_success": self.is_success,
             "fencing_token": self.fencing_token,
             "holder_id": self.holder_id,
             "deadline_ms": self.deadline_ms,
@@ -127,7 +127,7 @@ impl Outputable for LockOutput {
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             match self.operation.as_str() {
                 "acquire" | "try_acquire" => {
                     let token = self.fencing_token.map(|t| t.to_string()).unwrap_or_else(|| "N/A".to_string());
@@ -182,14 +182,14 @@ async fn lock_acquire(client: &AspenClient, args: AcquireArgs, json: bool) -> Re
             let output = LockOutput {
                 operation: "acquire".to_string(),
                 key: args.key,
-                success: result.success,
+                is_success: result.is_success,
                 fencing_token: result.fencing_token,
                 holder_id: result.holder_id,
                 deadline_ms: result.deadline_ms,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -213,14 +213,14 @@ async fn lock_try_acquire(client: &AspenClient, args: TryAcquireArgs, json: bool
             let output = LockOutput {
                 operation: "try_acquire".to_string(),
                 key: args.key,
-                success: result.success,
+                is_success: result.is_success,
                 fencing_token: result.fencing_token,
                 holder_id: result.holder_id,
                 deadline_ms: result.deadline_ms,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -244,14 +244,14 @@ async fn lock_release(client: &AspenClient, args: ReleaseArgs, json: bool) -> Re
             let output = LockOutput {
                 operation: "release".to_string(),
                 key: args.key,
-                success: result.success,
+                is_success: result.is_success,
                 fencing_token: None,
                 holder_id: result.holder_id,
                 deadline_ms: None,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -276,14 +276,14 @@ async fn lock_renew(client: &AspenClient, args: RenewArgs, json: bool) -> Result
             let output = LockOutput {
                 operation: "renew".to_string(),
                 key: args.key,
-                success: result.success,
+                is_success: result.is_success,
                 fencing_token: result.fencing_token,
                 holder_id: result.holder_id,
                 deadline_ms: result.deadline_ms,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

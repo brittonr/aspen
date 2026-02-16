@@ -55,7 +55,7 @@ pub struct BlameResult {
     /// List of changes that contributed to this file, in reverse chronological order.
     pub attributions: Vec<FileAttribution>,
     /// Whether the file currently exists in the channel.
-    pub file_exists: bool,
+    pub does_file_exist: bool,
 }
 
 impl BlameResult {
@@ -65,7 +65,7 @@ impl BlameResult {
             path,
             channel,
             attributions: Vec::new(),
-            file_exists: true,
+            does_file_exist: true,
         }
     }
 

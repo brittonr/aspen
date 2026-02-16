@@ -110,8 +110,8 @@ async fn handle_dns_set_record(
         Some(rt) => rt,
         None => {
             return Ok(ClientRpcResponse::DnsSetRecordResult(DnsRecordResultResponse {
-                success: false,
-                found: false,
+                is_success: false,
+                was_found: false,
                 record: None,
                 error: Some(format!("Invalid record type: {}", record_type)),
             }));
@@ -123,8 +123,8 @@ async fn handle_dns_set_record(
         Ok(d) => d,
         Err(e) => {
             return Ok(ClientRpcResponse::DnsSetRecordResult(DnsRecordResultResponse {
-                success: false,
-                found: false,
+                is_success: false,
+                was_found: false,
                 record: None,
                 error: Some(format!("Invalid record data JSON: {}", e)),
             }));
@@ -134,8 +134,8 @@ async fn handle_dns_set_record(
     // Verify record type matches data
     if data.record_type() != rtype {
         return Ok(ClientRpcResponse::DnsSetRecordResult(DnsRecordResultResponse {
-            success: false,
-            found: false,
+            is_success: false,
+            was_found: false,
             record: None,
             error: Some(format!("Record type mismatch: specified {} but data is {}", rtype, data.record_type())),
         }));
@@ -146,14 +146,14 @@ async fn handle_dns_set_record(
 
     match dns_store.set_record(record.clone()).await {
         Ok(()) => Ok(ClientRpcResponse::DnsSetRecordResult(DnsRecordResultResponse {
-            success: true,
-            found: true,
+            is_success: true,
+            was_found: true,
             record: Some(dns_record_to_response(&record)),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::DnsSetRecordResult(DnsRecordResultResponse {
-            success: false,
-            found: false,
+            is_success: false,
+            was_found: false,
             record: None,
             error: Some(e.to_string()),
         })),
@@ -170,8 +170,8 @@ async fn handle_dns_get_record(
         Some(rt) => rt,
         None => {
             return Ok(ClientRpcResponse::DnsGetRecordResult(DnsRecordResultResponse {
-                success: false,
-                found: false,
+                is_success: false,
+                was_found: false,
                 record: None,
                 error: Some(format!("Invalid record type: {}", record_type)),
             }));
@@ -182,20 +182,20 @@ async fn handle_dns_get_record(
 
     match dns_store.get_record(&domain, rtype).await {
         Ok(Some(record)) => Ok(ClientRpcResponse::DnsGetRecordResult(DnsRecordResultResponse {
-            success: true,
-            found: true,
+            is_success: true,
+            was_found: true,
             record: Some(dns_record_to_response(&record)),
             error: None,
         })),
         Ok(None) => Ok(ClientRpcResponse::DnsGetRecordResult(DnsRecordResultResponse {
-            success: true,
-            found: false,
+            is_success: true,
+            was_found: false,
             record: None,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::DnsGetRecordResult(DnsRecordResultResponse {
-            success: false,
-            found: false,
+            is_success: false,
+            was_found: false,
             record: None,
             error: Some(e.to_string()),
         })),
@@ -211,14 +211,14 @@ async fn handle_dns_get_records(ctx: &ClientProtocolContext, domain: String) -> 
             let record_responses: Vec<DnsRecordResponse> = records.iter().map(dns_record_to_response).collect();
 
             Ok(ClientRpcResponse::DnsGetRecordsResult(DnsRecordsResultResponse {
-                success: true,
+                is_success: true,
                 records: record_responses,
                 count,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::DnsGetRecordsResult(DnsRecordsResultResponse {
-            success: false,
+            is_success: false,
             records: vec![],
             count: 0,
             error: Some(e.to_string()),
@@ -236,8 +236,8 @@ async fn handle_dns_delete_record(
         Some(rt) => rt,
         None => {
             return Ok(ClientRpcResponse::DnsDeleteRecordResult(DnsDeleteRecordResultResponse {
-                success: false,
-                deleted: false,
+                is_success: false,
+                was_deleted: false,
                 error: Some(format!("Invalid record type: {}", record_type)),
             }));
         }
@@ -246,14 +246,14 @@ async fn handle_dns_delete_record(
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
     match dns_store.delete_record(&domain, rtype).await {
-        Ok(deleted) => Ok(ClientRpcResponse::DnsDeleteRecordResult(DnsDeleteRecordResultResponse {
-            success: true,
-            deleted,
+        Ok(was_deleted) => Ok(ClientRpcResponse::DnsDeleteRecordResult(DnsDeleteRecordResultResponse {
+            is_success: true,
+            was_deleted,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::DnsDeleteRecordResult(DnsDeleteRecordResultResponse {
-            success: false,
-            deleted: false,
+            is_success: false,
+            was_deleted: false,
             error: Some(e.to_string()),
         })),
     }
@@ -269,7 +269,7 @@ async fn handle_dns_resolve(
         Some(rt) => rt,
         None => {
             return Ok(ClientRpcResponse::DnsResolveResult(DnsRecordsResultResponse {
-                success: false,
+                is_success: false,
                 records: vec![],
                 count: 0,
                 error: Some(format!("Invalid record type: {}", record_type)),
@@ -285,14 +285,14 @@ async fn handle_dns_resolve(
             let record_responses: Vec<DnsRecordResponse> = records.iter().map(dns_record_to_response).collect();
 
             Ok(ClientRpcResponse::DnsResolveResult(DnsRecordsResultResponse {
-                success: true,
+                is_success: true,
                 records: record_responses,
                 count,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::DnsResolveResult(DnsRecordsResultResponse {
-            success: false,
+            is_success: false,
             records: vec![],
             count: 0,
             error: Some(e.to_string()),
@@ -316,14 +316,14 @@ async fn handle_dns_scan_records(
             let record_responses: Vec<DnsRecordResponse> = records.iter().map(dns_record_to_response).collect();
 
             Ok(ClientRpcResponse::DnsScanRecordsResult(DnsRecordsResultResponse {
-                success: true,
+                is_success: true,
                 records: record_responses,
                 count,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::DnsScanRecordsResult(DnsRecordsResultResponse {
-            success: false,
+            is_success: false,
             records: vec![],
             count: 0,
             error: Some(e.to_string()),
@@ -355,14 +355,14 @@ async fn handle_dns_set_zone(
 
     match dns_store.set_zone(zone.clone()).await {
         Ok(()) => Ok(ClientRpcResponse::DnsSetZoneResult(DnsZoneResultResponse {
-            success: true,
-            found: true,
+            is_success: true,
+            was_found: true,
             zone: Some(zone_to_response(&zone)),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::DnsSetZoneResult(DnsZoneResultResponse {
-            success: false,
-            found: false,
+            is_success: false,
+            was_found: false,
             zone: None,
             error: Some(e.to_string()),
         })),
@@ -374,20 +374,20 @@ async fn handle_dns_get_zone(ctx: &ClientProtocolContext, name: String) -> anyho
 
     match dns_store.get_zone(&name).await {
         Ok(Some(zone)) => Ok(ClientRpcResponse::DnsGetZoneResult(DnsZoneResultResponse {
-            success: true,
-            found: true,
+            is_success: true,
+            was_found: true,
             zone: Some(zone_to_response(&zone)),
             error: None,
         })),
         Ok(None) => Ok(ClientRpcResponse::DnsGetZoneResult(DnsZoneResultResponse {
-            success: true,
-            found: false,
+            is_success: true,
+            was_found: false,
             zone: None,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::DnsGetZoneResult(DnsZoneResultResponse {
-            success: false,
-            found: false,
+            is_success: false,
+            was_found: false,
             zone: None,
             error: Some(e.to_string()),
         })),
@@ -403,14 +403,14 @@ async fn handle_dns_list_zones(ctx: &ClientProtocolContext) -> anyhow::Result<Cl
             let zone_responses: Vec<DnsZoneResponse> = zones.iter().map(zone_to_response).collect();
 
             Ok(ClientRpcResponse::DnsListZonesResult(DnsZonesResultResponse {
-                success: true,
+                is_success: true,
                 zones: zone_responses,
                 count,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::DnsListZonesResult(DnsZonesResultResponse {
-            success: false,
+            is_success: false,
             zones: vec![],
             count: 0,
             error: Some(e.to_string()),
@@ -426,15 +426,15 @@ async fn handle_dns_delete_zone(
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
     match dns_store.delete_zone(&name, delete_records).await {
-        Ok(deleted) => Ok(ClientRpcResponse::DnsDeleteZoneResult(DnsDeleteZoneResultResponse {
-            success: true,
-            deleted,
+        Ok(was_deleted) => Ok(ClientRpcResponse::DnsDeleteZoneResult(DnsDeleteZoneResultResponse {
+            is_success: true,
+            was_deleted,
             records_deleted: 0, // DnsStore doesn't return count; would need enhancement
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::DnsDeleteZoneResult(DnsDeleteZoneResultResponse {
-            success: false,
-            deleted: false,
+            is_success: false,
+            was_deleted: false,
             records_deleted: 0,
             error: Some(e.to_string()),
         })),

@@ -88,7 +88,7 @@ async fn handle_execute_sql(
                 .collect(),
             Err(e) => {
                 return Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
-                    success: false,
+                    is_success: false,
                     columns: None,
                     rows: None,
                     row_count: None,
@@ -135,7 +135,7 @@ async fn handle_execute_sql(
             let columns: Vec<String> = result.columns.into_iter().map(|c| c.name).collect();
 
             Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
-                success: true,
+                is_success: true,
                 columns: Some(columns),
                 rows: Some(rows),
                 row_count: Some(result.row_count),
@@ -147,7 +147,7 @@ async fn handle_execute_sql(
         Err(e) => {
             // Return the error message (SQL errors are safe to show)
             Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
-                success: false,
+                is_success: false,
                 columns: None,
                 rows: None,
                 row_count: None,

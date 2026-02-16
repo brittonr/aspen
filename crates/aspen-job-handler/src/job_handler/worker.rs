@@ -83,7 +83,7 @@ pub(crate) async fn handle_worker_register(
 
     let Some(coordinator) = coordinator else {
         return Ok(ClientRpcResponse::WorkerRegisterResult(WorkerRegisterResultResponse {
-            success: false,
+            is_success: false,
             worker_token: None,
             error: Some("Worker coordinator not available".to_string()),
         }));
@@ -116,7 +116,7 @@ pub(crate) async fn handle_worker_register(
             // Generate a simple token (worker_id + timestamp for uniqueness)
             let token = format!("{}:{}", worker_id, now_ms);
             Ok(ClientRpcResponse::WorkerRegisterResult(WorkerRegisterResultResponse {
-                success: true,
+                is_success: true,
                 worker_token: Some(token),
                 error: None,
             }))
@@ -124,7 +124,7 @@ pub(crate) async fn handle_worker_register(
         Err(e) => {
             warn!(worker_id = %worker_id, error = %e, "failed to register worker");
             Ok(ClientRpcResponse::WorkerRegisterResult(WorkerRegisterResultResponse {
-                success: false,
+                is_success: false,
                 worker_token: None,
                 error: Some(e.to_string()),
             }))
@@ -141,7 +141,7 @@ pub(crate) async fn handle_worker_heartbeat(
 
     let Some(coordinator) = coordinator else {
         return Ok(ClientRpcResponse::WorkerHeartbeatResult(WorkerHeartbeatResultResponse {
-            success: false,
+            is_success: false,
             jobs_to_process: vec![],
             error: Some("Worker coordinator not available".to_string()),
         }));
@@ -172,7 +172,7 @@ pub(crate) async fn handle_worker_heartbeat(
             // Note: jobs_to_process would be filled by job assignment logic
             // For now, external workers poll for jobs separately
             Ok(ClientRpcResponse::WorkerHeartbeatResult(WorkerHeartbeatResultResponse {
-                success: true,
+                is_success: true,
                 jobs_to_process: vec![],
                 error: None,
             }))
@@ -180,7 +180,7 @@ pub(crate) async fn handle_worker_heartbeat(
         Err(e) => {
             warn!(worker_id = %worker_id, error = %e, "failed to process heartbeat");
             Ok(ClientRpcResponse::WorkerHeartbeatResult(WorkerHeartbeatResultResponse {
-                success: false,
+                is_success: false,
                 jobs_to_process: vec![],
                 error: Some(e.to_string()),
             }))
@@ -196,7 +196,7 @@ pub(crate) async fn handle_worker_deregister(
 
     let Some(coordinator) = coordinator else {
         return Ok(ClientRpcResponse::WorkerDeregisterResult(WorkerDeregisterResultResponse {
-            success: false,
+            is_success: false,
             error: Some("Worker coordinator not available".to_string()),
         }));
     };
@@ -205,14 +205,14 @@ pub(crate) async fn handle_worker_deregister(
         Ok(()) => {
             info!(worker_id = %worker_id, "external worker deregistered");
             Ok(ClientRpcResponse::WorkerDeregisterResult(WorkerDeregisterResultResponse {
-                success: true,
+                is_success: true,
                 error: None,
             }))
         }
         Err(e) => {
             warn!(worker_id = %worker_id, error = %e, "failed to deregister worker");
             Ok(ClientRpcResponse::WorkerDeregisterResult(WorkerDeregisterResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(e.to_string()),
             }))
         }

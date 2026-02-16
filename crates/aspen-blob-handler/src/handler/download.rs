@@ -20,7 +20,7 @@ pub(crate) async fn handle_download_blob(
 
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
-            success: false,
+            is_success: false,
             hash: None,
             size: None,
             error: Some("blob store not enabled".to_string()),
@@ -32,7 +32,7 @@ pub(crate) async fn handle_download_blob(
         Ok(t) => t,
         Err(_) => {
             return Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
-                success: false,
+                is_success: false,
                 hash: None,
                 size: None,
                 error: Some("invalid ticket".to_string()),
@@ -52,7 +52,7 @@ pub(crate) async fn handle_download_blob(
             }
 
             Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
-                success: true,
+                is_success: true,
                 hash: Some(blob_ref.hash.to_string()),
                 size: Some(blob_ref.size_bytes),
                 error: None,
@@ -112,7 +112,7 @@ pub(crate) async fn handle_download_blob(
                                 );
 
                                 return Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
-                                    success: true,
+                                    is_success: true,
                                     hash: Some(blob_ref.hash.to_string()),
                                     size: Some(blob_ref.size_bytes),
                                     error: None,
@@ -126,7 +126,7 @@ pub(crate) async fn handle_download_blob(
             // All providers failed (ticket + DHT)
             warn!(error = %ticket_error, "blob download failed from all providers");
             Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
-                success: false,
+                is_success: false,
                 hash: None,
                 size: None,
                 error: Some(sanitize_blob_error(&ticket_error)),
@@ -146,7 +146,7 @@ pub(crate) async fn handle_download_blob_by_hash(
 
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
-            success: false,
+            is_success: false,
             hash: None,
             size: None,
             error: Some("blob store not enabled".to_string()),
@@ -155,7 +155,7 @@ pub(crate) async fn handle_download_blob_by_hash(
 
     let Some(ref discovery) = ctx.content_discovery else {
         return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
-            success: false,
+            is_success: false,
             hash: None,
             size: None,
             error: Some("content discovery not enabled".to_string()),
@@ -167,7 +167,7 @@ pub(crate) async fn handle_download_blob_by_hash(
         Ok(h) => h,
         Err(_) => {
             return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
-                success: false,
+                is_success: false,
                 hash: None,
                 size: None,
                 error: Some("invalid hash".to_string()),
@@ -181,7 +181,7 @@ pub(crate) async fn handle_download_blob_by_hash(
         Err(e) => {
             warn!(error = %e, hash = %hash.fmt_short(), "DHT provider lookup failed");
             return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
-                success: false,
+                is_success: false,
                 hash: Some(hash.to_string()),
                 size: None,
                 error: Some("provider lookup failed".to_string()),
@@ -191,7 +191,7 @@ pub(crate) async fn handle_download_blob_by_hash(
 
     if providers.is_empty() {
         return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
-            success: false,
+            is_success: false,
             hash: Some(hash.to_string()),
             size: None,
             error: Some("no providers found".to_string()),
@@ -231,7 +231,7 @@ pub(crate) async fn handle_download_blob_by_hash(
                 );
 
                 return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
-                    success: true,
+                    is_success: true,
                     hash: Some(blob_ref.hash.to_string()),
                     size: Some(blob_ref.size_bytes),
                     error: None,
@@ -252,7 +252,7 @@ pub(crate) async fn handle_download_blob_by_hash(
     let error_msg = last_error.map(|e| sanitize_blob_error(&e)).unwrap_or_else(|| "all providers failed".to_string());
     warn!(hash = %hash.fmt_short(), error = %error_msg, "blob download failed from all providers");
     Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
-        success: false,
+        is_success: false,
         hash: Some(hash.to_string()),
         size: None,
         error: Some(error_msg),
@@ -266,7 +266,7 @@ pub(crate) async fn handle_download_blob_by_hash(
     _tag: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
-        success: false,
+        is_success: false,
         hash: None,
         size: None,
         error: Some("global-discovery feature not enabled".to_string()),
@@ -286,7 +286,7 @@ pub(crate) async fn handle_download_blob_by_provider(
 
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
-            success: false,
+            is_success: false,
             hash: None,
             size: None,
             error: Some("blob store not enabled".to_string()),
@@ -295,7 +295,7 @@ pub(crate) async fn handle_download_blob_by_provider(
 
     let Some(ref discovery) = ctx.content_discovery else {
         return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
-            success: false,
+            is_success: false,
             hash: None,
             size: None,
             error: Some("content discovery not enabled".to_string()),
@@ -307,7 +307,7 @@ pub(crate) async fn handle_download_blob_by_provider(
         Ok(h) => h,
         Err(_) => {
             return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
-                success: false,
+                is_success: false,
                 hash: None,
                 size: None,
                 error: Some("invalid hash".to_string()),
@@ -320,7 +320,7 @@ pub(crate) async fn handle_download_blob_by_provider(
         Ok(k) => k,
         Err(_) => {
             return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
-                success: false,
+                is_success: false,
                 hash: Some(hash.to_string()),
                 size: None,
                 error: Some("invalid provider public key".to_string()),
@@ -338,7 +338,7 @@ pub(crate) async fn handle_download_blob_by_provider(
                 "provider not found in DHT mutable items"
             );
             return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
-                success: false,
+                is_success: false,
                 hash: Some(hash.to_string()),
                 size: None,
                 error: Some("provider not found in DHT".to_string()),
@@ -352,7 +352,7 @@ pub(crate) async fn handle_download_blob_by_provider(
                 "DHT mutable item lookup failed"
             );
             return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
-                success: false,
+                is_success: false,
                 hash: Some(hash.to_string()),
                 size: None,
                 error: Some(format!("DHT lookup failed: {}", e)),
@@ -387,7 +387,7 @@ pub(crate) async fn handle_download_blob_by_provider(
             );
 
             Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
-                success: true,
+                is_success: true,
                 hash: Some(blob_ref.hash.to_string()),
                 size: Some(blob_ref.size_bytes),
                 error: None,
@@ -402,7 +402,7 @@ pub(crate) async fn handle_download_blob_by_provider(
                 "blob download from provider failed"
             );
             Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
-                success: false,
+                is_success: false,
                 hash: Some(hash.to_string()),
                 size: None,
                 error: Some(error_msg),
@@ -419,7 +419,7 @@ pub(crate) async fn handle_download_blob_by_provider(
     _tag: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
-        success: false,
+        is_success: false,
         hash: None,
         size: None,
         error: Some("global-discovery feature not enabled".to_string()),

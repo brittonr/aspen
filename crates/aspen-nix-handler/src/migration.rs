@@ -145,12 +145,12 @@ async fn handle_migration_status(ctx: &ClientProtocolContext) -> anyhow::Result<
 
     match load_progress(&ctx.kv_store).await? {
         Some(progress) => Ok(ClientRpcResponse::CacheMigrationStatusResult(CacheMigrationStatusResultResponse {
-            running: !progress.is_complete,
+            is_running: !progress.is_complete,
             progress: Some(progress_to_response(&progress)),
             error: None,
         })),
         None => Ok(ClientRpcResponse::CacheMigrationStatusResult(CacheMigrationStatusResultResponse {
-            running: false,
+            is_running: false,
             progress: None,
             error: None,
         })),

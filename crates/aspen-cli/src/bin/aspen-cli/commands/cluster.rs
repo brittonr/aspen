@@ -76,8 +76,8 @@ pub struct PromoteArgs {
     pub replace: Option<u64>,
 
     /// Skip safety checks.
-    #[arg(long)]
-    pub force: bool,
+    #[arg(long = "force")]
+    pub is_force: bool,
 }
 
 #[derive(Args)]
@@ -254,7 +254,7 @@ async fn promote_learner(client: &AspenClient, args: PromoteArgs, json: bool) ->
         .send(ClientRpcRequest::PromoteLearner {
             learner_id: args.learner_id,
             replace_node: args.replace,
-            force: args.force,
+            is_force: args.is_force,
         })
         .await?;
 
@@ -266,11 +266,11 @@ async fn promote_learner(client: &AspenClient, args: PromoteArgs, json: bool) ->
                     serde_json::json!({
                         "status": "success",
                         "learner_id": args.learner_id,
-                        "promoted": result.success,
+                        "promoted": result.is_success,
                         "message": result.message
                     })
                 );
-            } else if result.success {
+            } else if result.is_success {
                 println!("Learner {} promoted to voter", args.learner_id);
             } else {
                 println!("Promotion failed: {}", result.message);
@@ -327,13 +327,13 @@ async fn checkpoint_wal(client: &AspenClient, json: bool) -> Result<()> {
                 println!(
                     "{}",
                     serde_json::json!({
-                        "status": if result.success { "success" } else { "failed" },
+                        "status": if result.is_success { "success" } else { "failed" },
                         "pages_checkpointed": result.pages_checkpointed,
                         "wal_size_before_bytes": result.wal_size_before_bytes,
                         "wal_size_after_bytes": result.wal_size_after_bytes
                     })
                 );
-            } else if result.success {
+            } else if result.is_success {
                 let pages = result.pages_checkpointed.unwrap_or(0);
                 println!("WAL checkpoint complete: {} pages checkpointed", pages);
             } else {

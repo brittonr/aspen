@@ -335,7 +335,7 @@ impl VerifyRequest {
 #[derive(Debug, Clone)]
 pub struct VerifyResponse {
     /// Whether the signature is valid.
-    pub valid: bool,
+    pub is_valid: bool,
 }
 
 /// Request to rewrap ciphertext with latest key version.

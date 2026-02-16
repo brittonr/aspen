@@ -42,7 +42,7 @@ impl FederationHandler {
 async fn handle_add_peer_cluster(ctx: &ClientProtocolContext, ticket: String) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref peer_manager) = ctx.peer_manager else {
         return Ok(ClientRpcResponse::AddPeerClusterResult(AddPeerClusterResultResponse {
-            success: false,
+            is_success: false,
             cluster_id: None,
             priority: None,
             error: Some("peer sync not enabled".to_string()),
@@ -54,7 +54,7 @@ async fn handle_add_peer_cluster(ctx: &ClientProtocolContext, ticket: String) ->
         Ok(t) => t,
         Err(_) => {
             return Ok(ClientRpcResponse::AddPeerClusterResult(AddPeerClusterResultResponse {
-                success: false,
+                is_success: false,
                 cluster_id: None,
                 priority: None,
                 error: Some("invalid ticket".to_string()),
@@ -73,7 +73,7 @@ async fn handle_add_peer_cluster(ctx: &ClientProtocolContext, ticket: String) ->
 
     match peer_manager.add_peer(docs_ticket).await {
         Ok(()) => Ok(ClientRpcResponse::AddPeerClusterResult(AddPeerClusterResultResponse {
-            success: true,
+            is_success: true,
             cluster_id: Some(cluster_id),
             priority: Some(priority),
             error: None,
@@ -81,7 +81,7 @@ async fn handle_add_peer_cluster(ctx: &ClientProtocolContext, ticket: String) ->
         Err(e) => {
             warn!(error = %e, "add peer cluster failed");
             Ok(ClientRpcResponse::AddPeerClusterResult(AddPeerClusterResultResponse {
-                success: false,
+                is_success: false,
                 cluster_id: Some(cluster_id),
                 priority: None,
                 error: Some("peer cluster operation failed".to_string()),
@@ -96,7 +96,7 @@ async fn handle_remove_peer_cluster(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref peer_manager) = ctx.peer_manager else {
         return Ok(ClientRpcResponse::RemovePeerClusterResult(RemovePeerClusterResultResponse {
-            success: false,
+            is_success: false,
             cluster_id: cluster_id.clone(),
             error: Some("peer sync not enabled".to_string()),
         }));
@@ -104,14 +104,14 @@ async fn handle_remove_peer_cluster(
 
     match peer_manager.remove_peer(&cluster_id).await {
         Ok(()) => Ok(ClientRpcResponse::RemovePeerClusterResult(RemovePeerClusterResultResponse {
-            success: true,
+            is_success: true,
             cluster_id,
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "remove peer cluster failed");
             Ok(ClientRpcResponse::RemovePeerClusterResult(RemovePeerClusterResultResponse {
-                success: false,
+                is_success: false,
                 cluster_id,
                 error: Some("peer cluster operation failed".to_string()),
             }))

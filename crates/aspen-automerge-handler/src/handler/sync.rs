@@ -22,7 +22,7 @@ pub(crate) async fn handle_generate_sync_message(
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeGenerateSyncMessageResult(
                 AutomergeGenerateSyncMessageResultResponse {
-                    success: false,
+                    is_success: false,
                     has_message: false,
                     message: None,
                     sync_state: None,
@@ -38,7 +38,7 @@ pub(crate) async fn handle_generate_sync_message(
         Ok(None) => {
             return Ok(ClientRpcResponse::AutomergeGenerateSyncMessageResult(
                 AutomergeGenerateSyncMessageResultResponse {
-                    success: false,
+                    is_success: false,
                     has_message: false,
                     message: None,
                     sync_state: None,
@@ -49,7 +49,7 @@ pub(crate) async fn handle_generate_sync_message(
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeGenerateSyncMessageResult(
                 AutomergeGenerateSyncMessageResultResponse {
-                    success: false,
+                    is_success: false,
                     has_message: false,
                     message: None,
                     sync_state: None,
@@ -67,7 +67,7 @@ pub(crate) async fn handle_generate_sync_message(
                 Err(e) => {
                     return Ok(ClientRpcResponse::AutomergeGenerateSyncMessageResult(
                         AutomergeGenerateSyncMessageResultResponse {
-                            success: false,
+                            is_success: false,
                             has_message: false,
                             message: None,
                             sync_state: None,
@@ -81,7 +81,7 @@ pub(crate) async fn handle_generate_sync_message(
                 Err(e) => {
                     return Ok(ClientRpcResponse::AutomergeGenerateSyncMessageResult(
                         AutomergeGenerateSyncMessageResultResponse {
-                            success: false,
+                            is_success: false,
                             has_message: false,
                             message: None,
                             sync_state: None,
@@ -104,7 +104,7 @@ pub(crate) async fn handle_generate_sync_message(
         Some(msg) => {
             let msg_b64 = base64::engine::general_purpose::STANDARD.encode(msg.encode());
             Ok(ClientRpcResponse::AutomergeGenerateSyncMessageResult(AutomergeGenerateSyncMessageResultResponse {
-                success: true,
+                is_success: true,
                 has_message: true,
                 message: Some(msg_b64),
                 sync_state: Some(new_state_b64),
@@ -112,7 +112,7 @@ pub(crate) async fn handle_generate_sync_message(
             }))
         }
         None => Ok(ClientRpcResponse::AutomergeGenerateSyncMessageResult(AutomergeGenerateSyncMessageResultResponse {
-            success: true,
+            is_success: true,
             has_message: false,
             message: None,
             sync_state: Some(new_state_b64),
@@ -133,7 +133,7 @@ pub(crate) async fn handle_receive_sync_message(
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeReceiveSyncMessageResult(
                 AutomergeReceiveSyncMessageResultResponse {
-                    success: false,
+                    is_success: false,
                     changes_applied: false,
                     sync_state: None,
                     error: Some(format!("Invalid document ID: {}", e)),
@@ -148,7 +148,7 @@ pub(crate) async fn handle_receive_sync_message(
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeReceiveSyncMessageResult(
                 AutomergeReceiveSyncMessageResultResponse {
-                    success: false,
+                    is_success: false,
                     changes_applied: false,
                     sync_state: None,
                     error: Some(format!("Invalid message bytes: {}", e)),
@@ -162,7 +162,7 @@ pub(crate) async fn handle_receive_sync_message(
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeReceiveSyncMessageResult(
                 AutomergeReceiveSyncMessageResultResponse {
-                    success: false,
+                    is_success: false,
                     changes_applied: false,
                     sync_state: None,
                     error: Some(format!("Invalid sync message: {}", e)),
@@ -177,7 +177,7 @@ pub(crate) async fn handle_receive_sync_message(
         Ok(None) => {
             return Ok(ClientRpcResponse::AutomergeReceiveSyncMessageResult(
                 AutomergeReceiveSyncMessageResultResponse {
-                    success: false,
+                    is_success: false,
                     changes_applied: false,
                     sync_state: None,
                     error: Some("Document not found".to_string()),
@@ -187,7 +187,7 @@ pub(crate) async fn handle_receive_sync_message(
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeReceiveSyncMessageResult(
                 AutomergeReceiveSyncMessageResultResponse {
-                    success: false,
+                    is_success: false,
                     changes_applied: false,
                     sync_state: None,
                     error: Some(e.to_string()),
@@ -204,7 +204,7 @@ pub(crate) async fn handle_receive_sync_message(
                 Err(e) => {
                     return Ok(ClientRpcResponse::AutomergeReceiveSyncMessageResult(
                         AutomergeReceiveSyncMessageResultResponse {
-                            success: false,
+                            is_success: false,
                             changes_applied: false,
                             sync_state: None,
                             error: Some(format!("Invalid sync state: {}", e)),
@@ -217,7 +217,7 @@ pub(crate) async fn handle_receive_sync_message(
                 Err(e) => {
                     return Ok(ClientRpcResponse::AutomergeReceiveSyncMessageResult(
                         AutomergeReceiveSyncMessageResultResponse {
-                            success: false,
+                            is_success: false,
                             changes_applied: false,
                             sync_state: None,
                             error: Some(format!("Invalid sync state: {}", e)),
@@ -235,7 +235,7 @@ pub(crate) async fn handle_receive_sync_message(
     // Receive sync message
     if let Err(e) = doc.sync().receive_sync_message(&mut sync_state, message) {
         return Ok(ClientRpcResponse::AutomergeReceiveSyncMessageResult(AutomergeReceiveSyncMessageResultResponse {
-            success: false,
+            is_success: false,
             changes_applied: false,
             sync_state: None,
             error: Some(format!("Failed to receive sync message: {}", e)),
@@ -249,7 +249,7 @@ pub(crate) async fn handle_receive_sync_message(
     // Save document if changes were applied
     if changes_applied && let Err(e) = store.save(&id, &mut doc).await {
         return Ok(ClientRpcResponse::AutomergeReceiveSyncMessageResult(AutomergeReceiveSyncMessageResultResponse {
-            success: false,
+            is_success: false,
             changes_applied: true,
             sync_state: None,
             error: Some(format!("Failed to save document after sync: {}", e)),
@@ -260,7 +260,7 @@ pub(crate) async fn handle_receive_sync_message(
     let new_state_b64 = base64::engine::general_purpose::STANDARD.encode(sync_state.encode());
 
     Ok(ClientRpcResponse::AutomergeReceiveSyncMessageResult(AutomergeReceiveSyncMessageResultResponse {
-        success: true,
+        is_success: true,
         changes_applied,
         sync_state: Some(new_state_b64),
         error: None,

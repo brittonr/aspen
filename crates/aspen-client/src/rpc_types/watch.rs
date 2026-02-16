@@ -32,7 +32,7 @@ pub struct WatchInfo {
     pub last_sent_index: u64,
     pub events_sent: u64,
     pub created_at_ms: u64,
-    pub include_prev_value: bool,
+    pub should_include_prev_value: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -377,7 +377,7 @@ pub struct DocsSyncCompletedPayload {
     /// Duration of the sync session in milliseconds.
     pub duration_ms: u64,
     /// Whether the sync completed successfully.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if sync failed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
@@ -551,13 +551,13 @@ mod tests {
             cluster_id: "cluster-1".to_string(),
             entries_synced: 100,
             duration_ms: 500,
-            success: true,
+            is_success: true,
             error: None,
         };
         let json = serde_json::to_value(&sync_completed).unwrap();
         assert_eq!(json["cluster_id"], "cluster-1");
         assert_eq!(json["entries_synced"], 100);
-        assert_eq!(json["success"], true);
+        assert_eq!(json["is_success"], true);
         assert!(json.get("error").is_none());
 
         // DocsEntryImported

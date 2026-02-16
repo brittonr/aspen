@@ -76,7 +76,7 @@ pub struct ShellCommandPayload {
     pub working_dir: Option<PathBuf>,
     /// Whether to capture stderr separately (default: true).
     #[serde(default = "default_true")]
-    pub capture_stderr: bool,
+    pub should_capture_stderr: bool,
     /// Maximum output size in bytes before truncation.
     #[serde(default = "default_max_output")]
     pub max_output_bytes: u64,
@@ -242,7 +242,7 @@ impl ShellCommandWorker {
             .current_dir(&working_dir)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(if payload.capture_stderr {
+            .stderr(if payload.should_capture_stderr {
                 Stdio::piped()
             } else {
                 Stdio::null()
@@ -601,7 +601,7 @@ mod tests {
 
         assert_eq!(payload.command, "echo");
         assert_eq!(payload.args, vec!["hello"]);
-        assert!(payload.capture_stderr);
+        assert!(payload.should_capture_stderr);
         assert_eq!(payload.max_output_bytes, DEFAULT_MAX_OUTPUT_BYTES);
         assert_eq!(payload.graceful_shutdown_secs, 5);
         assert!(payload.auth_token.is_none());

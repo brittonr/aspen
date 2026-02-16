@@ -37,9 +37,9 @@ impl std::str::FromStr for OutputFormat {
 }
 
 /// Render a report in the specified format.
-pub fn render(report: &VerificationReport, format: OutputFormat, verbose: bool, min_severity: Severity) -> String {
+pub fn render(report: &VerificationReport, format: OutputFormat, is_verbose: bool, min_severity: Severity) -> String {
     match format {
-        OutputFormat::Terminal => terminal::render(report, verbose, min_severity),
+        OutputFormat::Terminal => terminal::render(report, is_verbose, min_severity),
         OutputFormat::Json => json::render(report, min_severity),
         OutputFormat::GithubActions => github::render(report, min_severity),
         OutputFormat::Markdown => markdown::render(report, min_severity),

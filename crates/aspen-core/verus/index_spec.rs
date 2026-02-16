@@ -35,7 +35,7 @@ verus! {
         /// Version number (monotonically increasing)
         pub version: u64,
         /// Whether entry is deleted (soft delete)
-        pub deleted: bool,
+        pub was_deleted: bool,
     }
 
     /// Index entry pointing to a primary
@@ -99,7 +99,7 @@ verus! {
                 let entry = state.indices[index_key][i];
                 state.primaries.contains_key(entry.primary_key) &&
                 entry.primary_version == state.primaries[entry.primary_key].version &&
-                !state.primaries[entry.primary_key].deleted
+                !state.primaries[entry.primary_key].was_deleted
             }
     }
 
@@ -162,7 +162,7 @@ verus! {
             key: update.primary_key,
             value: update.new_value,
             version: new_version,
-            deleted: false,
+            was_deleted: false,
         };
 
         // Create new index entry
@@ -243,7 +243,7 @@ verus! {
         // After delete (hard or soft), no index entries reference the key
         // (May be immediate or lazy cleanup)
         !post.primaries.contains_key(deleted_key) ||
-        post.primaries[deleted_key].deleted ==>
+        post.primaries[deleted_key].was_deleted ==>
         forall |index_key: Seq<u8>, i: int|
             #![trigger post.indices.contains_key(index_key), post.indices[index_key][i]]
             post.indices.contains_key(index_key) &&
@@ -308,7 +308,7 @@ verus! {
             key: key,
             value: value,
             version: 1,
-            deleted: false,
+            was_deleted: false,
         };
         let new_index_entry = IndexEntrySpec {
             index_key: index_key,
@@ -452,7 +452,7 @@ verus! {
                         key: Seq::empty(),
                         value: Seq::empty(),
                         version: 0,
-                        deleted: true,
+                        was_deleted: true,
                     }
                 }
             )

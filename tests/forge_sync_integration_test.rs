@@ -132,7 +132,7 @@ async fn test_sync_single_commit_already_present() {
     assert_eq!(result.fetched, 0);
     assert!(result.missing.is_empty());
     assert!(result.errors.is_empty());
-    assert!(!result.truncated);
+    assert!(!result.is_truncated);
     assert!(result.is_complete());
 }
 

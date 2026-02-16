@@ -64,8 +64,8 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueCreateResult(result) => {
-                if result.success {
-                    Ok(result.created)
+                if result.is_success {
+                    Ok(result.was_created)
                 } else {
                     bail!("queue create failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
@@ -87,7 +87,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueDeleteResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result.items_deleted.unwrap_or(0))
                 } else {
                     bail!("queue delete failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -121,7 +121,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueEnqueueResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result.item_id.unwrap_or(0))
                 } else {
                     bail!("enqueue failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -157,7 +157,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueEnqueueBatchResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result.item_ids)
                 } else {
                     bail!("enqueue batch failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -189,7 +189,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueDequeueResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result
                         .items
                         .into_iter()
@@ -233,7 +233,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueDequeueResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result
                         .items
                         .into_iter()
@@ -268,7 +268,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueuePeekResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result
                         .items
                         .into_iter()
@@ -304,7 +304,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueAckResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     bail!("ack failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -328,7 +328,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueNackResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     bail!("nack failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -352,7 +352,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueNackResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     bail!("nack_to_dlq failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -377,7 +377,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueExtendVisibilityResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result.new_deadline_ms.unwrap_or(0))
                 } else {
                     bail!("extend_visibility failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -398,9 +398,9 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueStatusResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(QueueStatusInfo {
-                        exists: result.exists,
+                        does_exist: result.does_exist,
                         visible_count: result.visible_count.unwrap_or(0),
                         pending_count: result.pending_count.unwrap_or(0),
                         dlq_count: result.dlq_count.unwrap_or(0),
@@ -427,7 +427,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueGetDLQResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result
                         .items
                         .into_iter()
@@ -461,7 +461,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
 
         match response {
             ClientRpcResponse::QueueRedriveDLQResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     bail!("redrive_dlq failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -543,7 +543,7 @@ pub struct QueuePeekedItem {
 #[derive(Debug, Clone)]
 pub struct QueueStatusInfo {
     /// Whether the queue exists.
-    pub exists: bool,
+    pub does_exist: bool,
     /// Approximate number of visible items.
     pub visible_count: u64,
     /// Approximate number of pending items.

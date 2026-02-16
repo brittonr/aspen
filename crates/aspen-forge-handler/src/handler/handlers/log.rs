@@ -18,7 +18,7 @@ pub(crate) async fn handle_log(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
-                success: false,
+                is_success: false,
                 commits: vec![],
                 count: 0,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -34,7 +34,7 @@ pub(crate) async fn handle_log(
         Ok(Some(h)) => h,
         Ok(None) => {
             return Ok(ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
-                success: true,
+                is_success: true,
                 commits: vec![],
                 count: 0,
                 error: None,
@@ -42,7 +42,7 @@ pub(crate) async fn handle_log(
         }
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
-                success: false,
+                is_success: false,
                 commits: vec![],
                 count: 0,
                 error: Some(e.to_string()),
@@ -88,7 +88,7 @@ pub(crate) async fn handle_log(
 
     let count = commits.len() as u32;
     Ok(ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
-        success: true,
+        is_success: true,
         commits,
         count,
         error: None,

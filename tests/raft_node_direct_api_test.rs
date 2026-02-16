@@ -557,7 +557,7 @@ async fn test_health_monitor_reports_healthy() {
     assert!(is_healthy, "node should be healthy after initialization");
 
     let status = health_monitor.status().await;
-    assert!(status.healthy);
+    assert!(status.is_healthy);
     assert!(status.has_membership);
     assert!(!status.is_shutdown);
     assert!(status.leader.is_some());

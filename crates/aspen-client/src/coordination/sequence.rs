@@ -63,7 +63,7 @@ impl<C: CoordinationRpc> SequenceClient<C> {
     fn extract_value(response: ClientRpcResponse) -> Result<u64> {
         match response {
             ClientRpcResponse::SequenceResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(result.value.unwrap_or(0))
                 } else {
                     bail!("sequence operation failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))

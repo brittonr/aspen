@@ -137,7 +137,7 @@ pub struct PromotionRequest {
     /// Optional voter to replace (if promoting to replace failed node).
     pub replace_node: Option<NodeId>,
     /// Skip safety checks (use with extreme caution).
-    pub force: bool,
+    pub is_force: bool,
 }
 
 /// Result of a successful learner promotion.
@@ -198,7 +198,7 @@ where C: ClusterController + 'static
 
     /// Promote a learner to voter with safety validation.
     ///
-    /// Safety checks performed (unless force=true):
+    /// Safety checks performed (unless is_force=true):
     /// 1. Membership cooldown elapsed (300s since last change)
     /// 2. Learner is healthy and reachable
     /// 3. Learner is caught up on log (<100 entries behind)
@@ -208,7 +208,7 @@ where C: ClusterController + 'static
     /// Tiger Style: Fail-fast on validation errors, explicit error types.
     pub async fn promote_learner(&self, request: PromotionRequest) -> Result<PromotionResult, PromotionError> {
         // Safety check 1: Membership cooldown
-        if !request.force {
+        if !request.is_force {
             self.check_membership_cooldown().await?;
         }
 
@@ -235,17 +235,17 @@ where C: ClusterController + 'static
         }
 
         // Safety check 2: Verify learner is healthy (unless forced)
-        if !request.force {
+        if !request.is_force {
             self.verify_learner_healthy(request.learner_id).await?;
         }
 
         // Safety check 3: Verify learner is caught up on log (unless forced)
-        if !request.force {
+        if !request.is_force {
             self.verify_learner_caught_up(request.learner_id, &metrics).await?;
         }
 
         // Safety check 4: Verify quorum will be maintained
-        if !request.force {
+        if !request.is_force {
             self.verify_quorum(&current_voters, request.replace_node).await?;
         }
 

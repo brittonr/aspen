@@ -68,7 +68,7 @@ pub enum JobsRequest {
         job_id: String,
         receipt_handle: String,
         execution_token: String,
-        success: bool,
+        is_success: bool,
         error_message: Option<String>,
         output_data: Option<Vec<u8>>,
         processing_time_ms: u64,

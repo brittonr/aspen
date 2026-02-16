@@ -65,7 +65,7 @@ pub enum BatchCondition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchReadResultResponse {
     /// Whether the batch read succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Values for each key in request order.
     pub values: Option<Vec<Option<Vec<u8>>>>,
     /// Error message if operation failed.
@@ -76,7 +76,7 @@ pub struct BatchReadResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchWriteResultResponse {
     /// Whether the batch write succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Number of operations applied (all or none).
     pub operations_applied: Option<u32>,
     /// Error message if operation failed.
@@ -87,7 +87,7 @@ pub struct BatchWriteResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConditionalBatchWriteResultResponse {
     /// Whether the batch executed (all conditions passed).
-    pub success: bool,
+    pub is_success: bool,
     /// Whether all conditions were satisfied.
     pub conditions_met: bool,
     /// Number of operations applied (0 if conditions failed).

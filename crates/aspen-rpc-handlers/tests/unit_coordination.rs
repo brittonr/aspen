@@ -213,7 +213,7 @@ mod counter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::CounterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 assert_eq!(result.value, Some(0)); // Uninitialized counter defaults to 0
             }
             other => panic!("unexpected response: {:?}", other),
@@ -233,7 +233,7 @@ mod counter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::CounterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 assert_eq!(result.value, Some(1));
             }
             other => panic!("unexpected response: {:?}", other),
@@ -247,7 +247,7 @@ mod counter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::CounterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 assert_eq!(result.value, Some(2));
             }
             other => panic!("unexpected response: {:?}", other),
@@ -274,7 +274,7 @@ mod counter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::CounterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 assert_eq!(result.value, Some(9));
             }
             other => panic!("unexpected response: {:?}", other),
@@ -294,7 +294,7 @@ mod counter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::CounterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 assert_eq!(result.value, Some(5));
             }
             other => panic!("unexpected response: {:?}", other),
@@ -321,7 +321,7 @@ mod counter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::CounterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 assert_eq!(result.value, Some(70));
             }
             other => panic!("unexpected response: {:?}", other),
@@ -341,7 +341,7 @@ mod counter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::CounterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 assert_eq!(result.value, Some(42));
             }
             other => panic!("unexpected response: {:?}", other),
@@ -370,7 +370,7 @@ mod counter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::CounterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
             }
             other => panic!("unexpected response: {:?}", other),
         }
@@ -388,7 +388,7 @@ mod counter_tests {
         match response {
             ClientRpcResponse::CounterResult(result) => {
                 // The handler processes the request; validation may happen elsewhere
-                assert!(result.success);
+                assert!(result.is_success);
             }
             other => panic!("unexpected response: {:?}", other),
         }
@@ -414,7 +414,7 @@ mod signed_counter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::SignedCounterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 assert_eq!(result.value, Some(0));
             }
             other => panic!("unexpected response: {:?}", other),
@@ -434,7 +434,7 @@ mod signed_counter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::SignedCounterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 assert_eq!(result.value, Some(100));
             }
             other => panic!("unexpected response: {:?}", other),
@@ -462,7 +462,7 @@ mod signed_counter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::SignedCounterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 assert_eq!(result.value, Some(20));
             }
             other => panic!("unexpected response: {:?}", other),
@@ -490,7 +490,7 @@ mod sequence_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         let first_value = match response {
             ClientRpcResponse::SequenceResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 result.value.unwrap()
             }
             other => panic!("unexpected response: {:?}", other),
@@ -509,7 +509,7 @@ mod sequence_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::SequenceResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 // Next batch starts at 101 (after first batch of 100)
                 let second_value = result.value.unwrap();
                 assert!(second_value > first_value);
@@ -532,7 +532,7 @@ mod sequence_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::SequenceResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 // Returns start of reserved range
                 let start = result.value.unwrap();
                 assert_eq!(start, 1); // First reservation starts at 1
@@ -549,7 +549,7 @@ mod sequence_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::SequenceResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 let start = result.value.unwrap();
                 assert_eq!(start, 6); // Continues after first 5
             }
@@ -570,7 +570,7 @@ mod sequence_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         let initial_value = match response {
             ClientRpcResponse::SequenceResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 result.value.unwrap()
             }
             other => panic!("unexpected response: {:?}", other),
@@ -590,7 +590,7 @@ mod sequence_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::SequenceResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 // After reserving 50, current should be higher than initial
                 let current = result.value.unwrap();
                 assert!(current > initial_value);
@@ -622,7 +622,7 @@ mod rate_limiter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::RateLimiterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 // success=true means tokens were acquired
             }
             other => panic!("unexpected response: {:?}", other),
@@ -653,7 +653,7 @@ mod rate_limiter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::RateLimiterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 // tokens_remaining indicates available tokens
                 assert!(result.tokens_remaining.is_some());
             }
@@ -685,7 +685,7 @@ mod rate_limiter_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::RateLimiterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
             }
             other => panic!("unexpected response: {:?}", other),
         }
@@ -700,7 +700,7 @@ mod rate_limiter_tests {
         let response = handler.handle(acquire_req, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::RateLimiterResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 // success=true means tokens were acquired
             }
             other => panic!("unexpected response: {:?}", other),
@@ -727,7 +727,7 @@ mod barrier_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::BarrierStatusResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
             }
             other => panic!("unexpected response: {:?}", other),
         }
@@ -748,7 +748,7 @@ mod barrier_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::BarrierLeaveResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
             }
             other => panic!("unexpected response: {:?}", other),
         }
@@ -778,7 +778,7 @@ mod semaphore_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::SemaphoreTryAcquireResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 assert!(result.permits_acquired.unwrap_or(0) > 0);
             }
             other => panic!("unexpected response: {:?}", other),
@@ -810,7 +810,7 @@ mod semaphore_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::SemaphoreReleaseResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
             }
             other => panic!("unexpected response: {:?}", other),
         }
@@ -828,7 +828,7 @@ mod semaphore_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::SemaphoreStatusResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
             }
             other => panic!("unexpected response: {:?}", other),
         }
@@ -856,7 +856,7 @@ mod rwlock_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::RWLockTryAcquireReadResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 // success=true means lock was acquired
             }
             other => panic!("unexpected response: {:?}", other),
@@ -877,7 +877,7 @@ mod rwlock_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::RWLockTryAcquireWriteResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 // success=true means lock was acquired
             }
             other => panic!("unexpected response: {:?}", other),
@@ -906,7 +906,7 @@ mod rwlock_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::RWLockReleaseReadResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
             }
             other => panic!("unexpected response: {:?}", other),
         }
@@ -924,7 +924,7 @@ mod rwlock_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::RWLockStatusResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
             }
             other => panic!("unexpected response: {:?}", other),
         }
@@ -953,8 +953,8 @@ mod queue_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::QueueCreateResult(result) => {
-                assert!(result.success);
-                assert!(result.created); // First create should return true
+                assert!(result.is_success);
+                assert!(result.was_created); // First create should return true
             }
             other => panic!("unexpected response: {:?}", other),
         }
@@ -979,8 +979,8 @@ mod queue_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::QueueCreateResult(result) => {
-                assert!(result.success);
-                assert!(!result.created); // Already existed
+                assert!(result.is_success);
+                assert!(!result.was_created); // Already existed
             }
             other => panic!("unexpected response: {:?}", other),
         }
@@ -1012,7 +1012,7 @@ mod queue_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::QueueEnqueueResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
                 assert!(result.item_id.is_some());
             }
             other => panic!("unexpected response: {:?}", other),
@@ -1040,8 +1040,8 @@ mod queue_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::QueueStatusResult(result) => {
-                assert!(result.success);
-                assert!(result.exists);
+                assert!(result.is_success);
+                assert!(result.does_exist);
             }
             other => panic!("unexpected response: {:?}", other),
         }
@@ -1068,7 +1068,7 @@ mod queue_tests {
         let response = handler.handle(request, &ctx).await.unwrap();
         match response {
             ClientRpcResponse::QueueDeleteResult(result) => {
-                assert!(result.success);
+                assert!(result.is_success);
             }
             other => panic!("unexpected response: {:?}", other),
         }

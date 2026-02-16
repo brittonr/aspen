@@ -38,7 +38,7 @@ async fn handle_delete_key(ctx: &ClientProtocolContext, key: String) -> anyhow::
     if let Err(vault_err) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::DeleteResult(DeleteResultResponse {
             key,
-            deleted: false,
+            was_deleted: false,
             error: Some(vault_err.to_string()),
         }));
     }
@@ -52,7 +52,7 @@ async fn handle_delete_key(ctx: &ClientProtocolContext, key: String) -> anyhow::
 
     Ok(ClientRpcResponse::DeleteResult(DeleteResultResponse {
         key,
-        deleted: result.is_ok(),
+        was_deleted: result.is_ok(),
         // HIGH-4: Sanitize error messages to prevent information leakage
         error: result.err().map(|e| sanitize_kv_error(&e)),
     }))

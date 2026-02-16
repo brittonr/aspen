@@ -33,8 +33,8 @@ enum Commands {
     /// Check for drift between production and Verus code
     Check {
         /// Show verbose output with detailed comparisons
-        #[arg(short, long)]
-        verbose: bool,
+        #[arg(short = 'v', long = "verbose")]
+        is_verbose: bool,
 
         /// Check only the specified crate
         #[arg(short, long)]
@@ -121,7 +121,7 @@ fn run() -> Result<bool> {
 
     match cli.command {
         Commands::Check {
-            verbose,
+            is_verbose,
             crate_name,
             format,
             output,
@@ -142,14 +142,14 @@ fn run() -> Result<bool> {
                 fail_on.map(|s| s.parse()).transpose().map_err(|e: String| anyhow::anyhow!(e))?
             };
 
-            let engine = VerificationEngine::new(root_dir, crates, verbose);
+            let engine = VerificationEngine::new(root_dir, crates, is_verbose);
             let report = engine.verify()?;
 
-            let output_str = render(&report, output_format, verbose, min_sev);
+            let output_str = render(&report, output_format, is_verbose, min_sev);
 
             if let Some(output_path) = output {
                 fs::write(&output_path, &output_str).context("Failed to write output file")?;
-                if verbose {
+                if is_verbose {
                     eprintln!("Report written to: {}", output_path.display());
                 }
             } else {

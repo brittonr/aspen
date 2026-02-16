@@ -114,7 +114,7 @@ impl From<KeyValueStoreError> for FederationResourceError {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FederationResourceState {
     /// Whether the resource was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Ref heads for the resource (ref_name -> hash).
     pub heads: HashMap<String, [u8; 32]>,
     /// Resource metadata.
@@ -291,7 +291,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Di
         };
 
         Ok(FederationResourceState {
-            found: true,
+            was_found: true,
             heads,
             metadata,
         })
@@ -528,7 +528,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Sh
         };
 
         Ok(FederationResourceState {
-            found: true,
+            was_found: true,
             heads,
             metadata,
         })
@@ -691,7 +691,7 @@ mod tests {
         let resolver = DirectResourceResolver::new(kv, settings);
 
         let result = resolver.get_resource_state(&fed_id).await.unwrap();
-        assert!(result.found);
+        assert!(result.was_found);
         // Note: The head won't parse because the hex value is wrong length for bytes
         // This is expected - real implementation would store raw bytes
     }

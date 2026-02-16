@@ -59,7 +59,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
 
         match response {
             ClientRpcResponse::ServiceRegisterResult(ServiceRegisterResultResponse {
-                success: true,
+                is_success: true,
                 fencing_token: Some(token),
                 deadline_ms: Some(deadline),
                 ..
@@ -103,7 +103,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
 
         match response {
             ClientRpcResponse::ServiceDiscoverResult(ServiceDiscoverResultResponse {
-                success: true,
+                is_success: true,
                 instances,
                 ..
             }) => Ok(instances
@@ -145,7 +145,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
 
         match response {
             ClientRpcResponse::ServiceListResult(ServiceListResultResponse {
-                success: true,
+                is_success: true,
                 services,
                 ..
             }) => Ok(services),
@@ -170,8 +170,8 @@ impl<C: CoordinationRpc> ServiceClient<C> {
 
         match response {
             ClientRpcResponse::ServiceGetInstanceResult(ServiceGetInstanceResultResponse {
-                success: true,
-                found: true,
+                is_success: true,
+                was_found: true,
                 instance: Some(inst),
                 ..
             }) => Ok(Some(ServiceInstanceInfo {
@@ -190,8 +190,8 @@ impl<C: CoordinationRpc> ServiceClient<C> {
                 fencing_token: inst.fencing_token,
             })),
             ClientRpcResponse::ServiceGetInstanceResult(ServiceGetInstanceResultResponse {
-                success: true,
-                found: false,
+                is_success: true,
+                was_found: false,
                 ..
             }) => Ok(None),
             ClientRpcResponse::ServiceGetInstanceResult(result) => {
@@ -251,7 +251,7 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
 
         match response {
             ClientRpcResponse::ServiceHeartbeatResult(ServiceHeartbeatResultResponse {
-                success: true,
+                is_success: true,
                 new_deadline_ms: Some(deadline),
                 health_status: Some(status),
                 ..
@@ -282,7 +282,8 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
 
         match response {
             ClientRpcResponse::ServiceUpdateHealthResult(ServiceUpdateHealthResultResponse {
-                success: true, ..
+                is_success: true,
+                ..
             }) => Ok(()),
             ClientRpcResponse::ServiceUpdateHealthResult(result) => {
                 bail!("service update health failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -314,7 +315,7 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
 
         match response {
             ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
-                success: true,
+                is_success: true,
                 ..
             }) => Ok(()),
             ClientRpcResponse::ServiceUpdateMetadataResult(result) => {
@@ -341,7 +342,7 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
 
         match response {
             ClientRpcResponse::ServiceDeregisterResult(ServiceDeregisterResultResponse {
-                success: true,
+                is_success: true,
                 was_registered,
                 ..
             }) => Ok(was_registered),

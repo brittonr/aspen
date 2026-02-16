@@ -523,7 +523,7 @@ impl ContentDiscoveryService {
                     blob_size: 0,
                     blob_format: format,
                     discovered_at: now_micros,
-                    verified: false,
+                    is_verified: false,
                 })
             })
             .collect();

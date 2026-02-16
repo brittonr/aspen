@@ -28,7 +28,7 @@ pub(crate) async fn handle_create(
             Ok(id) => Some(id),
             Err(e) => {
                 return Ok(ClientRpcResponse::AutomergeCreateResult(AutomergeCreateResultResponse {
-                    success: false,
+                    is_success: false,
                     document_id: None,
                     error: Some(format!("Invalid document ID: {}", e)),
                 }));
@@ -54,12 +54,12 @@ pub(crate) async fn handle_create(
 
     match store.create(id, Some(metadata)).await {
         Ok(created_id) => Ok(ClientRpcResponse::AutomergeCreateResult(AutomergeCreateResultResponse {
-            success: true,
+            is_success: true,
             document_id: Some(created_id.to_string()),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::AutomergeCreateResult(AutomergeCreateResultResponse {
-            success: false,
+            is_success: false,
             document_id: None,
             error: Some(e.to_string()),
         })),
@@ -72,8 +72,8 @@ pub(crate) async fn handle_get(store: &DynAutomergeStore, document_id: String) -
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeGetResult(AutomergeGetResultResponse {
-                success: false,
-                found: false,
+                is_success: false,
+                was_found: false,
                 document_id: None,
                 document_bytes: None,
                 metadata: None,
@@ -92,8 +92,8 @@ pub(crate) async fn handle_get(store: &DynAutomergeStore, document_id: String) -
             let metadata = store.get_metadata(&id).await.ok().flatten().map(convert_metadata);
 
             Ok(ClientRpcResponse::AutomergeGetResult(AutomergeGetResultResponse {
-                success: true,
-                found: true,
+                is_success: true,
+                was_found: true,
                 document_id: Some(document_id),
                 document_bytes: Some(encoded),
                 metadata,
@@ -101,16 +101,16 @@ pub(crate) async fn handle_get(store: &DynAutomergeStore, document_id: String) -
             }))
         }
         Ok(None) => Ok(ClientRpcResponse::AutomergeGetResult(AutomergeGetResultResponse {
-            success: true,
-            found: false,
+            is_success: true,
+            was_found: false,
             document_id: Some(document_id),
             document_bytes: None,
             metadata: None,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::AutomergeGetResult(AutomergeGetResultResponse {
-            success: false,
-            found: false,
+            is_success: false,
+            was_found: false,
             document_id: Some(document_id),
             document_bytes: None,
             metadata: None,
@@ -129,7 +129,7 @@ pub(crate) async fn handle_save(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeSaveResult(AutomergeSaveResultResponse {
-                success: false,
+                is_success: false,
                 size_bytes: None,
                 change_count: None,
                 error: Some(format!("Invalid document ID: {}", e)),
@@ -142,7 +142,7 @@ pub(crate) async fn handle_save(
         Ok(b) => b,
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeSaveResult(AutomergeSaveResultResponse {
-                success: false,
+                is_success: false,
                 size_bytes: None,
                 change_count: None,
                 error: Some(format!("Invalid base64 document bytes: {}", e)),
@@ -155,7 +155,7 @@ pub(crate) async fn handle_save(
         Ok(d) => d,
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeSaveResult(AutomergeSaveResultResponse {
-                success: false,
+                is_success: false,
                 size_bytes: None,
                 change_count: None,
                 error: Some(format!("Invalid Automerge document: {}", e)),
@@ -169,14 +169,14 @@ pub(crate) async fn handle_save(
             let change_count = doc.get_changes(&[]).len() as u64;
 
             Ok(ClientRpcResponse::AutomergeSaveResult(AutomergeSaveResultResponse {
-                success: true,
+                is_success: true,
                 size_bytes: Some(saved_bytes.len() as u64),
                 change_count: Some(change_count),
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::AutomergeSaveResult(AutomergeSaveResultResponse {
-            success: false,
+            is_success: false,
             size_bytes: None,
             change_count: None,
             error: Some(e.to_string()),
@@ -190,7 +190,7 @@ pub(crate) async fn handle_delete(store: &DynAutomergeStore, document_id: String
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::AutomergeDeleteResult(AutomergeDeleteResultResponse {
-                success: false,
+                is_success: false,
                 existed: false,
                 error: Some(format!("Invalid document ID: {}", e)),
             }));
@@ -199,12 +199,12 @@ pub(crate) async fn handle_delete(store: &DynAutomergeStore, document_id: String
 
     match store.delete(&id).await {
         Ok(existed) => Ok(ClientRpcResponse::AutomergeDeleteResult(AutomergeDeleteResultResponse {
-            success: true,
+            is_success: true,
             existed,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::AutomergeDeleteResult(AutomergeDeleteResultResponse {
-            success: false,
+            is_success: false,
             existed: false,
             error: Some(e.to_string()),
         })),

@@ -135,7 +135,7 @@ impl App {
         // Fetch logs from the server
         match self.client.ci_get_job_logs(&run_id, &job_id, 0, None).await {
             Ok(result) => {
-                if !result.found {
+                if !result.was_found {
                     self.ci_state.log_stream.error = Some("No logs found for this job".to_string());
                     self.set_status("No logs found for this job");
                     return;

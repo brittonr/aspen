@@ -101,7 +101,7 @@ impl StepBuilder {
     pub fn done(mut self) -> SagaBuilder {
         let step = SagaStep {
             name: self.name,
-            executed: false,
+            was_executed: false,
             action_result: None,
             compensation_result: None,
             timeout: self.timeout,

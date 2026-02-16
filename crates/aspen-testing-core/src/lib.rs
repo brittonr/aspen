@@ -1069,7 +1069,7 @@ mod tests {
 
         store.write(WriteRequest::set("key", "value")).await.unwrap();
         let result = store.delete(DeleteRequest::new("key")).await.unwrap();
-        assert!(result.deleted);
+        assert!(result.is_deleted);
 
         // Key should be gone
         let read_result = store.read(ReadRequest::new("key")).await;
@@ -1080,7 +1080,7 @@ mod tests {
     async fn kv_store_delete_nonexistent() {
         let store = DeterministicKeyValueStore::new();
         let result = store.delete(DeleteRequest::new("nonexistent")).await.unwrap();
-        assert!(!result.deleted);
+        assert!(!result.is_deleted);
     }
 
     #[tokio::test]

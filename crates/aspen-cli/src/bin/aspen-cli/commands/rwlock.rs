@@ -157,7 +157,7 @@ pub struct StatusArgs {
 pub struct RWLockOutput {
     pub operation: String,
     pub name: String,
-    pub success: bool,
+    pub is_success: bool,
     pub mode: Option<String>,
     pub fencing_token: Option<u64>,
     pub deadline_ms: Option<u64>,
@@ -171,7 +171,7 @@ impl Outputable for RWLockOutput {
         serde_json::json!({
             "operation": self.operation,
             "name": self.name,
-            "success": self.success,
+            "is_success": self.is_success,
             "mode": self.mode,
             "fencing_token": self.fencing_token,
             "deadline_ms": self.deadline_ms,
@@ -182,7 +182,7 @@ impl Outputable for RWLockOutput {
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             match self.operation.as_str() {
                 "read" | "try_read" => {
                     format!("Read lock acquired (readers: {})", self.reader_count.unwrap_or(1))
@@ -247,7 +247,7 @@ async fn rwlock_read(client: &AspenClient, args: ReadArgs, json: bool) -> Result
             let output = RWLockOutput {
                 operation: "read".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 mode: result.mode,
                 fencing_token: result.fencing_token,
                 deadline_ms: result.deadline_ms,
@@ -256,7 +256,7 @@ async fn rwlock_read(client: &AspenClient, args: ReadArgs, json: bool) -> Result
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -280,7 +280,7 @@ async fn rwlock_try_read(client: &AspenClient, args: TryReadArgs, json: bool) ->
             let output = RWLockOutput {
                 operation: "try_read".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 mode: result.mode,
                 fencing_token: result.fencing_token,
                 deadline_ms: result.deadline_ms,
@@ -289,7 +289,7 @@ async fn rwlock_try_read(client: &AspenClient, args: TryReadArgs, json: bool) ->
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -314,7 +314,7 @@ async fn rwlock_write(client: &AspenClient, args: WriteArgs, json: bool) -> Resu
             let output = RWLockOutput {
                 operation: "write".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 mode: result.mode,
                 fencing_token: result.fencing_token,
                 deadline_ms: result.deadline_ms,
@@ -323,7 +323,7 @@ async fn rwlock_write(client: &AspenClient, args: WriteArgs, json: bool) -> Resu
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -347,7 +347,7 @@ async fn rwlock_try_write(client: &AspenClient, args: TryWriteArgs, json: bool) 
             let output = RWLockOutput {
                 operation: "try_write".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 mode: result.mode,
                 fencing_token: result.fencing_token,
                 deadline_ms: result.deadline_ms,
@@ -356,7 +356,7 @@ async fn rwlock_try_write(client: &AspenClient, args: TryWriteArgs, json: bool) 
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -379,7 +379,7 @@ async fn rwlock_release_read(client: &AspenClient, args: ReleaseReadArgs, json: 
             let output = RWLockOutput {
                 operation: "release_read".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 mode: result.mode,
                 fencing_token: None,
                 deadline_ms: None,
@@ -388,7 +388,7 @@ async fn rwlock_release_read(client: &AspenClient, args: ReleaseReadArgs, json: 
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -412,7 +412,7 @@ async fn rwlock_release_write(client: &AspenClient, args: ReleaseWriteArgs, json
             let output = RWLockOutput {
                 operation: "release_write".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 mode: result.mode,
                 fencing_token: None,
                 deadline_ms: None,
@@ -421,7 +421,7 @@ async fn rwlock_release_write(client: &AspenClient, args: ReleaseWriteArgs, json
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -446,7 +446,7 @@ async fn rwlock_downgrade(client: &AspenClient, args: DowngradeArgs, json: bool)
             let output = RWLockOutput {
                 operation: "downgrade".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 mode: result.mode,
                 fencing_token: result.fencing_token,
                 deadline_ms: result.deadline_ms,
@@ -455,7 +455,7 @@ async fn rwlock_downgrade(client: &AspenClient, args: DowngradeArgs, json: bool)
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -477,7 +477,7 @@ async fn rwlock_status(client: &AspenClient, args: StatusArgs, json: bool) -> Re
             let output = RWLockOutput {
                 operation: "status".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 mode: result.mode,
                 fencing_token: result.fencing_token,
                 deadline_ms: result.deadline_ms,
@@ -486,7 +486,7 @@ async fn rwlock_status(client: &AspenClient, args: StatusArgs, json: bool) -> Re
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

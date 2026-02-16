@@ -280,7 +280,7 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
         // Check the response
         match response {
             aspen_client_api::ClientRpcResponse::BlobReplicatePullResult(result) => {
-                if result.success {
+                if result.is_success {
                     info!(
                         hash = %hash.to_hex(),
                         target_node = target.node_id,
@@ -382,10 +382,10 @@ mod tests {
             &self,
             request: aspen_core::kv::DeleteRequest,
         ) -> Result<aspen_core::kv::DeleteResult, aspen_core::error::KeyValueStoreError> {
-            let deleted = self.data.write().unwrap().remove(&request.key).is_some();
+            let is_deleted = self.data.write().unwrap().remove(&request.key).is_some();
             Ok(aspen_core::kv::DeleteResult {
                 key: request.key,
-                deleted,
+                is_deleted,
             })
         }
 

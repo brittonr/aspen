@@ -12,7 +12,7 @@ pub enum WatchRequest {
     WatchCreate {
         prefix: String,
         start_index: u64,
-        include_prev_value: bool,
+        should_include_prev_value: bool,
     },
     /// Cancel an active watch.
     WatchCancel { watch_id: u64 },
@@ -35,7 +35,7 @@ impl WatchRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchCreateResultResponse {
     /// Whether watch creation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Unique watch ID for this subscription.
     pub watch_id: Option<u64>,
     /// Current committed log index at watch creation time.
@@ -48,7 +48,7 @@ pub struct WatchCreateResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchCancelResultResponse {
     /// Whether cancellation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Watch ID that was cancelled.
     pub watch_id: u64,
     /// Error message if cancellation failed.
@@ -59,7 +59,7 @@ pub struct WatchCancelResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchStatusResultResponse {
     /// Whether status query succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of watch statuses.
     pub watches: Option<Vec<WatchInfo>>,
     /// Error message if query failed.
@@ -80,7 +80,7 @@ pub struct WatchInfo {
     /// Watch creation timestamp (ms since epoch).
     pub created_at_ms: u64,
     /// Whether the watch includes previous values.
-    pub include_prev_value: bool,
+    pub should_include_prev_value: bool,
 }
 
 /// Streaming watch event response.
@@ -107,7 +107,7 @@ pub struct WatchKeyEvent {
     pub key: String,
     /// New value (for Put events).
     pub value: Option<Vec<u8>>,
-    /// Previous value (if include_prev_value was set).
+    /// Previous value (if should_include_prev_value was set).
     pub prev_value: Option<Vec<u8>>,
 }
 

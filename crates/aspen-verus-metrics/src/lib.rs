@@ -376,16 +376,16 @@ pub struct VerificationEngine {
     /// Crates to verify
     crate_names: Vec<String>,
     /// Verbose output
-    verbose: bool,
+    is_verbose: bool,
 }
 
 impl VerificationEngine {
     /// Create a new verification engine.
-    pub fn new(root_dir: PathBuf, crate_names: Vec<String>, verbose: bool) -> Self {
+    pub fn new(root_dir: PathBuf, crate_names: Vec<String>, is_verbose: bool) -> Self {
         Self {
             root_dir,
             crate_names,
-            verbose,
+            is_verbose,
         }
     }
 
@@ -410,7 +410,7 @@ impl VerificationEngine {
 
         // Skip if directories don't exist
         if !verified_dir.exists() || !verus_dir.exists() {
-            if self.verbose {
+            if self.is_verbose {
                 eprintln!("Skipping {}: missing src/verified/ or verus/", crate_name);
             }
             return Ok(None);

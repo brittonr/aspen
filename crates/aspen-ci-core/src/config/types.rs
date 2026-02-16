@@ -136,7 +136,7 @@ pub struct JobConfig {
     /// Whether to upload build results to blob store (for nix jobs).
     /// Defaults to true.
     #[serde(default = "default_true")]
-    pub upload_result: bool,
+    pub should_upload_result: bool,
 }
 
 fn default_job_timeout() -> u64 {
@@ -305,7 +305,7 @@ pub struct ArtifactConfig {
 
     /// Compress artifacts.
     #[serde(default = "default_true")]
-    pub compress: bool,
+    pub should_compress: bool,
 }
 
 fn default_retention() -> u32 {

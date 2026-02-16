@@ -25,7 +25,7 @@ pub(crate) async fn handle_create_repo(
             let _default_branch = default_branch.as_deref().unwrap_or("main");
 
             Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
-                success: true,
+                is_success: true,
                 repo: Some(ForgeRepoInfo {
                     id: identity.repo_id().to_hex(),
                     name: identity.name.clone(),
@@ -42,7 +42,7 @@ pub(crate) async fn handle_create_repo(
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
-            success: false,
+            is_success: false,
             repo: None,
             error: Some(e.to_string()),
         })),
@@ -58,7 +58,7 @@ pub(crate) async fn handle_get_repo(forge_node: &ForgeNodeRef, repo_id: String) 
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
-                success: false,
+                is_success: false,
                 repo: None,
                 error: Some(format!("Invalid repo ID: {}", e)),
             }));
@@ -67,7 +67,7 @@ pub(crate) async fn handle_get_repo(forge_node: &ForgeNodeRef, repo_id: String) 
 
     match forge_node.get_repo(&repo_id).await {
         Ok(identity) => Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
-            success: true,
+            is_success: true,
             repo: Some(ForgeRepoInfo {
                 id: identity.repo_id().to_hex(),
                 name: identity.name.clone(),
@@ -80,7 +80,7 @@ pub(crate) async fn handle_get_repo(forge_node: &ForgeNodeRef, repo_id: String) 
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
-            success: false,
+            is_success: false,
             repo: None,
             error: Some(e.to_string()),
         })),
@@ -144,14 +144,14 @@ pub(crate) async fn handle_list_repos(
 
             let count = repos.len() as u32;
             Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
-                success: true,
+                is_success: true,
                 repos,
                 count,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
-            success: false,
+            is_success: false,
             repos: vec![],
             count: 0,
             error: Some(e.to_string()),

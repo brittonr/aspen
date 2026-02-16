@@ -266,7 +266,7 @@ pub struct ReplayConfig {
     /// Network delay range (ms).
     pub network_delay: (u64, u64),
     /// Enable deterministic mode.
-    pub deterministic: bool,
+    pub is_deterministic: bool,
     /// Maximum replay duration.
     pub max_duration_ms: u64,
 }
@@ -278,7 +278,7 @@ impl Default for ReplayConfig {
             chaos_enabled: false,
             failure_rate: 0.0,
             network_delay: (0, 0),
-            deterministic: true,
+            is_deterministic: true,
             max_duration_ms: 60_000,
         }
     }
@@ -360,7 +360,7 @@ impl DeterministicJobExecutor {
             JobResult::success(serde_json::json!({
                 "executed_at_ms": self.current_hlc_timestamp().to_unix_ms(),
                 "seed": self.seed,
-                "deterministic": true,
+                "is_deterministic": true,
             }))
         };
 

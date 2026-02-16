@@ -14,14 +14,14 @@ pub(crate) async fn handle_store_blob(
     let size = content.len() as u64;
     match forge_node.git.store_blob(content).await {
         Ok(hash) => Ok(ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
-            success: true,
+            is_success: true,
             hash: Some(hash.to_hex().to_string()),
             content: None,
             size: Some(size),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
-            success: false,
+            is_success: false,
             hash: None,
             content: None,
             size: None,
@@ -37,7 +37,7 @@ pub(crate) async fn handle_get_blob(forge_node: &ForgeNodeRef, hash: String) -> 
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
-                success: false,
+                is_success: false,
                 hash: None,
                 content: None,
                 size: None,
@@ -50,7 +50,7 @@ pub(crate) async fn handle_get_blob(forge_node: &ForgeNodeRef, hash: String) -> 
         Ok(content) => {
             let size = content.len() as u64;
             Ok(ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
-                success: true,
+                is_success: true,
                 hash: Some(hash.to_hex().to_string()),
                 content: Some(content),
                 size: Some(size),
@@ -58,7 +58,7 @@ pub(crate) async fn handle_get_blob(forge_node: &ForgeNodeRef, hash: String) -> 
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
-            success: false,
+            is_success: false,
             hash: None,
             content: None,
             size: None,
@@ -81,7 +81,7 @@ pub(crate) async fn handle_create_tree(
         Ok(e) => e,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
-                success: false,
+                is_success: false,
                 hash: None,
                 entries: None,
                 error: Some(format!("Invalid entries JSON: {}", e)),
@@ -106,7 +106,7 @@ pub(crate) async fn handle_create_tree(
         Ok(e) => e,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
-                success: false,
+                is_success: false,
                 hash: None,
                 entries: None,
                 error: Some(format!("Invalid entry hash: {}", e)),
@@ -116,13 +116,13 @@ pub(crate) async fn handle_create_tree(
 
     match forge_node.git.create_tree(&entries).await {
         Ok(hash) => Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
-            success: true,
+            is_success: true,
             hash: Some(hash.to_hex().to_string()),
             entries: Some(parsed),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
-            success: false,
+            is_success: false,
             hash: None,
             entries: None,
             error: Some(e.to_string()),
@@ -138,7 +138,7 @@ pub(crate) async fn handle_get_tree(forge_node: &ForgeNodeRef, hash: String) -> 
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
-                success: false,
+                is_success: false,
                 hash: None,
                 entries: None,
                 error: Some(format!("Invalid hash: {}", e)),
@@ -159,14 +159,14 @@ pub(crate) async fn handle_get_tree(forge_node: &ForgeNodeRef, hash: String) -> 
                 .collect();
 
             Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
-                success: true,
+                is_success: true,
                 hash: Some(hash.to_hex().to_string()),
                 entries: Some(entries),
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
-            success: false,
+            is_success: false,
             hash: None,
             entries: None,
             error: Some(e.to_string()),
@@ -188,7 +188,7 @@ pub(crate) async fn handle_commit(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
-                success: false,
+                is_success: false,
                 commit: None,
                 error: Some(format!("Invalid tree hash: {}", e)),
             }));
@@ -200,7 +200,7 @@ pub(crate) async fn handle_commit(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
-                success: false,
+                is_success: false,
                 commit: None,
                 error: Some(format!("Invalid parent hash: {}", e)),
             }));
@@ -215,7 +215,7 @@ pub(crate) async fn handle_commit(
                 .unwrap_or(0);
 
             Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
-                success: true,
+                is_success: true,
                 commit: Some(ForgeCommitInfo {
                     hash: hash.to_hex().to_string(),
                     tree,
@@ -230,7 +230,7 @@ pub(crate) async fn handle_commit(
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
-            success: false,
+            is_success: false,
             commit: None,
             error: Some(e.to_string()),
         })),
@@ -245,7 +245,7 @@ pub(crate) async fn handle_get_commit(forge_node: &ForgeNodeRef, hash: String) -
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
-                success: false,
+                is_success: false,
                 commit: None,
                 error: Some(format!("Invalid hash: {}", e)),
             }));
@@ -254,7 +254,7 @@ pub(crate) async fn handle_get_commit(forge_node: &ForgeNodeRef, hash: String) -
 
     match forge_node.git.get_commit(&hash).await {
         Ok(commit) => Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
-            success: true,
+            is_success: true,
             commit: Some(ForgeCommitInfo {
                 hash: hash.to_hex().to_string(),
                 tree: blake3::Hash::from_bytes(commit.tree).to_hex().to_string(),
@@ -268,7 +268,7 @@ pub(crate) async fn handle_get_commit(forge_node: &ForgeNodeRef, hash: String) -
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
-            success: false,
+            is_success: false,
             commit: None,
             error: Some(e.to_string()),
         })),

@@ -288,7 +288,7 @@ fn build_nix_payload(job: &JobConfig, context: &PipelineContext) -> Result<serde
         sandbox: matches!(job.isolation, crate::config::types::IsolationMode::NixSandbox),
         cache_key: job.cache_key.clone(),
         artifacts: job.artifacts.clone(),
-        upload_result: job.upload_result,
+        should_upload_result: job.should_upload_result,
     };
 
     serde_json::to_value(&nix_payload).map_err(|e| CiError::InvalidConfig {

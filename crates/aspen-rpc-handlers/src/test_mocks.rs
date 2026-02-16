@@ -228,12 +228,12 @@ impl WatchRegistry for MockWatchRegistry {
         self.watches.read().unwrap().len()
     }
 
-    fn register_watch(&self, prefix: String, include_prev_value: bool) -> u64 {
+    fn register_watch(&self, prefix: String, should_include_prev_value: bool) -> u64 {
         let watch_id = self.next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let watch_info = WatchInfo {
             watch_id,
             prefix,
-            include_prev_value,
+            should_include_prev_value,
             last_sent_index: 0,
             events_sent: 0,
             created_at_ms: std::time::SystemTime::now()

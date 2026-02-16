@@ -92,18 +92,18 @@ pub struct GlobalOptions {
     pub timeout_ms: u64,
 
     /// Output JSON instead of human-readable format.
-    #[arg(long, global = true)]
-    pub json: bool,
+    #[arg(long = "json", global = true)]
+    pub is_json: bool,
 
     /// Enable verbose logging.
-    #[arg(short, long, global = true)]
-    pub verbose: bool,
+    #[arg(short = 'v', long = "verbose", global = true)]
+    pub is_verbose: bool,
 
     /// Suppress all logging output (warnings, debug messages).
     ///
     /// Useful for scripting and when parsing JSON output.
-    #[arg(short, long, global = true)]
-    pub quiet: bool,
+    #[arg(short = 'q', long = "quiet", global = true)]
+    pub is_quiet: bool,
 }
 
 /// Top-level command categories.
@@ -283,7 +283,7 @@ impl Cli {
     pub async fn run(self) -> Result<()> {
         // Handle commands that don't require a cluster connection first
         if let Commands::Index(cmd) = self.command {
-            return cmd.run(self.global.json);
+            return cmd.run(self.global.is_json);
         }
 
         // Validate ticket is provided for cluster commands
@@ -310,44 +310,44 @@ impl Cli {
         // Dispatch to appropriate command handler
         match self.command {
             #[cfg(feature = "automerge")]
-            Commands::Automerge(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Barrier(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Blob(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Branch(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Automerge(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Barrier(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Blob(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Branch(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "ci")]
-            Commands::Cache(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Cache(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "ci")]
-            Commands::Ci(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Cluster(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Counter(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Ci(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Cluster(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Counter(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "dns")]
-            Commands::Dns(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Docs(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Federation(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Git(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Hook(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Dns(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Docs(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Federation(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Git(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Hook(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Index(_) => unreachable!("handled above"),
-            Commands::Issue(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Job(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Kv(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Lease(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Lock(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Patch(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Peer(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Issue(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Job(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Kv(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Lease(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Lock(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Patch(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Peer(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "pijul")]
-            Commands::Pijul(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Queue(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Ratelimit(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Rwlock(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Pijul(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Queue(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Ratelimit(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Rwlock(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "secrets")]
-            Commands::Secrets(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Semaphore(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Sequence(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Service(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Secrets(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Semaphore(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Sequence(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Service(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "sql")]
-            Commands::Sql(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Tag(cmd) => cmd.run(&client, self.global.json).await,
-            Commands::Verify(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Sql(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Tag(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Verify(cmd) => cmd.run(&client, self.global.is_json).await,
         }
     }
 }
@@ -421,7 +421,7 @@ mod tests {
         let result = Cli::try_parse_from(["aspen-cli", "--json", "kv", "get", "key"]);
         assert!(result.is_ok());
         let cli = result.unwrap();
-        assert!(cli.global.json);
+        assert!(cli.global.is_json);
     }
 
     #[test]
@@ -429,7 +429,7 @@ mod tests {
         let result = Cli::try_parse_from(["aspen-cli", "-v", "kv", "get", "key"]);
         assert!(result.is_ok());
         let cli = result.unwrap();
-        assert!(cli.global.verbose);
+        assert!(cli.global.is_verbose);
     }
 
     #[test]
@@ -437,7 +437,7 @@ mod tests {
         let result = Cli::try_parse_from(["aspen-cli", "-q", "kv", "get", "key"]);
         assert!(result.is_ok());
         let cli = result.unwrap();
-        assert!(cli.global.quiet);
+        assert!(cli.global.is_quiet);
     }
 
     #[test]

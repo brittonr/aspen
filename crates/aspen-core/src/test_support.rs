@@ -180,11 +180,11 @@ impl KeyValueStore for DeterministicKeyValueStore {
         let _revision = self.next_revision().await;
         let mut data = self.data.write().await;
 
-        let deleted = data.remove(&request.key).is_some();
+        let is_deleted = data.remove(&request.key).is_some();
 
         Ok(DeleteResult {
             key: request.key,
-            deleted,
+            is_deleted,
         })
     }
 

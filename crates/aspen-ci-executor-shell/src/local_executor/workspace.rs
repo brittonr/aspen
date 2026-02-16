@@ -113,7 +113,7 @@ impl LocalExecutorWorker {
 
     /// Clean up the job workspace if configured.
     pub(super) async fn cleanup_workspace(&self, job_id: &str, job_workspace: &std::path::Path) {
-        if !self.config.cleanup_workspaces {
+        if !self.config.should_cleanup_workspaces {
             return;
         }
 

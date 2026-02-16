@@ -127,7 +127,7 @@ pub struct OriginArgs {
 
 /// Add peer cluster output.
 pub struct AddPeerOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub cluster_id: Option<String>,
     pub priority: Option<u32>,
     pub error: Option<String>,
@@ -136,7 +136,7 @@ pub struct AddPeerOutput {
 impl Outputable for AddPeerOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "cluster_id": self.cluster_id,
             "priority": self.priority,
             "error": self.error
@@ -144,7 +144,7 @@ impl Outputable for AddPeerOutput {
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!(
                 "Added peer cluster: {} (priority: {})",
                 self.cluster_id.as_deref().unwrap_or("unknown"),
@@ -158,7 +158,7 @@ impl Outputable for AddPeerOutput {
 
 /// Remove peer cluster output.
 pub struct RemovePeerOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub cluster_id: String,
     pub error: Option<String>,
 }
@@ -166,14 +166,14 @@ pub struct RemovePeerOutput {
 impl Outputable for RemovePeerOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "cluster_id": self.cluster_id,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!("Removed peer cluster: {}", self.cluster_id)
         } else {
             format!("Remove failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -207,7 +207,7 @@ impl Outputable for ListPeersOutput {
                     "name": p.name,
                     "state": p.state,
                     "priority": p.priority,
-                    "enabled": p.is_enabled,
+                    "is_enabled": p.is_enabled,
                     "sync_count": p.sync_count,
                     "failure_count": p.failure_count
                 })
@@ -251,10 +251,10 @@ impl Outputable for ListPeersOutput {
 
 /// Peer status output.
 pub struct PeerStatusOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub cluster_id: String,
     pub state: String,
-    pub syncing: bool,
+    pub is_syncing: bool,
     pub entries_received: u64,
     pub entries_imported: u64,
     pub entries_skipped: u64,
@@ -265,10 +265,10 @@ pub struct PeerStatusOutput {
 impl Outputable for PeerStatusOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "cluster_id": self.cluster_id,
             "state": self.state,
-            "syncing": self.syncing,
+            "is_syncing": self.is_syncing,
             "entries_received": self.entries_received,
             "entries_imported": self.entries_imported,
             "entries_skipped": self.entries_skipped,
@@ -278,7 +278,7 @@ impl Outputable for PeerStatusOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.found {
+        if !self.was_found {
             return format!("Peer cluster not found: {}", self.cluster_id);
         }
 
@@ -290,7 +290,7 @@ impl Outputable for PeerStatusOutput {
             "Peer: {}\n  State:           {}\n  Syncing:         {}\n  Entries received: {}\n  Entries imported: {}\n  Entries skipped:  {}\n  Entries filtered: {}",
             self.cluster_id,
             self.state,
-            if self.syncing { "yes" } else { "no" },
+            if self.is_syncing { "yes" } else { "no" },
             self.entries_received,
             self.entries_imported,
             self.entries_skipped,
@@ -303,7 +303,7 @@ impl Outputable for PeerStatusOutput {
 pub struct PeerSuccessOutput {
     pub operation: String,
     pub cluster_id: String,
-    pub success: bool,
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
@@ -312,13 +312,13 @@ impl Outputable for PeerSuccessOutput {
         serde_json::json!({
             "operation": self.operation,
             "cluster_id": self.cluster_id,
-            "success": self.success,
+            "is_success": self.is_success,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             "OK".to_string()
         } else {
             format!("{} failed: {}", self.operation, self.error.as_deref().unwrap_or("unknown error"))
@@ -328,7 +328,7 @@ impl Outputable for PeerSuccessOutput {
 
 /// Key origin output.
 pub struct KeyOriginOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub key: String,
     pub cluster_id: Option<String>,
     pub priority: Option<u32>,
@@ -339,7 +339,7 @@ pub struct KeyOriginOutput {
 impl Outputable for KeyOriginOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "key": self.key,
             "cluster_id": self.cluster_id,
             "priority": self.priority,
@@ -349,7 +349,7 @@ impl Outputable for KeyOriginOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.found {
+        if !self.was_found {
             return format!("Key '{}' has no origin metadata", self.key);
         }
 
@@ -392,13 +392,13 @@ async fn peer_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()>
     match response {
         ClientRpcResponse::AddPeerClusterResult(result) => {
             let output = AddPeerOutput {
-                success: result.success,
+                is_success: result.is_success,
                 cluster_id: result.cluster_id,
                 priority: result.priority,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -418,12 +418,12 @@ async fn peer_remove(client: &AspenClient, args: RemoveArgs, json: bool) -> Resu
     match response {
         ClientRpcResponse::RemovePeerClusterResult(result) => {
             let output = RemovePeerOutput {
-                success: result.success,
+                is_success: result.is_success,
                 cluster_id: args.cluster_id,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -475,10 +475,10 @@ async fn peer_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resu
     match response {
         ClientRpcResponse::PeerClusterStatus(result) => {
             let output = PeerStatusOutput {
-                found: result.found,
+                was_found: result.was_found,
                 cluster_id: args.cluster_id,
                 state: result.state,
-                syncing: result.syncing,
+                is_syncing: result.is_syncing,
                 entries_received: result.entries_received,
                 entries_imported: result.entries_imported,
                 entries_skipped: result.entries_skipped,
@@ -486,7 +486,7 @@ async fn peer_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resu
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.found {
+            if !result.was_found {
                 std::process::exit(1);
             }
             Ok(())
@@ -519,11 +519,11 @@ async fn peer_filter(client: &AspenClient, args: FilterArgs, json: bool) -> Resu
             let output = PeerSuccessOutput {
                 operation: "filter".to_string(),
                 cluster_id: args.cluster_id,
-                success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -546,11 +546,11 @@ async fn peer_priority(client: &AspenClient, args: PriorityArgs, json: bool) -> 
             let output = PeerSuccessOutput {
                 operation: "priority".to_string(),
                 cluster_id: args.cluster_id,
-                success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -573,11 +573,11 @@ async fn peer_enable(client: &AspenClient, args: EnableArgs, json: bool) -> Resu
             let output = PeerSuccessOutput {
                 operation: "enable".to_string(),
                 cluster_id: args.cluster_id,
-                success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -600,11 +600,11 @@ async fn peer_disable(client: &AspenClient, args: DisableArgs, json: bool) -> Re
             let output = PeerSuccessOutput {
                 operation: "disable".to_string(),
                 cluster_id: args.cluster_id,
-                success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -620,7 +620,7 @@ async fn peer_origin(client: &AspenClient, args: OriginArgs, json: bool) -> Resu
     match response {
         ClientRpcResponse::KeyOriginResult(result) => {
             let output = KeyOriginOutput {
-                found: result.found,
+                was_found: result.was_found,
                 key: args.key,
                 cluster_id: result.cluster_id,
                 priority: result.priority,

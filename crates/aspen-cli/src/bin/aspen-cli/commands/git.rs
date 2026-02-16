@@ -314,7 +314,7 @@ async fn git_init(client: &AspenClient, args: InitArgs, json: bool) -> Result<()
 
     match response {
         ClientRpcResponse::ForgeRepoResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(repo) = result.repo {
                     let output = RepoOutput {
                         id: repo.id,
@@ -333,7 +333,7 @@ async fn git_init(client: &AspenClient, args: InitArgs, json: bool) -> Result<()
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Repository created");
                 }
@@ -357,7 +357,7 @@ async fn git_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()
 
     match response {
         ClientRpcResponse::ForgeRepoListResult(result) => {
-            if result.success {
+            if result.is_success {
                 let output = RepoListOutput {
                     repos: result
                         .repos
@@ -396,7 +396,7 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
 
     let repo_info = match repo_response {
         ClientRpcResponse::ForgeRepoResult(result) => {
-            if result.success {
+            if result.is_success {
                 result.repo.ok_or_else(|| anyhow::anyhow!("Repository not found"))?
             } else {
                 anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -433,7 +433,7 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
 
     let head_hash = match ref_response {
         ClientRpcResponse::ForgeRefResult(result) => {
-            if result.success {
+            if result.is_success {
                 result
                     .ref_info
                     .map(|r| r.hash)
@@ -472,7 +472,7 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
 
     let commits = match log_response {
         ClientRpcResponse::ForgeLogResult(result) => {
-            if result.success {
+            if result.is_success {
                 result.commits
             } else {
                 anyhow::bail!("{}", result.error.unwrap_or_else(|| "failed to get log".to_string()))
@@ -516,7 +516,7 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
             .await?;
 
         if let ClientRpcResponse::ForgeTreeResult(result) = tree_response {
-            if result.success {
+            if result.is_success {
                 if let Some(entries) = result.entries {
                     for entry in entries {
                         let entry_path = base_path.join(&entry.name);
@@ -560,7 +560,7 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
             .await?;
 
         if let ClientRpcResponse::ForgeBlobResult(result) = blob_response {
-            if result.success {
+            if result.is_success {
                 if let Some(content) = result.content {
                     // Write blob to objects directory
                     let blob_path = objects_dir.join(&blob_hash[..2]).join(&blob_hash[2..]);
@@ -666,7 +666,7 @@ async fn git_show(client: &AspenClient, args: ShowArgs, json: bool) -> Result<()
 
     match response {
         ClientRpcResponse::ForgeRepoResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(repo) = result.repo {
                     let output = RepoOutput {
                         id: repo.id,
@@ -706,7 +706,7 @@ async fn git_commit(client: &AspenClient, args: CommitArgs, json: bool) -> Resul
 
     match response {
         ClientRpcResponse::ForgeCommitResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(commit) = result.commit {
                     let output = CommitOutput {
                         hash: commit.hash,
@@ -743,7 +743,7 @@ async fn git_log(client: &AspenClient, args: LogArgs, json: bool) -> Result<()> 
 
     match response {
         ClientRpcResponse::ForgeLogResult(result) => {
-            if result.success {
+            if result.is_success {
                 let commits: Vec<CommitOutput> = result
                     .commits
                     .into_iter()
@@ -786,7 +786,7 @@ async fn fetch_current_ref_hash(client: &AspenClient, repo_id: &str, ref_name: &
 
     match response {
         ClientRpcResponse::ForgeRefResult(result) => {
-            if result.success {
+            if result.is_success {
                 Ok(result.ref_info.map(|info| info.hash))
             } else {
                 // Ref doesn't exist - this is OK for new refs
@@ -901,7 +901,7 @@ async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()
 
     match response {
         ClientRpcResponse::ForgeRefResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(ref_info) = result.ref_info {
                     let output = RefOutput {
                         name: ref_info.name,
@@ -917,7 +917,7 @@ async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Ref {} updated", args.ref_name);
                 }
@@ -941,7 +941,7 @@ async fn git_get_ref(client: &AspenClient, args: GetRefArgs, json: bool) -> Resu
 
     match response {
         ClientRpcResponse::ForgeRefResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(ref_info) = result.ref_info {
                     let output = RefOutput {
                         name: ref_info.name,
@@ -976,7 +976,7 @@ async fn git_store_blob(client: &AspenClient, args: StoreBlobArgs, json: bool) -
 
     match response {
         ClientRpcResponse::ForgeBlobResult(result) => {
-            if result.success {
+            if result.is_success {
                 if json {
                     println!(
                         "{}",
@@ -1007,7 +1007,7 @@ async fn git_get_blob(client: &AspenClient, args: GetBlobArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::ForgeBlobResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(content) = result.content {
                     if let Some(ref path) = args.output {
                         std::fs::write(path, &content).map_err(|e| anyhow::anyhow!("failed to write file: {}", e))?;
@@ -1125,7 +1125,7 @@ async fn git_create_tree(client: &AspenClient, args: CreateTreeArgs, json: bool)
 
     match response {
         ClientRpcResponse::ForgeTreeResult(result) => {
-            if result.success {
+            if result.is_success {
                 if json {
                     println!(
                         "{}",
@@ -1160,7 +1160,7 @@ async fn git_get_tree(client: &AspenClient, args: GetTreeArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::ForgeTreeResult(result) => {
-            if result.success {
+            if result.is_success {
                 if json {
                     println!(
                         "{}",
@@ -1209,7 +1209,7 @@ async fn git_export_key(client: &AspenClient, args: ExportKeyArgs, json: bool) -
 
     match response {
         ClientRpcResponse::ForgeKeyResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(ref secret_key) = result.secret_key {
                     if let Some(ref path) = args.output {
                         std::fs::write(path, format!("{}\n", secret_key))
@@ -1270,7 +1270,7 @@ async fn git_federate(client: &AspenClient, args: FederateArgs, json: bool) -> R
 
     match response {
         ClientRpcResponse::FederateRepositoryResult(result) => {
-            if result.success {
+            if result.is_success {
                 if json {
                     println!(
                         "{}",
@@ -1334,7 +1334,7 @@ async fn git_fetch_remote(client: &AspenClient, args: FetchRemoteArgs, json: boo
 
     match response {
         ClientRpcResponse::ForgeFetchResult(result) => {
-            if result.success {
+            if result.is_success {
                 if json {
                     println!(
                         "{}",

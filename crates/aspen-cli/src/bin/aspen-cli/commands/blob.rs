@@ -155,8 +155,8 @@ pub struct DeleteArgs {
     pub hash: String,
 
     /// Force deletion even if protected.
-    #[arg(long)]
-    pub force: bool,
+    #[arg(long = "force")]
+    pub is_force: bool,
 }
 
 #[derive(Args)]
@@ -224,7 +224,7 @@ pub struct RepairArgs {
 
 /// Add blob output.
 pub struct AddBlobOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub hash: Option<String>,
     pub size: Option<u64>,
     pub was_new: Option<bool>,
@@ -234,7 +234,7 @@ pub struct AddBlobOutput {
 impl Outputable for AddBlobOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "hash": self.hash,
             "size": self.size,
             "was_new": self.was_new,
@@ -243,7 +243,7 @@ impl Outputable for AddBlobOutput {
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             let hash = self.hash.as_deref().unwrap_or("unknown");
             let size = self.size.unwrap_or(0);
             let status = if self.was_new.unwrap_or(false) {
@@ -260,7 +260,7 @@ impl Outputable for AddBlobOutput {
 
 /// Get blob output.
 pub struct GetBlobOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub data: Option<Vec<u8>>,
     pub error: Option<String>,
 }
@@ -268,14 +268,14 @@ pub struct GetBlobOutput {
 impl Outputable for GetBlobOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "size": self.data.as_ref().map(|d| d.len()),
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.found {
+        if self.was_found {
             match &self.data {
                 Some(data) => {
                     // Try to display as UTF-8
@@ -295,7 +295,7 @@ impl Outputable for GetBlobOutput {
 /// Has blob output.
 pub struct HasBlobOutput {
     pub hash: String,
-    pub exists: bool,
+    pub does_exist: bool,
     pub error: Option<String>,
 }
 
@@ -303,19 +303,19 @@ impl Outputable for HasBlobOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "hash": self.hash,
-            "exists": self.exists,
+            "does_exist": self.does_exist,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.exists { "exists" } else { "not found" }.to_string()
+        if self.does_exist { "exists" } else { "not found" }.to_string()
     }
 }
 
 /// Blob ticket output.
 pub struct BlobTicketOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub ticket: Option<String>,
     pub error: Option<String>,
 }
@@ -323,14 +323,14 @@ pub struct BlobTicketOutput {
 impl Outputable for BlobTicketOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "ticket": self.ticket,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             self.ticket.clone().unwrap_or_else(|| "no ticket".to_string())
         } else {
             format!("Ticket failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -398,7 +398,7 @@ impl Outputable for ListBlobsOutput {
 /// Protect/Unprotect blob output.
 pub struct ProtectBlobOutput {
     pub operation: String,
-    pub success: bool,
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
@@ -406,13 +406,13 @@ impl Outputable for ProtectBlobOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "operation": self.operation,
-            "success": self.success,
+            "is_success": self.is_success,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             "OK".to_string()
         } else {
             format!("{} failed: {}", self.operation, self.error.as_deref().unwrap_or("unknown error"))
@@ -422,20 +422,20 @@ impl Outputable for ProtectBlobOutput {
 
 /// Delete blob output.
 pub struct DeleteBlobOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 impl Outputable for DeleteBlobOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             "deleted".to_string()
         } else {
             format!("Delete failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -445,7 +445,7 @@ impl Outputable for DeleteBlobOutput {
 
 /// Download blob output.
 pub struct DownloadBlobOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub hash: Option<String>,
     pub size: Option<u64>,
     pub error: Option<String>,
@@ -454,7 +454,7 @@ pub struct DownloadBlobOutput {
 impl Outputable for DownloadBlobOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "hash": self.hash,
             "size": self.size,
             "error": self.error
@@ -462,7 +462,7 @@ impl Outputable for DownloadBlobOutput {
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             let hash = self.hash.as_deref().unwrap_or("unknown");
             let size = self.size.unwrap_or(0);
             format!("Downloaded {} ({} bytes)", hash, size)
@@ -474,7 +474,7 @@ impl Outputable for DownloadBlobOutput {
 
 /// Blob status output.
 pub struct BlobStatusOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub hash: Option<String>,
     pub size: Option<u64>,
     pub complete: Option<bool>,
@@ -485,7 +485,7 @@ pub struct BlobStatusOutput {
 impl Outputable for BlobStatusOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "hash": self.hash,
             "size": self.size,
             "complete": self.complete,
@@ -495,7 +495,7 @@ impl Outputable for BlobStatusOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.found {
+        if !self.was_found {
             return format!(
                 "Blob not found: {}",
                 self.error.as_deref().unwrap_or(self.hash.as_deref().unwrap_or("unknown"))
@@ -521,7 +521,7 @@ impl Outputable for BlobStatusOutput {
 
 /// Blob replication status output.
 pub struct BlobReplicationStatusOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub hash: Option<String>,
     pub size: Option<u64>,
     pub replica_nodes: Option<Vec<u64>>,
@@ -536,7 +536,7 @@ pub struct BlobReplicationStatusOutput {
 impl Outputable for BlobReplicationStatusOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "hash": self.hash,
             "size": self.size,
             "replica_nodes": self.replica_nodes,
@@ -550,7 +550,7 @@ impl Outputable for BlobReplicationStatusOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.found {
+        if !self.was_found {
             return format!(
                 "Replication metadata not found: {}",
                 self.error.as_deref().unwrap_or(self.hash.as_deref().unwrap_or("unknown"))
@@ -597,7 +597,7 @@ impl Outputable for BlobReplicationStatusOutput {
 
 /// Blob repair output.
 pub struct BlobRepairOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub hash: Option<String>,
     pub successful_nodes: Option<Vec<u64>>,
     pub failed_nodes: Option<Vec<(u64, String)>>,
@@ -608,7 +608,7 @@ pub struct BlobRepairOutput {
 impl Outputable for BlobRepairOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "hash": self.hash,
             "successful_nodes": self.successful_nodes,
             "failed_nodes": self.failed_nodes,
@@ -618,7 +618,7 @@ impl Outputable for BlobRepairOutput {
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             let hash = self.hash.as_deref().unwrap_or("unknown");
             let successful = self.successful_nodes.as_ref().map(|n| n.len()).unwrap_or(0);
             let failed = self.failed_nodes.as_ref().map(|n| n.len()).unwrap_or(0);
@@ -638,20 +638,20 @@ impl Outputable for BlobRepairOutput {
 
 /// Blob repair cycle output.
 pub struct BlobRepairCycleOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 impl Outputable for BlobRepairCycleOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             "Repair cycle initiated successfully. Repairs running in background.".to_string()
         } else {
             format!("Repair cycle failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -703,7 +703,7 @@ async fn blob_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()>
     match response {
         ClientRpcResponse::AddBlobResult(result) => {
             let output = AddBlobOutput {
-                success: result.success,
+                is_success: result.success,
                 hash: result.hash,
                 size: result.size,
                 was_new: result.was_new,
@@ -736,7 +736,7 @@ async fn blob_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
             }
 
             let output = GetBlobOutput {
-                found: result.found,
+                was_found: result.found,
                 data: result.data,
                 error: result.error,
             };
@@ -762,7 +762,7 @@ async fn blob_has(client: &AspenClient, args: HasArgs, json: bool) -> Result<()>
         ClientRpcResponse::HasBlobResult(result) => {
             let output = HasBlobOutput {
                 hash: args.hash,
-                exists: result.exists,
+                does_exist: result.exists,
                 error: result.error,
             };
             print_output(&output, json);
@@ -782,7 +782,7 @@ async fn blob_ticket(client: &AspenClient, args: TicketArgs, json: bool) -> Resu
     match response {
         ClientRpcResponse::GetBlobTicketResult(result) => {
             let output = BlobTicketOutput {
-                success: result.success,
+                is_success: result.success,
                 ticket: result.ticket,
                 error: result.error,
             };
@@ -843,7 +843,7 @@ async fn blob_protect(client: &AspenClient, args: ProtectArgs, json: bool) -> Re
         ClientRpcResponse::ProtectBlobResult(result) => {
             let output = ProtectBlobOutput {
                 operation: "protect".to_string(),
-                success: result.success,
+                is_success: result.success,
                 error: result.error,
             };
             print_output(&output, json);
@@ -864,7 +864,7 @@ async fn blob_unprotect(client: &AspenClient, args: UnprotectArgs, json: bool) -
         ClientRpcResponse::UnprotectBlobResult(result) => {
             let output = ProtectBlobOutput {
                 operation: "unprotect".to_string(),
-                success: result.success,
+                is_success: result.success,
                 error: result.error,
             };
             print_output(&output, json);
@@ -882,14 +882,14 @@ async fn blob_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Resu
     let response = client
         .send(ClientRpcRequest::DeleteBlob {
             hash: args.hash,
-            force: args.force,
+            force: args.is_force,
         })
         .await?;
 
     match response {
         ClientRpcResponse::DeleteBlobResult(result) => {
             let output = DeleteBlobOutput {
-                success: result.success,
+                is_success: result.success,
                 error: result.error,
             };
             print_output(&output, json);
@@ -914,7 +914,7 @@ async fn blob_download(client: &AspenClient, args: DownloadArgs, json: bool) -> 
     match response {
         ClientRpcResponse::DownloadBlobResult(result) => {
             let output = DownloadBlobOutput {
-                success: result.success,
+                is_success: result.success,
                 hash: result.hash,
                 size: result.size,
                 error: result.error,
@@ -941,7 +941,7 @@ async fn blob_download_by_hash(client: &AspenClient, args: DownloadByHashArgs, j
     match response {
         ClientRpcResponse::DownloadBlobByHashResult(result) => {
             let output = DownloadBlobOutput {
-                success: result.success,
+                is_success: result.success,
                 hash: result.hash,
                 size: result.size,
                 error: result.error,
@@ -969,7 +969,7 @@ async fn blob_download_by_provider(client: &AspenClient, args: DownloadByProvide
     match response {
         ClientRpcResponse::DownloadBlobByProviderResult(result) => {
             let output = DownloadBlobOutput {
-                success: result.success,
+                is_success: result.success,
                 hash: result.hash,
                 size: result.size,
                 error: result.error,
@@ -991,7 +991,7 @@ async fn blob_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resu
     match response {
         ClientRpcResponse::GetBlobStatusResult(result) => {
             let output = BlobStatusOutput {
-                found: result.found,
+                was_found: result.found,
                 hash: result.hash,
                 size: result.size,
                 complete: result.complete,
@@ -1015,7 +1015,7 @@ async fn blob_replication_status(client: &AspenClient, args: ReplicationStatusAr
     match response {
         ClientRpcResponse::GetBlobReplicationStatusResult(result) => {
             let output = BlobReplicationStatusOutput {
-                found: result.found,
+                was_found: result.found,
                 hash: result.hash,
                 size: result.size,
                 replica_nodes: result.replica_nodes,
@@ -1060,7 +1060,7 @@ async fn blob_repair(client: &AspenClient, args: RepairArgs, json: bool) -> Resu
     match response {
         ClientRpcResponse::TriggerBlobReplicationResult(result) => {
             let output = BlobRepairOutput {
-                success: result.success,
+                is_success: result.success,
                 hash: result.hash,
                 successful_nodes: result.successful_nodes,
                 failed_nodes: result.failed_nodes,
@@ -1084,7 +1084,7 @@ async fn blob_repair_cycle(client: &AspenClient, json: bool) -> Result<()> {
     match response {
         ClientRpcResponse::RunBlobRepairCycleResult(result) => {
             let output = BlobRepairCycleOutput {
-                success: result.success,
+                is_success: result.success,
                 error: result.error,
             };
             print_output(&output, json);

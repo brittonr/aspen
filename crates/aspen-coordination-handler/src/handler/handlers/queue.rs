@@ -37,13 +37,13 @@ pub(crate) async fn handle_queue_create(
 
     match manager.create(&queue_name, config).await {
         Ok((created, _)) => Ok(ClientRpcResponse::QueueCreateResult(QueueCreateResultResponse {
-            success: true,
-            created,
+            is_success: true,
+            was_created: created,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::QueueCreateResult(QueueCreateResultResponse {
-            success: false,
-            created: false,
+            is_success: false,
+            was_created: false,
             error: Some(e.to_string()),
         })),
     }
@@ -57,12 +57,12 @@ pub(crate) async fn handle_queue_delete(
 
     match manager.delete(&queue_name).await {
         Ok(deleted) => Ok(ClientRpcResponse::QueueDeleteResult(QueueDeleteResultResponse {
-            success: true,
+            is_success: true,
             items_deleted: Some(deleted),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::QueueDeleteResult(QueueDeleteResultResponse {
-            success: false,
+            is_success: false,
             items_deleted: None,
             error: Some(e.to_string()),
         })),
@@ -86,12 +86,12 @@ pub(crate) async fn handle_queue_enqueue(
 
     match manager.enqueue(&queue_name, payload, options).await {
         Ok(item_id) => Ok(ClientRpcResponse::QueueEnqueueResult(QueueEnqueueResultResponse {
-            success: true,
+            is_success: true,
             item_id: Some(item_id),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::QueueEnqueueResult(QueueEnqueueResultResponse {
-            success: false,
+            is_success: false,
             item_id: None,
             error: Some(e.to_string()),
         })),
@@ -118,12 +118,12 @@ pub(crate) async fn handle_queue_enqueue_batch(
 
     match manager.enqueue_batch(&queue_name, batch).await {
         Ok(item_ids) => Ok(ClientRpcResponse::QueueEnqueueBatchResult(QueueEnqueueBatchResultResponse {
-            success: true,
+            is_success: true,
             item_ids,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::QueueEnqueueBatchResult(QueueEnqueueBatchResultResponse {
-            success: false,
+            is_success: false,
             item_ids: vec![],
             error: Some(e.to_string()),
         })),
@@ -153,13 +153,13 @@ pub(crate) async fn handle_queue_dequeue(
                 })
                 .collect();
             Ok(ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
-                success: true,
+                is_success: true,
                 items: response_items,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
-            success: false,
+            is_success: false,
             items: vec![],
             error: Some(e.to_string()),
         })),
@@ -193,13 +193,13 @@ pub(crate) async fn handle_queue_dequeue_wait(
                 })
                 .collect();
             Ok(ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
-                success: true,
+                is_success: true,
                 items: response_items,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
-            success: false,
+            is_success: false,
             items: vec![],
             error: Some(e.to_string()),
         })),
@@ -226,13 +226,13 @@ pub(crate) async fn handle_queue_peek(
                 })
                 .collect();
             Ok(ClientRpcResponse::QueuePeekResult(QueuePeekResultResponse {
-                success: true,
+                is_success: true,
                 items: response_items,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::QueuePeekResult(QueuePeekResultResponse {
-            success: false,
+            is_success: false,
             items: vec![],
             error: Some(e.to_string()),
         })),
@@ -248,11 +248,11 @@ pub(crate) async fn handle_queue_ack(
 
     match manager.ack(&queue_name, &receipt_handle).await {
         Ok(()) => Ok(ClientRpcResponse::QueueAckResult(QueueAckResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::QueueAckResult(QueueAckResultResponse {
-            success: false,
+            is_success: false,
             error: Some(e.to_string()),
         })),
     }
@@ -269,11 +269,11 @@ pub(crate) async fn handle_queue_nack(
 
     match manager.nack(&queue_name, &receipt_handle, move_to_dlq, error_message).await {
         Ok(()) => Ok(ClientRpcResponse::QueueNackResult(QueueNackResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::QueueNackResult(QueueNackResultResponse {
-            success: false,
+            is_success: false,
             error: Some(e.to_string()),
         })),
     }
@@ -289,12 +289,12 @@ pub(crate) async fn handle_queue_extend_visibility(
 
     match manager.extend_visibility(&queue_name, &receipt_handle, additional_timeout_ms).await {
         Ok(new_deadline) => Ok(ClientRpcResponse::QueueExtendVisibilityResult(QueueExtendVisibilityResultResponse {
-            success: true,
+            is_success: true,
             new_deadline_ms: Some(new_deadline),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::QueueExtendVisibilityResult(QueueExtendVisibilityResultResponse {
-            success: false,
+            is_success: false,
             new_deadline_ms: None,
             error: Some(e.to_string()),
         })),
@@ -309,8 +309,8 @@ pub(crate) async fn handle_queue_status(
 
     match manager.status(&queue_name).await {
         Ok(status) => Ok(ClientRpcResponse::QueueStatusResult(QueueStatusResultResponse {
-            success: true,
-            exists: status.exists,
+            is_success: true,
+            does_exist: status.does_exist,
             visible_count: Some(status.visible_count),
             pending_count: Some(status.pending_count),
             dlq_count: Some(status.dlq_count),
@@ -319,8 +319,8 @@ pub(crate) async fn handle_queue_status(
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::QueueStatusResult(QueueStatusResultResponse {
-            success: false,
-            exists: false,
+            is_success: false,
+            does_exist: false,
             visible_count: None,
             pending_count: None,
             dlq_count: None,
@@ -360,13 +360,13 @@ pub(crate) async fn handle_queue_get_dlq(
                 })
                 .collect();
             Ok(ClientRpcResponse::QueueGetDLQResult(QueueGetDLQResultResponse {
-                success: true,
+                is_success: true,
                 items: response_items,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::QueueGetDLQResult(QueueGetDLQResultResponse {
-            success: false,
+            is_success: false,
             items: vec![],
             error: Some(e.to_string()),
         })),
@@ -382,11 +382,11 @@ pub(crate) async fn handle_queue_redrive_dlq(
 
     match manager.redrive_dlq(&queue_name, item_id).await {
         Ok(()) => Ok(ClientRpcResponse::QueueRedriveDLQResult(QueueRedriveDLQResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::QueueRedriveDLQResult(QueueRedriveDLQResultResponse {
-            success: false,
+            is_success: false,
             error: Some(e.to_string()),
         })),
     }

@@ -151,7 +151,7 @@ async fn test_hook_trigger_no_handlers() {
     match response {
         ClientRpcResponse::HookTriggerResult(result) => {
             tracing::info!(
-                success = result.success,
+                success = result.is_success,
                 dispatched_count = result.dispatched_count,
                 error = ?result.error,
                 "hook trigger result"
@@ -205,10 +205,10 @@ async fn test_hook_trigger_invalid_event_type() {
 
     match response {
         ClientRpcResponse::HookTriggerResult(result) => {
-            tracing::info!(success = result.success, error = ?result.error, "hook trigger result for invalid type");
+            tracing::info!(success = result.is_success, error = ?result.error, "hook trigger result for invalid type");
 
             // Should fail with an error about unknown event type
-            assert!(!result.success, "should fail for invalid event type");
+            assert!(!result.is_success, "should fail for invalid event type");
             assert!(result.error.is_some(), "should have an error message");
             let error = result.error.unwrap();
             assert!(error.contains("unknown event type"), "error should mention unknown event type: {}", error);
@@ -342,7 +342,7 @@ async fn test_hook_trigger_all_event_types() {
 
         match response {
             ClientRpcResponse::HookTriggerResult(result) => {
-                tracing::info!(event_type = %event_type, success = result.success, error = ?result.error, "trigger result");
+                tracing::info!(event_type = %event_type, success = result.is_success, error = ?result.error, "trigger result");
 
                 // Should not have "unknown event type" error
                 if let Some(error) = &result.error {

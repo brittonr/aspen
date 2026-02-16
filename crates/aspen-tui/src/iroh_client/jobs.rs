@@ -124,7 +124,7 @@ impl IrohClient {
 
         match response {
             ClientRpcResponse::JobCancelResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     anyhow::bail!(

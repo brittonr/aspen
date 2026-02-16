@@ -108,7 +108,7 @@ async fn handle_transit_create_key(
         "ed25519" => KeyType::Ed25519,
         _ => {
             return Ok(ClientRpcResponse::SecretsTransitKeyResult(SecretsTransitKeyResultResponse {
-                success: false,
+                is_success: false,
                 name: None,
                 version: None,
                 key_type: None,
@@ -131,7 +131,7 @@ async fn handle_transit_create_key(
 
     match store.create_key(request).await {
         Ok(key) => Ok(ClientRpcResponse::SecretsTransitKeyResult(SecretsTransitKeyResultResponse {
-            success: true,
+            is_success: true,
             name: Some(key.name),
             version: Some(key.current_version as u64),
             key_type: Some(format!("{:?}", key.key_type)),
@@ -140,7 +140,7 @@ async fn handle_transit_create_key(
         Err(e) => {
             warn!(error = %e, "Transit create key failed");
             Ok(ClientRpcResponse::SecretsTransitKeyResult(SecretsTransitKeyResultResponse {
-                success: false,
+                is_success: false,
                 name: None,
                 version: None,
                 key_type: None,
@@ -169,14 +169,14 @@ async fn handle_transit_encrypt(
 
     match store.encrypt(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsTransitEncryptResult(SecretsTransitEncryptResultResponse {
-            success: true,
+            is_success: true,
             ciphertext: Some(response.ciphertext),
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "Transit encrypt failed");
             Ok(ClientRpcResponse::SecretsTransitEncryptResult(SecretsTransitEncryptResultResponse {
-                success: false,
+                is_success: false,
                 ciphertext: None,
                 error: Some(sanitize_secrets_error(&e)),
             }))
@@ -202,14 +202,14 @@ async fn handle_transit_decrypt(
 
     match store.decrypt(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsTransitDecryptResult(SecretsTransitDecryptResultResponse {
-            success: true,
+            is_success: true,
             plaintext: Some(response.plaintext),
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "Transit decrypt failed");
             Ok(ClientRpcResponse::SecretsTransitDecryptResult(SecretsTransitDecryptResultResponse {
-                success: false,
+                is_success: false,
                 plaintext: None,
                 error: Some(sanitize_secrets_error(&e)),
             }))
@@ -236,14 +236,14 @@ async fn handle_transit_sign(
 
     match store.sign(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsTransitSignResult(SecretsTransitSignResultResponse {
-            success: true,
+            is_success: true,
             signature: Some(response.signature),
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "Transit sign failed");
             Ok(ClientRpcResponse::SecretsTransitSignResult(SecretsTransitSignResultResponse {
-                success: false,
+                is_success: false,
                 signature: None,
                 error: Some(sanitize_secrets_error(&e)),
             }))
@@ -271,15 +271,15 @@ async fn handle_transit_verify(
 
     match store.verify(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsTransitVerifyResult(SecretsTransitVerifyResultResponse {
-            success: true,
-            valid: Some(response.valid),
+            is_success: true,
+            is_valid: Some(response.is_valid),
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "Transit verify failed");
             Ok(ClientRpcResponse::SecretsTransitVerifyResult(SecretsTransitVerifyResultResponse {
-                success: false,
-                valid: None,
+                is_success: false,
+                is_valid: None,
                 error: Some(sanitize_secrets_error(&e)),
             }))
         }
@@ -296,7 +296,7 @@ async fn handle_transit_rotate_key(
     let store = service.get_transit_store(mount).await?;
     match store.rotate_key(&name).await {
         Ok(key) => Ok(ClientRpcResponse::SecretsTransitKeyResult(SecretsTransitKeyResultResponse {
-            success: true,
+            is_success: true,
             name: Some(key.name),
             version: Some(key.current_version as u64),
             key_type: Some(format!("{:?}", key.key_type)),
@@ -305,7 +305,7 @@ async fn handle_transit_rotate_key(
         Err(e) => {
             warn!(error = %e, "Transit rotate key failed");
             Ok(ClientRpcResponse::SecretsTransitKeyResult(SecretsTransitKeyResultResponse {
-                success: false,
+                is_success: false,
                 name: None,
                 version: None,
                 key_type: None,
@@ -321,14 +321,14 @@ async fn handle_transit_list_keys(service: &SecretsService, mount: &str) -> anyh
     let store = service.get_transit_store(mount).await?;
     match store.list_keys().await {
         Ok(keys) => Ok(ClientRpcResponse::SecretsTransitListResult(SecretsTransitListResultResponse {
-            success: true,
+            is_success: true,
             keys,
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "Transit list keys failed");
             Ok(ClientRpcResponse::SecretsTransitListResult(SecretsTransitListResultResponse {
-                success: false,
+                is_success: false,
                 keys: vec![],
                 error: Some(sanitize_secrets_error(&e)),
             }))
@@ -354,14 +354,14 @@ async fn handle_transit_rewrap(
 
     match store.rewrap(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsTransitEncryptResult(SecretsTransitEncryptResultResponse {
-            success: true,
+            is_success: true,
             ciphertext: Some(response.ciphertext),
             error: None,
         })),
         Err(e) => {
             warn!(error = %e, "Transit rewrap failed");
             Ok(ClientRpcResponse::SecretsTransitEncryptResult(SecretsTransitEncryptResultResponse {
-                success: false,
+                is_success: false,
                 ciphertext: None,
                 error: Some(sanitize_secrets_error(&e)),
             }))
@@ -391,7 +391,7 @@ async fn handle_transit_datakey(
 
     match store.generate_data_key(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsTransitDatakeyResult(SecretsTransitDatakeyResultResponse {
-            success: true,
+            is_success: true,
             plaintext: Some(response.plaintext),
             ciphertext: Some(response.ciphertext),
             error: None,
@@ -399,7 +399,7 @@ async fn handle_transit_datakey(
         Err(e) => {
             warn!(error = %e, "Transit datakey failed");
             Ok(ClientRpcResponse::SecretsTransitDatakeyResult(SecretsTransitDatakeyResultResponse {
-                success: false,
+                is_success: false,
                 plaintext: None,
                 ciphertext: None,
                 error: Some(sanitize_secrets_error(&e)),

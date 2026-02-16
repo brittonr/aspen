@@ -39,7 +39,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         let dlq_keys = self.scan_keys(&dlq_pref, MAX_QUEUE_CLEANUP_BATCH).await?;
 
         Ok(QueueStatus {
-            exists: true,
+            does_exist: true,
             visible_count: visible_keys.len() as u64,
             pending_count: pending_keys.len() as u64,
             dlq_count: dlq_keys.len() as u64,

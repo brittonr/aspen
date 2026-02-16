@@ -18,8 +18,8 @@ pub struct ContentProviderInfo {
     pub blob_format: iroh_blobs::BlobFormat,
     /// Timestamp when this provider was discovered (microseconds since epoch).
     pub discovered_at: u64,
-    /// Whether this provider has been verified (we successfully connected).
-    pub verified: bool,
+    /// Whether this provider has been is_verified (we successfully connected).
+    pub is_verified: bool,
 }
 
 /// Node address resolved from DHT.
@@ -92,24 +92,24 @@ mod tests {
             blob_size: 1024,
             blob_format: iroh_blobs::BlobFormat::Raw,
             discovered_at: 1704067200000000,
-            verified: false,
+            is_verified: false,
         };
 
         assert_eq!(info.blob_size, 1024);
-        assert!(!info.verified);
+        assert!(!info.is_verified);
     }
 
     #[test]
-    fn content_provider_info_verified() {
+    fn content_provider_info_is_verified() {
         let info = ContentProviderInfo {
             node_id: test_public_key(),
             blob_size: 2048,
             blob_format: iroh_blobs::BlobFormat::HashSeq,
             discovered_at: 1704067200000000,
-            verified: true,
+            is_verified: true,
         };
 
-        assert!(info.verified);
+        assert!(info.is_verified);
         assert_eq!(info.blob_size, 2048);
     }
 
@@ -120,7 +120,7 @@ mod tests {
             blob_size: 512,
             blob_format: iroh_blobs::BlobFormat::Raw,
             discovered_at: 1000000,
-            verified: true,
+            is_verified: true,
         };
 
         let cloned = info.clone();
@@ -128,7 +128,7 @@ mod tests {
         assert_eq!(info.node_id, cloned.node_id);
         assert_eq!(info.blob_size, cloned.blob_size);
         assert_eq!(info.discovered_at, cloned.discovered_at);
-        assert_eq!(info.verified, cloned.verified);
+        assert_eq!(info.is_verified, cloned.is_verified);
     }
 
     #[test]
@@ -138,7 +138,7 @@ mod tests {
             blob_size: 100,
             blob_format: iroh_blobs::BlobFormat::Raw,
             discovered_at: 999,
-            verified: false,
+            is_verified: false,
         };
 
         let debug_str = format!("{:?}", info);
@@ -154,7 +154,7 @@ mod tests {
             blob_size: 0,
             blob_format: iroh_blobs::BlobFormat::Raw,
             discovered_at: 0,
-            verified: false,
+            is_verified: false,
         };
 
         assert_eq!(info.blob_size, 0);
@@ -168,7 +168,7 @@ mod tests {
             blob_size: u64::MAX,
             blob_format: iroh_blobs::BlobFormat::HashSeq,
             discovered_at: u64::MAX,
-            verified: true,
+            is_verified: true,
         };
 
         assert_eq!(info.blob_size, u64::MAX);

@@ -110,7 +110,7 @@ impl<B: BlobStore> SyncService<B> {
 
         while let Some(hash) = queue.pop_front() {
             if result.fetched + result.already_present >= MAX_FETCH_BATCH_SIZE {
-                result.truncated = true;
+                result.is_truncated = true;
                 break;
             }
 
@@ -215,7 +215,7 @@ impl<B: BlobStore> SyncService<B> {
 
         while let Some(hash) = queue.pop_front() {
             if result.fetched + result.already_present >= MAX_FETCH_BATCH_SIZE {
-                result.truncated = true;
+                result.is_truncated = true;
                 break;
             }
 
@@ -278,13 +278,13 @@ pub struct FetchResult {
     pub errors: Vec<(blake3::Hash, String)>,
 
     /// Whether the fetch was truncated due to limits.
-    pub truncated: bool,
+    pub is_truncated: bool,
 }
 
 impl FetchResult {
     /// Check if the fetch was successful (no missing objects or errors).
     pub fn is_complete(&self) -> bool {
-        self.missing.is_empty() && self.errors.is_empty() && !self.truncated
+        self.missing.is_empty() && self.errors.is_empty() && !self.is_truncated
     }
 }
 

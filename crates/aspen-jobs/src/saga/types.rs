@@ -86,7 +86,7 @@ pub struct SagaStep {
     /// Unique name for this step.
     pub name: String,
     /// Whether this step has been executed.
-    pub executed: bool,
+    pub was_executed: bool,
     /// Result of the action (if executed).
     pub action_result: Option<StepResult>,
     /// Result of compensation (if compensated).

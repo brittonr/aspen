@@ -13,7 +13,7 @@ use aspen_rpc_core::ClientProtocolContext;
 
 fn lock_error(error: String) -> ClientRpcResponse {
     ClientRpcResponse::LockResult(LockResultResponse {
-        success: false,
+        is_success: false,
         fencing_token: None,
         holder_id: None,
         deadline_ms: None,
@@ -23,7 +23,7 @@ fn lock_error(error: String) -> ClientRpcResponse {
 
 fn lock_error_with_holder(error: String, entry: &LockEntry) -> ClientRpcResponse {
     ClientRpcResponse::LockResult(LockResultResponse {
-        success: false,
+        is_success: false,
         fencing_token: Some(entry.fencing_token),
         holder_id: Some(entry.holder_id.clone()),
         deadline_ms: Some(entry.deadline_ms),
@@ -33,7 +33,7 @@ fn lock_error_with_holder(error: String, entry: &LockEntry) -> ClientRpcResponse
 
 fn lock_success(fencing_token: u64, holder_id: String, deadline_ms: Option<u64>) -> ClientRpcResponse {
     ClientRpcResponse::LockResult(LockResultResponse {
-        success: true,
+        is_success: true,
         fencing_token: Some(fencing_token),
         holder_id: Some(holder_id),
         deadline_ms,
@@ -50,7 +50,7 @@ pub(crate) async fn handle_lock_acquire(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::LockResult(LockResultResponse {
-            success: false,
+            is_success: false,
             fencing_token: None,
             holder_id: None,
             deadline_ms: None,
@@ -71,7 +71,7 @@ pub(crate) async fn handle_lock_acquire(
             let deadline = guard.deadline_ms();
             std::mem::forget(guard);
             Ok(ClientRpcResponse::LockResult(LockResultResponse {
-                success: true,
+                is_success: true,
                 fencing_token: Some(token),
                 holder_id: Some(holder_id),
                 deadline_ms: Some(deadline),
@@ -85,7 +85,7 @@ pub(crate) async fn handle_lock_acquire(
                 _ => (None, None),
             };
             Ok(ClientRpcResponse::LockResult(LockResultResponse {
-                success: false,
+                is_success: false,
                 fencing_token: None,
                 holder_id: holder,
                 deadline_ms: deadline,
@@ -103,7 +103,7 @@ pub(crate) async fn handle_lock_try_acquire(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::LockResult(LockResultResponse {
-            success: false,
+            is_success: false,
             fencing_token: None,
             holder_id: None,
             deadline_ms: None,
@@ -123,7 +123,7 @@ pub(crate) async fn handle_lock_try_acquire(
             let deadline = guard.deadline_ms();
             std::mem::forget(guard);
             Ok(ClientRpcResponse::LockResult(LockResultResponse {
-                success: true,
+                is_success: true,
                 fencing_token: Some(token),
                 holder_id: Some(holder_id),
                 deadline_ms: Some(deadline),
@@ -137,7 +137,7 @@ pub(crate) async fn handle_lock_try_acquire(
                 _ => (None, None),
             };
             Ok(ClientRpcResponse::LockResult(LockResultResponse {
-                success: false,
+                is_success: false,
                 fencing_token: None,
                 holder_id: holder,
                 deadline_ms: deadline,

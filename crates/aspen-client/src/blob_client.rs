@@ -129,7 +129,7 @@ impl<'a> BlobClient<'a> {
 
         match response {
             ClientRpcResponse::AddBlobResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(BlobUploadResult {
                         hash: result.hash.context("Blob uploaded but no hash returned")?,
                         size_bytes: result.size.context("Blob uploaded but no size returned")?,
@@ -174,7 +174,7 @@ impl<'a> BlobClient<'a> {
 
         match response {
             ClientRpcResponse::GetBlobResult(result) => {
-                if result.found {
+                if result.was_found {
                     let data = result.data.context("Blob found but no data returned")?;
                     Ok(Some(BlobDownloadResult {
                         hash: hash_str,
@@ -209,7 +209,7 @@ impl<'a> BlobClient<'a> {
 
         match response {
             ClientRpcResponse::DownloadBlobResult(result) => {
-                if result.success {
+                if result.is_success {
                     let hash = result.hash.context("Blob downloaded but no hash returned")?;
                     let _size = result.size.context("Blob downloaded but no size returned")?;
 
@@ -241,7 +241,7 @@ impl<'a> BlobClient<'a> {
                 if let Some(error) = result.error {
                     Err(anyhow::anyhow!("Failed to check blob: {}", error))
                 } else {
-                    Ok(result.exists)
+                    Ok(result.does_exist)
                 }
             }
             _ => Err(anyhow::anyhow!("Unexpected response type for blob check")),
@@ -258,7 +258,7 @@ impl<'a> BlobClient<'a> {
 
         match response {
             ClientRpcResponse::GetBlobTicketResult(result) => {
-                if result.success {
+                if result.is_success {
                     result.ticket.context("Ticket generated but not returned")
                 } else {
                     Err(anyhow::anyhow!(
@@ -311,7 +311,7 @@ impl<'a> BlobClient<'a> {
 
         match response {
             ClientRpcResponse::GetBlobStatusResult(result) => {
-                if result.found {
+                if result.was_found {
                     Ok(Some(BlobStatus {
                         hash: result.hash.context("Status found but no hash returned")?,
                         size_bytes: result.size,
@@ -339,7 +339,7 @@ impl<'a> BlobClient<'a> {
 
         match response {
             ClientRpcResponse::ProtectBlobResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     Err(anyhow::anyhow!(
@@ -360,7 +360,7 @@ impl<'a> BlobClient<'a> {
 
         match response {
             ClientRpcResponse::UnprotectBlobResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     Err(anyhow::anyhow!(
@@ -374,17 +374,17 @@ impl<'a> BlobClient<'a> {
     }
 
     /// Delete a blob from the store.
-    pub async fn delete(&self, hash: impl Into<String>, force: bool) -> Result<()> {
+    pub async fn delete(&self, hash: impl Into<String>, is_force: bool) -> Result<()> {
         let request = ClientRpcRequest::DeleteBlob {
             hash: hash.into(),
-            force,
+            is_force,
         };
 
         let response = self.client.send(request).await?;
 
         match response {
             ClientRpcResponse::DeleteBlobResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     Err(anyhow::anyhow!(
@@ -486,7 +486,7 @@ mod rpc_blob_store {
 
             match self.client.send(request).await {
                 Ok(ClientRpcResponse::AddBlobResult(result)) => {
-                    if result.success {
+                    if result.is_success {
                         let hash_str = result.hash.ok_or_else(|| BlobStoreError::Storage {
                             message: "Blob uploaded but no hash returned".to_string(),
                         })?;
@@ -526,7 +526,7 @@ mod rpc_blob_store {
 
             match self.client.send(request).await {
                 Ok(ClientRpcResponse::ProtectBlobResult(result)) => {
-                    if result.success {
+                    if result.is_success {
                         Ok(())
                     } else {
                         Err(BlobStoreError::Storage {
@@ -550,7 +550,7 @@ mod rpc_blob_store {
 
             match self.client.send(request).await {
                 Ok(ClientRpcResponse::UnprotectBlobResult(result)) => {
-                    if result.success {
+                    if result.is_success {
                         Ok(())
                     } else {
                         Err(BlobStoreError::Storage {
@@ -579,7 +579,7 @@ mod rpc_blob_store {
 
             match self.client.send(request).await {
                 Ok(ClientRpcResponse::GetBlobResult(result)) => {
-                    if result.found {
+                    if result.was_found {
                         match result.data {
                             Some(data) => {
                                 debug!(hash = %hash_str, size = data.len(), "RpcBlobStore: blob retrieved");
@@ -615,7 +615,7 @@ mod rpc_blob_store {
                     if let Some(error) = result.error {
                         Err(BlobStoreError::Storage { message: error })
                     } else {
-                        Ok(result.exists)
+                        Ok(result.does_exist)
                     }
                 }
                 Ok(_) => Err(BlobStoreError::Storage {
@@ -634,7 +634,7 @@ mod rpc_blob_store {
 
             match self.client.send(request).await {
                 Ok(ClientRpcResponse::GetBlobStatusResult(result)) => {
-                    if result.found {
+                    if result.was_found {
                         Ok(Some(BlobStatus {
                             hash: *hash,
                             size_bytes: result.size,
@@ -679,7 +679,7 @@ mod rpc_blob_store {
 
             match self.client.send(request).await {
                 Ok(ClientRpcResponse::GetBlobTicketResult(result)) => {
-                    if result.success {
+                    if result.is_success {
                         let ticket_str = result.ticket.ok_or_else(|| BlobStoreError::Storage {
                             message: "Ticket generated but not returned".to_string(),
                         })?;
@@ -709,7 +709,7 @@ mod rpc_blob_store {
 
             match self.client.send(request).await {
                 Ok(ClientRpcResponse::DownloadBlobResult(result)) => {
-                    if result.success {
+                    if result.is_success {
                         let hash_str = result.hash.ok_or_else(|| BlobStoreError::Download {
                             message: "Blob downloaded but no hash returned".to_string(),
                         })?;

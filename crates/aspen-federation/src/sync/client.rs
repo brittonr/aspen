@@ -110,7 +110,11 @@ pub async fn get_remote_resource_state(
     let response: FederationResponse = read_message(&mut recv).await?;
 
     match response {
-        FederationResponse::ResourceState { found, heads, metadata } => Ok((found, heads, metadata)),
+        FederationResponse::ResourceState {
+            was_found,
+            heads,
+            metadata,
+        } => Ok((was_found, heads, metadata)),
         FederationResponse::Error { code, message } => {
             anyhow::bail!("Get resource state failed: {} - {}", code, message)
         }

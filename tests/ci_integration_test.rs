@@ -65,7 +65,7 @@ async fn test_ci_trigger_pipeline_rpc() {
 
     // The trigger should fail since the repo doesn't exist, but the RPC should work
     tracing::info!(
-        success = result.success,
+        success = result.is_success,
         run_id = ?result.run_id,
         error = ?result.error,
         "CI trigger result"
@@ -74,7 +74,7 @@ async fn test_ci_trigger_pipeline_rpc() {
     // We expect either success=false with an error, or success=true with a run_id
     // Since the repo doesn't exist and CI config loading isn't fully implemented,
     // we'll likely get an error
-    if !result.success {
+    if !result.is_success {
         assert!(result.error.is_some(), "failed trigger should have error message");
         tracing::info!(error = ?result.error, "expected error for non-existent repo");
     }
@@ -108,7 +108,7 @@ async fn test_ci_get_status_rpc() {
         .expect("RPC should succeed even for non-existent run");
 
     tracing::info!(
-        found = result.found,
+        found = result.was_found,
         run_id = ?result.run_id,
         status = ?result.status,
         error = ?result.error,
@@ -116,7 +116,7 @@ async fn test_ci_get_status_rpc() {
     );
 
     // Should return found=false for non-existent run
-    assert!(!result.found, "non-existent run should not be found");
+    assert!(!result.was_found, "non-existent run should not be found");
 
     tester.shutdown().await.expect("shutdown failed");
 }
@@ -184,11 +184,11 @@ async fn test_ci_cancel_run_rpc() {
         .await
         .expect("RPC should succeed even if cancel fails");
 
-    tracing::info!(success = result.success, error = ?result.error, "CI cancel result");
+    tracing::info!(success = result.is_success, error = ?result.error, "CI cancel result");
 
     // Should fail since the run doesn't exist
     // Note: Current implementation returns success=false for unimplemented features
-    if !result.success {
+    if !result.is_success {
         assert!(result.error.is_some(), "failed cancel should have error message");
     }
 
@@ -221,7 +221,7 @@ async fn test_ci_watch_unwatch_repo_rpc() {
     let watch_result = tester.ci_watch_repo(test_repo_id).await.expect("watch RPC should succeed");
 
     tracing::info!(
-        success = watch_result.success,
+        success = watch_result.is_success,
         error = ?watch_result.error,
         "CI watch result"
     );
@@ -233,7 +233,7 @@ async fn test_ci_watch_unwatch_repo_rpc() {
     let unwatch_result = tester.ci_unwatch_repo(test_repo_id).await.expect("unwatch RPC should succeed");
 
     tracing::info!(
-        success = unwatch_result.success,
+        success = unwatch_result.is_success,
         error = ?unwatch_result.error,
         "CI unwatch result"
     );
@@ -268,7 +268,7 @@ async fn test_ci_multi_node_cluster() {
     // Verify status query works
     let status_result = tester.ci_get_status("test-run-id").await.expect("status should succeed");
 
-    assert!(!status_result.found, "non-existent run should not be found");
+    assert!(!status_result.was_found, "non-existent run should not be found");
 
     tester.shutdown().await.expect("shutdown failed");
 }
@@ -299,11 +299,11 @@ async fn test_ci_disabled_returns_error() {
         Ok(response) => {
             // If we get a response, it should indicate CI is not available
             tracing::info!(
-                success = response.success,
+                success = response.is_success,
                 error = ?response.error,
                 "CI trigger response when disabled"
             );
-            if !response.success {
+            if !response.is_success {
                 assert!(
                     response
                         .error

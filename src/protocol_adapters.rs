@@ -397,7 +397,7 @@ impl ContentDiscovery for ContentDiscoveryAdapter {
                 blob_size: p.blob_size,
                 blob_format: p.blob_format,
                 discovered_at: p.discovered_at,
-                verified: p.verified,
+                is_verified: p.is_verified,
             })
             .collect())
     }
@@ -504,7 +504,7 @@ impl PeerManager for PeerManagerAdapter {
         self.inner.sync_status(cluster_id).await.map(|s| SyncStatus {
             cluster_id: s.cluster_id,
             state: convert_peer_connection_state(s.state),
-            syncing: s.syncing,
+            is_syncing: s.is_syncing,
             entries_received: s.entries_received,
             entries_imported: s.entries_imported,
             entries_skipped: s.entries_skipped,

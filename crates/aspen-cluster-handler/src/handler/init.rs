@@ -39,7 +39,7 @@ pub(crate) async fn handle_init_cluster(ctx: &ClientProtocolContext) -> anyhow::
     }
 
     Ok(ClientRpcResponse::InitResult(InitResultResponse {
-        success: result.is_ok(),
+        is_success: result.is_ok(),
         error: result.err().map(|e| sanitize_control_error(&e)),
     }))
 }

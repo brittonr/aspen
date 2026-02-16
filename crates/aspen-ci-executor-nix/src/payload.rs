@@ -60,7 +60,7 @@ pub struct NixBuildPayload {
     /// Whether to upload build results to the blob store as NAR archives.
     /// Defaults to true when a blob store is configured.
     #[serde(default = "default_true")]
-    pub upload_result: bool,
+    pub should_upload_result: bool,
 }
 
 impl NixBuildPayload {

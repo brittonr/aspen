@@ -27,7 +27,7 @@ pub enum BlobRequest {
     /// Remove protection from a blob.
     UnprotectBlob { tag: String },
     /// Delete a blob from the store.
-    DeleteBlob { hash: String, force: bool },
+    DeleteBlob { hash: String, is_force: bool },
     /// Download a blob from a remote peer using a ticket.
     DownloadBlob { ticket: String, tag: Option<String> },
     /// Download a blob by hash using DHT discovery.
@@ -103,7 +103,7 @@ impl BlobRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddBlobResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// BLAKE3 hash of the stored blob (hex-encoded).
     pub hash: Option<String>,
     /// Size of the blob in bytes.
@@ -118,7 +118,7 @@ pub struct AddBlobResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetBlobResultResponse {
     /// Whether the blob was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Blob data if found.
     pub data: Option<Vec<u8>>,
     /// Error message if failed.
@@ -129,7 +129,7 @@ pub struct GetBlobResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HasBlobResultResponse {
     /// Whether the blob exists in the store.
-    pub exists: bool,
+    pub does_exist: bool,
     /// Error message if check failed.
     pub error: Option<String>,
 }
@@ -138,7 +138,7 @@ pub struct HasBlobResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetBlobTicketResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Serialized BlobTicket.
     pub ticket: Option<String>,
     /// Error message if failed.
@@ -174,7 +174,7 @@ pub struct ListBlobsResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProtectBlobResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -183,7 +183,7 @@ pub struct ProtectBlobResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnprotectBlobResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -192,7 +192,7 @@ pub struct UnprotectBlobResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteBlobResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -201,7 +201,7 @@ pub struct DeleteBlobResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadBlobResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// BLAKE3 hash of the downloaded blob (hex-encoded).
     pub hash: Option<String>,
     /// Size of the downloaded blob in bytes.
@@ -214,7 +214,7 @@ pub struct DownloadBlobResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetBlobStatusResultResponse {
     /// Whether the blob exists.
-    pub found: bool,
+    pub was_found: bool,
     /// BLAKE3 hash of the blob (hex-encoded).
     pub hash: Option<String>,
     /// Size of the blob in bytes.
@@ -231,7 +231,7 @@ pub struct GetBlobStatusResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobReplicatePullResultResponse {
     /// Whether the replication succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// BLAKE3 hash of the replicated blob (hex-encoded).
     pub hash: Option<String>,
     /// Size of the replicated blob in bytes.
@@ -246,7 +246,7 @@ pub struct BlobReplicatePullResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetBlobReplicationStatusResultResponse {
     /// Whether the blob has replication metadata.
-    pub found: bool,
+    pub was_found: bool,
     /// BLAKE3 hash of the blob (hex-encoded).
     pub hash: Option<String>,
     /// Size of the blob in bytes.
@@ -271,7 +271,7 @@ pub struct GetBlobReplicationStatusResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TriggerBlobReplicationResultResponse {
     /// Whether the replication was triggered successfully.
-    pub success: bool,
+    pub is_success: bool,
     /// BLAKE3 hash of the blob (hex-encoded).
     pub hash: Option<String>,
     /// Node IDs that successfully received the blob.
@@ -288,7 +288,7 @@ pub struct TriggerBlobReplicationResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunBlobRepairCycleResultResponse {
     /// Whether the repair cycle was initiated successfully.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if initiation failed.
     pub error: Option<String>,
 }

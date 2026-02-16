@@ -101,7 +101,7 @@ pub struct StatusArgs {
 pub struct SemaphoreOutput {
     pub operation: String,
     pub name: String,
-    pub success: bool,
+    pub is_success: bool,
     pub permits_acquired: Option<u32>,
     pub available: Option<u32>,
     pub capacity: Option<u32>,
@@ -114,7 +114,7 @@ impl Outputable for SemaphoreOutput {
         serde_json::json!({
             "operation": self.operation,
             "name": self.name,
-            "success": self.success,
+            "is_success": self.is_success,
             "permits_acquired": self.permits_acquired,
             "available": self.available,
             "capacity": self.capacity,
@@ -124,7 +124,7 @@ impl Outputable for SemaphoreOutput {
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             match self.operation.as_str() {
                 "acquire" | "try_acquire" => {
                     let acquired = self.permits_acquired.unwrap_or(0);
@@ -185,7 +185,7 @@ async fn semaphore_acquire(client: &AspenClient, args: AcquireArgs, json: bool) 
             let output = SemaphoreOutput {
                 operation: "acquire".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 permits_acquired: result.permits_acquired,
                 available: result.available,
                 capacity: result.capacity,
@@ -193,7 +193,7 @@ async fn semaphore_acquire(client: &AspenClient, args: AcquireArgs, json: bool) 
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -219,7 +219,7 @@ async fn semaphore_try_acquire(client: &AspenClient, args: TryAcquireArgs, json:
             let output = SemaphoreOutput {
                 operation: "try_acquire".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 permits_acquired: result.permits_acquired,
                 available: result.available,
                 capacity: result.capacity,
@@ -227,7 +227,7 @@ async fn semaphore_try_acquire(client: &AspenClient, args: TryAcquireArgs, json:
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -251,7 +251,7 @@ async fn semaphore_release(client: &AspenClient, args: ReleaseArgs, json: bool) 
             let output = SemaphoreOutput {
                 operation: "release".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 permits_acquired: None,
                 available: result.available,
                 capacity: result.capacity,
@@ -259,7 +259,7 @@ async fn semaphore_release(client: &AspenClient, args: ReleaseArgs, json: bool) 
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -281,7 +281,7 @@ async fn semaphore_status(client: &AspenClient, args: StatusArgs, json: bool) ->
             let output = SemaphoreOutput {
                 operation: "status".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 permits_acquired: None,
                 available: result.available,
                 capacity: result.capacity,
@@ -289,7 +289,7 @@ async fn semaphore_status(client: &AspenClient, args: StatusArgs, json: bool) ->
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

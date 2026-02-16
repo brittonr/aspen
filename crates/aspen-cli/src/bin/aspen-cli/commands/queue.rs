@@ -229,23 +229,23 @@ pub struct RedriveArgs {
 
 /// Queue create output.
 pub struct QueueCreateOutput {
-    pub success: bool,
-    pub created: bool,
+    pub is_success: bool,
+    pub was_created: bool,
     pub error: Option<String>,
 }
 
 impl Outputable for QueueCreateOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
-            "created": self.created,
+            "is_success": self.is_success,
+            "was_created": self.was_created,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
-            if self.created {
+        if self.is_success {
+            if self.was_created {
                 "Queue created"
             } else {
                 "Queue already exists"
@@ -259,7 +259,7 @@ impl Outputable for QueueCreateOutput {
 
 /// Queue delete output.
 pub struct QueueDeleteOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub items_deleted: Option<u64>,
     pub error: Option<String>,
 }
@@ -267,14 +267,14 @@ pub struct QueueDeleteOutput {
 impl Outputable for QueueDeleteOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "items_deleted": self.items_deleted,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!("Queue deleted ({} items)", self.items_deleted.unwrap_or(0))
         } else {
             format!("Delete failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -284,7 +284,7 @@ impl Outputable for QueueDeleteOutput {
 
 /// Queue enqueue output.
 pub struct QueueEnqueueOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub item_id: Option<u64>,
     pub error: Option<String>,
 }
@@ -292,14 +292,14 @@ pub struct QueueEnqueueOutput {
 impl Outputable for QueueEnqueueOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "item_id": self.item_id,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!("Enqueued. Item ID: {}", self.item_id.unwrap_or(0))
         } else {
             format!("Enqueue failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -309,7 +309,7 @@ impl Outputable for QueueEnqueueOutput {
 
 /// Queue enqueue batch output.
 pub struct QueueEnqueueBatchOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub item_ids: Vec<u64>,
     pub error: Option<String>,
 }
@@ -317,14 +317,14 @@ pub struct QueueEnqueueBatchOutput {
 impl Outputable for QueueEnqueueBatchOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "item_ids": self.item_ids,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!("Enqueued {} items", self.item_ids.len())
         } else {
             format!("Enqueue batch failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -334,7 +334,7 @@ impl Outputable for QueueEnqueueBatchOutput {
 
 /// Queue dequeue output.
 pub struct QueueDequeueOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub items: Vec<QueueItemDisplay>,
     pub error: Option<String>,
 }
@@ -349,7 +349,7 @@ pub struct QueueItemDisplay {
 impl Outputable for QueueDequeueOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "items": self.items.iter().map(|i| {
                 serde_json::json!({
                     "item_id": i.item_id,
@@ -363,7 +363,7 @@ impl Outputable for QueueDequeueOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.success {
+        if !self.is_success {
             return format!("Dequeue failed: {}", self.error.as_deref().unwrap_or("unknown error"));
         }
 
@@ -385,7 +385,7 @@ impl Outputable for QueueDequeueOutput {
 /// Queue simple success output.
 pub struct QueueSuccessOutput {
     pub operation: String,
-    pub success: bool,
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
@@ -393,13 +393,13 @@ impl Outputable for QueueSuccessOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "operation": self.operation,
-            "success": self.success,
+            "is_success": self.is_success,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             "OK".to_string()
         } else {
             format!("{} failed: {}", self.operation, self.error.as_deref().unwrap_or("unknown error"))
@@ -409,7 +409,7 @@ impl Outputable for QueueSuccessOutput {
 
 /// Queue status output.
 pub struct QueueStatusOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub queue_name: String,
     pub visible_count: Option<u64>,
     pub pending_count: Option<u64>,
@@ -420,7 +420,7 @@ pub struct QueueStatusOutput {
 impl Outputable for QueueStatusOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "queue_name": self.queue_name,
             "visible_count": self.visible_count,
             "pending_count": self.pending_count,
@@ -430,7 +430,7 @@ impl Outputable for QueueStatusOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.success {
+        if !self.is_success {
             return format!("Status failed: {}", self.error.as_deref().unwrap_or("unknown error"));
         }
 
@@ -478,12 +478,12 @@ async fn queue_create(client: &AspenClient, args: CreateArgs, json: bool) -> Res
     match response {
         ClientRpcResponse::QueueCreateResult(result) => {
             let output = QueueCreateOutput {
-                success: result.success,
-                created: result.created,
+                is_success: result.is_success,
+                was_created: result.was_created,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -503,12 +503,12 @@ async fn queue_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Res
     match response {
         ClientRpcResponse::QueueDeleteResult(result) => {
             let output = QueueDeleteOutput {
-                success: result.success,
+                is_success: result.is_success,
                 items_deleted: result.items_deleted,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -532,12 +532,12 @@ async fn queue_enqueue(client: &AspenClient, args: EnqueueArgs, json: bool) -> R
     match response {
         ClientRpcResponse::QueueEnqueueResult(result) => {
             let output = QueueEnqueueOutput {
-                success: result.success,
+                is_success: result.is_success,
                 item_id: result.item_id,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -572,12 +572,12 @@ async fn queue_enqueue_batch(client: &AspenClient, args: EnqueueBatchArgs, json:
     match response {
         ClientRpcResponse::QueueEnqueueBatchResult(result) => {
             let output = QueueEnqueueBatchOutput {
-                success: result.success,
+                is_success: result.is_success,
                 item_ids: result.item_ids,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -611,12 +611,12 @@ async fn queue_dequeue(client: &AspenClient, args: DequeueArgs, json: bool) -> R
                 .collect();
 
             let output = QueueDequeueOutput {
-                success: result.success,
+                is_success: result.is_success,
                 items,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -651,12 +651,12 @@ async fn queue_dequeue_wait(client: &AspenClient, args: DequeueWaitArgs, json: b
                 .collect();
 
             let output = QueueDequeueOutput {
-                success: result.success,
+                is_success: result.is_success,
                 items,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -688,12 +688,12 @@ async fn queue_peek(client: &AspenClient, args: PeekArgs, json: bool) -> Result<
                 .collect();
 
             let output = QueueDequeueOutput {
-                success: result.success,
+                is_success: result.is_success,
                 items,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -715,11 +715,11 @@ async fn queue_ack(client: &AspenClient, args: AckArgs, json: bool) -> Result<()
         ClientRpcResponse::QueueAckResult(result) => {
             let output = QueueSuccessOutput {
                 operation: "ack".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -743,11 +743,11 @@ async fn queue_nack(client: &AspenClient, args: NackArgs, json: bool) -> Result<
         ClientRpcResponse::QueueNackResult(result) => {
             let output = QueueSuccessOutput {
                 operation: "nack".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -770,11 +770,11 @@ async fn queue_extend(client: &AspenClient, args: ExtendArgs, json: bool) -> Res
         ClientRpcResponse::QueueExtendVisibilityResult(result) => {
             let output = QueueSuccessOutput {
                 operation: "extend".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -794,7 +794,7 @@ async fn queue_status(client: &AspenClient, args: StatusArgs, json: bool) -> Res
     match response {
         ClientRpcResponse::QueueStatusResult(result) => {
             let output = QueueStatusOutput {
-                success: result.success,
+                is_success: result.is_success,
                 queue_name: args.queue_name,
                 visible_count: result.visible_count,
                 pending_count: result.pending_count,
@@ -802,7 +802,7 @@ async fn queue_status(client: &AspenClient, args: StatusArgs, json: bool) -> Res
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -834,12 +834,12 @@ async fn queue_dlq(client: &AspenClient, args: DlqArgs, json: bool) -> Result<()
                 .collect();
 
             let output = QueueDequeueOutput {
-                success: result.success,
+                is_success: result.is_success,
                 items,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -861,11 +861,11 @@ async fn queue_redrive(client: &AspenClient, args: RedriveArgs, json: bool) -> R
         ClientRpcResponse::QueueRedriveDLQResult(result) => {
             let output = QueueSuccessOutput {
                 operation: "redrive".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

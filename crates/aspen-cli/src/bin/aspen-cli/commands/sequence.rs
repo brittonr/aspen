@@ -53,7 +53,7 @@ pub struct CurrentArgs {
 pub struct SequenceOutput {
     pub key: String,
     pub operation: String,
-    pub success: bool,
+    pub is_success: bool,
     pub value: Option<u64>,
     pub error: Option<String>,
 }
@@ -63,14 +63,14 @@ impl Outputable for SequenceOutput {
         serde_json::json!({
             "key": self.key,
             "operation": self.operation,
-            "success": self.success,
+            "is_success": self.is_success,
             "value": self.value,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             match self.value {
                 Some(v) => v.to_string(),
                 None => "OK".to_string(),
@@ -103,12 +103,12 @@ async fn sequence_next(client: &AspenClient, args: NextArgs, json: bool) -> Resu
             let output = SequenceOutput {
                 key: args.key,
                 operation: "next".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 value: result.value,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -131,12 +131,12 @@ async fn sequence_reserve(client: &AspenClient, args: ReserveArgs, json: bool) -
             let output = SequenceOutput {
                 key: args.key,
                 operation: "reserve".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 value: result.value,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -154,12 +154,12 @@ async fn sequence_current(client: &AspenClient, args: CurrentArgs, json: bool) -
             let output = SequenceOutput {
                 key: args.key,
                 operation: "current".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 value: result.value,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

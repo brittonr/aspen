@@ -103,7 +103,7 @@ pub struct DiscoveredClustersResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredClusterResponse {
     /// Whether the cluster was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Cluster public key.
     pub cluster_key: Option<String>,
     /// Cluster name.
@@ -122,7 +122,7 @@ pub struct DiscoveredClusterResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrustClusterResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -131,7 +131,7 @@ pub struct TrustClusterResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UntrustClusterResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -140,7 +140,7 @@ pub struct UntrustClusterResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FederateRepositoryResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Federated ID (if successful).
     pub fed_id: Option<String>,
     /// Error message if failed.
@@ -173,7 +173,7 @@ pub struct FederatedRepositoriesResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeFetchFederatedResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Remote cluster name.
     pub remote_cluster: Option<String>,
     /// Number of objects fetched.

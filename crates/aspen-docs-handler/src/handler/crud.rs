@@ -48,7 +48,7 @@ async fn handle_docs_set(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref docs_sync) = ctx.docs_sync else {
         return Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
-            success: false,
+            is_success: false,
             key: None,
             size: None,
             error: Some("docs not enabled".to_string()),
@@ -58,7 +58,7 @@ async fn handle_docs_set(
     let value_len = value.len() as u64;
     match docs_sync.set_entry(key.as_bytes().to_vec(), value).await {
         Ok(()) => Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
-            success: true,
+            is_success: true,
             key: Some(key),
             size: Some(value_len),
             error: None,
@@ -66,7 +66,7 @@ async fn handle_docs_set(
         Err(e) => {
             warn!(key = %key, error = %e, "docs set failed");
             Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
-                success: false,
+                is_success: false,
                 key: Some(key),
                 size: None,
                 error: Some("docs operation failed".to_string()),
@@ -78,7 +78,7 @@ async fn handle_docs_set(
 async fn handle_docs_get(ctx: &ClientProtocolContext, key: String) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref docs_sync) = ctx.docs_sync else {
         return Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
-            found: false,
+            was_found: false,
             value: None,
             size: None,
             error: Some("docs not enabled".to_string()),
@@ -87,13 +87,13 @@ async fn handle_docs_get(ctx: &ClientProtocolContext, key: String) -> anyhow::Re
 
     match docs_sync.get_entry(key.as_bytes()).await {
         Ok(Some((value, size, _hash))) => Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
-            found: true,
+            was_found: true,
             value: Some(value),
             size: Some(size),
             error: None,
         })),
         Ok(None) => Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
-            found: false,
+            was_found: false,
             value: None,
             size: None,
             error: None,
@@ -101,7 +101,7 @@ async fn handle_docs_get(ctx: &ClientProtocolContext, key: String) -> anyhow::Re
         Err(e) => {
             warn!(key = %key, error = %e, "docs get failed");
             Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
-                found: false,
+                was_found: false,
                 value: None,
                 size: None,
                 error: Some("docs operation failed".to_string()),
@@ -113,20 +113,20 @@ async fn handle_docs_get(ctx: &ClientProtocolContext, key: String) -> anyhow::Re
 async fn handle_docs_delete(ctx: &ClientProtocolContext, key: String) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref docs_sync) = ctx.docs_sync else {
         return Ok(ClientRpcResponse::DocsDeleteResult(DocsDeleteResultResponse {
-            success: false,
+            is_success: false,
             error: Some("docs not enabled".to_string()),
         }));
     };
 
     match docs_sync.delete_entry(key.as_bytes().to_vec()).await {
         Ok(()) => Ok(ClientRpcResponse::DocsDeleteResult(DocsDeleteResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => {
             warn!(key = %key, error = %e, "docs delete failed");
             Ok(ClientRpcResponse::DocsDeleteResult(DocsDeleteResultResponse {
-                success: false,
+                is_success: false,
                 error: Some("docs operation failed".to_string()),
             }))
         }

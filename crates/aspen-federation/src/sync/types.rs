@@ -104,7 +104,7 @@ pub enum FederationResponse {
     /// Current state of a resource.
     ResourceState {
         /// Whether the resource was found.
-        found: bool,
+        was_found: bool,
         /// Ref heads (ref_name -> hash).
         heads: HashMap<String, [u8; 32]>,
         /// Resource metadata.
@@ -122,7 +122,7 @@ pub enum FederationResponse {
     /// Ref verification result.
     VerifyResult {
         /// Whether the signature is valid.
-        valid: bool,
+        is_valid: bool,
         /// Error message if invalid.
         error: Option<String>,
     },

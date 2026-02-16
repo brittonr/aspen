@@ -68,7 +68,7 @@ pub struct StatusArgs {
 pub struct BarrierOutput {
     pub operation: String,
     pub name: String,
-    pub success: bool,
+    pub is_success: bool,
     pub current_count: Option<u32>,
     pub required_count: Option<u32>,
     pub phase: Option<String>,
@@ -80,7 +80,7 @@ impl Outputable for BarrierOutput {
         serde_json::json!({
             "operation": self.operation,
             "name": self.name,
-            "success": self.success,
+            "is_success": self.is_success,
             "current_count": self.current_count,
             "required_count": self.required_count,
             "phase": self.phase,
@@ -89,7 +89,7 @@ impl Outputable for BarrierOutput {
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             let current = self.current_count.unwrap_or(0);
             let required = self.required_count.unwrap_or(0);
             let phase = self.phase.as_deref().unwrap_or("unknown");
@@ -129,14 +129,14 @@ async fn barrier_enter(client: &AspenClient, args: EnterArgs, json: bool) -> Res
             let output = BarrierOutput {
                 operation: "enter".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 current_count: result.current_count,
                 required_count: result.required_count,
                 phase: result.phase,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -160,14 +160,14 @@ async fn barrier_leave(client: &AspenClient, args: LeaveArgs, json: bool) -> Res
             let output = BarrierOutput {
                 operation: "leave".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 current_count: result.current_count,
                 required_count: result.required_count,
                 phase: result.phase,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -189,14 +189,14 @@ async fn barrier_status(client: &AspenClient, args: StatusArgs, json: bool) -> R
             let output = BarrierOutput {
                 operation: "status".to_string(),
                 name: args.name,
-                success: result.success,
+                is_success: result.is_success,
                 current_count: result.current_count,
                 required_count: result.required_count,
                 phase: result.phase,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

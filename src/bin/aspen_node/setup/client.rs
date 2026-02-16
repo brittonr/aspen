@@ -672,7 +672,7 @@ async fn initialize_job_system(
 
                     let local_config = LocalExecutorWorkerConfig {
                         workspace_dir: workspace_dir.clone(),
-                        cleanup_workspaces: true,
+                        should_cleanup_workspaces: true,
                         snix_blob_service: snix_blob_service.clone(),
                         snix_directory_service: snix_directory_service.clone(),
                         snix_pathinfo_service: snix_pathinfo_service.clone(),

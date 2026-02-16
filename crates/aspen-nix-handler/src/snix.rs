@@ -83,14 +83,14 @@ impl SnixHandler {
             Ok(result) => result,
             Err(aspen_core::error::KeyValueStoreError::NotFound { .. }) => {
                 return Ok(ClientRpcResponse::SnixDirectoryGetResult(SnixDirectoryGetResultResponse {
-                    found: false,
+                    was_found: false,
                     directory_bytes: None,
                     error: None,
                 }));
             }
             Err(e) => {
                 return Ok(ClientRpcResponse::SnixDirectoryGetResult(SnixDirectoryGetResultResponse {
-                    found: false,
+                    was_found: false,
                     directory_bytes: None,
                     error: Some(format!("KV read error: {}", e)),
                 }));
@@ -101,13 +101,13 @@ impl SnixHandler {
             Some(kv) => {
                 debug!(key = %key, "directory found");
                 Ok(ClientRpcResponse::SnixDirectoryGetResult(SnixDirectoryGetResultResponse {
-                    found: true,
+                    was_found: true,
                     directory_bytes: Some(kv.value),
                     error: None,
                 }))
             }
             None => Ok(ClientRpcResponse::SnixDirectoryGetResult(SnixDirectoryGetResultResponse {
-                found: false,
+                was_found: false,
                 directory_bytes: None,
                 error: None,
             })),
@@ -132,7 +132,7 @@ impl SnixHandler {
             Err(e) => {
                 error!(error = %e, "failed to decode base64 directory bytes");
                 return Ok(ClientRpcResponse::SnixDirectoryPutResult(SnixDirectoryPutResultResponse {
-                    success: false,
+                    is_success: false,
                     digest: None,
                     error: Some(format!("base64 decode error: {}", e)),
                 }));
@@ -145,7 +145,7 @@ impl SnixHandler {
             Err(e) => {
                 error!(error = %e, size_bytes = bytes.len(), "failed to decode protobuf directory");
                 return Ok(ClientRpcResponse::SnixDirectoryPutResult(SnixDirectoryPutResultResponse {
-                    success: false,
+                    is_success: false,
                     digest: None,
                     error: Some(format!("protobuf decode error: {}", e)),
                 }));
@@ -171,7 +171,7 @@ impl SnixHandler {
         {
             error!(error = %e, key = %key, digest = %digest_hex, "failed to write SNIX directory to KV store");
             return Ok(ClientRpcResponse::SnixDirectoryPutResult(SnixDirectoryPutResultResponse {
-                success: false,
+                is_success: false,
                 digest: None,
                 error: Some(format!("KV write error: {}", e)),
             }));
@@ -179,7 +179,7 @@ impl SnixHandler {
 
         info!(key = %key, digest = %digest_hex, size_bytes = bytes.len(), "SNIX directory stored successfully");
         Ok(ClientRpcResponse::SnixDirectoryPutResult(SnixDirectoryPutResultResponse {
-            success: true,
+            is_success: true,
             digest: Some(digest_hex),
             error: None,
         }))
@@ -195,14 +195,14 @@ impl SnixHandler {
             Ok(result) => result,
             Err(aspen_core::error::KeyValueStoreError::NotFound { .. }) => {
                 return Ok(ClientRpcResponse::SnixPathInfoGetResult(SnixPathInfoGetResultResponse {
-                    found: false,
+                    was_found: false,
                     pathinfo_bytes: None,
                     error: None,
                 }));
             }
             Err(e) => {
                 return Ok(ClientRpcResponse::SnixPathInfoGetResult(SnixPathInfoGetResultResponse {
-                    found: false,
+                    was_found: false,
                     pathinfo_bytes: None,
                     error: Some(format!("KV read error: {}", e)),
                 }));
@@ -213,13 +213,13 @@ impl SnixHandler {
             Some(kv) => {
                 debug!(key = %key, "path info found");
                 Ok(ClientRpcResponse::SnixPathInfoGetResult(SnixPathInfoGetResultResponse {
-                    found: true,
+                    was_found: true,
                     pathinfo_bytes: Some(kv.value),
                     error: None,
                 }))
             }
             None => Ok(ClientRpcResponse::SnixPathInfoGetResult(SnixPathInfoGetResultResponse {
-                found: false,
+                was_found: false,
                 pathinfo_bytes: None,
                 error: None,
             })),
@@ -244,7 +244,7 @@ impl SnixHandler {
             Err(e) => {
                 error!(error = %e, "failed to decode base64 pathinfo bytes");
                 return Ok(ClientRpcResponse::SnixPathInfoPutResult(SnixPathInfoPutResultResponse {
-                    success: false,
+                    is_success: false,
                     store_path: None,
                     error: Some(format!("base64 decode error: {}", e)),
                 }));
@@ -257,7 +257,7 @@ impl SnixHandler {
             Err(e) => {
                 error!(error = %e, size_bytes = bytes.len(), "failed to decode protobuf pathinfo");
                 return Ok(ClientRpcResponse::SnixPathInfoPutResult(SnixPathInfoPutResultResponse {
-                    success: false,
+                    is_success: false,
                     store_path: None,
                     error: Some(format!("protobuf decode error: {}", e)),
                 }));
@@ -270,7 +270,7 @@ impl SnixHandler {
             Err(e) => {
                 error!(error = %e, "failed to convert protobuf to PathInfo");
                 return Ok(ClientRpcResponse::SnixPathInfoPutResult(SnixPathInfoPutResultResponse {
-                    success: false,
+                    is_success: false,
                     store_path: None,
                     error: Some(format!("pathinfo conversion error: {}", e)),
                 }));
@@ -297,7 +297,7 @@ impl SnixHandler {
         {
             error!(error = %e, key = %key, store_path = %store_path_str, "failed to write SNIX path info to KV store");
             return Ok(ClientRpcResponse::SnixPathInfoPutResult(SnixPathInfoPutResultResponse {
-                success: false,
+                is_success: false,
                 store_path: None,
                 error: Some(format!("KV write error: {}", e)),
             }));
@@ -305,7 +305,7 @@ impl SnixHandler {
 
         info!(key = %key, store_path = %store_path_str, nar_size, "SNIX path info stored successfully");
         Ok(ClientRpcResponse::SnixPathInfoPutResult(SnixPathInfoPutResultResponse {
-            success: true,
+            is_success: true,
             store_path: Some(store_path_str),
             error: None,
         }))

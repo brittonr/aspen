@@ -24,7 +24,7 @@ pub(crate) async fn handle_sequence_next(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         }));
@@ -33,12 +33,12 @@ pub(crate) async fn handle_sequence_next(
     let seq = SequenceGenerator::new(ctx.kv_store.clone(), &key, SequenceConfig::default());
     match seq.next().await {
         Ok(value) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
-            success: true,
+            is_success: true,
             value: Some(value),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         })),
@@ -52,7 +52,7 @@ pub(crate) async fn handle_sequence_reserve(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         }));
@@ -63,12 +63,12 @@ pub(crate) async fn handle_sequence_reserve(
         // Reserve returns the start of the reserved range
         // The client can compute end as start + count - 1
         Ok(start) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
-            success: true,
+            is_success: true,
             value: Some(start),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         })),
@@ -81,7 +81,7 @@ pub(crate) async fn handle_sequence_current(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         }));
@@ -90,12 +90,12 @@ pub(crate) async fn handle_sequence_current(
     let seq = SequenceGenerator::new(ctx.kv_store.clone(), &key, SequenceConfig::default());
     match seq.current().await {
         Ok(value) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
-            success: true,
+            is_success: true,
             value: Some(value),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         })),
@@ -115,7 +115,7 @@ pub(crate) async fn handle_rate_limiter_try_acquire(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: false,
+            is_success: false,
             tokens_remaining: None,
             retry_after_ms: None,
             error: Some(e.to_string()),
@@ -127,13 +127,13 @@ pub(crate) async fn handle_rate_limiter_try_acquire(
 
     match limiter.try_acquire_n(tokens).await {
         Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: true,
+            is_success: true,
             tokens_remaining: Some(remaining),
             retry_after_ms: None,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: false,
+            is_success: false,
             tokens_remaining: None,
             retry_after_ms: e.retry_after_ms(),
             error: Some(e.to_string()),
@@ -151,7 +151,7 @@ pub(crate) async fn handle_rate_limiter_acquire(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: false,
+            is_success: false,
             tokens_remaining: None,
             retry_after_ms: None,
             error: Some(e.to_string()),
@@ -164,13 +164,13 @@ pub(crate) async fn handle_rate_limiter_acquire(
 
     match limiter.acquire_n(tokens, timeout).await {
         Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: true,
+            is_success: true,
             tokens_remaining: Some(remaining),
             retry_after_ms: None,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: false,
+            is_success: false,
             tokens_remaining: None,
             retry_after_ms: e.retry_after_ms(),
             error: Some(e.to_string()),
@@ -186,7 +186,7 @@ pub(crate) async fn handle_rate_limiter_available(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: false,
+            is_success: false,
             tokens_remaining: None,
             retry_after_ms: None,
             error: Some(e.to_string()),
@@ -198,13 +198,13 @@ pub(crate) async fn handle_rate_limiter_available(
 
     match limiter.available().await {
         Ok(available) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: true,
+            is_success: true,
             tokens_remaining: Some(available),
             retry_after_ms: None,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: false,
+            is_success: false,
             tokens_remaining: None,
             retry_after_ms: None,
             error: Some(e.to_string()),
@@ -220,7 +220,7 @@ pub(crate) async fn handle_rate_limiter_reset(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: false,
+            is_success: false,
             tokens_remaining: None,
             retry_after_ms: None,
             error: Some(e.to_string()),
@@ -232,13 +232,13 @@ pub(crate) async fn handle_rate_limiter_reset(
 
     match limiter.reset().await {
         Ok(()) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: true,
+            is_success: true,
             tokens_remaining: Some(capacity),
             retry_after_ms: None,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-            success: false,
+            is_success: false,
             tokens_remaining: None,
             retry_after_ms: None,
             error: Some(e.to_string()),
@@ -262,14 +262,14 @@ pub(crate) async fn handle_barrier_enter(
 
     match manager.enter(&name, &participant_id, required_count, timeout).await {
         Ok((count, phase)) => Ok(ClientRpcResponse::BarrierEnterResult(BarrierResultResponse {
-            success: true,
+            is_success: true,
             current_count: Some(count),
             required_count: Some(required_count),
             phase: Some(phase),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::BarrierEnterResult(BarrierResultResponse {
-            success: false,
+            is_success: false,
             current_count: None,
             required_count: Some(required_count),
             phase: None,
@@ -289,14 +289,14 @@ pub(crate) async fn handle_barrier_leave(
 
     match manager.leave(&name, &participant_id, timeout).await {
         Ok((remaining, phase)) => Ok(ClientRpcResponse::BarrierLeaveResult(BarrierResultResponse {
-            success: true,
+            is_success: true,
             current_count: Some(remaining),
             required_count: None,
             phase: Some(phase),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::BarrierLeaveResult(BarrierResultResponse {
-            success: false,
+            is_success: false,
             current_count: None,
             required_count: None,
             phase: None,
@@ -313,14 +313,14 @@ pub(crate) async fn handle_barrier_status(
 
     match manager.status(&name).await {
         Ok((current, required, phase)) => Ok(ClientRpcResponse::BarrierStatusResult(BarrierResultResponse {
-            success: true,
+            is_success: true,
             current_count: Some(current),
             required_count: Some(required),
             phase: Some(phase),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::BarrierStatusResult(BarrierResultResponse {
-            success: false,
+            is_success: false,
             current_count: None,
             required_count: None,
             phase: None,
@@ -347,7 +347,7 @@ pub(crate) async fn handle_semaphore_acquire(
 
     match manager.acquire(&name, &holder_id, permits, capacity, ttl_ms, timeout).await {
         Ok((acquired, available)) => Ok(ClientRpcResponse::SemaphoreAcquireResult(SemaphoreResultResponse {
-            success: true,
+            is_success: true,
             permits_acquired: Some(acquired),
             available: Some(available),
             capacity: Some(capacity),
@@ -355,7 +355,7 @@ pub(crate) async fn handle_semaphore_acquire(
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::SemaphoreAcquireResult(SemaphoreResultResponse {
-            success: false,
+            is_success: false,
             permits_acquired: None,
             available: None,
             capacity: Some(capacity),
@@ -377,7 +377,7 @@ pub(crate) async fn handle_semaphore_try_acquire(
 
     match manager.try_acquire(&name, &holder_id, permits, capacity, ttl_ms).await {
         Ok(Some((acquired, available))) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
-            success: true,
+            is_success: true,
             permits_acquired: Some(acquired),
             available: Some(available),
             capacity: Some(capacity),
@@ -385,7 +385,7 @@ pub(crate) async fn handle_semaphore_try_acquire(
             error: None,
         })),
         Ok(None) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
-            success: false,
+            is_success: false,
             permits_acquired: None,
             available: None,
             capacity: Some(capacity),
@@ -393,7 +393,7 @@ pub(crate) async fn handle_semaphore_try_acquire(
             error: Some("no permits available".to_string()),
         })),
         Err(e) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
-            success: false,
+            is_success: false,
             permits_acquired: None,
             available: None,
             capacity: Some(capacity),
@@ -413,7 +413,7 @@ pub(crate) async fn handle_semaphore_release(
 
     match manager.release(&name, &holder_id, permits).await {
         Ok(available) => Ok(ClientRpcResponse::SemaphoreReleaseResult(SemaphoreResultResponse {
-            success: true,
+            is_success: true,
             permits_acquired: None,
             available: Some(available),
             capacity: None,
@@ -421,7 +421,7 @@ pub(crate) async fn handle_semaphore_release(
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::SemaphoreReleaseResult(SemaphoreResultResponse {
-            success: false,
+            is_success: false,
             permits_acquired: None,
             available: None,
             capacity: None,
@@ -439,7 +439,7 @@ pub(crate) async fn handle_semaphore_status(
 
     match manager.status(&name).await {
         Ok((available, capacity)) => Ok(ClientRpcResponse::SemaphoreStatusResult(SemaphoreResultResponse {
-            success: true,
+            is_success: true,
             permits_acquired: None,
             available: Some(available),
             capacity: Some(capacity),
@@ -447,7 +447,7 @@ pub(crate) async fn handle_semaphore_status(
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::SemaphoreStatusResult(SemaphoreResultResponse {
-            success: false,
+            is_success: false,
             permits_acquired: None,
             available: None,
             capacity: None,

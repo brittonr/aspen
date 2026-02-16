@@ -169,7 +169,7 @@ impl PathInfoService for RpcPathInfoService {
 
         match response {
             ClientRpcResponse::SnixPathInfoGetResult(SnixPathInfoGetResultResponse {
-                found,
+                was_found,
                 pathinfo_bytes,
                 error,
             }) => {
@@ -177,7 +177,7 @@ impl PathInfoService for RpcPathInfoService {
                     return Err(Box::new(std::io::Error::other(format!("RPC error: {}", err))));
                 }
 
-                if !found {
+                if !was_found {
                     debug!(digest = %digest_hex, "path info not found");
                     return Ok(None);
                 }
@@ -231,7 +231,7 @@ impl PathInfoService for RpcPathInfoService {
 
         match response {
             ClientRpcResponse::SnixPathInfoPutResult(SnixPathInfoPutResultResponse {
-                success,
+                is_success,
                 store_path,
                 error,
             }) => {
@@ -240,7 +240,7 @@ impl PathInfoService for RpcPathInfoService {
                     return Err(Box::new(std::io::Error::other(format!("RPC error: {}", err))));
                 }
 
-                if !success {
+                if !is_success {
                     error!(store_path = %store_path_str, "RPC path info put failed without error message");
                     return Err(Box::new(std::io::Error::other("path info put failed")));
                 }

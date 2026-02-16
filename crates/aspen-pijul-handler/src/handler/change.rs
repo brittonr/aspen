@@ -247,7 +247,7 @@ pub(crate) async fn handle_blame(
                 channel: result.channel,
                 repo_id,
                 attributions,
-                file_exists: result.file_exists,
+                does_file_exist: result.does_file_exist,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {

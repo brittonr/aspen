@@ -319,7 +319,7 @@ async fn handle_get_resource_state(
     let settings = context.resource_settings.read().await;
     if !settings.contains_key(&fed_id) {
         return Ok(FederationResponse::ResourceState {
-            found: false,
+            was_found: false,
             heads: HashMap::new(),
             metadata: None,
         });
@@ -327,7 +327,7 @@ async fn handle_get_resource_state(
 
     // No resolver available, return stub response
     Ok(FederationResponse::ResourceState {
-        found: true,
+        was_found: true,
         heads: HashMap::new(),
         metadata: None,
     })
@@ -339,12 +339,12 @@ async fn handle_get_resource_state_resolved(
 ) -> Result<FederationResponse> {
     match resolver.get_resource_state(fed_id).await {
         Ok(state) => Ok(FederationResponse::ResourceState {
-            found: state.found,
+            was_found: state.was_found,
             heads: state.heads,
             metadata: state.metadata,
         }),
         Err(FederationResourceError::NotFound { .. }) => Ok(FederationResponse::ResourceState {
-            found: false,
+            was_found: false,
             heads: HashMap::new(),
             metadata: None,
         }),
@@ -441,7 +441,7 @@ fn handle_verify_ref_update(
         Ok(k) => k,
         Err(_) => {
             return Ok(FederationResponse::VerifyResult {
-                valid: false,
+                is_valid: false,
                 error: Some("Invalid signer public key".to_string()),
             });
         }
@@ -459,7 +459,7 @@ fn handle_verify_ref_update(
         Ok(bytes) => bytes,
         Err(_) => {
             return Ok(FederationResponse::VerifyResult {
-                valid: false,
+                is_valid: false,
                 error: Some("Invalid signature format".to_string()),
             });
         }
@@ -468,11 +468,11 @@ fn handle_verify_ref_update(
 
     match signer_key.verify(&message, &sig) {
         Ok(()) => Ok(FederationResponse::VerifyResult {
-            valid: true,
+            is_valid: true,
             error: None,
         }),
         Err(e) => Ok(FederationResponse::VerifyResult {
-            valid: false,
+            is_valid: false,
             error: Some(format!("Signature verification failed: {}", e)),
         }),
     }

@@ -44,7 +44,7 @@ impl App {
             .await
         {
             Ok(result) => {
-                if result.success {
+                if result.is_success {
                     let row_count = result.row_count.unwrap_or(0);
                     let exec_time = result.execution_time_ms.unwrap_or(0);
                     let is_truncated = result.is_truncated.unwrap_or(false);

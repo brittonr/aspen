@@ -178,7 +178,7 @@ fn create_sync_completed_event(docs_event: &DocsEvent, node_id: u64) -> HookEven
         cluster_id: docs_event.cluster_id.clone(),
         entries_synced: docs_event.entry_count.unwrap_or(0),
         duration_ms: docs_event.duration_ms.unwrap_or(0),
-        success: true, // Bridge only emits successful completions
+        is_success: true, // Bridge only emits successful completions
         error: None,
     };
 

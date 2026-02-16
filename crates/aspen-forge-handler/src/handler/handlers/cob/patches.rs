@@ -20,7 +20,7 @@ pub(crate) async fn handle_create_patch(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
-                success: false,
+                is_success: false,
                 patch: None,
                 comments: None,
                 revisions: None,
@@ -34,7 +34,7 @@ pub(crate) async fn handle_create_patch(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
-                success: false,
+                is_success: false,
                 patch: None,
                 comments: None,
                 revisions: None,
@@ -48,7 +48,7 @@ pub(crate) async fn handle_create_patch(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
-                success: false,
+                is_success: false,
                 patch: None,
                 comments: None,
                 revisions: None,
@@ -66,7 +66,7 @@ pub(crate) async fn handle_create_patch(
                 .unwrap_or(0);
 
             Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
-                success: true,
+                is_success: true,
                 patch: Some(ForgePatchInfo {
                     id: patch_hash.to_hex().to_string(),
                     title,
@@ -88,7 +88,7 @@ pub(crate) async fn handle_create_patch(
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
-            success: false,
+            is_success: false,
             patch: None,
             comments: None,
             revisions: None,
@@ -112,7 +112,7 @@ pub(crate) async fn handle_list_patches(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgePatchListResult(ForgePatchListResultResponse {
-                success: false,
+                is_success: false,
                 patches: vec![],
                 count: 0,
                 error: Some(format!("Invalid repo ID: {}", e)),
@@ -166,14 +166,14 @@ pub(crate) async fn handle_list_patches(
 
             let count = patches.len() as u32;
             Ok(ClientRpcResponse::ForgePatchListResult(ForgePatchListResultResponse {
-                success: true,
+                is_success: true,
                 patches,
                 count,
                 error: None,
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgePatchListResult(ForgePatchListResultResponse {
-            success: false,
+            is_success: false,
             patches: vec![],
             count: 0,
             error: Some(e.to_string()),
@@ -197,7 +197,7 @@ pub(crate) async fn handle_get_patch(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
-                success: false,
+                is_success: false,
                 patch: None,
                 comments: None,
                 revisions: None,
@@ -211,7 +211,7 @@ pub(crate) async fn handle_get_patch(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
-                success: false,
+                is_success: false,
                 patch: None,
                 comments: None,
                 revisions: None,
@@ -264,7 +264,7 @@ pub(crate) async fn handle_get_patch(
                 .collect();
 
             Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
-                success: true,
+                is_success: true,
                 patch: Some(ForgePatchInfo {
                     id: patch_id,
                     title: patch.title,
@@ -286,7 +286,7 @@ pub(crate) async fn handle_get_patch(
             }))
         }
         Err(e) => Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
-            success: false,
+            is_success: false,
             patch: None,
             comments: None,
             revisions: None,
@@ -310,7 +310,7 @@ pub(crate) async fn handle_update_patch(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid repo ID: {}", e)),
             }));
         }
@@ -320,7 +320,7 @@ pub(crate) async fn handle_update_patch(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid patch ID: {}", e)),
             }));
         }
@@ -330,7 +330,7 @@ pub(crate) async fn handle_update_patch(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid head hash: {}", e)),
             }));
         }
@@ -338,11 +338,11 @@ pub(crate) async fn handle_update_patch(
 
     match forge_node.cobs.update_patch(&repo_id, &patch_hash, head_hash, message).await {
         Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: false,
+            is_success: false,
             error: Some(e.to_string()),
         })),
     }
@@ -362,7 +362,7 @@ pub(crate) async fn handle_approve_patch(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid repo ID: {}", e)),
             }));
         }
@@ -372,7 +372,7 @@ pub(crate) async fn handle_approve_patch(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid patch ID: {}", e)),
             }));
         }
@@ -382,7 +382,7 @@ pub(crate) async fn handle_approve_patch(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid commit hash: {}", e)),
             }));
         }
@@ -390,11 +390,11 @@ pub(crate) async fn handle_approve_patch(
 
     match forge_node.cobs.approve_patch(&repo_id, &patch_hash, commit_hash, message).await {
         Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: false,
+            is_success: false,
             error: Some(e.to_string()),
         })),
     }
@@ -413,7 +413,7 @@ pub(crate) async fn handle_merge_patch(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid repo ID: {}", e)),
             }));
         }
@@ -423,7 +423,7 @@ pub(crate) async fn handle_merge_patch(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid patch ID: {}", e)),
             }));
         }
@@ -433,7 +433,7 @@ pub(crate) async fn handle_merge_patch(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid merge commit hash: {}", e)),
             }));
         }
@@ -441,11 +441,11 @@ pub(crate) async fn handle_merge_patch(
 
     match forge_node.cobs.merge_patch(&repo_id, &patch_hash, merge_hash).await {
         Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: false,
+            is_success: false,
             error: Some(e.to_string()),
         })),
     }
@@ -464,7 +464,7 @@ pub(crate) async fn handle_close_patch(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid repo ID: {}", e)),
             }));
         }
@@ -474,7 +474,7 @@ pub(crate) async fn handle_close_patch(
         Ok(h) => h,
         Err(e) => {
             return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(format!("Invalid patch ID: {}", e)),
             }));
         }
@@ -482,11 +482,11 @@ pub(crate) async fn handle_close_patch(
 
     match forge_node.cobs.close_patch(&repo_id, &patch_hash, reason).await {
         Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
-            success: false,
+            is_success: false,
             error: Some(e.to_string()),
         })),
     }

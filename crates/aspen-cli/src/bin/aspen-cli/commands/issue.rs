@@ -148,7 +148,7 @@ async fn issue_list(client: &AspenClient, args: IssueListArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::ForgeIssueListResult(result) => {
-            if result.success {
+            if result.is_success {
                 let issues: Vec<IssueOutput> = result
                     .issues
                     .into_iter()
@@ -197,7 +197,7 @@ async fn issue_create(client: &AspenClient, args: IssueCreateArgs, json: bool) -
 
     match response {
         ClientRpcResponse::ForgeIssueResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(issue) = result.issue {
                     let output = IssueOutput {
                         id: issue.id,
@@ -216,7 +216,7 @@ async fn issue_create(client: &AspenClient, args: IssueCreateArgs, json: bool) -
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Issue created");
                 }
@@ -240,7 +240,7 @@ async fn issue_show(client: &AspenClient, args: IssueShowArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::ForgeIssueResult(result) => {
-            if result.success {
+            if result.is_success {
                 if let Some(issue) = result.issue {
                     let output = IssueDetailOutput {
                         id: issue.id,
@@ -291,7 +291,7 @@ async fn issue_close(client: &AspenClient, args: IssueCloseArgs, json: bool) -> 
 
     match response {
         ClientRpcResponse::ForgeIssueResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Issue {} closed", args.issue);
                 } else {
@@ -303,7 +303,7 @@ async fn issue_close(client: &AspenClient, args: IssueCloseArgs, json: bool) -> 
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Issue {} closed", args.issue);
                 }
@@ -327,7 +327,7 @@ async fn issue_reopen(client: &AspenClient, args: IssueReopenArgs, json: bool) -
 
     match response {
         ClientRpcResponse::ForgeIssueResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Issue {} reopened", args.issue);
                 } else {
@@ -339,7 +339,7 @@ async fn issue_reopen(client: &AspenClient, args: IssueReopenArgs, json: bool) -
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Issue {} reopened", args.issue);
                 }
@@ -364,7 +364,7 @@ async fn issue_comment(client: &AspenClient, args: IssueCommentArgs, json: bool)
 
     match response {
         ClientRpcResponse::ForgeIssueResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Comment added to issue {}", args.issue);
                 } else {
@@ -376,7 +376,7 @@ async fn issue_comment(client: &AspenClient, args: IssueCommentArgs, json: bool)
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
-            if result.success {
+            if result.is_success {
                 if !json {
                     println!("Comment added to issue {}", args.issue);
                 }

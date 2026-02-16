@@ -90,7 +90,7 @@ pub(crate) async fn handle_job_submit(
         Ok(job_id) => {
             info!("Job submitted: {}", job_id);
             Ok(ClientRpcResponse::JobSubmitResult(JobSubmitResultResponse {
-                success: true,
+                is_success: true,
                 job_id: Some(job_id.to_string()),
                 error: None,
             }))
@@ -98,7 +98,7 @@ pub(crate) async fn handle_job_submit(
         Err(e) => {
             warn!("Failed to submit job: {}", e);
             Ok(ClientRpcResponse::JobSubmitResult(JobSubmitResultResponse {
-                success: false,
+                is_success: false,
                 job_id: None,
                 error: Some(e.to_string()),
             }))

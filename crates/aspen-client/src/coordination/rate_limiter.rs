@@ -108,7 +108,7 @@ impl<C: CoordinationRpc> RateLimiterClient<C> {
 
         match response {
             ClientRpcResponse::RateLimiterResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(())
                 } else {
                     bail!("rate limiter reset failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -121,7 +121,7 @@ impl<C: CoordinationRpc> RateLimiterClient<C> {
     fn extract_result(response: ClientRpcResponse) -> Result<RateLimitResult> {
         match response {
             ClientRpcResponse::RateLimiterResult(result) => {
-                if result.success {
+                if result.is_success {
                     Ok(RateLimitResult::Acquired {
                         tokens_remaining: result.tokens_remaining.unwrap_or(0),
                     })

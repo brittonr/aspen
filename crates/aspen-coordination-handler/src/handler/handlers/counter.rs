@@ -16,7 +16,7 @@ use aspen_rpc_core::ClientProtocolContext;
 pub(crate) async fn handle_counter_get(ctx: &ClientProtocolContext, key: String) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         }));
@@ -25,12 +25,12 @@ pub(crate) async fn handle_counter_get(ctx: &ClientProtocolContext, key: String)
     let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
     match counter.get().await {
         Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(value),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         })),
@@ -43,7 +43,7 @@ pub(crate) async fn handle_counter_increment(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         }));
@@ -52,12 +52,12 @@ pub(crate) async fn handle_counter_increment(
     let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
     match counter.increment().await {
         Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(value),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         })),
@@ -70,7 +70,7 @@ pub(crate) async fn handle_counter_decrement(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         }));
@@ -79,12 +79,12 @@ pub(crate) async fn handle_counter_decrement(
     let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
     match counter.decrement().await {
         Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(value),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         })),
@@ -98,7 +98,7 @@ pub(crate) async fn handle_counter_add(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         }));
@@ -107,12 +107,12 @@ pub(crate) async fn handle_counter_add(
     let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
     match counter.add(amount).await {
         Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(value),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         })),
@@ -126,7 +126,7 @@ pub(crate) async fn handle_counter_subtract(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         }));
@@ -135,12 +135,12 @@ pub(crate) async fn handle_counter_subtract(
     let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
     match counter.subtract(amount).await {
         Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(value),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         })),
@@ -154,7 +154,7 @@ pub(crate) async fn handle_counter_set(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         }));
@@ -163,12 +163,12 @@ pub(crate) async fn handle_counter_set(
     let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
     match counter.set(value).await {
         Ok(()) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(value),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         })),
@@ -183,7 +183,7 @@ pub(crate) async fn handle_counter_compare_and_set(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         }));
@@ -192,17 +192,17 @@ pub(crate) async fn handle_counter_compare_and_set(
     let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
     match counter.compare_and_set(expected, new_value).await {
         Ok(true) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(new_value),
             error: None,
         })),
         Ok(false) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some("compare-and-set condition not met".to_string()),
         })),
         Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         })),
@@ -219,7 +219,7 @@ pub(crate) async fn handle_signed_counter_get(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         }));
@@ -228,12 +228,12 @@ pub(crate) async fn handle_signed_counter_get(
     let counter = SignedAtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
     match counter.get().await {
         Ok(value) => Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(value),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         })),
@@ -247,7 +247,7 @@ pub(crate) async fn handle_signed_counter_add(
 ) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         }));
@@ -256,12 +256,12 @@ pub(crate) async fn handle_signed_counter_add(
     let counter = SignedAtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
     match counter.add(amount).await {
         Ok(value) => Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
-            success: true,
+            is_success: true,
             value: Some(value),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
-            success: false,
+            is_success: false,
             value: None,
             error: Some(e.to_string()),
         })),

@@ -71,8 +71,8 @@ pub struct FederationStatusOutput {
     pub is_enabled: bool,
     pub cluster_name: String,
     pub cluster_key: String,
-    pub dht_enabled: bool,
-    pub gossip_enabled: bool,
+    pub is_dht_enabled: bool,
+    pub is_gossip_enabled: bool,
     pub discovered_clusters: u32,
     pub federated_repos: u32,
     pub error: Option<String>,
@@ -81,11 +81,11 @@ pub struct FederationStatusOutput {
 impl Outputable for FederationStatusOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "enabled": self.is_enabled,
+            "is_enabled": self.is_enabled,
             "cluster_name": self.cluster_name,
             "cluster_key": self.cluster_key,
-            "dht_enabled": self.dht_enabled,
-            "gossip_enabled": self.gossip_enabled,
+            "is_dht_enabled": self.is_dht_enabled,
+            "is_gossip_enabled": self.is_gossip_enabled,
             "discovered_clusters": self.discovered_clusters,
             "federated_repos": self.federated_repos,
             "error": self.error
@@ -106,13 +106,13 @@ impl Outputable for FederationStatusOutput {
              Cluster Name:        {}\n\
              Cluster Key:         {}\n\
              DHT Discovery:       {}\n\
-             Gossip Enabled:      {}\n\
+             Gossip:              {}\n\
              Discovered Clusters: {}\n\
              Federated Repos:     {}",
             self.cluster_name,
             self.cluster_key,
-            if self.dht_enabled { "enabled" } else { "disabled" },
-            if self.gossip_enabled { "enabled" } else { "disabled" },
+            if self.is_dht_enabled { "enabled" } else { "disabled" },
+            if self.is_gossip_enabled { "enabled" } else { "disabled" },
             self.discovered_clusters,
             self.federated_repos
         )
@@ -187,7 +187,7 @@ impl Outputable for DiscoveredClustersOutput {
 /// Simple success output.
 pub struct FederationSuccessOutput {
     pub operation: String,
-    pub success: bool,
+    pub is_success: bool,
     pub message: Option<String>,
     pub error: Option<String>,
 }
@@ -196,14 +196,14 @@ impl Outputable for FederationSuccessOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "operation": self.operation,
-            "success": self.success,
+            "is_success": self.is_success,
             "message": self.message,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             self.message.clone().unwrap_or_else(|| "OK".to_string())
         } else {
             format!("{} failed: {}", self.operation, self.error.as_deref().unwrap_or("unknown error"))
@@ -235,8 +235,8 @@ async fn federation_status(client: &AspenClient, json: bool) -> Result<()> {
                 is_enabled: status.is_enabled,
                 cluster_name: status.cluster_name,
                 cluster_key: status.cluster_key,
-                dht_enabled: status.dht_enabled,
-                gossip_enabled: status.gossip_enabled,
+                is_dht_enabled: status.is_dht_enabled,
+                is_gossip_enabled: status.is_gossip_enabled,
                 discovered_clusters: status.discovered_clusters,
                 federated_repos: status.federated_repos,
                 error: status.error,
@@ -288,10 +288,10 @@ async fn federation_peer(client: &AspenClient, args: PeerArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::DiscoveredCluster(result) => {
-            if !result.found {
+            if !result.was_found {
                 let output = FederationSuccessOutput {
                     operation: "get_peer".to_string(),
-                    success: false,
+                    is_success: false,
                     message: None,
                     error: Some(format!("Cluster not found: {}", args.cluster_key)),
                 };
@@ -304,7 +304,7 @@ async fn federation_peer(client: &AspenClient, args: PeerArgs, json: bool) -> Re
                 println!(
                     "{}",
                     serde_json::json!({
-                        "found": result.found,
+                        "was_found": result.was_found,
                         "cluster_key": result.cluster_key,
                         "name": result.name,
                         "node_count": result.node_count,
@@ -339,8 +339,8 @@ async fn federation_trust(client: &AspenClient, args: TrustArgs, json: bool) -> 
         ClientRpcResponse::TrustClusterResult(result) => {
             let output = FederationSuccessOutput {
                 operation: "trust".to_string(),
-                success: result.success,
-                message: if result.success {
+                is_success: result.is_success,
+                message: if result.is_success {
                     Some(format!("Trusted cluster: {}", args.cluster_key))
                 } else {
                     None
@@ -348,7 +348,7 @@ async fn federation_trust(client: &AspenClient, args: TrustArgs, json: bool) -> 
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -369,8 +369,8 @@ async fn federation_untrust(client: &AspenClient, args: UntrustArgs, json: bool)
         ClientRpcResponse::UntrustClusterResult(result) => {
             let output = FederationSuccessOutput {
                 operation: "untrust".to_string(),
-                success: result.success,
-                message: if result.success {
+                is_success: result.is_success,
+                message: if result.is_success {
                     Some(format!("Untrusted cluster: {}", args.cluster_key))
                 } else {
                     None
@@ -378,7 +378,7 @@ async fn federation_untrust(client: &AspenClient, args: UntrustArgs, json: bool)
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -400,8 +400,8 @@ async fn federation_federate(client: &AspenClient, args: FederateArgs, json: boo
         ClientRpcResponse::FederateRepositoryResult(result) => {
             let output = FederationSuccessOutput {
                 operation: "federate".to_string(),
-                success: result.success,
-                message: if result.success {
+                is_success: result.is_success,
+                message: if result.is_success {
                     Some(format!("Federated repository {} (mode: {})", args.repo_id, args.mode))
                 } else {
                     None
@@ -409,7 +409,7 @@ async fn federation_federate(client: &AspenClient, args: FederateArgs, json: boo
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

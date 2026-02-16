@@ -166,7 +166,7 @@ async fn kv_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
             let output = KvReadOutput {
                 key: args.key,
                 value: result.value,
-                exists: result.found,
+                does_exist: result.found,
             };
             print_output(&output, json);
             Ok(())
@@ -228,7 +228,7 @@ async fn kv_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Result
                     serde_json::json!({
                         "status": "success",
                         "key": args.key,
-                        "deleted": result.deleted
+                        "was_deleted": result.deleted
                     })
                 );
             } else if result.deleted {
@@ -265,7 +265,7 @@ async fn kv_cas(client: &AspenClient, args: CasArgs, json: bool) -> Result<()> {
                     serde_json::json!({
                         "status": if result.success { "success" } else { "conflict" },
                         "key": args.key,
-                        "success": result.success
+                        "is_success": result.success
                     })
                 );
             } else if result.success {
@@ -302,7 +302,7 @@ async fn kv_cad(client: &AspenClient, args: CadArgs, json: bool) -> Result<()> {
                     serde_json::json!({
                         "status": if result.success { "success" } else { "conflict" },
                         "key": args.key,
-                        "success": result.success
+                        "is_success": result.success
                     })
                 );
             } else if result.success {
@@ -383,7 +383,7 @@ async fn kv_batch_write(client: &AspenClient, args: BatchWriteArgs, json: bool) 
     match response {
         ClientRpcResponse::BatchWriteResult(result) => {
             let output = KvBatchWriteOutput {
-                success: result.success,
+                is_success: result.success,
                 operations_applied: result.operations_applied.unwrap_or(op_count),
             };
             print_output(&output, json);

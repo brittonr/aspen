@@ -48,7 +48,7 @@ pub enum ClusterRequest {
         /// Optional voter to replace.
         replace_node: Option<u64>,
         /// Skip safety checks if true.
-        force: bool,
+        is_force: bool,
     },
     /// Manually checkpoint SQLite WAL file.
     CheckpointWal,
@@ -184,7 +184,7 @@ pub struct ClusterTicketResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InitResultResponse {
     /// Whether initialization succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -195,7 +195,7 @@ pub struct ReadResultResponse {
     /// The value if found.
     pub value: Option<Vec<u8>>,
     /// Whether the key was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Optional error message when read fails.
     pub error: Option<String>,
 }
@@ -204,7 +204,7 @@ pub struct ReadResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WriteResultResponse {
     /// Whether write succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -213,7 +213,7 @@ pub struct WriteResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompareAndSwapResultResponse {
     /// Whether the CAS operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// The actual value of the key when CAS failed.
     pub actual_value: Option<Vec<u8>>,
     /// Error message if operation failed due to internal error.
@@ -224,7 +224,7 @@ pub struct CompareAndSwapResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnapshotResultResponse {
     /// Whether snapshot was triggered.
-    pub success: bool,
+    pub is_success: bool,
     /// Snapshot log index if successful.
     pub snapshot_index: Option<u64>,
     /// Error message if failed.
@@ -235,7 +235,7 @@ pub struct SnapshotResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddLearnerResultResponse {
     /// Whether adding learner succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -244,7 +244,7 @@ pub struct AddLearnerResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChangeMembershipResultResponse {
     /// Whether membership change succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -295,7 +295,7 @@ pub struct MetricsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromoteLearnerResultResponse {
     /// Whether promotion succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// ID of promoted learner.
     pub learner_id: u64,
     /// Voters before the change.
@@ -312,7 +312,7 @@ pub struct PromoteLearnerResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckpointWalResultResponse {
     /// Whether checkpoint succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Number of pages checkpointed.
     pub pages_checkpointed: Option<u32>,
     /// WAL file size before checkpoint (bytes).
@@ -327,7 +327,7 @@ pub struct CheckpointWalResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddPeerResultResponse {
     /// Whether add peer succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -353,11 +353,11 @@ pub struct ClientTicketResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TopologyResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Current topology version.
     pub version: u64,
     /// Whether the topology was updated (false if client version matches).
-    pub updated: bool,
+    pub was_updated: bool,
     /// Serialized ShardTopology (JSON) if updated is true.
     pub topology_data: Option<String>,
     /// Number of shards in the topology.

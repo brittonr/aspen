@@ -87,12 +87,12 @@ impl<C: CoordinationRpc> LeaseClient<C> {
 
         match response {
             ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
-                success,
+                is_success,
                 lease_id,
                 ttl_seconds,
                 error,
             }) => {
-                if success {
+                if is_success {
                     Ok(LeaseGrantResult {
                         lease_id: lease_id.unwrap_or(0),
                         ttl_seconds: ttl_seconds.unwrap_or(0),
@@ -119,11 +119,11 @@ impl<C: CoordinationRpc> LeaseClient<C> {
 
         match response {
             ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
-                success,
+                is_success,
                 keys_deleted,
                 error,
             }) => {
-                if success {
+                if is_success {
                     Ok(LeaseRevokeResult {
                         keys_deleted: keys_deleted.unwrap_or(0),
                     })
@@ -152,12 +152,12 @@ impl<C: CoordinationRpc> LeaseClient<C> {
 
         match response {
             ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
-                success,
+                is_success,
                 lease_id: returned_id,
                 ttl_seconds,
                 error,
             }) => {
-                if success {
+                if is_success {
                     Ok(LeaseKeepaliveResult {
                         lease_id: returned_id.unwrap_or(lease_id),
                         ttl_seconds: ttl_seconds.unwrap_or(0),
@@ -183,19 +183,22 @@ impl<C: CoordinationRpc> LeaseClient<C> {
 
         let response = self
             .client
-            .send_coordination_request(ClientRpcRequest::LeaseTimeToLive { lease_id, include_keys })
+            .send_coordination_request(ClientRpcRequest::LeaseTimeToLive {
+                lease_id,
+                should_include_keys: include_keys,
+            })
             .await?;
 
         match response {
             ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
-                success,
+                is_success,
                 lease_id: returned_id,
                 granted_ttl_seconds,
                 remaining_ttl_seconds,
                 keys,
                 error,
             }) => {
-                if success {
+                if is_success {
                     Ok(LeaseTimeToLiveResult {
                         lease_id: returned_id.unwrap_or(lease_id),
                         granted_ttl_seconds: granted_ttl_seconds.unwrap_or(0),
@@ -220,8 +223,12 @@ impl<C: CoordinationRpc> LeaseClient<C> {
         let response = self.client.send_coordination_request(ClientRpcRequest::LeaseList).await?;
 
         match response {
-            ClientRpcResponse::LeaseListResult(LeaseListResultResponse { success, leases, error }) => {
-                if success {
+            ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
+                is_success,
+                leases,
+                error,
+            }) => {
+                if is_success {
                     Ok(leases
                         .unwrap_or_default()
                         .into_iter()
@@ -260,8 +267,8 @@ impl<C: CoordinationRpc> LeaseClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::WriteResult(WriteResultResponse { success, error }) => {
-                if success {
+            ClientRpcResponse::WriteResult(WriteResultResponse { is_success, error }) => {
+                if is_success {
                     Ok(())
                 } else {
                     bail!("write with lease failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
@@ -352,12 +359,12 @@ async fn send_keepalive<C: CoordinationRpc>(client: &Arc<C>, lease_id: u64) -> R
 
     match response {
         ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
-            success,
+            is_success,
             ttl_seconds,
             error,
             ..
         }) => {
-            if success {
+            if is_success {
                 Ok(ttl_seconds.unwrap_or(0))
             } else {
                 bail!("keepalive failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))

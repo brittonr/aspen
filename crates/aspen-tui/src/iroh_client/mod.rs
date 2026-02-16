@@ -44,7 +44,7 @@ pub struct IrohClient {
     /// Target node address.
     target_addr: Arc<RwLock<EndpointAddr>>,
     /// Connection status.
-    connected: Arc<RwLock<bool>>,
+    is_connected: Arc<RwLock<bool>>,
 }
 
 impl IrohClient {
@@ -79,7 +79,7 @@ impl IrohClient {
         Ok(Self {
             endpoint,
             target_addr: Arc::new(RwLock::new(target_addr)),
-            connected: Arc::new(RwLock::new(false)),
+            is_connected: Arc::new(RwLock::new(false)),
         })
     }
 
@@ -89,13 +89,13 @@ impl IrohClient {
         *target = addr;
 
         // Mark as disconnected so next request will reconnect
-        let mut connected = self.connected.write().await;
-        *connected = false;
+        let mut is_connected = self.is_connected.write().await;
+        *is_connected = false;
     }
 
     /// Check if the client is connected.
     pub async fn is_connected(&self) -> bool {
-        *self.connected.read().await
+        *self.is_connected.read().await
     }
 
     /// Shutdown the client and close all connections.

@@ -38,7 +38,7 @@ pub struct WatchInfo {
     /// Watch creation timestamp (ms since epoch).
     pub created_at_ms: u64,
     /// Whether to include previous value in events.
-    pub include_prev_value: bool,
+    pub should_include_prev_value: bool,
 }
 
 /// Registry for tracking active watch subscriptions.
@@ -71,7 +71,7 @@ pub trait WatchRegistry: Send + Sync {
     ///
     /// Called by `LogSubscriberProtocolHandler` when a client creates a watch.
     /// Returns the assigned watch ID.
-    fn register_watch(&self, prefix: String, include_prev_value: bool) -> u64;
+    fn register_watch(&self, prefix: String, should_include_prev_value: bool) -> u64;
 
     /// Update watch state after sending events.
     ///
@@ -126,7 +126,7 @@ impl WatchRegistry for InMemoryWatchRegistry {
         self.watches.read().unwrap_or_else(|poisoned| poisoned.into_inner()).len()
     }
 
-    fn register_watch(&self, prefix: String, include_prev_value: bool) -> u64 {
+    fn register_watch(&self, prefix: String, should_include_prev_value: bool) -> u64 {
         let watch_id = self.next_watch_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         let now_ms =
@@ -138,7 +138,7 @@ impl WatchRegistry for InMemoryWatchRegistry {
             last_sent_index: 0,
             events_sent: 0,
             created_at_ms: now_ms,
-            include_prev_value,
+            should_include_prev_value,
         };
 
         // Tiger Style: Recover from poisoned locks - the HashMap insert is safe
@@ -205,7 +205,7 @@ mod tests {
         let info = info.unwrap();
         assert_eq!(info.watch_id, id);
         assert_eq!(info.prefix, "test/");
-        assert!(info.include_prev_value);
+        assert!(info.should_include_prev_value);
         assert_eq!(info.last_sent_index, 0);
         assert_eq!(info.events_sent, 0);
         assert!(info.created_at_ms > 0);
@@ -302,7 +302,7 @@ mod tests {
             last_sent_index: 100,
             events_sent: 42,
             created_at_ms: 1704326400000, // 2024-01-04 00:00:00 UTC
-            include_prev_value: true,
+            should_include_prev_value: true,
         };
 
         let debug = format!("{:?}", info);
@@ -318,7 +318,7 @@ mod tests {
             last_sent_index: 100,
             events_sent: 42,
             created_at_ms: 1704326400000,
-            include_prev_value: true,
+            should_include_prev_value: true,
         };
 
         let cloned = info.clone();
@@ -327,7 +327,7 @@ mod tests {
         assert_eq!(cloned.last_sent_index, info.last_sent_index);
         assert_eq!(cloned.events_sent, info.events_sent);
         assert_eq!(cloned.created_at_ms, info.created_at_ms);
-        assert_eq!(cloned.include_prev_value, info.include_prev_value);
+        assert_eq!(cloned.should_include_prev_value, info.should_include_prev_value);
     }
 
     // ========================================================================

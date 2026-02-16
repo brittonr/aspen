@@ -105,7 +105,7 @@ pub struct ResetArgs {
 pub struct RateLimitOutput {
     pub operation: String,
     pub key: String,
-    pub success: bool,
+    pub is_success: bool,
     pub tokens_remaining: Option<u64>,
     pub retry_after_ms: Option<u64>,
     pub error: Option<String>,
@@ -116,7 +116,7 @@ impl Outputable for RateLimitOutput {
         serde_json::json!({
             "operation": self.operation,
             "key": self.key,
-            "success": self.success,
+            "is_success": self.is_success,
             "tokens_remaining": self.tokens_remaining,
             "retry_after_ms": self.retry_after_ms,
             "error": self.error
@@ -124,7 +124,7 @@ impl Outputable for RateLimitOutput {
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             match self.tokens_remaining {
                 Some(remaining) => format!("OK ({} tokens remaining)", remaining),
                 None => "OK".to_string(),
@@ -168,13 +168,13 @@ async fn ratelimit_try_acquire(client: &AspenClient, args: TryAcquireArgs, json:
             let output = RateLimitOutput {
                 operation: "try_acquire".to_string(),
                 key: args.key,
-                success: result.success,
+                is_success: result.is_success,
                 tokens_remaining: result.tokens_remaining,
                 retry_after_ms: result.retry_after_ms,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -200,13 +200,13 @@ async fn ratelimit_acquire(client: &AspenClient, args: AcquireArgs, json: bool) 
             let output = RateLimitOutput {
                 operation: "acquire".to_string(),
                 key: args.key,
-                success: result.success,
+                is_success: result.is_success,
                 tokens_remaining: result.tokens_remaining,
                 retry_after_ms: result.retry_after_ms,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -230,13 +230,13 @@ async fn ratelimit_available(client: &AspenClient, args: AvailableArgs, json: bo
             let output = RateLimitOutput {
                 operation: "available".to_string(),
                 key: args.key,
-                success: result.success,
+                is_success: result.is_success,
                 tokens_remaining: result.tokens_remaining,
                 retry_after_ms: None,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -260,13 +260,13 @@ async fn ratelimit_reset(client: &AspenClient, args: ResetArgs, json: bool) -> R
             let output = RateLimitOutput {
                 operation: "reset".to_string(),
                 key: args.key,
-                success: result.success,
+                is_success: result.is_success,
                 tokens_remaining: result.tokens_remaining,
                 retry_after_ms: None,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

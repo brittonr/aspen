@@ -64,7 +64,7 @@ impl SqlCellValue {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SqlResultResponse {
     /// Whether the query succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Column names.
     pub columns: Option<Vec<String>>,
     /// Result rows.

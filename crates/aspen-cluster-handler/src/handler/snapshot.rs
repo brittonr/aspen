@@ -11,12 +11,12 @@ pub(crate) async fn handle_trigger_snapshot(ctx: &ClientProtocolContext) -> anyh
 
     match result {
         Ok(snapshot) => Ok(ClientRpcResponse::SnapshotResult(SnapshotResultResponse {
-            success: true,
+            is_success: true,
             snapshot_index: snapshot.as_ref().map(|log_id| log_id.index),
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::SnapshotResult(SnapshotResultResponse {
-            success: false,
+            is_success: false,
             snapshot_index: None,
             error: Some(sanitize_control_error(&e)),
         })),

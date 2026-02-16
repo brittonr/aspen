@@ -101,7 +101,7 @@ pub struct CasArgs {
 pub struct CounterOutput {
     pub key: String,
     pub operation: String,
-    pub success: bool,
+    pub is_success: bool,
     pub value: Option<u64>,
     pub error: Option<String>,
 }
@@ -111,14 +111,14 @@ impl Outputable for CounterOutput {
         serde_json::json!({
             "key": self.key,
             "operation": self.operation,
-            "success": self.success,
+            "is_success": self.is_success,
             "value": self.value,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             match self.value {
                 Some(v) => v.to_string(),
                 None => "OK".to_string(),
@@ -155,12 +155,12 @@ async fn counter_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<
             let output = CounterOutput {
                 key: args.key,
                 operation: "get".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 value: result.value,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -178,12 +178,12 @@ async fn counter_incr(client: &AspenClient, args: IncrArgs, json: bool) -> Resul
             let output = CounterOutput {
                 key: args.key,
                 operation: "incr".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 value: result.value,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -201,12 +201,12 @@ async fn counter_decr(client: &AspenClient, args: DecrArgs, json: bool) -> Resul
             let output = CounterOutput {
                 key: args.key,
                 operation: "decr".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 value: result.value,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -229,12 +229,12 @@ async fn counter_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<
             let output = CounterOutput {
                 key: args.key,
                 operation: "add".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 value: result.value,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -257,12 +257,12 @@ async fn counter_sub(client: &AspenClient, args: SubArgs, json: bool) -> Result<
             let output = CounterOutput {
                 key: args.key,
                 operation: "sub".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 value: result.value,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -285,12 +285,12 @@ async fn counter_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<
             let output = CounterOutput {
                 key: args.key,
                 operation: "set".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 value: result.value,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -314,12 +314,12 @@ async fn counter_cas(client: &AspenClient, args: CasArgs, json: bool) -> Result<
             let output = CounterOutput {
                 key: args.key,
                 operation: "cas".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 value: result.value,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

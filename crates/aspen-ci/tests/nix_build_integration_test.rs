@@ -170,7 +170,7 @@ fn create_test_payload(flake_url: &str, attribute: Option<&str>) -> NixBuildPayl
         attribute: attribute.unwrap_or("default").to_string(),
         timeout_secs: SIMPLE_FLAKE_TIMEOUT,
         sandbox: true,
-        upload_result: true,
+        should_upload_result: true,
         artifacts: vec![],
         job_name: Some("test-build".to_string()),
         extra_args: vec![],

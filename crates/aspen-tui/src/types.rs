@@ -226,7 +226,7 @@ impl SqlState {
 #[derive(Debug, Clone)]
 pub struct SqlQueryResult {
     /// Whether the query succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Column names.
     pub columns: Vec<String>,
     /// Result rows (each row is a vec of string values).
@@ -270,7 +270,7 @@ impl SqlQueryResult {
         }
 
         Self {
-            success: true,
+            is_success: true,
             columns,
             rows: string_rows,
             row_count,
@@ -284,7 +284,7 @@ impl SqlQueryResult {
     /// Create an error result.
     pub fn error(message: String) -> Self {
         Self {
-            success: false,
+            is_success: false,
             columns: vec![],
             rows: vec![],
             row_count: 0,

@@ -164,7 +164,7 @@ impl CiRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CiTriggerPipelineResponse {
     /// Whether the trigger was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Pipeline run ID (if successful).
     pub run_id: Option<String>,
     /// Error message if the operation failed.
@@ -203,7 +203,7 @@ pub struct CiJobInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CiGetStatusResponse {
     /// Whether the pipeline run was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Pipeline run ID.
     pub run_id: Option<String>,
     /// Repository ID.
@@ -250,7 +250,7 @@ pub struct CiListRunsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CiCancelRunResponse {
     /// Whether the cancel was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -259,7 +259,7 @@ pub struct CiCancelRunResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CiWatchRepoResponse {
     /// Whether the watch was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -268,7 +268,7 @@ pub struct CiWatchRepoResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CiUnwatchRepoResponse {
     /// Whether the unwatch was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -294,7 +294,7 @@ pub struct CiArtifactInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CiListArtifactsResponse {
     /// Whether the operation was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// List of artifacts.
     pub artifacts: Vec<CiArtifactInfo>,
     /// Error message if the operation failed.
@@ -305,7 +305,7 @@ pub struct CiListArtifactsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CiGetArtifactResponse {
     /// Whether the operation was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Artifact metadata.
     pub artifact: Option<CiArtifactInfo>,
     /// Blob ticket for downloading (base32 encoded).
@@ -329,7 +329,7 @@ pub struct CiLogChunkInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CiGetJobLogsResponse {
     /// Whether the job was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Log chunks in order.
     pub chunks: Vec<CiLogChunkInfo>,
     /// Index of the last chunk returned.
@@ -346,7 +346,7 @@ pub struct CiGetJobLogsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CiSubscribeLogsResponse {
     /// Whether the job was found.
-    pub found: bool,
+    pub was_found: bool,
     /// KV prefix to watch via LOG_SUBSCRIBER_ALPN.
     pub watch_prefix: String,
     /// Current log index (for catch-up before subscribing).
@@ -361,7 +361,7 @@ pub struct CiSubscribeLogsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CiGetJobOutputResponse {
     /// Whether the job was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Full stdout content (resolved from blob if needed).
     pub stdout: Option<String>,
     /// Full stderr content (resolved from blob if needed).
@@ -415,7 +415,7 @@ pub struct CacheEntryResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheQueryResultResponse {
     /// Whether the store path was found in cache.
-    pub found: bool,
+    pub was_found: bool,
     /// Cache entry if found.
     pub entry: Option<CacheEntryResponse>,
     /// Error message if the operation failed.
@@ -443,7 +443,7 @@ pub struct CacheStatsResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheDownloadResultResponse {
     /// Whether the store path was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Blob ticket for downloading the NAR (base64-encoded).
     pub blob_ticket: Option<String>,
     /// BLAKE3 hash of the NAR.
@@ -462,7 +462,7 @@ pub struct CacheDownloadResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnixDirectoryGetResultResponse {
     /// Whether the directory was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Protobuf-encoded directory (base64-encoded).
     pub directory_bytes: Option<String>,
     /// Error message if the operation failed.
@@ -473,7 +473,7 @@ pub struct SnixDirectoryGetResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnixDirectoryPutResultResponse {
     /// Whether the directory was stored successfully.
-    pub success: bool,
+    pub is_success: bool,
     /// BLAKE3 digest of the stored directory (hex-encoded, 64 chars).
     pub digest: Option<String>,
     /// Error message if the operation failed.
@@ -484,7 +484,7 @@ pub struct SnixDirectoryPutResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnixPathInfoGetResultResponse {
     /// Whether the path info was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Protobuf-encoded PathInfo (base64-encoded).
     pub pathinfo_bytes: Option<String>,
     /// Error message if the operation failed.
@@ -495,7 +495,7 @@ pub struct SnixPathInfoGetResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnixPathInfoPutResultResponse {
     /// Whether the path info was stored successfully.
-    pub success: bool,
+    pub is_success: bool,
     /// Store path that was registered (e.g., /nix/store/abc...-name).
     pub store_path: Option<String>,
     /// Error message if the operation failed.
@@ -523,7 +523,7 @@ pub struct CacheMigrationStartResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheMigrationStatusResultResponse {
     /// Whether migration is currently running.
-    pub running: bool,
+    pub is_running: bool,
     /// Migration progress details.
     pub progress: Option<CacheMigrationProgressResponse>,
     /// Error message if the operation failed.

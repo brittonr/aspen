@@ -134,13 +134,13 @@ impl IrohClient {
         &self,
         learner_id: u64,
         replace_node: Option<u64>,
-        force: bool,
+        is_force: bool,
     ) -> Result<PromoteLearnerResultResponse> {
         let response = self
             .send_rpc_with_retry(ClientRpcRequest::PromoteLearner {
                 learner_id,
                 replace_node,
-                force,
+                is_force,
             })
             .await?;
 

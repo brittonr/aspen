@@ -200,7 +200,7 @@ pub struct UpdateArgs {
 
 /// Service register output.
 pub struct RegisterOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub fencing_token: Option<u64>,
     pub error: Option<String>,
 }
@@ -208,14 +208,14 @@ pub struct RegisterOutput {
 impl Outputable for RegisterOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "fencing_token": self.fencing_token,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             format!("Registered. Fencing token: {}", self.fencing_token.unwrap_or(0))
         } else {
             format!("Register failed: {}", self.error.as_deref().unwrap_or("unknown error"))
@@ -226,7 +226,7 @@ impl Outputable for RegisterOutput {
 /// Simple success output for deregister, heartbeat, health, update.
 pub struct ServiceSuccessOutput {
     pub operation: String,
-    pub success: bool,
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
@@ -234,13 +234,13 @@ impl Outputable for ServiceSuccessOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "operation": self.operation,
-            "success": self.success,
+            "is_success": self.is_success,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if self.success {
+        if self.is_success {
             "OK".to_string()
         } else {
             format!("{} failed: {}", self.operation, self.error.as_deref().unwrap_or("unknown error"))
@@ -250,7 +250,7 @@ impl Outputable for ServiceSuccessOutput {
 
 /// Service discover output.
 pub struct DiscoverOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub instances: Vec<InstanceInfo>,
     pub error: Option<String>,
 }
@@ -266,7 +266,7 @@ pub struct InstanceInfo {
 impl Outputable for DiscoverOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "instances": self.instances.iter().map(|i| {
                 serde_json::json!({
                     "instance_id": i.instance_id,
@@ -281,7 +281,7 @@ impl Outputable for DiscoverOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.success {
+        if !self.is_success {
             return format!("Discover failed: {}", self.error.as_deref().unwrap_or("unknown error"));
         }
 
@@ -310,7 +310,7 @@ impl Outputable for DiscoverOutput {
 
 /// Service list output.
 pub struct ServiceListOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub services: Vec<String>,
     pub error: Option<String>,
 }
@@ -318,14 +318,14 @@ pub struct ServiceListOutput {
 impl Outputable for ServiceListOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "services": self.services,
             "error": self.error
         })
     }
 
     fn to_human(&self) -> String {
-        if !self.success {
+        if !self.is_success {
             return format!("List failed: {}", self.error.as_deref().unwrap_or("unknown error"));
         }
 
@@ -343,8 +343,8 @@ impl Outputable for ServiceListOutput {
 
 /// Service get instance output.
 pub struct GetInstanceOutput {
-    pub success: bool,
-    pub found: bool,
+    pub is_success: bool,
+    pub was_found: bool,
     pub instance: Option<InstanceInfo>,
     pub error: Option<String>,
 }
@@ -352,8 +352,8 @@ pub struct GetInstanceOutput {
 impl Outputable for GetInstanceOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
-            "found": self.found,
+            "is_success": self.is_success,
+            "was_found": self.was_found,
             "instance": self.instance.as_ref().map(|i| {
                 serde_json::json!({
                     "instance_id": i.instance_id,
@@ -368,11 +368,11 @@ impl Outputable for GetInstanceOutput {
     }
 
     fn to_human(&self) -> String {
-        if !self.success {
+        if !self.is_success {
             return format!("Get failed: {}", self.error.as_deref().unwrap_or("unknown error"));
         }
 
-        if !self.found {
+        if !self.was_found {
             return "Instance not found".to_string();
         }
 
@@ -430,12 +430,12 @@ async fn service_register(client: &AspenClient, args: RegisterArgs, json: bool) 
     match response {
         ClientRpcResponse::ServiceRegisterResult(result) => {
             let output = RegisterOutput {
-                success: result.success,
+                is_success: result.is_success,
                 fencing_token: result.fencing_token,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -458,11 +458,11 @@ async fn service_deregister(client: &AspenClient, args: DeregisterArgs, json: bo
         ClientRpcResponse::ServiceDeregisterResult(result) => {
             let output = ServiceSuccessOutput {
                 operation: "deregister".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -507,12 +507,12 @@ async fn service_discover(client: &AspenClient, args: DiscoverArgs, json: bool) 
                 .collect();
 
             let output = DiscoverOutput {
-                success: result.success,
+                is_success: result.is_success,
                 instances,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -533,12 +533,12 @@ async fn service_list(client: &AspenClient, args: ListArgs, json: bool) -> Resul
     match response {
         ClientRpcResponse::ServiceListResult(result) => {
             let output = ServiceListOutput {
-                success: result.success,
+                is_success: result.is_success,
                 services: result.services,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -567,13 +567,13 @@ async fn service_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<
             });
 
             let output = GetInstanceOutput {
-                success: result.success,
-                found: result.found,
+                is_success: result.is_success,
+                was_found: result.was_found,
                 instance,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success || !result.found {
+            if !result.is_success || !result.was_found {
                 std::process::exit(1);
             }
             Ok(())
@@ -596,11 +596,11 @@ async fn service_heartbeat(client: &AspenClient, args: HeartbeatArgs, json: bool
         ClientRpcResponse::ServiceHeartbeatResult(result) => {
             let output = ServiceSuccessOutput {
                 operation: "heartbeat".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -624,11 +624,11 @@ async fn service_health(client: &AspenClient, args: HealthArgs, json: bool) -> R
         ClientRpcResponse::ServiceUpdateHealthResult(result) => {
             let output = ServiceSuccessOutput {
                 operation: "health".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -664,11 +664,11 @@ async fn service_update(client: &AspenClient, args: UpdateArgs, json: bool) -> R
         ClientRpcResponse::ServiceUpdateMetadataResult(result) => {
             let output = ServiceSuccessOutput {
                 operation: "update".to_string(),
-                success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

@@ -25,7 +25,7 @@ pub(crate) async fn handle_job_cancel(
         Ok(()) => {
             info!("Job cancelled: {}", job_id);
             Ok(ClientRpcResponse::JobCancelResult(JobCancelResultResponse {
-                success: true,
+                is_success: true,
                 previous_status: None, // Could fetch this if needed
                 error: None,
             }))
@@ -33,7 +33,7 @@ pub(crate) async fn handle_job_cancel(
         Err(e) => {
             warn!("Failed to cancel job: {}", e);
             Ok(ClientRpcResponse::JobCancelResult(JobCancelResultResponse {
-                success: false,
+                is_success: false,
                 previous_status: None,
                 error: Some(e.to_string()),
             }))
@@ -53,13 +53,13 @@ pub(crate) async fn handle_job_update_progress(
 
     match job_manager.update_progress(&job_id, progress, message).await {
         Ok(()) => Ok(ClientRpcResponse::JobUpdateProgressResult(JobUpdateProgressResultResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => {
             warn!("Failed to update job progress: {}", e);
             Ok(ClientRpcResponse::JobUpdateProgressResult(JobUpdateProgressResultResponse {
-                success: false,
+                is_success: false,
                 error: Some(e.to_string()),
             }))
         }

@@ -123,7 +123,7 @@ proptest! {
             let resp_a = handler.handle(req_a, &ctx).await.unwrap();
 
             if let ClientRpcResponse::LockResult(result_a) = resp_a {
-                if result_a.success {
+                if result_a.is_success {
                     // Holder A got the lock, now B should fail
                     let req_b = ClientRpcRequest::LockTryAcquire {
                         key: key.clone(),
@@ -134,7 +134,7 @@ proptest! {
 
                     if let ClientRpcResponse::LockResult(result_b) = resp_b {
                         // Mutual exclusion: B should not get the lock while A holds it
-                        prop_assert!(!result_b.success, "Lock should not be acquired while held by another");
+                        prop_assert!(!result_b.is_success, "Lock should not be acquired while held by another");
                         prop_assert_eq!(result_b.holder_id, Some(holder_a.clone()), "Should report current holder");
                     }
                 }
@@ -171,7 +171,7 @@ proptest! {
                 let resp = handler.handle(req, &ctx).await.unwrap();
 
                 if let ClientRpcResponse::LockResult(result) = resp {
-                    if result.success {
+                    if result.is_success {
                         let token = result.fencing_token.unwrap();
 
                         // Fencing token should be strictly greater than previous
@@ -188,7 +188,7 @@ proptest! {
                         };
                         let release_resp = handler.handle(release_req, &ctx).await.unwrap();
                         if let ClientRpcResponse::LockResult(release_result) = release_resp {
-                            prop_assert!(release_result.success, "Release should succeed");
+                            prop_assert!(release_result.is_success, "Release should succeed");
                         }
                     }
                 }
@@ -224,7 +224,7 @@ proptest! {
             let resp_a = handler.handle(req_a, &ctx).await.unwrap();
 
             if let ClientRpcResponse::LockResult(result_a) = resp_a {
-                if result_a.success {
+                if result_a.is_success {
                     let token = result_a.fencing_token.unwrap();
 
                     // Holder B tries to release A's lock - should fail
@@ -235,7 +235,7 @@ proptest! {
                     };
                     let bad_resp = handler.handle(bad_release, &ctx).await.unwrap();
                     if let ClientRpcResponse::LockResult(bad_result) = bad_resp {
-                        prop_assert!(!bad_result.success, "Wrong holder should not release lock");
+                        prop_assert!(!bad_result.is_success, "Wrong holder should not release lock");
                     }
 
                     // Holder A with wrong token - should fail
@@ -246,7 +246,7 @@ proptest! {
                     };
                     let wrong_resp = handler.handle(wrong_token_release, &ctx).await.unwrap();
                     if let ClientRpcResponse::LockResult(wrong_result) = wrong_resp {
-                        prop_assert!(!wrong_result.success, "Wrong token should not release lock");
+                        prop_assert!(!wrong_result.is_success, "Wrong token should not release lock");
                     }
 
                     // Correct release - should succeed
@@ -257,7 +257,7 @@ proptest! {
                     };
                     let good_resp = handler.handle(good_release, &ctx).await.unwrap();
                     if let ClientRpcResponse::LockResult(good_result) = good_resp {
-                        prop_assert!(good_result.success, "Correct credentials should release lock");
+                        prop_assert!(good_result.is_success, "Correct credentials should release lock");
                     }
                 }
             }
@@ -289,7 +289,7 @@ proptest! {
             let resp1 = handler.handle(req1, &ctx).await.unwrap();
 
             if let ClientRpcResponse::LockResult(result1) = resp1 {
-                if result1.success {
+                if result1.is_success {
                     // Same holder tries to acquire again (without releasing)
                     let req2 = ClientRpcRequest::LockTryAcquire {
                         key: key.clone(),
@@ -300,7 +300,7 @@ proptest! {
 
                     if let ClientRpcResponse::LockResult(result2) = resp2 {
                         // Re-acquisition by same holder should FAIL (non-reentrant)
-                        prop_assert!(!result2.success, "Same holder should NOT be able to re-acquire without release");
+                        prop_assert!(!result2.is_success, "Same holder should NOT be able to re-acquire without release");
                         // Should report itself as current holder
                         prop_assert_eq!(result2.holder_id, Some(holder.clone()), "Should report current holder");
                     }
@@ -336,7 +336,7 @@ proptest! {
                 let resp = handler.handle(req, &ctx).await.unwrap();
 
                 if let ClientRpcResponse::CounterResult(result) = resp {
-                    prop_assert!(result.success, "Increment should succeed");
+                    prop_assert!(result.is_success, "Increment should succeed");
                     prop_assert_eq!(result.value, Some(i as u64), "Counter should equal number of increments");
                 }
             }
@@ -362,7 +362,7 @@ proptest! {
 
             if let ClientRpcResponse::CounterResult(result) = resp {
                 // Either fails or returns 0 (no negative)
-                if result.success {
+                if result.is_success {
                     if let Some(value) = result.value {
                         prop_assert!(value == 0, "Counter should not go negative, got {}", value);
                     }
@@ -399,7 +399,7 @@ proptest! {
             };
             let bad_resp = handler.handle(bad_cas, &ctx).await.unwrap();
             if let ClientRpcResponse::CounterResult(bad_result) = bad_resp {
-                prop_assert!(!bad_result.success, "CAS with wrong expected should fail");
+                prop_assert!(!bad_result.is_success, "CAS with wrong expected should fail");
             }
 
             // CAS with correct expected - should succeed
@@ -410,7 +410,7 @@ proptest! {
             };
             let good_resp = handler.handle(good_cas, &ctx).await.unwrap();
             if let ClientRpcResponse::CounterResult(good_result) = good_resp {
-                prop_assert!(good_result.success, "CAS with correct expected should succeed");
+                prop_assert!(good_result.is_success, "CAS with correct expected should succeed");
                 prop_assert_eq!(good_result.value, Some(new_value), "CAS should return new value");
             }
 
@@ -565,7 +565,7 @@ proptest! {
             };
             let lock_resp = handler.handle(lock_req, &ctx).await.unwrap();
             if let ClientRpcResponse::LockResult(result) = lock_resp {
-                prop_assert!(!result.success, "Reserved prefix '_system:' should be rejected for lock");
+                prop_assert!(!result.is_success, "Reserved prefix '_system:' should be rejected for lock");
                 prop_assert!(result.error.is_some(), "Should have error message");
             }
 
@@ -573,7 +573,7 @@ proptest! {
             let counter_req = ClientRpcRequest::CounterGet { key: key.clone() };
             let counter_resp = handler.handle(counter_req, &ctx).await.unwrap();
             if let ClientRpcResponse::CounterResult(result) = counter_resp {
-                prop_assert!(!result.success, "Reserved prefix '_system:' should be rejected for counter");
+                prop_assert!(!result.is_success, "Reserved prefix '_system:' should be rejected for counter");
                 prop_assert!(result.error.is_some(), "Should have error message");
             }
 

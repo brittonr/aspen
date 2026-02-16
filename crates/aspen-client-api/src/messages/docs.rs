@@ -96,7 +96,7 @@ pub struct DocsTicketResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsSetResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// The key that was set.
     pub key: Option<String>,
     /// Size of the value in bytes.
@@ -109,7 +109,7 @@ pub struct DocsSetResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsGetResultResponse {
     /// Whether the key was found.
-    pub found: bool,
+    pub was_found: bool,
     /// The value if found.
     pub value: Option<Vec<u8>>,
     /// Size of the value in bytes.
@@ -122,7 +122,7 @@ pub struct DocsGetResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsDeleteResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if failed.
     pub error: Option<String>,
 }
@@ -174,7 +174,7 @@ pub struct DocsStatusResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddPeerClusterResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Cluster ID of the added peer.
     pub cluster_id: Option<String>,
     /// Priority assigned to this peer.
@@ -187,7 +187,7 @@ pub struct AddPeerClusterResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemovePeerClusterResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Cluster ID of the removed peer.
     pub cluster_id: String,
     /// Error message if failed.
@@ -229,13 +229,13 @@ pub struct PeerClusterInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerClusterStatusResponse {
     /// Whether the peer was found.
-    pub found: bool,
+    pub was_found: bool,
     /// Cluster ID of the peer.
     pub cluster_id: String,
     /// Connection state: "disconnected", "connecting", "connected", "failed".
     pub state: String,
     /// Whether sync is currently in progress.
-    pub syncing: bool,
+    pub is_syncing: bool,
     /// Entries received in current/last sync.
     pub entries_received: u64,
     /// Entries imported in current/last sync.
@@ -252,7 +252,7 @@ pub struct PeerClusterStatusResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdatePeerClusterFilterResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Cluster ID of the peer.
     pub cluster_id: String,
     /// New filter type: "full", "include", or "exclude".
@@ -265,7 +265,7 @@ pub struct UpdatePeerClusterFilterResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdatePeerClusterPriorityResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Cluster ID of the peer.
     pub cluster_id: String,
     /// Previous priority value.
@@ -280,7 +280,7 @@ pub struct UpdatePeerClusterPriorityResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetPeerClusterEnabledResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Cluster ID of the peer.
     pub cluster_id: String,
     /// Whether the peer is now enabled.
@@ -294,7 +294,7 @@ pub struct SetPeerClusterEnabledResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyOriginResultResponse {
     /// Whether the key has origin metadata.
-    pub found: bool,
+    pub was_found: bool,
     /// The key that was looked up.
     pub key: String,
     /// Cluster ID that wrote the key (if found).

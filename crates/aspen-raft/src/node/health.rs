@@ -18,7 +18,7 @@ use super::conversions::node_state_from_openraft;
 #[derive(Debug, Clone)]
 pub struct HealthStatus {
     /// Whether the node is considered healthy overall.
-    pub healthy: bool,
+    pub is_healthy: bool,
     /// Current Raft state (Leader, Follower, Candidate, Learner, Shutdown).
     pub state: NodeState,
     /// Current leader ID, if known.
@@ -84,7 +84,7 @@ impl RaftNodeHealth {
         let consecutive_failures = self.consecutive_failures.load(Ordering::Relaxed);
 
         HealthStatus {
-            healthy: !is_shutdown && (has_membership || state == NodeState::Learner),
+            is_healthy: !is_shutdown && (has_membership || state == NodeState::Learner),
             state,
             leader,
             consecutive_failures,
@@ -111,7 +111,7 @@ impl RaftNodeHealth {
 
             let status = self.status().await;
 
-            if !status.healthy {
+            if !status.is_healthy {
                 let failures = self.consecutive_failures.fetch_add(1, Ordering::Relaxed) + 1;
 
                 warn!(

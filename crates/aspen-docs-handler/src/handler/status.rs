@@ -71,7 +71,7 @@ async fn handle_docs_status(ctx: &ClientProtocolContext) -> anyhow::Result<Clien
 async fn handle_get_key_origin(ctx: &ClientProtocolContext, key: String) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref peer_manager) = ctx.peer_manager else {
         return Ok(ClientRpcResponse::KeyOriginResult(KeyOriginResultResponse {
-            found: false,
+            was_found: false,
             key: key.clone(),
             cluster_id: None,
             priority: None,
@@ -82,7 +82,7 @@ async fn handle_get_key_origin(ctx: &ClientProtocolContext, key: String) -> anyh
 
     let Some(importer) = peer_manager.importer() else {
         return Ok(ClientRpcResponse::KeyOriginResult(KeyOriginResultResponse {
-            found: false,
+            was_found: false,
             key,
             cluster_id: None,
             priority: None,
@@ -95,7 +95,7 @@ async fn handle_get_key_origin(ctx: &ClientProtocolContext, key: String) -> anyh
         Some(origin) => {
             let is_local = origin.is_local();
             Ok(ClientRpcResponse::KeyOriginResult(KeyOriginResultResponse {
-                found: true,
+                was_found: true,
                 key,
                 cluster_id: Some(origin.cluster_id),
                 priority: Some(origin.priority),
@@ -104,7 +104,7 @@ async fn handle_get_key_origin(ctx: &ClientProtocolContext, key: String) -> anyh
             }))
         }
         None => Ok(ClientRpcResponse::KeyOriginResult(KeyOriginResultResponse {
-            found: false,
+            was_found: false,
             key,
             cluster_id: None,
             priority: None,

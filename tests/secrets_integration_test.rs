@@ -90,7 +90,7 @@ async fn test_secrets_kv_write_read() {
 
     match write_response {
         ClientRpcResponse::SecretsKvWriteResult(result) => {
-            assert!(result.success, "write should succeed: {:?}", result.error);
+            assert!(result.is_success, "write should succeed: {:?}", result.error);
             assert!(result.version.is_some(), "should return version");
             tracing::info!(version = result.version, "secret written");
         }
@@ -113,7 +113,7 @@ async fn test_secrets_kv_write_read() {
 
     match read_response {
         ClientRpcResponse::SecretsKvReadResult(result) => {
-            assert!(result.success, "read should succeed: {:?}", result.error);
+            assert!(result.is_success, "read should succeed: {:?}", result.error);
             let read_data = result.data.expect("should have data");
             assert_eq!(read_data.get("username"), Some(&"admin".to_string()));
             assert_eq!(read_data.get("password"), Some(&"secret123".to_string()));
@@ -164,7 +164,7 @@ async fn test_secrets_kv_versioning() {
 
     let version1 = match write1 {
         ClientRpcResponse::SecretsKvWriteResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             r.version.expect("should have version")
         }
         _ => panic!("unexpected response"),
@@ -187,7 +187,7 @@ async fn test_secrets_kv_versioning() {
 
     let version2 = match write2 {
         ClientRpcResponse::SecretsKvWriteResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             r.version.expect("should have version")
         }
         _ => panic!("unexpected response"),
@@ -208,7 +208,7 @@ async fn test_secrets_kv_versioning() {
 
     match read_v1 {
         ClientRpcResponse::SecretsKvReadResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             let data = r.data.expect("should have data");
             assert_eq!(data.get("value"), Some(&"version1".to_string()));
         }
@@ -228,7 +228,7 @@ async fn test_secrets_kv_versioning() {
 
     match read_latest {
         ClientRpcResponse::SecretsKvReadResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             let data = r.data.expect("should have data");
             assert_eq!(data.get("value"), Some(&"version2".to_string()));
         }
@@ -273,7 +273,7 @@ async fn test_secrets_kv_list() {
             .expect("failed to write");
 
         match response {
-            ClientRpcResponse::SecretsKvWriteResult(r) => assert!(r.success),
+            ClientRpcResponse::SecretsKvWriteResult(r) => assert!(r.is_success),
             _ => panic!("unexpected response"),
         }
     }
@@ -290,7 +290,7 @@ async fn test_secrets_kv_list() {
 
     match list_response {
         ClientRpcResponse::SecretsKvListResult(result) => {
-            assert!(result.success, "list should succeed: {:?}", result.error);
+            assert!(result.is_success, "list should succeed: {:?}", result.error);
             tracing::info!(keys = ?result.keys, "listed secrets");
             assert_eq!(result.keys.len(), 3, "should have 3 secrets");
         }
@@ -338,7 +338,7 @@ async fn test_secrets_kv_cas_conflict() {
 
     let version = match write_response {
         ClientRpcResponse::SecretsKvWriteResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             r.version.expect("should have version")
         }
         _ => panic!("unexpected response"),
@@ -362,7 +362,7 @@ async fn test_secrets_kv_cas_conflict() {
 
     match cas_fail_response {
         ClientRpcResponse::SecretsKvWriteResult(r) => {
-            assert!(!r.success, "CAS write with wrong version should fail");
+            assert!(!r.is_success, "CAS write with wrong version should fail");
             assert!(
                 r.error.as_ref().map(|e| e.contains("conflict") || e.contains("CAS")).unwrap_or(false),
                 "error should mention conflict or CAS: {:?}",
@@ -391,7 +391,7 @@ async fn test_secrets_kv_cas_conflict() {
 
     match cas_ok_response {
         ClientRpcResponse::SecretsKvWriteResult(r) => {
-            assert!(r.success, "CAS write with correct version should succeed: {:?}", r.error);
+            assert!(r.is_success, "CAS write with correct version should succeed: {:?}", r.error);
             assert_eq!(r.version, Some(2), "should be version 2");
             tracing::info!("CAS write succeeded");
         }
@@ -436,7 +436,7 @@ async fn test_secrets_kv_metadata() {
         .expect("failed to write");
 
     match write_response {
-        ClientRpcResponse::SecretsKvWriteResult(r) => assert!(r.success),
+        ClientRpcResponse::SecretsKvWriteResult(r) => assert!(r.is_success),
         _ => panic!("unexpected response"),
     }
 
@@ -452,7 +452,7 @@ async fn test_secrets_kv_metadata() {
 
     match metadata_response {
         ClientRpcResponse::SecretsKvMetadataResult(r) => {
-            assert!(r.success, "metadata read should succeed: {:?}", r.error);
+            assert!(r.is_success, "metadata read should succeed: {:?}", r.error);
             assert!(r.current_version.is_some(), "should have current version");
             tracing::info!(current_version = r.current_version, max_versions = r.max_versions, "metadata retrieved");
         }
@@ -499,7 +499,7 @@ async fn test_secrets_kv_delete_undelete() {
 
     let version = match write_response {
         ClientRpcResponse::SecretsKvWriteResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             r.version.expect("should have version")
         }
         _ => panic!("unexpected response"),
@@ -518,7 +518,7 @@ async fn test_secrets_kv_delete_undelete() {
 
     match delete_response {
         ClientRpcResponse::SecretsKvDeleteResult(r) => {
-            assert!(r.success, "delete should succeed: {:?}", r.error);
+            assert!(r.is_success, "delete should succeed: {:?}", r.error);
         }
         _ => panic!("unexpected response"),
     }
@@ -536,7 +536,7 @@ async fn test_secrets_kv_delete_undelete() {
 
     match undelete_response {
         ClientRpcResponse::SecretsKvDeleteResult(r) => {
-            assert!(r.success, "undelete should succeed: {:?}", r.error);
+            assert!(r.is_success, "undelete should succeed: {:?}", r.error);
         }
         _ => panic!("unexpected response"),
     }
@@ -554,7 +554,7 @@ async fn test_secrets_kv_delete_undelete() {
 
     match read_response {
         ClientRpcResponse::SecretsKvReadResult(r) => {
-            assert!(r.success, "read should succeed after undelete");
+            assert!(r.is_success, "read should succeed after undelete");
             assert!(r.data.is_some(), "should have data after undelete");
         }
         _ => panic!("unexpected response"),
@@ -599,7 +599,7 @@ async fn test_secrets_transit_encrypt_decrypt() {
 
     match create_response {
         ClientRpcResponse::SecretsTransitKeyResult(r) => {
-            assert!(r.success, "key creation should succeed: {:?}", r.error);
+            assert!(r.is_success, "key creation should succeed: {:?}", r.error);
             tracing::info!(name = r.name, "key created");
         }
         ClientRpcResponse::Error(e) => {
@@ -624,7 +624,7 @@ async fn test_secrets_transit_encrypt_decrypt() {
 
     let ciphertext = match encrypt_response {
         ClientRpcResponse::SecretsTransitEncryptResult(r) => {
-            assert!(r.success, "encryption should succeed: {:?}", r.error);
+            assert!(r.is_success, "encryption should succeed: {:?}", r.error);
             let ct = r.ciphertext.expect("should have ciphertext");
             tracing::info!(ciphertext_len = ct.len(), "data encrypted");
             ct
@@ -649,7 +649,7 @@ async fn test_secrets_transit_encrypt_decrypt() {
 
     match decrypt_response {
         ClientRpcResponse::SecretsTransitDecryptResult(r) => {
-            assert!(r.success, "decryption should succeed: {:?}", r.error);
+            assert!(r.is_success, "decryption should succeed: {:?}", r.error);
             let decrypted = r.plaintext.expect("should have plaintext");
             assert_eq!(decrypted, plaintext, "roundtrip should preserve data");
             tracing::info!("roundtrip successful");
@@ -694,7 +694,7 @@ async fn test_secrets_transit_sign_verify() {
 
     match create_response {
         ClientRpcResponse::SecretsTransitKeyResult(r) => {
-            assert!(r.success, "key creation should succeed: {:?}", r.error);
+            assert!(r.is_success, "key creation should succeed: {:?}", r.error);
         }
         _ => panic!("unexpected response"),
     }
@@ -714,7 +714,7 @@ async fn test_secrets_transit_sign_verify() {
 
     let signature = match sign_response {
         ClientRpcResponse::SecretsTransitSignResult(r) => {
-            assert!(r.success, "signing should succeed: {:?}", r.error);
+            assert!(r.is_success, "signing should succeed: {:?}", r.error);
             r.signature.expect("should have signature")
         }
         _ => panic!("unexpected response"),
@@ -734,8 +734,8 @@ async fn test_secrets_transit_sign_verify() {
 
     match verify_response {
         ClientRpcResponse::SecretsTransitVerifyResult(r) => {
-            assert!(r.success, "verify request should succeed: {:?}", r.error);
-            assert!(r.valid.unwrap_or(false), "signature should be valid");
+            assert!(r.is_success, "verify request should succeed: {:?}", r.error);
+            assert!(r.is_valid.unwrap_or(false), "signature should be valid");
             tracing::info!("signature verified");
         }
         _ => panic!("unexpected response"),
@@ -775,7 +775,7 @@ async fn test_secrets_transit_key_rotation() {
         .expect("failed to create key");
 
     match create_response {
-        ClientRpcResponse::SecretsTransitKeyResult(r) => assert!(r.success),
+        ClientRpcResponse::SecretsTransitKeyResult(r) => assert!(r.is_success),
         _ => panic!("unexpected response"),
     }
 
@@ -794,7 +794,7 @@ async fn test_secrets_transit_key_rotation() {
 
     let ciphertext = match encrypt_response {
         ClientRpcResponse::SecretsTransitEncryptResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             r.ciphertext.expect("should have ciphertext")
         }
         _ => panic!("unexpected response"),
@@ -812,7 +812,7 @@ async fn test_secrets_transit_key_rotation() {
 
     match rotate_response {
         ClientRpcResponse::SecretsTransitKeyResult(r) => {
-            assert!(r.success, "rotation should succeed: {:?}", r.error);
+            assert!(r.is_success, "rotation should succeed: {:?}", r.error);
             tracing::info!(version = r.version, "key rotated");
         }
         _ => panic!("unexpected response"),
@@ -832,7 +832,7 @@ async fn test_secrets_transit_key_rotation() {
 
     match decrypt_response {
         ClientRpcResponse::SecretsTransitDecryptResult(r) => {
-            assert!(r.success, "decryption should work after rotation");
+            assert!(r.is_success, "decryption should work after rotation");
             let decrypted = r.plaintext.expect("should have plaintext");
             assert_eq!(decrypted, plaintext);
             tracing::info!("old ciphertext decrypted after rotation");
@@ -874,7 +874,7 @@ async fn test_secrets_transit_rewrap() {
         .expect("failed to create key");
 
     match create_response {
-        ClientRpcResponse::SecretsTransitKeyResult(r) => assert!(r.success),
+        ClientRpcResponse::SecretsTransitKeyResult(r) => assert!(r.is_success),
         _ => panic!("unexpected response"),
     }
 
@@ -893,7 +893,7 @@ async fn test_secrets_transit_rewrap() {
 
     let ciphertext_v1 = match encrypt_response {
         ClientRpcResponse::SecretsTransitEncryptResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             r.ciphertext.expect("should have ciphertext")
         }
         _ => panic!("unexpected response"),
@@ -911,7 +911,7 @@ async fn test_secrets_transit_rewrap() {
 
     match rotate_response {
         ClientRpcResponse::SecretsTransitKeyResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             tracing::info!(version = r.version, "key rotated to v2");
         }
         _ => panic!("unexpected response"),
@@ -931,7 +931,7 @@ async fn test_secrets_transit_rewrap() {
 
     let ciphertext_v2 = match rewrap_response {
         ClientRpcResponse::SecretsTransitEncryptResult(r) => {
-            assert!(r.success, "rewrap should succeed: {:?}", r.error);
+            assert!(r.is_success, "rewrap should succeed: {:?}", r.error);
             let ct = r.ciphertext.expect("should have rewrapped ciphertext");
             tracing::info!("ciphertext rewrapped to v2");
             ct
@@ -953,7 +953,7 @@ async fn test_secrets_transit_rewrap() {
 
     match decrypt_response {
         ClientRpcResponse::SecretsTransitDecryptResult(r) => {
-            assert!(r.success, "decryption should succeed");
+            assert!(r.is_success, "decryption should succeed");
             let decrypted = r.plaintext.expect("should have plaintext");
             assert_eq!(decrypted, plaintext, "rewrapped data should decrypt correctly");
             tracing::info!("rewrapped ciphertext decrypted successfully");
@@ -995,7 +995,7 @@ async fn test_secrets_transit_list_keys() {
             .expect("failed to create key");
 
         match response {
-            ClientRpcResponse::SecretsTransitKeyResult(r) => assert!(r.success),
+            ClientRpcResponse::SecretsTransitKeyResult(r) => assert!(r.is_success),
             _ => panic!("unexpected response"),
         }
     }
@@ -1011,7 +1011,7 @@ async fn test_secrets_transit_list_keys() {
 
     match list_response {
         ClientRpcResponse::SecretsTransitListResult(r) => {
-            assert!(r.success, "list should succeed: {:?}", r.error);
+            assert!(r.is_success, "list should succeed: {:?}", r.error);
             tracing::info!(keys = ?r.keys, "listed transit keys");
             assert!(r.keys.len() >= 3, "should have at least 3 keys");
         }
@@ -1054,7 +1054,7 @@ async fn test_secrets_transit_multi_node() {
 
     match create_response {
         ClientRpcResponse::SecretsTransitKeyResult(r) => {
-            assert!(r.success, "key creation should succeed in cluster");
+            assert!(r.is_success, "key creation should succeed in cluster");
             tracing::info!("key created in 3-node cluster");
         }
         _ => panic!("unexpected response"),
@@ -1076,7 +1076,7 @@ async fn test_secrets_transit_multi_node() {
 
     let ciphertext = match encrypt_response {
         ClientRpcResponse::SecretsTransitEncryptResult(r) => {
-            assert!(r.success, "encryption should succeed in cluster");
+            assert!(r.is_success, "encryption should succeed in cluster");
             r.ciphertext.expect("should have ciphertext")
         }
         _ => panic!("unexpected response"),
@@ -1096,7 +1096,7 @@ async fn test_secrets_transit_multi_node() {
 
     match decrypt_response {
         ClientRpcResponse::SecretsTransitDecryptResult(r) => {
-            assert!(r.success, "decryption should succeed in cluster");
+            assert!(r.is_success, "decryption should succeed in cluster");
             let decrypted = r.plaintext.expect("should have plaintext");
             assert_eq!(decrypted, plaintext, "roundtrip should preserve data in cluster");
             tracing::info!("multi-node Transit roundtrip successful");
@@ -1141,7 +1141,7 @@ async fn test_secrets_pki_generate_root() {
 
     match response {
         ClientRpcResponse::SecretsPkiCertificateResult(r) => {
-            assert!(r.success, "root generation should succeed: {:?}", r.error);
+            assert!(r.is_success, "root generation should succeed: {:?}", r.error);
             let cert = r.certificate.expect("should have certificate");
             assert!(cert.contains("BEGIN CERTIFICATE"), "should be PEM format");
             tracing::info!(serial = r.serial, "root CA generated");
@@ -1186,7 +1186,7 @@ async fn test_secrets_pki_create_role_and_issue() {
         .expect("failed to generate root");
 
     match root_response {
-        ClientRpcResponse::SecretsPkiCertificateResult(r) => assert!(r.success),
+        ClientRpcResponse::SecretsPkiCertificateResult(r) => assert!(r.is_success),
         _ => panic!("unexpected response"),
     }
 
@@ -1207,7 +1207,7 @@ async fn test_secrets_pki_create_role_and_issue() {
 
     match role_response {
         ClientRpcResponse::SecretsPkiRoleResult(r) => {
-            assert!(r.success, "role creation should succeed: {:?}", r.error);
+            assert!(r.is_success, "role creation should succeed: {:?}", r.error);
             tracing::info!("role created");
         }
         _ => panic!("unexpected response"),
@@ -1228,7 +1228,7 @@ async fn test_secrets_pki_create_role_and_issue() {
 
     match issue_response {
         ClientRpcResponse::SecretsPkiCertificateResult(r) => {
-            assert!(r.success, "issuance should succeed: {:?}", r.error);
+            assert!(r.is_success, "issuance should succeed: {:?}", r.error);
             let cert = r.certificate.expect("should have certificate");
             let key = r.private_key.expect("should have private key");
             assert!(cert.contains("BEGIN CERTIFICATE"));
@@ -1271,7 +1271,7 @@ async fn test_secrets_pki_list_certs_and_roles() {
         .expect("failed to generate root");
 
     match root_response {
-        ClientRpcResponse::SecretsPkiCertificateResult(r) => assert!(r.success),
+        ClientRpcResponse::SecretsPkiCertificateResult(r) => assert!(r.is_success),
         _ => panic!("unexpected response"),
     }
 
@@ -1291,7 +1291,7 @@ async fn test_secrets_pki_list_certs_and_roles() {
         .expect("failed to create role");
 
     match role_response {
-        ClientRpcResponse::SecretsPkiRoleResult(r) => assert!(r.success),
+        ClientRpcResponse::SecretsPkiRoleResult(r) => assert!(r.is_success),
         _ => panic!("unexpected response"),
     }
 
@@ -1306,7 +1306,7 @@ async fn test_secrets_pki_list_certs_and_roles() {
 
     match list_roles {
         ClientRpcResponse::SecretsPkiListResult(r) => {
-            assert!(r.success, "list roles should succeed: {:?}", r.error);
+            assert!(r.is_success, "list roles should succeed: {:?}", r.error);
             tracing::info!(roles = ?r.items, "listed roles");
             assert!(!r.items.is_empty(), "should have at least one role");
         }
@@ -1324,7 +1324,7 @@ async fn test_secrets_pki_list_certs_and_roles() {
 
     match list_certs {
         ClientRpcResponse::SecretsPkiListResult(r) => {
-            assert!(r.success, "list certs should succeed: {:?}", r.error);
+            assert!(r.is_success, "list certs should succeed: {:?}", r.error);
             tracing::info!(certs = ?r.items, "listed certificates");
             // Root CA is stored under ca/ prefix, list_certs returns issued certs from certs/
             // With just a root CA and no issued certs, the list will be empty
@@ -1365,7 +1365,7 @@ async fn test_secrets_pki_revoke_and_crl() {
         .expect("failed to generate root");
 
     match root_response {
-        ClientRpcResponse::SecretsPkiCertificateResult(r) => assert!(r.success),
+        ClientRpcResponse::SecretsPkiCertificateResult(r) => assert!(r.is_success),
         _ => panic!("unexpected response"),
     }
 
@@ -1385,7 +1385,7 @@ async fn test_secrets_pki_revoke_and_crl() {
         .expect("failed to create role");
 
     match role_response {
-        ClientRpcResponse::SecretsPkiRoleResult(r) => assert!(r.success),
+        ClientRpcResponse::SecretsPkiRoleResult(r) => assert!(r.is_success),
         _ => panic!("unexpected response"),
     }
 
@@ -1403,7 +1403,7 @@ async fn test_secrets_pki_revoke_and_crl() {
 
     let serial = match issue_response {
         ClientRpcResponse::SecretsPkiCertificateResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             r.serial.expect("should have serial")
         }
         _ => panic!("unexpected response"),
@@ -1421,7 +1421,7 @@ async fn test_secrets_pki_revoke_and_crl() {
 
     match revoke_response {
         ClientRpcResponse::SecretsPkiRevokeResult(r) => {
-            assert!(r.success, "revocation should succeed: {:?}", r.error);
+            assert!(r.is_success, "revocation should succeed: {:?}", r.error);
             tracing::info!(serial = serial, "certificate revoked");
         }
         _ => panic!("unexpected response"),
@@ -1438,7 +1438,7 @@ async fn test_secrets_pki_revoke_and_crl() {
 
     match crl_response {
         ClientRpcResponse::SecretsPkiCrlResult(r) => {
-            assert!(r.success, "CRL should succeed: {:?}", r.error);
+            assert!(r.is_success, "CRL should succeed: {:?}", r.error);
             let crl = r.crl.expect("should have CRL");
             // Current implementation returns CRL state summary, not PEM
             // TODO: Update when handler returns actual PEM-formatted CRL
@@ -1482,7 +1482,7 @@ async fn test_secrets_pki_cert_chain_in_issue() {
 
     match root_response {
         ClientRpcResponse::SecretsPkiCertificateResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             tracing::info!("root CA generated for chain test");
         }
         _ => panic!("unexpected response"),
@@ -1504,7 +1504,7 @@ async fn test_secrets_pki_cert_chain_in_issue() {
         .expect("failed to create role");
 
     match role_response {
-        ClientRpcResponse::SecretsPkiRoleResult(r) => assert!(r.success),
+        ClientRpcResponse::SecretsPkiRoleResult(r) => assert!(r.is_success),
         _ => panic!("unexpected response"),
     }
 
@@ -1523,7 +1523,7 @@ async fn test_secrets_pki_cert_chain_in_issue() {
 
     match issue_response {
         ClientRpcResponse::SecretsPkiCertificateResult(r) => {
-            assert!(r.success, "issue should succeed: {:?}", r.error);
+            assert!(r.is_success, "issue should succeed: {:?}", r.error);
             let cert = r.certificate.expect("should have certificate");
             assert!(cert.contains("BEGIN CERTIFICATE"), "should be PEM certificate");
             tracing::info!(serial = r.serial, "certificate issued successfully");
@@ -1567,7 +1567,7 @@ async fn test_secrets_pki_multi_node() {
 
     match root_response {
         ClientRpcResponse::SecretsPkiCertificateResult(r) => {
-            assert!(r.success, "root CA generation should succeed in cluster");
+            assert!(r.is_success, "root CA generation should succeed in cluster");
             tracing::info!("root CA generated in 3-node cluster");
         }
         _ => panic!("unexpected response"),
@@ -1590,7 +1590,7 @@ async fn test_secrets_pki_multi_node() {
 
     match role_response {
         ClientRpcResponse::SecretsPkiRoleResult(r) => {
-            assert!(r.success, "role creation should succeed in cluster");
+            assert!(r.is_success, "role creation should succeed in cluster");
         }
         _ => panic!("unexpected response"),
     }
@@ -1610,7 +1610,7 @@ async fn test_secrets_pki_multi_node() {
 
     match issue_response {
         ClientRpcResponse::SecretsPkiCertificateResult(r) => {
-            assert!(r.success, "certificate issuance should succeed in cluster: {:?}", r.error);
+            assert!(r.is_success, "certificate issuance should succeed in cluster: {:?}", r.error);
             assert!(r.certificate.is_some(), "should have certificate");
             assert!(r.private_key.is_some(), "should have private key");
             tracing::info!(serial = r.serial, "certificate issued in cluster");
@@ -1660,7 +1660,7 @@ async fn test_secrets_multi_node_consistency() {
 
     match write_response {
         ClientRpcResponse::SecretsKvWriteResult(r) => {
-            assert!(r.success, "write should succeed");
+            assert!(r.is_success, "write should succeed");
             tracing::info!("secret written to cluster");
         }
         _ => panic!("unexpected response"),
@@ -1679,7 +1679,7 @@ async fn test_secrets_multi_node_consistency() {
 
     match read_response {
         ClientRpcResponse::SecretsKvReadResult(r) => {
-            assert!(r.success, "read should succeed");
+            assert!(r.is_success, "read should succeed");
             let data = r.data.expect("should have data");
             assert_eq!(data.get("distributed"), Some(&"secret".to_string()));
             tracing::info!("secret read from cluster");
@@ -1726,7 +1726,7 @@ async fn test_secrets_concurrent_writes() {
 
         match write_response {
             ClientRpcResponse::SecretsKvWriteResult(r) => {
-                assert!(r.success, "write {} should succeed", i);
+                assert!(r.is_success, "write {} should succeed", i);
             }
             _ => panic!("unexpected response for write {}", i),
         }
@@ -1746,7 +1746,7 @@ async fn test_secrets_concurrent_writes() {
 
         match read_response {
             ClientRpcResponse::SecretsKvReadResult(r) => {
-                assert!(r.success, "read {} should succeed", i);
+                assert!(r.is_success, "read {} should succeed", i);
                 let data = r.data.expect("should have data");
                 assert_eq!(data.get("index"), Some(&i.to_string()), "data should match for {}", i);
             }
@@ -1793,7 +1793,7 @@ async fn test_secrets_kv_destroy() {
 
     let version = match write_response {
         ClientRpcResponse::SecretsKvWriteResult(r) => {
-            assert!(r.success);
+            assert!(r.is_success);
             r.version.expect("should have version")
         }
         _ => panic!("unexpected response"),
@@ -1812,7 +1812,7 @@ async fn test_secrets_kv_destroy() {
 
     match destroy_response {
         ClientRpcResponse::SecretsKvDeleteResult(r) => {
-            assert!(r.success, "destroy should succeed: {:?}", r.error);
+            assert!(r.is_success, "destroy should succeed: {:?}", r.error);
             tracing::info!("version {} destroyed", version);
         }
         _ => panic!("unexpected response"),
@@ -1832,7 +1832,7 @@ async fn test_secrets_kv_destroy() {
     match read_response {
         ClientRpcResponse::SecretsKvReadResult(r) => {
             // Either success=false or no data expected for destroyed version
-            if r.success {
+            if r.is_success {
                 assert!(r.data.is_none(), "destroyed version should have no data");
             }
             tracing::info!("destroyed version correctly inaccessible");

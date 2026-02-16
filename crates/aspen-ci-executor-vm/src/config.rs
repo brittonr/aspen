@@ -121,7 +121,7 @@ pub struct CloudHypervisorWorkerConfig {
     /// When false, VMs are returned to the pool for reuse, which is faster
     /// but can cause state leakage between jobs (e.g., overlay whiteout
     /// files causing "cannot open shared object file" errors).
-    pub destroy_after_job: bool,
+    pub should_destroy_after_job: bool,
 
     /// Port the host's Iroh endpoint is bound to.
     ///
@@ -184,7 +184,7 @@ impl Default for CloudHypervisorWorkerConfig {
             network_base: "10.200.0".to_string(),
             // Destroy VMs after each job by default to ensure clean overlay state.
             // This prevents library loading failures from accumulated whiteout files.
-            destroy_after_job: true,
+            should_destroy_after_job: true,
             // No host Iroh port by default - must be set from the running endpoint
             host_iroh_port: None,
             // Default to no networking (fully isolated)

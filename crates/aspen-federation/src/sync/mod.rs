@@ -533,7 +533,7 @@ mod tests {
     #[test]
     fn test_resource_state_response_found() {
         let response = FederationResponse::ResourceState {
-            found: true,
+            was_found: true,
             heads: {
                 let mut h = HashMap::new();
                 h.insert("heads/main".to_string(), [0xef; 32]);
@@ -547,8 +547,8 @@ mod tests {
         let parsed: FederationResponse = postcard::from_bytes(&bytes).unwrap();
 
         match parsed {
-            FederationResponse::ResourceState { found, heads, .. } => {
-                assert!(found);
+            FederationResponse::ResourceState { was_found, heads, .. } => {
+                assert!(was_found);
                 assert_eq!(heads.len(), 2);
                 assert!(heads.contains_key("heads/main"));
                 assert!(heads.contains_key("heads/dev"));
@@ -560,7 +560,7 @@ mod tests {
     #[test]
     fn test_resource_state_response_not_found() {
         let response = FederationResponse::ResourceState {
-            found: false,
+            was_found: false,
             heads: HashMap::new(),
             metadata: None,
         };
@@ -569,8 +569,8 @@ mod tests {
         let parsed: FederationResponse = postcard::from_bytes(&bytes).unwrap();
 
         match parsed {
-            FederationResponse::ResourceState { found, heads, .. } => {
-                assert!(!found);
+            FederationResponse::ResourceState { was_found, heads, .. } => {
+                assert!(!was_found);
                 assert!(heads.is_empty());
             }
             _ => panic!("expected ResourceState"),
@@ -591,7 +591,7 @@ mod tests {
         };
 
         let response = FederationResponse::ResourceState {
-            found: true,
+            was_found: true,
             heads: HashMap::new(),
             metadata: Some(metadata),
         };
@@ -717,7 +717,7 @@ mod tests {
     #[test]
     fn test_verify_result_response_valid() {
         let response = FederationResponse::VerifyResult {
-            valid: true,
+            is_valid: true,
             error: None,
         };
 
@@ -725,8 +725,8 @@ mod tests {
         let parsed: FederationResponse = postcard::from_bytes(&bytes).unwrap();
 
         match parsed {
-            FederationResponse::VerifyResult { valid, error } => {
-                assert!(valid);
+            FederationResponse::VerifyResult { is_valid, error } => {
+                assert!(is_valid);
                 assert!(error.is_none());
             }
             _ => panic!("expected VerifyResult"),
@@ -736,7 +736,7 @@ mod tests {
     #[test]
     fn test_verify_result_response_invalid() {
         let response = FederationResponse::VerifyResult {
-            valid: false,
+            is_valid: false,
             error: Some("signature verification failed".to_string()),
         };
 
@@ -744,8 +744,8 @@ mod tests {
         let parsed: FederationResponse = postcard::from_bytes(&bytes).unwrap();
 
         match parsed {
-            FederationResponse::VerifyResult { valid, error } => {
-                assert!(!valid);
+            FederationResponse::VerifyResult { is_valid, error } => {
+                assert!(!is_valid);
                 assert_eq!(error, Some("signature verification failed".to_string()));
             }
             _ => panic!("expected VerifyResult"),
@@ -774,7 +774,7 @@ mod tests {
     #[test]
     fn test_response_roundtrip() {
         let response = FederationResponse::ResourceState {
-            found: true,
+            was_found: true,
             heads: {
                 let mut h = HashMap::new();
                 h.insert("heads/main".to_string(), [0xef; 32]);
@@ -787,8 +787,8 @@ mod tests {
         let parsed: FederationResponse = postcard::from_bytes(&bytes).unwrap();
 
         match parsed {
-            FederationResponse::ResourceState { found, heads, .. } => {
-                assert!(found);
+            FederationResponse::ResourceState { was_found, heads, .. } => {
+                assert!(was_found);
                 assert!(heads.contains_key("heads/main"));
             }
             _ => panic!("expected ResourceState"),

@@ -66,7 +66,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> RequestHandler for Worke
                 job_id,
                 receipt_handle,
                 execution_token,
-                success,
+                is_success,
                 error_message,
                 output_data,
                 processing_time_ms,
@@ -76,7 +76,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> RequestHandler for Worke
                     job_id,
                     receipt_handle,
                     execution_token,
-                    success,
+                    is_success,
                     error_message,
                     output_data,
                     processing_time_ms,
@@ -121,7 +121,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
             Err(e) => {
                 error!(worker_id = %worker_id, error = %e, "failed to dequeue jobs");
                 return Ok(ClientRpcResponse::WorkerPollJobsResult(WorkerPollJobsResultResponse {
-                    success: false,
+                    is_success: false,
                     worker_id,
                     jobs: vec![],
                     error: Some(format!("Failed to dequeue jobs: {}", e)),
@@ -239,7 +239,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
         );
 
         Ok(ClientRpcResponse::WorkerPollJobsResult(WorkerPollJobsResultResponse {
-            success: true,
+            is_success: true,
             worker_id,
             jobs: job_infos,
             error: None,
@@ -256,7 +256,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
         job_id: String,
         receipt_handle: String,
         execution_token: String,
-        success: bool,
+        is_success: bool,
         error_message: Option<String>,
         output_data: Option<Vec<u8>>,
         processing_time_ms: u64,
@@ -264,14 +264,14 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
         debug!(
             worker_id = %worker_id,
             job_id = %job_id,
-            success,
+            is_success,
             processing_time_ms,
             "worker completing job"
         );
 
         let job_id_parsed = JobId::from_string(job_id.clone());
 
-        if success {
+        if is_success {
             // Build job output from provided data
             let data = match output_data {
                 Some(d) => serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(&d)),
@@ -298,7 +298,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
                         "job completed successfully"
                     );
                     Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
-                        success: true,
+                        is_success: true,
                         worker_id,
                         job_id,
                         error: None,
@@ -312,7 +312,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
                         "failed to acknowledge job completion"
                     );
                     Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
-                        success: false,
+                        is_success: false,
                         worker_id,
                         job_id,
                         error: Some(format!("Failed to acknowledge job: {}", e)),
@@ -336,7 +336,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
                         "job failed, negative acknowledged"
                     );
                     Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
-                        success: true,
+                        is_success: true,
                         worker_id,
                         job_id,
                         error: None,
@@ -350,7 +350,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
                         "failed to negative acknowledge job"
                     );
                     Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
-                        success: false,
+                        is_success: false,
                         worker_id,
                         job_id,
                         error: Some(format!("Failed to nack job: {}", e)),

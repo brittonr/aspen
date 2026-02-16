@@ -83,13 +83,13 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
 
         match response {
             ClientRpcResponse::SemaphoreAcquireResult(SemaphoreResultResponse {
-                success,
+                is_success,
                 permits_acquired,
                 available,
                 error,
                 ..
             }) => {
-                if success {
+                if is_success {
                     Ok(SemaphoreAcquireResult {
                         permits_acquired: permits_acquired.unwrap_or(permits),
                         available: available.unwrap_or(0),
@@ -138,13 +138,13 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
 
         match response {
             ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
-                success,
+                is_success,
                 permits_acquired,
                 available,
                 error,
                 ..
             }) => {
-                if success {
+                if is_success {
                     Ok(Some(SemaphoreAcquireResult {
                         permits_acquired: permits_acquired.unwrap_or(permits),
                         available: available.unwrap_or(0),
@@ -183,12 +183,12 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
 
         match response {
             ClientRpcResponse::SemaphoreReleaseResult(SemaphoreResultResponse {
-                success,
+                is_success,
                 available,
                 error,
                 ..
             }) => {
-                if success {
+                if is_success {
                     Ok(available.unwrap_or(0))
                 } else {
                     bail!("semaphore release failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
@@ -215,13 +215,13 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
 
         match response {
             ClientRpcResponse::SemaphoreStatusResult(SemaphoreResultResponse {
-                success,
+                is_success,
                 available,
                 capacity,
                 error,
                 ..
             }) => {
-                if success {
+                if is_success {
                     Ok(SemaphoreStatusResult {
                         available: available.unwrap_or(0),
                         capacity: capacity.unwrap_or(0),

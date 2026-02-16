@@ -49,7 +49,7 @@ pub(crate) async fn handle_trigger_pipeline(
 
     let Some(orchestrator) = &ctx.ci_orchestrator else {
         return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-            success: false,
+            is_success: false,
             run_id: None,
             error: Some("CI orchestrator not available".to_string()),
         }));
@@ -57,7 +57,7 @@ pub(crate) async fn handle_trigger_pipeline(
 
     let Some(forge_node) = &ctx.forge_node else {
         return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-            success: false,
+            is_success: false,
             run_id: None,
             error: Some("Forge not available - required for CI config".to_string()),
         }));
@@ -70,7 +70,7 @@ pub(crate) async fn handle_trigger_pipeline(
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                success: false,
+                is_success: false,
                 run_id: None,
                 error: Some(format!("Invalid repo_id: {}", e)),
             }));
@@ -85,7 +85,7 @@ pub(crate) async fn handle_trigger_pipeline(
                 Ok(hash) => hash,
                 Err(e) => {
                     return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                        success: false,
+                        is_success: false,
                         run_id: None,
                         error: Some(format!("Invalid commit hash: {}", e)),
                     }));
@@ -104,14 +104,14 @@ pub(crate) async fn handle_trigger_pipeline(
                 Ok(Some(hash)) => *hash.as_bytes(),
                 Ok(None) => {
                     return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                        success: false,
+                        is_success: false,
                         run_id: None,
                         error: Some(format!("Ref '{}' not found in repository", ref_name)),
                     }));
                 }
                 Err(e) => {
                     return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                        success: false,
+                        is_success: false,
                         run_id: None,
                         error: Some(format!("Failed to resolve ref '{}': {}", ref_name, e)),
                     }));
@@ -126,7 +126,7 @@ pub(crate) async fn handle_trigger_pipeline(
         Ok(c) => c,
         Err(e) => {
             return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                success: false,
+                is_success: false,
                 run_id: None,
                 error: Some(format!("Failed to get commit: {}", e)),
             }));
@@ -138,14 +138,14 @@ pub(crate) async fn handle_trigger_pipeline(
         Ok(Some(content)) => content,
         Ok(None) => {
             return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                success: false,
+                is_success: false,
                 run_id: None,
                 error: Some("CI config file (.aspen/ci.ncl) not found in repository".to_string()),
             }));
         }
         Err(e) => {
             return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                success: false,
+                is_success: false,
                 run_id: None,
                 error: Some(format!("Failed to read CI config: {}", e)),
             }));
@@ -157,7 +157,7 @@ pub(crate) async fn handle_trigger_pipeline(
         Ok(s) => s,
         Err(e) => {
             return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                success: false,
+                is_success: false,
                 run_id: None,
                 error: Some(format!("CI config is not valid UTF-8: {}", e)),
             }));
@@ -169,7 +169,7 @@ pub(crate) async fn handle_trigger_pipeline(
         Ok(c) => c,
         Err(e) => {
             return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                success: false,
+                is_success: false,
                 run_id: None,
                 error: Some(format!("Failed to parse CI config: {}", e)),
             }));
@@ -191,7 +191,7 @@ pub(crate) async fn handle_trigger_pipeline(
         // Clean up partial checkout directory
         let _ = cleanup_checkout(&checkout_dir).await;
         return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-            success: false,
+            is_success: false,
             run_id: None,
             error: Some(format!("Failed to checkout repository: {}", e)),
         }));
@@ -202,7 +202,7 @@ pub(crate) async fn handle_trigger_pipeline(
         // Clean up failed checkout directory
         let _ = cleanup_checkout(&checkout_dir).await;
         return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-            success: false,
+            is_success: false,
             run_id: None,
             error: Some(format!("Failed to prepare checkout for CI build: {}", e)),
         }));
@@ -231,7 +231,7 @@ pub(crate) async fn handle_trigger_pipeline(
         Ok(r) => r,
         Err(e) => {
             return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                success: false,
+                is_success: false,
                 run_id: None,
                 error: Some(format!("Failed to start pipeline: {}", e)),
             }));
@@ -241,7 +241,7 @@ pub(crate) async fn handle_trigger_pipeline(
     info!(run_id = %run.id, "CI pipeline started successfully");
 
     Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-        success: true,
+        is_success: true,
         run_id: Some(run.id),
         error: None,
     }))
@@ -256,7 +256,7 @@ pub(crate) async fn handle_get_status(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(orchestrator) = &ctx.ci_orchestrator else {
         return Ok(ClientRpcResponse::CiGetStatusResult(CiGetStatusResponse {
-            found: false,
+            was_found: false,
             run_id: None,
             repo_id: None,
             ref_name: None,
@@ -276,7 +276,7 @@ pub(crate) async fn handle_get_status(
         Some(r) => r,
         None => {
             return Ok(ClientRpcResponse::CiGetStatusResult(CiGetStatusResponse {
-                found: false,
+                was_found: false,
                 run_id: Some(run_id),
                 repo_id: None,
                 ref_name: None,
@@ -315,7 +315,7 @@ pub(crate) async fn handle_get_status(
         .collect();
 
     Ok(ClientRpcResponse::CiGetStatusResult(CiGetStatusResponse {
-        found: true,
+        was_found: true,
         run_id: Some(run.id),
         repo_id: Some(run.context.repo_id.to_hex()),
         ref_name: Some(run.context.ref_name),
@@ -391,7 +391,7 @@ pub(crate) async fn handle_cancel_run(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(orchestrator) = &ctx.ci_orchestrator else {
         return Ok(ClientRpcResponse::CiCancelRunResult(CiCancelRunResponse {
-            success: false,
+            is_success: false,
             error: Some("CI orchestrator not available".to_string()),
         }));
     };
@@ -400,11 +400,11 @@ pub(crate) async fn handle_cancel_run(
 
     match orchestrator.cancel(&run_id).await {
         Ok(()) => Ok(ClientRpcResponse::CiCancelRunResult(CiCancelRunResponse {
-            success: true,
+            is_success: true,
             error: None,
         })),
         Err(e) => Ok(ClientRpcResponse::CiCancelRunResult(CiCancelRunResponse {
-            success: false,
+            is_success: false,
             error: Some(format!("Failed to cancel pipeline: {}", e)),
         })),
     }

@@ -249,14 +249,14 @@ pub struct SecretsKvVersionMetadata {
     /// Deletion time if soft-deleted (Unix timestamp in milliseconds).
     pub deletion_time_unix_ms: Option<u64>,
     /// Whether this version has been permanently destroyed.
-    pub destroyed: bool,
+    pub was_destroyed: bool,
 }
 
 /// Secrets KV read result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsKvReadResultResponse {
     /// Whether the read was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Secret data (key-value pairs).
     pub data: Option<std::collections::HashMap<String, String>>,
     /// Version metadata.
@@ -269,7 +269,7 @@ pub struct SecretsKvReadResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsKvWriteResultResponse {
     /// Whether the write was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Version number of the written secret.
     pub version: Option<u64>,
     /// Error message if the operation failed.
@@ -280,7 +280,7 @@ pub struct SecretsKvWriteResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsKvDeleteResultResponse {
     /// Whether the operation was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -289,7 +289,7 @@ pub struct SecretsKvDeleteResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsKvListResultResponse {
     /// Whether the list was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Secret keys (names only, not values).
     pub keys: Vec<String>,
     /// Error message if the operation failed.
@@ -304,16 +304,16 @@ pub struct SecretsKvVersionInfo {
     /// Creation time (Unix timestamp in milliseconds).
     pub created_time_unix_ms: u64,
     /// Whether this version is deleted.
-    pub deleted: bool,
+    pub was_deleted: bool,
     /// Whether this version is destroyed.
-    pub destroyed: bool,
+    pub was_destroyed: bool,
 }
 
 /// Secrets KV metadata result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsKvMetadataResultResponse {
     /// Whether the read was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Current version number.
     pub current_version: Option<u64>,
     /// Maximum versions to retain.
@@ -340,7 +340,7 @@ pub struct SecretsKvMetadataResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsTransitEncryptResultResponse {
     /// Whether the encryption was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Ciphertext (prefixed with key version).
     pub ciphertext: Option<String>,
     /// Error message if the operation failed.
@@ -351,7 +351,7 @@ pub struct SecretsTransitEncryptResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsTransitDecryptResultResponse {
     /// Whether the decryption was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Decrypted plaintext.
     pub plaintext: Option<Vec<u8>>,
     /// Error message if the operation failed.
@@ -362,7 +362,7 @@ pub struct SecretsTransitDecryptResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsTransitSignResultResponse {
     /// Whether the signing was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Signature (prefixed with key version).
     pub signature: Option<String>,
     /// Error message if the operation failed.
@@ -373,9 +373,9 @@ pub struct SecretsTransitSignResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsTransitVerifyResultResponse {
     /// Whether the verification request was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether the signature is valid.
-    pub valid: Option<bool>,
+    pub is_valid: Option<bool>,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -384,7 +384,7 @@ pub struct SecretsTransitVerifyResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsTransitDatakeyResultResponse {
     /// Whether the operation was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Plaintext data key (if requested).
     pub plaintext: Option<Vec<u8>>,
     /// Encrypted/wrapped data key.
@@ -397,7 +397,7 @@ pub struct SecretsTransitDatakeyResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsTransitKeyResultResponse {
     /// Whether the operation was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Key name.
     pub name: Option<String>,
     /// Current key version.
@@ -412,7 +412,7 @@ pub struct SecretsTransitKeyResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsTransitListResultResponse {
     /// Whether the list was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Key names.
     pub keys: Vec<String>,
     /// Error message if the operation failed.
@@ -427,7 +427,7 @@ pub struct SecretsTransitListResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsPkiCertificateResultResponse {
     /// Whether the operation was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Certificate in PEM format.
     pub certificate: Option<String>,
     /// Private key in PEM format (only for issued certs, not for get operations).
@@ -444,7 +444,7 @@ pub struct SecretsPkiCertificateResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsPkiRevokeResultResponse {
     /// Whether the revocation was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Revoked serial number.
     pub serial: Option<String>,
     /// Error message if the operation failed.
@@ -455,7 +455,7 @@ pub struct SecretsPkiRevokeResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsPkiCrlResultResponse {
     /// Whether the request was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// CRL in PEM format.
     pub crl: Option<String>,
     /// Error message if the operation failed.
@@ -466,7 +466,7 @@ pub struct SecretsPkiCrlResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsPkiListResultResponse {
     /// Whether the list was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Serial numbers (for certs) or role names (for roles).
     pub items: Vec<String>,
     /// Error message if the operation failed.
@@ -492,7 +492,7 @@ pub struct SecretsPkiRoleConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsPkiRoleResultResponse {
     /// Whether the request was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Role configuration.
     pub role: Option<SecretsPkiRoleConfig>,
     /// Error message if the operation failed.
@@ -507,7 +507,7 @@ pub struct SecretsPkiRoleResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsNixCacheKeyResultResponse {
     /// Whether the operation was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Public key in Nix format ("{cache_name}:{base64_key}").
     pub public_key: Option<String>,
     /// Error message if the operation failed.
@@ -518,7 +518,7 @@ pub struct SecretsNixCacheKeyResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsNixCacheDeleteResultResponse {
     /// Whether the deletion was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -527,7 +527,7 @@ pub struct SecretsNixCacheDeleteResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretsNixCacheListResultResponse {
     /// Whether the operation was successful.
-    pub success: bool,
+    pub is_success: bool,
     /// List of cache names that have signing keys.
     pub cache_names: Option<Vec<String>>,
     /// Error message if the operation failed.

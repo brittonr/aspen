@@ -157,7 +157,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobMonitoringService<S> {
         debug!(
             job_id = %metrics.job_id,
             job_type = %metrics.job_type,
-            success = metrics.success,
+            is_success = metrics.is_success,
             "recording job metrics"
         );
 
@@ -310,7 +310,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobMonitoringService<S> {
             output.push_str(&format!(
                 "job_execution_duration_seconds{{job_type=\"{}\",status=\"{}\"}} {}\n",
                 m.job_type,
-                if m.success { "success" } else { "failure" },
+                if m.is_success { "success" } else { "failure" },
                 m.execution_time_ms as f64 / 1000.0
             ));
         }

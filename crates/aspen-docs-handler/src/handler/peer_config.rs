@@ -57,10 +57,10 @@ async fn handle_get_peer_cluster_status(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref peer_manager) = ctx.peer_manager else {
         return Ok(ClientRpcResponse::PeerClusterStatus(PeerClusterStatusResponse {
-            found: false,
+            was_found: false,
             cluster_id: cluster_id.clone(),
             state: "unknown".to_string(),
-            syncing: false,
+            is_syncing: false,
             entries_received: 0,
             entries_imported: 0,
             entries_skipped: 0,
@@ -71,10 +71,10 @@ async fn handle_get_peer_cluster_status(
 
     match peer_manager.sync_status(&cluster_id).await {
         Some(status) => Ok(ClientRpcResponse::PeerClusterStatus(PeerClusterStatusResponse {
-            found: true,
+            was_found: true,
             cluster_id: status.cluster_id,
             state: format!("{:?}", status.state),
-            syncing: status.syncing,
+            is_syncing: status.is_syncing,
             entries_received: status.entries_received,
             entries_imported: status.entries_imported,
             entries_skipped: status.entries_skipped,
@@ -82,10 +82,10 @@ async fn handle_get_peer_cluster_status(
             error: None,
         })),
         None => Ok(ClientRpcResponse::PeerClusterStatus(PeerClusterStatusResponse {
-            found: false,
+            was_found: false,
             cluster_id,
             state: "unknown".to_string(),
-            syncing: false,
+            is_syncing: false,
             entries_received: 0,
             entries_imported: 0,
             entries_skipped: 0,
@@ -103,7 +103,7 @@ async fn handle_update_peer_cluster_filter(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref peer_manager) = ctx.peer_manager else {
         return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
-            success: false,
+            is_success: false,
             cluster_id: cluster_id.clone(),
             filter_type: None,
             error: Some("peer sync not enabled".to_string()),
@@ -125,7 +125,7 @@ async fn handle_update_peer_cluster_filter(
         }
         other => {
             return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
-                success: false,
+                is_success: false,
                 cluster_id,
                 filter_type: None,
                 error: Some(format!("invalid filter type: {}", other)),
@@ -135,7 +135,7 @@ async fn handle_update_peer_cluster_filter(
 
     let Some(importer) = peer_manager.importer() else {
         return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
-            success: false,
+            is_success: false,
             cluster_id,
             filter_type: None,
             error: Some("importer not available".to_string()),
@@ -144,7 +144,7 @@ async fn handle_update_peer_cluster_filter(
 
     match importer.update_filter(&cluster_id, filter.clone()).await {
         Ok(()) => Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
-            success: true,
+            is_success: true,
             cluster_id,
             filter_type: Some(filter_type),
             error: None,
@@ -152,7 +152,7 @@ async fn handle_update_peer_cluster_filter(
         Err(e) => {
             warn!(error = %e, "update peer cluster filter failed");
             Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
-                success: false,
+                is_success: false,
                 cluster_id,
                 filter_type: None,
                 error: Some("peer cluster operation failed".to_string()),
@@ -168,7 +168,7 @@ async fn handle_update_peer_cluster_priority(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref peer_manager) = ctx.peer_manager else {
         return Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {
-            success: false,
+            is_success: false,
             cluster_id: cluster_id.clone(),
             previous_priority: None,
             new_priority: None,
@@ -178,7 +178,7 @@ async fn handle_update_peer_cluster_priority(
 
     let Some(importer) = peer_manager.importer() else {
         return Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {
-            success: false,
+            is_success: false,
             cluster_id,
             previous_priority: None,
             new_priority: None,
@@ -192,7 +192,7 @@ async fn handle_update_peer_cluster_priority(
 
     match importer.update_priority(&cluster_id, priority).await {
         Ok(()) => Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {
-            success: true,
+            is_success: true,
             cluster_id,
             previous_priority,
             new_priority: Some(priority),
@@ -201,7 +201,7 @@ async fn handle_update_peer_cluster_priority(
         Err(e) => {
             warn!(error = %e, "update peer cluster priority failed");
             Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {
-                success: false,
+                is_success: false,
                 cluster_id,
                 previous_priority,
                 new_priority: None,
@@ -218,7 +218,7 @@ async fn handle_set_peer_cluster_enabled(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref peer_manager) = ctx.peer_manager else {
         return Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
-            success: false,
+            is_success: false,
             cluster_id: cluster_id.clone(),
             is_enabled: None,
             error: Some("peer sync not enabled".to_string()),
@@ -227,7 +227,7 @@ async fn handle_set_peer_cluster_enabled(
 
     let Some(importer) = peer_manager.importer() else {
         return Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
-            success: false,
+            is_success: false,
             cluster_id,
             is_enabled: None,
             error: Some("importer not available".to_string()),
@@ -236,7 +236,7 @@ async fn handle_set_peer_cluster_enabled(
 
     match importer.set_enabled(&cluster_id, enabled).await {
         Ok(()) => Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
-            success: true,
+            is_success: true,
             cluster_id,
             is_enabled: Some(enabled),
             error: None,
@@ -244,7 +244,7 @@ async fn handle_set_peer_cluster_enabled(
         Err(e) => {
             warn!(error = %e, "set peer cluster enabled failed");
             Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
-                success: false,
+                is_success: false,
                 cluster_id,
                 is_enabled: None,
                 error: Some("peer cluster operation failed".to_string()),

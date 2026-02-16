@@ -84,7 +84,7 @@ pub struct TicketArgs {
 
 /// Docs set output.
 pub struct DocsSetOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub key: Option<String>,
     pub size: Option<u64>,
     pub error: Option<String>,
@@ -93,7 +93,7 @@ pub struct DocsSetOutput {
 impl Outputable for DocsSetOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "key": self.key,
             "size": self.size,
             "error": self.error,
@@ -103,7 +103,7 @@ impl Outputable for DocsSetOutput {
     fn to_human(&self) -> String {
         if let Some(ref e) = self.error {
             format!("error: {e}")
-        } else if self.success {
+        } else if self.is_success {
             let key = self.key.as_deref().unwrap_or("?");
             let size = self.size.unwrap_or(0);
             format!("{key} ({size} bytes)")
@@ -115,7 +115,7 @@ impl Outputable for DocsSetOutput {
 
 /// Docs get output.
 pub struct DocsGetOutput {
-    pub found: bool,
+    pub was_found: bool,
     pub value: Option<Vec<u8>>,
     pub size: Option<u64>,
     pub error: Option<String>,
@@ -125,7 +125,7 @@ impl Outputable for DocsGetOutput {
     fn to_json(&self) -> serde_json::Value {
         let value_str = self.value.as_ref().map(|v| String::from_utf8_lossy(v).to_string());
         serde_json::json!({
-            "found": self.found,
+            "was_found": self.was_found,
             "value": value_str,
             "size": self.size,
             "error": self.error,
@@ -135,7 +135,7 @@ impl Outputable for DocsGetOutput {
     fn to_human(&self) -> String {
         if let Some(ref e) = self.error {
             format!("error: {e}")
-        } else if self.found {
+        } else if self.was_found {
             if let Some(ref v) = self.value {
                 String::from_utf8_lossy(v).to_string()
             } else {
@@ -150,14 +150,14 @@ impl Outputable for DocsGetOutput {
 
 /// Docs delete output.
 pub struct DocsDeleteOutput {
-    pub success: bool,
+    pub is_success: bool,
     pub error: Option<String>,
 }
 
 impl Outputable for DocsDeleteOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "success": self.success,
+            "is_success": self.is_success,
             "error": self.error,
         })
     }
@@ -165,7 +165,7 @@ impl Outputable for DocsDeleteOutput {
     fn to_human(&self) -> String {
         if let Some(ref e) = self.error {
             format!("error: {e}")
-        } else if self.success {
+        } else if self.is_success {
             "deleted".to_string()
         } else {
             "failed".to_string()
@@ -244,7 +244,7 @@ pub struct DocsStatusOutput {
 impl Outputable for DocsStatusOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "enabled": self.is_enabled,
+            "is_enabled": self.is_enabled,
             "namespace_id": self.namespace_id,
             "author_id": self.author_id,
             "entry_count": self.entry_count,
@@ -343,13 +343,13 @@ async fn docs_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()>
 
     let output = match response {
         ClientRpcResponse::DocsSetResult(r) => DocsSetOutput {
-            success: r.success,
+            is_success: r.is_success,
             key: r.key,
             size: r.size,
             error: r.error,
         },
         other => DocsSetOutput {
-            success: false,
+            is_success: false,
             key: None,
             size: None,
             error: Some(format!("unexpected response: {other:?}")),
@@ -367,13 +367,13 @@ async fn docs_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
 
     let output = match response {
         ClientRpcResponse::DocsGetResult(r) => DocsGetOutput {
-            found: r.found,
+            was_found: r.was_found,
             value: r.value,
             size: r.size,
             error: r.error,
         },
         other => DocsGetOutput {
-            found: false,
+            was_found: false,
             value: None,
             size: None,
             error: Some(format!("unexpected response: {other:?}")),
@@ -391,11 +391,11 @@ async fn docs_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Resu
 
     let output = match response {
         ClientRpcResponse::DocsDeleteResult(r) => DocsDeleteOutput {
-            success: r.success,
+            is_success: r.is_success,
             error: r.error,
         },
         other => DocsDeleteOutput {
-            success: false,
+            is_success: false,
             error: Some(format!("unexpected response: {other:?}")),
         },
     };

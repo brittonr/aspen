@@ -29,7 +29,7 @@ pub struct ForgeRepoInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRepoResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Repository info (if found/created).
     pub repo: Option<ForgeRepoInfo>,
     /// Error message if the operation failed.
@@ -40,7 +40,7 @@ pub struct ForgeRepoResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRepoListResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of repositories.
     pub repos: Vec<ForgeRepoInfo>,
     /// Total count.
@@ -53,7 +53,7 @@ pub struct ForgeRepoListResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeBlobResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Blob hash (hex-encoded BLAKE3).
     pub hash: Option<String>,
     /// Blob content (for get operations).
@@ -79,7 +79,7 @@ pub struct ForgeTreeEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeTreeResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Tree hash (hex-encoded BLAKE3).
     pub hash: Option<String>,
     /// Tree entries (for get operations).
@@ -113,7 +113,7 @@ pub struct ForgeCommitInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeCommitResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Commit info (if found/created).
     pub commit: Option<ForgeCommitInfo>,
     /// Error message if the operation failed.
@@ -124,7 +124,7 @@ pub struct ForgeCommitResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeLogResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of commits.
     pub commits: Vec<ForgeCommitInfo>,
     /// Total commits returned.
@@ -146,9 +146,9 @@ pub struct ForgeRefInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRefResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Whether the ref was found (for get/delete).
-    pub found: bool,
+    pub was_found: bool,
     /// Ref info (if found).
     pub ref_info: Option<ForgeRefInfo>,
     /// Previous hash (for CAS operations).
@@ -161,7 +161,7 @@ pub struct ForgeRefResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRefListResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of refs.
     pub refs: Vec<ForgeRefInfo>,
     /// Total count.
@@ -210,7 +210,7 @@ pub struct ForgeIssueInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeIssueResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Issue info (if found/created).
     pub issue: Option<ForgeIssueInfo>,
     /// Comments (for detailed get).
@@ -223,7 +223,7 @@ pub struct ForgeIssueResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeIssueListResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of issues.
     pub issues: Vec<ForgeIssueInfo>,
     /// Total count.
@@ -293,7 +293,7 @@ pub struct ForgePatchInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgePatchResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Patch info (if found/created).
     pub patch: Option<ForgePatchInfo>,
     /// Comments (for detailed get).
@@ -310,7 +310,7 @@ pub struct ForgePatchResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgePatchListResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of patches.
     pub patches: Vec<ForgePatchInfo>,
     /// Total count.
@@ -323,7 +323,7 @@ pub struct ForgePatchListResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeOperationResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
@@ -332,7 +332,7 @@ pub struct ForgeOperationResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeKeyResultResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Public key (hex-encoded).
     pub public_key: Option<String>,
     /// Secret key (hex-encoded). Only returned for authorized local requests.
@@ -366,7 +366,7 @@ pub struct GitBridgeRefUpdate {
     /// New SHA-1 hash.
     pub new_sha1: String,
     /// Force update (bypass fast-forward check).
-    pub force: bool,
+    pub is_force: bool,
 }
 
 /// Ref info for git list.
@@ -382,7 +382,7 @@ pub struct GitBridgeRefInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgeListRefsResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// List of refs with their SHA-1 hashes.
     pub refs: Vec<GitBridgeRefInfo>,
     /// HEAD symref target (e.g., "refs/heads/main"), if any.
@@ -395,7 +395,7 @@ pub struct GitBridgeListRefsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgeFetchResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Objects in dependency order (dependencies before dependents).
     pub objects: Vec<GitBridgeObject>,
     /// Number of objects skipped (already in have list).
@@ -423,7 +423,7 @@ pub struct GitBridgePushMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgePushResponse {
     /// Whether the operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Number of objects imported.
     pub objects_imported: u32,
     /// Number of objects skipped (already existed).
@@ -440,7 +440,7 @@ pub struct GitBridgeRefResult {
     /// Ref name.
     pub ref_name: String,
     /// Whether the update succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if update failed.
     pub error: Option<String>,
 }
@@ -453,7 +453,7 @@ pub struct GitBridgePushStartResponse {
     /// Maximum chunk size in bytes that the server will accept.
     pub max_chunk_size: usize,
     /// Success indicator.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if operation failed.
     pub error: Option<String>,
 }
@@ -466,7 +466,7 @@ pub struct GitBridgePushChunkResponse {
     /// Chunk ID that was processed.
     pub chunk_id: u64,
     /// Whether this chunk was received successfully.
-    pub success: bool,
+    pub is_success: bool,
     /// Error message if chunk processing failed.
     pub error: Option<String>,
 }
@@ -477,7 +477,7 @@ pub struct GitBridgePushCompleteResponse {
     /// Session ID that was completed.
     pub session_id: String,
     /// Whether the entire operation succeeded.
-    pub success: bool,
+    pub is_success: bool,
     /// Number of objects imported.
     pub objects_imported: u32,
     /// Number of objects skipped (already existed).

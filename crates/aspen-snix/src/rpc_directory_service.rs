@@ -171,7 +171,7 @@ impl DirectoryService for RpcDirectoryService {
 
         match response {
             ClientRpcResponse::SnixDirectoryGetResult(SnixDirectoryGetResultResponse {
-                found,
+                was_found,
                 directory_bytes,
                 error,
             }) => {
@@ -179,7 +179,7 @@ impl DirectoryService for RpcDirectoryService {
                     return Err(Error::StorageError(format!("RPC error: {}", err)));
                 }
 
-                if !found {
+                if !was_found {
                     debug!(digest = %digest_hex, "directory not found");
                     return Ok(None);
                 }
@@ -228,13 +228,17 @@ impl DirectoryService for RpcDirectoryService {
         let response = self.send_rpc(request).await?;
 
         match response {
-            ClientRpcResponse::SnixDirectoryPutResult(SnixDirectoryPutResultResponse { success, digest, error }) => {
+            ClientRpcResponse::SnixDirectoryPutResult(SnixDirectoryPutResultResponse {
+                is_success,
+                digest,
+                error,
+            }) => {
                 if let Some(err) = error {
                     error!(error = %err, entries = dir_size, "RPC directory put returned error");
                     return Err(Error::StorageError(format!("RPC error: {}", err)));
                 }
 
-                if !success {
+                if !is_success {
                     error!(entries = dir_size, "RPC directory put failed without error message");
                     return Err(Error::StorageError("directory put failed".to_string()));
                 }

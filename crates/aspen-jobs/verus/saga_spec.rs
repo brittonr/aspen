@@ -54,7 +54,7 @@ verus! {
     /// Abstract saga step
     pub struct SagaStepSpec {
         /// Whether step was executed
-        pub executed: bool,
+        pub was_executed: bool,
         /// Whether compensation is required
         pub requires_compensation: bool,
         /// Step result
