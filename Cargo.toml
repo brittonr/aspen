@@ -34,6 +34,12 @@ required-features = ["ci"]
 [[example]]
 name = "submit_job"
 path = "examples/submit_job.rs"
+required-features = ["jobs"]
+
+[[example]]
+name = "node_service"
+path = "examples/node_service.rs"
+required-features = ["jobs", "docs", "hooks", "federation"]
 
 [[example]]
 name = "test_vm_standalone"
@@ -406,7 +412,7 @@ forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 # CI preset: Basic CI without snix (lighter build)
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
-testing = ["dep:aspen-testing"]
+testing = ["dep:aspen-testing", "aspen-testing/router"]
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
 forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge"]
 # Git bridge: bidirectional sync with standard Git repositories (GitHub, GitLab, Gitea, etc.)
@@ -593,7 +599,7 @@ required-features = ["testing"]
 
 [[test]]
 name = "verify_integration_test"
-required-features = ["testing"]
+required-features = ["testing", "simulation"]
 
 [[test]]
 name = "sharding_split_merge_test"
@@ -610,6 +616,188 @@ required-features = ["testing", "forge", "blob"]
 [[test]]
 name = "forge_hosting_e2e_test"
 required-features = ["testing", "forge", "blob"]
+
+# Chaos tests - require AspenRouter (testing feature)
+[[test]]
+name = "chaos_leader_crash"
+required-features = ["testing"]
+
+[[test]]
+name = "chaos_membership_change"
+required-features = ["testing"]
+
+[[test]]
+name = "chaos_message_drops"
+required-features = ["testing"]
+
+[[test]]
+name = "chaos_network_partition"
+required-features = ["testing"]
+
+[[test]]
+name = "chaos_slow_network"
+required-features = ["testing"]
+
+# Proptest tests requiring AspenRouter
+[[test]]
+name = "distributed_invariants_proptest"
+required-features = ["testing"]
+
+[[test]]
+name = "raft_operations_proptest"
+required-features = ["testing"]
+
+# Router tests - require AspenRouter (testing feature)
+[[test]]
+name = "router_snapshot_t10_build_snapshot"
+required-features = ["testing"]
+
+[[test]]
+name = "router_t10_see_higher_vote"
+required-features = ["testing"]
+
+[[test]]
+name = "router_t11_elect"
+required-features = ["testing"]
+
+[[test]]
+name = "router_t20_append_entries_three_membership"
+required-features = ["testing"]
+
+[[test]]
+name = "router_t20_truncate_logs_revert_membership"
+required-features = ["testing"]
+
+[[test]]
+name = "router_t50_append_entries_backoff_rejoin"
+required-features = ["testing"]
+
+[[test]]
+name = "router_t50_install_snapshot_conflict"
+required-features = ["testing"]
+
+[[test]]
+name = "router_t50_leader_restart"
+required-features = ["testing"]
+
+[[test]]
+name = "router_t50_snapshot_when_lacking_log"
+required-features = ["testing"]
+
+[[test]]
+name = "router_t61_heartbeat_reject_vote"
+required-features = ["testing"]
+
+# Simulation + testing tests
+[[test]]
+name = "fuzz_driven_madsim"
+required-features = ["testing", "simulation"]
+
+[[test]]
+name = "soak_sustained_write_madsim"
+required-features = ["testing", "simulation"]
+
+# Tests using NodeBuilder::start() (needs jobs+docs+hooks+federation)
+[[test]]
+name = "raft_node_direct_api_test"
+required-features = ["jobs", "docs", "hooks", "federation"]
+
+[[test]]
+name = "write_batching_integration"
+required-features = ["jobs", "docs", "hooks", "federation"]
+
+[[test]]
+name = "gossip_e2e_integration"
+required-features = ["jobs", "docs", "hooks", "federation"]
+
+[[test]]
+name = "multi_node_cluster_test"
+required-features = ["jobs", "docs", "hooks", "federation"]
+
+[[test]]
+name = "node_builder_integration"
+required-features = ["jobs", "docs", "hooks", "federation"]
+
+# Feature-gated crate imports
+[[test]]
+name = "dns_integration_test"
+required-features = ["dns"]
+
+[[test]]
+name = "docs_sync_integration_test"
+required-features = ["docs"]
+
+[[test]]
+name = "docs_sync_test"
+required-features = ["docs"]
+
+[[test]]
+name = "forge_cob_proptest"
+required-features = ["forge", "blob"]
+
+[[test]]
+name = "forge_gossip_integration_test"
+required-features = ["forge"]
+
+[[test]]
+name = "forge_real_cluster_integration_test"
+required-features = ["forge", "blob", "jobs", "docs", "hooks", "federation"]
+
+[[test]]
+name = "forge_sync_integration_test"
+required-features = ["forge", "blob", "git-bridge"]
+
+[[test]]
+name = "forge_federation_test"
+required-features = ["federation"]
+
+[[test]]
+name = "federation_integration_test"
+required-features = ["federation"]
+
+[[test]]
+name = "pijul_integration_test"
+required-features = ["pijul", "blob"]
+
+[[test]]
+name = "pijul_real_changes_test"
+required-features = ["pijul", "blob"]
+
+[[test]]
+name = "pijul_multi_node_test"
+required-features = ["pijul", "blob", "testing"]
+
+[[test]]
+name = "consumer_group_integration_test"
+required-features = ["hooks", "jobs", "docs", "federation"]
+
+[[test]]
+name = "pubsub_integration_test"
+required-features = ["hooks", "jobs", "docs", "federation"]
+
+[[test]]
+name = "hooks_integration_test"
+required-features = ["hooks"]
+
+[[test]]
+name = "blob_gc_integration_test"
+required-features = ["blob"]
+
+[[test]]
+name = "blob_replication_integration_test"
+required-features = ["blob"]
+
+[[test]]
+name = "job_integration_test"
+required-features = ["jobs"]
+
+[[test]]
+name = "shell_command_worker_test"
+required-features = ["shell-worker"]
+
+[[test]]
+name = "secrets_integration_test"
+required-features = ["secrets"]
 
 # Vendored patches: cargo-hyperlight patched to replace --build-plan
 # (removed in Cargo 1.93) with stable --message-format=json.

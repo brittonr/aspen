@@ -15,5 +15,6 @@ pub mod mock_iroh;
 #[cfg(feature = "pijul")]
 pub mod pijul_tester;
 pub mod proptest_generators;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 pub mod real_cluster;
 pub mod rpc_handler_generators;
