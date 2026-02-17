@@ -1,5 +1,6 @@
 [toolchain]
-channel = "stable"
+# Pinned to 1.92.0: cargo-hyperlight v0.1.5 uses --build-plan, removed in Cargo 1.93.0.
+channel = "1.92.0"
 components = ["rust-src"]
 targets = ["wasm32-unknown-unknown", "x86_64-unknown-none"]
 profile = "default"

@@ -10,10 +10,7 @@ mod hyperlight;
 mod types;
 #[cfg(feature = "wasm-component")]
 mod wasm_component;
-// Host bindings are defined but not yet called; suppress dead_code until
-// hyperlight-wasm sandbox integration is wired up.
 #[cfg(feature = "wasm-component")]
-#[allow(dead_code, unused_imports)]
 mod wasm_host;
 
 #[cfg(feature = "vm-executor")]

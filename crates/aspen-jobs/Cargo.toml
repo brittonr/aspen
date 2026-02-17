@@ -13,8 +13,7 @@ categories = ["asynchronous", "concurrency", "network-programming"]
 default = []
 blob = ["dep:aspen-blob", "dep:iroh-blobs"]
 vm-executor = ["hyperlight-host", "blob"]
-# hyperlight-wasm blocked: cargo-hyperlight 0.1.5 uses --build-plan (removed in Cargo 1.93)
-wasm-component = ["blob"]
+wasm-component = ["dep:hyperlight-wasm", "blob"]
 
 [dependencies]
 # Core dependencies

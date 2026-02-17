@@ -15,9 +15,16 @@ use std::sync::Arc;
 use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
 
-// TODO: Implement full WIT host bindings using hyperlight_component_macro::host_bindgen!()
-// when hyperlight-wasm stabilizes. The macro will generate typed bindings from
-// wit/aspen-plugin.wit that map to the functions defined in this module.
+// TODO: Generate typed WIT bindings when cargo-hyperlight supports Cargo 1.93+.
+// Blocked: cargo-hyperlight v0.1.5 uses --build-plan (removed in Cargo 1.93).
+//
+// When unblocked:
+// 1. Compile WIT to binary: `wasm-tools component wit -w -o world.wasm wit/aspen-plugin.wit`
+// 2. Generate bindings: mod bindings { hyperlight_component_macro::host_bindgen!("world.wasm"); }
+// 3. Implement the generated Host trait on AspenHostContext, delegating to the standalone functions
+//    below (kv_get, kv_put, blob_get, etc.)
+// 4. In wasm_component.rs, call `bindings::register_host_functions(&mut proto, state)` to register
+//    all host functions on the ProtoWasmSandbox.
 
 /// Host context passed to WASM guest host function callbacks.
 ///
@@ -31,6 +38,8 @@ pub struct AspenHostContext {
     /// Job ID for structured log context.
     pub job_id: String,
     /// Clock baseline (epoch ms at sandbox creation).
+    /// Reserved for guest elapsed-time queries (not yet exposed as a host function).
+    #[allow(dead_code)]
     pub start_time_ms: u64,
 }
 
@@ -275,22 +284,139 @@ pub fn blob_put(ctx: &AspenHostContext, data: &[u8]) -> Result<String, String> {
 }
 
 // ---------------------------------------------------------------------------
-// Sandbox registration
+// Sandbox registration (primitive mode)
 // ---------------------------------------------------------------------------
 
-// TODO: Add register_host_functions(sandbox, ctx) when hyperlight-wasm
-// stabilizes and the `UninitializedSandbox` type becomes available.
-// The function will register each host function above on the sandbox,
-// capturing a cloned Arc<AspenHostContext> in each closure:
-//
-//   pub fn register_host_functions(
-//       sandbox: &mut UninitializedSandbox,
-//       ctx: Arc<AspenHostContext>,
-//   ) -> crate::error::Result<()> {
-//       let c = ctx.clone();
-//       sandbox.register("log_info", move |msg: String| {
-//           log_info(&c.job_id, &msg);
-//           Ok(())
-//       }).map_err(|e| ...)?;
-//       // ... repeat for all host functions
-//   }
+// TODO: Replace with generated Component Model bindings (host_bindgen!) when
+// cargo-hyperlight drops the --build-plan dependency. The standalone functions
+// above will become trait delegation targets.
+
+/// Register all host functions on a `ProtoWasmSandbox` using primitive mode.
+///
+/// Must be called before `proto.load_runtime()`. Each closure captures a
+/// shared `Arc<AspenHostContext>` and delegates to the standalone functions.
+///
+/// Type adaptations for primitive mode (only String, i32/u32/i64/u64, f32/f64,
+/// bool, Vec<u8> are supported):
+/// - `Option<Vec<u8>>` -> empty `Vec<u8>` for None (guest checks `.is_empty()`)
+/// - `Result<(), String>` -> `String` (empty = success, non-empty = error)
+/// - `Vec<(String, Vec<u8>)>` -> JSON-serialized `Vec<u8>`
+/// - `Result<String, String>` -> `String` with `\0` prefix for ok, `\x01` for err
+pub fn register_host_functions(
+    proto: &mut hyperlight_wasm::ProtoWasmSandbox,
+    ctx: Arc<AspenHostContext>,
+) -> crate::error::Result<()> {
+    // -- Logging --
+    let ctx_log_info = Arc::clone(&ctx);
+    proto
+        .register("log_info", move |msg: String| -> () {
+            log_info(&ctx_log_info.job_id, &msg);
+        })
+        .map_err(|e| crate::error::JobError::VmExecutionFailed {
+            reason: format!("failed to register log_info: {e}"),
+        })?;
+
+    let ctx_log_debug = Arc::clone(&ctx);
+    proto
+        .register("log_debug", move |msg: String| -> () {
+            log_debug(&ctx_log_debug.job_id, &msg);
+        })
+        .map_err(|e| crate::error::JobError::VmExecutionFailed {
+            reason: format!("failed to register log_debug: {e}"),
+        })?;
+
+    let ctx_log_warn = Arc::clone(&ctx);
+    proto
+        .register("log_warn", move |msg: String| -> () {
+            log_warn(&ctx_log_warn.job_id, &msg);
+        })
+        .map_err(|e| crate::error::JobError::VmExecutionFailed {
+            reason: format!("failed to register log_warn: {e}"),
+        })?;
+
+    // -- Clock --
+    proto
+        .register("now_ms", || -> u64 { now_ms() })
+        .map_err(|e| crate::error::JobError::VmExecutionFailed {
+            reason: format!("failed to register now_ms: {e}"),
+        })?;
+
+    // -- KV Store --
+    // kv_get: returns Vec<u8> (empty = key not found)
+    let ctx_kv_get = Arc::clone(&ctx);
+    proto
+        .register("kv_get", move |key: String| -> Vec<u8> { kv_get(&ctx_kv_get, &key).unwrap_or_default() })
+        .map_err(|e| crate::error::JobError::VmExecutionFailed {
+            reason: format!("failed to register kv_get: {e}"),
+        })?;
+
+    // kv_put: returns String (empty = success, non-empty = error)
+    let ctx_kv_put = Arc::clone(&ctx);
+    proto
+        .register("kv_put", move |key: String, value: Vec<u8>| -> String {
+            match kv_put(&ctx_kv_put, &key, &value) {
+                Ok(()) => String::new(),
+                Err(e) => e,
+            }
+        })
+        .map_err(|e| crate::error::JobError::VmExecutionFailed {
+            reason: format!("failed to register kv_put: {e}"),
+        })?;
+
+    // kv_delete: returns String (empty = success, non-empty = error)
+    let ctx_kv_delete = Arc::clone(&ctx);
+    proto
+        .register("kv_delete", move |key: String| -> String {
+            match kv_delete(&ctx_kv_delete, &key) {
+                Ok(()) => String::new(),
+                Err(e) => e,
+            }
+        })
+        .map_err(|e| crate::error::JobError::VmExecutionFailed {
+            reason: format!("failed to register kv_delete: {e}"),
+        })?;
+
+    // kv_scan: returns Vec<u8> (JSON-serialized array of [key, value_bytes] pairs)
+    let ctx_kv_scan = Arc::clone(&ctx);
+    proto
+        .register("kv_scan", move |prefix: String, limit: u32| -> Vec<u8> {
+            let results = kv_scan(&ctx_kv_scan, &prefix, limit);
+            serde_json::to_vec(&results).unwrap_or_default()
+        })
+        .map_err(|e| crate::error::JobError::VmExecutionFailed {
+            reason: format!("failed to register kv_scan: {e}"),
+        })?;
+
+    // -- Blob Store --
+    // blob_has: bool is directly supported
+    let ctx_blob_has = Arc::clone(&ctx);
+    proto
+        .register("blob_has", move |hash: String| -> bool { blob_has(&ctx_blob_has, &hash) })
+        .map_err(|e| crate::error::JobError::VmExecutionFailed {
+            reason: format!("failed to register blob_has: {e}"),
+        })?;
+
+    // blob_get: returns Vec<u8> (empty = not found)
+    let ctx_blob_get = Arc::clone(&ctx);
+    proto
+        .register("blob_get", move |hash: String| -> Vec<u8> { blob_get(&ctx_blob_get, &hash).unwrap_or_default() })
+        .map_err(|e| crate::error::JobError::VmExecutionFailed {
+            reason: format!("failed to register blob_get: {e}"),
+        })?;
+
+    // blob_put: returns String with first byte as ok/err tag
+    // '\0' + hash = success, '\x01' + error = failure
+    let ctx_blob_put = Arc::clone(&ctx);
+    proto
+        .register("blob_put", move |data: Vec<u8>| -> String {
+            match blob_put(&ctx_blob_put, &data) {
+                Ok(hash) => format!("\0{hash}"),
+                Err(e) => format!("\x01{e}"),
+            }
+        })
+        .map_err(|e| crate::error::JobError::VmExecutionFailed {
+            reason: format!("failed to register blob_put: {e}"),
+        })?;
+
+    Ok(())
+}

@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use aspen_blob::prelude::*;
+use aspen_core::KeyValueStore;
 use async_trait::async_trait;
 use tracing::debug;
 use tracing::info;
@@ -17,6 +18,7 @@ use crate::error::Result;
 use crate::job::Job;
 use crate::job::JobResult;
 use crate::vm_executor::types::JobPayload;
+use crate::vm_executor::wasm_host;
 use crate::worker::Worker;
 
 /// WASM magic bytes: `\0asm`.
@@ -24,6 +26,8 @@ const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6D];
 
 /// Worker that executes WASM Component Model binaries in hyperlight-wasm sandboxes.
 pub struct WasmComponentWorker {
+    /// KV store for guest key-value operations.
+    kv_store: Arc<dyn KeyValueStore>,
     /// Blob store for retrieving WASM components.
     blob_store: Arc<dyn BlobStore>,
 }
@@ -31,9 +35,10 @@ pub struct WasmComponentWorker {
 impl WasmComponentWorker {
     /// Create a new WASM component worker.
     ///
-    /// Requires a blob store for retrieving component binaries.
-    pub fn new(blob_store: Arc<dyn BlobStore>) -> Result<Self> {
-        Ok(Self { blob_store })
+    /// Requires a KV store for guest operations and a blob store for
+    /// retrieving component binaries.
+    pub fn new(kv_store: Arc<dyn KeyValueStore>, blob_store: Arc<dyn BlobStore>) -> Result<Self> {
+        Ok(Self { kv_store, blob_store })
     }
 
     /// Retrieve a WASM component from the blob store.
@@ -117,17 +122,54 @@ impl WasmComponentWorker {
             });
         }
 
-        // TODO: Wire up hyperlight-wasm sandbox execution when the crate stabilizes.
-        // The implementation will:
-        // 1. Create SandboxConfiguration with fuel_limit and memory_limit
-        // 2. Create UninitializedSandbox with GuestBinary::Buffer(&component_bytes)
-        // 3. Register host functions via wasm_host::register_host_functions()
-        // 4. Evolve to MultiUseSandbox
-        // 5. Call guest "execute" export with job input
-        Err(JobError::VmExecutionFailed {
-            reason: "hyperlight-wasm execution not yet available; sandbox integration pending crate stabilization"
-                .to_string(),
-        })
+        // Build host context for guest callbacks.
+        let ctx = Arc::new(wasm_host::AspenHostContext::new(
+            Arc::clone(&self.kv_store),
+            Arc::clone(&self.blob_store),
+            job.id.to_string(),
+            wasm_host::now_ms(),
+        ));
+
+        // Build sandbox (requires KVM/hypervisor at runtime).
+        // State machine: ProtoWasmSandbox -> WasmSandbox -> LoadedWasmSandbox
+        let mut proto =
+            hyperlight_wasm::SandboxBuilder::new().with_guest_heap_size(memory_limit).build().map_err(|e| {
+                JobError::VmExecutionFailed {
+                    reason: format!("failed to create WASM sandbox: {e}"),
+                }
+            })?;
+
+        // Register host functions (primitive mode) before loading runtime.
+        wasm_host::register_host_functions(&mut proto, Arc::clone(&ctx))?;
+
+        let wasm_sb = proto.load_runtime().map_err(|e| JobError::VmExecutionFailed {
+            reason: format!("failed to load WASM runtime: {e}"),
+        })?;
+
+        let mut loaded =
+            wasm_sb.load_module_from_buffer(&component_bytes).map_err(|e| JobError::VmExecutionFailed {
+                reason: format!("failed to load WASM module: {e}"),
+            })?;
+
+        // Prepare input bytes from the job payload.
+        let input_bytes: Vec<u8> = serde_json::to_vec(&job.spec.payload).unwrap_or_default();
+
+        // Call the guest's "execute" export.
+        // TODO: Pass fuel_limit when hyperlight-wasm exposes fuel configuration.
+        let _fuel_limit = fuel_limit;
+        let output: Vec<u8> =
+            loaded.call_guest_function("execute", input_bytes).map_err(|e| JobError::VmExecutionFailed {
+                reason: format!("guest execution failed: {e}"),
+            })?;
+
+        // Parse output as JSON or wrap raw bytes.
+        let result: serde_json::Value = serde_json::from_slice(&output).unwrap_or_else(|_| {
+            serde_json::json!({
+                "raw_output": String::from_utf8_lossy(&output)
+            })
+        });
+
+        Ok(JobResult::success(result))
     }
 }
 
