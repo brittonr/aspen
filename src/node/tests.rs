@@ -1,6 +1,6 @@
 //! Unit tests for the NodeBuilder.
 
-#[cfg(test)]
+#[cfg(all(test, feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use tempfile::TempDir;
 
 #[cfg(test)]

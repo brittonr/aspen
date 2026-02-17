@@ -169,8 +169,7 @@ async fn load_plugin(
 
     let priority = manifest
         .priority
-        .max(aspen_constants::plugin::MIN_PLUGIN_PRIORITY)
-        .min(aspen_constants::plugin::MAX_PLUGIN_PRIORITY);
+        .clamp(aspen_constants::plugin::MIN_PLUGIN_PRIORITY, aspen_constants::plugin::MAX_PLUGIN_PRIORITY);
 
     let handler = WasmPluginHandler::new(manifest.name.clone(), manifest.handles.clone(), loaded);
 

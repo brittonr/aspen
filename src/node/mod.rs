@@ -59,26 +59,40 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use std::collections::HashMap;
 use std::path::PathBuf;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use std::sync::Arc;
 
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use anyhow::Result;
 // Secrets support imports
 #[cfg(feature = "secrets")]
 use aspen_rpc_handlers::SecretsService;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use iroh::EndpointAddr;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use iroh::protocol::Router;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use tokio_util::sync::CancellationToken;
 
 pub use self::types::NodeId;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::AuthenticatedRaftProtocolHandler;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::CLIENT_ALPN;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::ClientProtocolContext;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::ClientProtocolHandler;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::RaftProtocolHandler;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::TrustedPeersRegistry;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::api::ClusterController;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::api::KeyValueStore;
 #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::cluster::bootstrap::NodeHandle;
@@ -106,10 +120,13 @@ use crate::cluster::federation::sync::FederationProtocolContext;
 // Pijul VCS integration
 #[cfg(feature = "pijul")]
 use crate::pijul::PijulStore;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::protocol_adapters::EndpointProviderAdapter;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
 
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 /// Transmute Raft type configuration for transport layer.
 ///
 /// # SAFETY
