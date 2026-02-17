@@ -254,6 +254,84 @@ mod tests {
         assert_eq!(registry.handlers[1].name(), "high");
     }
 
+    #[tokio::test]
+    async fn dispatch_app_request_without_handler_returns_capability_unavailable() {
+        use aspen_core::EndpointProvider;
+
+        let mock_endpoint = Arc::new(aspen_rpc_core::test_support::MockEndpointProvider::with_seed(42).await)
+            as Arc<dyn EndpointProvider>;
+        let ctx = aspen_rpc_core::test_support::TestContextBuilder::new().with_endpoint_manager(mock_endpoint).build();
+
+        let registry = empty_registry();
+        let request = ClientRpcRequest::ForgeCreateRepo {
+            name: "test-repo".to_string(),
+            description: None,
+            default_branch: None,
+        };
+
+        let response = registry.dispatch(request, &ctx).await.expect("dispatch should not error");
+        match response {
+            ClientRpcResponse::CapabilityUnavailable(ref cap) => {
+                assert_eq!(cap.required_app, "forge");
+                assert!(cap.hints.is_empty());
+            }
+            other => panic!("expected CapabilityUnavailable, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn dispatch_core_request_without_handler_returns_error() {
+        use aspen_core::EndpointProvider;
+
+        let mock_endpoint = Arc::new(aspen_rpc_core::test_support::MockEndpointProvider::with_seed(43).await)
+            as Arc<dyn EndpointProvider>;
+        let ctx = aspen_rpc_core::test_support::TestContextBuilder::new().with_endpoint_manager(mock_endpoint).build();
+
+        let registry = empty_registry();
+        let request = ClientRpcRequest::Ping;
+
+        let result = registry.dispatch(request, &ctx).await;
+        assert!(result.is_err(), "core request with no handler should return Err, not CapabilityUnavailable");
+    }
+
+    #[tokio::test]
+    async fn dispatch_routes_to_matching_handler() {
+        use aspen_core::EndpointProvider;
+
+        let mock_endpoint = Arc::new(aspen_rpc_core::test_support::MockEndpointProvider::with_seed(44).await)
+            as Arc<dyn EndpointProvider>;
+        let ctx = aspen_rpc_core::test_support::TestContextBuilder::new().with_endpoint_manager(mock_endpoint).build();
+
+        // Create a handler that accepts Ping
+        struct PingHandler;
+
+        #[async_trait::async_trait]
+        impl RequestHandler for PingHandler {
+            fn name(&self) -> &'static str {
+                "ping-handler"
+            }
+
+            fn can_handle(&self, request: &ClientRpcRequest) -> bool {
+                matches!(request, ClientRpcRequest::Ping)
+            }
+
+            async fn handle(
+                &self,
+                _request: ClientRpcRequest,
+                _ctx: &ClientProtocolContext,
+            ) -> anyhow::Result<ClientRpcResponse> {
+                Ok(ClientRpcResponse::Pong)
+            }
+        }
+
+        let mut registry = empty_registry();
+        let handler: Arc<dyn RequestHandler> = Arc::new(PingHandler);
+        registry.add_handlers(vec![(handler, 100)]);
+
+        let response = registry.dispatch(ClientRpcRequest::Ping, &ctx).await.expect("dispatch should succeed");
+        assert!(matches!(response, ClientRpcResponse::Pong), "expected Pong response");
+    }
+
     #[test]
     fn add_handlers_appends_after_existing() {
         let existing: Arc<dyn RequestHandler> = Arc::new(TestHandler { name: "existing" });

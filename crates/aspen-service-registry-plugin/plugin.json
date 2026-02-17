@@ -11,5 +11,6 @@
     "ServiceUpdateHealth",
     "ServiceUpdateMetadata"
   ],
-  "priority": 950
+  "priority": 950,
+  "app_id": "service-registry"
 }

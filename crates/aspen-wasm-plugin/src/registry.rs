@@ -204,3 +204,64 @@ async fn load_plugin(
 
     Ok(Some((Arc::new(handler) as Arc<dyn RequestHandler>, priority)))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use aspen_core::app_registry::AppManifest;
+    use aspen_core::app_registry::AppRegistry;
+    use aspen_plugin_api::PluginManifest;
+
+    #[test]
+    fn plugin_manifest_with_app_id_registers_capability() {
+        let manifest = PluginManifest {
+            name: "forge".to_string(),
+            version: "1.0.0".to_string(),
+            wasm_hash: String::new(),
+            handles: vec!["ForgeCreateRepo".to_string()],
+            priority: 950,
+            fuel_limit: None,
+            memory_limit: None,
+            enabled: true,
+            app_id: Some("forge".to_string()),
+        };
+
+        let registry = Arc::new(AppRegistry::new());
+
+        // Mirror the registration logic from load_plugin
+        if let Some(ref app_id) = manifest.app_id {
+            let app_manifest = AppManifest::new(app_id, &manifest.version);
+            registry.register(app_manifest);
+        }
+
+        assert!(registry.has_app("forge"), "forge app should be registered");
+        let app = registry.get_app("forge").expect("forge app should exist");
+        assert_eq!(app.version, "1.0.0");
+    }
+
+    #[test]
+    fn plugin_manifest_without_app_id_skips_registration() {
+        let manifest = PluginManifest {
+            name: "echo-plugin".to_string(),
+            version: "0.1.0".to_string(),
+            wasm_hash: String::new(),
+            handles: vec!["Ping".to_string()],
+            priority: 950,
+            fuel_limit: None,
+            memory_limit: None,
+            enabled: true,
+            app_id: None,
+        };
+
+        let registry = Arc::new(AppRegistry::new());
+
+        // Mirror the registration logic from load_plugin
+        if let Some(ref app_id) = manifest.app_id {
+            let app_manifest = AppManifest::new(app_id, &manifest.version);
+            registry.register(app_manifest);
+        }
+
+        assert!(registry.is_empty(), "registry should remain empty when app_id is None");
+    }
+}

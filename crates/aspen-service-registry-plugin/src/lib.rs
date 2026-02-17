@@ -33,7 +33,7 @@ impl AspenPlugin for ServiceRegistryPlugin {
                 "ServiceUpdateMetadata".to_string(),
             ],
             priority: 950,
-            app_id: None,
+            app_id: Some("service-registry".to_string()),
         }
     }
 
@@ -136,5 +136,6 @@ mod tests {
         assert_eq!(info.handles, manifest.handles, "handles mismatch between code and plugin.json");
         assert_eq!(info.priority, manifest.priority, "priority mismatch between code and plugin.json");
         assert_eq!(info.version, manifest.version, "version mismatch between code and plugin.json");
+        assert_eq!(info.app_id, manifest.app_id, "app_id mismatch between code and plugin.json");
     }
 }
