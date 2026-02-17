@@ -198,11 +198,15 @@ impl FuseSyncClient {
         let response = self.send_rpc(ClientRpcRequest::ReadKey { key: key.to_string() }, READ_TIMEOUT)?;
 
         match response {
-            ClientRpcResponse::ReadResult(ReadResultResponse { value, found, error }) => {
+            ClientRpcResponse::ReadResult(ReadResultResponse {
+                value,
+                was_found,
+                error,
+            }) => {
                 if let Some(err) = error {
                     anyhow::bail!("read error: {}", err);
                 }
-                if found { Ok(value) } else { Ok(None) }
+                if was_found { Ok(value) } else { Ok(None) }
             }
             _ => anyhow::bail!("unexpected response type for ReadKey"),
         }
@@ -221,13 +225,13 @@ impl FuseSyncClient {
         )?;
 
         match response {
-            ClientRpcResponse::WriteResult(WriteResultResponse { success, error }) => {
+            ClientRpcResponse::WriteResult(WriteResultResponse { is_success, error }) => {
                 if let Some(err) = error
-                    && !success
+                    && !is_success
                 {
                     anyhow::bail!("write error: {}", err);
                 }
-                Ok(success)
+                Ok(is_success)
             }
             _ => anyhow::bail!("unexpected response type for WriteKey"),
         }
@@ -240,11 +244,11 @@ impl FuseSyncClient {
         let response = self.send_rpc(ClientRpcRequest::DeleteKey { key: key.to_string() }, WRITE_TIMEOUT)?;
 
         match response {
-            ClientRpcResponse::DeleteResult(DeleteResultResponse { deleted, error, .. }) => {
+            ClientRpcResponse::DeleteResult(DeleteResultResponse { was_deleted, error, .. }) => {
                 if let Some(err) = error {
                     anyhow::bail!("delete error: {}", err);
                 }
-                Ok(deleted)
+                Ok(was_deleted)
             }
             _ => anyhow::bail!("unexpected response type for DeleteKey"),
         }

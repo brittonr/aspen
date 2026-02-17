@@ -54,6 +54,9 @@ pub struct AspenFs {
     gid: u32,
     /// Aspen client for KV operations (optional for testing).
     client: Option<SharedClient>,
+    /// Key prefix for namespace isolation (e.g., `ci/workspaces/{vm_id}/`).
+    /// Prepended to all KV keys. Empty string means no prefix.
+    key_prefix: String,
 }
 
 impl AspenFs {
@@ -64,6 +67,22 @@ impl AspenFs {
             uid,
             gid,
             client: Some(client),
+            key_prefix: String::new(),
+        }
+    }
+
+    /// Create a new Aspen filesystem with a key prefix for namespace isolation.
+    ///
+    /// All KV operations will be scoped under the given prefix.
+    /// For example, with prefix `ci/workspaces/vm-1/`, a file at `/foo/bar`
+    /// maps to KV key `ci/workspaces/vm-1/foo/bar`.
+    pub fn with_prefix(uid: u32, gid: u32, client: SharedClient, prefix: String) -> Self {
+        Self {
+            inodes: InodeManager::new(),
+            uid,
+            gid,
+            client: Some(client),
+            key_prefix: prefix,
         }
     }
 
@@ -75,6 +94,7 @@ impl AspenFs {
             uid,
             gid,
             client: None,
+            key_prefix: String::new(),
         }
     }
 
@@ -183,6 +203,24 @@ impl AspenFs {
         }
     }
 
+    /// Prepend the key prefix to a key for namespace isolation.
+    fn prefixed_key(&self, key: &str) -> String {
+        if self.key_prefix.is_empty() {
+            key.to_string()
+        } else {
+            format!("{}{}", self.key_prefix, key)
+        }
+    }
+
+    /// Strip the key prefix from a key returned by scan.
+    fn strip_prefix<'a>(&self, key: &'a str) -> &'a str {
+        if self.key_prefix.is_empty() {
+            key
+        } else {
+            key.strip_prefix(&self.key_prefix).unwrap_or(key)
+        }
+    }
+
     /// Read a key from the KV store.
     fn kv_read(&self, key: &str) -> std::io::Result<Option<Vec<u8>>> {
         let Some(ref client) = self.client else {
@@ -190,14 +228,16 @@ impl AspenFs {
             return Ok(None);
         };
 
-        debug!(key, "reading key from Aspen");
+        let prefixed = self.prefixed_key(key);
+        debug!(key = %prefixed, "reading key from Aspen");
 
-        client.read_key(key).map_err(|e| std::io::Error::other(e.to_string()))
+        client.read_key(&prefixed).map_err(|e| std::io::Error::other(e.to_string()))
     }
 
     /// Write a key to the KV store.
     fn kv_write(&self, key: &str, value: &[u8]) -> std::io::Result<()> {
-        if key.len() > MAX_KEY_SIZE {
+        let prefixed = self.prefixed_key(key);
+        if prefixed.len() > MAX_KEY_SIZE {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "key too large"));
         }
         if value.len() > MAX_VALUE_SIZE {
@@ -209,9 +249,9 @@ impl AspenFs {
             return Ok(());
         };
 
-        debug!(key, value_len = value.len(), "writing key to Aspen");
+        debug!(key = %prefixed, value_len = value.len(), "writing key to Aspen");
 
-        client.write_key(key, value).map_err(|e| std::io::Error::other(e.to_string()))?;
+        client.write_key(&prefixed, value).map_err(|e| std::io::Error::other(e.to_string()))?;
 
         Ok(())
     }
@@ -223,9 +263,10 @@ impl AspenFs {
             return Ok(());
         };
 
-        debug!(key, "deleting key from Aspen");
+        let prefixed = self.prefixed_key(key);
+        debug!(key = %prefixed, "deleting key from Aspen");
 
-        client.delete_key(key).map_err(|e| std::io::Error::other(e.to_string()))?;
+        client.delete_key(&prefixed).map_err(|e| std::io::Error::other(e.to_string()))?;
 
         Ok(())
     }
@@ -237,12 +278,13 @@ impl AspenFs {
             return Ok(Vec::new());
         };
 
-        debug!(prefix, "scanning keys from Aspen");
+        let prefixed = self.prefixed_key(prefix);
+        debug!(prefix = %prefixed, "scanning keys from Aspen");
 
         let entries =
-            client.scan_keys(prefix, MAX_READDIR_ENTRIES).map_err(|e| std::io::Error::other(e.to_string()))?;
+            client.scan_keys(&prefixed, MAX_READDIR_ENTRIES).map_err(|e| std::io::Error::other(e.to_string()))?;
 
-        Ok(entries.into_iter().map(|(k, _)| k).collect())
+        Ok(entries.into_iter().map(|(k, _)| self.strip_prefix(&k).to_string()).collect())
     }
 
     /// Check if a key exists (file) or has children (directory).

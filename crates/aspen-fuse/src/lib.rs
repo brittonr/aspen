@@ -48,4 +48,8 @@ pub use inode::InodeManager;
 #[cfg(feature = "virtiofs")]
 pub use virtiofs::AspenVirtioFsHandler;
 #[cfg(feature = "virtiofs")]
+pub use virtiofs::VirtioFsDaemonHandle;
+#[cfg(feature = "virtiofs")]
 pub use virtiofs::run_virtiofs_daemon;
+#[cfg(feature = "virtiofs")]
+pub use virtiofs::spawn_virtiofs_daemon;

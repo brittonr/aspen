@@ -956,6 +956,7 @@ dependencies = [
  "aspen-ci-core",
  "aspen-ci-executor-shell",
  "aspen-core",
+ "aspen-fuse",
  "aspen-jobs",
  "aspen-ticket",
  "async-trait",

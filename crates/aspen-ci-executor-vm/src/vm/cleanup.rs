@@ -10,22 +10,36 @@ impl ManagedCiVm {
     /// Kill all VM-related processes.
     pub(super) async fn kill_processes(&self) {
         // Kill cloud-hypervisor
-        if let Some(mut process) = self.process.write().await.take() {
-            if let Err(e) = process.kill().await {
-                warn!("failed to kill cloud-hypervisor process: {e}");
-            }
+        if let Some(mut process) = self.process.write().await.take()
+            && let Err(e) = process.kill().await
+        {
+            warn!("failed to kill cloud-hypervisor process: {e}");
         }
 
-        // Kill virtiofsd processes
-        if let Some(mut process) = self.virtiofsd_nix_store.write().await.take() {
-            if let Err(e) = process.kill().await {
-                warn!("failed to kill virtiofsd nix-store process: {e}");
-            }
+        // Kill virtiofsd for nix store
+        if let Some(mut process) = self.virtiofsd_nix_store.write().await.take()
+            && let Err(e) = process.kill().await
+        {
+            warn!("failed to kill virtiofsd nix-store process: {e}");
         }
-        if let Some(mut process) = self.virtiofsd_workspace.write().await.take() {
-            if let Err(e) = process.kill().await {
-                warn!("failed to kill virtiofsd workspace process: {e}");
+
+        // Shutdown workspace virtiofs backend
+        #[cfg(not(feature = "aspen-workspace-fs"))]
+        if let Some(mut process) = self.virtiofsd_workspace.write().await.take()
+            && let Err(e) = process.kill().await
+        {
+            warn!("failed to kill virtiofsd workspace process: {e}");
+        }
+
+        #[cfg(feature = "aspen-workspace-fs")]
+        {
+            if let Some(handle) = self.virtiofs_workspace_handle.write().await.take()
+                && let Err(e) = handle.shutdown()
+            {
+                warn!("failed to shutdown AspenFs workspace daemon: {e}");
             }
+            // Drop the shared client
+            let _ = self.workspace_client.write().await.take();
         }
     }
 

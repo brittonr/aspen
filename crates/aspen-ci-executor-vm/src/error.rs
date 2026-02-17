@@ -143,6 +143,14 @@ pub enum CloudHypervisorError {
     /// Failed to create source archive.
     #[snafu(display("failed to create source archive: {reason}"))]
     SourceArchive { reason: String },
+
+    /// Failed to start in-process VirtioFS daemon.
+    #[snafu(display("failed to start VirtioFS daemon: {reason}"))]
+    StartVirtioFsDaemon { reason: String },
+
+    /// Failed to provision workspace via AspenFs.
+    #[snafu(display("workspace provision failed: {reason}"))]
+    WorkspaceProvision { reason: String },
 }
 
 /// Result type for Cloud Hypervisor worker operations.

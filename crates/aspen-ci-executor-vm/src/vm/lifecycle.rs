@@ -49,17 +49,86 @@ impl ManagedCiVm {
         let nix_store_virtiofsd = self.start_virtiofsd("/nix/store", CI_VM_NIX_STORE_TAG, "auto").await?;
         *self.virtiofsd_nix_store.write().await = Some(nix_store_virtiofsd);
 
-        // Create workspace directory
-        let workspace_dir = self.config.workspace_dir(&self.id);
-        tokio::fs::create_dir_all(&workspace_dir).await.context(error::WorkspaceSetupSnafu)?;
+        // Start workspace filesystem backend.
+        // With `aspen-workspace-fs`: in-process VirtioFS daemon backed by AspenFs (KV + blobs).
+        // Without: external virtiofsd backed by host-local directory.
+        #[cfg(not(feature = "aspen-workspace-fs"))]
+        {
+            // Create workspace directory
+            let workspace_dir = self.config.workspace_dir(&self.id);
+            tokio::fs::create_dir_all(&workspace_dir).await.context(error::WorkspaceSetupSnafu)?;
 
-        // Start virtiofsd for workspace (files copied before job runs - use caching)
-        info!(vm_id = %self.id, "starting virtiofsd for workspace");
-        let workspace_dir_str = workspace_dir.to_str().ok_or_else(|| CloudHypervisorError::InvalidConfig {
-            message: format!("workspace directory path is not valid UTF-8: {}", workspace_dir.display()),
-        })?;
-        let workspace_virtiofsd = self.start_virtiofsd(workspace_dir_str, CI_VM_WORKSPACE_TAG, "auto").await?;
-        *self.virtiofsd_workspace.write().await = Some(workspace_virtiofsd);
+            // Start virtiofsd for workspace (files copied before job runs - use caching)
+            info!(vm_id = %self.id, "starting virtiofsd for workspace");
+            let workspace_dir_str = workspace_dir.to_str().ok_or_else(|| CloudHypervisorError::InvalidConfig {
+                message: format!("workspace directory path is not valid UTF-8: {}", workspace_dir.display()),
+            })?;
+            let workspace_virtiofsd = self.start_virtiofsd(workspace_dir_str, CI_VM_WORKSPACE_TAG, "auto").await?;
+            *self.virtiofsd_workspace.write().await = Some(workspace_virtiofsd);
+        }
+
+        #[cfg(feature = "aspen-workspace-fs")]
+        {
+            use std::sync::Arc;
+
+            // Get cluster ticket for AspenFs client connection
+            let ticket_str =
+                self.config.get_cluster_ticket().ok_or_else(|| CloudHypervisorError::StartVirtioFsDaemon {
+                    reason: "no cluster ticket configured - cannot create AspenFs client".to_string(),
+                })?;
+
+            // If bridge socket address is configured, inject it into the ticket
+            let final_ticket = if let Some(bridge_addr) = self.config.bridge_socket_addr() {
+                match aspen_ticket::AspenClusterTicket::deserialize(&ticket_str) {
+                    Ok(mut ticket) => {
+                        info!(
+                            vm_id = %self.id,
+                            bridge_addr = %bridge_addr,
+                            "injecting bridge address into workspace ticket"
+                        );
+                        ticket.inject_direct_addr(bridge_addr);
+                        ticket.serialize()
+                    }
+                    Err(e) => {
+                        warn!(
+                            vm_id = %self.id,
+                            error = %e,
+                            "failed to parse ticket for bridge injection, using original"
+                        );
+                        ticket_str.clone()
+                    }
+                }
+            } else {
+                ticket_str.clone()
+            };
+
+            // Create FuseSyncClient from ticket (blocking - runs inside spawn_blocking)
+            let client: aspen_fuse::SharedClient = Arc::new(
+                tokio::task::spawn_blocking(move || aspen_fuse::FuseSyncClient::from_ticket(&final_ticket))
+                    .await
+                    .map_err(|e| CloudHypervisorError::StartVirtioFsDaemon {
+                        reason: format!("spawn_blocking join error: {e}"),
+                    })?
+                    .map_err(|e| CloudHypervisorError::StartVirtioFsDaemon {
+                        reason: format!("failed to create AspenFs client: {e}"),
+                    })?,
+            );
+
+            // Create AspenFs with per-VM key prefix for namespace isolation
+            let prefix = format!("ci/workspaces/{}/", self.id);
+            let fs = aspen_fuse::AspenFs::with_prefix(0, 0, client.clone(), prefix);
+
+            // Remove stale socket before spawning daemon
+            let socket_path = self.config.virtiofs_socket_path(&self.id, CI_VM_WORKSPACE_TAG);
+            let _ = tokio::fs::remove_file(&socket_path).await;
+
+            info!(vm_id = %self.id, socket = ?socket_path, "spawning AspenFs VirtioFS daemon for workspace");
+            let handle = aspen_fuse::spawn_virtiofs_daemon(&socket_path, fs)
+                .map_err(|e| CloudHypervisorError::StartVirtioFsDaemon { reason: format!("{e}") })?;
+
+            *self.virtiofs_workspace_handle.write().await = Some(handle);
+            *self.workspace_client.write().await = Some(client);
+        }
 
         // Write cluster ticket to workspace for VM's aspen-node to read.
         // The VM runs in worker-only mode and needs the ticket to join the cluster.
@@ -96,8 +165,33 @@ impl ManagedCiVm {
                 ticket_str
             };
 
+            // Write ticket to workspace. With aspen-workspace-fs, the ticket
+            // is written via the FuseSyncClient to the distributed KV store.
+            // Without, it's written directly to the host filesystem.
             info!(vm_id = %self.id, ticket_path = %ticket_path.display(), "writing cluster ticket to workspace");
-            tokio::fs::write(&ticket_path, &final_ticket).await.context(error::WorkspaceSetupSnafu)?;
+            #[cfg(feature = "aspen-workspace-fs")]
+            {
+                let ticket_key = format!("ci/workspaces/{}/.aspen-cluster-ticket", self.id);
+                let ticket_bytes = final_ticket.as_bytes().to_vec();
+                let client = self.workspace_client.read().await;
+                if let Some(ref c) = *client {
+                    tokio::task::spawn_blocking({
+                        let c = c.clone();
+                        move || c.write_key(&ticket_key, &ticket_bytes)
+                    })
+                    .await
+                    .map_err(|e| CloudHypervisorError::WorkspaceProvision {
+                        reason: format!("spawn_blocking join error: {e}"),
+                    })?
+                    .map_err(|e| CloudHypervisorError::WorkspaceProvision {
+                        reason: format!("failed to write cluster ticket via AspenFs: {e}"),
+                    })?;
+                }
+            }
+            #[cfg(not(feature = "aspen-workspace-fs"))]
+            {
+                tokio::fs::write(&ticket_path, &final_ticket).await.context(error::WorkspaceSetupSnafu)?;
+            }
         } else {
             warn!(
                 vm_id = %self.id,
@@ -204,18 +298,51 @@ impl ManagedCiVm {
 
         *self.state.write().await = VmState::Cleanup;
 
-        // Clean workspace
-        let workspace_dir = self.config.workspace_dir(&self.id);
-        if workspace_dir.exists() {
-            debug!(vm_id = %self.id, path = ?workspace_dir, "cleaning workspace");
-            // Remove contents but keep directory
-            let mut entries = tokio::fs::read_dir(&workspace_dir).await.context(error::WorkspaceSetupSnafu)?;
-            while let Some(entry) = entries.next_entry().await.context(error::WorkspaceSetupSnafu)? {
-                let path = entry.path();
-                if path.is_dir() {
-                    let _ = tokio::fs::remove_dir_all(&path).await;
-                } else {
-                    let _ = tokio::fs::remove_file(&path).await;
+        // Clean workspace.
+        // With aspen-workspace-fs: scan and delete all keys under the VM's KV prefix.
+        // Without: remove files from host directory.
+        #[cfg(feature = "aspen-workspace-fs")]
+        {
+            let prefix = format!("ci/workspaces/{}/", self.id);
+            let client = self.workspace_client.read().await;
+            if let Some(ref c) = *client {
+                debug!(vm_id = %self.id, prefix = %prefix, "cleaning workspace KV keys");
+                let c = c.clone();
+                let prefix_clone = prefix.clone();
+                let keys = tokio::task::spawn_blocking(move || c.scan_keys(&prefix_clone, 10_000))
+                    .await
+                    .map_err(|e| CloudHypervisorError::WorkspaceProvision {
+                        reason: format!("spawn_blocking join error: {e}"),
+                    })?
+                    .map_err(|e| CloudHypervisorError::WorkspaceProvision {
+                        reason: format!("failed to scan workspace keys: {e}"),
+                    })?;
+
+                for (key, _) in keys {
+                    let c = self.workspace_client.read().await.clone();
+                    if let Some(c) = c {
+                        let key_clone = key.clone();
+                        let _ = tokio::task::spawn_blocking(move || c.delete_key(&key_clone)).await;
+                    }
+                }
+                debug!(vm_id = %self.id, "workspace KV keys cleaned");
+            }
+        }
+
+        #[cfg(not(feature = "aspen-workspace-fs"))]
+        {
+            let workspace_dir = self.config.workspace_dir(&self.id);
+            if workspace_dir.exists() {
+                debug!(vm_id = %self.id, path = ?workspace_dir, "cleaning workspace");
+                // Remove contents but keep directory
+                let mut entries = tokio::fs::read_dir(&workspace_dir).await.context(error::WorkspaceSetupSnafu)?;
+                while let Some(entry) = entries.next_entry().await.context(error::WorkspaceSetupSnafu)? {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        let _ = tokio::fs::remove_dir_all(&path).await;
+                    } else {
+                        let _ = tokio::fs::remove_file(&path).await;
+                    }
                 }
             }
         }

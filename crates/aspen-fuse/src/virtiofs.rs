@@ -260,6 +260,13 @@ impl AspenVirtioFsHandler {
             backend: Mutex::new(backend),
         })
     }
+
+    /// Clone the internal kill EventFd for external shutdown signaling.
+    pub fn kill_event(&self) -> Result<EventFd, VirtioFsError> {
+        let backend =
+            self.backend.lock().map_err(|_| VirtioFsError::DaemonError("backend lock poisoned".to_string()))?;
+        backend.kill_evt.try_clone().map_err(VirtioFsError::EventFdError)
+    }
 }
 
 impl VhostUserBackendMut for AspenVirtioFsHandler {
@@ -395,6 +402,90 @@ pub fn run_virtiofs_daemon(socket_path: &Path, fs: AspenFs) -> Result<(), Virtio
     info!("VirtioFS daemon stopped");
 
     Ok(())
+}
+
+/// Handle for a spawned VirtioFS daemon running on a background OS thread.
+///
+/// Provides graceful shutdown via the kill EventFd. Dropping without calling
+/// `shutdown()` will leave the daemon thread running until process exit.
+pub struct VirtioFsDaemonHandle {
+    thread: Option<std::thread::JoinHandle<Result<(), VirtioFsError>>>,
+    kill_evt: EventFd,
+}
+
+impl VirtioFsDaemonHandle {
+    /// Signal the daemon to stop and wait for the thread to join.
+    pub fn shutdown(mut self) -> Result<(), VirtioFsError> {
+        info!("shutting down VirtioFS daemon");
+
+        // Write to kill_evt to signal the daemon's epoll loop to exit
+        self.kill_evt.write(1).map_err(VirtioFsError::EventFdError)?;
+
+        // Join the daemon thread
+        if let Some(thread) = self.thread.take() {
+            match thread.join() {
+                Ok(result) => result?,
+                Err(_) => {
+                    warn!("VirtioFS daemon thread panicked");
+                    return Err(VirtioFsError::DaemonError("daemon thread panicked".to_string()));
+                }
+            }
+        }
+
+        info!("VirtioFS daemon shut down");
+        Ok(())
+    }
+}
+
+/// Spawn a VirtioFS daemon on a background OS thread.
+///
+/// Creates an `AspenVirtioFsHandler` for the given filesystem, spawns a
+/// vhost-user-fs daemon on a dedicated OS thread, and returns a handle
+/// for shutdown.
+///
+/// The daemon listens on `socket_path` for vhost-user connections from
+/// a VMM (cloud-hypervisor, QEMU, etc.).
+pub fn spawn_virtiofs_daemon(socket_path: &Path, fs: AspenFs) -> Result<VirtioFsDaemonHandle, VirtioFsError> {
+    info!(socket = %socket_path.display(), "spawning VirtioFS daemon thread");
+
+    // Create handler and extract kill_evt before moving into thread
+    let handler = AspenVirtioFsHandler::new(fs)?;
+    let kill_evt = handler.kill_event()?;
+
+    let socket_path = socket_path.to_path_buf();
+    let thread = std::thread::Builder::new()
+        .name("virtiofs-daemon".to_string())
+        .spawn(move || {
+            let handler = Arc::new(RwLock::new(handler));
+
+            let mut daemon = VhostUserDaemon::new(
+                String::from("aspen-virtiofs"),
+                handler,
+                GuestMemoryAtomic::new(GuestMemoryMmap::new()),
+            )
+            .map_err(|e| VirtioFsError::DaemonError(format!("{:?}", e)))?;
+
+            let listener =
+                Listener::new(&socket_path, true).map_err(|e| VirtioFsError::ListenerError(format!("{e:?}")))?;
+
+            info!("VirtioFS daemon listening on {}", socket_path.display());
+
+            daemon.start(listener).map_err(|e| VirtioFsError::DaemonError(format!("{:?}", e)))?;
+
+            info!("VirtioFS daemon started, waiting for VMM connection");
+
+            daemon.wait().map_err(|e| VirtioFsError::DaemonError(format!("{:?}", e)))?;
+
+            info!("VirtioFS daemon stopped");
+
+            Ok(())
+        })
+        .map_err(|e| VirtioFsError::DaemonError(format!("failed to spawn thread: {e}")))?;
+
+    Ok(VirtioFsDaemonHandle {
+        thread: Some(thread),
+        kill_evt,
+    })
 }
 
 #[cfg(test)]
