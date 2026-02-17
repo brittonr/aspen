@@ -21,6 +21,13 @@ use crate::error::{self};
 impl ManagedCiVm {
     /// Start virtiofsd for a directory share.
     ///
+    /// TODO: Replace plain virtiofsd with `AspenVirtioFsHandler` (from
+    /// `crates/aspen-fuse/src/virtiofs.rs`). The guest filesystem interface
+    /// stays identical -- only the host-side backing changes from local
+    /// filesystem to Aspen distributed storage (KV + iroh-blobs):
+    /// - Nix store: SNIX (store path metadata in KV, NAR content in blobs)
+    /// - Workspace: `AspenFs` (paths to KV keys, large artifacts to blobs)
+    ///
     /// The `cache_mode` parameter controls guest-side caching:
     /// - "auto": Default caching based on modification times (good for static content like
     ///   /nix/store)

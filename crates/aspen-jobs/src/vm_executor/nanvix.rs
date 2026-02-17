@@ -1,8 +1,21 @@
 //! Nanvix micro-VM worker implementation.
 //!
 //! Executes JavaScript, Python, and native binary workloads inside
-//! hardware-isolated micro-VMs via hyperlight-nanvix. Guest I/O is
-//! captured from the console log file written by the Nanvix microkernel.
+//! hardware-isolated micro-VMs via hyperlight-nanvix. The Nanvix
+//! microkernel provides a POSIX-compatible interface to guest code.
+//! Guest I/O is captured from the console log file written by the
+//! Nanvix microkernel.
+//!
+//! # Storage
+//!
+//! Workload files are sourced from Aspen's iroh-blobs store. Guest
+//! output is currently captured from console logs only.
+//!
+//! TODO: Serve the Nanvix filesystem via `AspenVirtioFsHandler` (from
+//! `aspen-fuse`) so guest file I/O is transparently backed by Aspen
+//! KV + blobs. The guest sees a standard POSIX filesystem -- the Aspen
+//! backing is invisible. On the host side, `AspenFs` routes metadata
+//! and small files to KV, large content to iroh-blobs.
 
 use std::sync::Arc;
 
