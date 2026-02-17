@@ -418,7 +418,8 @@ impl SharedRedbStorage {
         if let Some(prev_idx) = prev_appended_index {
             assert!(index > prev_idx, "APPEND: log index regression: {index} <= {prev_idx}");
         }
-        assert!(term > 0, "APPEND: entry at index {index} has zero term");
+        // Term 0 is valid for the initial membership entry at index 0
+        assert!(term > 0 || index == 0, "APPEND: entry at index {index} has zero term");
 
         let data = bincode::serialize(entry).context(SerializeSnafu)?;
         let entry_hash = compute_entry_hash(&prev_hash, index, term, &data);
