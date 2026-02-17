@@ -38,7 +38,8 @@ Default features (enabled in production):
 - **secrets**: SOPS secrets management
 - **automerge**: CRDT documents
 - **global-discovery**: BitTorrent DHT
-- **vm-executor/shell-worker**: Job isolation
+- **plugins**: Hyperlight-based execution (VM, WASM, Nanvix, RPC plugins)
+- **shell-worker**: Shell command job execution
 
 Dev features: testing, fuzzing, bolero, snix, nix-cache-gateway
 

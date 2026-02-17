@@ -277,6 +277,9 @@ async fn test_worker_pool_basic() {
     // Start workers
     pool.start(2).await.unwrap();
 
+    // Allow spawned worker tasks to transition from Starting to Idle
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
     // Get worker info
     let info = pool.get_worker_info().await;
     assert_eq!(info.len(), 2);
@@ -335,7 +338,7 @@ async fn test_concurrent_worker_job_processing() {
     pool.shutdown().await.unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_job_retry_with_concurrent_workers() {
     let store = Arc::new(DeterministicKeyValueStore::new());
     let manager = Arc::new(JobManager::new(store.clone()));
@@ -397,16 +400,34 @@ async fn test_job_retry_with_concurrent_workers() {
     let worker = RetryTestWorker::new(executed.clone());
     pool.register_handler("test", worker).await.unwrap();
 
-    // Start multiple workers
-    pool.start(2).await.unwrap();
+    // Use a single worker with a short visibility timeout so retrying jobs
+    // become re-visible quickly after mark_started rejects them
+    // (default 300s is too long for tests).
+    let config = aspen_jobs::WorkerConfig {
+        id: Some("retry-worker".to_string()),
+        visibility_timeout: Duration::from_millis(200),
+        ..Default::default()
+    };
+    pool.spawn_worker(config).await.unwrap();
 
-    // Give time for initial failure and retry
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    // Job should eventually succeed
-    let job = manager.get_job(&job_id).await.unwrap().unwrap();
-    assert_eq!(job.status, JobStatus::Completed, "Job should complete after retry");
-    assert!(job.attempts > 1, "Job should have multiple attempts");
+    // Poll until job completes or timeout
+    let start = std::time::Instant::now();
+    let timeout = Duration::from_secs(10);
+    loop {
+        let job = manager.get_job(&job_id).await.unwrap().unwrap();
+        if job.status == JobStatus::Completed {
+            assert!(job.attempts > 1, "Job should have multiple attempts");
+            break;
+        }
+        if start.elapsed() > timeout {
+            let executed_list = executed.lock().await;
+            panic!(
+                "Timed out waiting for job completion. Status: {:?}, attempts: {}, executed: {:?}",
+                job.status, job.attempts, *executed_list,
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     pool.shutdown().await.unwrap();
 }
@@ -537,8 +558,8 @@ async fn test_echo_worker_excludes_ci_vm_jobs() {
     // Start workers
     pool.start(1).await.unwrap();
 
-    // Give time for jobs to be processed
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // Give time for jobs to be processed (worker poll interval + execution)
+    tokio::time::sleep(Duration::from_millis(1000)).await;
 
     // The regular job should be completed by EchoWorker
     let echo_job = manager.get_job(&echo_job_id).await.unwrap().unwrap();

@@ -497,8 +497,17 @@ impl Job {
 
     /// Check if the job can be executed now.
     pub fn can_execute_now(&self) -> bool {
-        if self.status.is_terminal() || self.status.is_active() {
+        // Terminal and Running jobs cannot be executed
+        if self.status.is_terminal() || self.status == JobStatus::Running {
             return false;
+        }
+
+        // Retrying jobs can only proceed if their retry time has passed
+        if self.status == JobStatus::Retrying {
+            return match self.next_retry_at {
+                Some(next_retry_at) => next_retry_at <= Utc::now(),
+                None => true,
+            };
         }
 
         // Check dependency state

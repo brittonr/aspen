@@ -534,6 +534,21 @@ impl DependencyGraph {
         }
     }
 
+    /// Reset a running job back to ready state for retry.
+    pub async fn mark_ready_for_retry(&self, job_id: &JobId) -> Result<()> {
+        let mut nodes = self.nodes.write().await;
+
+        if let Some(info) = nodes.get_mut(job_id) {
+            if matches!(info.state, DependencyState::Running) {
+                info.state = DependencyState::Ready;
+            }
+            Ok(())
+        } else {
+            // Job not tracked in dependency graph, nothing to do
+            Ok(())
+        }
+    }
+
     /// Get next ready job.
     pub async fn get_next_ready(&self) -> Option<JobId> {
         let mut ready_queue = self.ready_queue.write().await;

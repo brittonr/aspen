@@ -83,7 +83,7 @@ fn extract_stderr(data: &Value) -> &str {
 fn create_test_worker(temp_dir: &TempDir) -> LocalExecutorWorker {
     let config = LocalExecutorWorkerConfig {
         workspace_dir: temp_dir.path().to_path_buf(),
-        cleanup_workspaces: true,
+        should_cleanup_workspaces: true,
         ..Default::default()
     };
     LocalExecutorWorker::new(config)
@@ -93,7 +93,7 @@ fn create_test_worker(temp_dir: &TempDir) -> LocalExecutorWorker {
 fn create_test_worker_with_blobs(temp_dir: &TempDir, blob_store: Arc<dyn BlobStore>) -> LocalExecutorWorker {
     let config = LocalExecutorWorkerConfig {
         workspace_dir: temp_dir.path().to_path_buf(),
-        cleanup_workspaces: true,
+        should_cleanup_workspaces: true,
         ..Default::default()
     };
     LocalExecutorWorker::with_blob_store(config, blob_store)
@@ -495,7 +495,7 @@ fn test_default_config() {
     let config = LocalExecutorWorkerConfig::default();
 
     assert_eq!(config.workspace_dir, std::path::PathBuf::from("/workspace"));
-    assert!(config.cleanup_workspaces);
+    assert!(config.should_cleanup_workspaces);
 }
 
 /// Test worker with blob store.

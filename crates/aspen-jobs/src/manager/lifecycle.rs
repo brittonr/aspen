@@ -434,6 +434,11 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         // Check the final status to determine queue action
         let move_to_dlq = job.status == JobStatus::DeadLetter;
 
+        // Reset dependency graph for retried jobs so mark_running succeeds on re-execution
+        if job.status == JobStatus::Retrying {
+            self.dependency_graph.mark_ready_for_retry(job_id).await?;
+        }
+
         // Nack the queue item
         if let Some(queue_manager) = self.queue_managers.get(&priority) {
             queue_manager
