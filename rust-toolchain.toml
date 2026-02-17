@@ -7,7 +7,7 @@
 # - const trait methods for verified pure functions
 # - Improved compile times via new trait solver and lld linker
 #
-# Note: hyperlight-wasm features (vm-executor, wasm-component, nanvix-executor)
+# Note: hyperlight-wasm features (plugins-vm, plugins-wasm, plugins-nanvix)
 # are temporarily disabled due to cargo-hyperlight v0.1.5 requiring --build-plan
 # (removed in Cargo 1.93). Re-enable when cargo-hyperlight is updated.
 # Tracking: https://github.com/rust-lang/cargo/issues/5579

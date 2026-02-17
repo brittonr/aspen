@@ -1,6 +1,6 @@
 //! Standalone test for VM executor with echo-worker binary.
 //!
-//! Run with: cargo run --example test_vm_standalone --features vm-executor
+//! Run with: cargo run --example test_vm_standalone --features plugins-vm
 
 use std::fs;
 use std::sync::Arc;

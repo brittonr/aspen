@@ -1,6 +1,6 @@
 //! Tests for Nanvix micro-VM worker.
 
-#![cfg(feature = "nanvix-executor")]
+#![cfg(feature = "plugins-nanvix")]
 
 use std::sync::Arc;
 use std::time::Duration;

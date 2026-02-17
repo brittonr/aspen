@@ -29,7 +29,7 @@ pub mod patch;
 pub mod peer;
 #[cfg(feature = "pijul")]
 pub mod pijul;
-#[cfg(feature = "wasm-plugins")]
+#[cfg(feature = "plugins-rpc")]
 pub mod plugin;
 pub mod queue;
 pub mod ratelimit;

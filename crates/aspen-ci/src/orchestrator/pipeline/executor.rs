@@ -8,7 +8,7 @@ use std::time::Duration;
 
 #[cfg(feature = "nix-executor")]
 use aspen_ci_executor_nix::NixBuildPayload;
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 use aspen_ci_executor_vm::CloudHypervisorPayload;
 use aspen_core::KeyValueStore;
 use aspen_jobs::JobAffinity;
@@ -210,11 +210,11 @@ fn build_job_payload(
         JobType::Nix => Err(CiError::InvalidConfig {
             reason: format!("Nix job type '{}' requires the 'nix-executor' feature to be enabled", job.name),
         }),
-        #[cfg(feature = "vm-executor")]
+        #[cfg(feature = "plugins-vm")]
         JobType::Vm => build_vm_payload(job, context, env),
-        #[cfg(not(feature = "vm-executor"))]
+        #[cfg(not(feature = "plugins-vm"))]
         JobType::Vm => Err(CiError::InvalidConfig {
-            reason: format!("VM job type '{}' requires the 'vm-executor' feature to be enabled", job.name),
+            reason: format!("VM job type '{}' requires the 'plugins-vm' feature to be enabled", job.name),
         }),
     }
 }
@@ -297,7 +297,7 @@ fn build_nix_payload(job: &JobConfig, context: &PipelineContext) -> Result<serde
 }
 
 /// Build payload for VM jobs.
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 fn build_vm_payload(
     job: &JobConfig,
     context: &PipelineContext,

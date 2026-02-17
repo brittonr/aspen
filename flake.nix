@@ -579,7 +579,7 @@
                   # docs: iroh-docs CRDT document operations
                   # hooks: Event-driven automation (requires jobs)
                   # shell-worker: Execute shell commands for CI shell jobs
-                  features = ["ci" "docs" "hooks" "shell-worker"];
+                  features = ["ci" "docs" "hooks" "shell-worker" "plugins"];
                 }
                 {
                   name = "git-remote-aspen";

@@ -1,6 +1,6 @@
 //! Integration tests for VM-based job execution with Hyperlight.
 
-#![cfg(all(feature = "vm-executor", target_os = "linux"))]
+#![cfg(all(feature = "plugins-vm", target_os = "linux"))]
 
 use std::sync::Arc;
 use std::time::Duration;

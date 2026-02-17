@@ -1,6 +1,6 @@
 //! Tests for WASM Component Model worker.
 
-#![cfg(feature = "wasm-component")]
+#![cfg(feature = "plugins-wasm")]
 
 use std::sync::Arc;
 use std::time::Duration;

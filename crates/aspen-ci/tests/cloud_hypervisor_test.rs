@@ -23,7 +23,7 @@
 //! - No unbounded collections
 
 #![cfg(target_os = "linux")]
-#![cfg(feature = "vm-executor")]
+#![cfg(feature = "plugins-vm")]
 
 use std::collections::HashMap;
 use std::path::PathBuf;

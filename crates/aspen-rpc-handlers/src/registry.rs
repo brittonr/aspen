@@ -188,7 +188,7 @@ impl HandlerRegistry {
     /// Scans for plugin manifests, loads enabled plugins, and adds them
     /// to the handler registry. Must be called after `new()` and before
     /// the registry is shared.
-    #[cfg(feature = "wasm-plugins")]
+    #[cfg(feature = "plugins-rpc")]
     pub async fn load_wasm_plugins(&mut self, ctx: &ClientProtocolContext) -> anyhow::Result<u32> {
         let handlers = aspen_wasm_plugin::PluginRegistry::load_all(ctx).await?;
         let count = handlers.len() as u32;

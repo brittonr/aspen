@@ -518,7 +518,7 @@ async fn initialize_job_system(
         }
 
         // Register VM executor worker for sandboxed job execution
-        #[cfg(all(feature = "vm-executor", target_os = "linux"))]
+        #[cfg(all(feature = "plugins-vm", target_os = "linux"))]
         {
             use aspen_jobs::HyperlightWorker;
             if let Some(blob_store) = node_mode.blob_store() {
@@ -543,7 +543,7 @@ async fn initialize_job_system(
         }
 
         // Register WASM component worker for hyperlight-wasm sandbox execution
-        #[cfg(all(feature = "wasm-component", target_os = "linux"))]
+        #[cfg(all(feature = "plugins-wasm", target_os = "linux"))]
         {
             use aspen_jobs::WasmComponentWorker;
             if let Some(blob_store) = node_mode.blob_store() {
@@ -568,7 +568,7 @@ async fn initialize_job_system(
         }
 
         // Register Nanvix executor worker for multi-language sandbox execution
-        #[cfg(all(feature = "nanvix-executor", target_os = "linux"))]
+        #[cfg(all(feature = "plugins-nanvix", target_os = "linux"))]
         {
             use aspen_jobs::NanvixWorker;
             if let Some(blob_store) = node_mode.blob_store() {

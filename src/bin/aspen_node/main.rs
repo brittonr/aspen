@@ -205,12 +205,12 @@ async fn async_main() -> Result<()> {
     )
     .await?;
 
-    #[cfg(feature = "wasm-plugins")]
+    #[cfg(feature = "plugins-rpc")]
     let mut client_handler = ClientProtocolHandler::new(client_context);
-    #[cfg(not(feature = "wasm-plugins"))]
+    #[cfg(not(feature = "plugins-rpc"))]
     let client_handler = ClientProtocolHandler::new(client_context);
 
-    #[cfg(feature = "wasm-plugins")]
+    #[cfg(feature = "plugins-rpc")]
     client_handler.load_wasm_plugins().await;
 
     // Spawn the Router with all protocol handlers

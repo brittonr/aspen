@@ -4,24 +4,24 @@
 //! supporting pre-built binaries, on-demand Nix builds, and WASM Component Model
 //! execution via hyperlight-wasm.
 
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 mod hyperlight;
-#[cfg(feature = "nanvix-executor")]
+#[cfg(feature = "plugins-nanvix")]
 mod nanvix;
-#[cfg(any(feature = "vm-executor", feature = "wasm-component", feature = "nanvix-executor"))]
+#[cfg(any(feature = "plugins-vm", feature = "plugins-wasm", feature = "plugins-nanvix"))]
 mod types;
-#[cfg(feature = "wasm-component")]
+#[cfg(feature = "plugins-wasm")]
 mod wasm_component;
-#[cfg(feature = "wasm-component")]
+#[cfg(feature = "plugins-wasm")]
 mod wasm_host;
 
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 pub use hyperlight::HyperlightWorker;
-#[cfg(feature = "nanvix-executor")]
+#[cfg(feature = "plugins-nanvix")]
 pub use nanvix::NanvixWorker;
-#[cfg(any(feature = "vm-executor", feature = "wasm-component", feature = "nanvix-executor"))]
+#[cfg(any(feature = "plugins-vm", feature = "plugins-wasm", feature = "plugins-nanvix"))]
 pub use types::JobPayload;
-#[cfg(any(feature = "vm-executor", feature = "wasm-component", feature = "nanvix-executor"))]
+#[cfg(any(feature = "plugins-vm", feature = "plugins-wasm", feature = "plugins-nanvix"))]
 pub use types::NixBuildOutput;
-#[cfg(feature = "wasm-component")]
+#[cfg(feature = "plugins-wasm")]
 pub use wasm_component::WasmComponentWorker;

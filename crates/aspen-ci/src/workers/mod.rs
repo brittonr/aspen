@@ -10,7 +10,7 @@
 //! # Feature Flags
 //!
 //! - `shell-executor`: Enables shell/local executor (default)
-//! - `vm-executor`: Enables Cloud Hypervisor VM executor
+//! - `plugins-vm`: Enables Cloud Hypervisor VM executor
 //! - `nix-executor`: Enables Nix build executor
 //! - `nix-cache-proxy`: Enables HTTP/3 cache proxy for Nix substitution
 
@@ -83,27 +83,27 @@ pub use aspen_ci_executor_shell::seed_workspace_from_blob;
 #[cfg(feature = "shell-executor")]
 pub use aspen_ci_executor_shell::upload_artifacts_to_blob_store;
 // ============================================================================
-// Re-exports from aspen-ci-executor-vm (vm-executor feature)
+// Re-exports from aspen-ci-executor-vm (plugins-vm feature)
 // ============================================================================
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 pub use aspen_ci_executor_vm::CloudHypervisorError;
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 pub use aspen_ci_executor_vm::CloudHypervisorPayload;
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 pub use aspen_ci_executor_vm::CloudHypervisorWorker;
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 pub use aspen_ci_executor_vm::CloudHypervisorWorkerConfig;
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 pub use aspen_ci_executor_vm::ManagedCiVm;
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 pub use aspen_ci_executor_vm::NetworkMode;
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 pub use aspen_ci_executor_vm::PoolStatus;
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 pub use aspen_ci_executor_vm::SharedVm;
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 pub use aspen_ci_executor_vm::VmApiClient;
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 pub use aspen_ci_executor_vm::VmPool;
-#[cfg(feature = "vm-executor")]
+#[cfg(feature = "plugins-vm")]
 pub use aspen_ci_executor_vm::VmState;

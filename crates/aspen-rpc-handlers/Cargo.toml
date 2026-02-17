@@ -85,7 +85,7 @@ snix = ["dep:aspen-nix-handler", "aspen-nix-handler?/snix"]
 hooks = ["dep:aspen-hooks-handler", "dep:aspen-hooks", "aspen-rpc-core/hooks"]
 jobs = ["dep:aspen-jobs", "dep:aspen-job-handler", "aspen-rpc-core/jobs", "aspen-rpc-core/worker"]
 docs = ["dep:aspen-docs", "dep:aspen-docs-handler", "aspen-cluster-handler/docs"]
-wasm-plugins = ["dep:aspen-wasm-plugin", "blob"]
+plugins-rpc = ["dep:aspen-wasm-plugin", "blob"]
 testing = []
 
 [dev-dependencies]

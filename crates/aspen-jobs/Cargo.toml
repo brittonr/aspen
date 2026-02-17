@@ -12,9 +12,9 @@ categories = ["asynchronous", "concurrency", "network-programming"]
 [features]
 default = []
 blob = ["dep:aspen-blob", "dep:iroh-blobs"]
-vm-executor = ["hyperlight-host", "blob"]
-wasm-component = ["dep:hyperlight-wasm", "blob"]
-nanvix-executor = ["dep:hyperlight-nanvix", "blob"]
+plugins-vm = ["hyperlight-host", "blob"]
+plugins-wasm = ["dep:hyperlight-wasm", "blob"]
+plugins-nanvix = ["dep:hyperlight-nanvix", "blob"]
 
 [dependencies]
 # Core dependencies

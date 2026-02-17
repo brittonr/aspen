@@ -1,6 +1,6 @@
 //! Tests for VM-based job execution.
 
-#![cfg(feature = "vm-executor")]
+#![cfg(feature = "plugins-vm")]
 
 use std::sync::Arc;
 use std::time::Duration;

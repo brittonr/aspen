@@ -86,7 +86,7 @@ nickel = ["dep:nickel-lang", "dep:aspen-nickel", "dep:stacker"]
 # Shell executor for local/direct command execution
 shell-executor = ["dep:aspen-ci-executor-shell"]
 # VM executor for Cloud Hypervisor microVM isolation
-vm-executor = ["dep:aspen-ci-executor-vm", "aspen-jobs/vm-executor"]
+plugins-vm = ["dep:aspen-ci-executor-vm", "aspen-jobs/plugins-vm"]
 # Nix build executor for Nix flake builds
 nix-executor = ["dep:aspen-ci-executor-nix"]
 # SNIX storage (forwarded to executor crates)

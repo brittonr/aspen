@@ -97,7 +97,7 @@ impl ClientProtocolHandler {
     ///
     /// Must be called before the handler is consumed by the router.
     /// Failures are logged but do not prevent the node from starting.
-    #[cfg(feature = "wasm-plugins")]
+    #[cfg(feature = "plugins-rpc")]
     pub async fn load_wasm_plugins(&mut self) {
         match self.registry.load_wasm_plugins(&self.ctx).await {
             Ok(count) if count > 0 => {

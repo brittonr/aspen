@@ -294,7 +294,7 @@ impl JobSpec {
 
     /// Helper method to create a job with a blob-stored binary.
     /// The binary MUST be uploaded to the blob store first.
-    #[cfg(feature = "vm-executor")]
+    #[cfg(feature = "plugins-vm")]
     pub fn with_blob_binary(hash: impl Into<String>, size: u64, format: impl Into<String>) -> Self {
         use crate::vm_executor::JobPayload;
         let payload = JobPayload::blob_binary(hash, size, format);
@@ -305,7 +305,7 @@ impl JobSpec {
     }
 
     /// Helper method to create a job with a Nix flake.
-    #[cfg(feature = "vm-executor")]
+    #[cfg(feature = "plugins-vm")]
     pub fn with_nix_flake(flake_url: &str, attribute: &str) -> Self {
         use crate::vm_executor::JobPayload;
         let payload = JobPayload::nix_flake(flake_url, attribute);
@@ -316,7 +316,7 @@ impl JobSpec {
     }
 
     /// Helper method to create a job with an inline Nix expression.
-    #[cfg(feature = "vm-executor")]
+    #[cfg(feature = "plugins-vm")]
     pub fn with_nix_expr(nix_code: &str) -> Self {
         use crate::vm_executor::JobPayload;
         let payload = JobPayload::nix_derivation(nix_code);
@@ -327,7 +327,7 @@ impl JobSpec {
     }
 
     /// Helper method to create a job with a WASM component from the blob store.
-    #[cfg(any(feature = "vm-executor", feature = "wasm-component"))]
+    #[cfg(any(feature = "plugins-vm", feature = "plugins-wasm"))]
     pub fn with_wasm_component(hash: impl Into<String>, size: u64) -> Self {
         use crate::vm_executor::JobPayload;
         let payload = JobPayload::wasm_component(hash, size);

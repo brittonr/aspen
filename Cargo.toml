@@ -44,7 +44,7 @@ required-features = ["jobs", "docs", "hooks", "federation"]
 [[example]]
 name = "test_vm_standalone"
 path = "examples/test_vm_standalone.rs"
-required-features = ["vm-executor"]
+required-features = ["plugins-vm"]
 
 [workspace]
 members = [
@@ -403,7 +403,7 @@ cloud-hypervisor-client = "0.3"
 default = []
 
 # Full production: all features enabled
-full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "wasm-component", "nanvix-executor", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs", "federation", "wasm-plugins"]
+full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs", "federation"]
 
 # Forge preset: Git hosting with blob storage, content discovery, and docs
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
@@ -423,20 +423,22 @@ sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-h
 dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto", "aspen-rpc-handlers/dns"]
 # Blob storage support for iroh-blobs operations
 blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-handlers/blob", "aspen-cluster/blob", "aspen-client/blob-store"]
-# VM-based job execution with Hyperlight
-vm-executor = ["aspen-jobs/vm-executor"]
-# WASM Component Model execution via hyperlight-wasm
-wasm-component = ["aspen-jobs/wasm-component"]
+# Plugin umbrella: all hyperlight-based execution backends
+plugins = ["plugins-vm", "plugins-wasm", "plugins-nanvix", "plugins-rpc"]
+# Hyperlight VM sandbox for native binaries
+plugins-vm = ["aspen-jobs/plugins-vm"]
+# WASM Component Model job execution via hyperlight-wasm
+plugins-wasm = ["aspen-jobs/plugins-wasm"]
+# Nanvix micro-VM execution (JS, Python, native) via hyperlight-nanvix
+plugins-nanvix = ["aspen-jobs/plugins-nanvix"]
 # WASM handler plugins for dynamic RPC handler loading
-wasm-plugins = ["aspen-rpc-handlers/wasm-plugins", "blob"]
-# Nanvix micro-VM execution (JS, Python, native binaries) via hyperlight-nanvix
-nanvix-executor = ["aspen-jobs/nanvix-executor"]
+plugins-rpc = ["aspen-rpc-handlers/plugins-rpc", "blob"]
 # Shell command worker for executing system commands as jobs (requires auth)
 shell-worker = ["dep:aspen-jobs-worker-shell", "jobs", "blob"]
 # Nix build executor for CI Nix flake builds
 nix-executor = ["aspen-ci/nix-executor"]
 # Cloud Hypervisor VM executor for CI VM-isolated jobs
-ci-vm-executor = ["aspen-ci/vm-executor"]
+ci-vm-executor = ["aspen-ci/plugins-vm"]
 # TUI is now a separate crate: aspen-tui (see crates/aspen-tui)
 # Fuzzing feature exposes internals for fuzz testing
 fuzzing = []
@@ -455,7 +457,7 @@ automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
 # Does NOT include Nix binary cache integration (snix, nix-cache-proxy)
 ci-basic = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "jobs", "blob", "forge"]
 # CI/CD with VM executor instead of shell executor
-ci-vm = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/vm-executor", "jobs", "blob", "forge"]
+ci-vm = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/plugins-vm", "jobs", "blob", "forge"]
 # Full CI/CD with Nix binary cache integration (snix + HTTP/3 cache proxy)
 ci = ["ci-basic", "aspen-ci/snix", "aspen-ci/nix-cache-proxy", "snix", "aspen-testing?/ci"]
 # Hooks handler for event-driven automation RPC (requires jobs for hook execution)
@@ -475,7 +477,7 @@ federation = ["aspen-cluster/federation"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"wasm-component\", \"nanvix-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"nix-executor\", \"ci-vm-executor\", \"wasm-plugins\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-nanvix\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"nix-executor\", \"ci-vm-executor\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit
