@@ -345,7 +345,7 @@ async fn docs_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()>
         ClientRpcResponse::DocsSetResult(r) => DocsSetOutput {
             is_success: r.is_success,
             key: r.key,
-            size_bytes: r.size,
+            size_bytes: r.size_bytes,
             error: r.error,
         },
         other => DocsSetOutput {
@@ -369,7 +369,7 @@ async fn docs_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
         ClientRpcResponse::DocsGetResult(r) => DocsGetOutput {
             was_found: r.was_found,
             value: r.value,
-            size_bytes: r.size,
+            size_bytes: r.size_bytes,
             error: r.error,
         },
         other => DocsGetOutput {

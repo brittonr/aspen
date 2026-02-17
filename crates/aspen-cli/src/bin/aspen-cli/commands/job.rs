@@ -429,7 +429,7 @@ impl Outputable for WorkerStatusOutput {
                     id_short,
                     worker.status,
                     worker.active_jobs,
-                    worker.capacity,
+                    worker.capacity_jobs,
                     worker.total_processed,
                     worker.total_failed
                 ));

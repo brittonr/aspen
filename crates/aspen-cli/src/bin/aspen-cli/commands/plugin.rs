@@ -58,8 +58,8 @@ pub struct InstallArgs {
     pub priority: u32,
 
     /// Semantic version string.
-    #[arg(long, default_value = "0.1.0")]
-    pub version: String,
+    #[arg(long = "plugin-version", default_value = "0.1.0")]
+    pub plugin_version: String,
 
     /// Fuel budget override.
     #[arg(long)]
@@ -289,7 +289,7 @@ async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> 
     // Build manifest
     let manifest = PluginManifest {
         name: args.name.clone(),
-        version: args.version,
+        version: args.plugin_version,
         wasm_hash: wasm_hash.clone(),
         handles: args.handles,
         priority: args.priority.max(900).min(999),

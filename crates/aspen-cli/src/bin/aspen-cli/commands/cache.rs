@@ -228,7 +228,7 @@ async fn cache_query(client: &AspenClient, args: QueryArgs, json: bool) -> Resul
     match response {
         ClientRpcResponse::CacheQueryResult(result) => {
             let output = CacheQueryOutput {
-                was_found: result.found,
+                was_found: result.was_found,
                 store_path: result.entry.as_ref().map(|e| e.store_path.clone()),
                 store_hash: result.entry.as_ref().map(|e| e.store_hash.clone()),
                 blob_hash: result.entry.as_ref().map(|e| e.blob_hash.clone()),
@@ -239,7 +239,7 @@ async fn cache_query(client: &AspenClient, args: QueryArgs, json: bool) -> Resul
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.found {
+            if !result.was_found {
                 std::process::exit(1);
             }
             Ok(())
@@ -288,14 +288,14 @@ async fn cache_download(client: &AspenClient, args: DownloadArgs, json: bool) ->
             }
 
             let output = CacheDownloadOutput {
-                was_found: result.found,
+                was_found: result.was_found,
                 blob_ticket: result.blob_ticket,
                 blob_hash: result.blob_hash,
                 nar_size: result.nar_size,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.found {
+            if !result.was_found {
                 std::process::exit(1);
             }
             Ok(())

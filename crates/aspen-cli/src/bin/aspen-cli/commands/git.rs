@@ -322,7 +322,7 @@ async fn git_init(client: &AspenClient, args: InitArgs, json: bool) -> Result<()
                         description: repo.description,
                         default_branch: repo.default_branch,
                         delegates: repo.delegates,
-                        threshold: repo.threshold,
+                        threshold: repo.threshold_delegates,
                         created_at_ms: repo.created_at_ms,
                     };
                     print_output(&output, json);
@@ -769,7 +769,7 @@ async fn git_show(client: &AspenClient, args: ShowArgs, json: bool) -> Result<()
                         description: repo.description,
                         default_branch: repo.default_branch,
                         delegates: repo.delegates,
-                        threshold: repo.threshold,
+                        threshold: repo.threshold_delegates,
                         created_at_ms: repo.created_at_ms,
                     };
                     print_output(&output, json);

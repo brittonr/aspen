@@ -68,13 +68,13 @@ pub(crate) async fn kv_get(client: &AspenClient, args: KvGetArgs, json: bool) ->
     match response {
         ClientRpcResponse::SecretsKvReadResult(result) => {
             let output = KvReadOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 data: result.data,
                 version: result.metadata.map(|m| m.version),
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -100,12 +100,12 @@ pub(crate) async fn kv_put(client: &AspenClient, args: KvPutArgs, json: bool) ->
     match response {
         ClientRpcResponse::SecretsKvWriteResult(result) => {
             let output = KvWriteOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 version: result.version,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -127,12 +127,12 @@ pub(crate) async fn kv_delete(client: &AspenClient, args: KvDeleteArgs, json: bo
     match response {
         ClientRpcResponse::SecretsKvDeleteResult(result) => {
             let output = SimpleSuccessOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 message: "Secret versions deleted".to_string(),
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -154,12 +154,12 @@ pub(crate) async fn kv_destroy(client: &AspenClient, args: KvDestroyArgs, json: 
     match response {
         ClientRpcResponse::SecretsKvDeleteResult(result) => {
             let output = SimpleSuccessOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 message: "Secret versions permanently destroyed".to_string(),
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -181,12 +181,12 @@ pub(crate) async fn kv_undelete(client: &AspenClient, args: KvUndeleteArgs, json
     match response {
         ClientRpcResponse::SecretsKvDeleteResult(result) => {
             let output = SimpleSuccessOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 message: "Secret versions restored".to_string(),
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -207,12 +207,12 @@ pub(crate) async fn kv_list(client: &AspenClient, args: KvListArgs, json: bool) 
     match response {
         ClientRpcResponse::SecretsKvListResult(result) => {
             let output = KvListOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 keys: result.keys,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -233,7 +233,7 @@ pub(crate) async fn kv_metadata(client: &AspenClient, args: KvMetadataArgs, json
     match response {
         ClientRpcResponse::SecretsKvMetadataResult(result) => {
             let output = json!({
-                "is_success": result.success,
+                "is_success": result.is_success,
                 "current_version": result.current_version,
                 "max_versions": result.max_versions,
                 "cas_required": result.cas_required,
@@ -252,7 +252,7 @@ pub(crate) async fn kv_metadata(client: &AspenClient, args: KvMetadataArgs, json
                 println!("CAS required: {:?}", result.cas_required);
                 println!("Versions: {}", result.versions.len());
                 for v in &result.versions {
-                    println!("  - Version {}: deleted={}, destroyed={}", v.version, v.deleted, v.destroyed);
+                    println!("  - Version {}: deleted={}, destroyed={}", v.version, v.was_deleted, v.was_destroyed);
                 }
             }
             Ok(())
@@ -278,7 +278,7 @@ pub(crate) async fn transit_create_key(client: &AspenClient, args: TransitCreate
     match response {
         ClientRpcResponse::SecretsTransitKeyResult(result) => {
             let output = SimpleSuccessOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 message: format!(
                     "Key '{}' created (type: {}, version: {})",
                     result.name.as_deref().unwrap_or("unknown"),
@@ -288,7 +288,7 @@ pub(crate) async fn transit_create_key(client: &AspenClient, args: TransitCreate
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -317,12 +317,12 @@ pub(crate) async fn transit_encrypt(client: &AspenClient, args: TransitEncryptAr
     match response {
         ClientRpcResponse::SecretsTransitEncryptResult(result) => {
             let output = TransitEncryptOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 ciphertext: result.ciphertext,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -352,12 +352,12 @@ pub(crate) async fn transit_decrypt(client: &AspenClient, args: TransitDecryptAr
         ClientRpcResponse::SecretsTransitDecryptResult(result) => {
             let plaintext = result.plaintext.map(|p| String::from_utf8_lossy(&p).to_string());
             let output = TransitDecryptOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 plaintext,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -379,12 +379,12 @@ pub(crate) async fn transit_sign(client: &AspenClient, args: TransitSignArgs, js
     match response {
         ClientRpcResponse::SecretsTransitSignResult(result) => {
             let output = TransitSignOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 signature: result.signature,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -407,12 +407,12 @@ pub(crate) async fn transit_verify(client: &AspenClient, args: TransitVerifyArgs
     match response {
         ClientRpcResponse::SecretsTransitVerifyResult(result) => {
             let output = TransitVerifyOutput {
-                is_success: result.success,
-                is_valid: result.valid,
+                is_success: result.is_success,
+                is_valid: result.is_valid,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -433,12 +433,12 @@ pub(crate) async fn transit_rotate_key(client: &AspenClient, args: TransitRotate
     match response {
         ClientRpcResponse::SecretsTransitKeyResult(result) => {
             let output = SimpleSuccessOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 message: format!("Key rotated to version {}", result.version.unwrap_or(0)),
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -454,12 +454,12 @@ pub(crate) async fn transit_list_keys(client: &AspenClient, args: TransitListArg
     match response {
         ClientRpcResponse::SecretsTransitListResult(result) => {
             let output = TransitListOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 keys: result.keys,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -481,7 +481,7 @@ pub(crate) async fn transit_datakey(client: &AspenClient, args: TransitDatakeyAr
     match response {
         ClientRpcResponse::SecretsTransitDatakeyResult(result) => {
             let output = json!({
-                "is_success": result.success,
+                "is_success": result.is_success,
                 "plaintext": result.plaintext.clone().map(|p| base64::Engine::encode(&base64::engine::general_purpose::STANDARD, p)),
                 "ciphertext": result.ciphertext,
                 "error": result.error
@@ -525,14 +525,14 @@ pub(crate) async fn pki_generate_root(client: &AspenClient, args: PkiGenerateRoo
     match response {
         ClientRpcResponse::SecretsPkiCertificateResult(result) => {
             let output = PkiCertificateOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 certificate: result.certificate,
                 private_key: result.private_key,
                 serial: result.serial,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -558,7 +558,7 @@ pub(crate) async fn pki_create_role(client: &AspenClient, args: PkiCreateRoleArg
     match response {
         ClientRpcResponse::SecretsPkiRoleResult(result) => {
             let output = SimpleSuccessOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 message: format!(
                     "Role '{}' created",
                     result.role.as_ref().map(|r| r.name.as_str()).unwrap_or("unknown")
@@ -566,7 +566,7 @@ pub(crate) async fn pki_create_role(client: &AspenClient, args: PkiCreateRoleArg
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -590,14 +590,14 @@ pub(crate) async fn pki_issue(client: &AspenClient, args: PkiIssueArgs, json: bo
     match response {
         ClientRpcResponse::SecretsPkiCertificateResult(result) => {
             let output = PkiCertificateOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 certificate: result.certificate,
                 private_key: result.private_key,
                 serial: result.serial,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -618,12 +618,12 @@ pub(crate) async fn pki_revoke(client: &AspenClient, args: PkiRevokeArgs, json: 
     match response {
         ClientRpcResponse::SecretsPkiRevokeResult(result) => {
             let output = SimpleSuccessOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 message: format!("Certificate {} revoked", result.serial.as_deref().unwrap_or("unknown")),
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -639,12 +639,12 @@ pub(crate) async fn pki_list_certs(client: &AspenClient, args: PkiListArgs, json
     match response {
         ClientRpcResponse::SecretsPkiListResult(result) => {
             let output = PkiListOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 items: result.items,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -660,12 +660,12 @@ pub(crate) async fn pki_list_roles(client: &AspenClient, args: PkiListArgs, json
     match response {
         ClientRpcResponse::SecretsPkiListResult(result) => {
             let output = PkiListOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 items: result.items,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -687,7 +687,7 @@ pub(crate) async fn pki_get_role(client: &AspenClient, args: PkiGetRoleArgs, jso
         ClientRpcResponse::SecretsPkiRoleResult(result) => {
             if json {
                 let output = json!({
-                    "is_success": result.success,
+                    "is_success": result.is_success,
                     "role": result.role,
                     "error": result.error
                 });
@@ -716,7 +716,7 @@ pub(crate) async fn pki_get_crl(client: &AspenClient, args: PkiListArgs, json: b
         ClientRpcResponse::SecretsPkiCrlResult(result) => {
             if json {
                 let output = json!({
-                    "is_success": result.success,
+                    "is_success": result.is_success,
                     "crl": result.crl,
                     "error": result.error
                 });
@@ -749,7 +749,7 @@ pub(crate) async fn nix_cache_create_key(client: &AspenClient, args: NixCacheCre
     match response {
         ClientRpcResponse::SecretsNixCacheKeyResult(result) => {
             let output = NixCacheKeyOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 public_key: result.public_key,
                 error: result.error,
             };
@@ -776,7 +776,7 @@ pub(crate) async fn nix_cache_get_public_key(
     match response {
         ClientRpcResponse::SecretsNixCacheKeyResult(result) => {
             let output = NixCacheKeyOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 public_key: result.public_key,
                 error: result.error,
             };
@@ -799,7 +799,7 @@ pub(crate) async fn nix_cache_rotate_key(client: &AspenClient, args: NixCacheRot
     match response {
         ClientRpcResponse::SecretsNixCacheKeyResult(result) => {
             let output = NixCacheKeyOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 public_key: result.public_key,
                 error: result.error,
             };
@@ -822,7 +822,7 @@ pub(crate) async fn nix_cache_delete_key(client: &AspenClient, args: NixCacheDel
     match response {
         ClientRpcResponse::SecretsNixCacheDeleteResult(result) => {
             let output = NixCacheDeleteOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
@@ -839,7 +839,7 @@ pub(crate) async fn nix_cache_list_keys(client: &AspenClient, args: NixCacheList
     match response {
         ClientRpcResponse::SecretsNixCacheListResult(result) => {
             let output = NixCacheListOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 cache_names: result.cache_names,
                 error: result.error,
             };

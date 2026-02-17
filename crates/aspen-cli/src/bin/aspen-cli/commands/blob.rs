@@ -703,14 +703,14 @@ async fn blob_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()>
     match response {
         ClientRpcResponse::AddBlobResult(result) => {
             let output = AddBlobOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 hash: result.hash,
-                size_bytes: result.size,
+                size_bytes: result.size_bytes,
                 was_new: result.was_new,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -726,7 +726,7 @@ async fn blob_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
     match response {
         ClientRpcResponse::GetBlobResult(result) => {
             // If output file specified and blob found with data, write directly
-            if let (Some(output_path), true, Some(data)) = (&args.output, result.found, &result.data) {
+            if let (Some(output_path), true, Some(data)) = (&args.output, result.was_found, &result.data) {
                 std::fs::write(output_path, data)
                     .with_context(|| format!("failed to write blob to {}", output_path.display()))?;
                 if !json {
@@ -736,12 +736,12 @@ async fn blob_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
             }
 
             let output = GetBlobOutput {
-                was_found: result.found,
+                was_found: result.was_found,
                 data: result.data,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.found {
+            if !result.was_found {
                 std::process::exit(1);
             }
             Ok(())
@@ -762,11 +762,11 @@ async fn blob_has(client: &AspenClient, args: HasArgs, json: bool) -> Result<()>
         ClientRpcResponse::HasBlobResult(result) => {
             let output = HasBlobOutput {
                 hash: args.hash,
-                does_exist: result.exists,
+                does_exist: result.does_exist,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.exists {
+            if !result.does_exist {
                 std::process::exit(1);
             }
             Ok(())
@@ -782,12 +782,12 @@ async fn blob_ticket(client: &AspenClient, args: TicketArgs, json: bool) -> Resu
     match response {
         ClientRpcResponse::GetBlobTicketResult(result) => {
             let output = BlobTicketOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 ticket: result.ticket,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -843,11 +843,11 @@ async fn blob_protect(client: &AspenClient, args: ProtectArgs, json: bool) -> Re
         ClientRpcResponse::ProtectBlobResult(result) => {
             let output = ProtectBlobOutput {
                 operation: "protect".to_string(),
-                is_success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -864,11 +864,11 @@ async fn blob_unprotect(client: &AspenClient, args: UnprotectArgs, json: bool) -
         ClientRpcResponse::UnprotectBlobResult(result) => {
             let output = ProtectBlobOutput {
                 operation: "unprotect".to_string(),
-                is_success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -882,18 +882,18 @@ async fn blob_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Resu
     let response = client
         .send(ClientRpcRequest::DeleteBlob {
             hash: args.hash,
-            force: args.is_force,
+            is_force: args.is_force,
         })
         .await?;
 
     match response {
         ClientRpcResponse::DeleteBlobResult(result) => {
             let output = DeleteBlobOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -914,13 +914,13 @@ async fn blob_download(client: &AspenClient, args: DownloadArgs, json: bool) -> 
     match response {
         ClientRpcResponse::DownloadBlobResult(result) => {
             let output = DownloadBlobOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 hash: result.hash,
-                size_bytes: result.size,
+                size_bytes: result.size_bytes,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -941,13 +941,13 @@ async fn blob_download_by_hash(client: &AspenClient, args: DownloadByHashArgs, j
     match response {
         ClientRpcResponse::DownloadBlobByHashResult(result) => {
             let output = DownloadBlobOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 hash: result.hash,
-                size_bytes: result.size,
+                size_bytes: result.size_bytes,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -969,13 +969,13 @@ async fn blob_download_by_provider(client: &AspenClient, args: DownloadByProvide
     match response {
         ClientRpcResponse::DownloadBlobByProviderResult(result) => {
             let output = DownloadBlobOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 hash: result.hash,
-                size_bytes: result.size,
+                size_bytes: result.size_bytes,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -991,15 +991,15 @@ async fn blob_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resu
     match response {
         ClientRpcResponse::GetBlobStatusResult(result) => {
             let output = BlobStatusOutput {
-                was_found: result.found,
+                was_found: result.was_found,
                 hash: result.hash,
-                size_bytes: result.size,
+                size_bytes: result.size_bytes,
                 complete: result.complete,
                 tags: result.tags,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.found {
+            if !result.was_found {
                 std::process::exit(1);
             }
             Ok(())
@@ -1015,9 +1015,9 @@ async fn blob_replication_status(client: &AspenClient, args: ReplicationStatusAr
     match response {
         ClientRpcResponse::GetBlobReplicationStatusResult(result) => {
             let output = BlobReplicationStatusOutput {
-                was_found: result.found,
+                was_found: result.was_found,
                 hash: result.hash,
-                size_bytes: result.size,
+                size_bytes: result.size_bytes,
                 replica_nodes: result.replica_nodes,
                 replication_factor: result.replication_factor,
                 min_replicas: result.min_replicas,
@@ -1027,7 +1027,7 @@ async fn blob_replication_status(client: &AspenClient, args: ReplicationStatusAr
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.found {
+            if !result.was_found {
                 std::process::exit(1);
             }
             Ok(())
@@ -1060,7 +1060,7 @@ async fn blob_repair(client: &AspenClient, args: RepairArgs, json: bool) -> Resu
     match response {
         ClientRpcResponse::TriggerBlobReplicationResult(result) => {
             let output = BlobRepairOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 hash: result.hash,
                 successful_nodes: result.successful_nodes,
                 failed_nodes: result.failed_nodes,
@@ -1068,7 +1068,7 @@ async fn blob_repair(client: &AspenClient, args: RepairArgs, json: bool) -> Resu
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -1084,11 +1084,11 @@ async fn blob_repair_cycle(client: &AspenClient, json: bool) -> Result<()> {
     match response {
         ClientRpcResponse::RunBlobRepairCycleResult(result) => {
             let output = BlobRepairCycleOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

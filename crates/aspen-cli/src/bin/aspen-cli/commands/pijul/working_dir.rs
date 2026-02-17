@@ -223,7 +223,7 @@ pub(super) async fn wd_record(client: &AspenClient, args: WdRecordArgs, json: bo
 
     // Record changes
     let recorder =
-        ChangeRecorder::new(pristine.clone(), change_dir, wd.root().to_path_buf()).with_threads(args.threads);
+        ChangeRecorder::new(pristine.clone(), change_dir, wd.root().to_path_buf()).with_threads(args.threads as u32);
 
     let result = recorder.record(&channel, &args.message, &author_str).await.context("failed to record changes")?;
 

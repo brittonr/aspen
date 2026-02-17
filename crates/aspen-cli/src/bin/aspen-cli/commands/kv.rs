@@ -166,7 +166,7 @@ async fn kv_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
             let output = KvReadOutput {
                 key: args.key,
                 value: result.value,
-                does_exist: result.found,
+                does_exist: result.was_found,
             };
             print_output(&output, json);
             Ok(())
@@ -199,11 +199,11 @@ async fn kv_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()> {
                 println!(
                     "{}",
                     serde_json::json!({
-                        "status": if result.success { "success" } else { "failed" },
+                        "status": if result.is_success { "success" } else { "failed" },
                         "key": args.key
                     })
                 );
-            } else if result.success {
+            } else if result.is_success {
                 println!("OK");
             } else {
                 println!("Write failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()));
@@ -228,10 +228,10 @@ async fn kv_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Result
                     serde_json::json!({
                         "status": "success",
                         "key": args.key,
-                        "was_deleted": result.deleted
+                        "was_deleted": result.was_deleted
                     })
                 );
-            } else if result.deleted {
+            } else if result.was_deleted {
                 println!("Deleted");
             } else {
                 println!("Key not found");
@@ -263,12 +263,12 @@ async fn kv_cas(client: &AspenClient, args: CasArgs, json: bool) -> Result<()> {
                 println!(
                     "{}",
                     serde_json::json!({
-                        "status": if result.success { "success" } else { "conflict" },
+                        "status": if result.is_success { "success" } else { "conflict" },
                         "key": args.key,
-                        "is_success": result.success
+                        "is_success": result.is_success
                     })
                 );
-            } else if result.success {
+            } else if result.is_success {
                 println!("OK");
             } else {
                 println!("CONFLICT: value has changed");
@@ -300,12 +300,12 @@ async fn kv_cad(client: &AspenClient, args: CadArgs, json: bool) -> Result<()> {
                 println!(
                     "{}",
                     serde_json::json!({
-                        "status": if result.success { "success" } else { "conflict" },
+                        "status": if result.is_success { "success" } else { "conflict" },
                         "key": args.key,
-                        "is_success": result.success
+                        "is_success": result.is_success
                     })
                 );
-            } else if result.success {
+            } else if result.is_success {
                 println!("Deleted");
             } else {
                 println!("CONFLICT: value has changed");
@@ -352,7 +352,7 @@ async fn kv_batch_read(client: &AspenClient, args: BatchReadArgs, json: bool) ->
 
     match response {
         ClientRpcResponse::BatchReadResult(result) => {
-            if !result.success {
+            if !result.is_success {
                 anyhow::bail!("batch read failed");
             }
             let values = result.values.unwrap_or_default();
@@ -383,11 +383,11 @@ async fn kv_batch_write(client: &AspenClient, args: BatchWriteArgs, json: bool) 
     match response {
         ClientRpcResponse::BatchWriteResult(result) => {
             let output = KvBatchWriteOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 operations_applied: result.operations_applied.unwrap_or(op_count),
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

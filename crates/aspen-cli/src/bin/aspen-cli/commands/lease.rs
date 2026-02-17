@@ -268,13 +268,13 @@ async fn lease_grant(client: &AspenClient, args: GrantArgs, json: bool) -> Resul
     match response {
         ClientRpcResponse::LeaseGrantResult(result) => {
             let output = LeaseGrantOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 lease_id: result.lease_id,
                 ttl_seconds: result.ttl_seconds,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -294,12 +294,12 @@ async fn lease_revoke(client: &AspenClient, args: RevokeArgs, json: bool) -> Res
     match response {
         ClientRpcResponse::LeaseRevokeResult(result) => {
             let output = LeaseRevokeOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 keys_deleted: result.keys_deleted,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -319,13 +319,13 @@ async fn lease_keepalive(client: &AspenClient, args: KeepaliveArgs, json: bool) 
     match response {
         ClientRpcResponse::LeaseKeepaliveResult(result) => {
             let output = LeaseKeepaliveOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 lease_id: result.lease_id,
                 ttl_seconds: result.ttl_seconds,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -339,14 +339,14 @@ async fn lease_ttl(client: &AspenClient, args: TtlArgs, json: bool) -> Result<()
     let response = client
         .send(ClientRpcRequest::LeaseTimeToLive {
             lease_id: args.lease_id,
-            include_keys: args.keys,
+            should_include_keys: args.keys,
         })
         .await?;
 
     match response {
         ClientRpcResponse::LeaseTimeToLiveResult(result) => {
             let output = LeaseTtlOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 lease_id: result.lease_id,
                 granted_ttl_seconds: result.granted_ttl_seconds,
                 remaining_ttl_seconds: result.remaining_ttl_seconds,
@@ -354,7 +354,7 @@ async fn lease_ttl(client: &AspenClient, args: TtlArgs, json: bool) -> Result<()
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
@@ -382,12 +382,12 @@ async fn lease_list(client: &AspenClient, json: bool) -> Result<()> {
                 .collect();
 
             let output = LeaseListOutput {
-                is_success: result.success,
+                is_success: result.is_success,
                 leases,
                 error: result.error,
             };
             print_output(&output, json);
-            if !result.success {
+            if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())

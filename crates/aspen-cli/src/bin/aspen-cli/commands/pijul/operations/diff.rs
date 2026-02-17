@@ -63,7 +63,7 @@ pub(in super::super) async fn pijul_diff(args: DiffArgs, json: bool) -> Result<(
 
     // Create recorder with performance options to get diff info
     let mut recorder =
-        ChangeRecorder::new(pristine, change_dir, PathBuf::from(&working_dir)).with_threads(args.threads);
+        ChangeRecorder::new(pristine, change_dir, PathBuf::from(&working_dir)).with_threads(args.threads as u32);
 
     if let Some(ref prefix) = args.prefix {
         recorder = recorder.with_prefix(prefix);

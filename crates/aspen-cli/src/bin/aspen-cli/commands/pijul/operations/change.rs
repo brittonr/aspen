@@ -100,7 +100,7 @@ async fn pijul_record_local(
 
     // Record changes with performance options
     let mut recorder =
-        ChangeRecorder::new(pristine.clone(), change_dir, PathBuf::from(&working_dir)).with_threads(threads);
+        ChangeRecorder::new(pristine.clone(), change_dir, PathBuf::from(&working_dir)).with_threads(threads as u32);
 
     if let Some(ref p) = prefix {
         recorder = recorder.with_prefix(p);

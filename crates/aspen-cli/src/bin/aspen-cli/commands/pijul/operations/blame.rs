@@ -42,7 +42,7 @@ pub(in super::super) async fn pijul_blame(client: &AspenClient, args: BlameArgs,
                         change_type: a.change_type,
                     })
                     .collect(),
-                file_exists: result.file_exists,
+                file_exists: result.does_file_exist,
             };
             print_output(&output, json);
             Ok(())

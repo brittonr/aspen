@@ -774,7 +774,7 @@ async fn verify_blob_add(client: &AspenClient, test_data: &[u8], details: &mut V
     let hash = match add_response {
         Ok(ClientRpcResponse::AddBlobResult(result)) => {
             if result.is_success {
-                details.push(format!("add: OK ({} bytes)", result.size.unwrap_or(0)));
+                details.push(format!("add: OK ({} bytes)", result.size_bytes.unwrap_or(0)));
                 result.hash
             } else {
                 let msg = format!("Add blob failed: {}", result.error.unwrap_or_default());

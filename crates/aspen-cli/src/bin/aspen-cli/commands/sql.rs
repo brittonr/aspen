@@ -233,7 +233,7 @@ async fn execute_sql(client: &AspenClient, config: SqlExecConfig, json: bool) ->
 
     match response {
         ClientRpcResponse::SqlResult(result) => {
-            if !result.success {
+            if !result.is_success {
                 let error = result.error.unwrap_or_else(|| "unknown error".to_string());
                 anyhow::bail!("query failed: {}", error);
             }
