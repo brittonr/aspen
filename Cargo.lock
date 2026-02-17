@@ -2600,6 +2600,7 @@ dependencies = [
  "aspen-kv-types",
  "aspen-plugin-api",
  "aspen-rpc-core",
+ "aspen-testing",
  "aspen-traits",
  "async-trait",
  "ed25519-dalek 2.2.0",

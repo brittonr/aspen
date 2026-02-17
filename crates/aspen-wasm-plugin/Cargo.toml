@@ -48,3 +48,13 @@ ed25519-dalek = "2.1"
 
 # Hex encoding for public keys
 hex = "0.4"
+
+[features]
+default = []
+testing = []
+
+[dev-dependencies]
+aspen-testing = { workspace = true }
+aspen-rpc-core = { path = "../aspen-rpc-core", features = ["blob", "testing"] }
+aspen-client-api = { workspace = true }
+tokio = { version = "1.0", features = ["full", "test-util"] }
