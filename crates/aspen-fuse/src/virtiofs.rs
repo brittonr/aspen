@@ -415,6 +415,13 @@ pub struct VirtioFsDaemonHandle {
 
 impl VirtioFsDaemonHandle {
     /// Signal the daemon to stop and wait for the thread to join.
+    ///
+    /// TODO: If called before a VMM connects, the daemon thread may deadlock
+    /// in VhostUserDaemon::start()'s blocking accept() loop, which does not
+    /// monitor the kill EventFd. In practice cloud-hypervisor connects quickly
+    /// after socket creation, but a robust fix would use a non-blocking accept
+    /// with epoll that also watches the kill EventFd, or set SO_RCVTIMEO on
+    /// the listener socket.
     pub fn shutdown(mut self) -> Result<(), VirtioFsError> {
         info!("shutting down VirtioFS daemon");
 
