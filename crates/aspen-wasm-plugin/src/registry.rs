@@ -55,8 +55,11 @@ impl PluginRegistry {
 
         info!(manifest_count = scan_result.entries.len(), "found WASM plugin manifests");
 
+        let secret_key = ctx.endpoint_manager.endpoint().secret_key().clone();
+        let hlc = Arc::new(aspen_core::hlc::create_hlc(&ctx.node_id.to_string()));
+
         for entry in scan_result.entries {
-            match load_plugin(ctx, blob_store, &entry.key, &entry.value).await {
+            match load_plugin(ctx, blob_store, &entry.key, &entry.value, &secret_key, &hlc).await {
                 Ok(Some((handler, priority))) => {
                     handlers.push((handler, priority));
                 }
@@ -85,6 +88,8 @@ async fn load_plugin(
     blob_store: &Arc<aspen_blob::IrohBlobStore>,
     key: &str,
     manifest_json: &str,
+    secret_key: &iroh::SecretKey,
+    hlc: &Arc<aspen_core::HLC>,
 ) -> anyhow::Result<Option<(Arc<dyn RequestHandler>, u32)>> {
     let manifest: PluginManifest =
         serde_json::from_str(manifest_json).map_err(|e| anyhow::anyhow!("invalid manifest at '{key}': {e}"))?;
@@ -134,13 +139,17 @@ async fn load_plugin(
         .map_err(|e| anyhow::anyhow!("failed to create sandbox for '{}': {e}", manifest.name))?;
 
     // Register host functions
-    let host_ctx = Arc::new(PluginHostContext::new(
-        ctx.kv_store.clone(),
-        Arc::clone(blob_store) as Arc<dyn BlobStore>,
-        ctx.controller.clone(),
-        ctx.node_id,
-        manifest.name.clone(),
-    ));
+    let host_ctx = Arc::new(
+        PluginHostContext::new(
+            ctx.kv_store.clone(),
+            Arc::clone(blob_store) as Arc<dyn BlobStore>,
+            ctx.controller.clone(),
+            ctx.node_id,
+            manifest.name.clone(),
+        )
+        .with_secret_key(secret_key.clone())
+        .with_hlc(Arc::clone(hlc)),
+    );
     register_plugin_host_functions(&mut proto, host_ctx)?;
 
     // Load runtime and module

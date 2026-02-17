@@ -63,14 +63,12 @@ impl PluginHostContext {
     }
 
     /// Set the Iroh secret key for Ed25519 operations.
-    #[allow(dead_code)]
     pub fn with_secret_key(mut self, secret_key: iroh::SecretKey) -> Self {
         self.secret_key = Some(secret_key);
         self
     }
 
     /// Set the HLC instance for causal timestamps.
-    #[allow(dead_code)]
     pub fn with_hlc(mut self, hlc: Arc<HLC>) -> Self {
         self.hlc = Some(hlc);
         self
