@@ -5,8 +5,15 @@
 
 use std::collections::HashMap;
 
-use serde_json::Value;
-use serde_json::json;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::ServiceDeregisterResultResponse;
+use aspen_client_api::ServiceDiscoverResultResponse;
+use aspen_client_api::ServiceGetInstanceResultResponse;
+use aspen_client_api::ServiceHeartbeatResultResponse;
+use aspen_client_api::ServiceListResultResponse;
+use aspen_client_api::ServiceRegisterResultResponse;
+use aspen_client_api::ServiceUpdateHealthResultResponse;
+use aspen_client_api::ServiceUpdateMetadataResultResponse;
 
 use crate::kv;
 use crate::types::HealthStatus;
@@ -51,19 +58,20 @@ fn write_instance(key: &str, instance: &ServiceInstance) -> Result<(), String> {
 // Handlers
 // ============================================================================
 
-pub fn handle_register(req: &Value) -> Value {
-    let service_name = req["service_name"].as_str().unwrap_or_default();
-    let instance_id = req["instance_id"].as_str().unwrap_or_default();
-    let address = req["address"].as_str().unwrap_or_default();
-    let version = req["version"].as_str().unwrap_or_default();
-    let tags_json = req["tags"].as_str().unwrap_or("[]");
-    let weight = req["weight"].as_u64().unwrap_or(100) as u32;
-    let custom_json = req["custom_metadata"].as_str().unwrap_or("{}");
-    let ttl_ms = req["ttl_ms"].as_u64().unwrap_or(0);
-    let lease_id = req["lease_id"].as_u64();
-
-    let tags: Vec<String> = serde_json::from_str(tags_json).unwrap_or_default();
-    let custom: HashMap<String, String> = serde_json::from_str(custom_json).unwrap_or_default();
+#[allow(clippy::too_many_arguments)]
+pub fn handle_register(
+    service_name: String,
+    instance_id: String,
+    address: String,
+    version: String,
+    tags: String,
+    weight: u32,
+    custom_metadata: String,
+    ttl_ms: u64,
+    lease_id: Option<u64>,
+) -> ClientRpcResponse {
+    let parsed_tags: Vec<String> = serde_json::from_str(&tags).unwrap_or_default();
+    let custom: HashMap<String, String> = serde_json::from_str(&custom_metadata).unwrap_or_default();
 
     let now = kv::now_ms();
     let effective_ttl = if ttl_ms == 0 {
@@ -78,8 +86,7 @@ pub fn handle_register(req: &Value) -> Value {
         now.saturating_add(effective_ttl)
     };
 
-    let key = instance_key(service_name, instance_id);
-
+    let key = instance_key(&service_name, &instance_id);
     let existing = read_instance(&key);
 
     let (fencing_token, registered_at_ms) = match &existing {
@@ -88,13 +95,13 @@ pub fn handle_register(req: &Value) -> Value {
     };
 
     let instance = ServiceInstance {
-        instance_id: instance_id.to_string(),
-        service_name: service_name.to_string(),
-        address: address.to_string(),
+        instance_id,
+        service_name,
+        address,
         health_status: HealthStatus::Healthy,
         metadata: ServiceInstanceMetadata {
-            version: version.to_string(),
-            tags,
+            version,
+            tags: parsed_tags,
             weight,
             custom,
         },
@@ -107,82 +114,69 @@ pub fn handle_register(req: &Value) -> Value {
     };
 
     match write_instance(&key, &instance) {
-        Ok(()) => json!({
-            "ServiceRegisterResult": {
-                "is_success": true,
-                "fencing_token": fencing_token,
-                "deadline_ms": deadline_ms,
-                "error": null
-            }
+        Ok(()) => ClientRpcResponse::ServiceRegisterResult(ServiceRegisterResultResponse {
+            is_success: true,
+            fencing_token: Some(fencing_token),
+            deadline_ms: Some(deadline_ms),
+            error: None,
         }),
-        Err(e) => json!({
-            "ServiceRegisterResult": {
-                "is_success": false,
-                "fencing_token": null,
-                "deadline_ms": null,
-                "error": e
-            }
+        Err(e) => ClientRpcResponse::ServiceRegisterResult(ServiceRegisterResultResponse {
+            is_success: false,
+            fencing_token: None,
+            deadline_ms: None,
+            error: Some(e),
         }),
     }
 }
 
-pub fn handle_deregister(req: &Value) -> Value {
-    let service_name = req["service_name"].as_str().unwrap_or_default();
-    let instance_id = req["instance_id"].as_str().unwrap_or_default();
-    let fencing_token = req["fencing_token"].as_u64().unwrap_or(0);
-
-    let key = instance_key(service_name, instance_id);
+pub fn handle_deregister(service_name: String, instance_id: String, fencing_token: u64) -> ClientRpcResponse {
+    let key = instance_key(&service_name, &instance_id);
 
     match read_instance(&key) {
-        None => json!({
-            "ServiceDeregisterResult": {
-                "is_success": true,
-                "was_registered": false,
-                "error": null
-            }
+        None => ClientRpcResponse::ServiceDeregisterResult(ServiceDeregisterResultResponse {
+            is_success: true,
+            was_registered: false,
+            error: None,
         }),
         Some(inst) => {
             if inst.fencing_token != fencing_token {
-                return json!({
-                    "ServiceDeregisterResult": {
-                        "is_success": false,
-                        "was_registered": false,
-                        "error": format!("fencing token mismatch: expected {}, got {}", inst.fencing_token, fencing_token)
-                    }
+                return ClientRpcResponse::ServiceDeregisterResult(ServiceDeregisterResultResponse {
+                    is_success: false,
+                    was_registered: false,
+                    error: Some(format!(
+                        "fencing token mismatch: expected {}, got {}",
+                        inst.fencing_token, fencing_token
+                    )),
                 });
             }
 
             match kv::kv_delete(&key) {
-                Ok(()) => json!({
-                    "ServiceDeregisterResult": {
-                        "is_success": true,
-                        "was_registered": true,
-                        "error": null
-                    }
+                Ok(()) => ClientRpcResponse::ServiceDeregisterResult(ServiceDeregisterResultResponse {
+                    is_success: true,
+                    was_registered: true,
+                    error: None,
                 }),
-                Err(e) => json!({
-                    "ServiceDeregisterResult": {
-                        "is_success": false,
-                        "was_registered": false,
-                        "error": e
-                    }
+                Err(e) => ClientRpcResponse::ServiceDeregisterResult(ServiceDeregisterResultResponse {
+                    is_success: false,
+                    was_registered: false,
+                    error: Some(e),
                 }),
             }
         }
     }
 }
 
-pub fn handle_discover(req: &Value) -> Value {
-    let service_name = req["service_name"].as_str().unwrap_or_default();
-    let healthy_only = req["healthy_only"].as_bool().unwrap_or(false);
-    let tags_json = req["tags"].as_str().unwrap_or("[]");
-    let version_prefix = req["version_prefix"].as_str();
-    let limit = req["limit"].as_u64().map(|l| l as u32);
-
-    let required_tags: Vec<String> = serde_json::from_str(tags_json).unwrap_or_default();
+pub fn handle_discover(
+    service_name: String,
+    healthy_only: bool,
+    tags: String,
+    version_prefix: Option<String>,
+    limit: Option<u32>,
+) -> ClientRpcResponse {
+    let required_tags: Vec<String> = serde_json::from_str(&tags).unwrap_or_default();
     let scan_limit = limit.unwrap_or(MAX_DISCOVERY_RESULTS).min(MAX_DISCOVERY_RESULTS);
 
-    let prefix = service_prefix(service_name);
+    let prefix = service_prefix(&service_name);
     let entries = kv::kv_scan(&prefix, scan_limit);
     let now = kv::now_ms();
 
@@ -213,10 +207,10 @@ pub fn handle_discover(req: &Value) -> Value {
         }
 
         // Version prefix filter
-        if let Some(vp) = version_prefix {
-            if !inst.metadata.version.starts_with(vp) {
-                continue;
-            }
+        if let Some(ref vp) = version_prefix
+            && !inst.metadata.version.starts_with(vp.as_str())
+        {
+            continue;
         }
 
         instances.push(inst.to_response());
@@ -227,19 +221,15 @@ pub fn handle_discover(req: &Value) -> Value {
     }
 
     let count = instances.len() as u32;
-    json!({
-        "ServiceDiscoverResult": {
-            "is_success": true,
-            "instances": instances,
-            "count": count,
-            "error": null
-        }
+    ClientRpcResponse::ServiceDiscoverResult(ServiceDiscoverResultResponse {
+        is_success: true,
+        instances,
+        count,
+        error: None,
     })
 }
 
-pub fn handle_list(req: &Value) -> Value {
-    let prefix = req["prefix"].as_str().unwrap_or_default();
-    let limit = req["limit"].as_u64().unwrap_or(100) as u32;
+pub fn handle_list(prefix: String, limit: u32) -> ClientRpcResponse {
     let scan_limit = limit.min(MAX_DISCOVERY_RESULTS);
 
     let full_prefix = format!("{SERVICE_PREFIX}{prefix}");
@@ -250,32 +240,27 @@ pub fn handle_list(req: &Value) -> Value {
 
     for (key, _) in &entries {
         // Key format: __service:{name}:{instance_id}
-        if let Some(rest) = key.strip_prefix(SERVICE_PREFIX) {
-            if let Some(colon_pos) = rest.find(':') {
-                let svc_name = &rest[..colon_pos];
-                if seen.insert(svc_name.to_string()) {
-                    services.push(svc_name.to_string());
-                }
+        if let Some(rest) = key.strip_prefix(SERVICE_PREFIX)
+            && let Some(colon_pos) = rest.find(':')
+        {
+            let svc_name = &rest[..colon_pos];
+            if seen.insert(svc_name.to_string()) {
+                services.push(svc_name.to_string());
             }
         }
     }
 
     let count = services.len() as u32;
-    json!({
-        "ServiceListResult": {
-            "is_success": true,
-            "services": services,
-            "count": count,
-            "error": null
-        }
+    ClientRpcResponse::ServiceListResult(ServiceListResultResponse {
+        is_success: true,
+        services,
+        count,
+        error: None,
     })
 }
 
-pub fn handle_get_instance(req: &Value) -> Value {
-    let service_name = req["service_name"].as_str().unwrap_or_default();
-    let instance_id = req["instance_id"].as_str().unwrap_or_default();
-
-    let key = instance_key(service_name, instance_id);
+pub fn handle_get_instance(service_name: String, instance_id: String) -> ClientRpcResponse {
+    let key = instance_key(&service_name, &instance_id);
 
     match read_instance(&key) {
         Some(inst) => {
@@ -283,61 +268,50 @@ pub fn handle_get_instance(req: &Value) -> Value {
             if inst.deadline_ms > 0 && now > inst.deadline_ms {
                 // Expired
                 let _ = kv::kv_delete(&key);
-                return json!({
-                    "ServiceGetInstanceResult": {
-                        "is_success": true,
-                        "was_found": false,
-                        "instance": null,
-                        "error": null
-                    }
+                return ClientRpcResponse::ServiceGetInstanceResult(ServiceGetInstanceResultResponse {
+                    is_success: true,
+                    was_found: false,
+                    instance: None,
+                    error: None,
                 });
             }
 
-            json!({
-                "ServiceGetInstanceResult": {
-                    "is_success": true,
-                    "was_found": true,
-                    "instance": inst.to_response(),
-                    "error": null
-                }
+            ClientRpcResponse::ServiceGetInstanceResult(ServiceGetInstanceResultResponse {
+                is_success: true,
+                was_found: true,
+                instance: Some(inst.to_response()),
+                error: None,
             })
         }
-        None => json!({
-            "ServiceGetInstanceResult": {
-                "is_success": true,
-                "was_found": false,
-                "instance": null,
-                "error": null
-            }
+        None => ClientRpcResponse::ServiceGetInstanceResult(ServiceGetInstanceResultResponse {
+            is_success: true,
+            was_found: false,
+            instance: None,
+            error: None,
         }),
     }
 }
 
-pub fn handle_heartbeat(req: &Value) -> Value {
-    let service_name = req["service_name"].as_str().unwrap_or_default();
-    let instance_id = req["instance_id"].as_str().unwrap_or_default();
-    let fencing_token = req["fencing_token"].as_u64().unwrap_or(0);
-
-    let key = instance_key(service_name, instance_id);
+pub fn handle_heartbeat(service_name: String, instance_id: String, fencing_token: u64) -> ClientRpcResponse {
+    let key = instance_key(&service_name, &instance_id);
 
     match read_instance(&key) {
-        None => json!({
-            "ServiceHeartbeatResult": {
-                "is_success": false,
-                "new_deadline_ms": null,
-                "health_status": null,
-                "error": format!("instance not found: {}:{}", service_name, instance_id)
-            }
+        None => ClientRpcResponse::ServiceHeartbeatResult(ServiceHeartbeatResultResponse {
+            is_success: false,
+            new_deadline_ms: None,
+            health_status: None,
+            error: Some(format!("instance not found: {}:{}", service_name, instance_id)),
         }),
         Some(mut inst) => {
             if inst.fencing_token != fencing_token {
-                return json!({
-                    "ServiceHeartbeatResult": {
-                        "is_success": false,
-                        "new_deadline_ms": null,
-                        "health_status": null,
-                        "error": format!("fencing token mismatch: expected {}, got {}", inst.fencing_token, fencing_token)
-                    }
+                return ClientRpcResponse::ServiceHeartbeatResult(ServiceHeartbeatResultResponse {
+                    is_success: false,
+                    new_deadline_ms: None,
+                    health_status: None,
+                    error: Some(format!(
+                        "fencing token mismatch: expected {}, got {}",
+                        inst.fencing_token, fencing_token
+                    )),
                 });
             }
 
@@ -350,125 +324,112 @@ pub fn handle_heartbeat(req: &Value) -> Value {
             };
 
             match write_instance(&key, &inst) {
-                Ok(()) => json!({
-                    "ServiceHeartbeatResult": {
-                        "is_success": true,
-                        "new_deadline_ms": inst.deadline_ms,
-                        "health_status": inst.health_status.as_str(),
-                        "error": null
-                    }
+                Ok(()) => ClientRpcResponse::ServiceHeartbeatResult(ServiceHeartbeatResultResponse {
+                    is_success: true,
+                    new_deadline_ms: Some(inst.deadline_ms),
+                    health_status: Some(inst.health_status.as_str().to_string()),
+                    error: None,
                 }),
-                Err(e) => json!({
-                    "ServiceHeartbeatResult": {
-                        "is_success": false,
-                        "new_deadline_ms": null,
-                        "health_status": null,
-                        "error": e
-                    }
+                Err(e) => ClientRpcResponse::ServiceHeartbeatResult(ServiceHeartbeatResultResponse {
+                    is_success: false,
+                    new_deadline_ms: None,
+                    health_status: None,
+                    error: Some(e),
                 }),
             }
         }
     }
 }
 
-pub fn handle_update_health(req: &Value) -> Value {
-    let service_name = req["service_name"].as_str().unwrap_or_default();
-    let instance_id = req["instance_id"].as_str().unwrap_or_default();
-    let fencing_token = req["fencing_token"].as_u64().unwrap_or(0);
-    let status = req["status"].as_str().unwrap_or("unknown");
-
-    let key = instance_key(service_name, instance_id);
+pub fn handle_update_health(
+    service_name: String,
+    instance_id: String,
+    fencing_token: u64,
+    status: String,
+) -> ClientRpcResponse {
+    let key = instance_key(&service_name, &instance_id);
 
     match read_instance(&key) {
-        None => json!({
-            "ServiceUpdateHealthResult": {
-                "is_success": false,
-                "error": format!("instance not found: {}:{}", service_name, instance_id)
-            }
+        None => ClientRpcResponse::ServiceUpdateHealthResult(ServiceUpdateHealthResultResponse {
+            is_success: false,
+            error: Some(format!("instance not found: {}:{}", service_name, instance_id)),
         }),
         Some(mut inst) => {
             if inst.fencing_token != fencing_token {
-                return json!({
-                    "ServiceUpdateHealthResult": {
-                        "is_success": false,
-                        "error": format!("fencing token mismatch: expected {}, got {}", inst.fencing_token, fencing_token)
-                    }
+                return ClientRpcResponse::ServiceUpdateHealthResult(ServiceUpdateHealthResultResponse {
+                    is_success: false,
+                    error: Some(format!(
+                        "fencing token mismatch: expected {}, got {}",
+                        inst.fencing_token, fencing_token
+                    )),
                 });
             }
 
-            inst.health_status = HealthStatus::parse(status);
+            inst.health_status = HealthStatus::parse(&status);
 
             match write_instance(&key, &inst) {
-                Ok(()) => json!({
-                    "ServiceUpdateHealthResult": {
-                        "is_success": true,
-                        "error": null
-                    }
+                Ok(()) => ClientRpcResponse::ServiceUpdateHealthResult(ServiceUpdateHealthResultResponse {
+                    is_success: true,
+                    error: None,
                 }),
-                Err(e) => json!({
-                    "ServiceUpdateHealthResult": {
-                        "is_success": false,
-                        "error": e
-                    }
+                Err(e) => ClientRpcResponse::ServiceUpdateHealthResult(ServiceUpdateHealthResultResponse {
+                    is_success: false,
+                    error: Some(e),
                 }),
             }
         }
     }
 }
 
-pub fn handle_update_metadata(req: &Value) -> Value {
-    let service_name = req["service_name"].as_str().unwrap_or_default();
-    let instance_id = req["instance_id"].as_str().unwrap_or_default();
-    let fencing_token = req["fencing_token"].as_u64().unwrap_or(0);
-
-    let key = instance_key(service_name, instance_id);
+pub fn handle_update_metadata(
+    service_name: String,
+    instance_id: String,
+    fencing_token: u64,
+    version: Option<String>,
+    tags: Option<String>,
+    weight: Option<u32>,
+    custom_metadata: Option<String>,
+) -> ClientRpcResponse {
+    let key = instance_key(&service_name, &instance_id);
 
     match read_instance(&key) {
-        None => json!({
-            "ServiceUpdateMetadataResult": {
-                "is_success": false,
-                "error": "instance not found"
-            }
+        None => ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
+            is_success: false,
+            error: Some("instance not found".to_string()),
         }),
         Some(mut inst) => {
             if inst.fencing_token != fencing_token {
-                return json!({
-                    "ServiceUpdateMetadataResult": {
-                        "is_success": false,
-                        "error": "fencing token mismatch"
-                    }
+                return ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
+                    is_success: false,
+                    error: Some("fencing token mismatch".to_string()),
                 });
             }
 
-            if let Some(v) = req["version"].as_str() {
-                inst.metadata.version = v.to_string();
+            if let Some(v) = version {
+                inst.metadata.version = v;
             }
-            if let Some(t) = req["tags"].as_str() {
-                if let Ok(parsed) = serde_json::from_str::<Vec<String>>(t) {
-                    inst.metadata.tags = parsed;
-                }
+            if let Some(t) = tags
+                && let Ok(parsed) = serde_json::from_str::<Vec<String>>(&t)
+            {
+                inst.metadata.tags = parsed;
             }
-            if let Some(w) = req["weight"].as_u64() {
-                inst.metadata.weight = w as u32;
+            if let Some(w) = weight {
+                inst.metadata.weight = w;
             }
-            if let Some(c) = req["custom_metadata"].as_str() {
-                if let Ok(parsed) = serde_json::from_str::<HashMap<String, String>>(c) {
-                    inst.metadata.custom = parsed;
-                }
+            if let Some(c) = custom_metadata
+                && let Ok(parsed) = serde_json::from_str::<HashMap<String, String>>(&c)
+            {
+                inst.metadata.custom = parsed;
             }
 
             match write_instance(&key, &inst) {
-                Ok(()) => json!({
-                    "ServiceUpdateMetadataResult": {
-                        "is_success": true,
-                        "error": null
-                    }
+                Ok(()) => ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
+                    is_success: true,
+                    error: None,
                 }),
-                Err(e) => json!({
-                    "ServiceUpdateMetadataResult": {
-                        "is_success": false,
-                        "error": e
-                    }
+                Err(e) => ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
+                    is_success: false,
+                    error: Some(e),
                 }),
             }
         }

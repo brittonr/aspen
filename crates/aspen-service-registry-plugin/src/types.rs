@@ -1,7 +1,8 @@
 //! Standalone service registry types for the WASM guest.
 //!
 //! These mirror `aspen_coordination::registry::types` but are self-contained
-//! so the plugin has zero dependency on aspen crates.
+//! so the plugin has zero dependency on aspen coordination crates.
+//! The response type (`ServiceInstanceResponse`) comes from `aspen_client_api`.
 
 use std::collections::HashMap;
 
@@ -70,30 +71,12 @@ pub struct ServiceInstance {
     pub fencing_token: u64,
 }
 
-/// Response-format service instance for client RPC.
-#[derive(Debug, Serialize)]
-pub struct ServiceInstanceResponse {
-    pub instance_id: String,
-    pub service_name: String,
-    pub address: String,
-    pub health_status: String,
-    pub version: String,
-    pub tags: Vec<String>,
-    pub weight: u32,
-    pub custom_metadata: String,
-    pub registered_at_ms: u64,
-    pub last_heartbeat_ms: u64,
-    pub deadline_ms: u64,
-    pub lease_id: Option<u64>,
-    pub fencing_token: u64,
-}
-
 impl ServiceInstance {
     /// Convert to the client RPC response format.
-    pub fn to_response(&self) -> ServiceInstanceResponse {
+    pub fn to_response(&self) -> aspen_client_api::ServiceInstanceResponse {
         let custom_metadata = serde_json::to_string(&self.metadata.custom).unwrap_or_else(|_| "{}".to_string());
 
-        ServiceInstanceResponse {
+        aspen_client_api::ServiceInstanceResponse {
             instance_id: self.instance_id.clone(),
             service_name: self.service_name.clone(),
             address: self.address.clone(),
