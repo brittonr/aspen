@@ -82,6 +82,7 @@ pub enum KvRequest {
     },
 }
 
+#[cfg(feature = "auth")]
 impl KvRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

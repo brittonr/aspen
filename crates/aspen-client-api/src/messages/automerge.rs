@@ -59,6 +59,7 @@ pub enum AutomergeRequest {
     },
 }
 
+#[cfg(feature = "auth")]
 impl AutomergeRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

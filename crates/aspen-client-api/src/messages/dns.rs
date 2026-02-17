@@ -45,6 +45,7 @@ pub enum DnsRequest {
     },
 }
 
+#[cfg(feature = "auth")]
 impl DnsRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

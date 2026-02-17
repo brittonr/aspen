@@ -86,6 +86,7 @@ pub enum CiRequest {
     CacheMigrationValidate { max_report: Option<u32> },
 }
 
+#[cfg(feature = "auth")]
 impl CiRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

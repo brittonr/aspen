@@ -34,6 +34,7 @@ pub mod lease;
 pub mod pijul;
 pub mod secrets;
 pub mod sql;
+#[cfg(feature = "auth")]
 mod to_operation;
 pub mod watch;
 
@@ -403,6 +404,7 @@ pub const MAX_GIT_CHUNK_SIZE_BYTES: u64 = 4 * 1024 * 1024;
 /// whether it's authenticated (1) or legacy (0):
 /// - Legacy: `[0, request_bytes...]`
 /// - Authenticated: `[1, token_bytes_len (4 bytes), token_bytes..., request_bytes...]`
+#[cfg(feature = "auth")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthenticatedRequest {
     /// The actual RPC request.
@@ -411,6 +413,7 @@ pub struct AuthenticatedRequest {
     pub token: Option<aspen_auth::CapabilityToken>,
 }
 
+#[cfg(feature = "auth")]
 impl AuthenticatedRequest {
     /// Create an authenticated request with a token.
     pub fn new(request: ClientRpcRequest, token: aspen_auth::CapabilityToken) -> Self {
@@ -426,6 +429,7 @@ impl AuthenticatedRequest {
     }
 }
 
+#[cfg(feature = "auth")]
 impl From<ClientRpcRequest> for AuthenticatedRequest {
     fn from(request: ClientRpcRequest) -> Self {
         Self::unauthenticated(request)
@@ -3190,6 +3194,7 @@ pub enum ClientRpcRequest {
     },
 }
 
+#[cfg(feature = "auth")]
 impl ClientRpcRequest {
     /// Convert the request to an authorization operation.
     ///

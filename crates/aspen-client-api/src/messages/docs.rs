@@ -47,6 +47,7 @@ pub enum DocsRequest {
     GetKeyOrigin { key: String },
 }
 
+#[cfg(feature = "auth")]
 impl DocsRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

@@ -319,6 +319,7 @@ pub enum CoordinationRequest {
     },
 }
 
+#[cfg(feature = "auth")]
 impl CoordinationRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

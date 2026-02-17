@@ -16,6 +16,7 @@ pub enum HooksRequest {
     HookTrigger { event_type: String, payload_json: String },
 }
 
+#[cfg(feature = "auth")]
 impl HooksRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

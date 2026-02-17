@@ -76,6 +76,7 @@ pub enum PijulRequest {
     },
 }
 
+#[cfg(feature = "auth")]
 impl PijulRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

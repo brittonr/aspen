@@ -29,6 +29,7 @@ pub enum FederationRequest {
     },
 }
 
+#[cfg(feature = "auth")]
 impl FederationRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

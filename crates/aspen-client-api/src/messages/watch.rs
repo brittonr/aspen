@@ -20,6 +20,7 @@ pub enum WatchRequest {
     WatchStatus { watch_id: Option<u64> },
 }
 
+#[cfg(feature = "auth")]
 impl WatchRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

@@ -194,6 +194,7 @@ pub enum ForgeRequest {
     GitBridgePushComplete { session_id: String, content_hash: [u8; 32] },
 }
 
+#[cfg(feature = "auth")]
 impl ForgeRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

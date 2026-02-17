@@ -78,6 +78,7 @@ pub enum ClusterRequest {
     },
 }
 
+#[cfg(feature = "auth")]
 impl ClusterRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

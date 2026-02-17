@@ -59,6 +59,7 @@ pub enum BlobRequest {
     RunBlobRepairCycle,
 }
 
+#[cfg(feature = "auth")]
 impl BlobRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

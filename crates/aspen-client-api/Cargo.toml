@@ -6,8 +6,8 @@ license = "AGPL-3.0-or-later"
 description = "Protocol definitions for Aspen client RPC communication"
 
 [dependencies]
-# Authentication types
-aspen-auth = { path = "../aspen-auth" }
+# Authentication types (optional for WASM guest targets)
+aspen-auth = { path = "../aspen-auth", optional = true }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -23,7 +23,8 @@ aspen-jobs-protocol = { path = "../aspen-jobs-protocol" }
 thiserror = "2.0"
 
 [features]
-default = []
+default = ["auth"]
+auth = ["dep:aspen-auth"]
 ci = []
 pijul = []
 secrets = []

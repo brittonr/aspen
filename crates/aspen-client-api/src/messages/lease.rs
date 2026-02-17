@@ -20,6 +20,7 @@ pub enum LeaseRequest {
     LeaseList,
 }
 
+#[cfg(feature = "auth")]
 impl LeaseRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

@@ -157,6 +157,7 @@ pub enum SecretsRequest {
     SecretsNixCacheListKeys { mount: String },
 }
 
+#[cfg(feature = "auth")]
 impl SecretsRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {

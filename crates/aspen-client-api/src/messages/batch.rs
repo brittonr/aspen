@@ -19,6 +19,7 @@ pub enum BatchRequest {
     },
 }
 
+#[cfg(feature = "auth")]
 impl BatchRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
