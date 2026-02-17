@@ -13,10 +13,7 @@ categories = ["asynchronous", "concurrency", "network-programming"]
 default = []
 blob = ["dep:aspen-blob", "dep:iroh-blobs"]
 vm-executor = ["hyperlight-host", "blob"]
-# NOTE: hyperlight-wasm dep is optional and not yet required by the feature.
-# The WasmComponentWorker is fully structured but stubs out sandbox execution
-# until hyperlight-wasm's build toolchain (wasm32 sysroot) is integrated.
-# To wire up: change to wasm-component = ["hyperlight-wasm", "blob"]
+# hyperlight-wasm blocked: cargo-hyperlight 0.1.5 uses --build-plan (removed in Cargo 1.93)
 wasm-component = ["blob"]
 
 [dependencies]
