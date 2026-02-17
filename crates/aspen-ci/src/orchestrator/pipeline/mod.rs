@@ -510,7 +510,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         }
 
         // Sort by created_at descending (newest first)
-        runs.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        runs.sort_by_key(|b| std::cmp::Reverse(b.created_at));
 
         runs
     }

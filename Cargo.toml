@@ -396,14 +396,8 @@ cloud-hypervisor-client = "0.3"
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
 default = []
 
-# Full production: all features enabled (excluding hyperlight-based features)
-# Note: vm-executor, wasm-component, nanvix-executor, wasm-plugins require cargo-hyperlight
-# which uses --build-plan (removed in Cargo 1.93). Use full-hyperlight when that's fixed.
-# Tracking: https://github.com/rust-lang/cargo/issues/5579
-full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs", "federation"]
-
-# Full production with Hyperlight VM features (requires Rust <= 1.92 due to cargo-hyperlight)
-full-hyperlight = ["full", "vm-executor", "wasm-component", "nanvix-executor", "wasm-plugins"]
+# Full production: all features enabled
+full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "wasm-component", "nanvix-executor", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs", "federation", "wasm-plugins"]
 
 # Forge preset: Git hosting with blob storage, content discovery, and docs
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
@@ -616,3 +610,8 @@ required-features = ["testing", "forge", "blob"]
 [[test]]
 name = "forge_hosting_e2e_test"
 required-features = ["testing", "forge", "blob"]
+
+# Vendored patches: cargo-hyperlight patched to replace --build-plan
+# (removed in Cargo 1.93) with stable --message-format=json.
+[patch.crates-io]
+cargo-hyperlight = { path = "vendor/cargo-hyperlight" }

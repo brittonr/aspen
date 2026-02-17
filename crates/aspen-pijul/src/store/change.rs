@@ -256,7 +256,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         }
 
         // Sort by recorded_at_ms descending (newest first)
-        log.sort_by(|a, b| b.recorded_at_ms.cmp(&a.recorded_at_ms));
+        log.sort_by_key(|b| std::cmp::Reverse(b.recorded_at_ms));
 
         debug!(repo_id = %repo_id, channel = channel, count = log.len(), "retrieved change log");
         Ok(log)

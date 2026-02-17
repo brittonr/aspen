@@ -149,7 +149,7 @@ impl GlobalMetrics {
     fn snapshot(&self) -> GlobalMetricsSnapshot {
         let samples = self.latency_samples.load(Ordering::Relaxed);
         let total_us = self.total_latency_us.load(Ordering::Relaxed);
-        let avg_latency_us = if samples > 0 { total_us / samples } else { 0 };
+        let avg_latency_us = total_us.checked_div(samples).unwrap_or(0);
 
         GlobalMetricsSnapshot {
             successes: self.successes.load(Ordering::Relaxed),
@@ -223,7 +223,7 @@ impl HandlerMetrics {
     pub fn snapshot(&self) -> HandlerMetricsSnapshot {
         let samples = self.latency_samples.load(Ordering::Relaxed);
         let total_us = self.total_latency_us.load(Ordering::Relaxed);
-        let avg_latency_us = if samples > 0 { total_us / samples } else { 0 };
+        let avg_latency_us = total_us.checked_div(samples).unwrap_or(0);
 
         HandlerMetricsSnapshot {
             successes: self.successes.load(Ordering::Relaxed),

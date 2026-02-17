@@ -73,17 +73,15 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
         }
 
         // Calculate averages
-        if analysis.total_jobs > 0 {
-            analysis.avg_age_seconds = analysis.total_age_seconds / analysis.total_jobs;
-            if analysis.redriven_jobs > 0 {
-                analysis.avg_redrive_attempts = analysis.total_redrive_attempts as f64 / analysis.redriven_jobs as f64;
-            }
+        analysis.avg_age_seconds = analysis.total_age_seconds.checked_div(analysis.total_jobs).unwrap_or(0);
+        if analysis.redriven_jobs > 0 {
+            analysis.avg_redrive_attempts = analysis.total_redrive_attempts as f64 / analysis.redriven_jobs as f64;
         }
 
         // Find most common errors
         analysis.top_errors =
             analysis.error_patterns.iter().map(|(error, count)| (error.clone(), *count)).collect::<Vec<_>>();
-        analysis.top_errors.sort_by(|a, b| b.1.cmp(&a.1));
+        analysis.top_errors.sort_by_key(|b| std::cmp::Reverse(b.1));
         analysis.top_errors.truncate(10);
 
         Ok(analysis)

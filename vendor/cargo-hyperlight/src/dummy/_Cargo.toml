@@ -1,0 +1,13 @@
+[package]
+name = "sysroot"
+version = "0.0.0"
+authors = ["The Rust Project Developers"]
+edition = "2018"
+autotests = false
+autobenches = false
+
+[workspace]
+
+[lib]
+name = "sysroot"
+path = "lib.rs"

@@ -190,12 +190,8 @@ pub fn refill_tokens(current_tokens: u64, refill_amount: u64, capacity: u64) -> 
 /// Number of complete intervals elapsed (0 if interval_ms is 0).
 #[inline]
 pub fn calculate_intervals_elapsed(last_refill_ms: u64, now_ms: u64, interval_ms: u64) -> u64 {
-    if interval_ms == 0 {
-        0
-    } else {
-        let elapsed = now_ms.saturating_sub(last_refill_ms);
-        elapsed / interval_ms
-    }
+    let elapsed = now_ms.saturating_sub(last_refill_ms);
+    elapsed.checked_div(interval_ms).unwrap_or(0)
 }
 
 /// Compute tokens to add during refill.

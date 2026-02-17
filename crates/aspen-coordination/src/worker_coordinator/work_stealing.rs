@@ -74,7 +74,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
         // Sort sources by queue depth (descending) for deterministic selection
         let mut sorted_sources = sources;
-        sorted_sources.sort_by(|a, b| b.queue_depth.cmp(&a.queue_depth));
+        sorted_sources.sort_by_key(|b| std::cmp::Reverse(b.queue_depth));
 
         // Get and update round-robin counter
         let mut counter = self.steal_source_counter.write().await;

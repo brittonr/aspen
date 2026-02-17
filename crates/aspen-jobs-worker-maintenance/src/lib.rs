@@ -390,8 +390,8 @@ impl MaintenanceWorker {
                     "total_size_bytes": total_key_bytes + total_value_bytes,
                     "expired_entries": expired_count,
                     "entries_with_lease": with_lease,
-                    "avg_key_size": if entry_count > 0 { total_key_bytes / entry_count } else { 0 },
-                    "avg_value_size": if entry_count > 0 { total_value_bytes / entry_count } else { 0 },
+                    "avg_key_size": total_key_bytes.checked_div(entry_count).unwrap_or(0),
+                    "avg_value_size": total_value_bytes.checked_div(entry_count).unwrap_or(0),
                 }),
             );
         }

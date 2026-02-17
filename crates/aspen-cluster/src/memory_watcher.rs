@@ -269,11 +269,7 @@ fn read_memory_stats() -> Result<MemoryStats, std::io::Error> {
     let total_bytes = total_kb * 1024;
     let available_bytes = available_kb * 1024;
     let used_bytes = total_bytes.saturating_sub(available_bytes);
-    let usage_percent = if total_bytes > 0 {
-        (used_bytes * 100) / total_bytes
-    } else {
-        0
-    };
+    let usage_percent = (used_bytes * 100).checked_div(total_bytes).unwrap_or(0);
 
     Ok(MemoryStats {
         total_bytes,
