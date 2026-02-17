@@ -1,0 +1,9 @@
+{
+  "name": "echo-plugin",
+  "version": "0.1.0",
+  "handles": [
+    "Ping",
+    "ReadKey"
+  ],
+  "priority": 950
+}

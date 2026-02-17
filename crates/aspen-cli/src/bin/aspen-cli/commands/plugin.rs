@@ -45,21 +45,27 @@ pub struct InstallArgs {
     /// Path to the WASM binary.
     pub wasm_file: PathBuf,
 
-    /// Unique plugin name.
+    /// Path to a plugin.json manifest file. When provided, name, handles,
+    /// priority, and version are read from the manifest. CLI flags override
+    /// manifest values.
     #[arg(long)]
-    pub name: String,
+    pub manifest: Option<PathBuf>,
 
-    /// Request types this plugin handles (comma-separated).
+    /// Unique plugin name (required unless --manifest is provided).
+    #[arg(long)]
+    pub name: Option<String>,
+
+    /// Request types this plugin handles (comma-separated; required unless --manifest is provided).
     #[arg(long, value_delimiter = ',')]
-    pub handles: Vec<String>,
+    pub handles: Option<Vec<String>>,
 
     /// Dispatch priority (900-999, lower = earlier).
-    #[arg(long, default_value = "950")]
-    pub priority: u32,
+    #[arg(long)]
+    pub priority: Option<u32>,
 
     /// Semantic version string.
-    #[arg(long = "plugin-version", default_value = "0.1.0")]
-    pub plugin_version: String,
+    #[arg(long = "plugin-version")]
+    pub plugin_version: Option<String>,
 
     /// Fuel budget override.
     #[arg(long)]
@@ -262,7 +268,62 @@ impl PluginCommand {
 // Subcommand implementations
 // ============================================================================
 
+/// Resolved install parameters after merging manifest + CLI flags.
+struct ResolvedInstall {
+    name: String,
+    handles: Vec<String>,
+    priority: u32,
+    version: String,
+    fuel_limit: Option<u64>,
+    memory_limit: Option<u64>,
+}
+
+fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
+    // If --manifest is provided, load it as the base.
+    let base: Option<aspen_plugin_api::PluginInfo> = match &args.manifest {
+        Some(path) => {
+            let bytes = std::fs::read(path).with_context(|| format!("failed to read manifest {}", path.display()))?;
+            let info: aspen_plugin_api::PluginInfo =
+                serde_json::from_slice(&bytes).with_context(|| format!("invalid manifest {}", path.display()))?;
+            Some(info)
+        }
+        None => None,
+    };
+
+    // CLI flags override manifest values.
+    let name = args
+        .name
+        .clone()
+        .or_else(|| base.as_ref().map(|b| b.name.clone()))
+        .ok_or_else(|| anyhow::anyhow!("--name is required when --manifest is not provided"))?;
+
+    let handles = args
+        .handles
+        .clone()
+        .or_else(|| base.as_ref().map(|b| b.handles.clone()))
+        .ok_or_else(|| anyhow::anyhow!("--handles is required when --manifest is not provided"))?;
+
+    let priority = args.priority.or_else(|| base.as_ref().map(|b| b.priority)).unwrap_or(950);
+
+    let version = args
+        .plugin_version
+        .clone()
+        .or_else(|| base.as_ref().map(|b| b.version.clone()))
+        .unwrap_or_else(|| "0.1.0".to_string());
+
+    Ok(ResolvedInstall {
+        name,
+        handles,
+        priority,
+        version,
+        fuel_limit: args.fuel_limit,
+        memory_limit: args.memory_limit,
+    })
+}
+
 async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> Result<()> {
+    let resolved = resolve_install_args(&args)?;
+
     // Read WASM binary
     let data =
         std::fs::read(&args.wasm_file).with_context(|| format!("failed to read {}", args.wasm_file.display()))?;
@@ -271,7 +332,7 @@ async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> 
     let blob_response = client
         .send(ClientRpcRequest::AddBlob {
             data,
-            tag: Some(format!("plugin:{}", args.name)),
+            tag: Some(format!("plugin:{}", resolved.name)),
         })
         .await?;
 
@@ -288,18 +349,18 @@ async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> 
 
     // Build manifest
     let manifest = PluginManifest {
-        name: args.name.clone(),
-        version: args.plugin_version,
+        name: resolved.name.clone(),
+        version: resolved.version,
         wasm_hash: wasm_hash.clone(),
-        handles: args.handles,
-        priority: args.priority.max(900).min(999),
-        fuel_limit: args.fuel_limit,
-        memory_limit: args.memory_limit,
+        handles: resolved.handles,
+        priority: resolved.priority.max(900).min(999),
+        fuel_limit: resolved.fuel_limit,
+        memory_limit: resolved.memory_limit,
         enabled: true,
     };
 
     let manifest_json = serde_json::to_string(&manifest)?;
-    let key = format!("{}{}", PLUGIN_KV_PREFIX, args.name);
+    let key = format!("{}{}", PLUGIN_KV_PREFIX, resolved.name);
 
     // Write manifest to KV store
     let write_response = client
@@ -320,7 +381,7 @@ async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> 
 
     print_output(
         &InstallOutput {
-            name: args.name,
+            name: resolved.name,
             wasm_hash,
         },
         json,
@@ -456,13 +517,15 @@ mod tests {
     }
 
     #[test]
-    fn plugin_install_fails_missing_required_args() {
+    fn plugin_install_parses_wasm_only() {
+        // Without --name/--handles/--manifest, clap still parses (they are all
+        // optional now). Validation happens at runtime in resolve_install_args.
         let result = Cli::try_parse_from(["aspen-cli", "plugin", "install", "test.wasm"]);
-        assert!(result.is_err(), "install without --name and --handles should fail");
+        assert!(result.is_ok(), "install with just wasm_file should parse: {:?}", result.err());
     }
 
     #[test]
-    fn plugin_install_succeeds_with_required_args() {
+    fn plugin_install_succeeds_with_name_and_handles() {
         let result = Cli::try_parse_from([
             "aspen-cli",
             "plugin",
@@ -489,6 +552,104 @@ mod tests {
             "ReadKey,WriteKey",
         ]);
         assert!(result.is_ok(), "install with comma-separated handles should parse: {:?}", result.err());
+    }
+
+    #[test]
+    fn plugin_install_with_manifest_flag() {
+        let result = Cli::try_parse_from([
+            "aspen-cli",
+            "plugin",
+            "install",
+            "test.wasm",
+            "--manifest",
+            "plugin.json",
+        ]);
+        assert!(result.is_ok(), "install with --manifest should parse: {:?}", result.err());
+    }
+
+    #[test]
+    fn plugin_install_manifest_with_overrides() {
+        let result = Cli::try_parse_from([
+            "aspen-cli",
+            "plugin",
+            "install",
+            "test.wasm",
+            "--manifest",
+            "plugin.json",
+            "--name",
+            "custom-name",
+            "--priority",
+            "910",
+        ]);
+        assert!(result.is_ok(), "install with --manifest and overrides should parse: {:?}", result.err());
+    }
+
+    #[test]
+    fn resolve_requires_name_without_manifest() {
+        let args = super::InstallArgs {
+            wasm_file: "test.wasm".into(),
+            manifest: None,
+            name: None,
+            handles: Some(vec!["ReadKey".to_string()]),
+            priority: None,
+            plugin_version: None,
+            fuel_limit: None,
+            memory_limit: None,
+        };
+        let result = super::resolve_install_args(&args);
+        assert!(result.is_err(), "should fail without --name or --manifest");
+    }
+
+    #[test]
+    fn resolve_requires_handles_without_manifest() {
+        let args = super::InstallArgs {
+            wasm_file: "test.wasm".into(),
+            manifest: None,
+            name: Some("my-plugin".to_string()),
+            handles: None,
+            priority: None,
+            plugin_version: None,
+            fuel_limit: None,
+            memory_limit: None,
+        };
+        let result = super::resolve_install_args(&args);
+        assert!(result.is_err(), "should fail without --handles or --manifest");
+    }
+
+    #[test]
+    fn resolve_succeeds_with_name_and_handles() {
+        let args = super::InstallArgs {
+            wasm_file: "test.wasm".into(),
+            manifest: None,
+            name: Some("my-plugin".to_string()),
+            handles: Some(vec!["ReadKey".to_string(), "WriteKey".to_string()]),
+            priority: Some(910),
+            plugin_version: Some("1.0.0".to_string()),
+            fuel_limit: None,
+            memory_limit: None,
+        };
+        let resolved = super::resolve_install_args(&args).expect("should resolve");
+        assert_eq!(resolved.name, "my-plugin");
+        assert_eq!(resolved.handles, vec!["ReadKey", "WriteKey"]);
+        assert_eq!(resolved.priority, 910);
+        assert_eq!(resolved.version, "1.0.0");
+    }
+
+    #[test]
+    fn resolve_defaults_priority_and_version() {
+        let args = super::InstallArgs {
+            wasm_file: "test.wasm".into(),
+            manifest: None,
+            name: Some("my-plugin".to_string()),
+            handles: Some(vec!["Ping".to_string()]),
+            priority: None,
+            plugin_version: None,
+            fuel_limit: None,
+            memory_limit: None,
+        };
+        let resolved = super::resolve_install_args(&args).expect("should resolve");
+        assert_eq!(resolved.priority, 950);
+        assert_eq!(resolved.version, "0.1.0");
     }
 
     #[test]

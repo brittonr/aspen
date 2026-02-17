@@ -2071,6 +2071,83 @@
                 exec ${scriptsDir}/setup-ci-network.sh "$@"
               ''}";
             };
+
+            # Build all WASM plugins for wasm32-unknown-unknown
+            # Usage: nix run .#build-plugins (from inside nix develop)
+            build-plugins = {
+              type = "app";
+              program = "${pkgs.writeShellScript "build-plugins" ''
+                set -e
+                PLUGINS="aspen-forge-plugin aspen-service-registry-plugin aspen-echo-plugin"
+                TARGET="wasm32-unknown-unknown"
+                echo "Building WASM plugins for $TARGET..."
+                for plugin in $PLUGINS; do
+                  echo "  Building $plugin..."
+                  cargo build --package "$plugin" --target "$TARGET" --release
+                done
+                echo ""
+                echo "Built plugins:"
+                ls -lh "target/$TARGET/release/"*.wasm 2>/dev/null || echo "  (none found)"
+              ''}";
+            };
+
+            # Build and deploy a named WASM plugin using its plugin.json manifest
+            # Usage: nix run .#deploy-plugin -- <plugin-name> [--ticket <ticket>]
+            # Examples:
+            #   nix run .#deploy-plugin -- forge --ticket <ticket>
+            #   nix run .#deploy-plugin -- service-registry --ticket <ticket>
+            #   nix run .#deploy-plugin -- echo --ticket <ticket>
+            deploy-plugin = {
+              type = "app";
+              program = "${pkgs.writeShellScript "deploy-plugin" ''
+                set -e
+                PLUGIN_NAME="''${1:?Usage: deploy-plugin <name> [--ticket <ticket>]}"
+                shift
+
+                # Resolve crate directory and cargo package name
+                case "$PLUGIN_NAME" in
+                  forge)
+                    CRATE_DIR="crates/aspen-forge-plugin"
+                    PKG_NAME="aspen-forge-plugin"
+                    ;;
+                  service-registry)
+                    CRATE_DIR="crates/aspen-service-registry-plugin"
+                    PKG_NAME="aspen-service-registry-plugin"
+                    ;;
+                  echo)
+                    CRATE_DIR="examples/plugins/echo-plugin"
+                    PKG_NAME="aspen-echo-plugin"
+                    ;;
+                  *)
+                    echo "Unknown plugin: $PLUGIN_NAME"
+                    echo "Available: forge, service-registry, echo"
+                    exit 1
+                    ;;
+                esac
+
+                MANIFEST="$CRATE_DIR/plugin.json"
+                if [ ! -f "$MANIFEST" ]; then
+                  echo "Error: manifest not found at $MANIFEST"
+                  exit 1
+                fi
+
+                TARGET="wasm32-unknown-unknown"
+                echo "Building $PKG_NAME for $TARGET..."
+                cargo build --package "$PKG_NAME" --target "$TARGET" --release
+
+                # Derive the .wasm filename from the package name (hyphens -> underscores)
+                WASM_NAME="$(echo "$PKG_NAME" | tr '-' '_').wasm"
+                WASM_PATH="target/$TARGET/release/$WASM_NAME"
+
+                if [ ! -f "$WASM_PATH" ]; then
+                  echo "Error: WASM binary not found at $WASM_PATH"
+                  exit 1
+                fi
+
+                echo "Deploying $PLUGIN_NAME from $WASM_PATH..."
+                aspen-cli plugin install "$WASM_PATH" --manifest "$MANIFEST" "$@"
+              ''}";
+            };
           };
         }
         // {

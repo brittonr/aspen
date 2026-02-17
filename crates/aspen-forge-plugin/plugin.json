@@ -1,0 +1,24 @@
+{
+  "name": "forge",
+  "version": "0.1.0",
+  "handles": [
+    "ForgeCreateRepo",
+    "ForgeGetRepo",
+    "ForgeListRepos",
+    "ForgeStoreBlob",
+    "ForgeGetBlob",
+    "ForgeCreateTree",
+    "ForgeGetTree",
+    "ForgeCommit",
+    "ForgeGetCommit",
+    "ForgeLog",
+    "ForgeGetRef",
+    "ForgeSetRef",
+    "ForgeDeleteRef",
+    "ForgeCasRef",
+    "ForgeListBranches",
+    "ForgeListTags",
+    "ForgeGetDelegateKey"
+  ],
+  "priority": 950
+}

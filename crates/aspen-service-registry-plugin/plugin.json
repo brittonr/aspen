@@ -1,0 +1,15 @@
+{
+  "name": "service-registry",
+  "version": "0.1.0",
+  "handles": [
+    "ServiceRegister",
+    "ServiceDeregister",
+    "ServiceDiscover",
+    "ServiceList",
+    "ServiceGetInstance",
+    "ServiceHeartbeat",
+    "ServiceUpdateHealth",
+    "ServiceUpdateMetadata"
+  ],
+  "priority": 950
+}
