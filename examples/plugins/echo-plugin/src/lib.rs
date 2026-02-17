@@ -46,3 +46,19 @@ impl AspenPlugin for EchoPlugin {
 }
 
 register_plugin!(EchoPlugin);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plugin_info_matches_manifest() {
+        let manifest_bytes = include_bytes!("../plugin.json");
+        let manifest: PluginInfo = serde_json::from_slice(manifest_bytes).expect("plugin.json should be valid");
+        let info = EchoPlugin::info();
+        assert_eq!(info.name, manifest.name, "name mismatch between code and plugin.json");
+        assert_eq!(info.handles, manifest.handles, "handles mismatch between code and plugin.json");
+        assert_eq!(info.priority, manifest.priority, "priority mismatch between code and plugin.json");
+        assert_eq!(info.version, manifest.version, "version mismatch between code and plugin.json");
+    }
+}
