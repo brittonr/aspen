@@ -1945,6 +1945,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-plugin-api"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "aspen-query-handler"
 version = "0.1.0"
 dependencies = [
@@ -2143,6 +2151,7 @@ dependencies = [
  "aspen-testing",
  "aspen-ticket",
  "aspen-transport",
+ "aspen-wasm-plugin",
  "async-trait",
  "blake3",
  "bolero 0.13.4",
@@ -2223,6 +2232,14 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "aspen-service-registry-plugin"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2535,6 +2552,29 @@ dependencies = [
  "thiserror 2.0.17",
  "toml 0.8.2",
  "walkdir",
+]
+
+[[package]]
+name = "aspen-wasm-plugin"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-blob",
+ "aspen-client-api",
+ "aspen-constants",
+ "aspen-core",
+ "aspen-kv-types",
+ "aspen-plugin-api",
+ "aspen-rpc-core",
+ "aspen-traits",
+ "async-trait",
+ "getrandom 0.2.16",
+ "hyperlight-wasm",
+ "iroh-blobs",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

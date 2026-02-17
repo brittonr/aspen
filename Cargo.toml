@@ -126,6 +126,9 @@ members = [
     "crates/aspen-nix-cache-gateway",
     "crates/aspen-verus-metrics",
     "crates/aspen-dht-discovery",
+    "crates/aspen-plugin-api",
+    "crates/aspen-wasm-plugin",
+    "crates/aspen-service-registry-plugin",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -260,6 +263,8 @@ aspen-coordination-protocol = { path = "crates/aspen-coordination-protocol" }
 aspen-forge-protocol = { path = "crates/aspen-forge-protocol" }
 aspen-jobs-protocol = { path = "crates/aspen-jobs-protocol" }
 aspen-dht-discovery = { path = "crates/aspen-dht-discovery" }
+aspen-plugin-api = { path = "crates/aspen-plugin-api" }
+aspen-wasm-plugin = { path = "crates/aspen-wasm-plugin" }
 
 # h3-iroh for HTTP/3 over Iroh QUIC (Nix binary cache gateway)
 h3 = "0.0.8"
@@ -389,7 +394,7 @@ cloud-hypervisor-client = "0.3"
 default = []
 
 # Full production: all features enabled
-full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "wasm-component", "nanvix-executor", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs", "federation"]
+full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "wasm-component", "nanvix-executor", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs", "federation", "wasm-plugins"]
 
 # Forge preset: Git hosting with blob storage, content discovery, and docs
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
@@ -413,6 +418,8 @@ blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-handlers/blob", "aspen-cl
 vm-executor = ["aspen-jobs/vm-executor"]
 # WASM Component Model execution via hyperlight-wasm
 wasm-component = ["aspen-jobs/wasm-component"]
+# WASM handler plugins for dynamic RPC handler loading
+wasm-plugins = ["aspen-rpc-handlers/wasm-plugins", "blob"]
 # Nanvix micro-VM execution (JS, Python, native binaries) via hyperlight-nanvix
 nanvix-executor = ["aspen-jobs/nanvix-executor"]
 # Shell command worker for executing system commands as jobs (requires auth)
@@ -459,7 +466,7 @@ federation = ["aspen-cluster/federation"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"wasm-component\", \"nanvix-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"nix-executor\", \"ci-vm-executor\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"wasm-component\", \"nanvix-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"nix-executor\", \"ci-vm-executor\", \"wasm-plugins\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit

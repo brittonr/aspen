@@ -63,3 +63,5 @@ pub use aspen_secrets_handler::SecretsHandler;
 #[cfg(feature = "secrets")]
 pub use aspen_secrets_handler::SecretsService;
 pub use aspen_service_registry_handler::ServiceRegistryHandler;
+#[cfg(feature = "wasm-plugins")]
+pub use aspen_wasm_plugin;

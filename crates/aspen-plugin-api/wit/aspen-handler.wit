@@ -1,0 +1,51 @@
+package aspen:handler@0.1.0;
+
+interface logging {
+    log-info: func(message: string);
+    log-debug: func(message: string);
+    log-warn: func(message: string);
+}
+
+interface clock {
+    now-ms: func() -> u64;
+}
+
+interface kv-store {
+    get: func(key: string) -> option<list<u8>>;
+    put: func(key: string, value: list<u8>) -> result<_, string>;
+    delete: func(key: string) -> result<_, string>;
+    scan: func(prefix: string, limit: u32) -> list<tuple<string, list<u8>>>;
+    cas: func(key: string, expected: list<u8>, new-value: list<u8>) -> result<_, string>;
+}
+
+interface blob-store {
+    has: func(hash: string) -> bool;
+    get: func(hash: string) -> option<list<u8>>;
+    put: func(data: list<u8>) -> result<string, string>;
+}
+
+interface identity {
+    node-id: func() -> u64;
+}
+
+interface randomness {
+    random-bytes: func(count: u32) -> list<u8>;
+}
+
+interface cluster {
+    is-leader: func() -> bool;
+    leader-id: func() -> u64;
+}
+
+world handler-plugin {
+    import logging;
+    import clock;
+    import kv-store;
+    import blob-store;
+    import identity;
+    import randomness;
+    import cluster;
+
+    export handle-request: func(input: list<u8>) -> result<list<u8>, string>;
+    export plugin-info: func() -> list<u8>;
+}

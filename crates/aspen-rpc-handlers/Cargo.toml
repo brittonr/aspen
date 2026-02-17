@@ -47,7 +47,7 @@ aspen-hooks-handler = { path = "../aspen-hooks-handler", optional = true }
 aspen-job-handler = { path = "../aspen-job-handler", optional = true }
 aspen-automerge-handler = { path = "../aspen-automerge-handler", optional = true }
 aspen-nix-cache-gateway = { path = "../aspen-nix-cache-gateway", optional = true }
-
+aspen-wasm-plugin = { path = "../aspen-wasm-plugin", optional = true }
 
 # Core dependencies
 tokio = { version = "1.0", features = ["rt-multi-thread", "sync", "macros"] }
@@ -85,6 +85,7 @@ snix = ["dep:aspen-nix-handler", "aspen-nix-handler?/snix"]
 hooks = ["dep:aspen-hooks-handler", "dep:aspen-hooks", "aspen-rpc-core/hooks"]
 jobs = ["dep:aspen-jobs", "dep:aspen-job-handler", "aspen-rpc-core/jobs", "aspen-rpc-core/worker"]
 docs = ["dep:aspen-docs", "dep:aspen-docs-handler", "aspen-cluster-handler/docs"]
+wasm-plugins = ["dep:aspen-wasm-plugin", "blob"]
 testing = []
 
 [dev-dependencies]

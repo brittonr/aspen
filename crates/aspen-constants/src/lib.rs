@@ -34,6 +34,7 @@ pub mod ci;
 pub mod coordination;
 pub mod directory;
 pub mod network;
+pub mod plugin;
 pub mod raft;
 pub mod wasm;
 

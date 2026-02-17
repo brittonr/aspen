@@ -104,6 +104,54 @@ impl HandlerRegistry {
         // No handler found - this shouldn't happen if all request types are covered
         Err(anyhow::anyhow!("no handler found for request type: {:?}", std::mem::discriminant(&request)))
     }
+
+    /// Add dynamically-loaded handlers (e.g., WASM plugins) to the registry.
+    ///
+    /// New handlers are appended after existing handlers and sorted by priority
+    /// among themselves. Since WASM plugins use priority >= 900 and native handlers
+    /// use priority < 900, appending maintains the global priority order.
+    ///
+    /// Must be called before the registry is cloned/shared across async tasks.
+    ///
+    /// # Tiger Style
+    ///
+    /// - Bounded: respects MAX_PLUGINS from aspen_constants::plugin
+    /// - Handlers are sorted by priority within the new batch
+    /// - Logged for observability
+    pub fn add_handlers(&mut self, mut new_handlers: Vec<(Arc<dyn RequestHandler>, u32)>) {
+        let count = new_handlers.len();
+        if count == 0 {
+            return;
+        }
+
+        // Sort new handlers by priority
+        new_handlers.sort_by_key(|(_, p)| *p);
+
+        // Get mutable access to handlers vec - this works because we're called during init
+        // before the Arc is cloned
+        let existing = std::mem::take(&mut self.handlers);
+        let mut all = Arc::try_unwrap(existing).unwrap_or_else(|arc| (*arc).clone());
+
+        // Append new handlers (already sorted, and all have priority >= 900)
+        all.extend(new_handlers.into_iter().map(|(h, _)| h));
+
+        self.handlers = Arc::new(all);
+        debug!(added = count, total = self.handlers.len(), "dynamic handlers added to registry");
+    }
+
+    /// Load WASM plugin handlers from the KV store.
+    ///
+    /// Scans for plugin manifests, loads enabled plugins, and adds them
+    /// to the handler registry. Must be called after `new()` and before
+    /// the registry is shared.
+    #[cfg(feature = "wasm-plugins")]
+    pub async fn load_wasm_plugins(&mut self, ctx: &ClientProtocolContext) -> anyhow::Result<u32> {
+        let handlers = aspen_wasm_plugin::PluginRegistry::load_all(ctx).await?;
+        let count = handlers.len() as u32;
+        self.add_handlers(handlers);
+        tracing::info!(plugin_count = count, "WASM plugin handlers loaded");
+        Ok(count)
+    }
 }
 
 impl std::fmt::Debug for HandlerRegistry {

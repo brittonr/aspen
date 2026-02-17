@@ -1,0 +1,13 @@
+[package]
+name = "aspen-service-registry-plugin"
+version = "0.1.0"
+edition = "2024"
+description = "WASM guest plugin reimplementing the service registry handler"
+license = "AGPL-3.0-or-later"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
