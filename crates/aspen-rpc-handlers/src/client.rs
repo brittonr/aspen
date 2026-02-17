@@ -92,6 +92,21 @@ impl ClientProtocolHandler {
             request_counter: AtomicU64::new(0),
         }
     }
+
+    /// Load WASM handler plugins from the cluster KV store.
+    ///
+    /// Must be called before the handler is consumed by the router.
+    /// Failures are logged but do not prevent the node from starting.
+    #[cfg(feature = "wasm-plugins")]
+    pub async fn load_wasm_plugins(&mut self) {
+        match self.registry.load_wasm_plugins(&self.ctx).await {
+            Ok(count) if count > 0 => {
+                info!(plugin_count = count, "WASM plugin handlers loaded");
+            }
+            Ok(_) => debug!("no WASM plugins to load"),
+            Err(e) => warn!(error = %e, "failed to load WASM plugins, continuing without"),
+        }
+    }
 }
 
 impl ProtocolHandler for ClientProtocolHandler {

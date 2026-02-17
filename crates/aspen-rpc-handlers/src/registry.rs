@@ -154,6 +154,78 @@ impl HandlerRegistry {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Minimal handler for testing the registry's `add_handlers` method.
+    struct TestHandler {
+        name: &'static str,
+    }
+
+    #[async_trait::async_trait]
+    impl RequestHandler for TestHandler {
+        fn name(&self) -> &'static str {
+            self.name
+        }
+
+        fn can_handle(&self, _request: &ClientRpcRequest) -> bool {
+            false
+        }
+
+        async fn handle(
+            &self,
+            _request: ClientRpcRequest,
+            _ctx: &ClientProtocolContext,
+        ) -> anyhow::Result<ClientRpcResponse> {
+            Err(anyhow::anyhow!("not implemented"))
+        }
+    }
+
+    fn empty_registry() -> HandlerRegistry {
+        HandlerRegistry {
+            handlers: Arc::new(Vec::new()),
+        }
+    }
+
+    #[test]
+    fn add_handlers_empty_vec_is_noop() {
+        let mut registry = empty_registry();
+        assert_eq!(registry.handlers.len(), 0);
+        registry.add_handlers(vec![]);
+        assert_eq!(registry.handlers.len(), 0);
+    }
+
+    #[test]
+    fn add_handlers_sorts_by_priority() {
+        let mut registry = empty_registry();
+        let h1: Arc<dyn RequestHandler> = Arc::new(TestHandler { name: "high" });
+        let h2: Arc<dyn RequestHandler> = Arc::new(TestHandler { name: "low" });
+
+        // Insert out of order: 950 before 910
+        registry.add_handlers(vec![(h1, 950), (h2, 910)]);
+
+        assert_eq!(registry.handlers.len(), 2);
+        assert_eq!(registry.handlers[0].name(), "low");
+        assert_eq!(registry.handlers[1].name(), "high");
+    }
+
+    #[test]
+    fn add_handlers_appends_after_existing() {
+        let existing: Arc<dyn RequestHandler> = Arc::new(TestHandler { name: "existing" });
+        let mut registry = HandlerRegistry {
+            handlers: Arc::new(vec![existing]),
+        };
+
+        let new_handler: Arc<dyn RequestHandler> = Arc::new(TestHandler { name: "new" });
+        registry.add_handlers(vec![(new_handler, 920)]);
+
+        assert_eq!(registry.handlers.len(), 2);
+        assert_eq!(registry.handlers[0].name(), "existing");
+        assert_eq!(registry.handlers[1].name(), "new");
+    }
+}
+
 impl std::fmt::Debug for HandlerRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HandlerRegistry").field("handler_count", &self.handlers.len()).finish()

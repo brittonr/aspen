@@ -29,6 +29,8 @@ pub mod patch;
 pub mod peer;
 #[cfg(feature = "pijul")]
 pub mod pijul;
+#[cfg(feature = "wasm-plugins")]
+pub mod plugin;
 pub mod queue;
 pub mod ratelimit;
 pub mod rwlock;

@@ -22,6 +22,7 @@ aspen-hooks-types = { path = "../aspen-hooks-types" }
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-pijul = { path = "../aspen-pijul", optional = true }
+aspen-plugin-api = { path = "../aspen-plugin-api", optional = true }
 
 # Async runtime
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "process", "fs", "io-std"] }
@@ -89,3 +90,4 @@ dns = []
 sql = []
 secrets = ["aspen-client-api/secrets"]
 automerge = ["aspen-client-api/automerge"]
+wasm-plugins = ["dep:aspen-plugin-api"]

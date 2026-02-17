@@ -39,6 +39,8 @@ use crate::commands::patch::PatchCommand;
 use crate::commands::peer::PeerCommand;
 #[cfg(feature = "pijul")]
 use crate::commands::pijul::PijulCommand;
+#[cfg(feature = "wasm-plugins")]
+use crate::commands::plugin::PluginCommand;
 use crate::commands::queue::QueueCommand;
 use crate::commands::ratelimit::RateLimitCommand;
 use crate::commands::rwlock::RWLockCommand;
@@ -229,6 +231,13 @@ pub enum Commands {
     #[command(subcommand)]
     Pijul(PijulCommand),
 
+    /// WASM plugin management.
+    ///
+    /// Install, list, enable, disable, and remove WASM handler plugins.
+    #[cfg(feature = "wasm-plugins")]
+    #[command(subcommand)]
+    Plugin(PluginCommand),
+
     /// Distributed queue operations.
     #[command(subcommand)]
     Queue(QueueCommand),
@@ -336,6 +345,8 @@ impl Cli {
             Commands::Peer(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "pijul")]
             Commands::Pijul(cmd) => cmd.run(&client, self.global.is_json).await,
+            #[cfg(feature = "wasm-plugins")]
+            Commands::Plugin(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Queue(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Ratelimit(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Rwlock(cmd) => cmd.run(&client, self.global.is_json).await,

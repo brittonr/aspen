@@ -205,7 +205,13 @@ async fn async_main() -> Result<()> {
     )
     .await?;
 
+    #[cfg(feature = "wasm-plugins")]
+    let mut client_handler = ClientProtocolHandler::new(client_context);
+    #[cfg(not(feature = "wasm-plugins"))]
     let client_handler = ClientProtocolHandler::new(client_context);
+
+    #[cfg(feature = "wasm-plugins")]
+    client_handler.load_wasm_plugins().await;
 
     // Spawn the Router with all protocol handlers
     let router = setup_router(&config, &node_mode, client_handler, watch_registry, kv_store.clone());

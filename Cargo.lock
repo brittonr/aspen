@@ -1024,6 +1024,7 @@ dependencies = [
  "aspen-forge",
  "aspen-hooks-types",
  "aspen-pijul",
+ "aspen-plugin-api",
  "async-trait",
  "base64 0.22.1",
  "blake3",
