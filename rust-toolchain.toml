@@ -1,6 +1,17 @@
 [toolchain]
-# Pinned to 1.92.0: cargo-hyperlight v0.1.5 uses --build-plan, removed in Cargo 1.93.0.
-channel = "1.92.0"
-components = ["rust-src"]
+# Nightly channel for access to unstable features and latest performance improvements.
+#
+# Key features enabled by nightly:
+# - Native async fn in traits (migrating from async-trait proc-macro)
+# - impl_trait_in_assoc_type for reduced boxing in RPC handlers
+# - const trait methods for verified pure functions
+# - Improved compile times via new trait solver and lld linker
+#
+# Note: hyperlight-wasm features (vm-executor, wasm-component, nanvix-executor)
+# are temporarily disabled due to cargo-hyperlight v0.1.5 requiring --build-plan
+# (removed in Cargo 1.93). Re-enable when cargo-hyperlight is updated.
+# Tracking: https://github.com/rust-lang/cargo/issues/5579
+channel = "nightly"
+components = ["rust-src", "rustfmt", "clippy"]
 targets = ["wasm32-unknown-unknown", "x86_64-unknown-none"]
 profile = "default"
