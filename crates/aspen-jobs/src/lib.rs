@@ -74,7 +74,7 @@ mod worker;
 pub mod workers;
 mod workflow;
 
-#[cfg(any(feature = "vm-executor", feature = "wasm-component"))]
+#[cfg(any(feature = "vm-executor", feature = "wasm-component", feature = "nanvix-executor"))]
 pub mod vm_executor;
 
 pub use affinity::AffinityJobManager;
@@ -208,8 +208,10 @@ pub use types::RetryPolicy;
 pub use types::Schedule;
 #[cfg(feature = "vm-executor")]
 pub use vm_executor::HyperlightWorker;
-#[cfg(any(feature = "vm-executor", feature = "wasm-component"))]
+#[cfg(any(feature = "vm-executor", feature = "wasm-component", feature = "nanvix-executor"))]
 pub use vm_executor::JobPayload as VmJobPayload;
+#[cfg(feature = "nanvix-executor")]
+pub use vm_executor::NanvixWorker;
 #[cfg(feature = "wasm-component")]
 pub use vm_executor::WasmComponentWorker;
 pub use worker::Worker;

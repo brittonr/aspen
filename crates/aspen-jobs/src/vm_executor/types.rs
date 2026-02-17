@@ -43,6 +43,16 @@ pub enum JobPayload {
         /// Memory limit in bytes (None = default).
         memory_limit: Option<u64>,
     },
+
+    /// Nanvix workload (JS, Python, or native binary) stored in blob store.
+    NanvixWorkload {
+        /// BLAKE3 hash of the workload file (hex string).
+        hash: String,
+        /// Size of the workload in bytes (for validation).
+        size: u64,
+        /// Workload type: "javascript", "python", or "binary".
+        workload_type: String,
+    },
 }
 
 /// Output from a Nix build operation.
@@ -102,6 +112,17 @@ impl JobPayload {
             size,
             fuel_limit,
             memory_limit,
+        }
+    }
+
+    /// Create a Nanvix workload payload.
+    /// The workload must already be uploaded to the blob store.
+    /// `workload_type` should be "javascript", "python", or "binary".
+    pub fn nanvix_workload(hash: impl Into<String>, size: u64, workload_type: impl Into<String>) -> Self {
+        Self::NanvixWorkload {
+            hash: hash.into(),
+            size,
+            workload_type: workload_type.into(),
         }
     }
 }

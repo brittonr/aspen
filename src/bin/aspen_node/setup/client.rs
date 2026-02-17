@@ -541,6 +541,55 @@ async fn initialize_job_system(
             }
         }
 
+        // Register WASM component worker for hyperlight-wasm sandbox execution
+        #[cfg(all(feature = "wasm-component", target_os = "linux"))]
+        {
+            use aspen_jobs::WasmComponentWorker;
+            if let Some(blob_store) = node_mode.blob_store() {
+                let blob_store_dyn: Arc<dyn aspen_blob::BlobStore> = blob_store.clone();
+                let kv_store_dyn: Arc<dyn aspen_core::KeyValueStore> = kv_store.clone();
+                match WasmComponentWorker::new(kv_store_dyn, blob_store_dyn) {
+                    Ok(wasm_worker) => {
+                        worker_service
+                            .register_handler("wasm_component", wasm_worker)
+                            .await
+                            .context("failed to register WASM component worker")?;
+                        info!("WASM component worker registered (hyperlight-wasm with KV + blob store)");
+                    }
+                    Err(e) => {
+                        warn!("Failed to create WasmComponentWorker: {}. WASM execution disabled.", e);
+                        warn!("WASM execution requires KVM support on Linux");
+                    }
+                }
+            } else {
+                warn!("No blob store available for WASM component executor. WASM execution disabled.");
+            }
+        }
+
+        // Register Nanvix executor worker for multi-language sandbox execution
+        #[cfg(all(feature = "nanvix-executor", target_os = "linux"))]
+        {
+            use aspen_jobs::NanvixWorker;
+            if let Some(blob_store) = node_mode.blob_store() {
+                let blob_store_dyn: Arc<dyn aspen_blob::BlobStore> = blob_store.clone();
+                match NanvixWorker::new(blob_store_dyn) {
+                    Ok(nanvix_worker) => {
+                        worker_service
+                            .register_handler("nanvix_execute", nanvix_worker)
+                            .await
+                            .context("failed to register Nanvix executor worker")?;
+                        info!("Nanvix executor worker registered (hyperlight-nanvix with blob store)");
+                    }
+                    Err(e) => {
+                        warn!("Failed to create NanvixWorker: {}. Nanvix execution disabled.", e);
+                        warn!("Nanvix execution requires KVM support on Linux");
+                    }
+                }
+            } else {
+                warn!("No blob store available for Nanvix executor. Nanvix execution disabled.");
+            }
+        }
+
         // CI/CD infrastructure setup
         #[cfg(feature = "ci")]
         {

@@ -389,7 +389,7 @@ cloud-hypervisor-client = "0.3"
 default = []
 
 # Full production: all features enabled
-full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs", "federation"]
+full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "wasm-component", "nanvix-executor", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs", "federation"]
 
 # Forge preset: Git hosting with blob storage, content discovery, and docs
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
@@ -411,6 +411,10 @@ dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hicko
 blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-handlers/blob", "aspen-cluster/blob", "aspen-client/blob-store"]
 # VM-based job execution with Hyperlight
 vm-executor = ["aspen-jobs/vm-executor"]
+# WASM Component Model execution via hyperlight-wasm
+wasm-component = ["aspen-jobs/wasm-component"]
+# Nanvix micro-VM execution (JS, Python, native binaries) via hyperlight-nanvix
+nanvix-executor = ["aspen-jobs/nanvix-executor"]
 # Shell command worker for executing system commands as jobs (requires auth)
 shell-worker = ["dep:aspen-jobs-worker-shell", "jobs", "blob"]
 # Nix build executor for CI Nix flake builds
@@ -455,7 +459,7 @@ federation = ["aspen-cluster/federation"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"nix-executor\", \"ci-vm-executor\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"wasm-component\", \"nanvix-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"nix-executor\", \"ci-vm-executor\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit

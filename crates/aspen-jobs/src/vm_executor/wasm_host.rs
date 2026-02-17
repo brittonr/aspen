@@ -420,3 +420,170 @@ pub fn register_host_functions(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use aspen_blob::InMemoryBlobStore;
+    use aspen_testing::DeterministicKeyValueStore;
+
+    use super::*;
+
+    /// Create an `AspenHostContext` backed by in-memory stores.
+    fn test_context() -> Arc<AspenHostContext> {
+        let kv_store: Arc<dyn KeyValueStore> = DeterministicKeyValueStore::new();
+        let blob_store: Arc<dyn BlobStore> = Arc::new(InMemoryBlobStore::new());
+        Arc::new(AspenHostContext::new(kv_store, blob_store, "test-job-1".to_string(), 0))
+    }
+
+    /// Run a closure that calls synchronous host functions (which use
+    /// `Handle::current().block_on()`) on a blocking thread so we don't
+    /// nest runtimes.
+    async fn on_blocking<F, R>(f: F) -> R
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        tokio::task::spawn_blocking(f).await.expect("blocking task panicked")
+    }
+
+    #[test]
+    fn test_now_ms_returns_reasonable_value() {
+        let ts = now_ms();
+        // Post-2023 timestamp (2023-11-14 roughly)
+        assert!(ts > 1_700_000_000_000, "timestamp {ts} should be post-2023");
+        // Before year 2100
+        assert!(ts < 4_102_444_800_000, "timestamp {ts} should be before 2100");
+    }
+
+    #[test]
+    fn test_log_functions_do_not_panic() {
+        log_info("job-1", "hello info");
+        log_debug("job-2", "hello debug");
+        log_warn("job-3", "hello warn");
+
+        // Empty messages
+        log_info("job-1", "");
+        log_debug("job-2", "");
+        log_warn("job-3", "");
+
+        // Long message
+        let long_msg = "x".repeat(10_000);
+        log_info("job-1", &long_msg);
+        log_debug("job-2", &long_msg);
+        log_warn("job-3", &long_msg);
+    }
+
+    #[test]
+    fn test_aspen_host_context_creation() {
+        let kv_store: Arc<dyn KeyValueStore> = DeterministicKeyValueStore::new();
+        let blob_store: Arc<dyn BlobStore> = Arc::new(InMemoryBlobStore::new());
+        let ctx = AspenHostContext::new(kv_store, blob_store, "test-job-1".to_string(), 42);
+        assert_eq!(ctx.job_id, "test-job-1");
+        assert_eq!(ctx.start_time_ms, 42);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_kv_get_nonexistent_key() {
+        let ctx = test_context();
+        let result = on_blocking(move || kv_get(&ctx, "nonexistent-key")).await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_kv_put_and_get_roundtrip() {
+        let ctx = test_context();
+        on_blocking({
+            let ctx = Arc::clone(&ctx);
+            move || kv_put(&ctx, "my-key", b"hello world").expect("kv_put should succeed")
+        })
+        .await;
+
+        let got = on_blocking(move || kv_get(&ctx, "my-key")).await;
+        assert_eq!(got.expect("key should exist"), b"hello world");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_kv_delete() {
+        let ctx = test_context();
+
+        on_blocking({
+            let ctx = Arc::clone(&ctx);
+            move || kv_put(&ctx, "delete-me", b"value").expect("kv_put should succeed")
+        })
+        .await;
+
+        let exists = on_blocking({
+            let ctx = Arc::clone(&ctx);
+            move || kv_get(&ctx, "delete-me").is_some()
+        })
+        .await;
+        assert!(exists);
+
+        on_blocking({
+            let ctx = Arc::clone(&ctx);
+            move || kv_delete(&ctx, "delete-me").expect("kv_delete should succeed")
+        })
+        .await;
+
+        let gone = on_blocking(move || kv_get(&ctx, "delete-me").is_none()).await;
+        assert!(gone);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_kv_scan_with_prefix() {
+        let ctx = test_context();
+
+        on_blocking({
+            let ctx = Arc::clone(&ctx);
+            move || {
+                kv_put(&ctx, "prefix/a", b"1").expect("put a");
+                kv_put(&ctx, "prefix/b", b"2").expect("put b");
+                kv_put(&ctx, "prefix/c", b"3").expect("put c");
+                kv_put(&ctx, "other/x", b"4").expect("put x");
+            }
+        })
+        .await;
+
+        let results = on_blocking(move || kv_scan(&ctx, "prefix/", 0)).await;
+        assert_eq!(results.len(), 3);
+
+        let keys: Vec<&str> = results.iter().map(|(k, _)| k.as_str()).collect();
+        assert!(keys.contains(&"prefix/a"));
+        assert!(keys.contains(&"prefix/b"));
+        assert!(keys.contains(&"prefix/c"));
+        assert!(!keys.contains(&"other/x"));
+    }
+
+    #[test]
+    fn test_kv_put_invalid_utf8() {
+        // UTF-8 validation happens before block_on, so no runtime needed.
+        let kv_store: Arc<dyn KeyValueStore> = DeterministicKeyValueStore::new();
+        let blob_store: Arc<dyn BlobStore> = Arc::new(InMemoryBlobStore::new());
+        let ctx = AspenHostContext::new(kv_store, blob_store, "test-job-1".to_string(), 0);
+
+        let invalid_utf8: &[u8] = &[0xFF, 0xFE, 0xFD];
+        let result = kv_put(&ctx, "bad-value", invalid_utf8);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err();
+        assert!(err_msg.contains("UTF-8"), "error should mention UTF-8, got: {err_msg}");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_blob_has_nonexistent() {
+        let ctx = test_context();
+        // Valid 64-hex-char BLAKE3 hash format, but no blob with this hash stored.
+        let fake_hash = "a".repeat(64);
+        let result = on_blocking(move || blob_has(&ctx, &fake_hash)).await;
+        assert!(!result);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_blob_get_nonexistent() {
+        let ctx = test_context();
+        // Valid hex format but no blob stored with this hash.
+        // iroh_blobs::Hash expects a 32-byte (64-hex-char) BLAKE3 hash.
+        let fake_hash = "0".repeat(64);
+        let result = on_blocking(move || blob_get(&ctx, &fake_hash)).await;
+        assert!(result.is_none());
+    }
+}
