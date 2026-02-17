@@ -129,6 +129,8 @@ members = [
     "crates/aspen-plugin-api",
     "crates/aspen-wasm-plugin",
     "crates/aspen-service-registry-plugin",
+    "crates/aspen-wasm-guest-sdk",
+    "examples/plugins/echo-plugin",
 ]
 
 # Required for vendored openraft workspace inheritance

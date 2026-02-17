@@ -1427,6 +1427,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-echo-plugin"
+version = "0.1.0"
+dependencies = [
+ "aspen-wasm-guest-sdk",
+ "serde_json",
+]
+
+[[package]]
 name = "aspen-federation"
 version = "0.1.0"
 dependencies = [
@@ -2553,6 +2561,16 @@ dependencies = [
  "thiserror 2.0.17",
  "toml 0.8.2",
  "walkdir",
+]
+
+[[package]]
+name = "aspen-wasm-guest-sdk"
+version = "0.1.0"
+dependencies = [
+ "aspen-client-api",
+ "aspen-plugin-api",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
