@@ -282,8 +282,6 @@ mod tests {
 
     #[test]
     fn test_commit_parents() {
-        use iroh::PublicKey;
-
         let tree = blake3::hash(b"tree");
         let parent1 = blake3::hash(b"parent1");
         let parent2 = blake3::hash(b"parent2");

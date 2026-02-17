@@ -171,13 +171,22 @@ pub fn kv_delete(ctx: &PluginHostContext, key: &str) -> Result<(), String> {
 
 /// Scan keys matching a prefix from the distributed KV store.
 ///
-/// Returns a list of `(key, value_bytes)` pairs. A `limit` of 0 means no limit.
+/// Returns a list of `(key, value_bytes)` pairs.
+///
+/// Tiger Style: All scans are bounded. A `limit` of 0 uses DEFAULT_SCAN_LIMIT (1,000).
+/// Maximum limit is capped at MAX_SCAN_RESULTS (10,000) to prevent unbounded memory allocation.
 pub fn kv_scan(ctx: &PluginHostContext, prefix: &str, limit: u32) -> Vec<(String, Vec<u8>)> {
     let handle = tokio::runtime::Handle::current();
     handle.block_on(async {
+        // Tiger Style: Apply default if 0, cap at MAX_SCAN_RESULTS to prevent unbounded operations
+        let bounded_limit = if limit == 0 {
+            aspen_constants::api::DEFAULT_SCAN_LIMIT
+        } else {
+            limit.min(aspen_constants::api::MAX_SCAN_RESULTS)
+        };
         let request = aspen_kv_types::ScanRequest {
             prefix: prefix.to_string(),
-            limit_results: if limit == 0 { None } else { Some(limit) },
+            limit_results: Some(bounded_limit),
             continuation_token: None,
         };
         match ctx.kv_store.scan(request).await {

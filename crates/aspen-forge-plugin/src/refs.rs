@@ -41,7 +41,19 @@ pub fn handle_get_ref(repo_id: String, ref_name: String) -> ClientRpcResponse {
 
     match kv::kv_get(&key) {
         Some(bytes) => {
-            let hash = String::from_utf8(bytes).unwrap_or_default();
+            // Tiger Style: Fail explicitly on invalid UTF-8 rather than returning empty hash
+            let hash = match String::from_utf8(bytes) {
+                Ok(h) => h,
+                Err(_) => {
+                    return ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        is_success: false,
+                        was_found: true,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some("ref contains invalid UTF-8".to_string()),
+                    });
+                }
+            };
             ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
                 is_success: true,
                 was_found: true,
@@ -179,7 +191,8 @@ fn list_refs_with_prefix(kv_prefix: &str, ref_prefix: &str) -> ClientRpcResponse
         });
     }
 
-    let count = refs.len() as u32;
+    // Tiger Style: Use try_from for safe conversion
+    let count = u32::try_from(refs.len()).unwrap_or(u32::MAX);
     ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
         is_success: true,
         refs,

@@ -34,8 +34,20 @@ fn ref_key(repo_id_hex: &str, ref_name: &str) -> String {
 // ============================================================================
 
 pub fn handle_store_blob(_repo_id: String, content: Vec<u8>) -> ClientRpcResponse {
-    let size = content.len() as u64;
-    let signed = signing::sign_object(&GitObject::Blob(BlobObject { content }));
+    // Tiger Style: Use u64 for size, but validate that usize fits in u64
+    let size = u64::try_from(content.len()).unwrap_or(u64::MAX);
+    let signed = match signing::sign_object(&GitObject::Blob(BlobObject { content })) {
+        Ok(s) => s,
+        Err(_) => {
+            return ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
+                is_success: false,
+                hash: None,
+                content: None,
+                size: None,
+                error: Some("failed to sign blob: serialization error".to_string()),
+            });
+        }
+    };
 
     let serialized = match serde_json::to_vec(&signed) {
         Ok(b) => b,
@@ -97,7 +109,8 @@ pub fn handle_get_blob(hash: String) -> ClientRpcResponse {
 
     match signed.payload {
         GitObject::Blob(blob) => {
-            let size = blob.content.len() as u64;
+            // Tiger Style: Use try_from for safe conversion from usize to u64
+            let size = u64::try_from(blob.content.len()).unwrap_or(u64::MAX);
             ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
                 is_success: true,
                 hash: Some(hash),
@@ -144,7 +157,17 @@ pub fn handle_create_tree(_repo_id: String, entries_json: String) -> ClientRpcRe
         .collect();
 
     let tree = GitObject::Tree(TreeObject { entries });
-    let signed = signing::sign_object(&tree);
+    let signed = match signing::sign_object(&tree) {
+        Ok(s) => s,
+        Err(_) => {
+            return ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                is_success: false,
+                hash: None,
+                entries: None,
+                error: Some("failed to sign tree: serialization error".to_string()),
+            });
+        }
+    };
 
     let serialized = match serde_json::to_vec(&signed) {
         Ok(b) => b,
@@ -266,7 +289,16 @@ pub fn handle_commit(_repo_id: String, tree: String, parents: Vec<String>, messa
         message,
     }));
 
-    let signed = signing::sign_object(&commit_obj);
+    let signed = match signing::sign_object(&commit_obj) {
+        Ok(s) => s,
+        Err(_) => {
+            return ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                is_success: false,
+                commit: None,
+                error: Some("failed to sign commit: serialization error".to_string()),
+            });
+        }
+    };
 
     let serialized = match serde_json::to_vec(&signed) {
         Ok(b) => b,
@@ -368,10 +400,12 @@ pub fn handle_log(repo_id: String, ref_name: Option<String>, limit: Option<u32>)
     };
 
     // Walk the parent chain
+    // Tiger Style: Use u32 counter to avoid usize comparisons
     let mut commits = Vec::new();
     let mut current_hash = start_hash;
+    let mut collected = 0u32;
 
-    while commits.len() < max_commits as usize {
+    while collected < max_commits {
         let data = match kv::blob_get(&current_hash) {
             Some(d) => d,
             None => break,
@@ -394,6 +428,7 @@ pub fn handle_log(repo_id: String, ref_name: Option<String>, limit: Option<u32>)
         };
 
         commits.push(info);
+        collected = collected.saturating_add(1);
 
         match next_parent {
             Some(parent) => current_hash = parent,
@@ -401,7 +436,8 @@ pub fn handle_log(repo_id: String, ref_name: Option<String>, limit: Option<u32>)
         }
     }
 
-    let count = commits.len() as u32;
+    // Tiger Style: Use try_from for safe conversion
+    let count = u32::try_from(commits.len()).unwrap_or(u32::MAX);
     ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
         is_success: true,
         commits,

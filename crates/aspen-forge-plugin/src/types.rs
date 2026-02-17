@@ -89,3 +89,171 @@ pub struct Author {
     pub timestamp_ms: u64,
     pub timezone: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_signed_object_roundtrip() {
+        let obj = SignedObject {
+            payload: "test payload".to_string(),
+            author: "a".repeat(64),
+            timestamp_ms: 1234567890,
+            signature: "b".repeat(128),
+        };
+        let json = serde_json::to_vec(&obj).expect("serialize");
+        let decoded: SignedObject<String> = serde_json::from_slice(&json).expect("deserialize");
+        assert_eq!(decoded.payload, "test payload");
+        assert_eq!(decoded.timestamp_ms, 1234567890);
+    }
+
+    #[test]
+    fn test_repo_identity_roundtrip() {
+        let identity = RepoIdentity {
+            name: "test-repo".to_string(),
+            description: Some("A test repository".to_string()),
+            default_branch: "main".to_string(),
+            delegates: vec!["delegate1".to_string()],
+            threshold: 1,
+            created_at_ms: 1000,
+        };
+        let json = serde_json::to_vec(&identity).expect("serialize");
+        let decoded: RepoIdentity = serde_json::from_slice(&json).expect("deserialize");
+        assert_eq!(decoded.name, "test-repo");
+        assert_eq!(decoded.default_branch, "main");
+    }
+
+    #[test]
+    fn test_git_object_blob_roundtrip() {
+        let blob = GitObject::Blob(BlobObject {
+            content: b"hello world".to_vec(),
+        });
+        let json = serde_json::to_vec(&blob).expect("serialize");
+        let decoded: GitObject = serde_json::from_slice(&json).expect("deserialize");
+        match decoded {
+            GitObject::Blob(b) => assert_eq!(b.content, b"hello world"),
+            _ => panic!("expected Blob"),
+        }
+    }
+
+    #[test]
+    fn test_git_object_tree_roundtrip() {
+        let tree = GitObject::Tree(TreeObject {
+            entries: vec![TreeEntry {
+                mode: 0o100644,
+                name: "file.txt".to_string(),
+                hash: "abc123".to_string(),
+            }],
+        });
+        let json = serde_json::to_vec(&tree).expect("serialize");
+        let decoded: GitObject = serde_json::from_slice(&json).expect("deserialize");
+        match decoded {
+            GitObject::Tree(t) => {
+                assert_eq!(t.entries.len(), 1);
+                assert_eq!(t.entries[0].name, "file.txt");
+            }
+            _ => panic!("expected Tree"),
+        }
+    }
+
+    #[test]
+    fn test_git_object_commit_roundtrip() {
+        let author = Author {
+            name: "Test User".to_string(),
+            email: "test@example.com".to_string(),
+            public_key: Some("key123".to_string()),
+            timestamp_ms: 1000,
+            timezone: "+0000".to_string(),
+        };
+        let commit = GitObject::Commit(Box::new(CommitObject {
+            tree: "treehash".to_string(),
+            parents: vec!["parent1".to_string()],
+            author: author.clone(),
+            committer: author,
+            message: "Initial commit".to_string(),
+        }));
+        let json = serde_json::to_vec(&commit).expect("serialize");
+        let decoded: GitObject = serde_json::from_slice(&json).expect("deserialize");
+        match decoded {
+            GitObject::Commit(c) => {
+                assert_eq!(c.message, "Initial commit");
+                assert_eq!(c.tree, "treehash");
+                assert_eq!(c.parents, vec!["parent1".to_string()]);
+            }
+            _ => panic!("expected Commit"),
+        }
+    }
+
+    #[test]
+    fn test_author_without_public_key() {
+        let author = Author {
+            name: "Anonymous".to_string(),
+            email: "anon@example.com".to_string(),
+            public_key: None,
+            timestamp_ms: 0,
+            timezone: "+0000".to_string(),
+        };
+        let json = serde_json::to_vec(&author).expect("serialize");
+        let decoded: Author = serde_json::from_slice(&json).expect("deserialize");
+        assert!(decoded.public_key.is_none());
+    }
+
+    #[test]
+    fn test_tree_entry_modes() {
+        // Regular file
+        let file_entry = TreeEntry {
+            mode: 0o100644,
+            name: "regular.txt".to_string(),
+            hash: "hash1".to_string(),
+        };
+        // Executable
+        let exec_entry = TreeEntry {
+            mode: 0o100755,
+            name: "script.sh".to_string(),
+            hash: "hash2".to_string(),
+        };
+        // Directory (tree)
+        let dir_entry = TreeEntry {
+            mode: 0o040000,
+            name: "subdir".to_string(),
+            hash: "hash3".to_string(),
+        };
+
+        let tree = TreeObject {
+            entries: vec![file_entry, exec_entry, dir_entry],
+        };
+        let json = serde_json::to_vec(&tree).expect("serialize");
+        let decoded: TreeObject = serde_json::from_slice(&json).expect("deserialize");
+        assert_eq!(decoded.entries[0].mode, 0o100644);
+        assert_eq!(decoded.entries[1].mode, 0o100755);
+        assert_eq!(decoded.entries[2].mode, 0o040000);
+    }
+
+    #[test]
+    fn test_empty_blob() {
+        let blob = GitObject::Blob(BlobObject { content: vec![] });
+        let json = serde_json::to_vec(&blob).expect("serialize");
+        let decoded: GitObject = serde_json::from_slice(&json).expect("deserialize");
+        match decoded {
+            GitObject::Blob(b) => assert!(b.content.is_empty()),
+            _ => panic!("expected Blob"),
+        }
+    }
+
+    #[test]
+    fn test_repo_identity_no_description() {
+        let identity = RepoIdentity {
+            name: "minimal".to_string(),
+            description: None,
+            default_branch: "master".to_string(),
+            delegates: vec![],
+            threshold: 0,
+            created_at_ms: 0,
+        };
+        let json = serde_json::to_vec(&identity).expect("serialize");
+        let decoded: RepoIdentity = serde_json::from_slice(&json).expect("deserialize");
+        assert!(decoded.description.is_none());
+        assert!(decoded.delegates.is_empty());
+    }
+}

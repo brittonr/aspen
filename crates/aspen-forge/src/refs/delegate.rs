@@ -385,7 +385,7 @@ mod tests {
     #[test]
     fn test_multi_sig_rejects_invalid() {
         let key1 = test_key();
-        let key2 = test_key();
+        let _key2 = test_key();
         let identity = test_identity(vec![key1.public()], 1);
         let repo_id = identity.repo_id();
         let new_hash = *blake3::hash(b"commit").as_bytes();
@@ -412,10 +412,11 @@ mod tests {
 
         // Add signature once
         let sig = key1.sign(&message);
-        assert!(collector.add_signature(key1.public(), sig.clone()));
+        assert!(collector.add_signature(key1.public(), sig));
 
-        // Try to add same signer again
-        assert!(!collector.add_signature(key1.public(), sig));
+        // Try to add same signer again - use fresh signature since sig was moved
+        let sig2 = key1.sign(&message);
+        assert!(!collector.add_signature(key1.public(), sig2));
 
         assert_eq!(collector.signatures().len(), 1);
     }

@@ -87,7 +87,16 @@ pub fn handle_create_repo(
         created_at_ms: now,
     };
 
-    let signed = signing::sign_object(&identity);
+    let signed = match signing::sign_object(&identity) {
+        Ok(s) => s,
+        Err(_) => {
+            return ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                is_success: false,
+                repo: None,
+                error: Some("failed to sign identity: serialization error".to_string()),
+            });
+        }
+    };
     let identity_bytes = match serde_json::to_vec(&signed) {
         Ok(b) => b,
         Err(e) => {
@@ -145,13 +154,15 @@ pub fn handle_get_repo(repo_id: String) -> ClientRpcResponse {
 
 pub fn handle_list_repos(limit: Option<u32>, offset: Option<u32>) -> ClientRpcResponse {
     let scan_limit = limit.unwrap_or(MAX_LIST_REPOS).min(MAX_LIST_REPOS);
-    let skip = offset.unwrap_or(0) as usize;
+    let skip = offset.unwrap_or(0);
 
     // Scan all repo identity keys
-    let entries = kv::kv_scan(REPO_IDENTITY_PREFIX, scan_limit.saturating_add(skip as u32));
+    // Tiger Style: Use saturating_add to avoid overflow
+    let entries = kv::kv_scan(REPO_IDENTITY_PREFIX, scan_limit.saturating_add(skip));
 
     let mut repos = Vec::new();
-    let mut skipped = 0usize;
+    let mut skipped = 0u32;
+    let mut collected = 0u32;
 
     for (key, value) in &entries {
         // Only match keys ending with ":identity"
@@ -160,7 +171,7 @@ pub fn handle_list_repos(limit: Option<u32>, offset: Option<u32>) -> ClientRpcRe
         }
 
         if skipped < skip {
-            skipped += 1;
+            skipped = skipped.saturating_add(1);
             continue;
         }
 
@@ -176,13 +187,15 @@ pub fn handle_list_repos(limit: Option<u32>, offset: Option<u32>) -> ClientRpcRe
             .unwrap_or("");
 
         repos.push(identity_to_info(repo_id_hex, &signed));
+        collected = collected.saturating_add(1);
 
-        if repos.len() >= scan_limit as usize {
+        if collected >= scan_limit {
             break;
         }
     }
 
-    let count = repos.len() as u32;
+    // Tiger Style: Use u32::try_from to avoid truncating cast from usize
+    let count = u32::try_from(repos.len()).unwrap_or(u32::MAX);
     ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
         is_success: true,
         repos,
