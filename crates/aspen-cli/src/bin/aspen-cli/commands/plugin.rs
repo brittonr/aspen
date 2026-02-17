@@ -74,6 +74,10 @@ pub struct InstallArgs {
     /// Memory limit override in bytes.
     #[arg(long)]
     pub memory_limit: Option<u64>,
+
+    /// Application ID for federation discovery (e.g., "forge").
+    #[arg(long)]
+    pub app_id: Option<String>,
 }
 
 #[derive(Args)]
@@ -137,7 +141,8 @@ impl Outputable for PluginListOutput {
                     "version": p.version,
                     "enabled": p.enabled,
                     "priority": p.priority,
-                    "handles": p.handles
+                    "handles": p.handles,
+                    "app_id": p.app_id
                 })
             }).collect::<Vec<_>>()
         })
@@ -149,18 +154,20 @@ impl Outputable for PluginListOutput {
         }
 
         let mut output = format!("Plugins ({})\n", self.plugins.len());
-        output.push_str("Name                 | Version  | Enabled | Priority | Handles\n");
-        output.push_str("---------------------+----------+---------+----------+--------\n");
+        output.push_str("Name                 | Version  | Enabled | Priority | App ID   | Handles\n");
+        output.push_str("---------------------+----------+---------+----------+----------+--------\n");
 
         for p in &self.plugins {
             let enabled = if p.enabled { "yes" } else { "no" };
             let handles = p.handles.join(",");
+            let app_id = p.app_id.as_deref().unwrap_or("-");
             output.push_str(&format!(
-                "{:20} | {:8} | {:7} | {:8} | {}\n",
+                "{:20} | {:8} | {:7} | {:8} | {:8} | {}\n",
                 &p.name[..20.min(p.name.len())],
                 &p.version[..8.min(p.version.len())],
                 enabled,
                 p.priority,
+                &app_id[..8.min(app_id.len())],
                 handles,
             ));
         }
@@ -183,7 +190,8 @@ impl Outputable for PluginInfoOutput {
             "priority": self.manifest.priority,
             "handles": self.manifest.handles,
             "fuel_limit": self.manifest.fuel_limit,
-            "memory_limit": self.manifest.memory_limit
+            "memory_limit": self.manifest.memory_limit,
+            "app_id": self.manifest.app_id
         })
     }
 
@@ -198,7 +206,8 @@ impl Outputable for PluginInfoOutput {
              WASM Hash:    {}\n\
              Handles:      {}\n\
              Fuel Limit:   {}\n\
-             Memory Limit: {}",
+             Memory Limit: {}\n\
+             App ID:       {}",
             m.name,
             m.version,
             enabled,
@@ -207,6 +216,7 @@ impl Outputable for PluginInfoOutput {
             m.handles.join(", "),
             m.fuel_limit.map_or("default".to_string(), |v| v.to_string()),
             m.memory_limit.map_or("default".to_string(), |v| v.to_string()),
+            m.app_id.as_deref().unwrap_or("none"),
         )
     }
 }
@@ -276,6 +286,7 @@ struct ResolvedInstall {
     version: String,
     fuel_limit: Option<u64>,
     memory_limit: Option<u64>,
+    app_id: Option<String>,
 }
 
 fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
@@ -311,6 +322,8 @@ fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
         .or_else(|| base.as_ref().map(|b| b.version.clone()))
         .unwrap_or_else(|| "0.1.0".to_string());
 
+    let app_id = args.app_id.clone().or_else(|| base.as_ref().and_then(|b| b.app_id.clone()));
+
     Ok(ResolvedInstall {
         name,
         handles,
@@ -318,6 +331,7 @@ fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
         version,
         fuel_limit: args.fuel_limit,
         memory_limit: args.memory_limit,
+        app_id,
     })
 }
 
@@ -357,6 +371,7 @@ async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> 
         fuel_limit: resolved.fuel_limit,
         memory_limit: resolved.memory_limit,
         enabled: true,
+        app_id: resolved.app_id,
     };
 
     let manifest_json = serde_json::to_string(&manifest)?;
@@ -595,6 +610,7 @@ mod tests {
             plugin_version: None,
             fuel_limit: None,
             memory_limit: None,
+            app_id: None,
         };
         let result = super::resolve_install_args(&args);
         assert!(result.is_err(), "should fail without --name or --manifest");
@@ -611,6 +627,7 @@ mod tests {
             plugin_version: None,
             fuel_limit: None,
             memory_limit: None,
+            app_id: None,
         };
         let result = super::resolve_install_args(&args);
         assert!(result.is_err(), "should fail without --handles or --manifest");
@@ -627,6 +644,7 @@ mod tests {
             plugin_version: Some("1.0.0".to_string()),
             fuel_limit: None,
             memory_limit: None,
+            app_id: None,
         };
         let resolved = super::resolve_install_args(&args).expect("should resolve");
         assert_eq!(resolved.name, "my-plugin");
@@ -646,6 +664,7 @@ mod tests {
             plugin_version: None,
             fuel_limit: None,
             memory_limit: None,
+            app_id: None,
         };
         let resolved = super::resolve_install_args(&args).expect("should resolve");
         assert_eq!(resolved.priority, 950);

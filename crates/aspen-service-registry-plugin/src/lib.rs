@@ -33,6 +33,7 @@ impl AspenPlugin for ServiceRegistryPlugin {
                 "ServiceUpdateMetadata".to_string(),
             ],
             priority: 950,
+            app_id: None,
         }
     }
 

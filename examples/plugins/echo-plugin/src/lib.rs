@@ -20,6 +20,7 @@ impl AspenPlugin for EchoPlugin {
             version: "0.1.0".to_string(),
             handles: vec!["Ping".to_string(), "ReadKey".to_string()],
             priority: 950,
+            app_id: None,
         }
     }
 

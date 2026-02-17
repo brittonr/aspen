@@ -24,6 +24,13 @@ pub struct PluginManifest {
     pub memory_limit: Option<u64>,
     /// Whether the plugin is active.
     pub enabled: bool,
+    /// Optional application ID for federation discovery.
+    ///
+    /// When set, the plugin's app capability is registered with [`AppRegistry`]
+    /// during loading so that federation dispatch can route requests to clusters
+    /// running this plugin.
+    #[serde(default)]
+    pub app_id: Option<String>,
 }
 
 /// Lightweight plugin info returned by `plugin-info` guest export.
@@ -37,4 +44,7 @@ pub struct PluginInfo {
     pub handles: Vec<String>,
     /// Dispatch priority.
     pub priority: u32,
+    /// Optional application ID for federation discovery.
+    #[serde(default)]
+    pub app_id: Option<String>,
 }

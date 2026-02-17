@@ -47,6 +47,7 @@ impl AspenPlugin for ForgePlugin {
                 "ForgeGetDelegateKey".to_string(),
             ],
             priority: 950,
+            app_id: Some("forge".to_string()),
         }
     }
 

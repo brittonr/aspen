@@ -182,11 +182,23 @@ async fn load_plugin(
 
     let handler = WasmPluginHandler::new(manifest.name.clone(), manifest.handles.clone(), loaded);
 
+    // Register app capability with the federation app registry
+    if let Some(ref app_id) = manifest.app_id {
+        let app_manifest = aspen_core::app_registry::AppManifest::new(app_id, &manifest.version);
+        ctx.app_registry.register(app_manifest);
+        info!(
+            plugin = %manifest.name,
+            app_id = %app_id,
+            "registered WASM plugin app capability"
+        );
+    }
+
     info!(
         plugin = %manifest.name,
         version = %manifest.version,
         priority,
         handles = ?manifest.handles,
+        app_id = ?manifest.app_id,
         "WASM plugin loaded successfully"
     );
 

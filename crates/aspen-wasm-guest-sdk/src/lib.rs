@@ -22,6 +22,7 @@
 //!             version: "0.1.0".into(),
 //!             handles: vec!["Echo".into()],
 //!             priority: 900,
+//!             app_id: None,
 //!         }
 //!     }
 //!
