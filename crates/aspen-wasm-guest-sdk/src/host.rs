@@ -23,6 +23,10 @@ unsafe extern "C" {
     fn random_bytes(count: u32) -> Vec<u8>;
     fn is_leader() -> bool;
     fn leader_id() -> u64;
+    fn sign(data: Vec<u8>) -> Vec<u8>;
+    fn verify(key: String, data: Vec<u8>, sig: Vec<u8>) -> bool;
+    fn public_key_hex() -> String;
+    fn hlc_now() -> u64;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,4 +135,24 @@ pub fn is_current_leader() -> bool {
 /// Get the numeric node ID of the current Raft leader.
 pub fn get_leader_id() -> u64 {
     unsafe { leader_id() }
+}
+
+/// Sign data with the host node's Ed25519 secret key.
+pub fn sign_data(data: &[u8]) -> Vec<u8> {
+    unsafe { sign(data.to_vec()) }
+}
+
+/// Verify an Ed25519 signature using a hex-encoded public key.
+pub fn verify_signature(public_key_hex: &str, data: &[u8], signature: &[u8]) -> bool {
+    unsafe { verify(public_key_hex.to_string(), data.to_vec(), signature.to_vec()) }
+}
+
+/// Get the host node's Ed25519 public key as a hex string.
+pub fn public_key() -> String {
+    unsafe { public_key_hex() }
+}
+
+/// Get the current HLC timestamp as milliseconds.
+pub fn hlc_now_ms() -> u64 {
+    unsafe { hlc_now() }
 }

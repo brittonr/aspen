@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
+use aspen_hlc::HLC;
 use aspen_traits::ClusterController;
 
 /// Host context for WASM handler plugin callbacks.
@@ -35,6 +36,10 @@ pub struct PluginHostContext {
     pub node_id: u64,
     /// Plugin name for structured log context.
     pub plugin_name: String,
+    /// Iroh secret key for Ed25519 signing on behalf of guest plugins.
+    pub secret_key: Option<iroh::SecretKey>,
+    /// Hybrid logical clock for causal timestamps.
+    pub hlc: Option<Arc<HLC>>,
 }
 
 impl PluginHostContext {
@@ -52,7 +57,23 @@ impl PluginHostContext {
             controller,
             node_id,
             plugin_name,
+            secret_key: None,
+            hlc: None,
         }
+    }
+
+    /// Set the Iroh secret key for Ed25519 operations.
+    #[allow(dead_code)]
+    pub fn with_secret_key(mut self, secret_key: iroh::SecretKey) -> Self {
+        self.secret_key = Some(secret_key);
+        self
+    }
+
+    /// Set the HLC instance for causal timestamps.
+    #[allow(dead_code)]
+    pub fn with_hlc(mut self, hlc: Arc<HLC>) -> Self {
+        self.hlc = Some(hlc);
+        self
     }
 }
 
@@ -344,6 +365,70 @@ pub fn leader_id(ctx: &PluginHostContext) -> u64 {
 }
 
 // ---------------------------------------------------------------------------
+// Crypto host functions
+// ---------------------------------------------------------------------------
+
+/// Sign data with the node's Ed25519 secret key.
+///
+/// Returns the 64-byte Ed25519 signature, or an empty vec if no key is configured.
+pub fn sign(ctx: &PluginHostContext, data: &[u8]) -> Vec<u8> {
+    match &ctx.secret_key {
+        Some(key) => {
+            let sig = key.sign(data);
+            sig.to_bytes().to_vec()
+        }
+        None => {
+            tracing::warn!(plugin = %ctx.plugin_name, "wasm plugin sign: no secret key configured");
+            Vec::new()
+        }
+    }
+}
+
+/// Verify an Ed25519 signature given a hex-encoded public key.
+pub fn verify(public_key_hex: &str, data: &[u8], sig_bytes: &[u8]) -> bool {
+    let Ok(key_bytes) = hex::decode(public_key_hex) else {
+        return false;
+    };
+    let Ok(key_array): Result<[u8; 32], _> = key_bytes.try_into() else {
+        return false;
+    };
+    let Ok(sig_array): Result<[u8; 64], _> = sig_bytes.to_vec().try_into() else {
+        return false;
+    };
+    let Ok(verifying_key) = ed25519_dalek::VerifyingKey::from_bytes(&key_array) else {
+        return false;
+    };
+    let signature = ed25519_dalek::Signature::from_bytes(&sig_array);
+    use ed25519_dalek::Verifier;
+    verifying_key.verify(data, &signature).is_ok()
+}
+
+/// Return the node's public key as a hex-encoded string.
+pub fn public_key_hex(ctx: &PluginHostContext) -> String {
+    match &ctx.secret_key {
+        Some(key) => hex::encode(key.public().as_bytes()),
+        None => {
+            tracing::warn!(plugin = %ctx.plugin_name, "wasm plugin public_key_hex: no secret key configured");
+            String::new()
+        }
+    }
+}
+
+/// Return the current HLC timestamp as milliseconds since epoch.
+pub fn hlc_now(ctx: &PluginHostContext) -> u64 {
+    match &ctx.hlc {
+        Some(hlc) => {
+            let ts = aspen_hlc::new_timestamp(hlc);
+            aspen_hlc::to_unix_ms(&ts)
+        }
+        None => {
+            // Fall back to wall clock
+            now_ms()
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Sandbox registration (primitive mode)
 // ---------------------------------------------------------------------------
 
@@ -477,6 +562,27 @@ pub fn register_plugin_host_functions(
     proto
         .register("leader_id", move || -> u64 { leader_id(&ctx_leader_id) })
         .map_err(|e| anyhow::anyhow!("failed to register leader_id: {e}"))?;
+
+    // -- Crypto --
+    let ctx_sign = Arc::clone(&ctx);
+    proto
+        .register("sign", move |data: Vec<u8>| -> Vec<u8> { sign(&ctx_sign, &data) })
+        .map_err(|e| anyhow::anyhow!("failed to register sign: {e}"))?;
+
+    proto
+        .register("verify", move |key: String, data: Vec<u8>, sig: Vec<u8>| -> bool { verify(&key, &data, &sig) })
+        .map_err(|e| anyhow::anyhow!("failed to register verify: {e}"))?;
+
+    let ctx_pubkey = Arc::clone(&ctx);
+    proto
+        .register("public_key_hex", move || -> String { public_key_hex(&ctx_pubkey) })
+        .map_err(|e| anyhow::anyhow!("failed to register public_key_hex: {e}"))?;
+
+    // -- HLC --
+    let ctx_hlc = Arc::clone(&ctx);
+    proto
+        .register("hlc_now", move || -> u64 { hlc_now(&ctx_hlc) })
+        .map_err(|e| anyhow::anyhow!("failed to register hlc_now: {e}"))?;
 
     Ok(())
 }

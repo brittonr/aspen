@@ -21,8 +21,12 @@ aspen-traits = { path = "../aspen-traits" }
 # Hyperlight WASM sandbox
 hyperlight-wasm = "0.12"
 
-# Iroh blob hashes
+# Iroh blob hashes and crypto
 iroh-blobs = "0.97"
+iroh = "0.95.1"
+
+# HLC timestamps
+aspen-hlc = { path = "../aspen-hlc" }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -38,3 +42,9 @@ tracing = "0.1"
 
 # Randomness for guest plugins
 getrandom = "0.2"
+
+# Ed25519 verification
+ed25519-dalek = "2.1"
+
+# Hex encoding for public keys
+hex = "0.4"

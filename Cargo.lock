@@ -1531,6 +1531,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-forge-plugin"
+version = "0.1.0"
+dependencies = [
+ "aspen-client-api",
+ "aspen-wasm-guest-sdk",
+ "blake3",
+ "hex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "aspen-forge-protocol"
 version = "0.1.0"
 dependencies = [
@@ -2584,13 +2596,17 @@ dependencies = [
  "aspen-client-api",
  "aspen-constants",
  "aspen-core",
+ "aspen-hlc",
  "aspen-kv-types",
  "aspen-plugin-api",
  "aspen-rpc-core",
  "aspen-traits",
  "async-trait",
+ "ed25519-dalek 2.2.0",
  "getrandom 0.2.16",
+ "hex",
  "hyperlight-wasm",
+ "iroh",
  "iroh-blobs",
  "serde",
  "serde_json",
