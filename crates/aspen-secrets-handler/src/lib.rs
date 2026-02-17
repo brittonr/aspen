@@ -64,6 +64,10 @@ impl HandlerFactory for SecretsHandlerFactory {
     fn priority(&self) -> u32 {
         580
     }
+
+    fn app_id(&self) -> Option<&'static str> {
+        Some("secrets")
+    }
 }
 
 // Self-register via inventory

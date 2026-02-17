@@ -16,6 +16,7 @@ use aspen_core::EndpointProvider;
 use aspen_core::KeyValueStore;
 use aspen_core::NetworkFactory;
 use aspen_core::PeerManager;
+use aspen_core::SharedAppRegistry;
 use aspen_core::WatchRegistry;
 use aspen_raft::StateMachineVariant;
 use aspen_sharding::ShardTopology;
@@ -126,6 +127,12 @@ pub struct ClientProtocolContext {
     /// Nix cache signer for narinfo signing (optional).
     #[cfg(feature = "nix-cache-gateway")]
     pub nix_cache_signer: Option<Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>>,
+    /// Application registry for capability-aware dispatch and federation advertisement.
+    ///
+    /// Populated automatically during handler registration. Used to:
+    /// 1. Return `CapabilityUnavailable` responses with the required app name
+    /// 2. Advertise capabilities to federated clusters via gossip
+    pub app_registry: SharedAppRegistry,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
@@ -475,6 +482,7 @@ pub mod test_support {
                 ci_trigger_service: None,
                 #[cfg(feature = "nix-cache-gateway")]
                 nix_cache_signer: None,
+                app_registry: aspen_core::shared_registry(),
             }
         }
     }

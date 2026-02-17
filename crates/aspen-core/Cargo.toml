@@ -66,6 +66,9 @@ iroh-blobs = { version = "0.97", optional = true }
 # Random for HCA (High-Contention Allocator)
 rand = "0.9"
 
+# Logging
+tracing = "0.1"
+
 # For simulation artifacts
 chrono = { version = "0.4", features = ["serde"] }
 serde_json = "1.0"

@@ -58,6 +58,10 @@ impl HandlerFactory for AutomergeHandlerFactory {
     fn priority(&self) -> u32 {
         590
     }
+
+    fn app_id(&self) -> Option<&'static str> {
+        Some("automerge")
+    }
 }
 
 // Self-register via inventory

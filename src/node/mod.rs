@@ -545,6 +545,7 @@ impl Node {
             ci_trigger_service: None,
             #[cfg(feature = "nix-cache-gateway")]
             nix_cache_signer: None,
+            app_registry: aspen_core::shared_registry(),
         }
     }
 

@@ -62,6 +62,10 @@ impl HandlerFactory for PijulHandlerFactory {
     fn priority(&self) -> u32 {
         550
     }
+
+    fn app_id(&self) -> Option<&'static str> {
+        Some("pijul")
+    }
 }
 
 // Self-register via inventory

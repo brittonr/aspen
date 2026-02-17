@@ -64,6 +64,10 @@ impl HandlerFactory for JobHandlerFactory {
     fn priority(&self) -> u32 {
         560
     }
+
+    fn app_id(&self) -> Option<&'static str> {
+        Some("jobs")
+    }
 }
 
 // Self-register via inventory
@@ -107,6 +111,10 @@ impl HandlerFactory for WorkerHandlerFactory {
 
     fn priority(&self) -> u32 {
         640
+    }
+
+    fn app_id(&self) -> Option<&'static str> {
+        Some("jobs")
     }
 }
 

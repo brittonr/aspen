@@ -61,6 +61,10 @@ mod snix_factory {
         fn priority(&self) -> u32 {
             800
         }
+
+        fn app_id(&self) -> Option<&'static str> {
+            Some("snix")
+        }
     }
 
     aspen_rpc_core::submit_handler_factory!(SnixHandlerFactory);
@@ -97,6 +101,10 @@ mod cache_factory {
         fn priority(&self) -> u32 {
             810
         }
+
+        fn app_id(&self) -> Option<&'static str> {
+            Some("snix")
+        }
     }
 
     /// Factory for creating `CacheMigrationHandler` instances.
@@ -125,6 +133,10 @@ mod cache_factory {
 
         fn priority(&self) -> u32 {
             811
+        }
+
+        fn app_id(&self) -> Option<&'static str> {
+            Some("snix")
         }
     }
 

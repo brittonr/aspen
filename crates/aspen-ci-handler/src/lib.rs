@@ -86,6 +86,10 @@ impl HandlerFactory for CiHandlerFactory {
     fn priority(&self) -> u32 {
         600
     }
+
+    fn app_id(&self) -> Option<&'static str> {
+        Some("ci")
+    }
 }
 
 // Self-register via inventory

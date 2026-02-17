@@ -204,6 +204,18 @@ pub trait HandlerFactory: Send + Sync + 'static {
     fn priority(&self) -> u32 {
         500
     }
+
+    /// Returns the app ID this handler belongs to, or None for core handlers.
+    ///
+    /// Used for capability-aware dispatch: when a handler is registered,
+    /// its app ID is recorded in the `AppRegistry` so the cluster can
+    /// advertise its capabilities via federation gossip.
+    ///
+    /// Core handlers (KV, Cluster, Coordination, etc.) return `None`.
+    /// Optional app handlers override this to return their app ID.
+    fn app_id(&self) -> Option<&'static str> {
+        None
+    }
 }
 
 // Inventory collection for handler factories

@@ -11,8 +11,10 @@
 
 use std::sync::Arc;
 
+use aspen_client_api::CapabilityUnavailableResponse;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+use aspen_core::app_registry::AppManifest;
 pub use aspen_rpc_core::HandlerFactory;
 pub use aspen_rpc_core::RequestHandler;
 // Re-export RequestHandler from aspen-rpc-core for handlers to implement
@@ -60,6 +62,12 @@ impl HandlerRegistry {
                 Some(handler) => {
                     trace!(factory = factory.name(), priority = factory.priority(), "handler registered via inventory");
                     handlers_with_priority.push((handler, factory.priority()));
+
+                    // Auto-register app capability when handler has an app_id
+                    if let Some(app_id) = factory.app_id() {
+                        let manifest = AppManifest::new(app_id, env!("CARGO_PKG_VERSION"));
+                        ctx.app_registry.register(manifest);
+                    }
                 }
                 None => {
                     trace!(factory = factory.name(), "handler factory skipped (preconditions not met)");
@@ -101,7 +109,43 @@ impl HandlerRegistry {
             }
         }
 
-        // No handler found - this shouldn't happen if all request types are covered
+        // No handler found - check if this is an optional app request
+        if let Some(app_id) = request.required_app() {
+            // Build hints from federation discovery if available
+            let hints = {
+                #[cfg(all(feature = "forge", feature = "global-discovery"))]
+                {
+                    use aspen_client_api::CapabilityHint;
+                    use aspen_client_api::MAX_CAPABILITY_HINTS;
+
+                    let mut h = Vec::new();
+                    if let Some(ref discovery) = ctx.federation_discovery {
+                        let clusters = discovery.find_clusters_with_app(app_id);
+                        for cluster in clusters.into_iter().take(MAX_CAPABILITY_HINTS) {
+                            let app_version = cluster.get_app(app_id).map(|m| m.version.clone());
+                            h.push(CapabilityHint {
+                                cluster_key: cluster.cluster_key.to_string(),
+                                name: cluster.name.clone(),
+                                app_version,
+                            });
+                        }
+                    }
+                    h
+                }
+                #[cfg(not(all(feature = "forge", feature = "global-discovery")))]
+                {
+                    Vec::new()
+                }
+            };
+
+            return Ok(ClientRpcResponse::CapabilityUnavailable(CapabilityUnavailableResponse {
+                required_app: app_id.to_string(),
+                message: format!("the '{}' app is not loaded on this cluster", app_id),
+                hints,
+            }));
+        }
+
+        // Core request with no handler - this shouldn't happen if all request types are covered
         Err(anyhow::anyhow!("no handler found for request type: {:?}", std::mem::discriminant(&request)))
     }
 

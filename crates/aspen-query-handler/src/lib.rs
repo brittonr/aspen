@@ -57,6 +57,10 @@ mod sql_factory {
         fn priority(&self) -> u32 {
             500
         }
+
+        fn app_id(&self) -> Option<&'static str> {
+            Some("sql")
+        }
     }
 
     aspen_rpc_core::submit_handler_factory!(SqlHandlerFactory);
@@ -94,6 +98,10 @@ mod dns_factory {
 
         fn priority(&self) -> u32 {
             510
+        }
+
+        fn app_id(&self) -> Option<&'static str> {
+            Some("dns")
         }
     }
 

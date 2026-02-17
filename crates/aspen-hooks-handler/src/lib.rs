@@ -57,6 +57,10 @@ impl HandlerFactory for HooksHandlerFactory {
     fn priority(&self) -> u32 {
         570
     }
+
+    fn app_id(&self) -> Option<&'static str> {
+        Some("hooks")
+    }
 }
 
 // Self-register via inventory

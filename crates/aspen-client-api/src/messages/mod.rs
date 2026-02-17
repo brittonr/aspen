@@ -435,6 +435,35 @@ impl From<ClientRpcRequest> for AuthenticatedRequest {
         Self::unauthenticated(request)
     }
 }
+/// Maximum number of capability hints in a CapabilityUnavailable response.
+///
+/// Tiger Style: Bounded to prevent response bloat.
+pub const MAX_CAPABILITY_HINTS: usize = 8;
+
+/// Hint about a cluster that can serve a capability.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapabilityHint {
+    /// Public key of the discovered cluster.
+    pub cluster_key: String,
+    /// Human-readable cluster name.
+    pub name: String,
+    /// Version of the app on this cluster (if known).
+    pub app_version: Option<String>,
+}
+
+/// Response returned when a request requires an app that is not loaded on this cluster.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapabilityUnavailableResponse {
+    /// The app ID required to handle this request.
+    pub required_app: String,
+    /// Human-readable message.
+    pub message: String,
+    /// Hints about clusters that can serve this capability.
+    ///
+    /// Tiger Style: Bounded to MAX_CAPABILITY_HINTS.
+    pub hints: Vec<CapabilityHint>,
+}
+
 /// Client RPC request protocol.
 ///
 /// Defines all operations clients can request from a node.
@@ -3204,6 +3233,331 @@ impl ClientRpcRequest {
     }
 }
 
+impl ClientRpcRequest {
+    /// Returns the app ID required to handle this request, or None for core requests.
+    ///
+    /// This is a pure function used by the handler registry for capability-aware dispatch.
+    pub fn required_app(&self) -> Option<&'static str> {
+        match self {
+            // Core operations - always available
+            Self::GetHealth
+            | Self::GetRaftMetrics
+            | Self::GetLeader
+            | Self::GetNodeInfo
+            | Self::GetClusterTicket
+            | Self::InitCluster
+            | Self::ReadKey { .. }
+            | Self::WriteKey { .. }
+            | Self::CompareAndSwapKey { .. }
+            | Self::CompareAndDeleteKey { .. }
+            | Self::TriggerSnapshot
+            | Self::AddLearner { .. }
+            | Self::ChangeMembership { .. }
+            | Self::Ping
+            | Self::GetClusterState
+            | Self::DeleteKey { .. }
+            | Self::ScanKeys { .. }
+            | Self::GetMetrics
+            | Self::PromoteLearner { .. }
+            | Self::CheckpointWal
+            | Self::ListVaults
+            | Self::GetVaultKeys { .. }
+            | Self::AddPeer { .. }
+            | Self::GetClusterTicketCombined { .. }
+            | Self::GetClientTicket { .. }
+            | Self::GetDocsTicket { .. }
+            | Self::GetTopology { .. } => None,
+
+            // KV batch operations
+            Self::BatchRead { .. } | Self::BatchWrite { .. } | Self::ConditionalBatchWrite { .. } => None,
+
+            // Watch operations
+            Self::WatchCreate { .. } | Self::WatchCancel { .. } | Self::WatchStatus { .. } => None,
+
+            // Lease operations
+            Self::LeaseGrant { .. }
+            | Self::LeaseRevoke { .. }
+            | Self::LeaseKeepalive { .. }
+            | Self::LeaseTimeToLive { .. }
+            | Self::LeaseList
+            | Self::WriteKeyWithLease { .. } => None,
+
+            // Coordination primitives
+            Self::LockAcquire { .. }
+            | Self::LockTryAcquire { .. }
+            | Self::LockRelease { .. }
+            | Self::LockRenew { .. }
+            | Self::CounterGet { .. }
+            | Self::CounterIncrement { .. }
+            | Self::CounterDecrement { .. }
+            | Self::CounterAdd { .. }
+            | Self::CounterSubtract { .. }
+            | Self::CounterSet { .. }
+            | Self::CounterCompareAndSet { .. }
+            | Self::SignedCounterGet { .. }
+            | Self::SignedCounterAdd { .. }
+            | Self::SequenceNext { .. }
+            | Self::SequenceReserve { .. }
+            | Self::SequenceCurrent { .. }
+            | Self::RateLimiterTryAcquire { .. }
+            | Self::RateLimiterAcquire { .. }
+            | Self::RateLimiterAvailable { .. }
+            | Self::RateLimiterReset { .. }
+            | Self::BarrierEnter { .. }
+            | Self::BarrierLeave { .. }
+            | Self::BarrierStatus { .. }
+            | Self::SemaphoreAcquire { .. }
+            | Self::SemaphoreTryAcquire { .. }
+            | Self::SemaphoreRelease { .. }
+            | Self::SemaphoreStatus { .. }
+            | Self::RWLockAcquireRead { .. }
+            | Self::RWLockTryAcquireRead { .. }
+            | Self::RWLockAcquireWrite { .. }
+            | Self::RWLockTryAcquireWrite { .. }
+            | Self::RWLockReleaseRead { .. }
+            | Self::RWLockReleaseWrite { .. }
+            | Self::RWLockDowngrade { .. }
+            | Self::RWLockStatus { .. }
+            | Self::QueueCreate { .. }
+            | Self::QueueDelete { .. }
+            | Self::QueueEnqueue { .. }
+            | Self::QueueEnqueueBatch { .. }
+            | Self::QueueDequeue { .. }
+            | Self::QueueDequeueWait { .. }
+            | Self::QueuePeek { .. }
+            | Self::QueueAck { .. }
+            | Self::QueueNack { .. }
+            | Self::QueueExtendVisibility { .. }
+            | Self::QueueStatus { .. }
+            | Self::QueueGetDLQ { .. }
+            | Self::QueueRedriveDLQ { .. } => None,
+
+            // Service Registry
+            Self::ServiceRegister { .. }
+            | Self::ServiceDeregister { .. }
+            | Self::ServiceDiscover { .. }
+            | Self::ServiceList { .. }
+            | Self::ServiceGetInstance { .. }
+            | Self::ServiceHeartbeat { .. }
+            | Self::ServiceUpdateHealth { .. }
+            | Self::ServiceUpdateMetadata { .. } => None,
+
+            // Blob operations
+            Self::AddBlob { .. }
+            | Self::GetBlob { .. }
+            | Self::HasBlob { .. }
+            | Self::GetBlobTicket { .. }
+            | Self::ListBlobs { .. }
+            | Self::ProtectBlob { .. }
+            | Self::UnprotectBlob { .. }
+            | Self::DeleteBlob { .. }
+            | Self::DownloadBlob { .. }
+            | Self::DownloadBlobByHash { .. }
+            | Self::DownloadBlobByProvider { .. }
+            | Self::GetBlobStatus { .. }
+            | Self::BlobReplicatePull { .. }
+            | Self::GetBlobReplicationStatus { .. }
+            | Self::TriggerBlobReplication { .. }
+            | Self::RunBlobRepairCycle => None,
+
+            // Docs operations
+            Self::DocsSet { .. }
+            | Self::DocsGet { .. }
+            | Self::DocsDelete { .. }
+            | Self::DocsList { .. }
+            | Self::DocsStatus => None,
+
+            // Peer cluster operations
+            Self::AddPeerCluster { .. }
+            | Self::RemovePeerCluster { .. }
+            | Self::ListPeerClusters
+            | Self::GetPeerClusterStatus { .. }
+            | Self::UpdatePeerClusterFilter { .. }
+            | Self::UpdatePeerClusterPriority { .. }
+            | Self::SetPeerClusterEnabled { .. }
+            | Self::GetKeyOrigin { .. } => None,
+
+            // Forge operations
+            Self::ForgeCreateRepo { .. }
+            | Self::ForgeGetRepo { .. }
+            | Self::ForgeListRepos { .. }
+            | Self::ForgeStoreBlob { .. }
+            | Self::ForgeGetBlob { .. }
+            | Self::ForgeCreateTree { .. }
+            | Self::ForgeGetTree { .. }
+            | Self::ForgeCommit { .. }
+            | Self::ForgeGetCommit { .. }
+            | Self::ForgeLog { .. }
+            | Self::ForgeGetRef { .. }
+            | Self::ForgeSetRef { .. }
+            | Self::ForgeDeleteRef { .. }
+            | Self::ForgeCasRef { .. }
+            | Self::ForgeListBranches { .. }
+            | Self::ForgeListTags { .. }
+            | Self::ForgeCreateIssue { .. }
+            | Self::ForgeListIssues { .. }
+            | Self::ForgeGetIssue { .. }
+            | Self::ForgeCommentIssue { .. }
+            | Self::ForgeCloseIssue { .. }
+            | Self::ForgeReopenIssue { .. }
+            | Self::ForgeCreatePatch { .. }
+            | Self::ForgeListPatches { .. }
+            | Self::ForgeGetPatch { .. }
+            | Self::ForgeUpdatePatch { .. }
+            | Self::ForgeApprovePatch { .. }
+            | Self::ForgeMergePatch { .. }
+            | Self::ForgeClosePatch { .. }
+            | Self::ForgeGetDelegateKey { .. } => Some("forge"),
+
+            // Federation operations
+            Self::GetFederationStatus
+            | Self::ListDiscoveredClusters
+            | Self::GetDiscoveredCluster { .. }
+            | Self::TrustCluster { .. }
+            | Self::UntrustCluster { .. }
+            | Self::FederateRepository { .. }
+            | Self::ListFederatedRepositories
+            | Self::ForgeFetchFederated { .. } => Some("forge"),
+
+            // Git Bridge operations
+            Self::GitBridgeListRefs { .. }
+            | Self::GitBridgeFetch { .. }
+            | Self::GitBridgePush { .. }
+            | Self::GitBridgePushStart { .. }
+            | Self::GitBridgePushChunk { .. }
+            | Self::GitBridgePushComplete { .. } => Some("forge"),
+
+            // SQL
+            Self::ExecuteSql { .. } => Some("sql"),
+
+            // DNS
+            Self::DnsSetRecord { .. }
+            | Self::DnsGetRecord { .. }
+            | Self::DnsGetRecords { .. }
+            | Self::DnsDeleteRecord { .. }
+            | Self::DnsResolve { .. }
+            | Self::DnsScanRecords { .. }
+            | Self::DnsSetZone { .. }
+            | Self::DnsGetZone { .. }
+            | Self::DnsListZones
+            | Self::DnsDeleteZone { .. } => Some("dns"),
+
+            // Job operations
+            Self::JobSubmit { .. }
+            | Self::JobGet { .. }
+            | Self::JobList { .. }
+            | Self::JobCancel { .. }
+            | Self::JobUpdateProgress { .. }
+            | Self::JobQueueStats
+            | Self::WorkerStatus
+            | Self::WorkerRegister { .. }
+            | Self::WorkerHeartbeat { .. }
+            | Self::WorkerDeregister { .. }
+            | Self::WorkerPollJobs { .. }
+            | Self::WorkerCompleteJob { .. } => Some("jobs"),
+
+            // Hook operations
+            Self::HookList | Self::HookGetMetrics { .. } | Self::HookTrigger { .. } => Some("hooks"),
+
+            // CI operations
+            Self::CiTriggerPipeline { .. }
+            | Self::CiGetStatus { .. }
+            | Self::CiListRuns { .. }
+            | Self::CiCancelRun { .. }
+            | Self::CiWatchRepo { .. }
+            | Self::CiUnwatchRepo { .. }
+            | Self::CiListArtifacts { .. }
+            | Self::CiGetArtifact { .. }
+            | Self::CiGetJobLogs { .. }
+            | Self::CiSubscribeLogs { .. }
+            | Self::CiGetJobOutput { .. } => Some("ci"),
+
+            // Secrets operations
+            Self::SecretsKvRead { .. }
+            | Self::SecretsKvWrite { .. }
+            | Self::SecretsKvDelete { .. }
+            | Self::SecretsKvDestroy { .. }
+            | Self::SecretsKvUndelete { .. }
+            | Self::SecretsKvList { .. }
+            | Self::SecretsKvMetadata { .. }
+            | Self::SecretsKvUpdateMetadata { .. }
+            | Self::SecretsKvDeleteMetadata { .. }
+            | Self::SecretsTransitCreateKey { .. }
+            | Self::SecretsTransitEncrypt { .. }
+            | Self::SecretsTransitDecrypt { .. }
+            | Self::SecretsTransitSign { .. }
+            | Self::SecretsTransitVerify { .. }
+            | Self::SecretsTransitRotateKey { .. }
+            | Self::SecretsTransitListKeys { .. }
+            | Self::SecretsTransitRewrap { .. }
+            | Self::SecretsTransitDatakey { .. }
+            | Self::SecretsPkiGenerateRoot { .. }
+            | Self::SecretsPkiGenerateIntermediate { .. }
+            | Self::SecretsPkiSetSignedIntermediate { .. }
+            | Self::SecretsPkiCreateRole { .. }
+            | Self::SecretsPkiIssue { .. }
+            | Self::SecretsPkiRevoke { .. }
+            | Self::SecretsPkiGetCrl { .. }
+            | Self::SecretsPkiListCerts { .. }
+            | Self::SecretsPkiGetRole { .. }
+            | Self::SecretsPkiListRoles { .. }
+            | Self::SecretsNixCacheCreateKey { .. }
+            | Self::SecretsNixCacheGetPublicKey { .. }
+            | Self::SecretsNixCacheRotateKey { .. }
+            | Self::SecretsNixCacheDeleteKey { .. }
+            | Self::SecretsNixCacheListKeys { .. } => Some("secrets"),
+
+            // SNIX and Cache operations
+            Self::CacheQuery { .. }
+            | Self::CacheStats
+            | Self::CacheDownload { .. }
+            | Self::SnixDirectoryGet { .. }
+            | Self::SnixDirectoryPut { .. }
+            | Self::SnixPathInfoGet { .. }
+            | Self::SnixPathInfoPut { .. } => Some("snix"),
+
+            // Feature-gated: Cache Migration
+            #[cfg(feature = "ci")]
+            Self::CacheMigrationStart { .. }
+            | Self::CacheMigrationStatus
+            | Self::CacheMigrationCancel
+            | Self::CacheMigrationValidate { .. } => Some("snix"),
+
+            // Feature-gated: Pijul
+            #[cfg(feature = "pijul")]
+            Self::PijulRepoInit { .. }
+            | Self::PijulRepoList { .. }
+            | Self::PijulRepoInfo { .. }
+            | Self::PijulChannelList { .. }
+            | Self::PijulChannelCreate { .. }
+            | Self::PijulChannelDelete { .. }
+            | Self::PijulChannelFork { .. }
+            | Self::PijulChannelInfo { .. }
+            | Self::PijulRecord { .. }
+            | Self::PijulApply { .. }
+            | Self::PijulUnrecord { .. }
+            | Self::PijulLog { .. }
+            | Self::PijulCheckout { .. }
+            | Self::PijulShow { .. }
+            | Self::PijulBlame { .. } => Some("pijul"),
+
+            // Feature-gated: Automerge
+            #[cfg(feature = "automerge")]
+            Self::AutomergeCreate { .. }
+            | Self::AutomergeGet { .. }
+            | Self::AutomergeSave { .. }
+            | Self::AutomergeDelete { .. }
+            | Self::AutomergeApplyChanges { .. }
+            | Self::AutomergeMerge { .. }
+            | Self::AutomergeList { .. }
+            | Self::AutomergeGetMetadata { .. }
+            | Self::AutomergeExists { .. }
+            | Self::AutomergeGenerateSyncMessage { .. }
+            | Self::AutomergeReceiveSyncMessage { .. } => Some("automerge"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientRpcResponse {
     /// Health status response.
@@ -3846,6 +4200,12 @@ pub enum ClientRpcResponse {
     WorkerPollJobsResult(WorkerPollJobsResultResponse),
     /// Worker job completion result.
     WorkerCompleteJobResult(WorkerCompleteJobResultResponse),
+
+    /// Capability unavailable response.
+    ///
+    /// Returned when a request requires an app that is not loaded on this cluster.
+    /// Contains the required app name and hints about clusters that can serve it.
+    CapabilityUnavailable(CapabilityUnavailableResponse),
 
     // =========================================================================
     // FEATURE-GATED VARIANTS (must be at end for postcard discriminant stability)

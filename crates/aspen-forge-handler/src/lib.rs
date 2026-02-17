@@ -98,6 +98,10 @@ impl HandlerFactory for ForgeHandlerFactory {
     fn priority(&self) -> u32 {
         540
     }
+
+    fn app_id(&self) -> Option<&'static str> {
+        Some("forge")
+    }
 }
 
 // Self-register via inventory

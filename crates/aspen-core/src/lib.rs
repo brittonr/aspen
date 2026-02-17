@@ -15,6 +15,7 @@
 //!
 //! - `sql` (default): Include SQL query types and traits
 
+pub mod app_registry;
 pub mod cluster;
 pub mod constants;
 pub mod context;
@@ -45,6 +46,11 @@ pub mod verified;
 pub(crate) mod test_support;
 // Re-export all public types at crate root for convenience
 
+// App registry types
+pub use app_registry::AppManifest;
+pub use app_registry::AppRegistry;
+pub use app_registry::SharedAppRegistry;
+pub use app_registry::shared_registry;
 // Re-export all constants at crate root for backward compatibility
 // This allows `use aspen_core::CONSTANT_NAME` instead of `use
 // aspen_core::constants::module::CONSTANT_NAME`
