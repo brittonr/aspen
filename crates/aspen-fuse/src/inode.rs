@@ -399,6 +399,7 @@ mod tests {
     #[test]
     fn test_entry_type_clone() {
         let entry_type = EntryType::File;
+        #[allow(clippy::clone_on_copy)]
         let cloned = entry_type.clone();
         assert_eq!(entry_type, cloned);
     }

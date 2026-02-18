@@ -480,17 +480,12 @@ mod readdir {
     #[test]
     fn test_dot_and_dotdot_entries() {
         // . and .. should be returned first
-        let mut entries = vec![];
-
-        // Offset 0: return .
-        entries.push((".", 1u64)); // offset 1
-
-        // Offset <= 1: return ..
-        entries.push(("..", 2u64)); // offset 2
-
-        // Then child entries
-        entries.push(("file1", 3u64));
-        entries.push(("file2", 4u64));
+        let entries = [
+            (".", 1u64),     // offset 0: return .
+            ("..", 2u64),    // offset <= 1: return ..
+            ("file1", 3u64), // child entries
+            ("file2", 4u64),
+        ];
 
         assert_eq!(entries[0].0, ".");
         assert_eq!(entries[1].0, "..");

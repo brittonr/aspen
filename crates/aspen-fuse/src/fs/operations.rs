@@ -800,9 +800,7 @@ impl FileSystem for AspenFs {
 
         debug!(key, name_str, size, "getxattr");
 
-        let value = self
-            .kv_read(&xattr_key)?
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "xattr not found"))?;
+        let value = self.kv_read(&xattr_key)?.ok_or_else(|| std::io::Error::from_raw_os_error(libc::ENODATA))?;
 
         if size == 0 {
             // Size query only
