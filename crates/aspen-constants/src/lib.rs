@@ -20,7 +20,7 @@
 //! Access constants via their submodule:
 //! ```
 //! use aspen_constants::api::MAX_KEY_SIZE;
-//! use aspen_constants::network::CONNECT_TIMEOUT_SECS;
+//! use aspen_constants::network::IROH_CONNECT_TIMEOUT_SECS;
 //! ```
 //!
 //! Or use the prelude for common constants:

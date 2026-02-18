@@ -41,6 +41,7 @@ pub enum GitCommand {
     Log(LogArgs),
 
     /// Push refs to the remote.
+    #[cfg(feature = "forge")]
     Push(PushArgs),
 
     /// Get a ref value.
@@ -159,6 +160,7 @@ pub struct LogArgs {
     pub limit: u32,
 }
 
+#[cfg(feature = "forge")]
 #[derive(Args)]
 pub struct PushArgs {
     /// Repository ID.
@@ -289,6 +291,7 @@ impl GitCommand {
             GitCommand::Show(args) => git_show(client, args, json).await,
             GitCommand::Commit(args) => git_commit(client, args, json).await,
             GitCommand::Log(args) => git_log(client, args, json).await,
+            #[cfg(feature = "forge")]
             GitCommand::Push(args) => git_push(client, args, json).await,
             GitCommand::GetRef(args) => git_get_ref(client, args, json).await,
             GitCommand::StoreBlob(args) => git_store_blob(client, args, json).await,
@@ -904,6 +907,7 @@ async fn fetch_current_ref_hash(client: &AspenClient, repo_id: &str, ref_name: &
     }
 }
 
+#[cfg(feature = "forge")]
 async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()> {
     use aspen_forge::identity::RepoId;
 
@@ -950,6 +954,7 @@ fn git_push_parse_old_hash(current_hash: &Option<String>) -> Option<blake3::Hash
 }
 
 /// Load a signing key and produce a signed ref update, if a key path is provided.
+#[cfg(feature = "forge")]
 fn git_push_sign_update(
     key_path: &Option<std::path::PathBuf>,
     repo_id: aspen_forge::identity::RepoId,
@@ -983,6 +988,7 @@ fn git_push_sign_update(
 }
 
 /// Send the push request (force set or CAS) to the server.
+#[cfg(feature = "forge")]
 async fn git_push_send_request(
     client: &AspenClient,
     args: &PushArgs,

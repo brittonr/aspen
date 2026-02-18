@@ -2,11 +2,13 @@
 //!
 //! Commands for listing, creating, and deleting tags.
 
+#[cfg(feature = "forge")]
 use std::path::PathBuf;
 
 use anyhow::Result;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+#[cfg(feature = "forge")]
 use aspen_forge::refs::SignedRefUpdate;
 use clap::Args;
 use clap::Subcommand;
@@ -23,6 +25,7 @@ pub enum TagCommand {
     List(TagListArgs),
 
     /// Create a new tag.
+    #[cfg(feature = "forge")]
     Create(TagCreateArgs),
 
     /// Delete a tag.
@@ -36,6 +39,7 @@ pub struct TagListArgs {
     pub repo: String,
 }
 
+#[cfg(feature = "forge")]
 #[derive(Args)]
 pub struct TagCreateArgs {
     /// Repository ID.
@@ -72,6 +76,7 @@ impl TagCommand {
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
         match self {
             TagCommand::List(args) => tag_list(client, args, json).await,
+            #[cfg(feature = "forge")]
             TagCommand::Create(args) => tag_create(client, args, json).await,
             TagCommand::Delete(args) => tag_delete(client, args, json).await,
         }
@@ -110,6 +115,7 @@ async fn tag_list(client: &AspenClient, args: TagListArgs, json: bool) -> Result
     }
 }
 
+#[cfg(feature = "forge")]
 async fn tag_create(client: &AspenClient, args: TagCreateArgs, json: bool) -> Result<()> {
     let ref_name = format!("tags/{}", args.name);
 
