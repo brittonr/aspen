@@ -419,7 +419,7 @@ async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> 
         app_id: resolved.app_id,
         execution_timeout_secs: None,
         kv_prefixes: resolved.kv_prefixes,
-        permissions: resolved.permissions.unwrap_or_else(aspen_plugin_api::PluginPermissions::all),
+        permissions: resolved.permissions.unwrap_or_default(),
     };
 
     let manifest_json = serde_json::to_string(&manifest)?;
