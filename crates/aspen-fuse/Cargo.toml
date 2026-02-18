@@ -65,9 +65,13 @@ virtiofs = [
 
 [dev-dependencies]
 tempfile = "3.4"
+xattr = "1"
+nix = { version = "0.29", features = ["fs"] }
 # vhost-user-frontend enables the Frontend (VMM-side) connector for integration tests
 # that verify our VirtioFS daemon speaks the vhost-user protocol correctly.
 vhost = { version = "0.11", features = ["vhost-user-frontend"] }
+vm-memory = "0.14"
+vmm-sys-util = "0.12"
 
 [[bin]]
 name = "aspen-fuse"

@@ -12,8 +12,8 @@
 //! AspenFs (FileSystem trait) → InMemory BTreeMap
 //! ```
 //!
-//! Real syscalls (open, write, read, readdir, unlink, symlink, readlink)
-//! pass through the kernel FUSE layer into our filesystem implementation.
+//! Real syscalls (open, write, read, readdir, unlink, symlink, readlink, rename, truncate, rmdir,
+//! xattr, statfs) pass through the kernel FUSE layer into our filesystem implementation.
 
 use std::sync::Arc;
 use std::thread;
@@ -116,6 +116,91 @@ fn test_fuse_mount_file_operations() {
 
     let dir_meta = std::fs::metadata(&sub_dir).unwrap();
     assert!(dir_meta.is_dir());
+
+    // --- Rename file ---
+    let rename_src = mount_path.join("rename_src.txt");
+    let rename_dst = mount_path.join("rename_dst.txt");
+    std::fs::write(&rename_src, b"rename me").unwrap();
+    std::fs::rename(&rename_src, &rename_dst).unwrap();
+    assert!(!rename_src.exists(), "rename source should be gone");
+    let content = std::fs::read(&rename_dst).unwrap();
+    assert_eq!(content, b"rename me");
+
+    // --- Rename directory ---
+    let dir_before = mount_path.join("dir_before");
+    std::fs::create_dir(&dir_before).unwrap();
+    std::fs::write(dir_before.join("child.txt"), b"child data").unwrap();
+    let dir_after = mount_path.join("dir_after");
+    std::fs::rename(&dir_before, &dir_after).unwrap();
+    assert!(!dir_before.exists(), "renamed dir should be gone");
+    let content = std::fs::read(dir_after.join("child.txt")).unwrap();
+    assert_eq!(content, b"child data");
+
+    // --- Truncate via set_len ---
+    let trunc_file = mount_path.join("truncate.txt");
+    std::fs::write(&trunc_file, b"0123456789").unwrap();
+    {
+        let f = std::fs::OpenOptions::new().write(true).open(&trunc_file).unwrap();
+        f.set_len(5).unwrap();
+    }
+    let content = std::fs::read(&trunc_file).unwrap();
+    assert_eq!(content.len(), 5);
+    assert_eq!(&content[..5], b"01234");
+    // Extend with zero-fill
+    {
+        let f = std::fs::OpenOptions::new().write(true).open(&trunc_file).unwrap();
+        f.set_len(8).unwrap();
+    }
+    let content = std::fs::read(&trunc_file).unwrap();
+    assert_eq!(content.len(), 8);
+    assert_eq!(&content[..5], b"01234");
+    assert_eq!(&content[5..], b"\0\0\0");
+
+    // --- Append writes ---
+    let append_file = mount_path.join("append.txt");
+    std::fs::write(&append_file, b"hello").unwrap();
+    {
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new().append(true).open(&append_file).unwrap();
+        f.write_all(b" world").unwrap();
+    }
+    let content = std::fs::read(&append_file).unwrap();
+    assert_eq!(content, b"hello world");
+
+    // --- rmdir (empty) ---
+    let empty_dir = mount_path.join("empty_dir");
+    std::fs::create_dir(&empty_dir).unwrap();
+    std::fs::remove_dir(&empty_dir).unwrap();
+    assert!(!empty_dir.exists(), "empty dir should be removed");
+
+    // --- rmdir non-empty fails ---
+    let nonempty_dir = mount_path.join("nonempty_dir");
+    std::fs::create_dir(&nonempty_dir).unwrap();
+    std::fs::write(nonempty_dir.join("file.txt"), b"data").unwrap();
+    let result = std::fs::remove_dir(&nonempty_dir);
+    assert!(result.is_err(), "rmdir on non-empty dir should fail");
+
+    // --- xattr operations ---
+    let xattr_file = mount_path.join("xattr_test.txt");
+    std::fs::write(&xattr_file, b"xattr content").unwrap();
+    xattr::set(&xattr_file, "user.myattr", b"myvalue").unwrap();
+    let val = xattr::get(&xattr_file, "user.myattr").unwrap().unwrap();
+    assert_eq!(val, b"myvalue");
+    let names: Vec<_> = xattr::list(&xattr_file).unwrap().collect();
+    assert!(
+        names.iter().any(|n| n.to_string_lossy() == "user.myattr"),
+        "xattr list should include user.myattr, got: {names:?}"
+    );
+    xattr::remove(&xattr_file, "user.myattr").unwrap();
+    let val = xattr::get(&xattr_file, "user.myattr").unwrap();
+    assert!(val.is_none(), "xattr should be removed");
+
+    // --- statfs ---
+    {
+        use nix::sys::statvfs::statvfs;
+        let stat = statvfs(&mount_path).unwrap();
+        assert!(stat.block_size() > 0, "block_size should be > 0");
+    }
 
     // --- Cleanup ---
     session.wake().unwrap();

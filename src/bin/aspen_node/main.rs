@@ -73,6 +73,8 @@ use aspen_core::context::InMemoryWatchRegistry;
 use aspen_core::context::WatchRegistry;
 use tracing::error;
 use tracing::info;
+#[cfg(not(feature = "ci"))]
+use tracing::warn;
 
 use crate::config::initialize_and_load_config;
 use crate::node_mode::bootstrap_node_and_generate_token;

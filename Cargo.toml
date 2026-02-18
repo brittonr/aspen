@@ -395,6 +395,10 @@ anyerror = { version = "0.1", features = ["anyhow"] }
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 portpicker = "0.1"
 
+# FUSE filesystem integration tests
+aspen-fuse = { workspace = true }
+fuse-backend-rs = { version = "0.13", default-features = false, features = ["fusedev"] }
+
 # VM-based integration testing with Cloud Hypervisor
 cloud-hypervisor-client = "0.3"
 
@@ -803,6 +807,10 @@ required-features = ["shell-worker"]
 [[test]]
 name = "secrets_integration_test"
 required-features = ["secrets"]
+
+[[test]]
+name = "fuse_raft_cluster_test"
+required-features = ["jobs", "docs", "hooks", "federation"]
 
 # Vendored patches: cargo-hyperlight patched to replace --build-plan
 # (removed in Cargo 1.93) with stable --message-format=json.

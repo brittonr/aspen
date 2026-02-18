@@ -560,6 +560,129 @@ mod tests {
         handle.shutdown().unwrap();
     }
 
+    /// Integration test: spawn VirtioFS daemon, connect as frontend, negotiate
+    /// features, configure shared memory regions and virtqueues (the full VMM
+    /// transport setup path before FUSE I/O begins).
+    #[test]
+    fn test_daemon_memory_and_queue_setup() {
+        use std::os::unix::io::AsRawFd;
+
+        use vhost::VhostBackend;
+        use vhost::VhostUserMemoryRegionInfo;
+        use vhost::VringConfigData;
+        use vhost::vhost_user::Frontend;
+        use vhost::vhost_user::VhostUserFrontend;
+        use vm_memory::MmapRegion;
+        use vmm_sys_util::eventfd::EventFd;
+
+        let dir = tempfile::tempdir().unwrap();
+        let socket_path = dir.path().join("virtiofs.sock");
+
+        let fs = AspenFs::new_in_memory(1000, 1000);
+        let handle = spawn_virtiofs_daemon(&socket_path, fs).unwrap();
+
+        // Wait for socket
+        for _ in 0..100 {
+            if socket_path.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(socket_path.exists(), "daemon failed to create socket");
+
+        let mut frontend = Frontend::connect(&socket_path, NUM_QUEUES as u64).unwrap();
+
+        // --- Ownership + feature negotiation (same as handshake test) ---
+        frontend.set_owner().unwrap();
+        let features = frontend.get_features().unwrap();
+        frontend.set_features(features).unwrap();
+        let proto_features = frontend.get_protocol_features().unwrap();
+        frontend.set_protocol_features(proto_features).unwrap();
+
+        // --- Configure shared memory region (4 MB) ---
+        // Create a memfd/tempfile for the shared memory region
+        let mem_file = tempfile::tempfile().unwrap();
+        let region_size: u64 = 4 * 1024 * 1024; // 4 MB
+        mem_file.set_len(region_size).unwrap();
+
+        // mmap the region so we have a valid userspace address
+        let mmap_region = unsafe {
+            let ptr = libc::mmap(
+                std::ptr::null_mut(),
+                region_size as usize,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED,
+                mem_file.as_raw_fd(),
+                0,
+            );
+            assert_ne!(ptr, libc::MAP_FAILED, "mmap failed");
+            MmapRegion::<()>::build_raw(
+                ptr as *mut u8,
+                region_size as usize,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED,
+            )
+            .unwrap()
+        };
+
+        let region_info = VhostUserMemoryRegionInfo {
+            guest_phys_addr: 0,
+            memory_size: region_size,
+            userspace_addr: mmap_region.as_ptr() as u64,
+            mmap_offset: 0,
+            mmap_handle: mem_file.as_raw_fd(),
+        };
+
+        frontend.set_mem_table(&[region_info]).unwrap();
+
+        // --- Configure virtqueues ---
+        // Queue descriptors table, available ring, and used ring must be within
+        // the guest memory region. We place them at fixed offsets within our 4MB region.
+        // Addresses passed to set_vring_addr are VMM virtual addresses (mmap ptr + offset),
+        // which the backend translates back to GPA via the memory mapping table.
+        let queue_size: u16 = 256;
+        let region_base = mmap_region.as_ptr() as u64;
+
+        for queue_index in 0..NUM_QUEUES {
+            // Offset each queue's structures within the region (64KB per queue)
+            let base_offset = (queue_index as u64) * 0x10000;
+
+            frontend.set_vring_num(queue_index, queue_size).unwrap();
+
+            let vring_config = VringConfigData {
+                queue_max_size: queue_size,
+                queue_size,
+                flags: 0,
+                desc_table_addr: region_base + base_offset,
+                used_ring_addr: region_base + base_offset + 0x2000,
+                avail_ring_addr: region_base + base_offset + 0x1000,
+                log_addr: None,
+            };
+            frontend.set_vring_addr(queue_index, &vring_config).unwrap();
+
+            frontend.set_vring_base(queue_index, 0).unwrap();
+
+            // Create eventfds for kick (guest -> host notification) and
+            // call (host -> guest notification)
+            let kick_fd = EventFd::new(libc::EFD_NONBLOCK).unwrap();
+            let call_fd = EventFd::new(libc::EFD_NONBLOCK).unwrap();
+
+            frontend.set_vring_kick(queue_index, &kick_fd).unwrap();
+            frontend.set_vring_call(queue_index, &call_fd).unwrap();
+            frontend.set_vring_enable(queue_index, true).unwrap();
+        }
+
+        // --- Graceful disconnection ---
+        drop(frontend);
+
+        // Unmap the shared memory region
+        unsafe {
+            libc::munmap(mmap_region.as_ptr() as *mut libc::c_void, region_size as usize);
+        }
+
+        handle.shutdown().unwrap();
+    }
+
     #[test]
     fn test_virtio_features() {
         // Verify feature flags are correctly set
