@@ -567,31 +567,6 @@ async fn initialize_job_system(
             }
         }
 
-        // Register Nanvix executor worker for multi-language sandbox execution
-        #[cfg(all(feature = "plugins-nanvix", target_os = "linux"))]
-        {
-            use aspen_jobs::NanvixWorker;
-            if let Some(blob_store) = node_mode.blob_store() {
-                let blob_store_dyn: Arc<dyn aspen_blob::BlobStore> = blob_store.clone();
-                let kv_store_dyn: Arc<dyn aspen_core::KeyValueStore> = kv_store.clone();
-                match NanvixWorker::new(blob_store_dyn, kv_store_dyn) {
-                    Ok(nanvix_worker) => {
-                        worker_service
-                            .register_handler("nanvix_execute", nanvix_worker)
-                            .await
-                            .context("failed to register Nanvix executor worker")?;
-                        info!("Nanvix executor worker registered (hyperlight-nanvix with blob store)");
-                    }
-                    Err(e) => {
-                        warn!("Failed to create NanvixWorker: {}. Nanvix execution disabled.", e);
-                        warn!("Nanvix execution requires KVM support on Linux");
-                    }
-                }
-            } else {
-                warn!("No blob store available for Nanvix executor. Nanvix execution disabled.");
-            }
-        }
-
         // CI/CD infrastructure setup
         #[cfg(feature = "ci")]
         {

@@ -429,13 +429,11 @@ dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hicko
 # Blob storage support for iroh-blobs operations
 blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-handlers/blob", "aspen-cluster/blob", "aspen-client/blob-store"]
 # Plugin umbrella: all hyperlight-based execution backends
-plugins = ["plugins-vm", "plugins-wasm", "plugins-nanvix", "plugins-rpc"]
+plugins = ["plugins-vm", "plugins-wasm", "plugins-rpc"]
 # Hyperlight VM sandbox for native binaries
 plugins-vm = ["aspen-jobs/plugins-vm"]
 # WASM Component Model job execution via hyperlight-wasm
 plugins-wasm = ["aspen-jobs/plugins-wasm"]
-# Nanvix micro-VM execution (JS, Python, native) via hyperlight-nanvix
-plugins-nanvix = ["aspen-jobs/plugins-nanvix"]
 # WASM handler plugins for dynamic RPC handler loading
 plugins-rpc = ["aspen-rpc-handlers/plugins-rpc", "blob"]
 # Shell command worker for executing system commands as jobs (requires auth)
@@ -482,7 +480,7 @@ federation = ["aspen-cluster/federation"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-nanvix\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"nix-executor\", \"ci-vm-executor\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"nix-executor\", \"ci-vm-executor\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit

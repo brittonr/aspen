@@ -10,7 +10,6 @@
 //! |---|---|---|---|---|
 //! | [`HyperlightWorker`] | Running native ELF binaries as short-lived compute tasks | KVM micro-VM | ~1ms | Rust, C, any static ELF |
 //! | [`WasmComponentWorker`] | Running portable, sandboxed logic with host API access (KV, blobs) | KVM + WASM sandbox | ~1ms | Rust/C compiled to WASM Component Model |
-//! | [`NanvixWorker`] | Running interpreted scripts without a compilation step | KVM micro-VM (Nanvix POSIX microkernel) | ~5-10ms | JavaScript (QuickJS), Python (CPython 3.12), ELF |
 //!
 //! The CI-specific [`CloudHypervisorWorker`](aspen_ci_executor_vm::CloudHypervisorWorker)
 //! lives in `aspen-ci-executor-vm` and serves a different purpose:
@@ -31,10 +30,9 @@
 //!   host functions (KV CRUD, blob store, HLC, crypto, etc.). Best for plugins and user-defined
 //!   extensions that need to interact with cluster state.
 //!
-//! - **"I have a Python or JavaScript script"** -- [`NanvixWorker`]. Embeds QuickJS or CPython 3.12
-//!   inside a Nanvix microkernel VM with a POSIX-compatible interface. No compilation step --
-//!   upload the script to blob store and run it. Good for user-submitted scripts, webhooks, and
-//!   lightweight automation.
+//! - **"I have a Python or JavaScript script"** -- `CloudHypervisorWorker`. Run scripts inside a
+//!   full Linux VM with a POSIX-compatible interface. Upload the script and run it. Good for
+//!   user-submitted scripts, webhooks, and lightweight automation.
 //!
 //! - **"I need to run `cargo build`, `nix build`, or a multi-step CI pipeline"** --
 //!   `CloudHypervisorWorker`. Full Linux VM with `/nix/store` mounted via virtiofs, network access,
@@ -51,8 +49,8 @@
 //! - **iroh-blobs**: Large content-addressed data -- binaries, WASM components, NARs, build
 //!   artifacts. P2P transfer across the cluster.
 //!
-//! For workers that expose a filesystem to the guest (`NanvixWorker`,
-//! `CloudHypervisorWorker`), the mapping is **transparent**: the guest
+//! For workers that expose a filesystem to the guest (`CloudHypervisorWorker`),
+//! the mapping is **transparent**: the guest
 //! sees a standard POSIX filesystem and has no knowledge of Aspen. On the
 //! host side, `aspen-fuse` (`AspenFs`) serves the VirtioFS protocol,
 //! routing file operations to KV for metadata and small files and to
@@ -68,13 +66,6 @@
 //!   blobs directly via 20 typed host functions (KV CRUD + CAS + scan, blob get/put/has, HLC,
 //!   crypto). No filesystem needed -- the host API *is* the storage interface.
 //!
-//! - **[`NanvixWorker`]**: Workload scripts sourced from iroh-blobs. Workspace files are
-//!   materialized from KV into a temp directory before execution, and new/modified files are synced
-//!   back after execution. This workspace materialization approach is used because
-//!   hyperlight-nanvix does not support VirtioFS (its `RuntimeConfig` hardcodes `T = ()` for
-//!   syscall handlers). Console output is also captured from guest logs. KV keys follow the
-//!   convention `nanvix/workspaces/{job_id}/{relative_path}` with file content base64-encoded.
-//!
 //! - **`CloudHypervisorWorker`**: VMs are full Aspen cluster members (`aspen-node --worker-only`).
 //!   The guest mounts two virtiofs shares (`/nix/store` read-only, `/workspace` read-write) that
 //!   appear as normal filesystems inside the VM. The host side should serve these via
@@ -88,9 +79,7 @@
 
 #[cfg(feature = "plugins-vm")]
 mod hyperlight;
-#[cfg(feature = "plugins-nanvix")]
-mod nanvix;
-#[cfg(any(feature = "plugins-vm", feature = "plugins-wasm", feature = "plugins-nanvix"))]
+#[cfg(any(feature = "plugins-vm", feature = "plugins-wasm"))]
 mod types;
 #[cfg(feature = "plugins-wasm")]
 mod wasm_component;
@@ -99,11 +88,9 @@ mod wasm_host;
 
 #[cfg(feature = "plugins-vm")]
 pub use hyperlight::HyperlightWorker;
-#[cfg(feature = "plugins-nanvix")]
-pub use nanvix::NanvixWorker;
-#[cfg(any(feature = "plugins-vm", feature = "plugins-wasm", feature = "plugins-nanvix"))]
+#[cfg(any(feature = "plugins-vm", feature = "plugins-wasm"))]
 pub use types::JobPayload;
-#[cfg(any(feature = "plugins-vm", feature = "plugins-wasm", feature = "plugins-nanvix"))]
+#[cfg(any(feature = "plugins-vm", feature = "plugins-wasm"))]
 pub use types::NixBuildOutput;
 #[cfg(feature = "plugins-wasm")]
 pub use wasm_component::WasmComponentWorker;

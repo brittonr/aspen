@@ -471,12 +471,6 @@ impl Worker for HyperlightWorker {
                     "HyperlightWorker does not handle WASM components; use WasmComponentWorker instead",
                 );
             }
-
-            JobPayload::NanvixWorkload { .. } => {
-                return JobResult::failure(
-                    "HyperlightWorker does not handle Nanvix workloads; use NanvixWorker instead",
-                );
-            }
         };
 
         match result {

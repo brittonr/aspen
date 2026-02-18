@@ -14,7 +14,6 @@ default = []
 blob = ["dep:aspen-blob", "dep:iroh-blobs"]
 plugins-vm = ["hyperlight-host", "blob"]
 plugins-wasm = ["dep:hyperlight-wasm", "blob"]
-plugins-nanvix = ["dep:hyperlight-nanvix", "blob"]
 
 [dependencies]
 # Core dependencies
@@ -71,7 +70,6 @@ zstd = "0.13"
 # VM execution (optional)
 hyperlight-host = { version = "0.12", optional = true }
 hyperlight-wasm = { version = "0.12", optional = true }
-hyperlight-nanvix = { git = "https://github.com/hyperlight-dev/hyperlight-nanvix", rev = "f4bc205a40ed072cbb5f26b141498477985782f7", optional = true }
 tempfile = "3.4"
 blake3 = "1.5"
 base64 = "0.22"
