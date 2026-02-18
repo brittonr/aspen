@@ -38,7 +38,7 @@ fn repo_id_from_name(name: &str) -> String {
 }
 
 fn read_repo_identity(repo_id_hex: &str) -> Option<SignedObject<RepoIdentity>> {
-    let bytes = kv::kv_get(&repo_identity_key(repo_id_hex))?;
+    let bytes = kv::kv_get(&repo_identity_key(repo_id_hex)).ok()??;
     serde_json::from_slice(&bytes).ok()
 }
 
@@ -158,7 +158,7 @@ pub fn handle_list_repos(limit: Option<u32>, offset: Option<u32>) -> ClientRpcRe
 
     // Scan all repo identity keys
     // Tiger Style: Use saturating_add to avoid overflow
-    let entries = kv::kv_scan(REPO_IDENTITY_PREFIX, scan_limit.saturating_add(skip));
+    let entries = kv::kv_scan(REPO_IDENTITY_PREFIX, scan_limit.saturating_add(skip)).unwrap_or_default();
 
     let mut repos = Vec::new();
     let mut skipped = 0u32;

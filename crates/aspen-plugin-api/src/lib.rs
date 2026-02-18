@@ -109,3 +109,49 @@ impl PluginHealth {
         self.state == PluginState::Ready
     }
 }
+
+// ---------------------------------------------------------------------------
+// KV Batch Operations
+// ---------------------------------------------------------------------------
+
+/// A single operation in a KV batch write.
+///
+/// Batch operations are serialized as JSON and passed across the WASM boundary.
+/// The host validates all keys against the plugin's namespace prefixes before
+/// executing any operations.
+///
+/// Tiger Style: Validate all inputs before side effects.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum KvBatchOp {
+    /// Set a key to a value.
+    Set { key: String, value: String },
+    /// Delete a key.
+    Delete { key: String },
+}
+
+// ---------------------------------------------------------------------------
+// Timer / Scheduler
+// ---------------------------------------------------------------------------
+
+/// Configuration for a scheduled timer.
+///
+/// Timers are identified by name within a plugin. Registering a timer
+/// with the same name as an existing one replaces it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimerConfig {
+    /// Unique name for this timer within the plugin.
+    pub name: String,
+    /// Interval in milliseconds for periodic timers, or delay for one-shot.
+    pub interval_ms: u64,
+    /// Whether this timer repeats. If false, fires once after `interval_ms`.
+    pub repeating: bool,
+}
+
+/// Maximum number of active timers per plugin.
+pub const MAX_TIMERS_PER_PLUGIN: usize = 16;
+
+/// Minimum timer interval in milliseconds (1 second).
+pub const MIN_TIMER_INTERVAL_MS: u64 = 1_000;
+
+/// Maximum timer interval in milliseconds (24 hours).
+pub const MAX_TIMER_INTERVAL_MS: u64 = 86_400_000;

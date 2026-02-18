@@ -40,6 +40,18 @@ use aspen_core::KeyValueStore;
 use aspen_hlc::HLC;
 use aspen_traits::ClusterController;
 
+/// A scheduler command from a WASM guest plugin.
+///
+/// Guest plugins enqueue these during execution; the host processes them
+/// after the guest call completes.
+#[derive(Debug)]
+pub enum SchedulerCommand {
+    /// Schedule a new timer (or replace an existing one with the same name).
+    Schedule(aspen_plugin_api::TimerConfig),
+    /// Cancel a timer by name.
+    Cancel(String),
+}
+
 /// Host context for WASM handler plugin callbacks.
 ///
 /// Holds references to cluster services that the guest can interact with
@@ -67,6 +79,11 @@ pub struct PluginHostContext {
     ///
     /// Tiger Style: Enforced bounds prevent cross-plugin data access.
     pub allowed_kv_prefixes: Vec<String>,
+    /// Pending scheduler requests from the guest.
+    ///
+    /// Shared with [`WasmPluginHandler`] which processes these after each
+    /// guest call completes.
+    pub scheduler_requests: Arc<std::sync::Mutex<Vec<SchedulerCommand>>>,
 }
 
 impl PluginHostContext {
@@ -87,6 +104,7 @@ impl PluginHostContext {
             secret_key: None,
             hlc: None,
             allowed_kv_prefixes: Vec::new(),
+            scheduler_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
         }
     }
 
@@ -116,6 +134,16 @@ impl PluginHostContext {
     /// Set the HLC instance for causal timestamps.
     pub fn with_hlc(mut self, hlc: Arc<HLC>) -> Self {
         self.hlc = Some(hlc);
+        self
+    }
+
+    /// Set a shared scheduler requests queue.
+    ///
+    /// This lets the handler and host context share the same queue so that
+    /// scheduler commands enqueued by host functions during guest execution
+    /// can be processed by the handler afterward.
+    pub fn with_scheduler_requests(mut self, reqs: Arc<std::sync::Mutex<Vec<SchedulerCommand>>>) -> Self {
+        self.scheduler_requests = reqs;
         self
     }
 }
@@ -271,6 +299,56 @@ pub fn kv_cas(ctx: &PluginHostContext, key: &str, expected: &[u8], new_value: &[
             );
             format!("kv_cas failed: {e}")
         })
+    })
+}
+
+/// Execute a batch of KV operations.
+///
+/// All keys are validated against the plugin's namespace prefixes before
+/// any operation executes. If any key fails validation, the entire batch
+/// is rejected.
+///
+/// Tiger Style: Validate all inputs before side effects.
+pub fn kv_batch(ctx: &PluginHostContext, ops_json: &[u8]) -> Result<(), String> {
+    let ops: Vec<aspen_plugin_api::KvBatchOp> =
+        serde_json::from_slice(ops_json).map_err(|e| format!("invalid batch JSON: {e}"))?;
+
+    if ops.is_empty() {
+        return Ok(());
+    }
+
+    // Validate all keys up front before executing any operations
+    for op in &ops {
+        let (key, operation) = match op {
+            aspen_plugin_api::KvBatchOp::Set { key, .. } => (key.as_str(), "batch-set"),
+            aspen_plugin_api::KvBatchOp::Delete { key } => (key.as_str(), "batch-delete"),
+        };
+        validate_key_prefix(&ctx.plugin_name, &ctx.allowed_kv_prefixes, key, operation)?;
+    }
+
+    let handle = tokio::runtime::Handle::current();
+    handle.block_on(async {
+        for op in ops {
+            match op {
+                aspen_plugin_api::KvBatchOp::Set { key, value } => {
+                    let request = aspen_kv_types::WriteRequest::set(&key, &value);
+                    ctx.kv_store
+                        .write(request)
+                        .await
+                        .map(|_| ())
+                        .map_err(|e| format!("kv_batch set '{}' failed: {e}", key))?;
+                }
+                aspen_plugin_api::KvBatchOp::Delete { key } => {
+                    let request = aspen_kv_types::DeleteRequest::new(&key);
+                    ctx.kv_store
+                        .delete(request)
+                        .await
+                        .map(|_| ())
+                        .map_err(|e| format!("kv_batch delete '{}' failed: {e}", key))?;
+                }
+            }
+        }
+        Ok(())
     })
 }
 
@@ -614,6 +692,17 @@ pub fn register_plugin_host_functions(
         })
         .map_err(|e| anyhow::anyhow!("failed to register kv_cas: {e}"))?;
 
+    // kv_batch: returns String with tag prefix (\0 = success, \x01 = error)
+    let ctx_kv_batch = Arc::clone(&ctx);
+    proto
+        .register("kv_batch", move |ops: Vec<u8>| -> String {
+            match kv_batch(&ctx_kv_batch, &ops) {
+                Ok(()) => "\0".to_string(),
+                Err(e) => format!("\x01{e}"),
+            }
+        })
+        .map_err(|e| anyhow::anyhow!("failed to register kv_batch: {e}"))?;
+
     // -- Blob Store --
     // blob_has: bool is directly supported
     let ctx_blob_has = Arc::clone(&ctx);
@@ -720,6 +809,43 @@ pub fn register_plugin_host_functions(
     proto
         .register("hlc_now", move || -> u64 { hlc_now(&ctx_hlc) })
         .map_err(|e| anyhow::anyhow!("failed to register hlc_now: {e}"))?;
+
+    // -- Scheduler --
+    let ctx_schedule = Arc::clone(&ctx);
+    proto
+        .register("schedule_timer", move |config_json: Vec<u8>| -> String {
+            let config: aspen_plugin_api::TimerConfig = match serde_json::from_slice(&config_json) {
+                Ok(c) => c,
+                Err(e) => return format!("\x01invalid timer config: {e}"),
+            };
+            if config.name.is_empty() {
+                return "\x01timer name must not be empty".to_string();
+            }
+            if config.name.len() > 64 {
+                return "\x01timer name too long (max 64 bytes)".to_string();
+            }
+            match ctx_schedule.scheduler_requests.lock() {
+                Ok(mut reqs) => {
+                    reqs.push(SchedulerCommand::Schedule(config));
+                    "\0".to_string()
+                }
+                Err(e) => format!("\x01scheduler lock failed: {e}"),
+            }
+        })
+        .map_err(|e| anyhow::anyhow!("failed to register schedule_timer: {e}"))?;
+
+    let ctx_cancel = Arc::clone(&ctx);
+    proto
+        .register("cancel_timer", move |name: String| -> String {
+            match ctx_cancel.scheduler_requests.lock() {
+                Ok(mut reqs) => {
+                    reqs.push(SchedulerCommand::Cancel(name));
+                    "\0".to_string()
+                }
+                Err(e) => format!("\x01scheduler lock failed: {e}"),
+            }
+        })
+        .map_err(|e| anyhow::anyhow!("failed to register cancel_timer: {e}"))?;
 
     Ok(())
 }

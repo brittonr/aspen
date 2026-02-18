@@ -2,7 +2,7 @@
 
 use aspen_wasm_guest_sdk::host;
 
-pub fn kv_get(key: &str) -> Option<Vec<u8>> {
+pub fn kv_get(key: &str) -> Result<Option<Vec<u8>>, String> {
     host::kv_get_value(key)
 }
 
@@ -14,7 +14,7 @@ pub fn kv_delete(key: &str) -> Result<(), String> {
     host::kv_delete_key(key)
 }
 
-pub fn kv_scan(prefix: &str, limit: u32) -> Vec<(String, Vec<u8>)> {
+pub fn kv_scan(prefix: &str, limit: u32) -> Result<Vec<(String, Vec<u8>)>, String> {
     host::kv_scan_prefix(prefix, limit)
 }
 
@@ -22,7 +22,11 @@ pub fn kv_cas(key: &str, expected: &[u8], new_value: &[u8]) -> Result<(), String
     host::kv_compare_and_swap(key, expected, new_value)
 }
 
-pub fn blob_get(hash: &str) -> Option<Vec<u8>> {
+pub fn kv_batch(ops: &[aspen_wasm_guest_sdk::KvBatchOp]) -> Result<(), String> {
+    host::kv_batch_write(ops)
+}
+
+pub fn blob_get(hash: &str) -> Result<Option<Vec<u8>>, String> {
     host::blob_get_data(hash)
 }
 

@@ -40,7 +40,7 @@ pub fn handle_get_ref(repo_id: String, ref_name: String) -> ClientRpcResponse {
     let key = ref_key(&repo_id, &ref_name);
 
     match kv::kv_get(&key) {
-        Some(bytes) => {
+        Ok(Some(bytes)) => {
             // Tiger Style: Fail explicitly on invalid UTF-8 rather than returning empty hash
             let hash = match String::from_utf8(bytes) {
                 Ok(h) => h,
@@ -62,12 +62,19 @@ pub fn handle_get_ref(repo_id: String, ref_name: String) -> ClientRpcResponse {
                 error: None,
             })
         }
-        None => ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+        Ok(None) => ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
             is_success: true,
             was_found: false,
             ref_info: None,
             previous_hash: None,
             error: None,
+        }),
+        Err(e) => ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+            is_success: false,
+            was_found: false,
+            ref_info: None,
+            previous_hash: None,
+            error: Some(format!("failed to read ref: {e}")),
         }),
     }
 }
@@ -83,7 +90,7 @@ pub fn handle_set_ref(
     let key = ref_key(&repo_id, &ref_name);
 
     // Read previous value for the response
-    let previous_hash = kv::kv_get(&key).and_then(|b| String::from_utf8(b).ok());
+    let previous_hash = kv::kv_get(&key).ok().flatten().and_then(|b| String::from_utf8(b).ok());
 
     match kv::kv_put(&key, hash.as_bytes()) {
         Ok(()) => ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
@@ -106,7 +113,7 @@ pub fn handle_set_ref(
 pub fn handle_delete_ref(repo_id: String, ref_name: String) -> ClientRpcResponse {
     let key = ref_key(&repo_id, &ref_name);
 
-    let previous_hash = kv::kv_get(&key).and_then(|b| String::from_utf8(b).ok());
+    let previous_hash = kv::kv_get(&key).ok().flatten().and_then(|b| String::from_utf8(b).ok());
     let was_found = previous_hash.is_some();
 
     match kv::kv_delete(&key) {
@@ -139,7 +146,7 @@ pub fn handle_cas_ref(
     let key = ref_key(&repo_id, &ref_name);
 
     let expected_bytes = expected.as_deref().unwrap_or("").as_bytes().to_vec();
-    let previous_hash = kv::kv_get(&key).and_then(|b| String::from_utf8(b).ok());
+    let previous_hash = kv::kv_get(&key).ok().flatten().and_then(|b| String::from_utf8(b).ok());
 
     match kv::kv_cas(&key, &expected_bytes, new_hash.as_bytes()) {
         Ok(()) => ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
@@ -173,7 +180,7 @@ pub fn handle_list_tags(repo_id: String) -> ClientRpcResponse {
 }
 
 fn list_refs_with_prefix(kv_prefix: &str, ref_prefix: &str) -> ClientRpcResponse {
-    let entries = kv::kv_scan(kv_prefix, MAX_LIST_REFS);
+    let entries = kv::kv_scan(kv_prefix, MAX_LIST_REFS).unwrap_or_default();
 
     let mut refs = Vec::new();
     for (key, value) in &entries {

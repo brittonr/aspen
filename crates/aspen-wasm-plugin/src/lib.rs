@@ -22,6 +22,7 @@ mod handler;
 mod host;
 mod marshal;
 mod registry;
+pub mod scheduler;
 
 pub use aspen_plugin_api::PluginHealth;
 pub use aspen_plugin_api::PluginState;

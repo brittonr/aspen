@@ -82,14 +82,23 @@ pub fn handle_store_blob(_repo_id: String, content: Vec<u8>) -> ClientRpcRespons
 
 pub fn handle_get_blob(hash: String) -> ClientRpcResponse {
     let data = match kv::blob_get(&hash) {
-        Some(d) => d,
-        None => {
+        Ok(Some(d)) => d,
+        Ok(None) => {
             return ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
                 is_success: true,
                 hash: Some(hash),
                 content: None,
                 size: None,
                 error: None,
+            });
+        }
+        Err(e) => {
+            return ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
+                is_success: false,
+                hash: Some(hash),
+                content: None,
+                size: None,
+                error: Some(format!("failed to read blob: {e}")),
             });
         }
     };
@@ -199,13 +208,21 @@ pub fn handle_create_tree(_repo_id: String, entries_json: String) -> ClientRpcRe
 
 pub fn handle_get_tree(hash: String) -> ClientRpcResponse {
     let data = match kv::blob_get(&hash) {
-        Some(d) => d,
-        None => {
+        Ok(Some(d)) => d,
+        Ok(None) => {
             return ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
                 is_success: true,
                 hash: Some(hash),
                 entries: None,
                 error: None,
+            });
+        }
+        Err(e) => {
+            return ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                is_success: false,
+                hash: Some(hash),
+                entries: None,
+                error: Some(format!("failed to read tree blob: {e}")),
             });
         }
     };
@@ -330,12 +347,19 @@ pub fn handle_commit(_repo_id: String, tree: String, parents: Vec<String>, messa
 
 pub fn handle_get_commit(hash: String) -> ClientRpcResponse {
     let data = match kv::blob_get(&hash) {
-        Some(d) => d,
-        None => {
+        Ok(Some(d)) => d,
+        Ok(None) => {
             return ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
                 is_success: true,
                 commit: None,
                 error: None,
+            });
+        }
+        Err(e) => {
+            return ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                is_success: false,
+                commit: None,
+                error: Some(format!("failed to read commit blob: {e}")),
             });
         }
     };
@@ -378,7 +402,7 @@ pub fn handle_log(repo_id: String, ref_name: Option<String>, limit: Option<u32>)
     // Resolve ref to commit hash
     let ref_key = ref_key(&repo_id, &resolved_ref);
     let start_hash = match kv::kv_get(&ref_key) {
-        Some(bytes) => match String::from_utf8(bytes) {
+        Ok(Some(bytes)) => match String::from_utf8(bytes) {
             Ok(h) => h,
             Err(_) => {
                 return ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
@@ -389,12 +413,20 @@ pub fn handle_log(repo_id: String, ref_name: Option<String>, limit: Option<u32>)
                 });
             }
         },
-        None => {
+        Ok(None) => {
             return ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
                 is_success: true,
                 commits: Vec::new(),
                 count: 0,
                 error: None,
+            });
+        }
+        Err(e) => {
+            return ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
+                is_success: false,
+                commits: Vec::new(),
+                count: 0,
+                error: Some(format!("failed to read ref: {e}")),
             });
         }
     };
@@ -407,8 +439,8 @@ pub fn handle_log(repo_id: String, ref_name: Option<String>, limit: Option<u32>)
 
     while collected < max_commits {
         let data = match kv::blob_get(&current_hash) {
-            Some(d) => d,
-            None => break,
+            Ok(Some(d)) => d,
+            Ok(None) | Err(_) => break,
         };
 
         let signed: SignedObject<GitObject> = match serde_json::from_slice(&data) {

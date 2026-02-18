@@ -45,7 +45,7 @@ fn service_prefix(service_name: &str) -> String {
 }
 
 fn read_instance(key: &str) -> Option<ServiceInstance> {
-    let bytes = kv::kv_get(key)?;
+    let bytes = kv::kv_get(key).ok()??;
     serde_json::from_slice(&bytes).ok()
 }
 
@@ -177,7 +177,7 @@ pub fn handle_discover(
     let scan_limit = limit.unwrap_or(MAX_DISCOVERY_RESULTS).min(MAX_DISCOVERY_RESULTS);
 
     let prefix = service_prefix(&service_name);
-    let entries = kv::kv_scan(&prefix, scan_limit);
+    let entries = kv::kv_scan(&prefix, scan_limit).unwrap_or_default();
     let now = kv::now_ms();
 
     let mut instances = Vec::new();
@@ -233,7 +233,7 @@ pub fn handle_list(prefix: String, limit: u32) -> ClientRpcResponse {
     let scan_limit = limit.min(MAX_DISCOVERY_RESULTS);
 
     let full_prefix = format!("{SERVICE_PREFIX}{prefix}");
-    let entries = kv::kv_scan(&full_prefix, scan_limit);
+    let entries = kv::kv_scan(&full_prefix, scan_limit).unwrap_or_default();
 
     let mut services = Vec::new();
     let mut seen = std::collections::HashSet::new();

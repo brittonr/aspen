@@ -20,6 +20,7 @@ use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;
 
 use crate::marshal;
+use crate::scheduler::PluginScheduler;
 
 /// A request handler backed by a WASM plugin running in a hyperlight-wasm sandbox.
 ///
@@ -47,6 +48,10 @@ pub struct WasmPluginHandler {
     /// Tiger Style: Atomic state tracking enables concurrent health checks
     /// and graceful shutdown without blocking request processing.
     state: Arc<AtomicU8>,
+    /// Timer scheduler for background work. Initialized after successful `call_init`.
+    scheduler: std::sync::OnceLock<Arc<PluginScheduler>>,
+    /// Pending scheduler requests from guest calls. Shared with host context.
+    scheduler_requests: Arc<std::sync::Mutex<Vec<crate::host::SchedulerCommand>>>,
 }
 
 impl WasmPluginHandler {
@@ -70,6 +75,30 @@ impl WasmPluginHandler {
             sandbox: Arc::new(std::sync::Mutex::new(sandbox)),
             execution_timeout,
             state: Arc::new(AtomicU8::new(0)), // Loading
+            scheduler: std::sync::OnceLock::new(),
+            scheduler_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
+        }
+    }
+
+    /// Create a new handler with a shared scheduler requests queue.
+    ///
+    /// The queue is shared with the [`PluginHostContext`] so that host
+    /// functions can enqueue scheduler commands during guest execution.
+    pub fn new_with_scheduler(
+        name: String,
+        handles: Vec<String>,
+        sandbox: hyperlight_wasm::LoadedWasmSandbox,
+        execution_timeout: Duration,
+        scheduler_requests: Arc<std::sync::Mutex<Vec<crate::host::SchedulerCommand>>>,
+    ) -> Self {
+        Self {
+            name: Box::leak(name.into_boxed_str()),
+            handles,
+            sandbox: Arc::new(std::sync::Mutex::new(sandbox)),
+            execution_timeout,
+            state: Arc::new(AtomicU8::new(0)),
+            scheduler: std::sync::OnceLock::new(),
+            scheduler_requests,
         }
     }
 
@@ -139,6 +168,15 @@ impl WasmPluginHandler {
 
                 if response["ok"].as_bool().unwrap_or(false) {
                     self.set_state(PluginState::Ready);
+                    // Create scheduler now that sandbox is available
+                    let scheduler = Arc::new(PluginScheduler::new(
+                        self.name.to_string(),
+                        Arc::clone(&self.sandbox),
+                        self.execution_timeout,
+                    ));
+                    let _ = self.scheduler.set(scheduler);
+                    // Process any scheduler commands enqueued during init
+                    self.process_scheduler_commands().await;
                     Ok(())
                 } else {
                     let error = response["error"].as_str().unwrap_or("unknown error").to_string();
@@ -180,6 +218,11 @@ impl WasmPluginHandler {
     pub async fn call_shutdown(&self) -> anyhow::Result<()> {
         self.set_state(PluginState::Stopping);
 
+        // Cancel all timers before calling guest shutdown
+        if let Some(scheduler) = self.scheduler.get() {
+            scheduler.cancel_all().await;
+        }
+
         let sandbox = Arc::clone(&self.sandbox);
         let handler_name = self.name;
         let timeout = self.execution_timeout;
@@ -209,6 +252,31 @@ impl WasmPluginHandler {
                 );
                 // Still set to Stopped even if timeout
                 Ok(())
+            }
+        }
+    }
+
+    /// Process pending scheduler commands enqueued by the guest.
+    async fn process_scheduler_commands(&self) {
+        let Some(scheduler) = self.scheduler.get() else {
+            return;
+        };
+        let commands: Vec<_> = {
+            let Ok(mut reqs) = self.scheduler_requests.lock() else {
+                return;
+            };
+            reqs.drain(..).collect()
+        };
+        for cmd in commands {
+            match cmd {
+                crate::host::SchedulerCommand::Schedule(config) => {
+                    if let Err(e) = scheduler.schedule(config).await {
+                        tracing::warn!(plugin = self.name, error = %e, "failed to schedule timer");
+                    }
+                }
+                crate::host::SchedulerCommand::Cancel(name) => {
+                    scheduler.cancel(&name).await;
+                }
             }
         }
     }
@@ -311,6 +379,9 @@ impl RequestHandler for WasmPluginHandler {
             anyhow::anyhow!("WASM plugin '{}' exceeded execution timeout of {}s", handler_name, timeout.as_secs())
         })?
         .map_err(|e| anyhow::anyhow!("WASM plugin task panicked: {e}"))??;
+
+        // Process any scheduler commands enqueued during this request
+        self.process_scheduler_commands().await;
 
         marshal::deserialize_response(&output)
     }

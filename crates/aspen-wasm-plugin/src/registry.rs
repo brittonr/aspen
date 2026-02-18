@@ -391,6 +391,9 @@ async fn load_plugin(
         .build()
         .map_err(|e| anyhow::anyhow!("failed to create sandbox for '{}': {e}", manifest.name))?;
 
+    // Create shared scheduler requests queue for host↔handler communication
+    let scheduler_requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+
     // Register host functions
     let host_ctx = Arc::new(
         PluginHostContext::new(
@@ -402,7 +405,8 @@ async fn load_plugin(
         )
         .with_kv_prefixes(manifest.kv_prefixes.clone())
         .with_secret_key(secret_key.clone())
-        .with_hlc(Arc::clone(hlc)),
+        .with_hlc(Arc::clone(hlc))
+        .with_scheduler_requests(Arc::clone(&scheduler_requests)),
     );
     register_plugin_host_functions(&mut proto, host_ctx)?;
 
@@ -442,8 +446,13 @@ async fn load_plugin(
         std::time::Duration::from_secs(secs)
     };
 
-    let handler =
-        Arc::new(WasmPluginHandler::new(manifest.name.clone(), manifest.handles.clone(), loaded, execution_timeout));
+    let handler = Arc::new(WasmPluginHandler::new_with_scheduler(
+        manifest.name.clone(),
+        manifest.handles.clone(),
+        loaded,
+        execution_timeout,
+        scheduler_requests,
+    ));
 
     // Register app capability with the federation app registry
     if let Some(ref app_id) = manifest.app_id {

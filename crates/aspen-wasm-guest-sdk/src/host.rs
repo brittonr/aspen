@@ -1,8 +1,9 @@
 //! Host function imports for WASM guest plugins.
 //!
 //! These functions call into the host runtime via primitive-mode FFI.
-//! The host registers 16 functions that guests can import to interact
-//! with the Aspen cluster (logging, KV store, blob storage, cluster info).
+//! The host registers functions that guests can import to interact
+//! with the Aspen cluster (logging, KV store, blob storage, cluster info,
+//! batch operations, and timer scheduling).
 
 // Hyperlight primitive-mode handles the ABI translation for these types.
 #[allow(improper_ctypes)]
@@ -16,6 +17,7 @@ unsafe extern "C" {
     fn kv_delete(key: String) -> String;
     fn kv_scan(prefix: String, limit: u32) -> Vec<u8>;
     fn kv_cas(key: String, expected: Vec<u8>, new_value: Vec<u8>) -> String;
+    fn kv_batch(ops: Vec<u8>) -> String;
     fn blob_has(hash: String) -> bool;
     fn blob_get(hash: String) -> Vec<u8>;
     fn blob_put(data: Vec<u8>) -> String;
@@ -27,6 +29,8 @@ unsafe extern "C" {
     fn verify(key: String, data: Vec<u8>, sig: Vec<u8>) -> bool;
     fn public_key_hex() -> String;
     fn hlc_now() -> u64;
+    fn schedule_timer(config: Vec<u8>) -> String;
+    fn cancel_timer(name: String) -> String;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,12 +59,12 @@ pub fn current_time_ms() -> u64 {
 
 /// Read a value from the distributed KV store.
 ///
-/// Returns `Some(data)` if the key exists, `None` if not found.
-/// Errors (tag `0x02`) are logged and treated as `None`.
+/// Returns `Ok(Some(data))` if the key exists, `Ok(None)` if not found,
+/// or `Err(message)` on error.
 ///
 /// Host encoding: `[0x00] ++ value` = found, `[0x01]` = not-found,
 /// `[0x02] ++ error_msg` = error.
-pub fn kv_get_value(key: &str) -> Option<Vec<u8>> {
+pub fn kv_get_value(key: &str) -> Result<Option<Vec<u8>>, String> {
     let result = unsafe { kv_get(key.to_string()) };
     decode_tagged_option_result(&result)
 }
@@ -88,20 +92,20 @@ pub fn kv_delete_key(key: &str) -> Result<(), String> {
 /// Returns a list of `(key, value)` pairs, JSON-decoded from the host response.
 ///
 /// Host encoding: `[0x00] ++ json_bytes` = ok, `[0x01] ++ error_msg` = error.
-pub fn kv_scan_prefix(prefix: &str, limit: u32) -> Vec<(String, Vec<u8>)> {
+pub fn kv_scan_prefix(prefix: &str, limit: u32) -> Result<Vec<(String, Vec<u8>)>, String> {
     let result = unsafe { kv_scan(prefix.to_string(), limit) };
     if result.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     match result[0] {
-        0x00 => serde_json::from_slice(&result[1..]).unwrap_or_default(),
+        0x00 => Ok(serde_json::from_slice(&result[1..]).unwrap_or_default()),
         0x01 => {
-            // Error from host — log if we can, return empty
-            Vec::new()
+            let msg = String::from_utf8_lossy(&result[1..]).to_string();
+            Err(msg)
         }
         _ => {
             // Backwards compat: no tag byte, try raw JSON decode
-            serde_json::from_slice(&result).unwrap_or_default()
+            Ok(serde_json::from_slice(&result).unwrap_or_default())
         }
     }
 }
@@ -120,12 +124,12 @@ pub fn blob_exists(hash: &str) -> bool {
     unsafe { blob_has(hash.to_string()) }
 }
 
-/// Retrieve a blob by hash. Returns `None` if the blob does not exist.
-/// Errors (tag `0x02`) are logged and treated as `None`.
+/// Retrieve a blob by hash. Returns `Ok(None)` if the blob does not exist,
+/// or `Err(message)` on error.
 ///
 /// Host encoding: `[0x00] ++ data` = found, `[0x01]` = not-found,
 /// `[0x02] ++ error_msg` = error.
-pub fn blob_get_data(hash: &str) -> Option<Vec<u8>> {
+pub fn blob_get_data(hash: &str) -> Result<Option<Vec<u8>>, String> {
     let result = unsafe { blob_get(hash.to_string()) };
     decode_tagged_option_result(&result)
 }
@@ -186,29 +190,72 @@ pub fn hlc_now_ms() -> u64 {
 }
 
 // ---------------------------------------------------------------------------
+// KV Batch Operations
+// ---------------------------------------------------------------------------
+
+/// Execute a batch of KV operations atomically.
+///
+/// All operations are validated and executed on the host side. Keys are
+/// checked against the plugin's namespace prefixes before any operation
+/// executes.
+///
+/// Tiger Style: Batch operations enable atomic multi-key updates,
+/// preventing inconsistent intermediate states.
+pub fn kv_batch_write(ops: &[aspen_plugin_api::KvBatchOp]) -> Result<(), String> {
+    let json = serde_json::to_vec(ops).map_err(|e| format!("failed to serialize batch: {e}"))?;
+    let result = unsafe { kv_batch(json) };
+    decode_tagged_unit_result(&result)
+}
+
+// ---------------------------------------------------------------------------
+// Timer / Scheduler
+// ---------------------------------------------------------------------------
+
+/// Schedule a timer on the host.
+///
+/// The host will call the plugin's `on_timer` method when the timer fires.
+/// If a timer with the same name already exists, it is replaced.
+///
+/// Intervals are clamped to \[1s, 24h\]. Maximum 16 active timers per plugin.
+pub fn schedule_timer_on_host(config: &aspen_plugin_api::TimerConfig) -> Result<(), String> {
+    let json = serde_json::to_vec(config).map_err(|e| format!("failed to serialize timer config: {e}"))?;
+    let result = unsafe { schedule_timer(json) };
+    decode_tagged_unit_result(&result)
+}
+
+/// Cancel a named timer on the host.
+pub fn cancel_timer_on_host(name: &str) -> Result<(), String> {
+    let result = unsafe { cancel_timer(name.to_string()) };
+    decode_tagged_unit_result(&result)
+}
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/// Decode a tagged `Option<Vec<u8>>` from a host function.
+/// Decode a tagged `Result<Option<Vec<u8>>, String>` from a host function.
 ///
 /// The host encodes results as:
-/// - `[0x00]` + data = found (returns `Some(data)`)
-/// - `[0x01]` = not found (returns `None`)
-/// - `[0x02]` + error message = error (returns `None`)
+/// - `[0x00]` + data = found (returns `Ok(Some(data))`)
+/// - `[0x01]` = not found (returns `Ok(None)`)
+/// - `[0x02]` + error message = error (returns `Err(message)`)
 /// - Empty vec = not found (backwards compatibility)
 ///
 /// Tiger Style: All option result decoding goes through one function.
-fn decode_tagged_option_result(result: &[u8]) -> Option<Vec<u8>> {
+fn decode_tagged_option_result(result: &[u8]) -> Result<Option<Vec<u8>>, String> {
     if result.is_empty() {
-        return None;
+        return Ok(None);
     }
     match result[0] {
-        0x00 => Some(result[1..].to_vec()),
-        0x01 => None,
-        0x02 => None, // Error — host already logged it
+        0x00 => Ok(Some(result[1..].to_vec())),
+        0x01 => Ok(None),
+        0x02 => {
+            let msg = String::from_utf8_lossy(&result[1..]).to_string();
+            Err(msg)
+        }
         _ => {
             // Backwards compat: no tag byte, treat entire vec as data
-            Some(result.to_vec())
+            Ok(Some(result.to_vec()))
         }
     }
 }

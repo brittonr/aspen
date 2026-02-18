@@ -35,13 +35,13 @@ const MAX_PENDING_TRIGGERS: u32 = 1000;
 
 /// Read the hooks configuration from KV.
 fn read_config() -> Option<HooksConfig> {
-    let bytes = kv::kv_get(HOOKS_CONFIG_KEY)?;
+    let bytes = kv::kv_get(HOOKS_CONFIG_KEY).ok()??;
     serde_json::from_slice(&bytes).ok()
 }
 
 /// Read the hooks metrics from KV.
 fn read_metrics() -> Option<HooksMetrics> {
-    let bytes = kv::kv_get(HOOKS_METRICS_KEY)?;
+    let bytes = kv::kv_get(HOOKS_METRICS_KEY).ok()??;
     serde_json::from_slice(&bytes).ok()
 }
 
@@ -138,7 +138,7 @@ pub fn handle_hook_trigger(event_type: String, payload_json: String) -> ClientRp
     };
 
     // Check we haven't exceeded the pending trigger limit
-    let pending = kv::kv_scan(HOOKS_TRIGGER_PREFIX, MAX_PENDING_TRIGGERS);
+    let pending = kv::kv_scan(HOOKS_TRIGGER_PREFIX, MAX_PENDING_TRIGGERS).unwrap_or_default();
     if pending.len() >= MAX_PENDING_TRIGGERS as usize {
         return ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
             is_success: false,

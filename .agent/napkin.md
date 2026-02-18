@@ -10,6 +10,7 @@
 ## User Preferences
 
 - User wants to improve plugin system iteratively — lifecycle + hot-reload first
+- When implementing multi-crate changes, do edits directly — delegate_task WILL lose file changes
 
 ## Patterns That Work
 
@@ -57,3 +58,8 @@
 - `load_wasm_plugins()` still takes `&mut self` because it stores the LivePluginRegistry
 - `PluginReload` request handled directly in `dispatch()` — not via a separate handler (avoids circular dependency)
 - pijul unused import warning in CLI is pre-existing, not from our changes
+- Guest SDK `kv_get_value`, `kv_scan_prefix`, `blob_get_data` now return `Result` — plugin call sites use `.ok()??` for Option-returning helpers or `match Ok(Some)/Ok(None)/Err` for handlers
+- Plugin kv.rs wrappers don't have direct `aspen_plugin_api` dep — use `aspen_wasm_guest_sdk::KvBatchOp` re-export
+- `PluginHostContext.scheduler_requests` is `Arc<Mutex<Vec<SchedulerCommand>>>` — shared between host context and handler
+- Handler has `new_with_scheduler()` for registry to pass the shared queue
+- `PluginScheduler` created in `call_init()` success path via `OnceLock`, processes commands after each guest call

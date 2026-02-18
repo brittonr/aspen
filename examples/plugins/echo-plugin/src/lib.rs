@@ -45,15 +45,21 @@ impl AspenPlugin for EchoPlugin {
         match request {
             ClientRpcRequest::Ping => ClientRpcResponse::Pong,
 
-            ClientRpcRequest::ReadKey { ref key } => {
-                let value = aspen_wasm_guest_sdk::host::kv_get_value(key);
-                let was_found = value.is_some();
-                ClientRpcResponse::ReadResult(ReadResultResponse {
-                    value,
-                    was_found,
-                    error: None,
-                })
-            }
+            ClientRpcRequest::ReadKey { ref key } => match aspen_wasm_guest_sdk::host::kv_get_value(key) {
+                Ok(value) => {
+                    let was_found = value.is_some();
+                    ClientRpcResponse::ReadResult(ReadResultResponse {
+                        value,
+                        was_found,
+                        error: None,
+                    })
+                }
+                Err(e) => ClientRpcResponse::ReadResult(ReadResultResponse {
+                    value: None,
+                    was_found: false,
+                    error: Some(e),
+                }),
+            },
 
             _ => ClientRpcResponse::Error(aspen_wasm_guest_sdk::response::error_response(
                 "UNHANDLED",

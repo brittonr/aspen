@@ -46,9 +46,11 @@ pub use aspen_client_api::ClientRpcRequest;
 pub use aspen_client_api::ClientRpcResponse;
 pub use aspen_client_api::ErrorResponse;
 pub use aspen_client_api::ReadResultResponse;
+pub use aspen_plugin_api::KvBatchOp;
 pub use aspen_plugin_api::PluginHealth;
 pub use aspen_plugin_api::PluginInfo;
 pub use aspen_plugin_api::PluginState;
+pub use aspen_plugin_api::TimerConfig;
 
 /// Trait that WASM plugin authors implement to handle requests.
 pub trait AspenPlugin {
@@ -78,6 +80,14 @@ pub trait AspenPlugin {
     fn health() -> Result<(), String> {
         Ok(())
     }
+
+    /// Called by the host when a scheduled timer fires.
+    ///
+    /// The `name` parameter identifies which timer fired. Schedule timers
+    /// via [`host::schedule_timer_on_host`].
+    ///
+    /// The default implementation does nothing.
+    fn on_timer(_name: &str) {}
 }
 
 /// Register a plugin type by generating the `handle_request` and `plugin_info`
@@ -140,6 +150,13 @@ macro_rules! register_plugin {
                     serde_json::to_vec(&serde_json::json!({"ok": false, "error": e})).unwrap_or_default()
                 }
             }
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn plugin_on_timer(input: Vec<u8>) -> Vec<u8> {
+            let name: String = serde_json::from_slice(&input).unwrap_or_default();
+            <$plugin_type as $crate::AspenPlugin>::on_timer(&name);
+            serde_json::to_vec(&serde_json::json!({"ok": true})).unwrap_or_default()
         }
     };
 }

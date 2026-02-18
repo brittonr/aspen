@@ -6,7 +6,7 @@
 use aspen_wasm_guest_sdk::host;
 
 /// Read a value from the host KV store.
-pub fn kv_get(key: &str) -> Option<Vec<u8>> {
+pub fn kv_get(key: &str) -> Result<Option<Vec<u8>>, String> {
     host::kv_get_value(key)
 }
 
@@ -16,8 +16,13 @@ pub fn kv_put(key: &str, value: &[u8]) -> Result<(), String> {
 }
 
 /// Scan keys by prefix, returning up to `limit` entries.
-pub fn kv_scan(prefix: &str, limit: u32) -> Vec<(String, Vec<u8>)> {
+pub fn kv_scan(prefix: &str, limit: u32) -> Result<Vec<(String, Vec<u8>)>, String> {
     host::kv_scan_prefix(prefix, limit)
+}
+
+/// Execute a batch of KV operations atomically.
+pub fn kv_batch(ops: &[aspen_wasm_guest_sdk::KvBatchOp]) -> Result<(), String> {
+    host::kv_batch_write(ops)
 }
 
 /// Get the current time in Unix milliseconds from the host.
