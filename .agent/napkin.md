@@ -13,6 +13,7 @@
 
 ## Patterns That Work
 
+- Pre-commit hooks run rustfmt + clippy — doc comments must have blank lines before continuation lines (clippy::doc_lazy_continuation)
 - Plugin system spans multiple crates: `aspen-plugin-api`, `aspen-wasm-plugin`, `aspen-wasm-guest-sdk`, plus individual plugin crates (`forge`, `hooks`, `service-registry`)
 - `docs/planning/` contains architectural planning docs (e.g., `plugin-system.md`)
 - Three sandbox backends: Hyperlight micro-VM (`plugins-vm`), hyperlight-wasm (`plugins-wasm`), Cloud Hypervisor full VM (`ci-vm`)
