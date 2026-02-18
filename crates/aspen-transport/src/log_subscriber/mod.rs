@@ -32,6 +32,7 @@ mod handler;
 pub mod kv_operation;
 mod state;
 pub mod types;
+pub mod wire;
 
 // Re-export all public items for API compatibility
 pub use constants::*;

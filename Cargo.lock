@@ -1069,7 +1069,6 @@ dependencies = [
  "aspen-blob",
  "aspen-client-api",
  "aspen-core",
- "aspen-raft",
  "aspen-ticket",
  "aspen-transport",
  "async-trait",

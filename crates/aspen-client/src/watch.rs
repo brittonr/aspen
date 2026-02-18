@@ -53,10 +53,12 @@ use aspen_transport::log_subscriber::KvOperation;
 use aspen_transport::log_subscriber::LOG_SUBSCRIBER_ALPN;
 use aspen_transport::log_subscriber::LogEntryMessage;
 use aspen_transport::log_subscriber::LogEntryPayload;
+use aspen_transport::log_subscriber::MAX_AUTH_MESSAGE_SIZE;
 use aspen_transport::log_subscriber::MAX_LOG_ENTRY_MESSAGE_SIZE;
 use aspen_transport::log_subscriber::SUBSCRIBE_HANDSHAKE_TIMEOUT;
 use aspen_transport::log_subscriber::SubscribeRequest;
 use aspen_transport::log_subscriber::SubscribeResponse;
+use aspen_transport::log_subscriber::wire::read_message;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::endpoint::Connection;
@@ -408,50 +410,42 @@ impl WatchSession {
 
     /// Perform the authentication handshake.
     ///
-    /// The server sends a challenge on accepting our stream, we compute the
-    /// response using our cookie, then receive the auth result on the same stream.
+    /// Opens a bidirectional stream (matched by the server's first `accept_bi`).
+    /// The server sends a length-prefixed challenge, we reply with our HMAC
+    /// response (+ finish send side), then read the length-prefixed auth result.
     async fn authenticate(connection: &Connection, cluster_cookie: &str, endpoint: &Endpoint) -> Result<u64> {
-        // The server sends the challenge on the first stream it accepts from us
-        let (mut send, mut recv) = connection.open_bi().await.context("failed to open bidirectional stream")?;
+        let (mut send, mut recv) = connection.open_bi().await.context("failed to open auth stream")?;
 
-        // Receive auth challenge (server writes it when it accepts our stream)
-        let challenge_bytes = timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
-            recv.read_to_end(1024).await.context("failed to read auth challenge")
+        // Receive length-prefixed auth challenge
+        let challenge: AuthChallenge = timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
+            read_message(&mut recv, MAX_AUTH_MESSAGE_SIZE).await.context("failed to read auth challenge")
         })
         .await
         .context("auth challenge timeout")??;
 
-        let challenge: AuthChallenge =
-            postcard::from_bytes(&challenge_bytes).context("failed to parse auth challenge")?;
-
         debug!(nonce = %hex::encode(challenge.nonce), "received auth challenge");
 
-        // Create auth context and compute response
+        // Compute response and send (server reads via read_to_end after we finish)
         let auth_context = AuthContext::new(cluster_cookie);
         let client_endpoint_id: [u8; 32] = *endpoint.id().as_bytes();
         let response = auth_context.compute_response(&challenge, &client_endpoint_id);
 
         let response_bytes = postcard::to_stdvec(&response).context("failed to serialize auth response")?;
-
         send.write_all(&response_bytes).await.context("failed to send auth response")?;
         send.finish().context("failed to finish auth response stream")?;
 
-        // Read auth result on the receive side of the same stream
-        // Wait for any remaining data
-        let result_bytes = timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
-            recv.read_to_end(1024).await.context("failed to read auth result")
+        // Receive length-prefixed auth result (server finishes after writing)
+        let result: AuthResult = timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
+            read_message(&mut recv, MAX_AUTH_MESSAGE_SIZE).await.context("failed to read auth result")
         })
         .await
         .context("auth result timeout")??;
-
-        let result: AuthResult = postcard::from_bytes(&result_bytes).context("failed to parse auth result")?;
 
         if !result.is_ok() {
             bail!("authentication failed: {:?}", result);
         }
 
-        // We don't have access to the node_id from auth result (it's just an enum)
-        // Return 0 for now - the actual node_id comes from subscribe response
+        // The actual node_id comes from the subscribe response
         Ok(0)
     }
 
@@ -466,33 +460,21 @@ impl WatchSession {
     pub async fn subscribe(&self, prefix: impl Into<Vec<u8>>, start_index: u64) -> Result<WatchSubscription> {
         let prefix = prefix.into();
 
-        // Open stream for subscription
+        // Open stream for subscription (matched by the server's second `accept_bi`)
         let (mut send, mut recv) = self.connection.open_bi().await.context("failed to open subscription stream")?;
 
-        // Send subscribe request
+        // Send subscribe request (server reads via read_to_end after we finish)
         let request = SubscribeRequest::with_prefix(start_index, prefix.clone());
         let request_bytes = postcard::to_stdvec(&request).context("failed to serialize subscribe request")?;
-
         send.write_all(&request_bytes).await.context("failed to send subscribe request")?;
         send.finish().context("failed to finish subscribe request stream")?;
 
-        // Receive subscribe response
-        let response_bytes = timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
-            // Read response from receive stream
-            let mut buf = vec![0u8; 1024];
-            let n = recv
-                .read(&mut buf)
-                .await
-                .context("failed to read subscribe response")?
-                .ok_or_else(|| anyhow::anyhow!("stream closed before response"))?;
-            buf.truncate(n);
-            Ok::<Vec<u8>, anyhow::Error>(buf)
+        // Receive length-prefixed subscribe response
+        let response: SubscribeResponse = timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
+            read_message(&mut recv, MAX_AUTH_MESSAGE_SIZE).await.context("failed to read subscribe response")
         })
         .await
         .context("subscribe response timeout")??;
-
-        let response: SubscribeResponse =
-            postcard::from_bytes(&response_bytes).context("failed to parse subscribe response")?;
 
         match response {
             SubscribeResponse::Accepted { current_index, node_id } => {
@@ -524,40 +506,31 @@ impl WatchSession {
         }
     }
 
-    /// Background task that reads events from the stream.
+    /// Background task that reads length-prefixed events from the stream.
     async fn event_reader(mut recv: iroh::endpoint::RecvStream, event_tx: mpsc::Sender<WatchEvent>) {
         loop {
-            // Read next message
-            let mut buf = vec![0u8; MAX_LOG_ENTRY_MESSAGE_SIZE];
-            let n = match recv.read(&mut buf).await {
-                Ok(Some(n)) => n,
-                Ok(None) => {
-                    debug!("log subscriber stream closed gracefully");
-                    let _ = event_tx
-                        .send(WatchEvent::EndOfStream {
-                            reason: "stream closed".to_string(),
-                        })
-                        .await;
-                    break;
-                }
-                Err(e) => {
-                    error!(error = %e, "error reading from log subscriber stream");
-                    let _ = event_tx
-                        .send(WatchEvent::EndOfStream {
-                            reason: format!("read error: {}", e),
-                        })
-                        .await;
-                    break;
-                }
-            };
-            buf.truncate(n);
-
-            // Parse message
-            let message: LogEntryMessage = match postcard::from_bytes(&buf) {
+            // Read next length-prefixed message
+            let message: LogEntryMessage = match read_message(&mut recv, MAX_LOG_ENTRY_MESSAGE_SIZE).await {
                 Ok(m) => m,
                 Err(e) => {
-                    warn!(error = %e, "failed to parse log entry message");
-                    continue;
+                    // read_exact returns an error when the stream is finished/closed
+                    let msg = e.to_string();
+                    if msg.contains("closed") || msg.contains("finished") || msg.contains("reset") {
+                        debug!("log subscriber stream closed gracefully");
+                        let _ = event_tx
+                            .send(WatchEvent::EndOfStream {
+                                reason: "stream closed".to_string(),
+                            })
+                            .await;
+                    } else {
+                        error!(error = %e, "error reading from log subscriber stream");
+                        let _ = event_tx
+                            .send(WatchEvent::EndOfStream {
+                                reason: format!("read error: {}", e),
+                            })
+                            .await;
+                    }
+                    break;
                 }
             };
 

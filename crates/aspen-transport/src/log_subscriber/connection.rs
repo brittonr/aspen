@@ -11,7 +11,6 @@ use aspen_core::hlc::SerializableTimestamp;
 use iroh::endpoint::Connection;
 use tokio::sync::broadcast;
 use tracing::debug;
-use tracing::error;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;
@@ -19,6 +18,7 @@ use tracing::warn;
 use super::constants::AUTH_HANDSHAKE_TIMEOUT;
 use super::constants::MAX_AUTH_MESSAGE_SIZE;
 use super::constants::MAX_HISTORICAL_BATCH_SIZE;
+use super::constants::MAX_LOG_ENTRY_MESSAGE_SIZE;
 use super::constants::SUBSCRIBE_HANDSHAKE_TIMEOUT;
 use super::constants::SUBSCRIBE_KEEPALIVE_INTERVAL;
 use super::types::EndOfStreamReason;
@@ -28,6 +28,7 @@ use super::types::LogEntryPayload;
 use super::types::SubscribeRejectReason;
 use super::types::SubscribeRequest;
 use super::types::SubscribeResponse;
+use super::wire::write_message;
 
 /// Handle a log subscriber connection.
 #[allow(clippy::too_many_arguments)]
@@ -55,108 +56,96 @@ pub(super) async fn handle_log_subscriber_connection(
 
     let remote_node_id = connection.remote_id();
 
-    // Accept the initial stream for authentication and subscription setup
-    let (mut send, mut recv) = connection.accept_bi().await.context("failed to accept subscriber stream")?;
+    // ========================================================================
+    // Stream 1: Authentication
+    // ========================================================================
+    let (mut auth_send, mut auth_recv) = connection.accept_bi().await.context("failed to accept auth stream")?;
 
-    // Step 1: Send challenge
+    // Step 1: Send challenge (length-prefixed)
     let challenge = auth_context.generate_challenge();
-    let challenge_bytes = postcard::to_stdvec(&challenge).context("failed to serialize challenge")?;
-    send.write_all(&challenge_bytes).await.context("failed to send challenge")?;
+    write_message(&mut auth_send, &challenge, MAX_AUTH_MESSAGE_SIZE)
+        .await
+        .context("failed to send challenge")?;
 
-    // Step 2: Receive auth response
-    let response_result = tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
-        let buffer = recv.read_to_end(MAX_AUTH_MESSAGE_SIZE).await.context("failed to read auth response")?;
-        let response: AuthResponse = postcard::from_bytes(&buffer).context("failed to deserialize auth response")?;
-        Ok::<_, anyhow::Error>(response)
-    })
-    .await;
+    // Step 2: Receive auth response (client finishes send side after writing)
+    let auth_response = {
+        let response_result = tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
+            let buffer = auth_recv.read_to_end(MAX_AUTH_MESSAGE_SIZE).await.context("failed to read auth response")?;
+            let response: AuthResponse =
+                postcard::from_bytes(&buffer).context("failed to deserialize auth response")?;
+            Ok::<_, anyhow::Error>(response)
+        })
+        .await;
 
-    let auth_response = match response_result {
-        Ok(Ok(response)) => response,
-        Ok(Err(err)) => {
-            warn!(error = %err, subscriber_id = subscriber_id, "subscriber auth failed");
-            let result_bytes = postcard::to_stdvec(&AuthResult::Failed)?;
-            // Best-effort send of failure response - log if it fails
-            if let Err(write_err) = send.write_all(&result_bytes).await {
-                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send auth failure to subscriber");
+        match response_result {
+            Ok(Ok(response)) => response,
+            Ok(Err(err)) => {
+                warn!(error = %err, subscriber_id = subscriber_id, "subscriber auth failed");
+                let _ = write_message(&mut auth_send, &AuthResult::Failed, MAX_AUTH_MESSAGE_SIZE).await;
+                let _ = auth_send.finish();
+                return Err(err);
             }
-            if let Err(finish_err) = send.finish() {
-                debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscriber auth failure");
+            Err(_) => {
+                warn!(subscriber_id = subscriber_id, "subscriber auth timed out");
+                let _ = write_message(&mut auth_send, &AuthResult::Failed, MAX_AUTH_MESSAGE_SIZE).await;
+                let _ = auth_send.finish();
+                return Err(anyhow::anyhow!("authentication timeout"));
             }
-            return Err(err);
-        }
-        Err(_) => {
-            warn!(subscriber_id = subscriber_id, "subscriber auth timed out");
-            let result_bytes = postcard::to_stdvec(&AuthResult::Failed)?;
-            // Best-effort send of failure response - log if it fails
-            if let Err(write_err) = send.write_all(&result_bytes).await {
-                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send auth timeout to subscriber");
-            }
-            if let Err(finish_err) = send.finish() {
-                debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscriber auth timeout");
-            }
-            return Err(anyhow::anyhow!("authentication timeout"));
         }
     };
 
     // Step 3: Verify
     let auth_result = auth_context.verify_response(&challenge, &auth_response);
 
-    // Step 4: Send auth result
-    let result_bytes = postcard::to_stdvec(&auth_result)?;
-    send.write_all(&result_bytes).await.context("failed to send auth result")?;
+    // Step 4: Send auth result (length-prefixed) and finish auth stream
+    write_message(&mut auth_send, &auth_result, MAX_AUTH_MESSAGE_SIZE)
+        .await
+        .context("failed to send auth result")?;
+
+    if let Err(finish_err) = auth_send.finish() {
+        debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish auth stream");
+    }
 
     if !auth_result.is_ok() {
         warn!(subscriber_id = subscriber_id, result = ?auth_result, "subscriber auth failed");
-        if let Err(finish_err) = send.finish() {
-            debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscriber auth verification failure");
-        }
         return Err(anyhow::anyhow!("authentication failed: {:?}", auth_result));
     }
 
     debug!(subscriber_id = subscriber_id, "subscriber authenticated");
 
-    // Step 5: Receive subscription request
-    let sub_request_result = tokio::time::timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
-        let buffer = recv
-            .read_to_end(1024) // Subscription requests are small
-            .await
-            .context("failed to read subscribe request")?;
-        let request: SubscribeRequest =
-            postcard::from_bytes(&buffer).context("failed to deserialize subscribe request")?;
-        Ok::<_, anyhow::Error>(request)
-    })
-    .await;
+    // ========================================================================
+    // Stream 2: Subscribe + streaming
+    // ========================================================================
+    let (mut send, mut recv) = connection.accept_bi().await.context("failed to accept subscribe stream")?;
 
-    let sub_request = match sub_request_result {
-        Ok(Ok(request)) => request,
-        Ok(Err(err)) => {
-            let response = SubscribeResponse::Rejected {
-                reason: SubscribeRejectReason::InternalError,
-            };
-            let response_bytes = postcard::to_stdvec(&response)?;
-            // Best-effort send of rejection - log if it fails
-            if let Err(write_err) = send.write_all(&response_bytes).await {
-                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send subscribe rejection");
+    // Step 5: Receive subscription request (client finishes send side after writing)
+    let sub_request = {
+        let sub_request_result = tokio::time::timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
+            let buffer = recv.read_to_end(MAX_AUTH_MESSAGE_SIZE).await.context("failed to read subscribe request")?;
+            let request: SubscribeRequest =
+                postcard::from_bytes(&buffer).context("failed to deserialize subscribe request")?;
+            Ok::<_, anyhow::Error>(request)
+        })
+        .await;
+
+        match sub_request_result {
+            Ok(Ok(request)) => request,
+            Ok(Err(err)) => {
+                let response = SubscribeResponse::Rejected {
+                    reason: SubscribeRejectReason::InternalError,
+                };
+                let _ = write_message(&mut send, &response, MAX_AUTH_MESSAGE_SIZE).await;
+                let _ = send.finish();
+                return Err(err);
             }
-            if let Err(finish_err) = send.finish() {
-                debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscribe error");
+            Err(_) => {
+                let response = SubscribeResponse::Rejected {
+                    reason: SubscribeRejectReason::InternalError,
+                };
+                let _ = write_message(&mut send, &response, MAX_AUTH_MESSAGE_SIZE).await;
+                let _ = send.finish();
+                return Err(anyhow::anyhow!("subscribe request timeout"));
             }
-            return Err(err);
-        }
-        Err(_) => {
-            let response = SubscribeResponse::Rejected {
-                reason: SubscribeRejectReason::InternalError,
-            };
-            let response_bytes = postcard::to_stdvec(&response)?;
-            // Best-effort send of rejection - log if it fails
-            if let Err(write_err) = send.write_all(&response_bytes).await {
-                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send subscribe timeout rejection");
-            }
-            if let Err(finish_err) = send.finish() {
-                debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscribe timeout");
-            }
-            return Err(anyhow::anyhow!("subscribe request timeout"));
         }
     };
 
@@ -167,14 +156,15 @@ pub(super) async fn handle_log_subscriber_connection(
         "processing subscription request"
     );
 
-    // Step 6: Accept subscription
+    // Step 6: Accept subscription (length-prefixed)
     let current_committed_index = committed_index.load(Ordering::Acquire);
     let response = SubscribeResponse::Accepted {
         current_index: current_committed_index,
         node_id,
     };
-    let response_bytes = postcard::to_stdvec(&response)?;
-    send.write_all(&response_bytes).await.context("failed to send subscribe response")?;
+    write_message(&mut send, &response, MAX_AUTH_MESSAGE_SIZE)
+        .await
+        .context("failed to send subscribe response")?;
 
     info!(
         subscriber_id = subscriber_id,
@@ -185,7 +175,6 @@ pub(super) async fn handle_log_subscriber_connection(
     );
 
     // Register watch with registry if configured
-    // Note: Log subscriptions don't include previous values (that's a client-side watch feature)
     let watch_id = watch_registry.as_ref().map(|registry| {
         let prefix = String::from_utf8_lossy(&sub_request.key_prefix).to_string();
         registry.register_watch(prefix, false)
@@ -201,7 +190,6 @@ pub(super) async fn handle_log_subscriber_connection(
                 "starting historical replay"
             );
 
-            // Replay in batches to avoid memory exhaustion
             let mut current_start = sub_request.start_index;
             let mut total_replayed = 0u64;
 
@@ -214,7 +202,6 @@ pub(super) async fn handle_log_subscriber_connection(
                 match reader.read_entries(current_start, batch_end).await {
                     Ok(entries) => {
                         if entries.is_empty() {
-                            // No more entries available (may have been compacted)
                             debug!(
                                 subscriber_id = subscriber_id,
                                 start = current_start,
@@ -224,7 +211,6 @@ pub(super) async fn handle_log_subscriber_connection(
                         }
 
                         for entry in entries {
-                            // Apply prefix filter
                             if !sub_request.key_prefix.is_empty()
                                 && !entry.operation.matches_prefix(&sub_request.key_prefix)
                             {
@@ -232,15 +218,7 @@ pub(super) async fn handle_log_subscriber_connection(
                             }
 
                             let message = LogEntryMessage::Entry(entry.clone());
-                            let message_bytes = match postcard::to_stdvec(&message) {
-                                Ok(bytes) => bytes,
-                                Err(err) => {
-                                    error!(error = %err, "failed to serialize historical entry");
-                                    continue;
-                                }
-                            };
-
-                            if let Err(err) = send.write_all(&message_bytes).await {
+                            if let Err(err) = write_message(&mut send, &message, MAX_LOG_ENTRY_MESSAGE_SIZE).await {
                                 debug!(
                                     subscriber_id = subscriber_id,
                                     error = %err,
@@ -263,7 +241,6 @@ pub(super) async fn handle_log_subscriber_connection(
                     }
                 }
 
-                // Check if we've finished
                 if current_start > current_committed_index {
                     break;
                 }
@@ -279,36 +256,24 @@ pub(super) async fn handle_log_subscriber_connection(
         current_committed_index
     };
 
-    // Update the log receiver to skip entries we've already sent
-    // (entries between replay_end_index and any new entries that arrived during replay)
-    let _ = replay_end_index; // Used for logging context
+    let _ = replay_end_index;
 
-    // Step 7: Stream log entries
+    // Step 7: Stream log entries (all length-prefixed)
     let key_prefix = sub_request.key_prefix;
     let mut keepalive_interval = tokio::time::interval(SUBSCRIBE_KEEPALIVE_INTERVAL);
     keepalive_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     loop {
         tokio::select! {
-            // Receive log entry from broadcast channel
             entry_result = log_receiver.recv() => {
                 match entry_result {
                     Ok(entry) => {
-                        // Apply prefix filter
                         if !key_prefix.is_empty() && !entry.operation.matches_prefix(&key_prefix) {
                             continue;
                         }
 
                         let message = LogEntryMessage::Entry(entry);
-                        let message_bytes = match postcard::to_stdvec(&message) {
-                            Ok(bytes) => bytes,
-                            Err(err) => {
-                                error!(error = %err, "failed to serialize log entry");
-                                continue;
-                            }
-                        };
-
-                        if let Err(err) = send.write_all(&message_bytes).await {
+                        if let Err(err) = write_message(&mut send, &message, MAX_LOG_ENTRY_MESSAGE_SIZE).await {
                             debug!(subscriber_id = subscriber_id, error = %err, "subscriber disconnected");
                             break;
                         }
@@ -322,12 +287,7 @@ pub(super) async fn handle_log_subscriber_connection(
                         let end_message = LogEntryMessage::EndOfStream {
                             reason: EndOfStreamReason::Lagged,
                         };
-                        if let Ok(bytes) = postcard::to_stdvec(&end_message) {
-                            // Best-effort send of end-of-stream message
-                            if let Err(write_err) = send.write_all(&bytes).await {
-                                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send lagged end-of-stream");
-                            }
-                        }
+                        let _ = write_message(&mut send, &end_message, MAX_AUTH_MESSAGE_SIZE).await;
                         break;
                     }
                     Err(broadcast::error::RecvError::Closed) => {
@@ -335,28 +295,18 @@ pub(super) async fn handle_log_subscriber_connection(
                         let end_message = LogEntryMessage::EndOfStream {
                             reason: EndOfStreamReason::ServerShutdown,
                         };
-                        if let Ok(bytes) = postcard::to_stdvec(&end_message) {
-                            // Best-effort send of end-of-stream message
-                            if let Err(write_err) = send.write_all(&bytes).await {
-                                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send shutdown end-of-stream");
-                            }
-                        }
+                        let _ = write_message(&mut send, &end_message, MAX_AUTH_MESSAGE_SIZE).await;
                         break;
                     }
                 }
             }
 
-            // Send keepalive on idle
             _ = keepalive_interval.tick() => {
                 let keepalive = LogEntryMessage::Keepalive {
                     committed_index: committed_index.load(Ordering::Acquire),
                     hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
                 };
-                let message_bytes = match postcard::to_stdvec(&keepalive) {
-                    Ok(bytes) => bytes,
-                    Err(_) => continue,
-                };
-                if send.write_all(&message_bytes).await.is_err() {
+                if write_message(&mut send, &keepalive, MAX_AUTH_MESSAGE_SIZE).await.is_err() {
                     debug!(subscriber_id = subscriber_id, "subscriber disconnected during keepalive");
                     break;
                 }
@@ -364,7 +314,6 @@ pub(super) async fn handle_log_subscriber_connection(
         }
     }
 
-    // Best-effort stream finish - log if it fails
     if let Err(finish_err) = send.finish() {
         debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish log subscription stream");
     }
