@@ -10,7 +10,6 @@ mod operations;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
 use std::collections::BTreeMap;
 use std::path::Component;
 use std::path::Path;
@@ -51,11 +50,9 @@ enum KvBackend {
     /// Real client connected to an Aspen cluster via Iroh.
     Client(SharedClient),
     /// No backend (all reads return None, writes are no-ops).
-    #[cfg(test)]
     None,
     /// In-memory BTreeMap backend for testing with real data persistence.
     /// Uses std::sync::RwLock since FUSE operations are synchronous.
-    #[cfg(test)]
     InMemory(std::sync::RwLock<BTreeMap<String, Vec<u8>>>),
 }
 
@@ -106,7 +103,6 @@ impl AspenFs {
 
     /// Create a new Aspen filesystem without a client (for testing).
     /// All KV operations are no-ops: reads return None, writes succeed silently.
-    #[cfg(test)]
     pub fn new_mock(uid: u32, gid: u32) -> Self {
         Self {
             inodes: InodeManager::new(),
@@ -120,7 +116,6 @@ impl AspenFs {
     /// Create a new Aspen filesystem with an in-memory KV backend (for testing).
     /// Stores data in a BTreeMap, enabling real filesystem operations without
     /// a running Aspen cluster.
-    #[cfg(test)]
     pub fn new_in_memory(uid: u32, gid: u32) -> Self {
         Self {
             inodes: InodeManager::new(),
@@ -262,9 +257,7 @@ impl AspenFs {
                 debug!(key = %prefixed, "reading key from Aspen");
                 client.read_key(&prefixed).map_err(|e| std::io::Error::other(e.to_string()))
             }
-            #[cfg(test)]
             KvBackend::None => Ok(None),
-            #[cfg(test)]
             KvBackend::InMemory(store) => {
                 let prefixed = self.prefixed_key(key);
                 let store = store.read().map_err(|_| std::io::Error::other("lock poisoned"))?;
@@ -289,9 +282,7 @@ impl AspenFs {
                 client.write_key(&prefixed, value).map_err(|e| std::io::Error::other(e.to_string()))?;
                 Ok(())
             }
-            #[cfg(test)]
             KvBackend::None => Ok(()),
-            #[cfg(test)]
             KvBackend::InMemory(store) => {
                 let mut store = store.write().map_err(|_| std::io::Error::other("lock poisoned"))?;
                 store.insert(prefixed, value.to_vec());
@@ -309,9 +300,7 @@ impl AspenFs {
                 client.delete_key(&prefixed).map_err(|e| std::io::Error::other(e.to_string()))?;
                 Ok(())
             }
-            #[cfg(test)]
             KvBackend::None => Ok(()),
-            #[cfg(test)]
             KvBackend::InMemory(store) => {
                 let prefixed = self.prefixed_key(key);
                 let mut store = store.write().map_err(|_| std::io::Error::other("lock poisoned"))?;
@@ -332,9 +321,7 @@ impl AspenFs {
                     .map_err(|e| std::io::Error::other(e.to_string()))?;
                 Ok(entries.into_iter().map(|(k, _)| self.strip_prefix(&k).to_string()).collect())
             }
-            #[cfg(test)]
             KvBackend::None => Ok(Vec::new()),
-            #[cfg(test)]
             KvBackend::InMemory(store) => {
                 let prefixed = self.prefixed_key(prefix);
                 let store = store.read().map_err(|_| std::io::Error::other("lock poisoned"))?;

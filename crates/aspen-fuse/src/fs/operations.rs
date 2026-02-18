@@ -119,15 +119,29 @@ impl FileSystem for AspenFs {
 
     fn setattr(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         inode: u64,
-        _attr: stat64,
+        attr: stat64,
         _handle: Option<u64>,
-        _valid: SetattrValid,
+        valid: SetattrValid,
     ) -> std::io::Result<(stat64, Duration)> {
-        // We don't support changing attributes (mode, owner, etc.)
-        // Just return current attributes
-        self.getattr(_ctx, inode, None)
+        // Handle truncation / extension (e.g., O_TRUNC sends setattr with SIZE)
+        if valid.contains(SetattrValid::SIZE) && inode != ROOT_INODE {
+            let entry = self
+                .inodes
+                .get_path(inode)?
+                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
+
+            if entry.entry_type == EntryType::File {
+                let key = Self::path_to_key(&entry.path)?;
+                let mut value = self.kv_read(&key)?.unwrap_or_default();
+                value.resize(attr.st_size as usize, 0);
+                self.kv_write(&key, &value)?;
+            }
+        }
+
+        // Return updated attributes (mode, owner, etc. are not mutable)
+        self.getattr(ctx, inode, None)
     }
 
     fn opendir(&self, ctx: &Context, inode: u64, _flags: u32) -> std::io::Result<(Option<u64>, OpenOptions)> {
