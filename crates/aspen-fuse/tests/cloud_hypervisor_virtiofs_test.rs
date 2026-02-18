@@ -9,6 +9,10 @@
 //! kernel mounts virtiofs, writes a file, reads it back, and verifies the
 //! content — all served by our AspenVirtioFsHandler (not virtiofsd).
 //!
+//! After the VM exits, we also verify that the guest's write landed in the
+//! in-memory BTreeMap backing the AspenFs, proving data flows all the way
+//! from guest userspace into our KV store.
+//!
 //! Requires: KVM (`/dev/kvm`), cloud-hypervisor, and the test initramfs.
 //! Environment variables (set by `nix develop`):
 //!   - `CLOUD_HYPERVISOR_BIN` — path to cloud-hypervisor binary
@@ -36,8 +40,9 @@ fn env_or_skip(var: &str) -> Option<String> {
 /// Full Cloud Hypervisor VirtioFS integration test.
 ///
 /// Spawns our VirtioFS daemon backed by an in-memory AspenFs, boots a minimal
-/// Linux guest via cloud-hypervisor, and verifies the guest can write/read
-/// files through the virtio-fs device into our handler.
+/// Linux guest via cloud-hypervisor, and verifies:
+///   1. The guest can write/read files through the virtio-fs device
+///   2. The written data actually landed in our in-memory KV store
 #[tokio::test]
 #[ignore] // Requires KVM + cloud-hypervisor; run with --run-ignored all
 async fn test_cloud_hypervisor_virtiofs_file_io() {
@@ -65,13 +70,16 @@ async fn test_cloud_hypervisor_virtiofs_file_io() {
     let serial_log = tmp.path().join("serial.log");
     let api_socket = tmp.path().join("api.sock");
 
+    // Create in-memory filesystem with a shared handle to the backing store.
+    // The test keeps `kv_store` to inspect contents after the VM writes.
+    let (fs, kv_store) = AspenFs::new_in_memory_shared(0, 0);
+
     // Spawn our VirtioFS daemon on a background OS thread.
     // This creates the vhost-user socket and blocks in accept() until
     // cloud-hypervisor connects.
-    let fs = AspenFs::new_in_memory(0, 0);
     let daemon_handle = spawn_virtiofs_daemon(&socket_path, fs).unwrap();
 
-    // Poll until the socket file appears (daemon creates it in serve() → Listener::new())
+    // Poll until the socket file appears (daemon creates it in serve() -> Listener::new())
     for _ in 0..100_u32 {
         if socket_path.exists() {
             break;
@@ -82,7 +90,7 @@ async fn test_cloud_hypervisor_virtiofs_file_io() {
 
     // Launch cloud-hypervisor with our VirtioFS socket.
     // The guest initramfs will:
-    //   1. insmod fuse.ko.xz + virtiofs.ko.xz
+    //   1. insmod virtio + fuse kernel modules
     //   2. mount -t virtiofs testfs /mnt
     //   3. Write "hello from guest" to /mnt/result.txt, read it back
     //   4. Print VIRTIOFS_TEST_PASS or VIRTIOFS_TEST_FAIL to serial console
@@ -130,9 +138,21 @@ async fn test_cloud_hypervisor_virtiofs_file_io() {
         "guest did not report VIRTIOFS_TEST_PASS in serial output"
     );
 
+    // Verify the guest's write actually landed in our in-memory KV store.
+    // The guest wrote "hello from guest\n" to /mnt/result.txt, which maps
+    // to KV key "result.txt" in the BTreeMap.
+    {
+        let store = kv_store.read().unwrap();
+        let value = store.get("result.txt").expect("result.txt not found in KV store");
+        let content = String::from_utf8_lossy(value);
+        assert_eq!(content.trim(), "hello from guest", "KV store content mismatch: got {content:?}");
+
+        // Verify we can enumerate keys
+        let keys: Vec<&String> = store.keys().collect();
+        assert!(keys.iter().any(|k| k.as_str() == "result.txt"), "result.txt not found in KV key listing: {keys:?}");
+    }
+
     // Shut down the daemon. After cloud-hypervisor exits, the vhost-user
     // connection is closed, so serve() returns and the thread is joinable.
-    // If shutdown hangs (e.g., daemon still in accept()), the test timeout
-    // will catch it.
     daemon_handle.shutdown().unwrap();
 }

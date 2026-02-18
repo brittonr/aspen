@@ -43,6 +43,7 @@ pub mod virtiofs;
 pub use client::FuseSyncClient;
 pub use client::SharedClient;
 pub use fs::AspenFs;
+pub use fs::SharedInMemoryStore;
 pub use inode::EntryType;
 pub use inode::InodeManager;
 #[cfg(feature = "virtiofs")]

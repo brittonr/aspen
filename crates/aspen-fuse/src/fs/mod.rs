@@ -13,6 +13,7 @@ mod tests;
 use std::collections::BTreeMap;
 use std::path::Component;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -42,6 +43,12 @@ const W_OK: u32 = 2;
 const X_OK: u32 = 1;
 const F_OK: u32 = 0;
 
+/// Shared in-memory KV store handle.
+///
+/// Allows test code to inspect the backing store after writes flow through
+/// the FUSE/VirtioFS path.
+pub type SharedInMemoryStore = Arc<std::sync::RwLock<BTreeMap<String, Vec<u8>>>>;
+
 /// KV storage backend for the filesystem.
 ///
 /// Separates storage concerns from filesystem logic, enabling
@@ -52,8 +59,9 @@ enum KvBackend {
     /// No backend (all reads return None, writes are no-ops).
     None,
     /// In-memory BTreeMap backend for testing with real data persistence.
+    /// Uses Arc for sharing the store with test code that needs to inspect it.
     /// Uses std::sync::RwLock since FUSE operations are synchronous.
-    InMemory(std::sync::RwLock<BTreeMap<String, Vec<u8>>>),
+    InMemory(SharedInMemoryStore),
 }
 
 /// Aspen FUSE filesystem.
@@ -121,9 +129,26 @@ impl AspenFs {
             inodes: InodeManager::new(),
             uid,
             gid,
-            backend: KvBackend::InMemory(std::sync::RwLock::new(BTreeMap::new())),
+            backend: KvBackend::InMemory(Arc::new(std::sync::RwLock::new(BTreeMap::new()))),
             key_prefix: String::new(),
         }
+    }
+
+    /// Create a new Aspen filesystem with a shared in-memory KV backend.
+    ///
+    /// Returns both the filesystem and an `Arc` handle to the backing store,
+    /// allowing test code to inspect KV contents after writes go through
+    /// the FUSE/VirtioFS path.
+    pub fn new_in_memory_shared(uid: u32, gid: u32) -> (Self, SharedInMemoryStore) {
+        let store = Arc::new(std::sync::RwLock::new(BTreeMap::new()));
+        let fs = Self {
+            inodes: InodeManager::new(),
+            uid,
+            gid,
+            backend: KvBackend::InMemory(Arc::clone(&store)),
+            key_prefix: String::new(),
+        };
+        (fs, store)
     }
 
     /// Convert a filesystem path to a KV key.
