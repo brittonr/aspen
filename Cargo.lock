@@ -1630,6 +1630,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-hooks-plugin"
+version = "0.1.0"
+dependencies = [
+ "aspen-client-api",
+ "aspen-wasm-guest-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "aspen-hooks-types"
 version = "0.1.0"
 dependencies = [
