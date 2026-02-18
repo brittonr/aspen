@@ -376,7 +376,7 @@ fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
         memory_limit: args.memory_limit,
         app_id,
         kv_prefixes,
-        permissions: None, // Defaults to all permissions; future: load from manifest
+        permissions: base.as_ref().map(|b| b.permissions.clone()),
     })
 }
 

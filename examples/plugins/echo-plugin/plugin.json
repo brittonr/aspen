@@ -5,5 +5,8 @@
     "Ping",
     "ReadKey"
   ],
-  "priority": 950
+  "priority": 950,
+  "permissions": {
+    "kv_read": true
+  }
 }

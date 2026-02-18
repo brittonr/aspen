@@ -15,6 +15,7 @@ use aspen_wasm_guest_sdk::AspenPlugin;
 use aspen_wasm_guest_sdk::ClientRpcRequest;
 use aspen_wasm_guest_sdk::ClientRpcResponse;
 use aspen_wasm_guest_sdk::PluginInfo;
+use aspen_wasm_guest_sdk::PluginPermissions;
 use aspen_wasm_guest_sdk::register_plugin;
 
 struct ForgePlugin;
@@ -49,6 +50,14 @@ impl AspenPlugin for ForgePlugin {
             priority: 950,
             app_id: Some("forge".to_string()),
             kv_prefixes: vec!["forge:".to_string()],
+            permissions: PluginPermissions {
+                kv_read: true,
+                kv_write: true,
+                blob_read: true,
+                blob_write: true,
+                signing: true,
+                ..PluginPermissions::default()
+            },
         }
     }
 

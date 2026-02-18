@@ -22,5 +22,12 @@
   ],
   "priority": 950,
   "app_id": "forge",
-  "kv_prefixes": ["forge:"]
+  "kv_prefixes": ["forge:"],
+  "permissions": {
+    "kv_read": true,
+    "kv_write": true,
+    "blob_read": true,
+    "blob_write": true,
+    "signing": true
+  }
 }

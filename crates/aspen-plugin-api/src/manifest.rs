@@ -145,4 +145,10 @@ pub struct PluginInfo {
     /// See [`PluginManifest::kv_prefixes`] for details.
     #[serde(default)]
     pub kv_prefixes: Vec<String>,
+    /// Capability permissions the plugin requires.
+    ///
+    /// Declared in `plugin.json` and carried through to [`PluginManifest`]
+    /// at install time. Default: all denied.
+    #[serde(default)]
+    pub permissions: PluginPermissions,
 }

@@ -8,5 +8,9 @@
   ],
   "priority": 950,
   "app_id": "hooks",
-  "kv_prefixes": ["__hooks:"]
+  "kv_prefixes": ["__hooks:"],
+  "permissions": {
+    "kv_read": true,
+    "kv_write": true
+  }
 }

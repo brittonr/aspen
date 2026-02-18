@@ -10,6 +10,7 @@ use aspen_wasm_guest_sdk::AspenPlugin;
 use aspen_wasm_guest_sdk::ClientRpcRequest;
 use aspen_wasm_guest_sdk::ClientRpcResponse;
 use aspen_wasm_guest_sdk::PluginInfo;
+use aspen_wasm_guest_sdk::PluginPermissions;
 use aspen_wasm_guest_sdk::ReadResultResponse;
 use aspen_wasm_guest_sdk::register_plugin;
 
@@ -24,6 +25,10 @@ impl AspenPlugin for EchoPlugin {
             priority: 950,
             app_id: None,
             kv_prefixes: vec![],
+            permissions: PluginPermissions {
+                kv_read: true,
+                ..PluginPermissions::default()
+            },
         }
     }
 

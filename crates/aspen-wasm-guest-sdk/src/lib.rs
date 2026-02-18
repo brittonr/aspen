@@ -24,6 +24,7 @@
 //!             priority: 900,
 //!             app_id: None,
 //!             kv_prefixes: vec![],
+//!             permissions: PluginPermissions::default(),
 //!         }
 //!     }
 //!
@@ -49,6 +50,7 @@ pub use aspen_client_api::ReadResultResponse;
 pub use aspen_plugin_api::KvBatchOp;
 pub use aspen_plugin_api::PluginHealth;
 pub use aspen_plugin_api::PluginInfo;
+pub use aspen_plugin_api::PluginPermissions;
 pub use aspen_plugin_api::PluginState;
 pub use aspen_plugin_api::TimerConfig;
 
