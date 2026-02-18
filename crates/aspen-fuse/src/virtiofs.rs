@@ -400,22 +400,31 @@ pub fn run_virtiofs_daemon(socket_path: &Path, fs: AspenFs) -> Result<(), Virtio
 pub struct VirtioFsDaemonHandle {
     thread: Option<std::thread::JoinHandle<Result<(), VirtioFsError>>>,
     kill_evt: EventFd,
+    /// Socket path stored for self-connect during shutdown. If shutdown() is
+    /// called before a VMM connects, we connect to our own socket to unblock
+    /// the daemon's blocking accept() loop.
+    socket_path: std::path::PathBuf,
 }
 
 impl VirtioFsDaemonHandle {
     /// Signal the daemon to stop and wait for the thread to join.
     ///
-    /// TODO: If called before a VMM connects, the daemon thread may deadlock
-    /// in VhostUserDaemon::start()'s blocking accept() loop, which does not
-    /// monitor the kill EventFd. In practice cloud-hypervisor connects quickly
-    /// after socket creation, but a robust fix would use a non-blocking accept
-    /// with epoll that also watches the kill EventFd, or set SO_RCVTIMEO on
-    /// the listener socket.
+    /// Safe to call whether or not a VMM has connected. If the daemon is
+    /// blocked in `accept()` waiting for a VMM, a self-connect unblocks it
+    /// so the daemon can observe the kill EventFd and exit. The self-connect
+    /// produces an immediate `Disconnected` error which `serve()` treats as
+    /// normal shutdown.
     pub fn shutdown(mut self) -> Result<(), VirtioFsError> {
         info!("shutting down VirtioFS daemon");
 
         // Write to kill_evt to signal the daemon's epoll loop to exit
         self.kill_evt.write(1).map_err(VirtioFsError::EventFdError)?;
+
+        // Connect to our own socket to unblock the daemon's blocking accept()
+        // loop. If a VMM already connected, this harmlessly sits in the listen
+        // backlog (serve() only accepts one connection). The immediately-dropped
+        // stream causes a Disconnected error that serve() treats as Ok.
+        let _ = std::os::unix::net::UnixStream::connect(&self.socket_path);
 
         // Join the daemon thread
         if let Some(thread) = self.thread.take() {
@@ -449,6 +458,7 @@ pub fn spawn_virtiofs_daemon(socket_path: &Path, fs: AspenFs) -> Result<VirtioFs
     let kill_evt = handler.kill_event()?;
 
     let socket_path = socket_path.to_path_buf();
+    let socket_path_for_handle = socket_path.clone();
     let thread = std::thread::Builder::new()
         .name("virtiofs-daemon".to_string())
         .spawn(move || {
@@ -476,6 +486,7 @@ pub fn spawn_virtiofs_daemon(socket_path: &Path, fs: AspenFs) -> Result<VirtioFs
     Ok(VirtioFsDaemonHandle {
         thread: Some(thread),
         kill_evt,
+        socket_path: socket_path_for_handle,
     })
 }
 
@@ -742,5 +753,32 @@ mod tests {
         let proto_features = handler.protocol_features();
         assert!(proto_features.contains(VhostUserProtocolFeatures::MQ));
         assert!(proto_features.contains(VhostUserProtocolFeatures::BACKEND_REQ));
+    }
+
+    /// Verify that shutdown() completes without deadlock even when no VMM
+    /// has connected to the daemon's socket. Previously the daemon's
+    /// blocking accept() loop would hang forever because the kill EventFd
+    /// was not monitored during accept. The fix uses a self-connect to
+    /// unblock accept, allowing the daemon to observe the kill event.
+    #[test]
+    fn test_daemon_shutdown_before_vmm_connects() {
+        let dir = tempfile::tempdir().unwrap();
+        let socket_path = dir.path().join("virtiofs.sock");
+
+        let fs = AspenFs::new_in_memory(1000, 1000);
+        let handle = spawn_virtiofs_daemon(&socket_path, fs).unwrap();
+
+        // Wait for socket to appear
+        for _ in 0..100_u32 {
+            if socket_path.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(socket_path.exists(), "daemon failed to create socket");
+
+        // Shutdown WITHOUT a VMM connecting. This used to deadlock because
+        // the daemon thread was stuck in blocking accept().
+        handle.shutdown().unwrap();
     }
 }
