@@ -23,6 +23,7 @@
 
 - delegate_task workers may report success but not persist file changes — always verify with `git diff --stat` or `grep` after delegation
 - For multi-file surgical edits, do them directly rather than delegating
+- Worker for HOST_ABI.md creation reported success but file wasn't on disk. Confirmed delegate_task unreliability for file creation again.
 
 ## Domain Notes
 

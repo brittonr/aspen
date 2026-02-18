@@ -20,3 +20,16 @@ pub const DEFAULT_WASM_MEMORY_LIMIT: u64 = 256 * 1024 * 1024;
 
 /// Maximum memory limit for WASM execution (1 GB).
 pub const MAX_WASM_MEMORY_LIMIT: u64 = 1024 * 1024 * 1024;
+
+/// Default wall-clock execution timeout for a single WASM guest call (30 seconds).
+///
+/// hyperlight-wasm 0.12 does not expose fuel metering, so we enforce execution
+/// limits via wall-clock timeout around the `spawn_blocking` call. This prevents
+/// infinite loops or pathological compute from blocking the handler indefinitely.
+pub const DEFAULT_WASM_EXECUTION_TIMEOUT_SECS: u64 = 30;
+
+/// Maximum allowed wall-clock execution timeout (5 minutes).
+///
+/// Manifests may override the default up to this cap. Values above this are
+/// clamped silently.
+pub const MAX_WASM_EXECUTION_TIMEOUT_SECS: u64 = 300;

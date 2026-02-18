@@ -181,7 +181,15 @@ async fn load_plugin(
         .priority
         .clamp(aspen_constants::plugin::MIN_PLUGIN_PRIORITY, aspen_constants::plugin::MAX_PLUGIN_PRIORITY);
 
-    let handler = WasmPluginHandler::new(manifest.name.clone(), manifest.handles.clone(), loaded);
+    let execution_timeout = {
+        let secs = manifest
+            .execution_timeout_secs
+            .unwrap_or(aspen_constants::wasm::DEFAULT_WASM_EXECUTION_TIMEOUT_SECS)
+            .min(aspen_constants::wasm::MAX_WASM_EXECUTION_TIMEOUT_SECS);
+        std::time::Duration::from_secs(secs)
+    };
+
+    let handler = WasmPluginHandler::new(manifest.name.clone(), manifest.handles.clone(), loaded, execution_timeout);
 
     // Register app capability with the federation app registry
     if let Some(ref app_id) = manifest.app_id {
@@ -204,6 +212,7 @@ async fn load_plugin(
         handles = ?manifest.handles,
         app_id = ?manifest.app_id,
         kv_prefixes = ?resolved_prefixes,
+        execution_timeout_secs = execution_timeout.as_secs(),
         "WASM plugin loaded successfully"
     );
 
@@ -230,6 +239,7 @@ mod tests {
             memory_limit: None,
             enabled: true,
             app_id: Some("forge".to_string()),
+            execution_timeout_secs: None,
             kv_prefixes: vec!["forge:".to_string()],
         };
 
@@ -258,6 +268,7 @@ mod tests {
             memory_limit: None,
             enabled: true,
             app_id: None,
+            execution_timeout_secs: None,
             kv_prefixes: vec![],
         };
 

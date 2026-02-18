@@ -24,3 +24,6 @@ MD029: false
 
 # Allow emphasis as heading (useful for sub-subsections)
 MD036: false
+
+# Allow flexible table column style (compact pipes in technical docs)
+MD060: false

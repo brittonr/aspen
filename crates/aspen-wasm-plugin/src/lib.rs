@@ -46,6 +46,8 @@ pub mod test_support {
     /// identity, validates the name matches `expected_name`, and returns
     /// a fully constructed `WasmPluginHandler`.
     ///
+    /// Uses `DEFAULT_WASM_EXECUTION_TIMEOUT_SECS` for the execution timeout.
+    ///
     /// # Errors
     ///
     /// Returns an error if:
@@ -88,6 +90,9 @@ pub mod test_support {
             ));
         }
 
-        Ok(WasmPluginHandler::new(info.name, info.handles, loaded))
+        let execution_timeout =
+            std::time::Duration::from_secs(aspen_constants::wasm::DEFAULT_WASM_EXECUTION_TIMEOUT_SECS);
+
+        Ok(WasmPluginHandler::new(info.name, info.handles, loaded, execution_timeout))
     }
 }

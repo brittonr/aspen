@@ -31,6 +31,15 @@ pub struct PluginManifest {
     /// running this plugin.
     #[serde(default)]
     pub app_id: Option<String>,
+    /// Wall-clock execution timeout in seconds for a single guest call.
+    ///
+    /// Uses `DEFAULT_WASM_EXECUTION_TIMEOUT_SECS` (30s) if `None`.
+    /// Clamped to `MAX_WASM_EXECUTION_TIMEOUT_SECS` (300s).
+    ///
+    /// hyperlight-wasm 0.12 does not support fuel metering, so this
+    /// wall-clock timeout is the only execution-time safeguard.
+    #[serde(default)]
+    pub execution_timeout_secs: Option<u64>,
     /// KV key prefixes this plugin is allowed to access.
     ///
     /// Every KV operation (get, put, delete, scan, cas) is validated to ensure

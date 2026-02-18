@@ -10,9 +10,12 @@
 //! `Vec<u8>` are supported. Complex types are encoded as follows:
 //!
 //! - `Option<Vec<u8>>` -> empty `Vec<u8>` for `None` (guest checks `.is_empty()`)
-//! - `Result<(), String>` -> `String` (empty = success, non-empty = error)
+//! - `Result<(), String>` -> `String` with `\0` prefix for ok, `\x01` prefix + message for err
+//! - `Result<String, String>` -> `String` with `\0` prefix + value for ok, `\x01` prefix + message
+//!   for err
 //! - `Vec<(String, Vec<u8>)>` -> JSON-serialized `Vec<u8>`
-//! - `Result<String, String>` -> `String` with `\0` prefix for ok, `\x01` for err
+//!
+//! See also: [HOST_ABI.md](../../../docs/HOST_ABI.md) for the formal ABI contract.
 
 use std::sync::Arc;
 
@@ -571,24 +574,24 @@ pub fn register_plugin_host_functions(
         .register("kv_get", move |key: String| -> Vec<u8> { kv_get(&ctx_kv_get, &key).unwrap_or_default() })
         .map_err(|e| anyhow::anyhow!("failed to register kv_get: {e}"))?;
 
-    // kv_put: returns String (empty = success, non-empty = error)
+    // kv_put: returns String with tag prefix (\0 = success, \x01 = error)
     let ctx_kv_put = Arc::clone(&ctx);
     proto
         .register("kv_put", move |key: String, value: Vec<u8>| -> String {
             match kv_put(&ctx_kv_put, &key, &value) {
-                Ok(()) => String::new(),
-                Err(e) => e,
+                Ok(()) => "\0".to_string(),
+                Err(e) => format!("\x01{e}"),
             }
         })
         .map_err(|e| anyhow::anyhow!("failed to register kv_put: {e}"))?;
 
-    // kv_delete: returns String (empty = success, non-empty = error)
+    // kv_delete: returns String with tag prefix (\0 = success, \x01 = error)
     let ctx_kv_delete = Arc::clone(&ctx);
     proto
         .register("kv_delete", move |key: String| -> String {
             match kv_delete(&ctx_kv_delete, &key) {
-                Ok(()) => String::new(),
-                Err(e) => e,
+                Ok(()) => "\0".to_string(),
+                Err(e) => format!("\x01{e}"),
             }
         })
         .map_err(|e| anyhow::anyhow!("failed to register kv_delete: {e}"))?;
@@ -602,13 +605,13 @@ pub fn register_plugin_host_functions(
         })
         .map_err(|e| anyhow::anyhow!("failed to register kv_scan: {e}"))?;
 
-    // kv_cas: returns String (empty = success, non-empty = error)
+    // kv_cas: returns String with tag prefix (\0 = success, \x01 = error)
     let ctx_kv_cas = Arc::clone(&ctx);
     proto
         .register("kv_cas", move |key: String, expected: Vec<u8>, new_value: Vec<u8>| -> String {
             match kv_cas(&ctx_kv_cas, &key, &expected, &new_value) {
-                Ok(()) => String::new(),
-                Err(e) => e,
+                Ok(()) => "\0".to_string(),
+                Err(e) => format!("\x01{e}"),
             }
         })
         .map_err(|e| anyhow::anyhow!("failed to register kv_cas: {e}"))?;

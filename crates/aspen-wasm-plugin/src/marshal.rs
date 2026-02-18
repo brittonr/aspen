@@ -20,15 +20,11 @@ pub fn deserialize_response(bytes: &[u8]) -> anyhow::Result<ClientRpcResponse> {
 
 /// Extract the serde variant name from a `ClientRpcRequest`.
 ///
-/// `ClientRpcRequest` uses serde's default external tagging, so serializing
-/// to a JSON value gives either `{"VariantName": {...}}` for struct variants
-/// or `"VariantName"` for unit variants.
-pub fn extract_variant_name(request: &ClientRpcRequest) -> Option<String> {
-    match serde_json::to_value(request) {
-        Ok(serde_json::Value::Object(map)) => map.keys().next().cloned(),
-        Ok(serde_json::Value::String(s)) => Some(s),
-        _ => None,
-    }
+/// Returns the variant name as a `&'static str` without any allocation.
+/// This delegates to `ClientRpcRequest::variant_name()` which uses a
+/// compile-time match instead of JSON serialization.
+pub fn extract_variant_name(request: &ClientRpcRequest) -> &'static str {
+    request.variant_name()
 }
 
 #[cfg(test)]
@@ -39,7 +35,7 @@ mod tests {
     fn extract_variant_name_from_ping() {
         let request = ClientRpcRequest::Ping;
         let name = extract_variant_name(&request);
-        assert_eq!(name, Some("Ping".to_string()));
+        assert_eq!(name, "Ping");
     }
 
     #[test]
@@ -48,7 +44,7 @@ mod tests {
             key: "test".to_string(),
         };
         let name = extract_variant_name(&request);
-        assert_eq!(name, Some("ReadKey".to_string()));
+        assert_eq!(name, "ReadKey");
     }
 
     #[test]
@@ -58,7 +54,7 @@ mod tests {
             value: b"val".to_vec(),
         };
         let name = extract_variant_name(&request);
-        assert_eq!(name, Some("WriteKey".to_string()));
+        assert_eq!(name, "WriteKey");
     }
 
     #[test]

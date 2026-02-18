@@ -384,6 +384,7 @@ async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> 
         memory_limit: resolved.memory_limit,
         enabled: true,
         app_id: resolved.app_id,
+        execution_timeout_secs: None,
         kv_prefixes: resolved.kv_prefixes,
     };
 

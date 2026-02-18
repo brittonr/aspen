@@ -62,16 +62,21 @@ pub fn kv_get_value(key: &str) -> Option<Vec<u8>> {
 
 /// Write a value to the distributed KV store.
 /// Returns `Ok(())` on success or `Err(message)` on failure.
+///
+/// The host uses the `\0`/`\x01` tag prefix convention:
+/// `\0` = success, `\x01` + message = error.
 pub fn kv_put_value(key: &str, value: &[u8]) -> Result<(), String> {
     let result = unsafe { kv_put(key.to_string(), value.to_vec()) };
-    if result.is_empty() { Ok(()) } else { Err(result) }
+    decode_tagged_unit_result(&result)
 }
 
 /// Delete a key from the distributed KV store.
 /// Returns `Ok(())` on success or `Err(message)` on failure.
+///
+/// The host uses the `\0`/`\x01` tag prefix convention.
 pub fn kv_delete_key(key: &str) -> Result<(), String> {
     let result = unsafe { kv_delete(key.to_string()) };
-    if result.is_empty() { Ok(()) } else { Err(result) }
+    decode_tagged_unit_result(&result)
 }
 
 /// Scan keys by prefix from the distributed KV store.
@@ -86,9 +91,11 @@ pub fn kv_scan_prefix(prefix: &str, limit: u32) -> Vec<(String, Vec<u8>)> {
 
 /// Compare-and-swap a value in the distributed KV store.
 /// Returns `Ok(())` if the swap succeeded or `Err(message)` on failure.
+///
+/// The host uses the `\0`/`\x01` tag prefix convention.
 pub fn kv_compare_and_swap(key: &str, expected: &[u8], new_value: &[u8]) -> Result<(), String> {
     let result = unsafe { kv_cas(key.to_string(), expected.to_vec(), new_value.to_vec()) };
-    if result.is_empty() { Ok(()) } else { Err(result) }
+    decode_tagged_unit_result(&result)
 }
 
 /// Check whether a blob exists in the content-addressed store.
@@ -155,4 +162,27 @@ pub fn public_key() -> String {
 /// Get the current HLC timestamp as milliseconds.
 pub fn hlc_now_ms() -> u64 {
     unsafe { hlc_now() }
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/// Decode a tagged `Result<(), String>` from a host function.
+///
+/// The host encodes results as:
+/// - `\0` (or `\0` + ignored payload) = success
+/// - `\x01` + message = error
+/// - Empty string = success (backwards compatibility)
+///
+/// Tiger Style: All result decoding goes through one function.
+fn decode_tagged_unit_result(result: &str) -> Result<(), String> {
+    if result.is_empty() || result.starts_with('\0') {
+        Ok(())
+    } else if let Some(msg) = result.strip_prefix('\x01') {
+        Err(msg.to_string())
+    } else {
+        // No tag prefix — treat entire string as error message (backwards compat)
+        Err(result.to_string())
+    }
 }
