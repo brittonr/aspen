@@ -93,9 +93,6 @@ nix-executor = ["dep:aspen-ci-executor-nix"]
 snix = ["dep:snix-castore", "dep:snix-store", "dep:nix-compat", "aspen-ci-executor-shell?/snix"]
 # HTTP/3 cache proxy for Nix binary cache substitution
 nix-cache-proxy = ["aspen-ci-executor-shell?/nix-cache-proxy"]
-# Replace workspace virtiofsd with in-process AspenVirtioFsHandler (AspenFs-backed)
-# Implies plugins-vm since aspen-ci-executor-vm is an optional dep gated behind it
-aspen-workspace-fs = ["plugins-vm", "aspen-ci-executor-vm/aspen-workspace-fs"]
 
 [dev-dependencies]
 tempfile = "3.4.0"

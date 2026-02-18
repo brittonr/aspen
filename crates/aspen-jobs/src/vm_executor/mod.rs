@@ -83,9 +83,9 @@
 //!   - **Nix store**: Backed by SNIX (store path metadata in KV, NAR content in blobs).
 //!   - **Workspace**: Backed by `AspenFs` (paths map to KV keys, large artifacts stored as blobs).
 //!
-//!   The workspace share can now use `AspenVirtioFsHandler` (backed by `AspenFs`) via the
-//!   `aspen-workspace-fs` feature flag on `aspen-ci-executor-vm`. The Nix store share still
-//!   uses plain `virtiofsd` pending SNIX integration.
+//!   The workspace share uses `AspenVirtioFsHandler` (backed by `AspenFs`) for in-process
+//!   VirtioFS serving. The Nix store share still uses plain `virtiofsd` pending SNIX
+//!   integration.
 
 #[cfg(feature = "plugins-vm")]
 mod hyperlight;

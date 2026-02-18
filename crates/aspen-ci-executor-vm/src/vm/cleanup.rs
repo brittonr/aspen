@@ -24,23 +24,13 @@ impl ManagedCiVm {
         }
 
         // Shutdown workspace virtiofs backend
-        #[cfg(not(feature = "aspen-workspace-fs"))]
-        if let Some(mut process) = self.virtiofsd_workspace.write().await.take()
-            && let Err(e) = process.kill().await
+        if let Some(handle) = self.virtiofs_workspace_handle.write().await.take()
+            && let Err(e) = handle.shutdown()
         {
-            warn!("failed to kill virtiofsd workspace process: {e}");
+            warn!("failed to shutdown AspenFs workspace daemon: {e}");
         }
-
-        #[cfg(feature = "aspen-workspace-fs")]
-        {
-            if let Some(handle) = self.virtiofs_workspace_handle.write().await.take()
-                && let Err(e) = handle.shutdown()
-            {
-                warn!("failed to shutdown AspenFs workspace daemon: {e}");
-            }
-            // Drop the shared client
-            let _ = self.workspace_client.write().await.take();
-        }
+        // Drop the shared client
+        let _ = self.workspace_client.write().await.take();
     }
 
     /// Clean up socket files.

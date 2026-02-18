@@ -21,9 +21,9 @@ use crate::error::{self};
 impl ManagedCiVm {
     /// Start virtiofsd for a directory share.
     ///
-    /// With the `aspen-workspace-fs` feature, the workspace share is handled
-    /// by an in-process `AspenVirtioFsHandler` backed by `AspenFs` (KV + iroh-blobs)
-    /// instead of this external virtiofsd process. See `vm/lifecycle.rs`.
+    /// The workspace share is handled by an in-process `AspenVirtioFsHandler`
+    /// backed by `AspenFs` (KV + iroh-blobs) -- see `vm/lifecycle.rs`. This
+    /// method is used for the Nix store share which still uses external virtiofsd.
     ///
     /// TODO: Replace plain virtiofsd for the Nix store with `AspenVirtioFsHandler`
     /// backed by SNIX (store path metadata in KV, NAR content in blobs). This

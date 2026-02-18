@@ -13,7 +13,7 @@ aspen-ci-core = { path = "../aspen-ci-core" }
 aspen-ci-executor-shell = { path = "../aspen-ci-executor-shell" }
 aspen-blob = { workspace = true }
 aspen-cache = { path = "../aspen-cache" }
-aspen-fuse = { workspace = true, features = ["virtiofs"], optional = true }
+aspen-fuse = { workspace = true, features = ["virtiofs"] }
 aspen-jobs = { workspace = true }
 aspen-ticket = { path = "../aspen-ticket" }
 
@@ -61,7 +61,6 @@ nix = { version = "0.29", features = ["signal", "process"] }
 
 [features]
 default = []
-aspen-workspace-fs = ["dep:aspen-fuse"]
 
 [dev-dependencies]
 tempfile = "3.4.0"

@@ -57,16 +57,10 @@ pub struct ManagedCiVm {
     /// Virtiofsd process for Nix store.
     pub(super) virtiofsd_nix_store: RwLock<Option<Child>>,
 
-    /// Virtiofsd process for workspace (external virtiofsd, used without aspen-workspace-fs).
-    #[cfg(not(feature = "aspen-workspace-fs"))]
-    pub(super) virtiofsd_workspace: RwLock<Option<Child>>,
-
     /// In-process VirtioFS daemon handle for workspace (AspenFs-backed).
-    #[cfg(feature = "aspen-workspace-fs")]
     pub(super) virtiofs_workspace_handle: RwLock<Option<aspen_fuse::VirtioFsDaemonHandle>>,
 
     /// Shared client for workspace KV operations (used during release to clean up keys).
-    #[cfg(feature = "aspen-workspace-fs")]
     pub(super) workspace_client: RwLock<Option<aspen_fuse::SharedClient>>,
 
     /// Currently assigned job ID.
@@ -90,11 +84,7 @@ impl ManagedCiVm {
             process: RwLock::new(None),
             process_stderr: RwLock::new(None),
             virtiofsd_nix_store: RwLock::new(None),
-            #[cfg(not(feature = "aspen-workspace-fs"))]
-            virtiofsd_workspace: RwLock::new(None),
-            #[cfg(feature = "aspen-workspace-fs")]
             virtiofs_workspace_handle: RwLock::new(None),
-            #[cfg(feature = "aspen-workspace-fs")]
             workspace_client: RwLock::new(None),
             current_job: RwLock::new(None),
             vm_index,
