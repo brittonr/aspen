@@ -9,8 +9,7 @@ use crate::core::RaftCore;
 /// purging.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct CoreState<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// LogId of the last snapshot attempt.
     ///

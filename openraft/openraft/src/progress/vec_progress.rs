@@ -95,9 +95,7 @@ where
     /// Find the index of the specified id.
     #[inline(always)]
     pub(crate) fn index(&self, target: &ID) -> Option<usize>
-    where
-        ID: PartialEq,
-    {
+    where ID: PartialEq {
         self.entries.iter().position(|item| &item.id == target)
     }
 
@@ -105,9 +103,7 @@ where
     /// sorted.
     #[inline(always)]
     fn move_up(&mut self, index: usize) -> usize
-    where
-        Prog: PartialOrd,
-    {
+    where Prog: PartialOrd {
         self.stat.move_count += 1;
         for i in (0..index).rev() {
             if self.entries[i].val.borrow() < self.entries[i + 1].val.borrow() {
@@ -134,9 +130,7 @@ where
     }
 
     pub(crate) fn display_with<Fmt>(&self, f: Fmt) -> DisplayVecProgress<'_, ID, Ent, Prog, QS, Fmt>
-    where
-        Fmt: Fn(&mut Formatter<'_>, &ID, &Ent) -> std::fmt::Result,
-    {
+    where Fmt: Fn(&mut Formatter<'_>, &ID, &Ent) -> std::fmt::Result {
         DisplayVecProgress { inner: self, f }
     }
 }

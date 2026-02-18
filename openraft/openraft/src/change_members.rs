@@ -18,8 +18,7 @@ use crate::display_ext::DisplaySlice;
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub enum ChangeMembers<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Upgrade learners to voters.
     ///
@@ -86,8 +85,7 @@ where
 }
 
 impl<C> fmt::Display for ChangeMembers<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -116,14 +114,10 @@ where
                 write!(f, "ReplaceAllNodes({})", nodes.display())
             }
             ChangeMembers::Batch(changes) => {
-                write!(
-                    f,
-                    "Batch({})",
-                    DisplaySlice {
-                        slice: changes.as_slice(),
-                        max: 1024
-                    }
-                )
+                write!(f, "Batch({})", DisplaySlice {
+                    slice: changes.as_slice(),
+                    max: 1024
+                })
             }
         }
     }

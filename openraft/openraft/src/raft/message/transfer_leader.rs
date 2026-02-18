@@ -10,8 +10,7 @@ use crate::type_config::alias::VoteOf;
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub struct TransferLeaderRequest<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// The vote of the Leader that is transferring the leadership.
     pub(crate) from_leader: VoteOf<C>,
@@ -24,8 +23,7 @@ where
 }
 
 impl<C> TransferLeaderRequest<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Create a new transfer leader request.
     pub fn new(from: VoteOf<C>, to: C::NodeId, last_log_id: Option<LogIdOf<C>>) -> Self {
@@ -55,8 +53,7 @@ where
 }
 
 impl<C> fmt::Display for TransferLeaderRequest<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

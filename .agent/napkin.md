@@ -9,7 +9,7 @@
 
 ## User Preferences
 
-- (accumulate here as you learn them)
+- User wants to improve plugin system iteratively — lifecycle + hot-reload first
 
 ## Patterns That Work
 
@@ -52,3 +52,8 @@
 - ~~Pre-existing: `aspen-constants` has a broken doctest~~ FIXED 2026-02-18
 - ~~Pre-existing: `aspen-cli` has unresolved `aspen_forge` import errors~~ FIXED 2026-02-18
 - Pre-commit hooks: shellcheck warnings on scripts/ are pre-existing, not blockers
+- `HandlerRegistry` now uses `ArcSwap` for hot-reload — field access is `self.handlers.load()` not `self.handlers`
+- `add_handlers()` takes `&self` not `&mut self` (ArcSwap enables interior mutability)
+- `load_wasm_plugins()` still takes `&mut self` because it stores the LivePluginRegistry
+- `PluginReload` request handled directly in `dispatch()` — not via a separate handler (avoids circular dependency)
+- pijul unused import warning in CLI is pre-existing, not from our changes

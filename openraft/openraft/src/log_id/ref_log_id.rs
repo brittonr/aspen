@@ -10,16 +10,14 @@ use crate::type_config::alias::CommittedLeaderIdOf;
 /// Committed leader ID is the `term` in standard Raft.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct RefLogId<'k, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) leader_id: &'k CommittedLeaderIdOf<C>,
     pub(crate) index: u64,
 }
 
 impl<'l, C> RefLogId<'l, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Create a new reference log id.
     pub(crate) fn new(leader_id: &'l CommittedLeaderIdOf<C>, index: u64) -> Self {
@@ -43,8 +41,7 @@ where
 }
 
 impl<C> Display for RefLogId<'_, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}", self.committed_leader_id(), self.index())
@@ -52,8 +49,7 @@ where
 }
 
 impl<C> RaftLogId<C> for RefLogId<'_, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn new(_leader_id: CommittedLeaderIdOf<C>, _index: u64) -> Self {
         unreachable!("RefLogId does not own the leader id, so it cannot be created from it.")

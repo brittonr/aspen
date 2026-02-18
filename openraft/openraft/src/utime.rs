@@ -95,8 +95,7 @@ impl<T, I: Instant> Leased<T, I> {
         }
 
         impl<T, I> fmt::Display for DisplayLeaseInfo<'_, T, I>
-        where
-            I: Instant,
+        where I: Instant
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 match &self.leased.last_update {

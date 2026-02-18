@@ -10,15 +10,13 @@ use crate::raft::RaftInner;
 /// These configs are mainly designed for testing purposes and special use cases.
 /// Usually you don't need to change runtime config.
 pub struct RuntimeConfigHandle<'r, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     raft_inner: &'r RaftInner<C>,
 }
 
 impl<'r, C> RuntimeConfigHandle<'r, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(in crate::raft) fn new(raft_inner: &'r RaftInner<C>) -> Self {
         Self { raft_inner }

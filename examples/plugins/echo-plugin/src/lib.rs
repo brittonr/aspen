@@ -3,6 +3,8 @@
 //! Demonstrates the guest SDK by handling two request types:
 //! - `Ping` -> `Pong`
 //! - `ReadKey` -> reads from host KV store and returns the result
+//!
+//! Also demonstrates lifecycle hooks: `init`, `shutdown`, and `health`.
 
 use aspen_wasm_guest_sdk::AspenPlugin;
 use aspen_wasm_guest_sdk::ClientRpcRequest;
@@ -23,6 +25,20 @@ impl AspenPlugin for EchoPlugin {
             app_id: None,
             kv_prefixes: vec![],
         }
+    }
+
+    fn init() -> Result<(), String> {
+        aspen_wasm_guest_sdk::host::log_info_msg("echo-plugin: initialized");
+        Ok(())
+    }
+
+    fn shutdown() {
+        aspen_wasm_guest_sdk::host::log_info_msg("echo-plugin: shutting down");
+    }
+
+    fn health() -> Result<(), String> {
+        // Always healthy — a real plugin might check internal state here
+        Ok(())
     }
 
     fn handle(request: ClientRpcRequest) -> ClientRpcResponse {

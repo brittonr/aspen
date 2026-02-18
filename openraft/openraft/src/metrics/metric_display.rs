@@ -7,15 +7,13 @@ use crate::metrics::Metric;
 
 /// Display the value of a metric.
 pub(crate) struct MetricDisplay<'a, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) metric: &'a Metric<C>,
 }
 
 impl<C> fmt::Display for MetricDisplay<'_, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.metric {

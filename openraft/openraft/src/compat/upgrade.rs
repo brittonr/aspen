@@ -8,9 +8,7 @@ pub trait Upgrade<To> {
     fn upgrade(self) -> To;
 
     fn try_upgrade(self) -> Result<To, (Self, &'static str)>
-    where
-        Self: Sized,
-    {
+    where Self: Sized {
         Ok(self.upgrade())
     }
 }
@@ -22,8 +20,7 @@ pub trait Upgrade<To> {
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(untagged)]
 pub enum Compat<From, To>
-where
-    From: Upgrade<To>,
+where From: Upgrade<To>
 {
     /// Represents the older version of the data.
     Old(From),
@@ -33,8 +30,7 @@ where
 
 /// A compatible type can be upgraded to `To` if `From` can be upgraded to `To`.
 impl<From, To> Upgrade<To> for Compat<From, To>
-where
-    From: Upgrade<To>,
+where From: Upgrade<To>
 {
     fn upgrade(self) -> To {
         match self {

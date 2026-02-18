@@ -31,8 +31,7 @@ use crate::type_config::alias::VoteOf;
 ///   `log` IO. E.g., Saving a vote and appending a log entry must be serialized too.
 #[add_async_trait]
 pub trait RaftLogStorage<C>: OptionalSend + OptionalSync + 'static
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Log reader type.
     ///

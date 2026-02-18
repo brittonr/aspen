@@ -20,8 +20,7 @@ use crate::type_config::alias::LogIdOf;
 #[derive(Clone, Debug)]
 #[derive(PartialEq, Eq)]
 pub(crate) enum Inflight<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     None,
 
@@ -45,8 +44,7 @@ where
 }
 
 impl<C> Validate for Inflight<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn validate(&self) -> Result<(), Box<dyn Error>> {
         match self {
@@ -58,8 +56,7 @@ where
 }
 
 impl<C> Display for Inflight<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -74,8 +71,7 @@ where
 }
 
 impl<C> Inflight<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Create inflight state for sending logs.
     pub(crate) fn logs(prev: Option<LogIdOf<C>>, last: Option<LogIdOf<C>>, inflight_id: InflightId) -> Self {

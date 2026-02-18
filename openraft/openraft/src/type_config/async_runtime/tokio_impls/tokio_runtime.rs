@@ -96,8 +96,7 @@ impl MpscUnbounded for TokioMpscUnbounded {
 }
 
 impl<T> mpsc_unbounded::MpscUnboundedSender<TokioMpscUnbounded, T> for mpsc::UnboundedSender<T>
-where
-    T: OptionalSend,
+where T: OptionalSend
 {
     #[inline]
     fn send(&self, msg: T) -> Result<(), mpsc_unbounded::SendError<T>> {
@@ -111,8 +110,7 @@ where
 }
 
 impl<T> mpsc_unbounded::MpscUnboundedReceiver<T> for mpsc::UnboundedReceiver<T>
-where
-    T: OptionalSend,
+where T: OptionalSend
 {
     #[inline]
     async fn recv(&mut self) -> Option<T> {
@@ -129,8 +127,7 @@ where
 }
 
 impl<T> mpsc_unbounded::MpscUnboundedWeakSender<TokioMpscUnbounded, T> for mpsc::WeakUnboundedSender<T>
-where
-    T: OptionalSend,
+where T: OptionalSend
 {
     #[inline]
     fn upgrade(&self) -> Option<<TokioMpscUnbounded as MpscUnbounded>::Sender<T>> {
@@ -167,8 +164,7 @@ mod mpsc_impl {
     }
 
     impl<T> MpscSender<TokioMpsc, T> for mpsc::Sender<T>
-    where
-        T: OptionalSend,
+    where T: OptionalSend
     {
         #[inline]
         fn send(&self, msg: T) -> impl Future<Output = Result<(), SendError<T>>> + OptionalSend {
@@ -182,8 +178,7 @@ mod mpsc_impl {
     }
 
     impl<T> MpscReceiver<T> for mpsc::Receiver<T>
-    where
-        T: OptionalSend,
+    where T: OptionalSend
     {
         #[inline]
         fn recv(&mut self) -> impl Future<Output = Option<T>> + OptionalSend {
@@ -200,8 +195,7 @@ mod mpsc_impl {
     }
 
     impl<T> MpscWeakSender<TokioMpsc, T> for mpsc::WeakSender<T>
-    where
-        T: OptionalSend,
+    where T: OptionalSend
     {
         #[inline]
         fn upgrade(&self) -> Option<<TokioMpsc as Mpsc>::Sender<T>> {
@@ -224,17 +218,14 @@ impl watch::Watch for TokioWatch {
 }
 
 impl<T> watch::WatchSender<TokioWatch, T> for tokio_watch::Sender<T>
-where
-    T: OptionalSend + OptionalSync,
+where T: OptionalSend + OptionalSync
 {
     fn send(&self, value: T) -> Result<(), watch::SendError<T>> {
         self.send(value).map_err(|e| watch::SendError(e.0))
     }
 
     fn send_if_modified<F>(&self, modify: F) -> bool
-    where
-        F: FnOnce(&mut T) -> bool,
-    {
+    where F: FnOnce(&mut T) -> bool {
         self.send_if_modified(modify)
     }
 
@@ -244,8 +235,7 @@ where
 }
 
 impl<T> watch::WatchReceiver<TokioWatch, T> for tokio_watch::Receiver<T>
-where
-    T: OptionalSend + OptionalSync,
+where T: OptionalSend + OptionalSync
 {
     async fn changed(&mut self) -> Result<(), watch::RecvError> {
         self.changed().await.map_err(|_| watch::RecvError(()))
@@ -265,17 +255,14 @@ impl oneshot::Oneshot for TokioOneshot {
 
     #[inline]
     fn channel<T>() -> (Self::Sender<T>, Self::Receiver<T>)
-    where
-        T: OptionalSend,
-    {
+    where T: OptionalSend {
         let (tx, rx) = tokio::sync::oneshot::channel();
         (tx, rx)
     }
 }
 
 impl<T> OneshotSender<T> for tokio::sync::oneshot::Sender<T>
-where
-    T: OptionalSend,
+where T: OptionalSend
 {
     #[inline]
     fn send(self, t: T) -> Result<(), T> {
@@ -286,8 +273,7 @@ where
 type TokioMutex<T> = tokio::sync::Mutex<T>;
 
 impl<T> mutex::Mutex<T> for TokioMutex<T>
-where
-    T: OptionalSend + 'static,
+where T: OptionalSend + 'static
 {
     type Guard<'a> = tokio::sync::MutexGuard<'a, T>;
 

@@ -53,14 +53,11 @@ fn test_follower_append_entries_update_accepted() -> anyhow::Result<()> {
 
     eng.output.clear_commands();
 
-    eng.following_handler().append_entries(
-        Some(log_id(2, 1, 3)),
-        vec![
-            //
-            blank_ent(3, 1, 4),
-            blank_ent(3, 1, 5),
-        ],
-    );
+    eng.following_handler().append_entries(Some(log_id(2, 1, 3)), vec![
+        //
+        blank_ent(3, 1, 4),
+        blank_ent(3, 1, 5),
+    ]);
 
     assert_eq!(
         &[
@@ -78,16 +75,13 @@ fn test_follower_append_entries_update_accepted() -> anyhow::Result<()> {
         )),
         eng.state.accepted_log_io()
     );
-    assert_eq!(
-        eng.output.take_commands(),
-        vec![
-            //
-            Command::AppendEntries {
-                committed_vote: Vote::new(2, 1).into_committed(),
-                entries: vec![blank_ent(3, 1, 4), blank_ent(3, 1, 5),],
-            }
-        ]
-    );
+    assert_eq!(eng.output.take_commands(), vec![
+        //
+        Command::AppendEntries {
+            committed_vote: Vote::new(2, 1).into_committed(),
+            entries: vec![blank_ent(3, 1, 4), blank_ent(3, 1, 5),],
+        }
+    ]);
 
     // Update to a new Leader and smaller log id
     {
@@ -97,13 +91,10 @@ fn test_follower_append_entries_update_accepted() -> anyhow::Result<()> {
             Duration::from_millis(500),
             Vote::new_committed(3, 1),
         );
-        eng.following_handler().append_entries(
-            Some(log_id(2, 1, 3)),
-            vec![
-                //
-                blank_ent(3, 1, 4),
-            ],
-        );
+        eng.following_handler().append_entries(Some(log_id(2, 1, 3)), vec![
+            //
+            blank_ent(3, 1, 4),
+        ]);
         assert_eq!(Some(&log_id(3, 1, 5)), eng.state.last_log_id());
         assert_eq!(
             Some(&IOId::new_log_io(
@@ -112,18 +103,15 @@ fn test_follower_append_entries_update_accepted() -> anyhow::Result<()> {
             )),
             eng.state.accepted_log_io()
         );
-        assert_eq!(
-            eng.output.take_commands(),
-            vec![
-                //
-                Command::UpdateIOProgress {
-                    when: Some(Condition::IOFlushed {
-                        io_id: IOId::new_log_io(Vote::new(2, 1).into_committed(), Some(log_id(3, 1, 5)))
-                    }),
-                    io_id: IOId::new_log_io(Vote::new(3, 1).into_committed(), Some(log_id(3, 1, 4))),
-                }
-            ]
-        );
+        assert_eq!(eng.output.take_commands(), vec![
+            //
+            Command::UpdateIOProgress {
+                when: Some(Condition::IOFlushed {
+                    io_id: IOId::new_log_io(Vote::new(2, 1).into_committed(), Some(log_id(3, 1, 5)))
+                }),
+                io_id: IOId::new_log_io(Vote::new(3, 1).into_committed(), Some(log_id(3, 1, 4))),
+            }
+        ]);
     }
 
     // Update to a smaller value is ignored.
@@ -138,12 +126,9 @@ fn test_follower_append_entries_update_accepted() -> anyhow::Result<()> {
             eng.state.accepted_log_io()
         );
 
-        assert_eq!(
-            eng.output.take_commands(),
-            vec![
-                //
-            ]
-        );
+        assert_eq!(eng.output.take_commands(), vec![
+            //
+        ]);
     }
 
     Ok(())

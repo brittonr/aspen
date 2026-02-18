@@ -18,8 +18,7 @@ pub struct Vote<C: RaftTypeConfig> {
 }
 
 impl<C> PartialOrd for Vote<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     #[inline]
     fn partial_cmp(&self, other: &Vote<C>) -> Option<Ordering> {
@@ -28,8 +27,7 @@ where
 }
 
 impl<C> std::fmt::Display for Vote<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.as_ref_vote().fmt(f)
@@ -37,8 +35,7 @@ where
 }
 
 impl<C> RaftVote<C> for Vote<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn from_leader_id(leader_id: C::LeaderId, committed: bool) -> Self {
         Self { leader_id, committed }
@@ -54,8 +51,7 @@ where
 }
 
 impl<C> Vote<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Create a new uncommitted vote for the given term and node.
     pub fn new(term: C::Term, node_id: C::NodeId) -> Self {

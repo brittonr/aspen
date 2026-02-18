@@ -7,8 +7,7 @@ use crate::type_config::alias::LogIdOf;
 ///
 /// Provides methods that mirror StorageError creation methods for easier error handling.
 pub(crate) trait StorageIOResult<C, T>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Convert io::Error to StorageError for writing a single log entry
     #[allow(dead_code)]
@@ -59,8 +58,7 @@ where
 }
 
 impl<C, T> StorageIOResult<C, T> for Result<T, std::io::Error>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn sto_write_log_entry(self, log_id: LogIdOf<C>) -> Result<T, StorageError<C>> {
         self.map_err(|e| StorageError::write_log_entry(log_id, &e))

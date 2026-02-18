@@ -22,15 +22,13 @@ use crate::type_config::alias::LogIdOf;
 #[derive(Default, Debug, Clone)]
 #[derive(PartialEq, Eq)]
 pub struct LogIdList<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     key_log_ids: Vec<LogIdOf<C>>,
 }
 
 impl<C> LogIdList<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Load all log ids that are the first one proposed by a leader.
     ///
@@ -122,8 +120,7 @@ where
 }
 
 impl<C> LogIdList<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Create a new `LogIdList`.
     ///

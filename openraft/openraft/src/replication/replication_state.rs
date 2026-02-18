@@ -9,8 +9,7 @@ use crate::replication::log_state::LogState;
 #[derive(Clone, Debug)]
 #[derive(PartialEq, Eq)]
 pub(crate) struct ReplicationState<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Replication stream identifier.
     ///

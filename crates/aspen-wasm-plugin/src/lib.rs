@@ -23,7 +23,10 @@ mod host;
 mod marshal;
 mod registry;
 
+pub use aspen_plugin_api::PluginHealth;
+pub use aspen_plugin_api::PluginState;
 pub use handler::WasmPluginHandler;
+pub use registry::LivePluginRegistry;
 pub use registry::PluginRegistry;
 
 /// Test utilities for loading WASM plugins in integration tests.

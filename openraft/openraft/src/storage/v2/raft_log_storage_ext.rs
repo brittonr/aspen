@@ -14,8 +14,7 @@ use crate::type_config::TypeConfigExt;
 /// All methods in this trait are provided with a default implementation.
 #[add_async_trait]
 pub trait RaftLogStorageExt<C>: RaftLogStorage<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Blocking mode appends log entries to the storage.
     ///

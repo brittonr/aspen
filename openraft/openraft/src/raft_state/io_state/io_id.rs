@@ -33,8 +33,7 @@ use crate::vote::ref_vote::RefVote;
 #[derive(Debug, Clone)]
 #[derive(PartialEq, Eq)]
 pub(crate) enum IOId<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Saving a non-committed vote, this kind of IO is not related to any log entries.
     Vote(UncommittedVote<C>),
@@ -44,8 +43,7 @@ where
 }
 
 impl<C> fmt::Display for IOId<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -59,8 +57,7 @@ where
 ///
 /// Compare the `vote` first, if votes are equal, compare the `last_log_id`.
 impl<C> PartialOrd for IOId<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         let res = self.as_ref_vote().partial_cmp(&other.as_ref_vote())?;
@@ -73,8 +70,7 @@ where
 }
 
 impl<C> IOId<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn new(vote: &VoteOf<C>) -> Self {
         if vote.is_committed() {

@@ -28,15 +28,13 @@ use crate::type_config::alias::OneshotReceiverOf;
 /// membership changes and node additions.
 #[since(version = "0.10.0")]
 pub(crate) struct ManagementApi<'a, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     inner: &'a RaftInner<C>,
 }
 
 impl<'a, C> ManagementApi<'a, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(in crate::raft) fn new(inner: &'a RaftInner<C>) -> Self {
         Self { inner }
@@ -45,9 +43,7 @@ where
     #[since(version = "0.10.0")]
     #[tracing::instrument(level = "debug", skip(self))]
     pub(crate) async fn initialize<T>(&self, members: T) -> Result<Result<(), InitializeError<C>>, Fatal<C>>
-    where
-        T: IntoNodes<C::NodeId, C::Node> + Debug,
-    {
+    where T: IntoNodes<C::NodeId, C::Node> + Debug {
         let (tx, rx) = C::oneshot();
         self.inner
             .call_core(

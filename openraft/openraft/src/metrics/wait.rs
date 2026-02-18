@@ -37,15 +37,12 @@ pub struct Wait<C: RaftTypeConfig> {
 }
 
 impl<C> Wait<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Wait for metrics to satisfy some condition or timeout.
     #[tracing::instrument(level = "trace", skip(self, func), fields(msg=%msg.to_string()))]
     pub async fn metrics<T>(&self, func: T, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError>
-    where
-        T: Fn(&RaftMetrics<C>) -> bool + OptionalSend,
-    {
+    where T: Fn(&RaftMetrics<C>) -> bool + OptionalSend {
         let timeout_at = C::now() + self.timeout;
 
         let mut rx = self.rx.clone();

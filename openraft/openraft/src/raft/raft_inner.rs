@@ -34,8 +34,7 @@ use crate::type_config::alias::WatchReceiverOf;
 /// RaftInner is the internal handle and provides internally used APIs to communicate with
 /// `RaftCore`.
 pub(in crate::raft) struct RaftInner<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(in crate::raft) id: C::NodeId,
     pub(in crate::raft) config: Arc<Config>,
@@ -57,8 +56,7 @@ where
 }
 
 impl<C> RaftInner<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn id(&self) -> &C::NodeId {
         &self.id
@@ -84,9 +82,7 @@ where
     /// Invoke RaftCore by sending a RaftMsg and blocks waiting for response.
     #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) async fn call_core<T>(&self, mes: RaftMsg<C>, rx: OneshotReceiverOf<C, T>) -> Result<T, Fatal<C>>
-    where
-        T: OptionalSend,
-    {
+    where T: OptionalSend {
         let sum = if tracing::enabled!(Level::DEBUG) {
             Some(mes.to_string())
         } else {

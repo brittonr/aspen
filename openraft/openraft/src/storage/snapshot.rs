@@ -9,8 +9,7 @@ use crate::storage::SnapshotMeta;
 #[since(version = "0.10.0", change = "SnapshotData without Box")]
 #[derive(Debug, Clone)]
 pub struct Snapshot<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// metadata of a snapshot
     pub meta: SnapshotMeta<C>,
@@ -20,8 +19,7 @@ where
 }
 
 impl<C> Snapshot<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     #[allow(dead_code)]
     pub(crate) fn new(meta: SnapshotMeta<C>, snapshot: C::SnapshotData) -> Self {
@@ -30,8 +28,7 @@ where
 }
 
 impl<C> fmt::Display for Snapshot<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Snapshot{{meta: {}}}", self.meta)

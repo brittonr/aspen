@@ -15,8 +15,7 @@ use crate::base::OptionalFeatures;
 /// Common implementations are provided for standard integer types like `u64`, `i64`, etc.
 #[since(version = "0.10.0")]
 pub trait RaftTerm
-where
-    Self: OptionalFeatures + Ord + Debug + Display + Copy + Default + 'static,
+where Self: OptionalFeatures + Ord + Debug + Display + Copy + Default + 'static
 {
     /// Returns the next term.
     ///

@@ -32,8 +32,7 @@ where
 }
 
 impl<NID> IntoNodes<NID, ()> for BTreeSet<NID>
-where
-    NID: NodeId,
+where NID: NodeId
 {
     fn into_nodes(self) -> BTreeMap<NID, ()> {
         self.into_iter().map(|node_id| (node_id, ())).collect()
@@ -41,8 +40,7 @@ where
 }
 
 impl<NID> IntoNodes<NID, EmptyNode> for BTreeSet<NID>
-where
-    NID: NodeId,
+where NID: NodeId
 {
     fn into_nodes(self) -> BTreeMap<NID, EmptyNode> {
         self.into_iter().map(|node_id| (node_id, EmptyNode {})).collect()

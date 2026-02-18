@@ -62,8 +62,7 @@ use crate::vote::raft_vote::RaftVoteExt;
 #[derive(Clone, Debug)]
 #[derive(PartialEq, Eq)]
 pub struct RaftState<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// The vote state of this node.
     pub(crate) vote: Leased<VoteOf<C>, InstantOf<C>>,
@@ -120,8 +119,7 @@ where
 }
 
 impl<C> LogStateReader<C> for RaftState<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn ref_log_id(&self, index: u64) -> Option<RefLogId<'_, C>> {
         self.log_ids.ref_at(index)
@@ -164,8 +162,7 @@ where
 }
 
 impl<C> VoteStateReader<C> for RaftState<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn vote_ref(&self) -> &VoteOf<C> {
         self.vote.deref()
@@ -173,8 +170,7 @@ where
 }
 
 impl<C> Validate for RaftState<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn validate(&self) -> Result<(), Box<dyn Error>> {
         if self.purged_next == 0 {
@@ -203,8 +199,7 @@ where
 }
 
 impl<C> RaftState<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     #[allow(dead_code)]
     pub(crate) fn new(node_id: C::NodeId) -> Self {
@@ -394,9 +389,7 @@ where
     /// Find the first entry in the input that does not exist on local raft-log,
     /// by comparing the log id.
     pub(crate) fn first_conflicting_index<Ent>(&self, entries: &[Ent]) -> usize
-    where
-        Ent: RaftEntry<C>,
-    {
+    where Ent: RaftEntry<C> {
         let l = entries.len();
 
         for (i, ent) in entries.iter().enumerate() {

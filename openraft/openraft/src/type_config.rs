@@ -138,8 +138,7 @@ pub trait RaftTypeConfig:
     ///
     /// [`Raft::client_write`]: `crate::raft::Raft::client_write`
     type Responder<T>: Responder<Self, T>
-    where
-        T: OptionalSend + 'static;
+    where T: OptionalSend + 'static;
 }
 
 #[allow(dead_code)]

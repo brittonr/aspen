@@ -150,118 +150,76 @@ fn test_log_id_list_truncate() -> anyhow::Result<()> {
     };
 
     let cases = vec![
-        (
-            0,
-            vec![
-                //
-            ],
-        ),
-        (
-            1,
-            vec![
-                //
-            ],
-        ),
-        (
-            2,
-            vec![
-                //
-            ],
-        ),
-        (
-            3,
-            vec![
-                log_id(2, 1, 2), //
-            ],
-        ),
-        (
-            4,
-            vec![
-                log_id(2, 1, 2), //
-                log_id(3, 1, 3),
-            ],
-        ),
-        (
-            5,
-            vec![
-                log_id(2, 1, 2), //
-                log_id(3, 1, 3),
-                log_id(3, 1, 4),
-            ],
-        ),
-        (
-            6,
-            vec![
-                log_id(2, 1, 2), //
-                log_id(3, 1, 3),
-                log_id(3, 1, 5),
-            ],
-        ),
-        (
-            7,
-            vec![
-                log_id(2, 1, 2), //
-                log_id(3, 1, 3),
-                log_id(6, 1, 6),
-            ],
-        ),
-        (
-            8,
-            vec![
-                log_id(2, 1, 2), //
-                log_id(3, 1, 3),
-                log_id(6, 1, 6),
-                log_id(6, 1, 7),
-            ],
-        ),
-        (
-            9,
-            vec![
-                log_id(2, 1, 2), //
-                log_id(3, 1, 3),
-                log_id(6, 1, 6),
-                log_id(6, 1, 8),
-            ],
-        ),
-        (
-            10,
-            vec![
-                log_id(2, 1, 2), //
-                log_id(3, 1, 3),
-                log_id(6, 1, 6),
-                log_id(9, 1, 9),
-            ],
-        ),
-        (
-            11,
-            vec![
-                log_id(2, 1, 2), //
-                log_id(3, 1, 3),
-                log_id(6, 1, 6),
-                log_id(9, 1, 9),
-                log_id(9, 1, 10),
-            ],
-        ),
-        (
-            12,
-            vec![
-                log_id(2, 1, 2), //
-                log_id(3, 1, 3),
-                log_id(6, 1, 6),
-                log_id(9, 1, 9),
-                log_id(9, 1, 11),
-            ],
-        ),
-        (
-            13,
-            vec![
-                log_id(2, 1, 2), //
-                log_id(3, 1, 3),
-                log_id(6, 1, 6),
-                log_id(9, 1, 9),
-                log_id(9, 1, 11),
-            ],
-        ),
+        (0, vec![
+            //
+        ]),
+        (1, vec![
+            //
+        ]),
+        (2, vec![
+            //
+        ]),
+        (3, vec![
+            log_id(2, 1, 2), //
+        ]),
+        (4, vec![
+            log_id(2, 1, 2), //
+            log_id(3, 1, 3),
+        ]),
+        (5, vec![
+            log_id(2, 1, 2), //
+            log_id(3, 1, 3),
+            log_id(3, 1, 4),
+        ]),
+        (6, vec![
+            log_id(2, 1, 2), //
+            log_id(3, 1, 3),
+            log_id(3, 1, 5),
+        ]),
+        (7, vec![
+            log_id(2, 1, 2), //
+            log_id(3, 1, 3),
+            log_id(6, 1, 6),
+        ]),
+        (8, vec![
+            log_id(2, 1, 2), //
+            log_id(3, 1, 3),
+            log_id(6, 1, 6),
+            log_id(6, 1, 7),
+        ]),
+        (9, vec![
+            log_id(2, 1, 2), //
+            log_id(3, 1, 3),
+            log_id(6, 1, 6),
+            log_id(6, 1, 8),
+        ]),
+        (10, vec![
+            log_id(2, 1, 2), //
+            log_id(3, 1, 3),
+            log_id(6, 1, 6),
+            log_id(9, 1, 9),
+        ]),
+        (11, vec![
+            log_id(2, 1, 2), //
+            log_id(3, 1, 3),
+            log_id(6, 1, 6),
+            log_id(9, 1, 9),
+            log_id(9, 1, 10),
+        ]),
+        (12, vec![
+            log_id(2, 1, 2), //
+            log_id(3, 1, 3),
+            log_id(6, 1, 6),
+            log_id(9, 1, 9),
+            log_id(9, 1, 11),
+        ]),
+        (13, vec![
+            log_id(2, 1, 2), //
+            log_id(3, 1, 3),
+            log_id(6, 1, 6),
+            log_id(9, 1, 9),
+            log_id(9, 1, 11),
+        ]),
     ];
 
     for (at, want) in cases {
@@ -295,50 +253,53 @@ fn test_log_id_list_purge() -> anyhow::Result<()> {
     };
 
     let cases = vec![
-        (
-            log_id(2, 1, 1),
-            vec![
-                log_id(2, 1, 2),
-                log_id(3, 1, 3),
-                log_id(6, 1, 6),
-                log_id(9, 1, 9),
-                log_id(9, 1, 11),
-            ],
-        ),
-        (
+        (log_id(2, 1, 1), vec![
             log_id(2, 1, 2),
-            vec![
-                log_id(2, 1, 2),
-                log_id(3, 1, 3),
-                log_id(6, 1, 6),
-                log_id(9, 1, 9),
-                log_id(9, 1, 11),
-            ],
-        ),
-        (
             log_id(3, 1, 3),
-            vec![log_id(3, 1, 3), log_id(6, 1, 6), log_id(9, 1, 9), log_id(9, 1, 11)],
-        ),
-        (
-            log_id(3, 1, 4),
-            vec![log_id(3, 1, 4), log_id(6, 1, 6), log_id(9, 1, 9), log_id(9, 1, 11)],
-        ),
-        (
-            log_id(3, 1, 5),
-            vec![log_id(3, 1, 5), log_id(6, 1, 6), log_id(9, 1, 9), log_id(9, 1, 11)],
-        ),
-        (
             log_id(6, 1, 6),
-            vec![log_id(6, 1, 6), log_id(9, 1, 9), log_id(9, 1, 11)],
-        ),
-        (
+            log_id(9, 1, 9),
+            log_id(9, 1, 11),
+        ]),
+        (log_id(2, 1, 2), vec![
+            log_id(2, 1, 2),
+            log_id(3, 1, 3),
+            log_id(6, 1, 6),
+            log_id(9, 1, 9),
+            log_id(9, 1, 11),
+        ]),
+        (log_id(3, 1, 3), vec![
+            log_id(3, 1, 3),
+            log_id(6, 1, 6),
+            log_id(9, 1, 9),
+            log_id(9, 1, 11),
+        ]),
+        (log_id(3, 1, 4), vec![
+            log_id(3, 1, 4),
+            log_id(6, 1, 6),
+            log_id(9, 1, 9),
+            log_id(9, 1, 11),
+        ]),
+        (log_id(3, 1, 5), vec![
+            log_id(3, 1, 5),
+            log_id(6, 1, 6),
+            log_id(9, 1, 9),
+            log_id(9, 1, 11),
+        ]),
+        (log_id(6, 1, 6), vec![
+            log_id(6, 1, 6),
+            log_id(9, 1, 9),
+            log_id(9, 1, 11),
+        ]),
+        (log_id(6, 1, 7), vec![
             log_id(6, 1, 7),
-            vec![log_id(6, 1, 7), log_id(9, 1, 9), log_id(9, 1, 11)],
-        ),
-        (
+            log_id(9, 1, 9),
+            log_id(9, 1, 11),
+        ]),
+        (log_id(6, 1, 8), vec![
             log_id(6, 1, 8),
-            vec![log_id(6, 1, 8), log_id(9, 1, 9), log_id(9, 1, 11)],
-        ),
+            log_id(9, 1, 9),
+            log_id(9, 1, 11),
+        ]),
         (log_id(9, 1, 9), vec![log_id(9, 1, 9), log_id(9, 1, 11)]),
         (log_id(9, 1, 10), vec![log_id(9, 1, 10), log_id(9, 1, 11)]),
         (log_id(9, 1, 11), vec![log_id(9, 1, 11)]),

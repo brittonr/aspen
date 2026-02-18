@@ -38,6 +38,10 @@ pub enum PluginCommand {
 
     /// Remove a plugin.
     Remove(RemoveArgs),
+
+    /// Reload WASM plugins (hot-reload). Reloads a single plugin by name,
+    /// or all plugins if no name is given.
+    Reload(ReloadArgs),
 }
 
 #[derive(Args)]
@@ -106,6 +110,12 @@ pub struct DisableArgs {
 pub struct RemoveArgs {
     /// Plugin name.
     pub name: String,
+}
+
+#[derive(Args)]
+pub struct ReloadArgs {
+    /// Plugin name to reload. If omitted, all plugins are reloaded.
+    pub name: Option<String>,
 }
 
 // ============================================================================
@@ -261,6 +271,26 @@ impl Outputable for RemoveOutput {
     }
 }
 
+struct ReloadOutput {
+    is_success: bool,
+    plugin_count: u32,
+    message: String,
+}
+
+impl Outputable for ReloadOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "is_success": self.is_success,
+            "plugin_count": self.plugin_count,
+            "message": self.message
+        })
+    }
+
+    fn to_human(&self) -> String {
+        self.message.clone()
+    }
+}
+
 // ============================================================================
 // Command dispatch
 // ============================================================================
@@ -274,6 +304,7 @@ impl PluginCommand {
             PluginCommand::Enable(args) => plugin_toggle(client, &args.name, true, json).await,
             PluginCommand::Disable(args) => plugin_toggle(client, &args.name, false, json).await,
             PluginCommand::Remove(args) => plugin_remove(client, args, json).await,
+            PluginCommand::Reload(args) => plugin_reload(client, args, json).await,
         }
     }
 }
@@ -529,6 +560,31 @@ async fn plugin_remove(client: &AspenClient, args: RemoveArgs, json: bool) -> Re
     }
 }
 
+async fn plugin_reload(client: &AspenClient, args: ReloadArgs, json: bool) -> Result<()> {
+    let response = client.send(ClientRpcRequest::PluginReload { name: args.name }).await?;
+
+    match response {
+        ClientRpcResponse::PluginReloadResult(r) => {
+            if !r.is_success {
+                if !json {
+                    eprintln!("Error: {}", r.error.unwrap_or_default());
+                }
+            }
+            print_output(
+                &ReloadOutput {
+                    is_success: r.is_success,
+                    plugin_count: r.plugin_count,
+                    message: r.message,
+                },
+                json,
+            );
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
 // ============================================================================
 // Tests (Deliverable 3c)
 // ============================================================================
@@ -625,6 +681,7 @@ mod tests {
             fuel_limit: None,
             memory_limit: None,
             app_id: None,
+            kv_prefixes: None,
         };
         let result = super::resolve_install_args(&args);
         assert!(result.is_err(), "should fail without --name or --manifest");
@@ -642,6 +699,7 @@ mod tests {
             fuel_limit: None,
             memory_limit: None,
             app_id: None,
+            kv_prefixes: None,
         };
         let result = super::resolve_install_args(&args);
         assert!(result.is_err(), "should fail without --handles or --manifest");
@@ -659,6 +717,7 @@ mod tests {
             fuel_limit: None,
             memory_limit: None,
             app_id: None,
+            kv_prefixes: None,
         };
         let resolved = super::resolve_install_args(&args).expect("should resolve");
         assert_eq!(resolved.name, "my-plugin");
@@ -679,6 +738,7 @@ mod tests {
             fuel_limit: None,
             memory_limit: None,
             app_id: None,
+            kv_prefixes: None,
         };
         let resolved = super::resolve_install_args(&args).expect("should resolve");
         assert_eq!(resolved.priority, 950);
@@ -707,5 +767,17 @@ mod tests {
     fn plugin_info_parses() {
         let result = Cli::try_parse_from(["aspen-cli", "plugin", "info", "my-plugin"]);
         assert!(result.is_ok(), "plugin info should parse: {:?}", result.err());
+    }
+
+    #[test]
+    fn plugin_reload_all_parses() {
+        let result = Cli::try_parse_from(["aspen-cli", "plugin", "reload"]);
+        assert!(result.is_ok(), "plugin reload should parse: {:?}", result.err());
+    }
+
+    #[test]
+    fn plugin_reload_single_parses() {
+        let result = Cli::try_parse_from(["aspen-cli", "plugin", "reload", "my-plugin"]);
+        assert!(result.is_ok(), "plugin reload with name should parse: {:?}", result.err());
     }
 }

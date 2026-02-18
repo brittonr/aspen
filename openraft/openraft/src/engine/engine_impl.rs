@@ -70,8 +70,7 @@ use crate::vote::raft_vote::RaftVoteExt;
 /// TODO: make the fields private
 #[derive(Debug)]
 pub(crate) struct Engine<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) config: EngineConfig<C>,
 
@@ -100,8 +99,7 @@ where
 }
 
 impl<C> Engine<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn new(init_state: RaftState<C>, config: EngineConfig<C>) -> Self {
         Self {
@@ -258,7 +256,10 @@ where
     ///
     /// [`C::Responder`]: RaftTypeConfig::Responder
     #[tracing::instrument(level = "debug", skip_all)]
-    pub(crate) fn get_leader_handler_or_reject<R>(&mut self, tx: Option<R>) -> Option<(LeaderHandler<'_, C>, Option<R>)>
+    pub(crate) fn get_leader_handler_or_reject<R>(
+        &mut self,
+        tx: Option<R>,
+    ) -> Option<(LeaderHandler<'_, C>, Option<R>)>
     where
         R: Responder<C, ClientWriteResult<C>>,
     {
@@ -695,8 +696,7 @@ where
 
 /// Supporting util
 impl<C> Engine<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Vote is granted by a quorum, leader established.
     #[tracing::instrument(level = "debug", skip_all)]
@@ -894,8 +894,7 @@ mod engine_testing {
     use crate::proposer::LeaderQuorumSet;
 
     impl<C> Engine<C>
-    where
-        C: RaftTypeConfig,
+    where C: RaftTypeConfig
     {
         /// Create a Leader state just for testing purpose only,
         /// without initializing related resource,

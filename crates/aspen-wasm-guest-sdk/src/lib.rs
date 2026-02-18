@@ -34,6 +34,9 @@
 //!
 //! aspen_wasm_guest_sdk::register_plugin!(Echo);
 //! ```
+//!
+//! The [`AspenPlugin`] trait also provides lifecycle hooks (`init`, `shutdown`, `health`)
+//! with default implementations.
 
 pub mod host;
 pub mod response;
@@ -43,7 +46,9 @@ pub use aspen_client_api::ClientRpcRequest;
 pub use aspen_client_api::ClientRpcResponse;
 pub use aspen_client_api::ErrorResponse;
 pub use aspen_client_api::ReadResultResponse;
+pub use aspen_plugin_api::PluginHealth;
 pub use aspen_plugin_api::PluginInfo;
+pub use aspen_plugin_api::PluginState;
 
 /// Trait that WASM plugin authors implement to handle requests.
 pub trait AspenPlugin {
@@ -52,6 +57,27 @@ pub trait AspenPlugin {
 
     /// Handle an incoming client RPC request and produce a response.
     fn handle(request: ClientRpcRequest) -> ClientRpcResponse;
+
+    /// Called once after the plugin is loaded. Perform initialization here.
+    ///
+    /// Return `Ok(())` to signal readiness, or `Err(message)` to indicate
+    /// initialization failure. The default implementation succeeds immediately.
+    fn init() -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Called when the plugin is being unloaded. Release resources here.
+    ///
+    /// The default implementation does nothing.
+    fn shutdown() {}
+
+    /// Called periodically by the host to check plugin health.
+    ///
+    /// Return `Ok(())` if the plugin is healthy, or `Err(message)` if it is
+    /// degraded. The default implementation always reports healthy.
+    fn health() -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// Register a plugin type by generating the `handle_request` and `plugin_info`
@@ -82,6 +108,38 @@ macro_rules! register_plugin {
         pub extern "C" fn plugin_info(_input: Vec<u8>) -> Vec<u8> {
             let info = <$plugin_type as $crate::AspenPlugin>::info();
             serde_json::to_vec(&info).unwrap_or_default()
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn plugin_init(_input: Vec<u8>) -> Vec<u8> {
+            match <$plugin_type as $crate::AspenPlugin>::init() {
+                Ok(()) => {
+                    // Return JSON: {"ok": true}
+                    serde_json::to_vec(&serde_json::json!({"ok": true})).unwrap_or_default()
+                }
+                Err(e) => {
+                    // Return JSON: {"ok": false, "error": "message"}
+                    serde_json::to_vec(&serde_json::json!({"ok": false, "error": e})).unwrap_or_default()
+                }
+            }
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn plugin_shutdown(_input: Vec<u8>) -> Vec<u8> {
+            <$plugin_type as $crate::AspenPlugin>::shutdown();
+            serde_json::to_vec(&serde_json::json!({"ok": true})).unwrap_or_default()
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn plugin_health(_input: Vec<u8>) -> Vec<u8> {
+            match <$plugin_type as $crate::AspenPlugin>::health() {
+                Ok(()) => {
+                    serde_json::to_vec(&serde_json::json!({"ok": true})).unwrap_or_default()
+                }
+                Err(e) => {
+                    serde_json::to_vec(&serde_json::json!({"ok": false, "error": e})).unwrap_or_default()
+                }
+            }
         }
     };
 }

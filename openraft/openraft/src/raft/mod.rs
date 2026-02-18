@@ -302,15 +302,13 @@ pub enum ReadPolicy {
 /// - [`RaftMetrics`] for monitoring cluster state
 #[derive(Clone)]
 pub struct Raft<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     inner: Arc<RaftInner<C>>,
 }
 
 impl<C> Debug for Raft<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Raft").field("id", &self.inner.id).finish()
@@ -364,8 +362,7 @@ async fn io_completion_forwarder<C>(
 }
 
 impl<C> Raft<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Create and spawn a new Raft task.
     ///
@@ -1144,9 +1141,7 @@ where
     /// ```
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn initialize<T>(&self, members: T) -> Result<(), RaftError<C, InitializeError<C>>>
-    where
-        T: IntoNodes<C::NodeId, C::Node> + Debug,
-    {
+    where T: IntoNodes<C::NodeId, C::Node> + Debug {
         self.management_api().initialize(members).await.into_raft_result()
     }
 
@@ -1209,9 +1204,7 @@ where
     /// - Raft core task is panicked due to programming error.
     /// - Raft core task is encountered a storage error.
     pub async fn external_request<F>(&self, req: F) -> Result<(), Fatal<C>>
-    where
-        F: FnOnce(&RaftState<C>) + OptionalSend + 'static,
-    {
+    where F: FnOnce(&RaftState<C>) + OptionalSend + 'static {
         let req: BoxOnce<'static, RaftState<C>> = Box::new(req);
         self.inner.send_msg(RaftMsg::ExternalCoreRequest { req }).await
     }

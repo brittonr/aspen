@@ -6,8 +6,7 @@ use crate::type_config::alias::LogIdOf;
 #[derive(Debug)]
 #[derive(PartialEq, Eq)]
 pub(crate) enum Replicate<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Inform the replication stream to forward the committed log id to followers/learners.
     Committed { committed: Option<LogIdOf<C>> },
@@ -17,8 +16,7 @@ where
 }
 
 impl<C> Replicate<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn logs(log_id_range: LogIdRange<C>, inflight_id: InflightId) -> Self {
         Self::Data {
@@ -57,8 +55,7 @@ use crate::progress::inflight_id::InflightId;
 ///   state.
 #[derive(PartialEq, Eq)]
 pub(crate) enum Data<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     Committed,
     Logs {
@@ -68,8 +65,7 @@ where
 }
 
 impl<C> fmt::Debug for Data<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -109,8 +105,7 @@ impl<C: RaftTypeConfig> fmt::Display for Data<C> {
 }
 
 impl<C> Data<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn new_committed() -> Self {
         Self::Committed

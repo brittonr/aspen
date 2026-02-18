@@ -33,8 +33,7 @@ use crate::vote::raft_vote::RaftVoteExt;
 #[derive(Clone, Debug)]
 #[derive(PartialEq, Eq)]
 pub(crate) struct Leader<C, QS: QuorumSet<C::NodeId>>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Whether this Leader is marked as transferring to another node.
     ///

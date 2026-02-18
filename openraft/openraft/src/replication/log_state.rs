@@ -6,8 +6,7 @@ use crate::RaftTypeConfig;
 #[derive(Clone, Debug)]
 #[derive(PartialEq, Eq)]
 pub(crate) struct LogState<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// The last known committed log id on a node.
     pub(crate) committed: Option<LogId<C>>,

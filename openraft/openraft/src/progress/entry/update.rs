@@ -8,16 +8,14 @@ use crate::type_config::alias::LogIdOf;
 
 /// It implements updating operations for a [`ProgressEntry`]
 pub(crate) struct Updater<'a, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     engine_config: &'a EngineConfig<C>,
     entry: &'a mut ProgressEntry<C>,
 }
 
 impl<'a, C> Updater<'a, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn new(engine_config: &'a EngineConfig<C>, entry: &'a mut ProgressEntry<C>) -> Self {
         Self { engine_config, entry }

@@ -36,8 +36,7 @@ where
 }
 
 impl<C> fmt::Debug for EntryPayload<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -53,8 +52,7 @@ where
 }
 
 impl<C> fmt::Display for EntryPayload<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -70,8 +68,7 @@ where
 }
 
 impl<C> EntryPayload<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub fn type_str(&self) -> &'static str {
         match self {
@@ -83,8 +80,7 @@ where
 }
 
 impl<C> RaftPayload<C> for EntryPayload<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn get_membership(&self) -> Option<Membership<C>> {
         if let EntryPayload::Membership(m) = self {

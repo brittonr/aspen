@@ -22,8 +22,7 @@ use crate::type_config::alias::LogIdOf;
 /// An active config is just the last seen config in raft spec.
 #[derive(Clone, Default, Eq)]
 pub struct EffectiveMembership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     stored_membership: Arc<StoredMembership<C>>,
 
@@ -35,8 +34,7 @@ where
 }
 
 impl<C> Debug for EffectiveMembership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("EffectiveMembership")
@@ -48,8 +46,7 @@ where
 }
 
 impl<C> PartialEq for EffectiveMembership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn eq(&self, other: &Self) -> bool {
         self.stored_membership == other.stored_membership && self.voter_ids == other.voter_ids
@@ -67,8 +64,7 @@ where
 }
 
 impl<C> EffectiveMembership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn new_arc(log_id: Option<LogIdOf<C>>, membership: Membership<C>) -> Arc<Self> {
         Arc::new(Self::new(log_id, membership))
@@ -114,8 +110,7 @@ where
 
 /// Membership API
 impl<C> EffectiveMembership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     #[allow(dead_code)]
     pub(crate) fn is_voter(&self, nid: &C::NodeId) -> bool {
@@ -152,8 +147,7 @@ where
 }
 
 impl<C> fmt::Display for EffectiveMembership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -167,8 +161,7 @@ where
 
 /// Implement node-id joint quorum set.
 impl<C> QuorumSet<C::NodeId> for EffectiveMembership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     type Iter = std::collections::btree_set::IntoIter<C::NodeId>;
 

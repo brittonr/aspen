@@ -16,8 +16,7 @@ use crate::vote::raft_vote::RaftVoteExt;
 #[derive(PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub(crate) struct UncommittedVote<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     leader_id: LeaderIdOf<C>,
 }
@@ -35,8 +34,7 @@ where
 }
 
 impl<C> UncommittedVote<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn new(leader_id: LeaderIdOf<C>) -> Self {
         Self { leader_id }
@@ -52,8 +50,7 @@ where
 }
 
 impl<C> RaftVote<C> for UncommittedVote<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn from_leader_id(_leader_id: C::LeaderId, _committed: bool) -> Self {
         unreachable!("NonCommittedVote should only be built from a Vote")
@@ -69,8 +66,7 @@ where
 }
 
 impl<C> fmt::Display for UncommittedVote<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.as_ref_vote().fmt(f)

@@ -10,8 +10,7 @@ use crate::type_config::alias::LogIdOf;
 ///
 /// See: [`log_pointers`](`crate::docs::data::log_pointers`).
 pub(crate) trait LogStateReader<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Get previous log id, i.e., the log id at index - 1
     fn prev_log_id(&self, index: u64) -> Option<LogIdOf<C>> {

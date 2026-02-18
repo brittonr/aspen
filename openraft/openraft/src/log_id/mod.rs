@@ -49,8 +49,7 @@ use crate::type_config::alias::CommittedLeaderIdOf;
 #[derive(Debug, Default, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub struct LogId<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// The id of the leader that proposed this log
     pub leader_id: CommittedLeaderIdOf<C>,
@@ -68,8 +67,7 @@ where
 }
 
 impl<C> RaftLogId<C> for LogId<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn new(leader_id: CommittedLeaderIdOf<C>, index: u64) -> Self {
         LogId { leader_id, index }
@@ -85,8 +83,7 @@ where
 }
 
 impl<C> Display for LogId<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}", self.committed_leader_id(), self.index())
@@ -94,8 +91,7 @@ where
 }
 
 impl<C> LogId<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Creates a log id proposed by a committed leader with `leader_id` at the given index.
     pub fn new(leader_id: CommittedLeaderIdOf<C>, index: u64) -> Self {

@@ -16,16 +16,14 @@ mod update_snapshot_test;
 
 /// Handle raft vote related operations
 pub(crate) struct SnapshotHandler<'st, 'out, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) state: &'st mut RaftState<C>,
     pub(crate) output: &'out mut EngineOutput<C>,
 }
 
 impl<C> SnapshotHandler<'_, '_, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Trigger building a snapshot if there is no pending building job.
     #[tracing::instrument(level = "debug", skip_all)]

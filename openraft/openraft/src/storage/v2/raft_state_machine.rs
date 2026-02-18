@@ -28,8 +28,7 @@ use crate::type_config::alias::LogIdOf;
 /// See: [`StateMachine`](crate::docs::components::state_machine)
 #[add_async_trait]
 pub trait RaftStateMachine<C>: OptionalSend + OptionalSync + 'static
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Snapshot builder type.
     type SnapshotBuilder: RaftSnapshotBuilder<C>;
@@ -87,8 +86,7 @@ where
     /// [`RaftLogStorage::save_committed()`]: crate::storage::RaftLogStorage::save_committed
     #[since(version = "0.10.0", change = "Entry-Responder-Result stream")]
     async fn apply<Strm>(&mut self, entries: Strm) -> Result<(), io::Error>
-    where
-        Strm: Stream<Item = Result<EntryResponder<C>, io::Error>> + Unpin + OptionalSend;
+    where Strm: Stream<Item = Result<EntryResponder<C>, io::Error>> + Unpin + OptionalSend;
 
     /// Try to create a snapshot builder for the state machine.
     ///

@@ -46,8 +46,7 @@ impl<C: RaftTypeConfig> fmt::Debug for AppendEntriesRequest<C> {
 }
 
 impl<C> fmt::Display for AppendEntriesRequest<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -107,8 +106,7 @@ pub enum AppendEntriesResponse<C: RaftTypeConfig> {
 }
 
 impl<C> AppendEntriesResponse<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Returns true if the response indicates a successful replication.
     pub fn is_success(&self) -> bool {
@@ -140,8 +138,7 @@ where
 }
 
 impl<C> fmt::Display for AppendEntriesResponse<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

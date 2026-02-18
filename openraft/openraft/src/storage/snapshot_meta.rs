@@ -15,8 +15,7 @@ use crate::type_config::alias::LogIdOf;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub struct SnapshotMeta<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Log entries up to which this snapshot includes, inclusive.
     pub last_log_id: Option<LogIdOf<C>>,
@@ -31,8 +30,7 @@ where
 }
 
 impl<C> fmt::Display for SnapshotMeta<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -46,8 +44,7 @@ where
 }
 
 impl<C> SnapshotMeta<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Get the signature of this snapshot metadata for comparison and identification.
     pub fn signature(&self) -> SnapshotSignature<C> {

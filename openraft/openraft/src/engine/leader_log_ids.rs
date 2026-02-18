@@ -11,8 +11,7 @@ pub(crate) struct LeaderLogIds<C: RaftTypeConfig> {
 }
 
 impl<C> fmt::Display for LeaderLogIds<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.log_id_range {
@@ -23,8 +22,7 @@ where
 }
 
 impl<C> LeaderLogIds<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn new(log_id_range: Option<RangeInclusive<LogIdOf<C>>>) -> Self {
         Self { log_id_range }

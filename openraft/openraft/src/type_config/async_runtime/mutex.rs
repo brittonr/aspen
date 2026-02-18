@@ -10,8 +10,7 @@ use crate::OptionalSync;
 pub trait Mutex<T: OptionalSend + 'static>: OptionalSend + OptionalSync {
     /// Handle to an acquired lock, should release it when dropped.
     type Guard<'a>: DerefMut<Target = T> + OptionalSend
-    where
-        Self: 'a;
+    where Self: 'a;
 
     /// Creates a new lock.
     fn new(value: T) -> Self;

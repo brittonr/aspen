@@ -29,16 +29,14 @@ use crate::raft::linearizable_read::LinearizeState;
 #[must_use = "call `try_await_ready()` to ensure linearizability"]
 #[derive(Debug, Clone)]
 pub struct Linearizer<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// The state containing the read log ID and last applied log ID for linearizable reads.
     state: LinearizeState<C>,
 }
 
 impl<C> Deref for Linearizer<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     type Target = LinearizeState<C>;
 
@@ -48,8 +46,7 @@ where
 }
 
 impl<C> Linearizer<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     #[since(version = "0.10.0")]
     pub fn new(node_id: C::NodeId, read_log_id: LogId<C>, applied: Option<LogId<C>>) -> Self {

@@ -42,8 +42,7 @@ mod tokio_rt {
 
     /// This chunk-based implementation requires `SnapshotData` to be `AsyncRead + AsyncSeek`.
     impl<C: RaftTypeConfig> SnapshotTransport<C> for Chunked
-    where
-        C::SnapshotData: tokio::io::AsyncRead + tokio::io::AsyncWrite + tokio::io::AsyncSeek + Unpin,
+    where C::SnapshotData: tokio::io::AsyncRead + tokio::io::AsyncWrite + tokio::io::AsyncSeek + Unpin
     {
         async fn send_snapshot<Net>(
             net: &mut Net,
@@ -340,8 +339,7 @@ pub trait SnapshotTransport<C: RaftTypeConfig> {
 /// The Raft node is streaming in a snapshot from the leader.
 #[since(version = "0.10.0", change = "SnapshotData without Box")]
 pub struct Streaming<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// The offset of the last byte written to the snapshot.
     #[cfg_attr(not(feature = "tokio-rt"), allow(dead_code))]
@@ -356,8 +354,7 @@ where
 }
 
 impl<C> Streaming<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     #[since(version = "0.10.0", change = "SnapshotData without Box")]
     pub fn new(snapshot_id: SnapshotId, snapshot_data: C::SnapshotData) -> Self {
@@ -411,8 +408,7 @@ mod tests {
     }
 
     impl<C> RaftNetwork<C> for Network
-    where
-        C: RaftTypeConfig<NodeId = u64>,
+    where C: RaftTypeConfig<NodeId = u64>
     {
         async fn append_entries(
             &mut self,

@@ -18,8 +18,7 @@ use crate::vote::committed::CommittedVote;
 #[derive(PartialEq, Eq)]
 #[derive(PartialOrd, Ord)]
 pub(crate) struct LogIOId<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// The id of the leader that performs the log io operation.
     pub(crate) committed_vote: CommittedVote<C>,
@@ -29,8 +28,7 @@ where
 }
 
 impl<C> fmt::Display for LogIOId<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "by:{}, {}", self.committed_vote, self.log_id.display())
@@ -38,8 +36,7 @@ where
 }
 
 impl<C> LogIOId<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn new(committed_vote: CommittedVote<C>, log_id: Option<LogIdOf<C>>) -> Self {
         Self { committed_vote, log_id }

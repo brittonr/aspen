@@ -27,8 +27,7 @@ use crate::raft::VoteResponse;
 /// [correct-node]: `crate::docs::cluster_control::dynamic_membership#ensure-connection-to-the-correct-node`
 #[add_async_trait]
 pub trait RaftNetwork<C>: OptionalSend + OptionalSync + 'static
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Send an AppendEntries RPC to the target.
     ///

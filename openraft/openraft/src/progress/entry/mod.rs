@@ -22,8 +22,7 @@ use crate::type_config::alias::LogIdOf;
 #[derive(Clone, Debug)]
 #[derive(PartialEq, Eq)]
 pub(crate) struct ProgressEntry<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// The id of the last matching log on the target following node.
     pub(crate) matching: Option<LogIdOf<C>>,
@@ -47,8 +46,7 @@ where
 }
 
 impl<C> ProgressEntry<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     #[allow(dead_code)]
     pub(crate) fn new(matching: Option<LogIdOf<C>>) -> Self {
@@ -184,8 +182,7 @@ where
 }
 
 impl<C> Borrow<Option<LogIdOf<C>>> for ProgressEntry<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn borrow(&self) -> &Option<LogIdOf<C>> {
         &self.matching
@@ -193,8 +190,7 @@ where
 }
 
 impl<C> Display for ProgressEntry<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -208,8 +204,7 @@ where
 }
 
 impl<C> Validate for ProgressEntry<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn validate(&self) -> Result<(), Box<dyn Error>> {
         validit::less_equal!(self.matching().next_index(), self.searching_end);

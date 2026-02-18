@@ -30,8 +30,7 @@ pub struct ClientWriteResponse<C: RaftTypeConfig> {
 }
 
 impl<C> ClientWriteResponse<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Create a new instance of `ClientWriteResponse`.
     #[allow(dead_code)]
@@ -62,8 +61,7 @@ where
 }
 
 impl<C: RaftTypeConfig> Debug for ClientWriteResponse<C>
-where
-    C::R: Debug,
+where C::R: Debug
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ClientWriteResponse")
@@ -75,8 +73,7 @@ where
 }
 
 impl<C> fmt::Display for ClientWriteResponse<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

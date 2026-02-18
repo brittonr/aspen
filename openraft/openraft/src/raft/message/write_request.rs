@@ -38,8 +38,7 @@ use crate::type_config::alias::WriteResponderOf;
 /// [`.responder()`]: WriteRequest::responder
 #[since(version = "0.10.0")]
 pub struct WriteRequest<'a, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(in crate::raft) inner: &'a RaftInner<C>,
     pub(in crate::raft) app_data: C::D,
@@ -48,8 +47,7 @@ where
 }
 
 impl<'a, C> WriteRequest<'a, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Attach a responder to receive the write result.
     ///
@@ -129,8 +127,7 @@ where
 }
 
 impl<'a, C> IntoFuture for WriteRequest<'a, C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     type Output = Result<(), Fatal<C>>;
     type IntoFuture = BoxFuture<'a, Self::Output>;

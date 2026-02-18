@@ -3245,6 +3245,19 @@ pub enum ClientRpcRequest {
         /// Processing time in milliseconds.
         processing_time_ms: u64,
     },
+
+    // =========================================================================
+    // Plugin management operations
+    // =========================================================================
+    /// Reload WASM plugins.
+    ///
+    /// When `name` is `Some`, reloads a single plugin. When `None`, reloads
+    /// all WASM plugins. Triggers shutdown of old plugin instances, re-scans
+    /// KV store for manifests, and atomically swaps the handler list.
+    PluginReload {
+        /// Plugin name to reload, or `None` to reload all.
+        name: Option<String>,
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -3573,6 +3586,7 @@ impl ClientRpcRequest {
             Self::WorkerStatus => "WorkerStatus",
             Self::WriteKey { .. } => "WriteKey",
             Self::WriteKeyWithLease { .. } => "WriteKeyWithLease",
+            Self::PluginReload { .. } => "PluginReload",
         }
     }
 }
@@ -3624,7 +3638,8 @@ impl ClientRpcRequest {
             | Self::LeaseKeepalive { .. }
             | Self::LeaseTimeToLive { .. }
             | Self::LeaseList
-            | Self::WriteKeyWithLease { .. } => None,
+            | Self::WriteKeyWithLease { .. }
+            | Self::PluginReload { .. } => None,
 
             // Coordination primitives
             Self::LockAcquire { .. }
@@ -4652,6 +4667,22 @@ pub enum ClientRpcResponse {
     /// Automerge receive sync message result.
     #[cfg(feature = "automerge")]
     AutomergeReceiveSyncMessageResult(AutomergeReceiveSyncMessageResultResponse),
+
+    /// Plugin reload result.
+    PluginReloadResult(PluginReloadResultResponse),
+}
+
+/// Result of a plugin reload operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginReloadResultResponse {
+    /// Whether the reload succeeded.
+    pub is_success: bool,
+    /// Number of plugins loaded after reload.
+    pub plugin_count: u32,
+    /// Error message if reload failed.
+    pub error: Option<String>,
+    /// Human-readable message.
+    pub message: String,
 }
 
 impl ClientRpcResponse {

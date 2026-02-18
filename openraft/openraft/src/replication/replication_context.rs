@@ -12,8 +12,7 @@ use crate::type_config::alias::MpscSenderOf;
 /// and snapshot transmission (`SnapshotTransmitter`) tasks, including node identifiers,
 /// session information, configuration, and the notification channel back to `RaftCore`.
 pub(crate) struct ReplicationContext<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// This node id
     #[allow(dead_code)]

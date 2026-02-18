@@ -23,8 +23,7 @@ use crate::type_config::async_runtime::oneshot::OneshotSender;
 
 /// Emit RaftMsg::Tick event at regular `interval`.
 pub(crate) struct Tick<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     interval: Duration,
 
@@ -35,8 +34,7 @@ where
 }
 
 pub(crate) struct TickHandle<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     enabled: Arc<AtomicBool>,
     shutdown: Mutex<Option<OneshotSenderOf<C, ()>>>,
@@ -44,8 +42,7 @@ where
 }
 
 impl<C> Drop for TickHandle<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Signal the tick loop to stop, without waiting for it to stop.
     fn drop(&mut self) {
@@ -57,8 +54,7 @@ where
 }
 
 impl<C> Tick<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn spawn(interval: Duration, tx: MpscSenderOf<C, Notification<C>>, enabled: bool) -> TickHandle<C> {
         let enabled = Arc::new(AtomicBool::from(enabled));
@@ -123,8 +119,7 @@ where
 }
 
 impl<C> TickHandle<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn enable(&self, enabled: bool) {
         self.enabled.store(enabled, Ordering::Relaxed);
@@ -187,8 +182,7 @@ mod tests {
         type AsyncRuntime = TokioRuntime;
         type Responder<T>
             = crate::impls::OneshotResponder<Self, T>
-        where
-            T: OptionalSend + 'static;
+        where T: OptionalSend + 'static;
     }
 
     #[tokio::test]

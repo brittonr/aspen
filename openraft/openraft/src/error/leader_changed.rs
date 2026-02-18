@@ -12,8 +12,7 @@ use crate::type_config::alias::VoteOf;
 /// that the cluster has moved to a different leader or candidate (indicated by a newer vote).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub struct LeaderChanged<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// The expected established leader ID.
     pub expected_leader: LeaderIdOf<C>,
@@ -23,8 +22,7 @@ where
 }
 
 impl<C> fmt::Display for LeaderChanged<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
@@ -37,8 +35,7 @@ where
 }
 
 impl<C> LeaderChanged<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Create a new LeaderChanged error.
     pub fn new(expected_leader: LeaderIdOf<C>, current_vote: Option<VoteOf<C>>) -> Self {

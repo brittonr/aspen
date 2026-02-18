@@ -17,8 +17,7 @@ pub struct VoteRequest<C: RaftTypeConfig> {
 }
 
 impl<C> fmt::Display for VoteRequest<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{{vote:{}, last_log:{}}}", self.vote, self.last_log_id.display(),)
@@ -26,8 +25,7 @@ where
 }
 
 impl<C> VoteRequest<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Create a new vote request.
     pub fn new(vote: VoteOf<C>, last_log_id: Option<LogIdOf<C>>) -> Self {
@@ -54,8 +52,7 @@ pub struct VoteResponse<C: RaftTypeConfig> {
 }
 
 impl<C> VoteResponse<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Create a new vote response.
     pub fn new(vote: impl Borrow<VoteOf<C>>, last_log_id: Option<LogIdOf<C>>, granted: bool) -> Self {
@@ -74,8 +71,7 @@ where
 }
 
 impl<C> fmt::Display for VoteResponse<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

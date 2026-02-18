@@ -6,8 +6,7 @@ use crate::type_config::alias::LogIdOf;
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub struct SnapshotSignature<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Log entries up to which this snapshot includes, inclusive.
     pub last_log_id: Option<LogIdOf<C>>,

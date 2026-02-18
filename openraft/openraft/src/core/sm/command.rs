@@ -15,8 +15,7 @@ use crate::type_config::alias::SnapshotDataOf;
 
 /// The payload of a state machine command.
 pub(crate) enum Command<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Instruct the state machine to create a snapshot based on its most recent view.
     BuildSnapshot,
@@ -67,8 +66,7 @@ where
 }
 
 impl<C> Command<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(crate) fn build_snapshot() -> Self {
         Command::BuildSnapshot
@@ -150,8 +148,7 @@ where
 }
 
 impl<C> Debug for Command<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -173,8 +170,7 @@ where
 }
 
 impl<C> fmt::Display for Command<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -197,8 +193,7 @@ where
 
 // `PartialEq` is only used for testing
 impl<C> PartialEq for Command<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {

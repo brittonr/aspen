@@ -7,8 +7,7 @@ use crate::error::QuorumNotEnough;
 #[derive(Debug, Clone, thiserror::Error, derive_more::TryInto)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub enum LinearizableReadError<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// This node is not the leader; request should be forwarded to the leader.
     #[error(transparent)]
@@ -20,8 +19,7 @@ where
 }
 
 impl<C> TryAsRef<ForwardToLeader<C>> for LinearizableReadError<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn try_as_ref(&self) -> Option<&ForwardToLeader<C>> {
         match self {

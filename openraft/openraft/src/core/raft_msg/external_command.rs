@@ -53,8 +53,7 @@ pub(crate) enum ExternalCommand<C: RaftTypeConfig> {
 }
 
 impl<C> fmt::Debug for ExternalCommand<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self, f)
@@ -62,8 +61,7 @@ where
 }
 
 impl<C> fmt::Display for ExternalCommand<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

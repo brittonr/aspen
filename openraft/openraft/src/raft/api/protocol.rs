@@ -63,15 +63,13 @@ use crate::vote::raft_vote::RaftVoteExt;
 /// ```
 #[since(version = "0.10.0")]
 pub(crate) struct ProtocolApi<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     inner: Arc<RaftInner<C>>,
 }
 
 impl<C> ProtocolApi<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     pub(in crate::raft) fn new(inner: Arc<RaftInner<C>>) -> Self {
         Self { inner }

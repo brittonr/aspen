@@ -7,16 +7,14 @@ use crate::metrics::metric_display::MetricDisplay;
 /// A condition that the application wait for.
 #[derive(Debug)]
 pub(crate) enum Condition<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     GE(Metric<C>),
     EQ(Metric<C>),
 }
 
 impl<C> Condition<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Build a new condition which the application will await to meet or exceed.
     pub(crate) fn ge(v: Metric<C>) -> Self {
@@ -51,8 +49,7 @@ where
 }
 
 impl<C> fmt::Display for Condition<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}{}{}", self.name(), self.op(), self.value())

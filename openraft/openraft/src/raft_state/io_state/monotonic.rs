@@ -5,15 +5,13 @@ use std::fmt;
 /// Updates are rejected if the new value is not greater than the current value.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub(crate) struct MonotonicIncrease<T>
-where
-    T: PartialOrd + fmt::Debug,
+where T: PartialOrd + fmt::Debug
 {
     value: Option<T>,
 }
 
 impl<T> MonotonicIncrease<T>
-where
-    T: PartialOrd + fmt::Debug,
+where T: PartialOrd + fmt::Debug
 {
     /// Creates a new monotonic container with an optional initial value.
     #[allow(dead_code)]
@@ -54,8 +52,7 @@ where
 }
 
 impl<T> Default for MonotonicIncrease<T>
-where
-    T: PartialOrd + fmt::Debug,
+where T: PartialOrd + fmt::Debug
 {
     fn default() -> Self {
         Self { value: None }

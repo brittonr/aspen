@@ -104,13 +104,10 @@ fn test_follower_do_append_entries_one_membership_entry() -> anyhow::Result<()> 
     eng.config.id = 2; // make it a member, the become learner
     eng.state.vote = Leased::without_last_update(Vote::new_committed(1, 1));
 
-    eng.following_handler().do_append_entries(vec![
-        blank_ent(3, 1, 4),
-        Entry::<UTConfig> {
-            log_id: log_id(3, 1, 5),
-            payload: EntryPayload::<UTConfig>::Membership(m34()),
-        },
-    ]);
+    eng.following_handler().do_append_entries(vec![blank_ent(3, 1, 4), Entry::<UTConfig> {
+        log_id: log_id(3, 1, 5),
+        payload: EntryPayload::<UTConfig>::Membership(m34()),
+    }]);
 
     assert_eq!(
         &[

@@ -22,8 +22,7 @@ use crate::quorum::QuorumSet;
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub struct Membership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Multi configs of members.
     ///
@@ -37,8 +36,7 @@ where
 }
 
 impl<C> Default for Membership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn default() -> Self {
         Membership {
@@ -49,8 +47,7 @@ where
 }
 
 impl<C> From<BTreeMap<C::NodeId, C::Node>> for Membership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn from(b: BTreeMap<C::NodeId, C::Node>) -> Self {
         let member_ids = b.keys().cloned().collect::<BTreeSet<C::NodeId>>();
@@ -59,8 +56,7 @@ where
 }
 
 impl<C> fmt::Display for Membership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{{voters:[",)?;
@@ -111,8 +107,7 @@ where
 
 // Public APIs
 impl<C> Membership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Create a new Membership from a joint config of voter-ids and a collection of all
     /// `Node` (voter nodes and learner nodes).
@@ -124,9 +119,7 @@ where
     /// The `nodes` implements [`IntoNodes`] thus it can be `BTreeMap<NodeId, Node>` or
     /// `HashMap<NodeId,Node>` including all Voter and Learner nodes.
     pub fn new<T>(config: Vec<BTreeSet<C::NodeId>>, nodes: T) -> Result<Self, MembershipError<C>>
-    where
-        T: IntoNodes<C::NodeId, C::Node>,
-    {
+    where T: IntoNodes<C::NodeId, C::Node> {
         let m = Membership {
             configs: config,
             nodes: nodes.into_nodes(),
@@ -193,8 +186,7 @@ where
 }
 
 impl<C> Membership<C>
-where
-    C: RaftTypeConfig,
+where C: RaftTypeConfig
 {
     /// Return true if the given node id is either a voter or a learner.
     pub(crate) fn contains(&self, node_id: &C::NodeId) -> bool {
@@ -215,9 +207,7 @@ where
     /// value `Node::default()` if a voter id is not in `nodes`. Thus, it may create an invalid
     /// instance.
     pub(crate) fn new_unchecked<T>(configs: Vec<BTreeSet<C::NodeId>>, nodes: T) -> Self
-    where
-        T: IntoNodes<C::NodeId, C::Node>,
-    {
+    where T: IntoNodes<C::NodeId, C::Node> {
         let nodes = nodes.into_nodes();
         Membership { configs, nodes }
     }
@@ -661,23 +651,17 @@ mod tests {
 
         let step1 = m().change(rm_2_add_5(), false)?;
 
-        assert_eq!(
-            step1,
-            Membership::<UTConfig> {
-                configs: vec![btreeset! {1,2}, btreeset! {1,5}],
-                nodes: btreemap! {1=>(),2=>(),3=>(),5=>()}
-            }
-        );
+        assert_eq!(step1, Membership::<UTConfig> {
+            configs: vec![btreeset! {1,2}, btreeset! {1,5}],
+            nodes: btreemap! {1=>(),2=>(),3=>(),5=>()}
+        });
 
         let step2 = step1.change(rm_2_add_5(), false)?;
 
-        assert_eq!(
-            step2,
-            Membership::<UTConfig> {
-                configs: vec![btreeset! {1,5}],
-                nodes: btreemap! {1=>(),3=>(), 5=>()}
-            }
-        );
+        assert_eq!(step2, Membership::<UTConfig> {
+            configs: vec![btreeset! {1,5}],
+            nodes: btreemap! {1=>(),3=>(), 5=>()}
+        });
 
         Ok(())
     }

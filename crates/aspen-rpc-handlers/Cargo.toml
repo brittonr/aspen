@@ -49,6 +49,9 @@ aspen-automerge-handler = { path = "../aspen-automerge-handler", optional = true
 aspen-nix-cache-gateway = { path = "../aspen-nix-cache-gateway", optional = true }
 aspen-wasm-plugin = { path = "../aspen-wasm-plugin", optional = true }
 
+# Atomic pointer swap for hot-reload of plugin handlers
+arc-swap = "1.8"
+
 # Core dependencies
 tokio = { version = "1.0", features = ["rt-multi-thread", "sync", "macros"] }
 tracing = "0.1"
