@@ -8,6 +8,7 @@ license = "AGPL-3.0-or-later"
 [dependencies]
 # Core dependencies (always required)
 aspen-client-api = { workspace = true }
+aspen-constants = { path = "../aspen-constants" }
 aspen-core = { path = "../aspen-core" }
 aspen-auth = { path = "../aspen-auth" }
 aspen-hooks-types = { path = "../aspen-hooks-types" }
@@ -22,6 +23,7 @@ tokio = { version = "1.0", features = ["sync"] }
 async-trait = "0.1"
 anyhow = "1.0"
 tracing = "0.1"
+serde = { workspace = true }
 
 # Plugin registration
 inventory = "0.3"

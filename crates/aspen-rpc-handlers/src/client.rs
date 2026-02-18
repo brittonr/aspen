@@ -346,13 +346,13 @@ async fn handle_client_request(
 
     // Read and parse the request
     let buffer = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read Client request")?;
-    let (request, token): (ClientRpcRequest, Option<aspen_auth::CapabilityToken>) =
+    let (request, token, proxy_hops): (ClientRpcRequest, Option<aspen_auth::CapabilityToken>, u8) =
         match postcard::from_bytes::<AuthenticatedRequest>(&buffer) {
-            Ok(auth_req) => (auth_req.request, auth_req.token),
+            Ok(auth_req) => (auth_req.request, auth_req.token, auth_req.proxy_hops),
             Err(_) => {
                 let req: ClientRpcRequest =
                     postcard::from_bytes(&buffer).context("failed to deserialize Client request")?;
-                (req, None)
+                (req, None, 0)
             }
         };
 
@@ -383,7 +383,7 @@ async fn handle_client_request(
     }
 
     // Process the request through the handler registry
-    let response = match registry.dispatch(request, &ctx).await {
+    let response = match registry.dispatch(request, &ctx, proxy_hops).await {
         Ok(resp) => resp,
         Err(err) => {
             warn!(error = %err, "Client request processing failed");

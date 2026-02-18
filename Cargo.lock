@@ -2114,6 +2114,7 @@ dependencies = [
  "aspen-ci",
  "aspen-client-api",
  "aspen-cluster",
+ "aspen-constants",
  "aspen-coordination",
  "aspen-core",
  "aspen-forge",
@@ -2129,6 +2130,7 @@ dependencies = [
  "async-trait",
  "inventory",
  "iroh",
+ "serde",
  "tokio",
  "tracing",
 ]

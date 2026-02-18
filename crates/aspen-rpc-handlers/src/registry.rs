@@ -21,8 +21,10 @@ pub use aspen_rpc_core::RequestHandler;
 pub use aspen_rpc_core::collect_handler_factories;
 use tracing::debug;
 use tracing::trace;
+use tracing::warn;
 
 use crate::context::ClientProtocolContext;
+use crate::proxy::ProxyService;
 
 /// Registry of request handlers.
 ///
@@ -39,6 +41,7 @@ use crate::context::ClientProtocolContext;
 #[derive(Clone)]
 pub struct HandlerRegistry {
     handlers: Arc<Vec<Arc<dyn RequestHandler>>>,
+    proxy_service: Option<Arc<ProxyService>>,
 }
 
 impl HandlerRegistry {
@@ -85,10 +88,22 @@ impl HandlerRegistry {
 
         Self {
             handlers: Arc::new(handlers),
+            proxy_service: None,
         }
     }
 
+    /// Set the proxy service for cross-cluster request forwarding.
+    ///
+    /// Must be called after construction and before the registry is cloned/shared.
+    pub fn with_proxy_service(&mut self, service: Arc<ProxyService>) {
+        self.proxy_service = Some(service);
+    }
+
     /// Dispatch a request to the appropriate handler.
+    ///
+    /// `proxy_hops` tracks how many times this request has been proxied across
+    /// clusters. Pass 0 for direct client requests. The value is extracted from
+    /// `AuthenticatedRequest.proxy_hops` by the client protocol handler.
     ///
     /// # Errors
     ///
@@ -97,6 +112,7 @@ impl HandlerRegistry {
         &self,
         request: ClientRpcRequest,
         ctx: &ClientProtocolContext,
+        proxy_hops: u8,
     ) -> anyhow::Result<ClientRpcResponse> {
         for handler in self.handlers.iter() {
             if handler.can_handle(&request) {
@@ -111,6 +127,22 @@ impl HandlerRegistry {
 
         // No handler found - check if this is an optional app request
         if let Some(app_id) = request.required_app() {
+            // Try proxying if enabled and we have a proxy service
+            if ctx.proxy_config.enabled {
+                if let Some(ref proxy_service) = self.proxy_service {
+                    match proxy_service.proxy_request(request.clone(), app_id, proxy_hops, ctx).await {
+                        Ok(Some(response)) => return Ok(response),
+                        Ok(None) => {
+                            // Fall through to CapabilityUnavailable
+                        }
+                        Err(e) => {
+                            warn!(app = app_id, error = %e, "proxy attempt failed");
+                            // Fall through to CapabilityUnavailable
+                        }
+                    }
+                }
+            }
+
             // Build hints from federation discovery if available
             let hints = {
                 #[cfg(all(feature = "forge", feature = "global-discovery"))]
@@ -229,6 +261,7 @@ mod tests {
     fn empty_registry() -> HandlerRegistry {
         HandlerRegistry {
             handlers: Arc::new(Vec::new()),
+            proxy_service: None,
         }
     }
 
@@ -269,7 +302,7 @@ mod tests {
             default_branch: None,
         };
 
-        let response = registry.dispatch(request, &ctx).await.expect("dispatch should not error");
+        let response = registry.dispatch(request, &ctx, 0).await.expect("dispatch should not error");
         match response {
             ClientRpcResponse::CapabilityUnavailable(ref cap) => {
                 assert_eq!(cap.required_app, "forge");
@@ -290,7 +323,7 @@ mod tests {
         let registry = empty_registry();
         let request = ClientRpcRequest::Ping;
 
-        let result = registry.dispatch(request, &ctx).await;
+        let result = registry.dispatch(request, &ctx, 0).await;
         assert!(result.is_err(), "core request with no handler should return Err, not CapabilityUnavailable");
     }
 
@@ -328,7 +361,7 @@ mod tests {
         let handler: Arc<dyn RequestHandler> = Arc::new(PingHandler);
         registry.add_handlers(vec![(handler, 100)]);
 
-        let response = registry.dispatch(ClientRpcRequest::Ping, &ctx).await.expect("dispatch should succeed");
+        let response = registry.dispatch(ClientRpcRequest::Ping, &ctx, 0).await.expect("dispatch should succeed");
         assert!(matches!(response, ClientRpcResponse::Pong), "expected Pong response");
     }
 
@@ -337,6 +370,7 @@ mod tests {
         let existing: Arc<dyn RequestHandler> = Arc::new(TestHandler { name: "existing" });
         let mut registry = HandlerRegistry {
             handlers: Arc::new(vec![existing]),
+            proxy_service: None,
         };
 
         let new_handler: Arc<dyn RequestHandler> = Arc::new(TestHandler { name: "new" });

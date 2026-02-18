@@ -301,7 +301,7 @@ fn draw_worker_list(frame: &mut Frame, app: &App, area: Rect) {
                 Span::styled(&worker.worker_id[..worker.worker_id.len().min(12)], style),
                 Span::raw(" "),
                 Span::styled(&worker.status, Style::default().fg(status_color)),
-                Span::raw(format!(" ({}/{})", worker.active_jobs, worker.capacity)),
+                Span::raw(format!(" ({}/{})", worker.active_jobs, worker.capacity_jobs)),
                 Span::raw(format!(" [{}]", worker.capabilities.join(","))),
             ]))
         })
@@ -330,7 +330,7 @@ fn draw_worker_details(frame: &mut Frame, app: &App, area: Rect) {
                 ]),
                 Line::from(vec![
                     Span::styled("Capacity: ", Style::default().add_modifier(Modifier::BOLD)),
-                    Span::raw(format!("{} (using {})", worker.capacity, worker.active_jobs)),
+                    Span::raw(format!("{} (using {})", worker.capacity_jobs, worker.active_jobs)),
                 ]),
                 Line::from(vec![
                     Span::styled("Capabilities: ", Style::default().add_modifier(Modifier::BOLD)),

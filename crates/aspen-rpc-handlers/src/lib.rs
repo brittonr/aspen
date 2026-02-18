@@ -43,6 +43,7 @@ pub mod client;
 pub mod context;
 pub mod error_sanitization;
 pub mod handlers;
+pub mod proxy;
 pub mod registry;
 /// Verified pure functions for RPC handler logic.
 pub mod verified;
@@ -60,6 +61,7 @@ pub use client::ClientProtocolHandler;
 pub use context::ClientProtocolContext;
 // Re-export all handlers
 pub use handlers::*;
+pub use proxy::ProxyService;
 pub use registry::HandlerFactory;
 pub use registry::HandlerRegistry;
 pub use registry::RequestHandler;

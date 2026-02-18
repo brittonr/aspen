@@ -546,6 +546,7 @@ impl Node {
             #[cfg(feature = "nix-cache-gateway")]
             nix_cache_signer: None,
             app_registry: aspen_core::shared_registry(),
+            proxy_config: aspen_rpc_handlers::aspen_rpc_core::ProxyConfig::default(),
         }
     }
 

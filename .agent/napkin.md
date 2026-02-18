@@ -2,8 +2,9 @@
 
 ## Corrections
 
-| Date   | Source | What Went Wrong    | What To Do Instead |
-|--------|--------|--------------------|--------------------|
+| Date | Source | What Went Wrong | What To Do Instead |
+|------|--------|----------------|-------------------|
+| 2026-02-18 | self | Told user Phase 2 (Capability Advertisement) wasn't done, but it was fully implemented | Check actual code before assessing roadmap status — grep for types/functions mentioned in the plan |
 
 ## User Preferences
 
@@ -41,6 +42,10 @@
 - Empty `kv_prefixes` in manifest → auto-scoped to `__plugin:{name}:` via `with_kv_prefixes()`
 - CLI `plugin install` supports `--kv-prefixes` flag and reads from plugin.json manifest
 - Echo plugin example is at `examples/plugins/echo-plugin/`
+- Phase 2 (Capability Advertisement) is fully implemented: AppManifest, AppRegistry, ClusterAnnouncement, required_app(), CapabilityUnavailable, handler app_id(), federation discovery
+- Phase 4 (Cross-Cluster Proxying) added: ProxyConfig, ProxyService, proxy_hops on AuthenticatedRequest, dispatch tries proxy before CapabilityUnavailable
+- `HandlerRegistry::dispatch()` takes 3 args: (request, ctx, proxy_hops)
+- Federation discovery is behind `#[cfg(all(feature = "forge", feature = "global-discovery"))]`
 - All plugin crates have `plugin_info_matches_manifest` tests that check code ↔ plugin.json consistency
 - Pre-existing: `aspen-constants` has a broken doctest (renamed `CONNECT_TIMEOUT_SECS` → `IROH_CONNECT_TIMEOUT_SECS`)
 - Pre-existing: `aspen-cli` has unresolved `aspen_forge` import errors (unrelated to plugins)

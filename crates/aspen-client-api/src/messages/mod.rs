@@ -411,6 +411,12 @@ pub struct AuthenticatedRequest {
     pub request: ClientRpcRequest,
     /// Capability token for authorization (optional during migration).
     pub token: Option<aspen_auth::CapabilityToken>,
+    /// Number of proxy hops this request has taken.
+    ///
+    /// Incremented each time the request is forwarded to another cluster.
+    /// Used for loop detection and hop limiting (max MAX_PROXY_HOPS).
+    #[serde(default)]
+    pub proxy_hops: u8,
 }
 
 #[cfg(feature = "auth")]
@@ -420,12 +426,30 @@ impl AuthenticatedRequest {
         Self {
             request,
             token: Some(token),
+            proxy_hops: 0,
         }
     }
 
     /// Create an unauthenticated request (legacy compatibility).
     pub fn unauthenticated(request: ClientRpcRequest) -> Self {
-        Self { request, token: None }
+        Self {
+            request,
+            token: None,
+            proxy_hops: 0,
+        }
+    }
+
+    /// Create a request with a specific hop count (used by proxy service).
+    pub fn with_proxy_hops(
+        request: ClientRpcRequest,
+        token: Option<aspen_auth::CapabilityToken>,
+        proxy_hops: u8,
+    ) -> Self {
+        Self {
+            request,
+            token,
+            proxy_hops,
+        }
     }
 }
 

@@ -21,6 +21,8 @@ use aspen_core::WatchRegistry;
 use aspen_raft::StateMachineVariant;
 use aspen_sharding::ShardTopology;
 
+use crate::proxy::ProxyConfig;
+
 /// Context for Client protocol handler with all dependencies.
 ///
 /// This struct contains all the services and configuration needed by RPC handlers.
@@ -133,6 +135,10 @@ pub struct ClientProtocolContext {
     /// 1. Return `CapabilityUnavailable` responses with the required app name
     /// 2. Advertise capabilities to federated clusters via gossip
     pub app_registry: SharedAppRegistry,
+    /// Configuration for cross-cluster request proxying.
+    ///
+    /// Controls whether requests for unavailable apps are forwarded to discovered clusters.
+    pub proxy_config: ProxyConfig,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
@@ -483,6 +489,7 @@ pub mod test_support {
                 #[cfg(feature = "nix-cache-gateway")]
                 nix_cache_signer: None,
                 app_registry: aspen_core::shared_registry(),
+                proxy_config: ProxyConfig::default(),
             }
         }
     }
