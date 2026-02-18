@@ -63,6 +63,12 @@ virtiofs = [
     "fuse-backend-rs/vhost-user-fs",
 ]
 
+[dev-dependencies]
+tempfile = "3.4"
+# vhost-user-frontend enables the Frontend (VMM-side) connector for integration tests
+# that verify our VirtioFS daemon speaks the vhost-user protocol correctly.
+vhost = { version = "0.11", features = ["vhost-user-frontend"] }
+
 [[bin]]
 name = "aspen-fuse"
 path = "src/main.rs"

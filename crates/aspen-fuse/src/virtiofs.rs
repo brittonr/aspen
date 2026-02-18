@@ -57,7 +57,6 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 use vhost::vhost_user::Backend;
-use vhost::vhost_user::Listener;
 use vhost::vhost_user::message::VhostUserProtocolFeatures;
 use vhost::vhost_user::message::VhostUserVirtioFeatures;
 use vhost_user_backend::VhostUserBackendMut;
@@ -359,7 +358,10 @@ impl VhostUserBackendMut for AspenVirtioFsHandler {
 /// Run the VirtioFS daemon.
 ///
 /// Creates a vhost-user-fs server listening on the specified Unix socket.
-/// The daemon will serve filesystem requests until shutdown is signaled.
+/// The daemon will serve filesystem requests until the VMM disconnects.
+///
+/// Uses `VhostUserDaemon::serve()` which handles VMM disconnection gracefully
+/// (treats `Disconnected` and `PartialMessage` as normal shutdown).
 ///
 /// # Arguments
 ///
@@ -375,29 +377,16 @@ impl VhostUserBackendMut for AspenVirtioFsHandler {
 pub fn run_virtiofs_daemon(socket_path: &Path, fs: AspenFs) -> Result<(), VirtioFsError> {
     info!(socket = %socket_path.display(), "starting VirtioFS daemon");
 
-    // Create the backend handler
     let handler = AspenVirtioFsHandler::new(fs)?;
-
-    // Wrap in Arc<RwLock> for the daemon
     let handler = Arc::new(RwLock::new(handler));
 
-    // Create the vhost-user daemon
     let mut daemon =
         VhostUserDaemon::new(String::from("aspen-virtiofs"), handler, GuestMemoryAtomic::new(GuestMemoryMmap::new()))
             .map_err(|e| VirtioFsError::DaemonError(format!("{:?}", e)))?;
 
-    // Create listener on the socket
-    let listener = Listener::new(socket_path, true).map_err(|e| VirtioFsError::ListenerError(format!("{e:?}")))?;
-
-    info!("VirtioFS daemon listening on {}", socket_path.display());
-
-    // Start serving requests
-    daemon.start(listener).map_err(|e| VirtioFsError::DaemonError(format!("{:?}", e)))?;
-
-    info!("VirtioFS daemon started, waiting for VMM connection");
-
-    // Wait for daemon to finish
-    daemon.wait().map_err(|e| VirtioFsError::DaemonError(format!("{:?}", e)))?;
+    // serve() handles listener creation, accept, request loop, and graceful
+    // shutdown on VMM disconnection (sends exit events to epoll handler threads)
+    daemon.serve(socket_path).map_err(|e| VirtioFsError::DaemonError(format!("{:?}", e)))?;
 
     info!("VirtioFS daemon stopped");
 
@@ -472,16 +461,11 @@ pub fn spawn_virtiofs_daemon(socket_path: &Path, fs: AspenFs) -> Result<VirtioFs
             )
             .map_err(|e| VirtioFsError::DaemonError(format!("{:?}", e)))?;
 
-            let listener =
-                Listener::new(&socket_path, true).map_err(|e| VirtioFsError::ListenerError(format!("{e:?}")))?;
-
             info!("VirtioFS daemon listening on {}", socket_path.display());
 
-            daemon.start(listener).map_err(|e| VirtioFsError::DaemonError(format!("{:?}", e)))?;
-
-            info!("VirtioFS daemon started, waiting for VMM connection");
-
-            daemon.wait().map_err(|e| VirtioFsError::DaemonError(format!("{:?}", e)))?;
+            // serve() handles listener creation, accept, request loop, and graceful
+            // shutdown on VMM disconnection (sends exit events to epoll handler threads)
+            daemon.serve(&socket_path).map_err(|e| VirtioFsError::DaemonError(format!("{:?}", e)))?;
 
             info!("VirtioFS daemon stopped");
 
@@ -498,6 +482,82 @@ pub fn spawn_virtiofs_daemon(socket_path: &Path, fs: AspenFs) -> Result<VirtioFs
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Integration test: spawn the VirtioFS daemon, connect as a VMM frontend
+    /// over the Unix socket, complete the full vhost-user protocol handshake,
+    /// and verify correct feature negotiation before clean shutdown.
+    ///
+    /// This exercises the real vhost-user protocol path that cloud-hypervisor
+    /// takes when connecting to our daemon: socket accept, GET_FEATURES,
+    /// SET_FEATURES, GET_PROTOCOL_FEATURES, SET_PROTOCOL_FEATURES,
+    /// GET_QUEUE_NUM, and graceful disconnection.
+    #[test]
+    fn test_daemon_vhost_user_handshake() {
+        use vhost::VhostBackend;
+        use vhost::vhost_user::Frontend;
+        use vhost::vhost_user::VhostUserFrontend;
+
+        let dir = tempfile::tempdir().unwrap();
+        let socket_path = dir.path().join("virtiofs.sock");
+
+        // Create mock filesystem (no real Aspen cluster needed -- KV ops are no-ops)
+        let fs = AspenFs::new_mock(1000, 1000);
+
+        // Spawn the virtiofs daemon on a background OS thread.
+        // The thread binds the socket, then blocks in accept() waiting for a VMM.
+        let handle = spawn_virtiofs_daemon(&socket_path, fs).unwrap();
+
+        // Wait for socket file to appear (daemon creates it in serve() -> Listener::new())
+        for _ in 0..100 {
+            if socket_path.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(socket_path.exists(), "daemon failed to create socket");
+
+        // Connect as a VMM (frontend/master side).
+        // Frontend::connect() has built-in retry (5x 100ms) for ConnectionRefused.
+        // This connection unblocks the daemon's accept(), starting the request handler.
+        let mut frontend = Frontend::connect(&socket_path, NUM_QUEUES as u64).unwrap();
+
+        // --- Ownership ---
+        frontend.set_owner().unwrap();
+
+        // --- Virtio feature negotiation ---
+        // GET_FEATURES travels over the Unix socket, through the vhost-user protocol
+        // codec, into VhostUserDaemon's dispatcher, which calls handler.features().
+        let features = frontend.get_features().unwrap();
+
+        // Verify all expected feature bits
+        assert!(features & (1 << VIRTIO_F_VERSION_1) != 0, "missing VIRTIO_F_VERSION_1");
+        assert!(features & (1 << VIRTIO_RING_F_INDIRECT_DESC) != 0, "missing VIRTIO_RING_F_INDIRECT_DESC");
+        assert!(features & (1 << VIRTIO_RING_F_EVENT_IDX) != 0, "missing VIRTIO_RING_F_EVENT_IDX");
+        assert!(features & VhostUserVirtioFeatures::PROTOCOL_FEATURES.bits() != 0, "missing PROTOCOL_FEATURES");
+
+        // Acknowledge all features back to the backend
+        frontend.set_features(features).unwrap();
+
+        // --- Protocol feature negotiation ---
+        let proto_features = frontend.get_protocol_features().unwrap();
+        assert!(proto_features.contains(VhostUserProtocolFeatures::MQ), "missing MQ");
+        assert!(proto_features.contains(VhostUserProtocolFeatures::BACKEND_REQ), "missing BACKEND_REQ");
+        frontend.set_protocol_features(proto_features).unwrap();
+
+        // --- Query queue count (requires MQ protocol feature) ---
+        let num_queues = frontend.get_queue_num().unwrap();
+        assert_eq!(num_queues, NUM_QUEUES as u64, "queue count mismatch");
+
+        // --- Graceful disconnection ---
+        // Drop the frontend to close the socket. The daemon's serve() method
+        // treats Disconnected as normal shutdown and sends exit events to
+        // epoll handler threads.
+        drop(frontend);
+
+        // Join the daemon thread. Since serve() handles disconnection gracefully,
+        // this should return Ok.
+        handle.shutdown().unwrap();
+    }
 
     #[test]
     fn test_virtio_features() {
