@@ -54,7 +54,7 @@ fn spawn_fuse_workers(
 /// End-to-end test: FUSE mount backed by a single-node Raft cluster.
 ///
 /// Requires /dev/fuse access (run with `--run-ignored all`).
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[ignore]
 async fn test_fuse_mount_with_raft_cluster() {
     let temp_dir = tempfile::tempdir().unwrap();
@@ -143,6 +143,11 @@ async fn test_fuse_mount_with_raft_cluster() {
     for w in workers {
         w.join().unwrap();
     }
+
+    // FuseSyncClient contains a tokio Runtime which panics if dropped in async
+    // context. Drop the server (which owns AspenFs -> Arc<FuseSyncClient>) in a
+    // blocking context before the async test function returns.
+    tokio::task::block_in_place(move || drop(server));
 
     node.shutdown().await.unwrap();
 }
