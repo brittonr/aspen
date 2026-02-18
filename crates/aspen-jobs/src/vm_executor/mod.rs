@@ -68,13 +68,12 @@
 //!   blobs directly via 20 typed host functions (KV CRUD + CAS + scan, blob get/put/has, HLC,
 //!   crypto). No filesystem needed -- the host API *is* the storage interface.
 //!
-//! - **[`NanvixWorker`]**: Workload scripts sourced from iroh-blobs. The Nanvix POSIX microkernel
-//!   provides a standard filesystem interface inside the VM. Guest code sees ordinary files and
-//!   directories -- the Aspen backing is invisible. Currently output is captured from console logs
-//!   only.
-//!
-//!   TODO: Wire up `AspenVirtioFsHandler` as the Nanvix filesystem backend so guest file I/O is
-//!   transparently backed by KV + blobs.
+//! - **[`NanvixWorker`]**: Workload scripts sourced from iroh-blobs. Workspace files are
+//!   materialized from KV into a temp directory before execution, and new/modified files are synced
+//!   back after execution. This workspace materialization approach is used because
+//!   hyperlight-nanvix does not support VirtioFS (its `RuntimeConfig` hardcodes `T = ()` for
+//!   syscall handlers). Console output is also captured from guest logs. KV keys follow the
+//!   convention `nanvix/workspaces/{job_id}/{relative_path}` with file content base64-encoded.
 //!
 //! - **`CloudHypervisorWorker`**: VMs are full Aspen cluster members (`aspen-node --worker-only`).
 //!   The guest mounts two virtiofs shares (`/nix/store` read-only, `/workspace` read-write) that

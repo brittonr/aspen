@@ -16,6 +16,7 @@ use aspen_jobs::JobStatus;
 use aspen_jobs::NanvixWorker;
 use aspen_jobs::VmJobPayload;
 use aspen_jobs::Worker;
+use aspen_testing::DeterministicKeyValueStore;
 use chrono::Utc;
 
 /// Create a test Job from a JobSpec with all required fields populated.
@@ -48,14 +49,16 @@ fn make_test_job(spec: JobSpec) -> Job {
 
 fn create_test_worker() -> (NanvixWorker, Arc<InMemoryBlobStore>) {
     let blob_store = Arc::new(InMemoryBlobStore::new());
-    let worker = NanvixWorker::new(blob_store.clone()).unwrap();
+    let kv_store = DeterministicKeyValueStore::new();
+    let worker = NanvixWorker::new(blob_store.clone(), kv_store).unwrap();
     (worker, blob_store)
 }
 
 #[tokio::test]
 async fn test_nanvix_worker_creation() {
     let blob_store = Arc::new(InMemoryBlobStore::new());
-    let result = NanvixWorker::new(blob_store);
+    let kv_store = DeterministicKeyValueStore::new();
+    let result = NanvixWorker::new(blob_store, kv_store);
     assert!(result.is_ok());
 }
 

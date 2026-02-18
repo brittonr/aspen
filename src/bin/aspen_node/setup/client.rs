@@ -573,7 +573,8 @@ async fn initialize_job_system(
             use aspen_jobs::NanvixWorker;
             if let Some(blob_store) = node_mode.blob_store() {
                 let blob_store_dyn: Arc<dyn aspen_blob::BlobStore> = blob_store.clone();
-                match NanvixWorker::new(blob_store_dyn) {
+                let kv_store_dyn: Arc<dyn aspen_core::KeyValueStore> = kv_store.clone();
+                match NanvixWorker::new(blob_store_dyn, kv_store_dyn) {
                     Ok(nanvix_worker) => {
                         worker_service
                             .register_handler("nanvix_execute", nanvix_worker)
