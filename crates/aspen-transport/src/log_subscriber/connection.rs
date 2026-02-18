@@ -4,6 +4,9 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use aspen_auth::hmac_auth::AuthContext;
+use aspen_auth::hmac_auth::AuthResponse;
+use aspen_auth::hmac_auth::AuthResult;
 use aspen_core::hlc::SerializableTimestamp;
 use iroh::endpoint::Connection;
 use tokio::sync::broadcast;
@@ -25,10 +28,6 @@ use super::types::LogEntryPayload;
 use super::types::SubscribeRejectReason;
 use super::types::SubscribeRequest;
 use super::types::SubscribeResponse;
-#[allow(deprecated)]
-use crate::rpc::AuthContext;
-use crate::rpc::AuthResponse;
-use crate::rpc::AuthResult;
 
 /// Handle a log subscriber connection.
 #[allow(clippy::too_many_arguments)]
@@ -41,7 +40,6 @@ use crate::rpc::AuthResult;
     hlc,
     watch_registry
 ))]
-#[allow(deprecated)] // TODO: Migrate to proper auth implementation
 pub(super) async fn handle_log_subscriber_connection(
     connection: Connection,
     auth_context: AuthContext,
@@ -102,18 +100,13 @@ pub(super) async fn handle_log_subscriber_connection(
     };
 
     // Step 3: Verify
-    let auth_success = auth_context.verify_response(&challenge, &auth_response);
+    let auth_result = auth_context.verify_response(&challenge, &auth_response);
 
     // Step 4: Send auth result
-    let auth_result = if auth_success {
-        AuthResult::Success
-    } else {
-        AuthResult::Failed
-    };
     let result_bytes = postcard::to_stdvec(&auth_result)?;
     send.write_all(&result_bytes).await.context("failed to send auth result")?;
 
-    if !auth_success {
+    if !auth_result.is_ok() {
         warn!(subscriber_id = subscriber_id, result = ?auth_result, "subscriber auth failed");
         if let Err(finish_err) = send.finish() {
             debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscriber auth verification failure");

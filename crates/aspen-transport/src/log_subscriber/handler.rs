@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use aspen_auth::hmac_auth::AuthContext;
 use iroh::endpoint::Connection;
 use iroh::protocol::AcceptError;
 use iroh::protocol::ProtocolHandler;
@@ -18,11 +19,6 @@ use super::constants::LOG_BROADCAST_BUFFER_SIZE;
 use super::constants::MAX_LOG_SUBSCRIBERS;
 use super::types::HistoricalLogReader;
 use super::types::LogEntryPayload;
-// TODO: SECURITY - Migrate to proper aspen_raft::auth::AuthContext implementation
-// The current AuthContext in crate::rpc is INSECURE (only checks for non-empty fields)
-// See https://github.com/aspen/aspen/issues/XXX for tracking
-#[allow(deprecated)]
-use crate::rpc::AuthContext;
 
 /// Protocol handler for log subscription over Iroh.
 ///
@@ -34,7 +30,6 @@ use crate::rpc::AuthContext;
 /// - Bounded subscriber count
 /// - Keepalive for idle connections
 /// - Explicit subscription limits
-#[allow(deprecated)] // TODO: Migrate to proper auth implementation
 pub struct LogSubscriberProtocolHandler {
     auth_context: AuthContext,
     connection_semaphore: Arc<Semaphore>,
@@ -63,7 +58,6 @@ impl std::fmt::Debug for LogSubscriberProtocolHandler {
     }
 }
 
-#[allow(deprecated)] // TODO: Migrate to proper auth implementation
 impl LogSubscriberProtocolHandler {
     /// Create a new log subscriber protocol handler.
     ///
@@ -83,7 +77,7 @@ impl LogSubscriberProtocolHandler {
         let committed_index = Arc::new(AtomicU64::new(0));
         let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
         let handler = Self {
-            auth_context: AuthContext::new(cluster_cookie.to_string()),
+            auth_context: AuthContext::new(cluster_cookie),
             connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
             log_sender: log_sender.clone(),
             node_id,
@@ -108,7 +102,7 @@ impl LogSubscriberProtocolHandler {
     ) -> Self {
         let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
         Self {
-            auth_context: AuthContext::new(cluster_cookie.to_string()),
+            auth_context: AuthContext::new(cluster_cookie),
             connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
             log_sender,
             node_id,
@@ -141,7 +135,7 @@ impl LogSubscriberProtocolHandler {
     ) -> Self {
         let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
         Self {
-            auth_context: AuthContext::new(cluster_cookie.to_string()),
+            auth_context: AuthContext::new(cluster_cookie),
             connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
             log_sender,
             node_id,

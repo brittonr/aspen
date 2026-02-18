@@ -32,9 +32,11 @@ mod builder;
 mod capability;
 pub mod constants;
 mod error;
+pub mod hmac_auth;
 mod revocation;
 mod token;
 mod utils;
+pub mod verified_auth;
 mod verifier;
 
 pub use builder::TokenBuilder;

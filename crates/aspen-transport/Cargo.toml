@@ -33,15 +33,10 @@ postcard = { version = "1.0", features = ["alloc"] }
 anyhow = "1.0"
 thiserror = "2.0"
 
-# Crypto for authentication
-hmac = "0.12"
-sha2 = "0.10"
-
 # Logging
 tracing = "0.1"
 
 # Utilities
-rand = "0.9"
 bytes = "1.7"
 parking_lot = "0.12"
 

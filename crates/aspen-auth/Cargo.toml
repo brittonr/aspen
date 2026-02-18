@@ -20,6 +20,8 @@ hex = "0.4"
 
 # Cryptography
 blake3 = "1.5"
+hmac = "0.12"
+sha2 = "0.10"
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 
 # Error handling
