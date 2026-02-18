@@ -325,6 +325,66 @@
           }
         );
 
+        # Minimal busybox initramfs for VirtioFS integration testing.
+        # Mounts virtiofs tag "testfs", writes/reads a file, prints PASS/FAIL,
+        # then powers off. Used by cloud_hypervisor_virtiofs_test.rs.
+        virtiofsTestInitrd = let
+          kmod = pkgs.linuxPackages.kernel.modules;
+          modDir = "${kmod}/lib/modules/${pkgs.linuxPackages.kernel.modDirVersion}/kernel";
+          fuseDir = "${modDir}/fs/fuse";
+          virtioDir = "${modDir}/drivers/virtio";
+        in
+          pkgs.runCommand "virtiofs-test-initrd" {
+            nativeBuildInputs = with pkgs; [cpio gzip];
+          } ''
+                      mkdir -p root/{bin,dev,proc,sys,mnt,lib/modules}
+                      cp ${pkgs.pkgsStatic.busybox}/bin/busybox root/bin/busybox
+                      for cmd in sh mount umount echo insmod poweroff cat mkdir; do
+                        ln -sf busybox root/bin/$cmd
+                      done
+                      # FUSE modules
+                      cp ${fuseDir}/fuse.ko.xz root/lib/modules/
+                      cp ${fuseDir}/virtiofs.ko.xz root/lib/modules/
+                      # Virtio transport modules (virtiofs depends on virtio_ring, virtio, virtio_pci)
+                      cp ${virtioDir}/virtio.ko.xz root/lib/modules/
+                      cp ${virtioDir}/virtio_ring.ko.xz root/lib/modules/
+                      cp ${virtioDir}/virtio_pci_modern_dev.ko.xz root/lib/modules/
+                      cp ${virtioDir}/virtio_pci_legacy_dev.ko.xz root/lib/modules/
+                      cp ${virtioDir}/virtio_pci.ko.xz root/lib/modules/
+                      cat > root/init << 'INITEOF'
+            #!/bin/sh
+            mount -t proc none /proc
+            mount -t sysfs none /sys
+            mount -t devtmpfs none /dev
+            # Load virtio transport stack (order matters: deps first)
+            insmod /lib/modules/virtio.ko.xz
+            insmod /lib/modules/virtio_ring.ko.xz
+            insmod /lib/modules/virtio_pci_modern_dev.ko.xz
+            insmod /lib/modules/virtio_pci_legacy_dev.ko.xz
+            insmod /lib/modules/virtio_pci.ko.xz
+            # Load FUSE + virtiofs
+            insmod /lib/modules/fuse.ko.xz
+            insmod /lib/modules/virtiofs.ko.xz
+            # Wait briefly for virtio-fs PCI device to be probed
+            sleep 1
+            mount -t virtiofs testfs /mnt
+            if [ $? -ne 0 ]; then
+              echo "VIRTIOFS_TEST_FAIL: mount failed"
+              poweroff -f
+            fi
+            echo "hello from guest" > /mnt/result.txt
+            READBACK=$(cat /mnt/result.txt)
+            if [ "$READBACK" = "hello from guest" ]; then
+              echo "VIRTIOFS_TEST_PASS"
+            else
+              echo "VIRTIOFS_TEST_FAIL: got '$READBACK'"
+            fi
+            poweroff -f
+            INITEOF
+                      chmod +x root/init
+                      cd root && find . | cpio --quiet -H newc -o | gzip -9 > $out
+          '';
+
         # Helper script for setting up VM test environment
         vm-test-setup = pkgs.writeShellScriptBin "aspen-vm-setup" ''
           #!/usr/bin/env bash
@@ -2199,6 +2259,8 @@
                 ci-vm-toplevel = ciVmConfig.config.system.build.toplevel;
                 # Full CI VM runner (includes cloud-hypervisor command)
                 ci-vm-runner = ciVmConfig.config.microvm.runner.cloud-hypervisor;
+                # VirtioFS test initramfs
+                inherit virtiofsTestInitrd;
               }
             );
         }
@@ -2326,6 +2388,12 @@
 
             # Virtiofsd path for Cloud Hypervisor worker
             env.VIRTIOFSD_PATH = "${pkgs.virtiofsd}/bin/virtiofsd";
+
+            # Cloud Hypervisor binary for VirtioFS integration tests
+            env.CLOUD_HYPERVISOR_BIN = "${pkgs.cloud-hypervisor}/bin/cloud-hypervisor";
+
+            # VirtioFS test initramfs for cloud_hypervisor_virtiofs_test
+            env.VIRTIOFS_TEST_INITRD = "${virtiofsTestInitrd}";
 
             shellHook = ''
               # Auto-stage scripts and decision docs so nix flake sees them
