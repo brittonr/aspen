@@ -21,5 +21,6 @@
     "ForgeGetDelegateKey"
   ],
   "priority": 950,
-  "app_id": "forge"
+  "app_id": "forge",
+  "kv_prefixes": ["forge:"]
 }

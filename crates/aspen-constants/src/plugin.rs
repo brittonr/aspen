@@ -23,3 +23,12 @@ pub const MIN_PLUGIN_PRIORITY: u32 = 900;
 
 /// Maximum priority for WASM plugins.
 pub const MAX_PLUGIN_PRIORITY: u32 = 999;
+
+/// Maximum number of KV prefixes a plugin can declare.
+pub const MAX_PLUGIN_KV_PREFIXES: u32 = 16;
+
+/// Default KV prefix template for plugins that don't declare explicit prefixes.
+///
+/// Plugins without `kv_prefixes` get auto-scoped to `__plugin:{name}:` to prevent
+/// unrestricted KV access. Format: this template + plugin name + `:`.
+pub const DEFAULT_PLUGIN_KV_PREFIX_TEMPLATE: &str = "__plugin:";

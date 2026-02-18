@@ -78,6 +78,10 @@ pub struct InstallArgs {
     /// Application ID for federation discovery (e.g., "forge").
     #[arg(long)]
     pub app_id: Option<String>,
+
+    /// Allowed KV key prefixes (comma-separated). When empty, defaults to `__plugin:{name}:`.
+    #[arg(long, value_delimiter = ',')]
+    pub kv_prefixes: Option<Vec<String>>,
 }
 
 #[derive(Args)]
@@ -287,6 +291,7 @@ struct ResolvedInstall {
     fuel_limit: Option<u64>,
     memory_limit: Option<u64>,
     app_id: Option<String>,
+    kv_prefixes: Vec<String>,
 }
 
 fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
@@ -324,6 +329,12 @@ fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
 
     let app_id = args.app_id.clone().or_else(|| base.as_ref().and_then(|b| b.app_id.clone()));
 
+    let kv_prefixes = args
+        .kv_prefixes
+        .clone()
+        .or_else(|| base.as_ref().map(|b| b.kv_prefixes.clone()))
+        .unwrap_or_default();
+
     Ok(ResolvedInstall {
         name,
         handles,
@@ -332,6 +343,7 @@ fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
         fuel_limit: args.fuel_limit,
         memory_limit: args.memory_limit,
         app_id,
+        kv_prefixes,
     })
 }
 
@@ -372,6 +384,7 @@ async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> 
         memory_limit: resolved.memory_limit,
         enabled: true,
         app_id: resolved.app_id,
+        kv_prefixes: resolved.kv_prefixes,
     };
 
     let manifest_json = serde_json::to_string(&manifest)?;

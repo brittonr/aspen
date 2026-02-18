@@ -21,7 +21,8 @@
 
 ## Patterns That Don't Work
 
-- (approaches that failed and why)
+- delegate_task workers may report success but not persist file changes — always verify with `git diff --stat` or `grep` after delegation
+- For multi-file surgical edits, do them directly rather than delegating
 
 ## Domain Notes
 
@@ -34,3 +35,11 @@
 - `AspenPlugin` (guest SDK) bridges into `RequestHandler` via `WasmPluginHandler`
 - `HandlerFactory` + `inventory` crate used for self-registration of RequestHandlers at link time
 - `WorkerPool` routes jobs to Workers by `job_types()`
+- KV namespace isolation: `PluginHostContext.allowed_kv_prefixes` + `validate_key_prefix()`/`validate_scan_prefix()` in `host.rs`
+- Plugin KV prefixes: forge uses `forge:`, hooks uses `__hooks:`, service-registry uses `__service:`
+- Empty `kv_prefixes` in manifest → auto-scoped to `__plugin:{name}:` via `with_kv_prefixes()`
+- CLI `plugin install` supports `--kv-prefixes` flag and reads from plugin.json manifest
+- Echo plugin example is at `examples/plugins/echo-plugin/`
+- All plugin crates have `plugin_info_matches_manifest` tests that check code ↔ plugin.json consistency
+- Pre-existing: `aspen-constants` has a broken doctest (renamed `CONNECT_TIMEOUT_SECS` → `IROH_CONNECT_TIMEOUT_SECS`)
+- Pre-existing: `aspen-cli` has unresolved `aspen_forge` import errors (unrelated to plugins)

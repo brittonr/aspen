@@ -31,6 +31,16 @@ pub struct PluginManifest {
     /// running this plugin.
     #[serde(default)]
     pub app_id: Option<String>,
+    /// KV key prefixes this plugin is allowed to access.
+    ///
+    /// Every KV operation (get, put, delete, scan, cas) is validated to ensure
+    /// the key starts with one of these prefixes. When empty, a default prefix
+    /// of `__plugin:{name}:` is enforced, automatically isolating the plugin's
+    /// keyspace.
+    ///
+    /// Tiger Style: Explicit bounds prevent cross-plugin data access.
+    #[serde(default)]
+    pub kv_prefixes: Vec<String>,
 }
 
 /// Lightweight plugin info returned by `plugin-info` guest export.
@@ -47,4 +57,9 @@ pub struct PluginInfo {
     /// Optional application ID for federation discovery.
     #[serde(default)]
     pub app_id: Option<String>,
+    /// KV key prefixes this plugin is allowed to access.
+    ///
+    /// See [`PluginManifest::kv_prefixes`] for details.
+    #[serde(default)]
+    pub kv_prefixes: Vec<String>,
 }

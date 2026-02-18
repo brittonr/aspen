@@ -23,6 +23,7 @@
 //!             handles: vec!["Echo".into()],
 //!             priority: 900,
 //!             app_id: None,
+//!             kv_prefixes: vec![],
 //!         }
 //!     }
 //!

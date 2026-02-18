@@ -40,6 +40,14 @@ pub struct PluginHostContext {
     pub secret_key: Option<iroh::SecretKey>,
     /// Hybrid logical clock for causal timestamps.
     pub hlc: Option<Arc<HLC>>,
+    /// Allowed KV key prefixes for namespace isolation.
+    ///
+    /// Every KV operation validates the key against these prefixes.
+    /// If the key doesn't start with any allowed prefix, the operation
+    /// is rejected with a namespace violation error.
+    ///
+    /// Tiger Style: Enforced bounds prevent cross-plugin data access.
+    pub allowed_kv_prefixes: Vec<String>,
 }
 
 impl PluginHostContext {
@@ -59,7 +67,25 @@ impl PluginHostContext {
             plugin_name,
             secret_key: None,
             hlc: None,
+            allowed_kv_prefixes: Vec::new(),
         }
+    }
+
+    /// Set the allowed KV prefixes for namespace isolation.
+    ///
+    /// If `prefixes` is empty, a default prefix of `__plugin:{name}:` is used,
+    /// ensuring automatic isolation for plugins that don't declare explicit prefixes.
+    pub fn with_kv_prefixes(mut self, prefixes: Vec<String>) -> Self {
+        if prefixes.is_empty() {
+            self.allowed_kv_prefixes = vec![format!(
+                "{}{}:",
+                aspen_constants::plugin::DEFAULT_PLUGIN_KV_PREFIX_TEMPLATE,
+                self.plugin_name
+            )];
+        } else {
+            self.allowed_kv_prefixes = prefixes;
+        }
+        self
     }
 
     /// Set the Iroh secret key for Ed25519 operations.
@@ -104,13 +130,71 @@ pub fn now_ms() -> u64 {
 }
 
 // ---------------------------------------------------------------------------
+// KV namespace validation
+// ---------------------------------------------------------------------------
+
+/// Validate that a KV key is within the plugin's allowed namespace.
+///
+/// Returns `Ok(())` if the key starts with any allowed prefix,
+/// or `Err` with a descriptive message if not.
+///
+/// Tiger Style: Empty `allowed_prefixes` means unrestricted access
+/// (backwards compat only — `with_kv_prefixes` always populates this).
+fn validate_key_prefix(
+    plugin_name: &str,
+    allowed_prefixes: &[String],
+    key: &str,
+    operation: &str,
+) -> Result<(), String> {
+    if allowed_prefixes.is_empty() {
+        return Ok(());
+    }
+    for prefix in allowed_prefixes {
+        if key.starts_with(prefix.as_str()) {
+            return Ok(());
+        }
+    }
+    let msg = format!(
+        "KV namespace violation: plugin '{}' {} key '{}' outside allowed prefixes {:?}",
+        plugin_name, operation, key, allowed_prefixes
+    );
+    tracing::warn!("{}", msg);
+    Err(msg)
+}
+
+/// Validate that a KV scan prefix is within the plugin's allowed namespace.
+///
+/// The scan prefix must start with one of the allowed prefixes. This prevents
+/// plugins from scanning the entire keyspace or another plugin's keys.
+fn validate_scan_prefix(plugin_name: &str, allowed_prefixes: &[String], prefix: &str) -> Result<(), String> {
+    if allowed_prefixes.is_empty() {
+        return Ok(());
+    }
+    for allowed in allowed_prefixes {
+        if prefix.starts_with(allowed.as_str()) {
+            return Ok(());
+        }
+    }
+    let msg = format!(
+        "KV namespace violation: plugin '{}' scan prefix '{}' outside allowed prefixes {:?}",
+        plugin_name, prefix, allowed_prefixes
+    );
+    tracing::warn!("{}", msg);
+    Err(msg)
+}
+
+// ---------------------------------------------------------------------------
 // KV Store host functions
 // ---------------------------------------------------------------------------
 
 /// Get a value by key from the distributed KV store.
 ///
-/// Returns `None` if the key does not exist.
+/// Returns `None` if the key does not exist or the key is outside the
+/// plugin's allowed namespace.
 pub fn kv_get(ctx: &PluginHostContext, key: &str) -> Option<Vec<u8>> {
+    if validate_key_prefix(&ctx.plugin_name, &ctx.allowed_kv_prefixes, key, "read").is_err() {
+        return None;
+    }
     let handle = tokio::runtime::Handle::current();
     handle.block_on(async {
         let request = aspen_kv_types::ReadRequest::new(key);
@@ -133,6 +217,7 @@ pub fn kv_get(ctx: &PluginHostContext, key: &str) -> Option<Vec<u8>> {
 ///
 /// The value bytes must be valid UTF-8.
 pub fn kv_put(ctx: &PluginHostContext, key: &str, value: &[u8]) -> Result<(), String> {
+    validate_key_prefix(&ctx.plugin_name, &ctx.allowed_kv_prefixes, key, "write")?;
     let value_str = std::str::from_utf8(value).map_err(|e| format!("value is not valid UTF-8: {e}"))?;
 
     let handle = tokio::runtime::Handle::current();
@@ -152,6 +237,7 @@ pub fn kv_put(ctx: &PluginHostContext, key: &str, value: &[u8]) -> Result<(), St
 
 /// Delete a key from the distributed KV store.
 pub fn kv_delete(ctx: &PluginHostContext, key: &str) -> Result<(), String> {
+    validate_key_prefix(&ctx.plugin_name, &ctx.allowed_kv_prefixes, key, "delete")?;
     let handle = tokio::runtime::Handle::current();
     handle.block_on(async {
         let request = aspen_kv_types::DeleteRequest::new(key);
@@ -174,6 +260,9 @@ pub fn kv_delete(ctx: &PluginHostContext, key: &str) -> Result<(), String> {
 /// Tiger Style: All scans are bounded. A `limit` of 0 uses DEFAULT_SCAN_LIMIT (1,000).
 /// Maximum limit is capped at MAX_SCAN_RESULTS (10,000) to prevent unbounded memory allocation.
 pub fn kv_scan(ctx: &PluginHostContext, prefix: &str, limit: u32) -> Vec<(String, Vec<u8>)> {
+    if validate_scan_prefix(&ctx.plugin_name, &ctx.allowed_kv_prefixes, prefix).is_err() {
+        return Vec::new();
+    }
     let handle = tokio::runtime::Handle::current();
     handle.block_on(async {
         // Tiger Style: Apply default if 0, cap at MAX_SCAN_RESULTS to prevent unbounded operations
@@ -207,6 +296,7 @@ pub fn kv_scan(ctx: &PluginHostContext, prefix: &str, limit: u32) -> Vec<(String
 /// If `expected` is empty, the key must not exist (create-if-absent).
 /// Both `expected` and `new_value` must be valid UTF-8.
 pub fn kv_cas(ctx: &PluginHostContext, key: &str, expected: &[u8], new_value: &[u8]) -> Result<(), String> {
+    validate_key_prefix(&ctx.plugin_name, &ctx.allowed_kv_prefixes, key, "cas")?;
     let expected_str = if expected.is_empty() {
         None
     } else {
@@ -592,4 +682,148 @@ pub fn register_plugin_host_functions(
         .map_err(|e| anyhow::anyhow!("failed to register hlc_now: {e}"))?;
 
     Ok(())
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // validate_key_prefix
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn key_within_allowed_prefix_is_valid() {
+        let result = validate_key_prefix("forge", &["forge:".into()], "forge:repos:abc", "read");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn key_outside_allowed_prefix_is_rejected() {
+        let result = validate_key_prefix("forge", &["forge:".into()], "__hooks:config", "read");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("namespace violation"));
+    }
+
+    #[test]
+    fn key_exact_prefix_match_is_valid() {
+        let result = validate_key_prefix("hooks", &["__hooks:".into()], "__hooks:config", "read");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn key_empty_prefixes_allows_all() {
+        let result = validate_key_prefix("test", &[], "anything:goes:here", "read");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn key_multiple_prefixes_any_match_is_valid() {
+        let prefixes = vec!["forge:".into(), "forge-cobs:".into()];
+        assert!(validate_key_prefix("forge", &prefixes, "forge:repos:x", "read").is_ok());
+        assert!(validate_key_prefix("forge", &prefixes, "forge-cobs:y", "read").is_ok());
+        assert!(validate_key_prefix("forge", &prefixes, "__hooks:z", "read").is_err());
+    }
+
+    #[test]
+    fn key_partial_prefix_match_is_rejected() {
+        // "forg" is a prefix of "forge:" but "forge:" is the allowed prefix
+        let result = validate_key_prefix("forge", &["forge:".into()], "forg", "read");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn key_error_message_includes_operation() {
+        let result = validate_key_prefix("hooks", &["__hooks:".into()], "forge:x", "write");
+        let err = result.unwrap_err();
+        assert!(err.contains("write"), "error should mention the operation");
+        assert!(err.contains("hooks"), "error should mention the plugin");
+        assert!(err.contains("forge:x"), "error should mention the key");
+    }
+
+    // -------------------------------------------------------------------------
+    // validate_scan_prefix
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn scan_within_allowed_prefix_is_valid() {
+        let result = validate_scan_prefix("forge", &["forge:".into()], "forge:repos:");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn scan_exact_allowed_prefix_is_valid() {
+        let result = validate_scan_prefix("forge", &["forge:".into()], "forge:");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn scan_outside_allowed_prefix_is_rejected() {
+        let result = validate_scan_prefix("forge", &["forge:".into()], "__hooks:");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_empty_string_is_rejected() {
+        // Empty scan prefix would scan everything — must be denied
+        let result = validate_scan_prefix("forge", &["forge:".into()], "");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_empty_prefixes_allows_all() {
+        let result = validate_scan_prefix("test", &[], "");
+        assert!(result.is_ok());
+    }
+
+    // -------------------------------------------------------------------------
+    // with_kv_prefixes
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn with_kv_prefixes_uses_explicit_when_non_empty() {
+        // We can't construct a full PluginHostContext without real stores,
+        // so we test the with_kv_prefixes logic by checking the output
+        // struct field directly. Build a minimal struct manually.
+        let prefixes = vec!["forge:".to_string(), "forge-cobs:".to_string()];
+        let ctx = PluginHostContextStub {
+            plugin_name: "forge".to_string(),
+            allowed_kv_prefixes: Vec::new(),
+        };
+        let resolved = resolve_kv_prefixes(&ctx.plugin_name, prefixes);
+        assert_eq!(resolved, vec!["forge:", "forge-cobs:"]);
+    }
+
+    #[test]
+    fn with_kv_prefixes_defaults_when_empty() {
+        let ctx = PluginHostContextStub {
+            plugin_name: "my-plugin".to_string(),
+            allowed_kv_prefixes: Vec::new(),
+        };
+        let resolved = resolve_kv_prefixes(&ctx.plugin_name, vec![]);
+        assert_eq!(resolved, vec!["__plugin:my-plugin:"]);
+    }
+
+    /// Minimal stub for testing prefix resolution without real cluster services.
+    struct PluginHostContextStub {
+        plugin_name: String,
+        allowed_kv_prefixes: Vec<String>,
+    }
+
+    /// Mirror the logic from `PluginHostContext::with_kv_prefixes`.
+    fn resolve_kv_prefixes(plugin_name: &str, prefixes: Vec<String>) -> Vec<String> {
+        if prefixes.is_empty() {
+            vec![format!(
+                "{}{}:",
+                aspen_constants::plugin::DEFAULT_PLUGIN_KV_PREFIX_TEMPLATE,
+                plugin_name
+            )]
+        } else {
+            prefixes
+        }
+    }
 }

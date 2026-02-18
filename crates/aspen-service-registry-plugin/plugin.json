@@ -12,5 +12,6 @@
     "ServiceUpdateMetadata"
   ],
   "priority": 950,
-  "app_id": "service-registry"
+  "app_id": "service-registry",
+  "kv_prefixes": ["__service:"]
 }

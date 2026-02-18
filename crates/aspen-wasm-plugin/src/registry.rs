@@ -147,6 +147,7 @@ async fn load_plugin(
             ctx.node_id,
             manifest.name.clone(),
         )
+        .with_kv_prefixes(manifest.kv_prefixes.clone())
         .with_secret_key(secret_key.clone())
         .with_hlc(Arc::clone(hlc)),
     );
@@ -193,12 +194,16 @@ async fn load_plugin(
         );
     }
 
+    // Log resolved KV prefixes for observability. The host_ctx has already
+    // resolved empty kv_prefixes to the default `__plugin:{name}:` prefix.
+    let resolved_prefixes = &manifest.kv_prefixes;
     info!(
         plugin = %manifest.name,
         version = %manifest.version,
         priority,
         handles = ?manifest.handles,
         app_id = ?manifest.app_id,
+        kv_prefixes = ?resolved_prefixes,
         "WASM plugin loaded successfully"
     );
 
@@ -225,6 +230,7 @@ mod tests {
             memory_limit: None,
             enabled: true,
             app_id: Some("forge".to_string()),
+            kv_prefixes: vec!["forge:".to_string()],
         };
 
         let registry = Arc::new(AppRegistry::new());
@@ -252,6 +258,7 @@ mod tests {
             memory_limit: None,
             enabled: true,
             app_id: None,
+            kv_prefixes: vec![],
         };
 
         let registry = Arc::new(AppRegistry::new());

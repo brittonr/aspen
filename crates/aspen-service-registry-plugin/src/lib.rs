@@ -34,6 +34,7 @@ impl AspenPlugin for ServiceRegistryPlugin {
             ],
             priority: 950,
             app_id: Some("service-registry".to_string()),
+            kv_prefixes: vec!["__service:".to_string()],
         }
     }
 
@@ -137,5 +138,6 @@ mod tests {
         assert_eq!(info.priority, manifest.priority, "priority mismatch between code and plugin.json");
         assert_eq!(info.version, manifest.version, "version mismatch between code and plugin.json");
         assert_eq!(info.app_id, manifest.app_id, "app_id mismatch between code and plugin.json");
+        assert_eq!(info.kv_prefixes, manifest.kv_prefixes, "kv_prefixes mismatch between code and plugin.json");
     }
 }

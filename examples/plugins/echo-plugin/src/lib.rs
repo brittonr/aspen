@@ -21,6 +21,7 @@ impl AspenPlugin for EchoPlugin {
             handles: vec!["Ping".to_string(), "ReadKey".to_string()],
             priority: 950,
             app_id: None,
+            kv_prefixes: vec![],
         }
     }
 
