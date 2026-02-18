@@ -16,7 +16,11 @@ use aspen_jobs::JobStatus;
 use aspen_jobs::NanvixWorker;
 use aspen_jobs::VmJobPayload;
 use aspen_jobs::Worker;
+use aspen_kv_types::ReadRequest;
+use aspen_kv_types::WriteRequest;
 use aspen_testing::DeterministicKeyValueStore;
+use aspen_traits::KeyValueStore;
+use base64::Engine;
 use chrono::Utc;
 
 /// Create a test Job from a JobSpec with all required fields populated.
@@ -52,6 +56,13 @@ fn create_test_worker() -> (NanvixWorker, Arc<InMemoryBlobStore>) {
     let kv_store = DeterministicKeyValueStore::new();
     let worker = NanvixWorker::new(blob_store.clone(), kv_store).unwrap();
     (worker, blob_store)
+}
+
+fn create_test_worker_with_kv() -> (NanvixWorker, Arc<InMemoryBlobStore>, Arc<DeterministicKeyValueStore>) {
+    let blob_store = Arc::new(InMemoryBlobStore::new());
+    let kv_store = DeterministicKeyValueStore::new();
+    let worker = NanvixWorker::new(blob_store.clone(), kv_store.clone()).unwrap();
+    (worker, blob_store, kv_store)
 }
 
 #[tokio::test]
@@ -211,5 +222,106 @@ async fn test_nanvix_invalid_workload_type() {
         );
     } else {
         panic!("Expected Failure result, got: {:?}", result);
+    }
+}
+
+/// End-to-end test: pre-populate KV with an input file, run a JS workload
+/// that reads the input and writes an output file, verify the output makes
+/// it back to KV.
+///
+/// This exercises the full workspace materialization -> sandbox execution ->
+/// sync-back flow. The guest accesses the host filesystem through Nanvix's
+/// default syscall interception (forwarding to host libc).
+#[tokio::test]
+#[ignore = "Requires KVM + QuickJS binary in ~/.cache/nanvix-registry"]
+async fn test_nanvix_workspace_e2e_js_file_io() {
+    let (worker, blob_store, kv_store) = create_test_worker_with_kv();
+
+    let job_id = "e2e-js-test";
+
+    // Pre-populate KV with an input file the JS workload will read.
+    let input_content = b"hello from KV store";
+    let encoded = base64::engine::general_purpose::STANDARD.encode(input_content);
+    kv_store
+        .write(WriteRequest::set(&format!("nanvix/workspaces/{}/input.txt", job_id), &encoded))
+        .await
+        .unwrap();
+
+    // JS workload that:
+    // 1. Derives its workspace directory from its own path (scriptArgs)
+    // 2. Reads input.txt from the workspace
+    // 3. Writes output.txt with the reversed content
+    let js_code = r#"
+import * as std from 'std';
+import * as os from 'os';
+
+// scriptArgs[0] is the module flag '-m', scriptArgs[1] is the script path
+var scriptPath = scriptArgs[scriptArgs.length - 1];
+// Derive workspace directory (parent of the script file)
+var lastSlash = scriptPath.lastIndexOf('/');
+var workspaceDir = scriptPath.substring(0, lastSlash);
+
+// Read input file from workspace
+var inputPath = workspaceDir + '/input.txt';
+var inputFile = std.open(inputPath, 'r');
+if (!inputFile) {
+    console.log('ERROR: could not open ' + inputPath);
+    std.exit(1);
+}
+var content = inputFile.readAsString();
+inputFile.close();
+console.log('Read input: ' + content);
+
+// Write reversed content to output file
+var reversed = content.split('').reverse().join('');
+var outputPath = workspaceDir + '/output.txt';
+var outputFile = std.open(outputPath, 'w');
+outputFile.puts(reversed);
+outputFile.close();
+console.log('Wrote output: ' + reversed);
+"#;
+
+    // Add the JS workload to the blob store.
+    let add_result = blob_store.add_bytes(js_code.as_bytes()).await.unwrap();
+    let hash = add_result.blob_ref.hash.to_string();
+    let size = js_code.len() as u64;
+
+    // Build and execute the job.
+    let payload = VmJobPayload::nanvix_workload(&hash, size, "javascript");
+    let spec = JobSpec::new("nanvix_execute")
+        .payload(payload)
+        .unwrap()
+        .with_isolation(true)
+        .timeout(Duration::from_secs(30));
+    let mut job = make_test_job(spec);
+    job.id = JobId::from_string(job_id.to_string());
+
+    let result = worker.execute(job).await;
+
+    // Verify execution succeeded.
+    assert!(result.is_success(), "Expected success, got: {:?}", result);
+
+    // Verify the output file was synced back to KV.
+    let output_key = format!("nanvix/workspaces/{}/output.txt", job_id);
+    let read_result = kv_store.read(ReadRequest::new(&output_key)).await.unwrap();
+    let kv_entry = read_result.kv.expect("output.txt should exist in KV after sync");
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(&kv_entry.value)
+        .expect("output.txt value should be valid base64");
+    let output_str = String::from_utf8(decoded).expect("output should be valid UTF-8");
+
+    // The workload reverses "hello from KV store"
+    let expected: String = "hello from KV store".chars().rev().collect();
+    assert_eq!(output_str, expected, "Guest should have written reversed input to output.txt");
+
+    // Verify console output mentions what happened.
+    if let aspen_jobs::JobResult::Success(success) = &result {
+        let data = &success.data;
+        let console = data["console_output"].as_str().unwrap_or("");
+        assert!(console.contains("Read input"), "Console should show the script read the input, got: {}", console);
+        let files_mat = data["files_materialized"].as_u64().unwrap_or(0);
+        assert_eq!(files_mat, 1, "Should have materialized 1 file (input.txt)");
+        let files_written = data["files_written"].as_u64().unwrap_or(0);
+        assert!(files_written >= 1, "Should have synced at least 1 file (output.txt), got: {}", files_written);
     }
 }
