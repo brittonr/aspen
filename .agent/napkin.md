@@ -29,6 +29,44 @@
 - For multi-file surgical edits, do them directly rather than delegating
 - Worker for HOST_ABI.md creation reported success but file wasn't on disk. Confirmed delegate_task unreliability for file creation again.
 
+## Recent Changes (2026-02-18)
+
+### aspen-fuse: Read Cache
+
+- New `cache.rs` module with TTL-bounded `ReadCache` (data, metadata, scan caches)
+- `kv_read` → cache-first; `kv_write`/`kv_delete` → invalidate on write-through
+- `kv_scan` → cached with 1s TTL; bulk `invalidate_prefix` for renames
+- Constants: `CACHE_DATA_TTL` (5s), `CACHE_META_TTL` (2s), `CACHE_SCAN_TTL` (1s)
+
+### aspen-fuse: Connection Pooling
+
+- `ConnectionPool` in `client.rs` reuses QUIC connections across RPCs
+- `send_rpc_inner` acquires from pool, falls back to fresh connection on stale
+- `POOL_MAX_CONNECTIONS` = 8
+
+### aspen-fuse: Persistent Timestamps
+
+- New `metadata.rs` module with `FileMetadata` (32-byte binary: mtime + ctime)
+- Stored as `.meta` suffix companion keys in KV
+- `create`, `write`, `mkdir`, `symlink` → store initial timestamps
+- `setattr` → handles `MTIME`, `MTIME_NOW`, `SIZE` flags to update timestamps
+- `rename` → copies metadata to new key, updates ctime
+- `unlink`, `rmdir` → deletes metadata companion keys
+- `lookup`, `getattr` → read stored timestamps via `get_size_and_meta` (cached)
+- `make_attr_with_meta` / `make_entry_with_meta` for persisted timestamp attrs
+
+### aspen-plugin-api: Plugin Permissions
+
+- New `PluginPermissions` struct: kv_read, kv_write, blob_read, blob_write, cluster_info, randomness, signing, timers
+- Added `permissions` field to `PluginManifest` (`#[serde(default)]` for backward compat)
+- `PluginPermissions::all()` for trusted plugins, `default()` = all denied
+
+### aspen-wasm-plugin: Permission Enforcement
+
+- `PluginHostContext.permissions` field wired from manifest on load
+- `check_permission()` called before every host function (kv_get, kv_put, kv_delete, kv_scan, kv_cas, kv_batch, blob_has, blob_get, blob_put, random_bytes, is_leader, leader_id, sign, public_key_hex, schedule_timer, cancel_timer)
+- CLI install defaults to `PluginPermissions::all()` for backward compat
+
 ## Domain Notes
 
 - Aspen is a Rust project with a WASM plugin system using `hyperlight-wasm`

@@ -38,6 +38,7 @@ use std::sync::Arc;
 use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
 use aspen_hlc::HLC;
+use aspen_plugin_api::PluginPermissions;
 use aspen_traits::ClusterController;
 
 /// A scheduler command from a WASM guest plugin.
@@ -84,6 +85,10 @@ pub struct PluginHostContext {
     /// Shared with [`WasmPluginHandler`] which processes these after each
     /// guest call completes.
     pub scheduler_requests: Arc<std::sync::Mutex<Vec<SchedulerCommand>>>,
+    /// Capability permissions from the plugin manifest.
+    ///
+    /// Checked before each host function call. Default: all denied.
+    pub permissions: PluginPermissions,
 }
 
 impl PluginHostContext {
@@ -105,6 +110,7 @@ impl PluginHostContext {
             hlc: None,
             allowed_kv_prefixes: Vec::new(),
             scheduler_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
+            permissions: PluginPermissions::default(),
         }
     }
 
@@ -146,6 +152,12 @@ impl PluginHostContext {
         self.scheduler_requests = reqs;
         self
     }
+
+    /// Set the capability permissions from the plugin manifest.
+    pub fn with_permissions(mut self, permissions: PluginPermissions) -> Self {
+        self.permissions = permissions;
+        self
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +186,24 @@ pub fn log_warn(plugin_name: &str, message: &str) {
 /// Return the current wall-clock time as milliseconds since the Unix epoch.
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64
+}
+
+// ---------------------------------------------------------------------------
+// Permission enforcement
+// ---------------------------------------------------------------------------
+
+/// Check that the plugin has the required permission.
+///
+/// Returns `Ok(())` if granted, `Err` with a descriptive message if denied.
+///
+/// Tiger Style: Fail-fast before any I/O.
+fn check_permission(plugin_name: &str, capability: &str, granted: bool) -> Result<(), String> {
+    if granted {
+        return Ok(());
+    }
+    let msg = format!("permission denied: plugin '{}' lacks '{}' capability", plugin_name, capability);
+    tracing::warn!("{}", msg);
+    Err(msg)
 }
 
 // ---------------------------------------------------------------------------
@@ -238,6 +268,7 @@ fn validate_scan_prefix(plugin_name: &str, allowed_prefixes: &[String], prefix: 
 ///
 /// The value bytes must be valid UTF-8.
 pub fn kv_put(ctx: &PluginHostContext, key: &str, value: &[u8]) -> Result<(), String> {
+    check_permission(&ctx.plugin_name, "kv_write", ctx.permissions.kv_write)?;
     validate_key_prefix(&ctx.plugin_name, &ctx.allowed_kv_prefixes, key, "write")?;
     let value_str = std::str::from_utf8(value).map_err(|e| format!("value is not valid UTF-8: {e}"))?;
 
@@ -258,6 +289,7 @@ pub fn kv_put(ctx: &PluginHostContext, key: &str, value: &[u8]) -> Result<(), St
 
 /// Delete a key from the distributed KV store.
 pub fn kv_delete(ctx: &PluginHostContext, key: &str) -> Result<(), String> {
+    check_permission(&ctx.plugin_name, "kv_write", ctx.permissions.kv_write)?;
     validate_key_prefix(&ctx.plugin_name, &ctx.allowed_kv_prefixes, key, "delete")?;
     let handle = tokio::runtime::Handle::current();
     handle.block_on(async {
@@ -279,6 +311,7 @@ pub fn kv_delete(ctx: &PluginHostContext, key: &str) -> Result<(), String> {
 /// If `expected` is empty, the key must not exist (create-if-absent).
 /// Both `expected` and `new_value` must be valid UTF-8.
 pub fn kv_cas(ctx: &PluginHostContext, key: &str, expected: &[u8], new_value: &[u8]) -> Result<(), String> {
+    check_permission(&ctx.plugin_name, "kv_write", ctx.permissions.kv_write)?;
     validate_key_prefix(&ctx.plugin_name, &ctx.allowed_kv_prefixes, key, "cas")?;
     let expected_str = if expected.is_empty() {
         None
@@ -310,6 +343,7 @@ pub fn kv_cas(ctx: &PluginHostContext, key: &str, expected: &[u8], new_value: &[
 ///
 /// Tiger Style: Validate all inputs before side effects.
 pub fn kv_batch(ctx: &PluginHostContext, ops_json: &[u8]) -> Result<(), String> {
+    check_permission(&ctx.plugin_name, "kv_write", ctx.permissions.kv_write)?;
     let ops: Vec<aspen_plugin_api::KvBatchOp> =
         serde_json::from_slice(ops_json).map_err(|e| format!("invalid batch JSON: {e}"))?;
 
@@ -360,6 +394,9 @@ pub fn kv_batch(ctx: &PluginHostContext, ops_json: &[u8]) -> Result<(), String> 
 ///
 /// The `hash` parameter is the hex-encoded BLAKE3 hash of the blob.
 pub fn blob_has(ctx: &PluginHostContext, hash: &str) -> bool {
+    if check_permission(&ctx.plugin_name, "blob_read", ctx.permissions.blob_read).is_err() {
+        return false;
+    }
     let blob_hash = match hash.parse::<iroh_blobs::Hash>() {
         Ok(h) => h,
         Err(e) => {
@@ -392,6 +429,7 @@ pub fn blob_has(ctx: &PluginHostContext, hash: &str) -> bool {
 
 /// Store bytes in the blob store and return the hex-encoded BLAKE3 hash.
 pub fn blob_put(ctx: &PluginHostContext, data: &[u8]) -> Result<String, String> {
+    check_permission(&ctx.plugin_name, "blob_write", ctx.permissions.blob_write)?;
     let handle = tokio::runtime::Handle::current();
     handle.block_on(async {
         match ctx.blob_store.add_bytes(data).await {
@@ -567,6 +605,11 @@ pub fn register_plugin_host_functions(
     let ctx_kv_get = Arc::clone(&ctx);
     proto
         .register("kv_get", move |key: String| -> Vec<u8> {
+            if let Err(e) = check_permission(&ctx_kv_get.plugin_name, "kv_read", ctx_kv_get.permissions.kv_read) {
+                let mut v = vec![0x02];
+                v.extend_from_slice(e.as_bytes());
+                return v;
+            }
             if let Err(e) = validate_key_prefix(&ctx_kv_get.plugin_name, &ctx_kv_get.allowed_kv_prefixes, &key, "read")
             {
                 let mut v = vec![0x02];
@@ -630,6 +673,11 @@ pub fn register_plugin_host_functions(
     let ctx_kv_scan = Arc::clone(&ctx);
     proto
         .register("kv_scan", move |prefix: String, limit: u32| -> Vec<u8> {
+            if let Err(e) = check_permission(&ctx_kv_scan.plugin_name, "kv_read", ctx_kv_scan.permissions.kv_read) {
+                let mut v = vec![0x01];
+                v.extend_from_slice(e.as_bytes());
+                return v;
+            }
             if let Err(e) = validate_scan_prefix(&ctx_kv_scan.plugin_name, &ctx_kv_scan.allowed_kv_prefixes, &prefix) {
                 let mut v = vec![0x01];
                 v.extend_from_slice(e.as_bytes());
@@ -715,6 +763,12 @@ pub fn register_plugin_host_functions(
     let ctx_blob_get = Arc::clone(&ctx);
     proto
         .register("blob_get", move |hash: String| -> Vec<u8> {
+            if let Err(e) = check_permission(&ctx_blob_get.plugin_name, "blob_read", ctx_blob_get.permissions.blob_read)
+            {
+                let mut v = vec![0x02];
+                v.extend_from_slice(e.as_bytes());
+                return v;
+            }
             let blob_hash = match hash.parse::<iroh_blobs::Hash>() {
                 Ok(h) => h,
                 Err(e) => {
@@ -774,25 +828,50 @@ pub fn register_plugin_host_functions(
         .map_err(|e| anyhow::anyhow!("failed to register node_id: {e}"))?;
 
     // -- Randomness --
+    let ctx_random = Arc::clone(&ctx);
     proto
-        .register("random_bytes", move |count: u32| -> Vec<u8> { random_bytes(count) })
+        .register("random_bytes", move |count: u32| -> Vec<u8> {
+            if check_permission(&ctx_random.plugin_name, "randomness", ctx_random.permissions.randomness).is_err() {
+                return Vec::new();
+            }
+            random_bytes(count)
+        })
         .map_err(|e| anyhow::anyhow!("failed to register random_bytes: {e}"))?;
 
     // -- Cluster --
     let ctx_is_leader = Arc::clone(&ctx);
     proto
-        .register("is_leader", move || -> bool { is_leader(&ctx_is_leader) })
+        .register("is_leader", move || -> bool {
+            if check_permission(&ctx_is_leader.plugin_name, "cluster_info", ctx_is_leader.permissions.cluster_info)
+                .is_err()
+            {
+                return false;
+            }
+            is_leader(&ctx_is_leader)
+        })
         .map_err(|e| anyhow::anyhow!("failed to register is_leader: {e}"))?;
 
     let ctx_leader_id = Arc::clone(&ctx);
     proto
-        .register("leader_id", move || -> u64 { leader_id(&ctx_leader_id) })
+        .register("leader_id", move || -> u64 {
+            if check_permission(&ctx_leader_id.plugin_name, "cluster_info", ctx_leader_id.permissions.cluster_info)
+                .is_err()
+            {
+                return 0;
+            }
+            leader_id(&ctx_leader_id)
+        })
         .map_err(|e| anyhow::anyhow!("failed to register leader_id: {e}"))?;
 
     // -- Crypto --
     let ctx_sign = Arc::clone(&ctx);
     proto
-        .register("sign", move |data: Vec<u8>| -> Vec<u8> { sign(&ctx_sign, &data) })
+        .register("sign", move |data: Vec<u8>| -> Vec<u8> {
+            if check_permission(&ctx_sign.plugin_name, "signing", ctx_sign.permissions.signing).is_err() {
+                return Vec::new();
+            }
+            sign(&ctx_sign, &data)
+        })
         .map_err(|e| anyhow::anyhow!("failed to register sign: {e}"))?;
 
     proto
@@ -801,7 +880,12 @@ pub fn register_plugin_host_functions(
 
     let ctx_pubkey = Arc::clone(&ctx);
     proto
-        .register("public_key_hex", move || -> String { public_key_hex(&ctx_pubkey) })
+        .register("public_key_hex", move || -> String {
+            if check_permission(&ctx_pubkey.plugin_name, "signing", ctx_pubkey.permissions.signing).is_err() {
+                return String::new();
+            }
+            public_key_hex(&ctx_pubkey)
+        })
         .map_err(|e| anyhow::anyhow!("failed to register public_key_hex: {e}"))?;
 
     // -- HLC --
@@ -814,6 +898,9 @@ pub fn register_plugin_host_functions(
     let ctx_schedule = Arc::clone(&ctx);
     proto
         .register("schedule_timer", move |config_json: Vec<u8>| -> String {
+            if let Err(e) = check_permission(&ctx_schedule.plugin_name, "timers", ctx_schedule.permissions.timers) {
+                return format!("\x01{e}");
+            }
             let config: aspen_plugin_api::TimerConfig = match serde_json::from_slice(&config_json) {
                 Ok(c) => c,
                 Err(e) => return format!("\x01invalid timer config: {e}"),
@@ -837,6 +924,9 @@ pub fn register_plugin_host_functions(
     let ctx_cancel = Arc::clone(&ctx);
     proto
         .register("cancel_timer", move |name: String| -> String {
+            if let Err(e) = check_permission(&ctx_cancel.plugin_name, "timers", ctx_cancel.permissions.timers) {
+                return format!("\x01{e}");
+            }
             match ctx_cancel.scheduler_requests.lock() {
                 Ok(mut reqs) => {
                     reqs.push(SchedulerCommand::Cancel(name));

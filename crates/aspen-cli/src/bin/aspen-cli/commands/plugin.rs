@@ -323,6 +323,7 @@ struct ResolvedInstall {
     memory_limit: Option<u64>,
     app_id: Option<String>,
     kv_prefixes: Vec<String>,
+    permissions: Option<aspen_plugin_api::PluginPermissions>,
 }
 
 fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
@@ -375,6 +376,7 @@ fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
         memory_limit: args.memory_limit,
         app_id,
         kv_prefixes,
+        permissions: None, // Defaults to all permissions; future: load from manifest
     })
 }
 
@@ -417,6 +419,7 @@ async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> 
         app_id: resolved.app_id,
         execution_timeout_secs: None,
         kv_prefixes: resolved.kv_prefixes,
+        permissions: resolved.permissions.unwrap_or_else(aspen_plugin_api::PluginPermissions::all),
     };
 
     let manifest_json = serde_json::to_string(&manifest)?;

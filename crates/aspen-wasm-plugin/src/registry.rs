@@ -406,7 +406,8 @@ async fn load_plugin(
         .with_kv_prefixes(manifest.kv_prefixes.clone())
         .with_secret_key(secret_key.clone())
         .with_hlc(Arc::clone(hlc))
-        .with_scheduler_requests(Arc::clone(&scheduler_requests)),
+        .with_scheduler_requests(Arc::clone(&scheduler_requests))
+        .with_permissions(manifest.permissions.clone()),
     );
     register_plugin_host_functions(&mut proto, host_ctx)?;
 
@@ -504,6 +505,7 @@ mod tests {
             app_id: Some("forge".to_string()),
             execution_timeout_secs: None,
             kv_prefixes: vec!["forge:".to_string()],
+            permissions: aspen_plugin_api::PluginPermissions::all(),
         };
 
         let registry = Arc::new(AppRegistry::new());
@@ -533,6 +535,7 @@ mod tests {
             app_id: None,
             execution_timeout_secs: None,
             kv_prefixes: vec![],
+            permissions: aspen_plugin_api::PluginPermissions::default(),
         };
 
         let registry = Arc::new(AppRegistry::new());

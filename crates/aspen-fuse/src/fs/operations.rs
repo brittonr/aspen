@@ -28,10 +28,12 @@ use crate::constants::MAX_READDIR_ENTRIES;
 use crate::constants::MAX_XATTR_NAME_SIZE;
 use crate::constants::MAX_XATTR_VALUE_SIZE;
 use crate::constants::MAX_XATTRS_PER_FILE;
+use crate::constants::META_SUFFIX;
 use crate::constants::ROOT_INODE;
 use crate::constants::SYMLINK_SUFFIX;
 use crate::constants::XATTR_PREFIX;
 use crate::inode::EntryType;
+use crate::metadata::FileMetadata;
 
 impl FileSystem for AspenFs {
     type Inode = u64;
@@ -74,21 +76,13 @@ impl FileSystem for AspenFs {
         // Get or create inode
         let inode = self.inodes.get_or_create(&child_path, entry_type)?;
 
-        // Get size (0 for directories, target length for symlinks)
-        let size = match entry_type {
-            EntryType::File => {
-                let key = Self::path_to_key(&child_path)?;
-                self.kv_read(&key)?.map(|v| v.len() as u64).unwrap_or(0)
-            }
-            EntryType::Directory => 0,
-            EntryType::Symlink => {
-                let key = Self::path_to_key(&child_path)?;
-                let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
-                self.kv_read(&symlink_key)?.map(|v| v.len() as u64).unwrap_or(0)
-            }
-        };
+        // Get size and metadata (cached)
+        let (size, meta) = self.get_size_and_meta(&child_path, entry_type)?;
 
-        Ok(self.make_entry(inode, entry_type, size))
+        match meta {
+            Some(ref m) => Ok(self.make_entry_with_meta(inode, entry_type, size, m)),
+            None => Ok(self.make_entry(inode, entry_type, size)),
+        }
     }
 
     fn getattr(&self, _ctx: &Context, inode: u64, _handle: Option<u64>) -> std::io::Result<(stat64, Duration)> {
@@ -101,20 +95,14 @@ impl FileSystem for AspenFs {
             .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
-        let size = match entry.entry_type {
-            EntryType::File => {
-                let key = Self::path_to_key(&entry.path)?;
-                self.kv_read(&key)?.map(|v| v.len() as u64).unwrap_or(0)
-            }
-            EntryType::Directory => 0,
-            EntryType::Symlink => {
-                let key = Self::path_to_key(&entry.path)?;
-                let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
-                self.kv_read(&symlink_key)?.map(|v| v.len() as u64).unwrap_or(0)
-            }
+        let (size, meta) = self.get_size_and_meta(&entry.path, entry.entry_type)?;
+
+        let attr = match meta {
+            Some(ref m) => self.make_attr_with_meta(inode, entry.entry_type, size, m),
+            None => self.make_attr(inode, entry.entry_type, size),
         };
 
-        Ok((self.make_attr(inode, entry.entry_type, size), ATTR_TTL))
+        Ok((attr, ATTR_TTL))
     }
 
     fn setattr(
@@ -125,22 +113,48 @@ impl FileSystem for AspenFs {
         _handle: Option<u64>,
         valid: SetattrValid,
     ) -> std::io::Result<(stat64, Duration)> {
-        // Handle truncation / extension (e.g., O_TRUNC sends setattr with SIZE)
-        if valid.contains(SetattrValid::SIZE) && inode != ROOT_INODE {
-            let entry = self
-                .inodes
-                .get_path(inode)?
-                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
-
-            if entry.entry_type == EntryType::File {
-                let key = Self::path_to_key(&entry.path)?;
-                let mut value = self.kv_read(&key)?.unwrap_or_default();
-                value.resize(attr.st_size as usize, 0);
-                self.kv_write(&key, &value)?;
-            }
+        if inode == ROOT_INODE {
+            return self.getattr(ctx, inode, None);
         }
 
-        // Return updated attributes (mode, owner, etc. are not mutable)
+        let entry = self
+            .inodes
+            .get_path(inode)?
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
+
+        let key = Self::path_to_key(&entry.path)?;
+
+        // Handle truncation / extension (e.g., O_TRUNC sends setattr with SIZE)
+        if valid.contains(SetattrValid::SIZE) && entry.entry_type == EntryType::File {
+            let mut value = self.kv_read(&key)?.unwrap_or_default();
+            value.resize(attr.st_size as usize, 0);
+            self.kv_write(&key, &value)?;
+        }
+
+        // Handle timestamp changes (touch, utimensat)
+        let needs_meta_update = valid.contains(SetattrValid::MTIME)
+            || valid.contains(SetattrValid::MTIME_NOW)
+            || valid.contains(SetattrValid::SIZE);
+
+        if needs_meta_update {
+            let existing = self.read_metadata(&key)?.unwrap_or_else(FileMetadata::now);
+
+            let updated = if valid.contains(SetattrValid::MTIME_NOW) {
+                // `touch` without explicit time — set mtime to now
+                existing.touch()
+            } else if valid.contains(SetattrValid::MTIME) {
+                // Explicit mtime from utimensat
+                FileMetadata::with_mtime(attr.st_mtime, attr.st_mtime_nsec).touch_ctime()
+            } else {
+                // SIZE change — update both mtime and ctime
+                existing.touch()
+            };
+
+            self.write_metadata(&key, &updated)?;
+            // Invalidate meta cache so getattr picks up new timestamps
+            self.cache.invalidate_meta(&entry.path);
+        }
+
         self.getattr(ctx, inode, None)
     }
 
@@ -400,6 +414,11 @@ impl FileSystem for AspenFs {
         // Write back
         self.kv_write(&key, &value)?;
 
+        // Update timestamps: both mtime and ctime change on write
+        let meta = self.read_metadata(&key)?.unwrap_or_else(FileMetadata::now).touch();
+        self.write_metadata(&key, &meta)?;
+        self.cache.invalidate_meta(&entry.path);
+
         Ok(size as usize)
     }
 
@@ -448,9 +467,13 @@ impl FileSystem for AspenFs {
         // Create empty file
         self.kv_write(&key, &[])?;
 
+        // Store initial timestamps
+        let meta = FileMetadata::now();
+        self.write_metadata(&key, &meta)?;
+
         // Allocate inode
         let inode = self.inodes.get_or_create(&child_path, EntryType::File)?;
-        let entry = self.make_entry(inode, EntryType::File, 0);
+        let entry = self.make_entry_with_meta(inode, EntryType::File, 0, &meta);
 
         Ok((entry, None, OpenOptions::empty(), None))
     }
@@ -477,8 +500,9 @@ impl FileSystem for AspenFs {
 
         let key = Self::path_to_key(&child_path)?;
 
-        // Delete from KV
+        // Delete from KV (data + metadata)
         self.kv_delete(&key)?;
+        let _ = self.delete_metadata(&key);
 
         // Remove from inode cache
         self.inodes.remove_path(&child_path)?;
@@ -506,11 +530,15 @@ impl FileSystem for AspenFs {
             format!("{}/{}", parent_entry.path, name_str)
         };
 
-        // Create directory marker (empty key ending with /)
-        // Or just allocate the inode - directories are virtual
+        // Store directory timestamps
+        let key = Self::path_to_key(&dir_path)?;
+        let meta = FileMetadata::now();
+        self.write_metadata(&key, &meta)?;
+
+        // Allocate the inode — directories are virtual (derived from key prefixes)
         let inode = self.inodes.get_or_create(&dir_path, EntryType::Directory)?;
 
-        Ok(self.make_entry(inode, EntryType::Directory, 0))
+        Ok(self.make_entry_with_meta(inode, EntryType::Directory, 0, &meta))
     }
 
     fn rmdir(&self, ctx: &Context, parent: u64, name: &CStr) -> std::io::Result<()> {
@@ -533,12 +561,17 @@ impl FileSystem for AspenFs {
             format!("{}/{}", parent_entry.path, name_str)
         };
 
-        // Check if directory is empty
+        // Check if directory is empty (exclude .meta keys from the check)
         let prefix = format!("{}/", dir_path);
         let children = self.kv_scan(&prefix)?;
-        if !children.is_empty() {
+        let real_children: Vec<_> = children.iter().filter(|k| !k.ends_with(META_SUFFIX)).collect();
+        if !real_children.is_empty() {
             return Err(std::io::Error::new(std::io::ErrorKind::DirectoryNotEmpty, "directory not empty"));
         }
+
+        // Clean up directory metadata
+        let key = Self::path_to_key(&dir_path)?;
+        let _ = self.delete_metadata(&key);
 
         // Remove from inode cache
         self.inodes.remove_path(&dir_path)?;
@@ -662,9 +695,13 @@ impl FileSystem for AspenFs {
         self.kv_write(&key, &[])?;
         self.kv_write(&symlink_key, link_target.as_bytes())?;
 
+        // Store initial timestamps
+        let meta = FileMetadata::now();
+        self.write_metadata(&key, &meta)?;
+
         // Allocate inode
         let inode = self.inodes.get_or_create(&link_path, EntryType::Symlink)?;
-        let entry = self.make_entry(inode, EntryType::Symlink, link_target.len() as u64);
+        let entry = self.make_entry_with_meta(inode, EntryType::Symlink, link_target.len() as u64, &meta);
 
         Ok(entry)
     }
@@ -895,7 +932,7 @@ impl FileSystem for AspenFs {
 
 /// Helper methods for rename operations, extracted to keep `rename` under 70 lines.
 impl AspenFs {
-    /// Rename a file or symlink by copying data and xattrs to the new key.
+    /// Rename a file or symlink by copying data, metadata, and xattrs to the new key.
     fn rename_file_or_symlink(&self, old_key: &str, new_key: &str) -> std::io::Result<()> {
         // Read old value
         let value = self.kv_read(old_key)?.unwrap_or_default();
@@ -912,6 +949,13 @@ impl AspenFs {
             let symlink_new = format!("{}{}", new_key, SYMLINK_SUFFIX);
             self.kv_write(&symlink_new, &target)?;
             self.kv_delete(&symlink_old)?;
+        }
+
+        // Move metadata (update ctime for the rename)
+        if let Ok(Some(meta)) = self.read_metadata(old_key) {
+            let updated = meta.touch_ctime();
+            self.write_metadata(new_key, &updated)?;
+            let _ = self.delete_metadata(old_key);
         }
 
         // Delete old
@@ -932,10 +976,17 @@ impl AspenFs {
         Ok(())
     }
 
-    /// Rename a directory by moving all children to the new prefix.
+    /// Rename a directory by moving all children (including metadata) to the new prefix.
     fn rename_directory(&self, old_key: &str, new_key: &str) -> std::io::Result<()> {
         let old_prefix = format!("{}/", old_key);
         let new_prefix = format!("{}/", new_key);
+
+        // Move directory's own metadata
+        if let Ok(Some(meta)) = self.read_metadata(old_key) {
+            let updated = meta.touch_ctime();
+            self.write_metadata(new_key, &updated)?;
+            let _ = self.delete_metadata(old_key);
+        }
 
         let children = self.kv_scan(&old_prefix)?;
         for child_key in children {
@@ -946,6 +997,9 @@ impl AspenFs {
                 self.kv_delete(&child_key)?;
             }
         }
+
+        // Invalidate cache for old prefix
+        self.cache.invalidate_prefix(&old_prefix);
 
         Ok(())
     }

@@ -23,6 +23,8 @@ use fuse_backend_rs::api::filesystem::Context;
 use fuse_backend_rs::api::filesystem::Entry;
 use tracing::debug;
 
+use crate::cache::CachedMeta;
+use crate::cache::ReadCache;
 use crate::client::SharedClient;
 use crate::constants::ATTR_TTL;
 use crate::constants::BLOCK_SIZE;
@@ -33,9 +35,11 @@ use crate::constants::ENTRY_TTL;
 use crate::constants::MAX_KEY_SIZE;
 use crate::constants::MAX_READDIR_ENTRIES;
 use crate::constants::MAX_VALUE_SIZE;
+use crate::constants::META_SUFFIX;
 use crate::constants::ROOT_INODE;
 use crate::inode::EntryType;
 use crate::inode::InodeManager;
+use crate::metadata::FileMetadata;
 
 // POSIX access mode bits
 const R_OK: u32 = 4;
@@ -80,6 +84,8 @@ pub struct AspenFs {
     /// Key prefix for namespace isolation (e.g., `ci/workspaces/{vm_id}/`).
     /// Prepended to all KV keys. Empty string means no prefix.
     key_prefix: String,
+    /// Read cache for reducing network round-trips.
+    cache: ReadCache,
 }
 
 impl AspenFs {
@@ -91,6 +97,7 @@ impl AspenFs {
             gid,
             backend: KvBackend::Client(client),
             key_prefix: String::new(),
+            cache: ReadCache::new(),
         }
     }
 
@@ -106,6 +113,7 @@ impl AspenFs {
             gid,
             backend: KvBackend::Client(client),
             key_prefix: prefix,
+            cache: ReadCache::new(),
         }
     }
 
@@ -118,6 +126,7 @@ impl AspenFs {
             gid,
             backend: KvBackend::None,
             key_prefix: String::new(),
+            cache: ReadCache::new(),
         }
     }
 
@@ -131,6 +140,7 @@ impl AspenFs {
             gid,
             backend: KvBackend::InMemory(Arc::new(std::sync::RwLock::new(BTreeMap::new()))),
             key_prefix: String::new(),
+            cache: ReadCache::new(),
         }
     }
 
@@ -147,6 +157,7 @@ impl AspenFs {
             gid,
             backend: KvBackend::InMemory(Arc::clone(&store)),
             key_prefix: String::new(),
+            cache: ReadCache::new(),
         };
         (fs, store)
     }
@@ -206,10 +217,14 @@ impl AspenFs {
     }
 
     /// Build a stat64 structure for a file or directory.
+    ///
+    /// Uses stored timestamps (mtime/ctime) if available, otherwise falls
+    /// back to the current wall-clock time. atime is always current time
+    /// (not persisted to avoid write amplification).
     fn make_attr(&self, inode: u64, entry_type: EntryType, size: u64) -> stat64 {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO);
-        let sec = now.as_secs() as i64;
-        let nsec = now.subsec_nanos() as i64;
+        let now_sec = now.as_secs() as i64;
+        let now_nsec = now.subsec_nanos() as i64;
 
         let mode = match entry_type {
             EntryType::File => DEFAULT_FILE_MODE,
@@ -235,12 +250,24 @@ impl AspenFs {
         attr.st_size = size as i64;
         attr.st_blocks = blocks as i64;
         attr.st_blksize = i64::from(BLOCK_SIZE);
-        attr.st_atime = sec;
-        attr.st_atime_nsec = nsec;
-        attr.st_mtime = sec;
-        attr.st_mtime_nsec = nsec;
-        attr.st_ctime = sec;
-        attr.st_ctime_nsec = nsec;
+        // atime is always "now" (not persisted)
+        attr.st_atime = now_sec;
+        attr.st_atime_nsec = now_nsec;
+        // mtime/ctime default to now, overridden by make_attr_with_meta
+        attr.st_mtime = now_sec;
+        attr.st_mtime_nsec = now_nsec;
+        attr.st_ctime = now_sec;
+        attr.st_ctime_nsec = now_nsec;
+        attr
+    }
+
+    /// Build a stat64 with stored persistent timestamps.
+    fn make_attr_with_meta(&self, inode: u64, entry_type: EntryType, size: u64, meta: &FileMetadata) -> stat64 {
+        let mut attr = self.make_attr(inode, entry_type, size);
+        attr.st_mtime = meta.mtime_secs;
+        attr.st_mtime_nsec = meta.mtime_nsecs;
+        attr.st_ctime = meta.ctime_secs;
+        attr.st_ctime_nsec = meta.ctime_nsecs;
         attr
     }
 
@@ -250,6 +277,18 @@ impl AspenFs {
             inode,
             generation: 0,
             attr: self.make_attr(inode, entry_type, size),
+            attr_flags: 0,
+            attr_timeout: ATTR_TTL,
+            entry_timeout: ENTRY_TTL,
+        }
+    }
+
+    /// Build an Entry with stored persistent timestamps.
+    fn make_entry_with_meta(&self, inode: u64, entry_type: EntryType, size: u64, meta: &FileMetadata) -> Entry {
+        Entry {
+            inode,
+            generation: 0,
+            attr: self.make_attr_with_meta(inode, entry_type, size, meta),
             attr_flags: 0,
             attr_timeout: ATTR_TTL,
             entry_timeout: ENTRY_TTL,
@@ -274,24 +313,36 @@ impl AspenFs {
         }
     }
 
-    /// Read a key from the KV store.
+    /// Read a key from the KV store (with caching).
     fn kv_read(&self, key: &str) -> std::io::Result<Option<Vec<u8>>> {
-        match &self.backend {
+        // Check cache first
+        if let Some(cached) = self.cache.get_data(key) {
+            return Ok(Some(cached));
+        }
+
+        let result = match &self.backend {
             KvBackend::Client(client) => {
                 let prefixed = self.prefixed_key(key);
                 debug!(key = %prefixed, "reading key from Aspen");
-                client.read_key(&prefixed).map_err(|e| std::io::Error::other(e.to_string()))
+                client.read_key(&prefixed).map_err(|e| std::io::Error::other(e.to_string()))?
             }
-            KvBackend::None => Ok(None),
+            KvBackend::None => None,
             KvBackend::InMemory(store) => {
                 let prefixed = self.prefixed_key(key);
                 let store = store.read().map_err(|_| std::io::Error::other("lock poisoned"))?;
-                Ok(store.get(&prefixed).cloned())
+                store.get(&prefixed).cloned()
             }
+        };
+
+        // Populate cache on hit
+        if let Some(ref value) = result {
+            self.cache.put_data(key.to_string(), value.clone());
         }
+
+        Ok(result)
     }
 
-    /// Write a key to the KV store.
+    /// Write a key to the KV store (invalidates cache).
     fn kv_write(&self, key: &str, value: &[u8]) -> std::io::Result<()> {
         let prefixed = self.prefixed_key(key);
         if prefixed.len() > MAX_KEY_SIZE {
@@ -305,60 +356,154 @@ impl AspenFs {
             KvBackend::Client(client) => {
                 debug!(key = %prefixed, value_len = value.len(), "writing key to Aspen");
                 client.write_key(&prefixed, value).map_err(|e| std::io::Error::other(e.to_string()))?;
-                Ok(())
             }
-            KvBackend::None => Ok(()),
+            KvBackend::None => {}
             KvBackend::InMemory(store) => {
                 let mut store = store.write().map_err(|_| std::io::Error::other("lock poisoned"))?;
                 store.insert(prefixed, value.to_vec());
-                Ok(())
             }
         }
+
+        // Invalidate caches: data, metadata for the path, and scan results
+        self.cache.invalidate_data(key);
+        self.cache.invalidate_meta(key);
+        self.cache.invalidate_all_scans();
+
+        Ok(())
     }
 
-    /// Delete a key from the KV store.
+    /// Delete a key from the KV store (invalidates cache).
     fn kv_delete(&self, key: &str) -> std::io::Result<()> {
         match &self.backend {
             KvBackend::Client(client) => {
                 let prefixed = self.prefixed_key(key);
                 debug!(key = %prefixed, "deleting key from Aspen");
                 client.delete_key(&prefixed).map_err(|e| std::io::Error::other(e.to_string()))?;
-                Ok(())
             }
-            KvBackend::None => Ok(()),
+            KvBackend::None => {}
             KvBackend::InMemory(store) => {
                 let prefixed = self.prefixed_key(key);
                 let mut store = store.write().map_err(|_| std::io::Error::other("lock poisoned"))?;
                 store.remove(&prefixed);
-                Ok(())
             }
         }
+
+        // Invalidate caches
+        self.cache.invalidate_data(key);
+        self.cache.invalidate_meta(key);
+        self.cache.invalidate_all_scans();
+
+        Ok(())
     }
 
-    /// Scan keys with a prefix from the KV store.
+    /// Scan keys with a prefix from the KV store (with caching).
     fn kv_scan(&self, prefix: &str) -> std::io::Result<Vec<String>> {
-        match &self.backend {
+        // Check cache first
+        if let Some(cached) = self.cache.get_scan(prefix) {
+            return Ok(cached);
+        }
+
+        let keys = match &self.backend {
             KvBackend::Client(client) => {
                 let prefixed = self.prefixed_key(prefix);
                 debug!(prefix = %prefixed, "scanning keys from Aspen");
                 let entries = client
                     .scan_keys(&prefixed, MAX_READDIR_ENTRIES)
                     .map_err(|e| std::io::Error::other(e.to_string()))?;
-                Ok(entries.into_iter().map(|(k, _)| self.strip_prefix(&k).to_string()).collect())
+                entries.into_iter().map(|(k, _)| self.strip_prefix(&k).to_string()).collect()
             }
-            KvBackend::None => Ok(Vec::new()),
+            KvBackend::None => Vec::new(),
             KvBackend::InMemory(store) => {
                 let prefixed = self.prefixed_key(prefix);
                 let store = store.read().map_err(|_| std::io::Error::other("lock poisoned"))?;
-                let keys: Vec<String> = store
+                store
                     .keys()
                     .filter(|k| k.starts_with(&prefixed))
                     .take(MAX_READDIR_ENTRIES as usize)
                     .map(|k| self.strip_prefix(k).to_string())
-                    .collect();
-                Ok(keys)
+                    .collect()
             }
+        };
+
+        // Cache the scan result
+        self.cache.put_scan(prefix.to_string(), keys.clone());
+        Ok(keys)
+    }
+
+    // =========================================================================
+    // Persistent metadata helpers
+    // =========================================================================
+
+    /// Read stored file metadata for a path.
+    ///
+    /// Returns `None` if no metadata is stored (file predates timestamp tracking).
+    fn read_metadata(&self, key: &str) -> std::io::Result<Option<FileMetadata>> {
+        let meta_key = format!("{}{}", key, META_SUFFIX);
+        let bytes = self.kv_read(&meta_key)?;
+        Ok(bytes.and_then(|b| FileMetadata::from_bytes(&b)))
+    }
+
+    /// Write file metadata for a path.
+    fn write_metadata(&self, key: &str, meta: &FileMetadata) -> std::io::Result<()> {
+        let meta_key = format!("{}{}", key, META_SUFFIX);
+        self.kv_write(&meta_key, &meta.to_bytes())
+    }
+
+    /// Delete file metadata for a path.
+    fn delete_metadata(&self, key: &str) -> std::io::Result<()> {
+        let meta_key = format!("{}{}", key, META_SUFFIX);
+        self.kv_delete(&meta_key)
+    }
+
+    /// Get size and metadata for a file/symlink, populating the meta cache.
+    ///
+    /// Returns (size, optional metadata) and caches the result.
+    fn get_size_and_meta(&self, path: &str, entry_type: EntryType) -> std::io::Result<(u64, Option<FileMetadata>)> {
+        // Check meta cache first
+        if let Some(cached) = self.cache.get_meta(path) {
+            return Ok((
+                cached.size,
+                Some(FileMetadata {
+                    mtime_secs: cached.mtime_secs,
+                    mtime_nsecs: cached.mtime_nsecs,
+                    ctime_secs: cached.ctime_secs,
+                    ctime_nsecs: cached.ctime_nsecs,
+                }),
+            ));
         }
+
+        let key = Self::path_to_key(path)?;
+        let (size, meta) = match entry_type {
+            EntryType::File => {
+                let sz = self.kv_read(&key)?.map(|v| v.len() as u64).unwrap_or(0);
+                let meta = self.read_metadata(&key)?;
+                (sz, meta)
+            }
+            EntryType::Directory => {
+                let meta = self.read_metadata(&key)?;
+                (0, meta)
+            }
+            EntryType::Symlink => {
+                let symlink_key = format!("{}{}", key, crate::constants::SYMLINK_SUFFIX);
+                let sz = self.kv_read(&symlink_key)?.map(|v| v.len() as u64).unwrap_or(0);
+                let meta = self.read_metadata(&key)?;
+                (sz, meta)
+            }
+        };
+
+        // Populate meta cache
+        let meta_ref = meta.as_ref();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO);
+        self.cache.put_meta(path.to_string(), CachedMeta {
+            entry_type,
+            size,
+            mtime_secs: meta_ref.map_or(now.as_secs() as i64, |m| m.mtime_secs),
+            mtime_nsecs: meta_ref.map_or(now.subsec_nanos() as i64, |m| m.mtime_nsecs),
+            ctime_secs: meta_ref.map_or(now.as_secs() as i64, |m| m.ctime_secs),
+            ctime_nsecs: meta_ref.map_or(now.subsec_nanos() as i64, |m| m.ctime_nsecs),
+        });
+
+        Ok((size, meta))
     }
 
     /// Check if a key exists (file) or has children (directory).

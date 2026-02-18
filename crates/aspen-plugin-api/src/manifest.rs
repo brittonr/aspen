@@ -50,6 +50,80 @@ pub struct PluginManifest {
     /// Tiger Style: Explicit bounds prevent cross-plugin data access.
     #[serde(default)]
     pub kv_prefixes: Vec<String>,
+    /// Capability permissions controlling which host APIs the plugin may use.
+    ///
+    /// Default: all denied. The manifest must explicitly grant each capability.
+    /// Checked at runtime before each host function call.
+    #[serde(default)]
+    pub permissions: PluginPermissions,
+}
+
+/// Capability permissions for a WASM plugin.
+///
+/// Controls which host functions the plugin is allowed to call.
+/// Checked at runtime before each host function invocation.
+///
+/// Default: all permissions denied (least privilege).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginPermissions {
+    /// Allow reading from the KV store (kv_get, kv_scan).
+    #[serde(default)]
+    pub kv_read: bool,
+    /// Allow writing to the KV store (kv_put, kv_delete, kv_cas, kv_batch).
+    #[serde(default)]
+    pub kv_write: bool,
+    /// Allow reading from the blob store (blob_has, blob_get).
+    #[serde(default)]
+    pub blob_read: bool,
+    /// Allow writing to the blob store (blob_put).
+    #[serde(default)]
+    pub blob_write: bool,
+    /// Allow querying cluster state (is_leader, leader_id).
+    #[serde(default)]
+    pub cluster_info: bool,
+    /// Allow generating random bytes.
+    #[serde(default)]
+    pub randomness: bool,
+    /// Allow cryptographic signing with the node's key.
+    #[serde(default)]
+    pub signing: bool,
+    /// Allow scheduling timers.
+    #[serde(default)]
+    pub timers: bool,
+}
+
+impl Default for PluginPermissions {
+    /// Default: all permissions denied (explicit opt-in required).
+    fn default() -> Self {
+        Self {
+            kv_read: false,
+            kv_write: false,
+            blob_read: false,
+            blob_write: false,
+            cluster_info: false,
+            randomness: false,
+            signing: false,
+            timers: false,
+        }
+    }
+}
+
+impl PluginPermissions {
+    /// Create permissions with all capabilities granted.
+    ///
+    /// Useful for trusted system plugins.
+    pub fn all() -> Self {
+        Self {
+            kv_read: true,
+            kv_write: true,
+            blob_read: true,
+            blob_write: true,
+            cluster_info: true,
+            randomness: true,
+            signing: true,
+            timers: true,
+        }
+    }
 }
 
 /// Lightweight plugin info returned by `plugin-info` guest export.

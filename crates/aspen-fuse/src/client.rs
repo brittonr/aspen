@@ -18,7 +18,9 @@
 //! - Bounded retries with backoff
 //! - Resource limits from constants.rs
 
+use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -35,11 +37,13 @@ use aspen_client::WriteResultResponse;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::SecretKey;
+use iroh::endpoint::Connection;
 use tokio::runtime::Runtime;
 use tracing::debug;
 use tracing::warn;
 
 use crate::constants::CONNECTION_TIMEOUT;
+use crate::constants::POOL_MAX_CONNECTIONS;
 use crate::constants::READ_TIMEOUT;
 use crate::constants::WRITE_TIMEOUT;
 
@@ -49,23 +53,91 @@ const MAX_RETRIES: u32 = 3;
 /// Delay between retries.
 const RETRY_DELAY: Duration = Duration::from_millis(500);
 
+/// Connection pool for reusing Iroh QUIC connections.
+///
+/// QUIC connections support multiplexed bidirectional streams, so a single
+/// connection can serve many concurrent RPCs. The pool maintains a set of
+/// established connections and hands them out on request.
+///
+/// Connections that fail stream creation are discarded and replaced.
+struct ConnectionPool {
+    /// Available connections. We use a VecDeque for round-robin.
+    connections: Mutex<VecDeque<Connection>>,
+    /// Endpoint for creating new connections.
+    endpoint: Endpoint,
+    /// Target node address.
+    target_addr: EndpointAddr,
+}
+
+impl ConnectionPool {
+    /// Create a new empty connection pool.
+    fn new(endpoint: Endpoint, target_addr: EndpointAddr) -> Self {
+        Self {
+            connections: Mutex::new(VecDeque::new()),
+            endpoint,
+            target_addr,
+        }
+    }
+
+    /// Acquire a connection from the pool, or create a new one.
+    ///
+    /// Returns a connection that is expected to be healthy. If the pool is
+    /// empty, a new connection is established. If a pooled connection is
+    /// stale (detected by the caller when `open_bi` fails), the caller
+    /// should call `discard` and retry.
+    async fn acquire(&self) -> Result<Connection> {
+        // Try to take one from the pool
+        {
+            let mut pool = self.connections.lock().map_err(|_| anyhow::anyhow!("pool lock poisoned"))?;
+            if let Some(conn) = pool.pop_front() {
+                return Ok(conn);
+            }
+        }
+
+        // Pool empty — establish a new connection
+        let conn =
+            tokio::time::timeout(CONNECTION_TIMEOUT, self.endpoint.connect(self.target_addr.clone(), CLIENT_ALPN))
+                .await
+                .context("connection timeout")?
+                .context("failed to connect to node")?;
+
+        Ok(conn)
+    }
+
+    /// Return a connection to the pool for reuse.
+    ///
+    /// If the pool is at capacity, the connection is dropped.
+    fn release(&self, conn: Connection) {
+        let Ok(mut pool) = self.connections.lock() else {
+            return;
+        };
+        if pool.len() < POOL_MAX_CONNECTIONS {
+            pool.push_back(conn);
+        }
+        // Over capacity: connection is dropped (QUIC close)
+    }
+}
+
 /// Synchronous wrapper around the async Aspen client.
 ///
 /// Designed for use in FUSE filesystem operations which are synchronous.
 /// Uses a multi-threaded tokio runtime internally.
+///
+/// Maintains a connection pool to avoid per-RPC connection setup overhead.
+/// QUIC connections support multiplexed streams, so even a single pooled
+/// connection serves multiple concurrent FUSE threads.
 pub struct FuseSyncClient {
     /// Multi-threaded tokio runtime for async operations.
     runtime: Runtime,
-    /// Iroh endpoint for making connections.
-    endpoint: Endpoint,
-    /// Target node address.
-    target_addr: EndpointAddr,
+    /// Connection pool for reusing QUIC connections.
+    pool: ConnectionPool,
 }
 
 impl FuseSyncClient {
     /// Create a new synchronous FUSE client.
     ///
     /// Connects to the Aspen cluster using the provided endpoint address.
+    /// Establishes a connection pool for reusing QUIC connections.
     pub fn new(target_addr: EndpointAddr) -> Result<Self> {
         // Create a multi-threaded runtime for async operations
         // IMPORTANT: Must be multi-threaded to avoid deadlocks when blocking
@@ -91,11 +163,9 @@ impl FuseSyncClient {
                 .context("failed to bind Iroh endpoint")
         })?;
 
-        Ok(Self {
-            runtime,
-            endpoint,
-            target_addr,
-        })
+        let pool = ConnectionPool::new(endpoint, target_addr);
+
+        Ok(Self { runtime, pool })
     }
 
     /// Create a client from a cluster ticket string.
@@ -153,31 +223,41 @@ impl FuseSyncClient {
     }
 
     /// Inner async RPC send implementation.
+    ///
+    /// Acquires a connection from the pool, opens a bidirectional stream,
+    /// and returns the connection to the pool on success. On stream failure,
+    /// the connection is discarded and a fresh one is tried.
     async fn send_rpc_inner(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         debug!(
-            target_node_id = %self.target_addr.id,
+            target_node_id = %self.pool.target_addr.id,
             request_type = ?std::mem::discriminant(&request),
             "sending FUSE RPC request"
         );
 
-        // Connect to the target node
-        let connection =
-            tokio::time::timeout(CONNECTION_TIMEOUT, self.endpoint.connect(self.target_addr.clone(), CLIENT_ALPN))
-                .await
-                .context("connection timeout")?
-                .context("failed to connect to node")?;
-
-        // Open a bidirectional stream for the RPC
-        let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
-
-        // Serialize and send the request
+        // Serialize the request once (before connection attempts)
         let request_bytes = postcard::to_stdvec(&request).context("failed to serialize request")?;
+
+        // Try with a pooled connection first, then a fresh one
+        let mut connection = self.pool.acquire().await?;
+
+        let (mut send, mut recv) = match connection.open_bi().await {
+            Ok(streams) => streams,
+            Err(_) => {
+                // Pooled connection was stale — get a fresh one
+                debug!("pooled connection stale, establishing new connection");
+                connection = self.pool.acquire().await?;
+                connection.open_bi().await.context("failed to open stream")?
+            }
+        };
 
         send.write_all(&request_bytes).await.context("failed to send request")?;
         send.finish().context("failed to finish send stream")?;
 
         // Read the response
         let response_bytes = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read response")?;
+
+        // Return connection to pool for reuse
+        self.pool.release(connection);
 
         // Deserialize the response
         let response: ClientRpcResponse =
@@ -278,11 +358,11 @@ impl FuseSyncClient {
         }
     }
 
-    /// Shutdown the client.
+    /// Shutdown the client and close all pooled connections.
     #[allow(dead_code)]
     pub fn shutdown(self) {
         self.runtime.block_on(async {
-            self.endpoint.close().await;
+            self.pool.endpoint.close().await;
         });
     }
 }

@@ -72,6 +72,50 @@ pub const MAX_XATTR_VALUE_SIZE: usize = 64 * 1024;
 pub const MAX_XATTRS_PER_FILE: usize = 100;
 
 // ============================================================================
+// Read Cache
+// ============================================================================
+
+/// Maximum number of entries in the data read cache.
+pub const CACHE_MAX_DATA_ENTRIES: usize = 1000;
+
+/// Maximum total bytes stored in the data read cache (64 MB).
+pub const CACHE_MAX_DATA_BYTES: usize = 64 * 1024 * 1024;
+
+/// TTL for cached data entries (5 seconds).
+pub const CACHE_DATA_TTL: Duration = Duration::from_secs(5);
+
+/// Maximum number of entries in the metadata cache.
+pub const CACHE_MAX_META_ENTRIES: usize = 5000;
+
+/// TTL for cached metadata entries (2 seconds).
+pub const CACHE_META_TTL: Duration = Duration::from_secs(2);
+
+/// Maximum number of entries in the scan/readdir cache.
+pub const CACHE_MAX_SCAN_ENTRIES: usize = 500;
+
+/// TTL for cached scan results (1 second — directories change more often).
+pub const CACHE_SCAN_TTL: Duration = Duration::from_secs(1);
+
+// ============================================================================
+// Persistent File Metadata
+// ============================================================================
+
+/// Suffix for file metadata storage in KV.
+///
+/// Format: `<key>.meta` -> serialized FileMetadata (mtime, ctime).
+pub const META_SUFFIX: &str = ".meta";
+
+// ============================================================================
+// Connection Pool
+// ============================================================================
+
+/// Maximum number of connections in the pool.
+pub const POOL_MAX_CONNECTIONS: usize = 8;
+
+/// How long to wait for a connection before creating a new one.
+pub const POOL_ACQUIRE_TIMEOUT: Duration = Duration::from_millis(500);
+
+// ============================================================================
 // Compile-Time Constant Assertions
 // ============================================================================
 
@@ -106,3 +150,12 @@ const _: () = assert!(READ_TIMEOUT.as_secs() < WRITE_TIMEOUT.as_secs());
 // Xattr limits relationships
 const _: () = assert!(MAX_XATTR_NAME_SIZE < MAX_XATTR_VALUE_SIZE);
 const _: () = assert!(MAX_XATTR_VALUE_SIZE < MAX_VALUE_SIZE);
+
+// Cache limits
+const _: () = assert!(CACHE_MAX_DATA_ENTRIES > 0);
+const _: () = assert!(CACHE_MAX_DATA_BYTES > 0);
+const _: () = assert!(CACHE_MAX_META_ENTRIES > 0);
+const _: () = assert!(CACHE_MAX_SCAN_ENTRIES > 0);
+
+// Connection pool
+const _: () = assert!(POOL_MAX_CONNECTIONS > 0);

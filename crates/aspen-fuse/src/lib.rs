@@ -32,10 +32,12 @@
 //! - Fail-fast on configuration errors
 //! - Bounded retries with backoff
 
+pub mod cache;
 pub mod client;
 pub mod constants;
 pub mod fs;
 pub mod inode;
+pub mod metadata;
 
 #[cfg(feature = "virtiofs")]
 pub mod virtiofs;
