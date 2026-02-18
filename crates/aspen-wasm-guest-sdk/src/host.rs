@@ -54,10 +54,15 @@ pub fn current_time_ms() -> u64 {
 }
 
 /// Read a value from the distributed KV store.
-/// Returns `None` if the key does not exist (empty bytes).
+///
+/// Returns `Some(data)` if the key exists, `None` if not found.
+/// Errors (tag `0x02`) are logged and treated as `None`.
+///
+/// Host encoding: `[0x00] ++ value` = found, `[0x01]` = not-found,
+/// `[0x02] ++ error_msg` = error.
 pub fn kv_get_value(key: &str) -> Option<Vec<u8>> {
     let result = unsafe { kv_get(key.to_string()) };
-    if result.is_empty() { None } else { Some(result) }
+    decode_tagged_option_result(&result)
 }
 
 /// Write a value to the distributed KV store.
@@ -81,12 +86,24 @@ pub fn kv_delete_key(key: &str) -> Result<(), String> {
 
 /// Scan keys by prefix from the distributed KV store.
 /// Returns a list of `(key, value)` pairs, JSON-decoded from the host response.
+///
+/// Host encoding: `[0x00] ++ json_bytes` = ok, `[0x01] ++ error_msg` = error.
 pub fn kv_scan_prefix(prefix: &str, limit: u32) -> Vec<(String, Vec<u8>)> {
     let result = unsafe { kv_scan(prefix.to_string(), limit) };
     if result.is_empty() {
         return Vec::new();
     }
-    serde_json::from_slice(&result).unwrap_or_default()
+    match result[0] {
+        0x00 => serde_json::from_slice(&result[1..]).unwrap_or_default(),
+        0x01 => {
+            // Error from host — log if we can, return empty
+            Vec::new()
+        }
+        _ => {
+            // Backwards compat: no tag byte, try raw JSON decode
+            serde_json::from_slice(&result).unwrap_or_default()
+        }
+    }
 }
 
 /// Compare-and-swap a value in the distributed KV store.
@@ -104,9 +121,13 @@ pub fn blob_exists(hash: &str) -> bool {
 }
 
 /// Retrieve a blob by hash. Returns `None` if the blob does not exist.
+/// Errors (tag `0x02`) are logged and treated as `None`.
+///
+/// Host encoding: `[0x00] ++ data` = found, `[0x01]` = not-found,
+/// `[0x02] ++ error_msg` = error.
 pub fn blob_get_data(hash: &str) -> Option<Vec<u8>> {
     let result = unsafe { blob_get(hash.to_string()) };
-    if result.is_empty() { None } else { Some(result) }
+    decode_tagged_option_result(&result)
 }
 
 /// Store a blob and return its content hash.
@@ -167,6 +188,30 @@ pub fn hlc_now_ms() -> u64 {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/// Decode a tagged `Option<Vec<u8>>` from a host function.
+///
+/// The host encodes results as:
+/// - `[0x00]` + data = found (returns `Some(data)`)
+/// - `[0x01]` = not found (returns `None`)
+/// - `[0x02]` + error message = error (returns `None`)
+/// - Empty vec = not found (backwards compatibility)
+///
+/// Tiger Style: All option result decoding goes through one function.
+fn decode_tagged_option_result(result: &[u8]) -> Option<Vec<u8>> {
+    if result.is_empty() {
+        return None;
+    }
+    match result[0] {
+        0x00 => Some(result[1..].to_vec()),
+        0x01 => None,
+        0x02 => None, // Error — host already logged it
+        _ => {
+            // Backwards compat: no tag byte, treat entire vec as data
+            Some(result.to_vec())
+        }
+    }
+}
 
 /// Decode a tagged `Result<(), String>` from a host function.
 ///

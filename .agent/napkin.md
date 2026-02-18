@@ -5,6 +5,7 @@
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
 | 2026-02-18 | self | Told user Phase 2 (Capability Advertisement) wasn't done, but it was fully implemented | Check actual code before assessing roadmap status — grep for types/functions mentioned in the plan |
+| 2026-02-18 | self | delegate_task worker reported CLI fix success but changes weren't on disk | Do surgical edits directly — delegate_task doesn't persist file writes reliably |
 
 ## User Preferences
 
@@ -47,5 +48,6 @@
 - `HandlerRegistry::dispatch()` takes 3 args: (request, ctx, proxy_hops)
 - Federation discovery is behind `#[cfg(all(feature = "forge", feature = "global-discovery"))]`
 - All plugin crates have `plugin_info_matches_manifest` tests that check code ↔ plugin.json consistency
-- Pre-existing: `aspen-constants` has a broken doctest (renamed `CONNECT_TIMEOUT_SECS` → `IROH_CONNECT_TIMEOUT_SECS`)
-- Pre-existing: `aspen-cli` has unresolved `aspen_forge` import errors (unrelated to plugins)
+- ~~Pre-existing: `aspen-constants` has a broken doctest~~ FIXED 2026-02-18
+- ~~Pre-existing: `aspen-cli` has unresolved `aspen_forge` import errors~~ FIXED 2026-02-18
+- Pre-commit hooks: shellcheck warnings on scripts/ are pre-existing, not blockers

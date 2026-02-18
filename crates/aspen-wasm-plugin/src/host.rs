@@ -9,11 +9,27 @@
 //! Only `String`, `i32`/`u32`/`i64`/`u64`, `f32`/`f64`, `bool`, and
 //! `Vec<u8>` are supported. Complex types are encoded as follows:
 //!
-//! - `Option<Vec<u8>>` -> empty `Vec<u8>` for `None` (guest checks `.is_empty()`)
-//! - `Result<(), String>` -> `String` with `\0` prefix for ok, `\x01` prefix + message for err
-//! - `Result<String, String>` -> `String` with `\0` prefix + value for ok, `\x01` prefix + message
-//!   for err
-//! - `Vec<(String, Vec<u8>)>` -> JSON-serialized `Vec<u8>`
+//! ### String-based results (`Result<(), String>`, `Result<String, String>`)
+//!
+//! - `\0` or `\0` + value = success
+//! - `\x01` + message = error
+//!
+//! Used by: `kv_put`, `kv_delete`, `kv_cas`, `blob_put`
+//!
+//! ### Vec-based option results (`Option<Vec<u8>>`)
+//!
+//! - `[0x00]` + data = found/success
+//! - `[0x01]` = not found
+//! - `[0x02]` + error message (UTF-8) = error
+//!
+//! Used by: `kv_get`, `blob_get`
+//!
+//! ### Vec-based results (`Result<Vec<u8>, String>`)
+//!
+//! - `[0x00]` + payload = success
+//! - `[0x01]` + error message (UTF-8) = error
+//!
+//! Used by: `kv_scan` (payload is JSON-encoded `Vec<(String, Vec<u8>)>`)
 //!
 //! See also: [HOST_ABI.md](../../../docs/HOST_ABI.md) for the formal ABI contract.
 
@@ -190,32 +206,6 @@ fn validate_scan_prefix(plugin_name: &str, allowed_prefixes: &[String], prefix: 
 // KV Store host functions
 // ---------------------------------------------------------------------------
 
-/// Get a value by key from the distributed KV store.
-///
-/// Returns `None` if the key does not exist or the key is outside the
-/// plugin's allowed namespace.
-pub fn kv_get(ctx: &PluginHostContext, key: &str) -> Option<Vec<u8>> {
-    if validate_key_prefix(&ctx.plugin_name, &ctx.allowed_kv_prefixes, key, "read").is_err() {
-        return None;
-    }
-    let handle = tokio::runtime::Handle::current();
-    handle.block_on(async {
-        let request = aspen_kv_types::ReadRequest::new(key);
-        match ctx.kv_store.read(request).await {
-            Ok(result) => result.kv.map(|entry| entry.value.into_bytes()),
-            Err(e) => {
-                tracing::warn!(
-                    plugin = %ctx.plugin_name,
-                    key,
-                    error = %e,
-                    "wasm plugin kv_get failed"
-                );
-                None
-            }
-        }
-    })
-}
-
 /// Put a key-value pair into the distributed KV store.
 ///
 /// The value bytes must be valid UTF-8.
@@ -253,44 +243,6 @@ pub fn kv_delete(ctx: &PluginHostContext, key: &str) -> Result<(), String> {
             );
             format!("kv_delete failed: {e}")
         })
-    })
-}
-
-/// Scan keys matching a prefix from the distributed KV store.
-///
-/// Returns a list of `(key, value_bytes)` pairs.
-///
-/// Tiger Style: All scans are bounded. A `limit` of 0 uses DEFAULT_SCAN_LIMIT (1,000).
-/// Maximum limit is capped at MAX_SCAN_RESULTS (10,000) to prevent unbounded memory allocation.
-pub fn kv_scan(ctx: &PluginHostContext, prefix: &str, limit: u32) -> Vec<(String, Vec<u8>)> {
-    if validate_scan_prefix(&ctx.plugin_name, &ctx.allowed_kv_prefixes, prefix).is_err() {
-        return Vec::new();
-    }
-    let handle = tokio::runtime::Handle::current();
-    handle.block_on(async {
-        // Tiger Style: Apply default if 0, cap at MAX_SCAN_RESULTS to prevent unbounded operations
-        let bounded_limit = if limit == 0 {
-            aspen_constants::api::DEFAULT_SCAN_LIMIT
-        } else {
-            limit.min(aspen_constants::api::MAX_SCAN_RESULTS)
-        };
-        let request = aspen_kv_types::ScanRequest {
-            prefix: prefix.to_string(),
-            limit_results: Some(bounded_limit),
-            continuation_token: None,
-        };
-        match ctx.kv_store.scan(request).await {
-            Ok(result) => result.entries.into_iter().map(|entry| (entry.key, entry.value.into_bytes())).collect(),
-            Err(e) => {
-                tracing::warn!(
-                    plugin = %ctx.plugin_name,
-                    prefix,
-                    error = %e,
-                    "wasm plugin kv_scan failed"
-                );
-                Vec::new()
-            }
-        }
     })
 }
 
@@ -355,42 +307,6 @@ pub fn blob_has(ctx: &PluginHostContext, hash: &str) -> bool {
                     "wasm plugin blob_has failed"
                 );
                 false
-            }
-        }
-    })
-}
-
-/// Retrieve blob bytes by hash.
-///
-/// The `hash` parameter is the hex-encoded BLAKE3 hash.
-/// Returns `None` if the blob does not exist.
-pub fn blob_get(ctx: &PluginHostContext, hash: &str) -> Option<Vec<u8>> {
-    let blob_hash = match hash.parse::<iroh_blobs::Hash>() {
-        Ok(h) => h,
-        Err(e) => {
-            tracing::warn!(
-                plugin = %ctx.plugin_name,
-                hash,
-                error = %e,
-                "wasm plugin blob_get: invalid hash"
-            );
-            return None;
-        }
-    };
-
-    let handle = tokio::runtime::Handle::current();
-    handle.block_on(async {
-        match ctx.blob_store.get_bytes(&blob_hash).await {
-            Ok(Some(bytes)) => Some(bytes.to_vec()),
-            Ok(None) => None,
-            Err(e) => {
-                tracing::warn!(
-                    plugin = %ctx.plugin_name,
-                    hash,
-                    error = %e,
-                    "wasm plugin blob_get failed"
-                );
-                None
             }
         }
     })
@@ -568,10 +484,45 @@ pub fn register_plugin_host_functions(
         .map_err(|e| anyhow::anyhow!("failed to register now_ms: {e}"))?;
 
     // -- KV Store --
-    // kv_get: returns Vec<u8> (empty = key not found)
+    // kv_get: returns Vec<u8> with tag byte
+    // [0x00] ++ value = found, [0x01] = not-found, [0x02] ++ error_msg = error
     let ctx_kv_get = Arc::clone(&ctx);
     proto
-        .register("kv_get", move |key: String| -> Vec<u8> { kv_get(&ctx_kv_get, &key).unwrap_or_default() })
+        .register("kv_get", move |key: String| -> Vec<u8> {
+            if let Err(e) = validate_key_prefix(&ctx_kv_get.plugin_name, &ctx_kv_get.allowed_kv_prefixes, &key, "read")
+            {
+                let mut v = vec![0x02];
+                v.extend_from_slice(e.as_bytes());
+                return v;
+            }
+            let handle = tokio::runtime::Handle::current();
+            handle.block_on(async {
+                let request = aspen_kv_types::ReadRequest::new(&key);
+                match ctx_kv_get.kv_store.read(request).await {
+                    Ok(result) => match result.kv {
+                        Some(entry) => {
+                            let bytes = entry.value.into_bytes();
+                            let mut v = Vec::with_capacity(1 + bytes.len());
+                            v.push(0x00);
+                            v.extend_from_slice(&bytes);
+                            v
+                        }
+                        None => vec![0x01],
+                    },
+                    Err(e) => {
+                        tracing::warn!(
+                            plugin = %ctx_kv_get.plugin_name,
+                            key = %key,
+                            error = %e,
+                            "wasm plugin kv_get failed"
+                        );
+                        let mut v = vec![0x02];
+                        v.extend_from_slice(format!("kv_get failed: {e}").as_bytes());
+                        v
+                    }
+                }
+            })
+        })
         .map_err(|e| anyhow::anyhow!("failed to register kv_get: {e}"))?;
 
     // kv_put: returns String with tag prefix (\0 = success, \x01 = error)
@@ -596,12 +547,59 @@ pub fn register_plugin_host_functions(
         })
         .map_err(|e| anyhow::anyhow!("failed to register kv_delete: {e}"))?;
 
-    // kv_scan: returns Vec<u8> (JSON-serialized array of [key, value_bytes] pairs)
+    // kv_scan: returns Vec<u8> with tag byte
+    // [0x00] ++ json_bytes = ok, [0x01] ++ error_msg = error
     let ctx_kv_scan = Arc::clone(&ctx);
     proto
         .register("kv_scan", move |prefix: String, limit: u32| -> Vec<u8> {
-            let results = kv_scan(&ctx_kv_scan, &prefix, limit);
-            serde_json::to_vec(&results).unwrap_or_default()
+            if let Err(e) = validate_scan_prefix(&ctx_kv_scan.plugin_name, &ctx_kv_scan.allowed_kv_prefixes, &prefix) {
+                let mut v = vec![0x01];
+                v.extend_from_slice(e.as_bytes());
+                return v;
+            }
+            let handle = tokio::runtime::Handle::current();
+            handle.block_on(async {
+                let bounded_limit = if limit == 0 {
+                    aspen_constants::api::DEFAULT_SCAN_LIMIT
+                } else {
+                    limit.min(aspen_constants::api::MAX_SCAN_RESULTS)
+                };
+                let request = aspen_kv_types::ScanRequest {
+                    prefix: prefix.to_string(),
+                    limit_results: Some(bounded_limit),
+                    continuation_token: None,
+                };
+                match ctx_kv_scan.kv_store.scan(request).await {
+                    Ok(result) => {
+                        let entries: Vec<(String, Vec<u8>)> =
+                            result.entries.into_iter().map(|entry| (entry.key, entry.value.into_bytes())).collect();
+                        match serde_json::to_vec(&entries) {
+                            Ok(json) => {
+                                let mut v = Vec::with_capacity(1 + json.len());
+                                v.push(0x00);
+                                v.extend_from_slice(&json);
+                                v
+                            }
+                            Err(e) => {
+                                let mut v = vec![0x01];
+                                v.extend_from_slice(format!("kv_scan JSON encode failed: {e}").as_bytes());
+                                v
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            plugin = %ctx_kv_scan.plugin_name,
+                            prefix = %prefix,
+                            error = %e,
+                            "wasm plugin kv_scan failed"
+                        );
+                        let mut v = vec![0x01];
+                        v.extend_from_slice(format!("kv_scan failed: {e}").as_bytes());
+                        v
+                    }
+                }
+            })
         })
         .map_err(|e| anyhow::anyhow!("failed to register kv_scan: {e}"))?;
 
@@ -623,10 +621,49 @@ pub fn register_plugin_host_functions(
         .register("blob_has", move |hash: String| -> bool { blob_has(&ctx_blob_has, &hash) })
         .map_err(|e| anyhow::anyhow!("failed to register blob_has: {e}"))?;
 
-    // blob_get: returns Vec<u8> (empty = not found)
+    // blob_get: returns Vec<u8> with tag byte
+    // [0x00] ++ data = found, [0x01] = not-found, [0x02] ++ error_msg = error
     let ctx_blob_get = Arc::clone(&ctx);
     proto
-        .register("blob_get", move |hash: String| -> Vec<u8> { blob_get(&ctx_blob_get, &hash).unwrap_or_default() })
+        .register("blob_get", move |hash: String| -> Vec<u8> {
+            let blob_hash = match hash.parse::<iroh_blobs::Hash>() {
+                Ok(h) => h,
+                Err(e) => {
+                    tracing::warn!(
+                        plugin = %ctx_blob_get.plugin_name,
+                        hash = %hash,
+                        error = %e,
+                        "wasm plugin blob_get: invalid hash"
+                    );
+                    let mut v = vec![0x02];
+                    v.extend_from_slice(format!("invalid hash: {e}").as_bytes());
+                    return v;
+                }
+            };
+            let handle = tokio::runtime::Handle::current();
+            handle.block_on(async {
+                match ctx_blob_get.blob_store.get_bytes(&blob_hash).await {
+                    Ok(Some(bytes)) => {
+                        let mut v = Vec::with_capacity(1 + bytes.len());
+                        v.push(0x00);
+                        v.extend_from_slice(&bytes);
+                        v
+                    }
+                    Ok(None) => vec![0x01],
+                    Err(e) => {
+                        tracing::warn!(
+                            plugin = %ctx_blob_get.plugin_name,
+                            hash = %hash,
+                            error = %e,
+                            "wasm plugin blob_get failed"
+                        );
+                        let mut v = vec![0x02];
+                        v.extend_from_slice(format!("blob_get failed: {e}").as_bytes());
+                        v
+                    }
+                }
+            })
+        })
         .map_err(|e| anyhow::anyhow!("failed to register blob_get: {e}"))?;
 
     // blob_put: returns String with first byte as ok/err tag

@@ -31,28 +31,45 @@ Complex types are encoded within these primitives:
 
 | Logical Type | Wire Encoding |
 |-------------|---------------|
-| `Option<Vec<u8>>` | Empty `Vec<u8>` = `None` |
-| `Result<(), String>` | `String` with `\0` prefix = ok, `\x01` prefix + message = err |
-| `Result<String, String>` | `String` with `\0` prefix + value = ok, `\x01` prefix + message = err |
-| `Vec<(String, Vec<u8>)>` | JSON-serialized `Vec<u8>` |
+| `Result<(), String>` | `String`: `\0` prefix = ok, `\x01` prefix + message = err |
+| `Result<String, String>` | `String`: `\0` prefix + value = ok, `\x01` prefix + message = err |
+| `Option<Vec<u8>>` | `Vec<u8>`: `[0x00]` + data = found, `[0x01]` = not-found, `[0x02]` + error = error |
+| `Result<Vec<u8>, String>` | `Vec<u8>`: `[0x00]` + payload = ok, `[0x01]` + error = error |
 
 ## Error Encoding Convention
 
-All `Result`-returning host functions use a **tag prefix** convention:
+All host functions returning results use a **tag prefix** convention.
+
+### String-based results
+
+Used by: `kv_put`, `kv_delete`, `kv_cas`, `blob_put`
 
 | First byte | Meaning | Payload |
 |-----------|---------|---------|
 | `\0` (0x00) | Success | Optional value after the tag |
-| `\x01` (0x01) | Error | Error message after the tag |
+| `\x01` (0x01) | Error | Error message (UTF-8) after the tag |
 
-For `Result<(), String>` (kv_put, kv_delete, kv_cas): success is `"\0"`, error is `"\x01{message}"`.
+### Vec-based option results
 
-For `Result<String, String>` (blob_put): success is `"\0{hash}"`, error is `"\x01{message}"`.
+Used by: `kv_get`, `blob_get`
 
-For `Option<Vec<u8>>` (kv_get, blob_get): empty `Vec<u8>` = not found/error. No tag prefix.
+| First byte | Meaning | Payload |
+|-----------|---------|---------|
+| `0x00` | Found | Value bytes after the tag |
+| `0x01` | Not found | No payload |
+| `0x02` | Error | Error message (UTF-8) after the tag |
 
-The guest SDK's `decode_tagged_unit_result()` also accepts empty string as
-success for backwards compatibility.
+### Vec-based results
+
+Used by: `kv_scan`
+
+| First byte | Meaning | Payload |
+|-----------|---------|---------|
+| `0x00` | Success | JSON-encoded `Vec<(String, Vec<u8>)>` after the tag |
+| `0x01` | Error | Error message (UTF-8) after the tag |
+
+The guest SDK's `decode_tagged_unit_result()` and `decode_tagged_option_result()`
+handle backwards-compatible decoding (no-tag-prefix → legacy behavior).
 
 ## Host Functions
 
@@ -78,10 +95,10 @@ See [Namespace Isolation](#namespace-isolation) below.
 
 | Function | Parameters | Returns | Description |
 |----------|-----------|---------|-------------|
-| `kv_get` | `key: String` | `Vec<u8>` | Get value by key. **Empty vec = not found or namespace violation.** |
+| `kv_get` | `key: String` | `Vec<u8>` | Get value by key. Tagged: `[0x00]+data` = found, `[0x01]` = not-found, `[0x02]+msg` = error/namespace violation. |
 | `kv_put` | `key: String, value: Vec<u8>` | `String` | Put key-value pair. Value must be valid UTF-8. Tagged result: `\0` = ok, `\x01msg` = err. |
 | `kv_delete` | `key: String` | `String` | Delete key. Tagged result: `\0` = ok, `\x01msg` = err. |
-| `kv_scan` | `prefix: String, limit: u32` | `Vec<u8>` | Scan keys by prefix. Returns JSON-serialized `Vec<(String, Vec<u8>)>`. Empty vec on error or no results. Limit 0 = default (1,000); max 10,000. |
+| `kv_scan` | `prefix: String, limit: u32` | `Vec<u8>` | Scan keys by prefix. Tagged: `[0x00]+JSON` = ok (JSON-serialized `Vec<(String, Vec<u8>)>`), `[0x01]+msg` = error. Limit 0 = default (1,000); max 10,000. |
 | `kv_cas` | `key: String, expected: Vec<u8>, new_value: Vec<u8>` | `String` | Compare-and-swap. Empty `expected` = create-if-absent. Both must be valid UTF-8. Tagged result: `\0` = ok, `\x01msg` = err. |
 
 ### Blob Store
@@ -89,7 +106,7 @@ See [Namespace Isolation](#namespace-isolation) below.
 | Function | Parameters | Returns | Description |
 |----------|-----------|---------|-------------|
 | `blob_has` | `hash: String` | `bool` | Check if blob exists. `hash` is hex-encoded BLAKE3. Returns `false` on invalid hash or error. |
-| `blob_get` | `hash: String` | `Vec<u8>` | Get blob bytes. **Empty vec = not found or error.** |
+| `blob_get` | `hash: String` | `Vec<u8>` | Get blob bytes. Tagged: `[0x00]+data` = found, `[0x01]` = not-found, `[0x02]+msg` = error/invalid hash. |
 | `blob_put` | `data: Vec<u8>` | `String` | Store blob, returns tagged result: `\0{hex_hash}` = ok, `\x01{msg}` = err. |
 
 ### Identity
@@ -127,8 +144,9 @@ Every KV operation validates the key (or scan prefix) against the plugin's
 - **Explicit prefixes:** Set via `kv_prefixes` in the plugin manifest.
 - **Default prefix:** If `kv_prefixes` is empty, auto-scoped to `__plugin:{name}:`.
 - **Validation:** `key.starts_with(prefix)` for any allowed prefix.
-- **On violation:** KV get returns empty vec; KV put/delete/cas return error;
-  KV scan returns empty results. All violations are logged at warn level.
+- **On violation:** KV get returns `[0x02]+msg` (error tag); KV put/delete/cas return
+  `\x01msg` (error tag); KV scan returns `[0x01]+msg` (error tag). All violations
+  are logged at warn level.
 
 ```
 Plugin "forge" with kv_prefixes: ["forge:", "forge-cobs:"]
@@ -162,5 +180,6 @@ Plugins must export these functions:
 
 | Version | Date | Changes |
 |---------|------|---------|
-| v1 | Initial | Mixed error encoding: blob_put used `\0`/`\x01`, kv_put/delete/cas used empty-string convention |
+| v1 | Initial | Mixed error encoding: blob_put used `\0`/`\x01`, kv_put/delete/cas used empty-string convention, kv_get/blob_get returned empty vec for both not-found and error |
 | v2 | 2026-02-18 | Standardized all Result-returning functions to `\0`/`\x01` tag prefix. Added execution timeout. Guest SDK `decode_tagged_unit_result()` handles both v1 and v2. |
+| v3 | 2026-02-18 | Standardized kv_get/blob_get to `[0x00]/[0x01]/[0x02]` tagged encoding (found/not-found/error). Standardized kv_scan to `[0x00]/[0x01]` tagged encoding (ok/error). Guest SDK `decode_tagged_option_result()` handles backwards compat. |
