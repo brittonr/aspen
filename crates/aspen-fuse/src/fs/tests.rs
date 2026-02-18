@@ -89,7 +89,7 @@ mod tests {
     #[test]
     fn test_new_mock_creates_filesystem() {
         let fs = AspenFs::new_mock(1000, 1000);
-        assert!(fs.client.is_none());
+        assert!(matches!(fs.backend, crate::fs::KvBackend::None));
     }
 
     #[test]
@@ -641,6 +641,144 @@ mod tests {
 
         let result = fs.fsyncdir(&ctx, ROOT_INODE, false, 0);
         assert!(result.is_ok());
+    }
+
+    // === In-Memory Backend Tests ===
+
+    #[test]
+    fn test_in_memory_kv_round_trip() {
+        let fs = AspenFs::new_in_memory(1000, 1000);
+
+        // Write should persist
+        fs.kv_write("test/key", b"hello world").unwrap();
+
+        // Read should return the written value
+        let result = fs.kv_read("test/key").unwrap();
+        assert_eq!(result, Some(b"hello world".to_vec()));
+
+        // exists() should detect the file
+        let entry_type = fs.exists("test/key").unwrap();
+        assert_eq!(entry_type, Some(EntryType::File));
+
+        // exists() should detect parent as directory
+        let entry_type = fs.exists("test").unwrap();
+        assert_eq!(entry_type, Some(EntryType::Directory));
+
+        // Scan should find the key
+        let keys = fs.kv_scan("test/").unwrap();
+        assert_eq!(keys, vec!["test/key"]);
+
+        // Delete should remove it
+        fs.kv_delete("test/key").unwrap();
+        let result = fs.kv_read("test/key").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_in_memory_lookup_file() {
+        let fs = AspenFs::new_in_memory(1000, 1000);
+        let ctx = mock_context();
+
+        // Write a key to simulate a file
+        fs.kv_write("myfile.txt", b"content").unwrap();
+
+        // Lookup should find it and report correct size
+        let name = CString::new("myfile.txt").unwrap();
+        let entry = fs.lookup(&ctx, ROOT_INODE, &name).unwrap();
+        assert_eq!(entry.attr.st_size, 7); // "content".len()
+        assert_eq!(entry.attr.st_mode, DEFAULT_FILE_MODE);
+    }
+
+    #[test]
+    fn test_in_memory_symlink_round_trip() {
+        let fs = AspenFs::new_in_memory(1000, 1000);
+        let ctx = mock_context();
+
+        // Create symlink
+        let name = CString::new("mylink").unwrap();
+        let target = CString::new("/target/path").unwrap();
+        let entry = fs.symlink(&ctx, &target, ROOT_INODE, &name).unwrap();
+        assert_eq!(entry.attr.st_mode, DEFAULT_SYMLINK_MODE);
+
+        // Readlink should return the target
+        let link_target = fs.readlink(&ctx, entry.inode).unwrap();
+        assert_eq!(link_target, b"/target/path");
+    }
+
+    #[test]
+    fn test_in_memory_create_write_read() {
+        use fuse_backend_rs::abi::fuse_abi::CreateIn;
+        use fuse_backend_rs::api::filesystem::FileSystem;
+
+        let fs = AspenFs::new_in_memory(1000, 1000);
+        let ctx = mock_context();
+
+        // Create a file under root
+        let name = CString::new("data.bin").unwrap();
+        // SAFETY: CreateIn is a C struct where all fields are integers
+        let args: CreateIn = unsafe { std::mem::zeroed() };
+        let (entry, _, _, _) = fs.create(&ctx, ROOT_INODE, &name, args).unwrap();
+        assert_eq!(entry.attr.st_size, 0);
+
+        // Verify the file exists in KV
+        let value = fs.kv_read("data.bin").unwrap();
+        assert_eq!(value, Some(vec![])); // create writes empty value
+    }
+
+    #[test]
+    fn test_in_memory_readdir_lists_children() {
+        use fuse_backend_rs::api::filesystem::DirEntry;
+        use fuse_backend_rs::api::filesystem::FileSystem;
+
+        let fs = AspenFs::new_in_memory(1000, 1000);
+        let ctx = mock_context();
+
+        // Write files to simulate directory contents
+        fs.kv_write("alpha", b"a").unwrap();
+        fs.kv_write("beta", b"b").unwrap();
+        fs.kv_write("sub/nested", b"n").unwrap();
+
+        // readdir on root should list alpha, beta, sub (direct children only)
+        let mut entries = Vec::new();
+        fs.readdir(&ctx, ROOT_INODE, 0, u32::MAX, 0, &mut |entry: DirEntry| {
+            entries.push(String::from_utf8_lossy(entry.name).to_string());
+            Ok(entry.name.len() + 24) // approximate dirent size
+        })
+        .unwrap();
+
+        // Should have ".", "..", "alpha", "beta", "sub"
+        assert!(entries.contains(&".".to_string()));
+        assert!(entries.contains(&"..".to_string()));
+        assert!(entries.contains(&"alpha".to_string()));
+        assert!(entries.contains(&"beta".to_string()));
+        assert!(entries.contains(&"sub".to_string()));
+    }
+
+    #[test]
+    fn test_in_memory_xattr_round_trip() {
+        use fuse_backend_rs::api::filesystem::FileSystem;
+        use fuse_backend_rs::api::filesystem::GetxattrReply;
+
+        let fs = AspenFs::new_in_memory(1000, 1000);
+        let ctx = mock_context();
+
+        // Set xattr on root
+        let attr_name = CString::new("user.test").unwrap();
+        fs.setxattr(&ctx, ROOT_INODE, &attr_name, b"my-value", 0).unwrap();
+
+        // Get xattr should return the value
+        let reply = fs.getxattr(&ctx, ROOT_INODE, &attr_name, 256).unwrap();
+        match reply {
+            GetxattrReply::Value(v) => assert_eq!(v, b"my-value"),
+            _ => panic!("expected GetxattrReply::Value"),
+        }
+
+        // Remove xattr
+        fs.removexattr(&ctx, ROOT_INODE, &attr_name).unwrap();
+
+        // Get xattr should now fail
+        let result = fs.getxattr(&ctx, ROOT_INODE, &attr_name, 256);
+        assert!(result.is_err());
     }
 
     // === Constants Tests ===

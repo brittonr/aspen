@@ -10,6 +10,8 @@ mod operations;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+use std::collections::BTreeMap;
 use std::path::Component;
 use std::path::Path;
 use std::time::Duration;
@@ -41,6 +43,22 @@ const W_OK: u32 = 2;
 const X_OK: u32 = 1;
 const F_OK: u32 = 0;
 
+/// KV storage backend for the filesystem.
+///
+/// Separates storage concerns from filesystem logic, enabling
+/// in-memory testing without a real Aspen cluster.
+enum KvBackend {
+    /// Real client connected to an Aspen cluster via Iroh.
+    Client(SharedClient),
+    /// No backend (all reads return None, writes are no-ops).
+    #[cfg(test)]
+    None,
+    /// In-memory BTreeMap backend for testing with real data persistence.
+    /// Uses std::sync::RwLock since FUSE operations are synchronous.
+    #[cfg(test)]
+    InMemory(std::sync::RwLock<BTreeMap<String, Vec<u8>>>),
+}
+
 /// Aspen FUSE filesystem.
 ///
 /// Provides a filesystem view of an Aspen KV cluster.
@@ -52,8 +70,8 @@ pub struct AspenFs {
     uid: u32,
     /// GID for file ownership.
     gid: u32,
-    /// Aspen client for KV operations (optional for testing).
-    client: Option<SharedClient>,
+    /// KV storage backend (real client or test backend).
+    backend: KvBackend,
     /// Key prefix for namespace isolation (e.g., `ci/workspaces/{vm_id}/`).
     /// Prepended to all KV keys. Empty string means no prefix.
     key_prefix: String,
@@ -66,7 +84,7 @@ impl AspenFs {
             inodes: InodeManager::new(),
             uid,
             gid,
-            client: Some(client),
+            backend: KvBackend::Client(client),
             key_prefix: String::new(),
         }
     }
@@ -81,19 +99,34 @@ impl AspenFs {
             inodes: InodeManager::new(),
             uid,
             gid,
-            client: Some(client),
+            backend: KvBackend::Client(client),
             key_prefix: prefix,
         }
     }
 
     /// Create a new Aspen filesystem without a client (for testing).
+    /// All KV operations are no-ops: reads return None, writes succeed silently.
     #[cfg(test)]
     pub fn new_mock(uid: u32, gid: u32) -> Self {
         Self {
             inodes: InodeManager::new(),
             uid,
             gid,
-            client: None,
+            backend: KvBackend::None,
+            key_prefix: String::new(),
+        }
+    }
+
+    /// Create a new Aspen filesystem with an in-memory KV backend (for testing).
+    /// Stores data in a BTreeMap, enabling real filesystem operations without
+    /// a running Aspen cluster.
+    #[cfg(test)]
+    pub fn new_in_memory(uid: u32, gid: u32) -> Self {
+        Self {
+            inodes: InodeManager::new(),
+            uid,
+            gid,
+            backend: KvBackend::InMemory(std::sync::RwLock::new(BTreeMap::new())),
             key_prefix: String::new(),
         }
     }
@@ -223,15 +256,21 @@ impl AspenFs {
 
     /// Read a key from the KV store.
     fn kv_read(&self, key: &str) -> std::io::Result<Option<Vec<u8>>> {
-        let Some(ref client) = self.client else {
-            // No client connected (mock mode)
-            return Ok(None);
-        };
-
-        let prefixed = self.prefixed_key(key);
-        debug!(key = %prefixed, "reading key from Aspen");
-
-        client.read_key(&prefixed).map_err(|e| std::io::Error::other(e.to_string()))
+        match &self.backend {
+            KvBackend::Client(client) => {
+                let prefixed = self.prefixed_key(key);
+                debug!(key = %prefixed, "reading key from Aspen");
+                client.read_key(&prefixed).map_err(|e| std::io::Error::other(e.to_string()))
+            }
+            #[cfg(test)]
+            KvBackend::None => Ok(None),
+            #[cfg(test)]
+            KvBackend::InMemory(store) => {
+                let prefixed = self.prefixed_key(key);
+                let store = store.read().map_err(|_| std::io::Error::other("lock poisoned"))?;
+                Ok(store.get(&prefixed).cloned())
+            }
+        }
     }
 
     /// Write a key to the KV store.
@@ -244,47 +283,70 @@ impl AspenFs {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "value too large"));
         }
 
-        let Some(ref client) = self.client else {
-            // No client connected (mock mode)
-            return Ok(());
-        };
-
-        debug!(key = %prefixed, value_len = value.len(), "writing key to Aspen");
-
-        client.write_key(&prefixed, value).map_err(|e| std::io::Error::other(e.to_string()))?;
-
-        Ok(())
+        match &self.backend {
+            KvBackend::Client(client) => {
+                debug!(key = %prefixed, value_len = value.len(), "writing key to Aspen");
+                client.write_key(&prefixed, value).map_err(|e| std::io::Error::other(e.to_string()))?;
+                Ok(())
+            }
+            #[cfg(test)]
+            KvBackend::None => Ok(()),
+            #[cfg(test)]
+            KvBackend::InMemory(store) => {
+                let mut store = store.write().map_err(|_| std::io::Error::other("lock poisoned"))?;
+                store.insert(prefixed, value.to_vec());
+                Ok(())
+            }
+        }
     }
 
     /// Delete a key from the KV store.
     fn kv_delete(&self, key: &str) -> std::io::Result<()> {
-        let Some(ref client) = self.client else {
-            // No client connected (mock mode)
-            return Ok(());
-        };
-
-        let prefixed = self.prefixed_key(key);
-        debug!(key = %prefixed, "deleting key from Aspen");
-
-        client.delete_key(&prefixed).map_err(|e| std::io::Error::other(e.to_string()))?;
-
-        Ok(())
+        match &self.backend {
+            KvBackend::Client(client) => {
+                let prefixed = self.prefixed_key(key);
+                debug!(key = %prefixed, "deleting key from Aspen");
+                client.delete_key(&prefixed).map_err(|e| std::io::Error::other(e.to_string()))?;
+                Ok(())
+            }
+            #[cfg(test)]
+            KvBackend::None => Ok(()),
+            #[cfg(test)]
+            KvBackend::InMemory(store) => {
+                let prefixed = self.prefixed_key(key);
+                let mut store = store.write().map_err(|_| std::io::Error::other("lock poisoned"))?;
+                store.remove(&prefixed);
+                Ok(())
+            }
+        }
     }
 
     /// Scan keys with a prefix from the KV store.
     fn kv_scan(&self, prefix: &str) -> std::io::Result<Vec<String>> {
-        let Some(ref client) = self.client else {
-            // No client connected (mock mode)
-            return Ok(Vec::new());
-        };
-
-        let prefixed = self.prefixed_key(prefix);
-        debug!(prefix = %prefixed, "scanning keys from Aspen");
-
-        let entries =
-            client.scan_keys(&prefixed, MAX_READDIR_ENTRIES).map_err(|e| std::io::Error::other(e.to_string()))?;
-
-        Ok(entries.into_iter().map(|(k, _)| self.strip_prefix(&k).to_string()).collect())
+        match &self.backend {
+            KvBackend::Client(client) => {
+                let prefixed = self.prefixed_key(prefix);
+                debug!(prefix = %prefixed, "scanning keys from Aspen");
+                let entries = client
+                    .scan_keys(&prefixed, MAX_READDIR_ENTRIES)
+                    .map_err(|e| std::io::Error::other(e.to_string()))?;
+                Ok(entries.into_iter().map(|(k, _)| self.strip_prefix(&k).to_string()).collect())
+            }
+            #[cfg(test)]
+            KvBackend::None => Ok(Vec::new()),
+            #[cfg(test)]
+            KvBackend::InMemory(store) => {
+                let prefixed = self.prefixed_key(prefix);
+                let store = store.read().map_err(|_| std::io::Error::other("lock poisoned"))?;
+                let keys: Vec<String> = store
+                    .keys()
+                    .filter(|k| k.starts_with(&prefixed))
+                    .take(MAX_READDIR_ENTRIES as usize)
+                    .map(|k| self.strip_prefix(k).to_string())
+                    .collect();
+                Ok(keys)
+            }
+        }
     }
 
     /// Check if a key exists (file) or has children (directory).

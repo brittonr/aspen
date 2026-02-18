@@ -500,8 +500,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let socket_path = dir.path().join("virtiofs.sock");
 
-        // Create mock filesystem (no real Aspen cluster needed -- KV ops are no-ops)
-        let fs = AspenFs::new_mock(1000, 1000);
+        // Create in-memory filesystem (real KV operations backed by BTreeMap,
+        // no Aspen cluster needed)
+        let fs = AspenFs::new_in_memory(1000, 1000);
 
         // Spawn the virtiofs daemon on a background OS thread.
         // The thread binds the socket, then blocks in accept() waiting for a VMM.
