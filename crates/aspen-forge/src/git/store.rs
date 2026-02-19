@@ -320,7 +320,7 @@ impl<B: BlobStore> GitBlobStore<B> {
     /// Tiger Style: Wait for blob availability before reading to handle
     /// eventual consistency in multi-node clusters.
     async fn get_object(&self, hash: &blake3::Hash) -> ForgeResult<SignedObject<GitObject>> {
-        self.get_object_with_timeout(hash, DEFAULT_BLOB_WAIT_TIMEOUT).await
+        self.get_object_with_timeout(hash, aspen_blob::BLOB_READ_WAIT_TIMEOUT).await
     }
 
     /// Get a Git object by hash with a custom timeout.
@@ -345,14 +345,17 @@ impl<B: BlobStore> GitBlobStore<B> {
             return self.parse_and_verify_object(hash, bytes);
         }
 
-        // Blob not available locally - wait for distributed availability
-        let missing = self
+        // Blob not available locally — wait briefly for replication.
+        // Uses wait_available (single blob) with a bounded timeout so reads
+        // fail fast in degraded clusters instead of blocking on
+        // replication from a downed node.
+        let available = self
             .blobs
-            .wait_available_all(&[iroh_hash], timeout)
+            .wait_available(&iroh_hash, timeout)
             .await
             .map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?;
 
-        if !missing.is_empty() {
+        if !available {
             return Err(ForgeError::ObjectNotFound {
                 hash: hex::encode(hash.as_bytes()),
             });

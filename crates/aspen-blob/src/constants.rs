@@ -55,6 +55,13 @@ pub const USER_TAG_PREFIX: &str = "user:";
 /// Matches FETCH_OBJECT_TIMEOUT for consistency.
 pub const DEFAULT_BLOB_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Timeout for blob read availability (5 seconds).
+///
+/// Tiger Style: Shorter than write timeout because reads should fail fast
+/// in degraded clusters rather than blocking for replication that may
+/// never arrive (e.g., when source node is down).
+pub const BLOB_READ_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// Maximum timeout for waiting on blob availability (5 minutes).
 ///
 /// Tiger Style: Upper bound prevents indefinite blocking.
@@ -88,6 +95,8 @@ const _: () = assert!(MAX_BLOB_LIST_SIZE > 0);
 // Wait timeout ordering
 const _: () = assert!(DEFAULT_BLOB_WAIT_TIMEOUT.as_secs() > 0);
 const _: () = assert!(MAX_BLOB_WAIT_TIMEOUT.as_secs() >= DEFAULT_BLOB_WAIT_TIMEOUT.as_secs());
+const _: () = assert!(BLOB_READ_WAIT_TIMEOUT.as_secs() > 0);
+const _: () = assert!(BLOB_READ_WAIT_TIMEOUT.as_secs() <= DEFAULT_BLOB_WAIT_TIMEOUT.as_secs());
 
 // Poll interval must be smaller than default timeout
 const _: () = assert!(BLOB_WAIT_POLL_INTERVAL.as_millis() > 0);

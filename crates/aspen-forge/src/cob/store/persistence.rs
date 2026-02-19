@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use aspen_blob::DEFAULT_BLOB_WAIT_TIMEOUT;
 use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
 use aspen_core::ReadConsistency;
@@ -217,14 +216,16 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             return Ok(signed);
         }
 
-        // Blob not available locally - wait for distributed availability
-        let missing = self
+        // Blob not available locally — wait briefly for replication.
+        // Uses wait_available (single blob) with a shorter read timeout so
+        // reads fail fast in degraded clusters.
+        let available = self
             .blobs
-            .wait_available_all(&[iroh_hash], DEFAULT_BLOB_WAIT_TIMEOUT)
+            .wait_available(&iroh_hash, aspen_blob::BLOB_READ_WAIT_TIMEOUT)
             .await
             .map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?;
 
-        if !missing.is_empty() {
+        if !available {
             return Err(ForgeError::ObjectNotFound {
                 hash: hex::encode(hash.as_bytes()),
             });

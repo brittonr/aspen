@@ -205,6 +205,17 @@ impl AspenClient {
                                 );
                                 last_error = Some(anyhow::anyhow!("{}: {}", e.code, e.message));
                                 break; // Move to next peer
+                            } else if e.code == "NOT_LEADER" {
+                                // Immediate peer rotation — this node isn't the Raft
+                                // leader, so write operations must go to another peer.
+                                debug!(
+                                    peer_id = %peer_id,
+                                    error_code = %e.code,
+                                    message = %e.message,
+                                    "not leader, trying next peer"
+                                );
+                                last_error = Some(anyhow::anyhow!("{}: {}", e.code, e.message));
+                                break; // Move to next peer
                             }
                         }
                         return Ok(response);

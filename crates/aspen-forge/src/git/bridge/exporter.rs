@@ -7,7 +7,6 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use aspen_blob::DEFAULT_BLOB_WAIT_TIMEOUT;
 use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
 use aspen_core::hlc::HLC;
@@ -111,14 +110,14 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         {
             bytes
         } else {
-            // Blob not available locally - wait for distributed availability
-            let missing = self
+            // Blob not available locally — wait briefly for replication.
+            let available = self
                 .blobs
-                .wait_available_all(&[iroh_hash], DEFAULT_BLOB_WAIT_TIMEOUT)
+                .wait_available(&iroh_hash, aspen_blob::BLOB_READ_WAIT_TIMEOUT)
                 .await
                 .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?;
 
-            if !missing.is_empty() {
+            if !available {
                 return Err(BridgeError::ObjectNotFound {
                     hash: hex::encode(blake3.as_bytes()),
                 });

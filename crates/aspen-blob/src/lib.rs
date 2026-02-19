@@ -69,6 +69,7 @@ pub use background_downloader::MAX_BACKGROUND_DOWNLOAD_SIZE;
 pub use background_downloader::MAX_CONCURRENT_BACKGROUND_DOWNLOADS;
 pub use constants::BLOB_GC_GRACE_PERIOD;
 pub use constants::BLOB_GC_INTERVAL;
+pub use constants::BLOB_READ_WAIT_TIMEOUT;
 pub use constants::BLOB_REF_PREFIX;
 pub use constants::BLOB_THRESHOLD;
 pub use constants::BLOB_WAIT_POLL_INTERVAL;

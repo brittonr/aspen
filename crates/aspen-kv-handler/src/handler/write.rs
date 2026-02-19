@@ -61,11 +61,26 @@ async fn handle_write_key(
         })
         .await;
 
-    Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
-        is_success: result.is_ok(),
-        // HIGH-4: Sanitize error messages to prevent information leakage
-        error: result.err().map(|e| sanitize_kv_error(&e)),
-    }))
+    match result {
+        Ok(_) => Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
+            is_success: true,
+            error: None,
+        })),
+        // Surface NOT_LEADER as a top-level error code so the client can
+        // detect it and rotate to the current Raft leader.
+        Err(aspen_core::KeyValueStoreError::NotLeader { leader, .. }) => {
+            let msg = if let Some(id) = leader {
+                format!("not leader; leader is node {}", id)
+            } else {
+                "not leader; leader unknown".to_string()
+            };
+            Ok(ClientRpcResponse::error("NOT_LEADER", msg))
+        }
+        Err(e) => Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
+            is_success: false,
+            error: Some(sanitize_kv_error(&e)),
+        })),
+    }
 }
 
 async fn handle_batch_write(
@@ -115,10 +130,18 @@ async fn handle_batch_write(
             operations_applied: result.batch_applied,
             error: None,
         })),
+        Err(aspen_core::KeyValueStoreError::NotLeader { leader, .. }) => {
+            let msg = if let Some(id) = leader {
+                format!("not leader; leader is node {}", id)
+            } else {
+                "not leader; leader unknown".to_string()
+            };
+            Ok(ClientRpcResponse::error("NOT_LEADER", msg))
+        }
         Err(e) => Ok(ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
             is_success: false,
             operations_applied: None,
-            error: Some(e.to_string()),
+            error: Some(sanitize_kv_error(&e)),
         })),
     }
 }

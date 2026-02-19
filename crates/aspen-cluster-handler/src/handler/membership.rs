@@ -2,8 +2,6 @@
 //!
 //! Handles: AddLearner, ChangeMembership, PromoteLearner.
 
-use std::str::FromStr;
-
 use aspen_client_api::AddLearnerResultResponse;
 use aspen_client_api::ChangeMembershipResultResponse;
 use aspen_client_api::ClientRpcResponse;
@@ -13,7 +11,6 @@ use aspen_core::ChangeMembershipRequest;
 use aspen_core::ClusterNode;
 use aspen_rpc_core::ClientProtocolContext;
 use iroh::EndpointAddr;
-use iroh::EndpointId;
 #[cfg(feature = "jobs")]
 use tracing::info;
 #[cfg(feature = "jobs")]
@@ -26,15 +23,32 @@ pub(crate) async fn handle_add_learner(
     node_id: u64,
     addr: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    // Parse the address as either JSON EndpointAddr or bare EndpointId
+    // Parse the address as JSON EndpointAddr.
+    // Bare EndpointId (hex string) is rejected because it produces an
+    // EndpointAddr with empty addrs — Raft can't connect without socket
+    // addresses.
     let iroh_addr = if addr.starts_with('{') {
         serde_json::from_str::<EndpointAddr>(&addr).map_err(|e| format!("invalid JSON EndpointAddr: {e}"))
     } else {
-        EndpointId::from_str(&addr).map(EndpointAddr::new).map_err(|e| format!("invalid EndpointId: {e}"))
+        Err("bare EndpointId is not supported — Raft requires socket addresses to connect. \
+             Pass a JSON EndpointAddr: {\"id\":\"<hex>\",\"addrs\":[{\"Ip\":\"host:port\"}]}"
+            .to_string())
     };
 
     let result = match iroh_addr {
         Ok(iroh_addr) => {
+            // Validate that the EndpointAddr has at least one routable address.
+            // Without socket addresses, Raft can't establish connections to the learner.
+            if iroh_addr.addrs.is_empty() {
+                return Ok(ClientRpcResponse::AddLearnerResult(AddLearnerResultResponse {
+                    is_success: false,
+                    error: Some(
+                        "EndpointAddr has no socket addresses — Raft requires at least one \
+                         routable address. Use format: {\"id\":\"<hex>\",\"addrs\":[{\"Ip\":\"host:port\"}]}"
+                            .to_string(),
+                    ),
+                }));
+            }
             ctx.controller
                 .add_learner(AddLearnerRequest {
                     learner: ClusterNode::with_iroh_addr(node_id, iroh_addr),

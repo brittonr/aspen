@@ -6,6 +6,7 @@
 |------|--------|----------------|-------------------|
 | 2026-02-18 | self | Told user Phase 2 (Capability Advertisement) wasn't done, but it was fully implemented | Check actual code before assessing roadmap status — grep for types/functions mentioned in the plan |
 | 2026-02-18 | self | delegate_task worker reported CLI fix success but changes weren't on disk | Do surgical edits directly — delegate_task doesn't persist file writes reliably |
+| 2026-02-19 | self | Delegated 3 fix tasks to workers — all reported success but zero changes persisted | delegate_task STILL doesn't persist. Use scouts to gather info, then edit directly. Third time hitting this. |
 
 ## User Preferences
 
@@ -174,6 +175,13 @@
 - Blob replication does NOT auto-catch-up after node restart — `wait_available_all remaining=1` persists
 - NixOS test VLAN: node1=192.168.1.1, node2=192.168.1.2, node3=192.168.1.3
 - Iroh bind port from `--bind-port 7777` may not match actual reported port — extract from journal
+
+### Three Multi-Node Cluster Fixes (2026-02-19)
+
+- **add-learner bare EndpointId rejected**: `membership.rs` no longer accepts bare hex EndpointId — requires JSON `{"id":"<hex>","addrs":[{"Ip":"host:port"}]}`. Also validates `addrs` is non-empty even for JSON input.
+- **Blob reads fail fast (5s)**: New `BLOB_READ_WAIT_TIMEOUT` (5s) for read paths. `wait_available_all` → `wait_available` (single blob) in `get_object`, `get_change`, `export_object`. Write-path `ensure_blobs_available` unchanged (still uses 30s `DEFAULT_BLOB_WAIT_TIMEOUT`).
+- **NOT_LEADER error code**: KV write/delete/CAS handlers return `ClientRpcResponse::error("NOT_LEADER", msg)` instead of burying the error in `WriteResultResponse.error`. CLI client rotates to next peer on `NOT_LEADER` (same as `SERVICE_UNAVAILABLE`).
+- Also fixed: `handle_batch_write` and `handle_conditional_batch_write` used raw `e.to_string()` — changed to `sanitize_kv_error(&e)`.
 
 ### NixOS VM Integration Test (2026-02-18)
 

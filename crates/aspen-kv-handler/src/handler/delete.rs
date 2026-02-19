@@ -50,10 +50,24 @@ async fn handle_delete_key(ctx: &ClientProtocolContext, key: String) -> anyhow::
         })
         .await;
 
-    Ok(ClientRpcResponse::DeleteResult(DeleteResultResponse {
-        key,
-        was_deleted: result.is_ok(),
-        // HIGH-4: Sanitize error messages to prevent information leakage
-        error: result.err().map(|e| sanitize_kv_error(&e)),
-    }))
+    match result {
+        Ok(_) => Ok(ClientRpcResponse::DeleteResult(DeleteResultResponse {
+            key,
+            was_deleted: true,
+            error: None,
+        })),
+        Err(aspen_core::KeyValueStoreError::NotLeader { leader, .. }) => {
+            let msg = if let Some(id) = leader {
+                format!("not leader; leader is node {}", id)
+            } else {
+                "not leader; leader unknown".to_string()
+            };
+            Ok(ClientRpcResponse::error("NOT_LEADER", msg))
+        }
+        Err(e) => Ok(ClientRpcResponse::DeleteResult(DeleteResultResponse {
+            key,
+            was_deleted: false,
+            error: Some(sanitize_kv_error(&e)),
+        })),
+    }
 }

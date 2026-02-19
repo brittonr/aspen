@@ -60,7 +60,7 @@ pub struct AddLearnerArgs {
     #[arg(long)]
     pub node_id: u64,
 
-    /// Network address of the learner (endpoint_id format).
+    /// JSON endpoint address: {"id":"<hex>","addrs":[{"Ip":"host:port"}]}.
     #[arg(long)]
     pub addr: String,
 }

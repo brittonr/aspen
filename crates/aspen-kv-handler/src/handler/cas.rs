@@ -94,6 +94,14 @@ async fn handle_compare_and_swap(
                 error: None,
             }))
         }
+        Err(KeyValueStoreError::NotLeader { leader, .. }) => {
+            let msg = if let Some(id) = leader {
+                format!("not leader; leader is node {}", id)
+            } else {
+                "not leader; leader unknown".to_string()
+            };
+            Ok(ClientRpcResponse::error("NOT_LEADER", msg))
+        }
         Err(e) => Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
             is_success: false,
             actual_value: None,
@@ -139,6 +147,14 @@ async fn handle_compare_and_delete(
                 actual_value: actual.map(|v| v.into_bytes()),
                 error: None,
             }))
+        }
+        Err(KeyValueStoreError::NotLeader { leader, .. }) => {
+            let msg = if let Some(id) = leader {
+                format!("not leader; leader is node {}", id)
+            } else {
+                "not leader; leader unknown".to_string()
+            };
+            Ok(ClientRpcResponse::error("NOT_LEADER", msg))
         }
         Err(e) => Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
             is_success: false,
@@ -235,13 +251,21 @@ async fn handle_conditional_batch_write(
                 error: None,
             }))
         }
+        Err(aspen_core::KeyValueStoreError::NotLeader { leader, .. }) => {
+            let msg = if let Some(id) = leader {
+                format!("not leader; leader is node {}", id)
+            } else {
+                "not leader; leader unknown".to_string()
+            };
+            Ok(ClientRpcResponse::error("NOT_LEADER", msg))
+        }
         Err(e) => Ok(ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
             is_success: false,
             conditions_met: false,
             operations_applied: None,
             failed_condition_index: None,
             failed_condition_reason: None,
-            error: Some(e.to_string()),
+            error: Some(sanitize_kv_error(&e)),
         })),
     }
 }
