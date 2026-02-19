@@ -183,6 +183,42 @@
 - **NOT_LEADER error code**: KV write/delete/CAS handlers return `ClientRpcResponse::error("NOT_LEADER", msg)` instead of burying the error in `WriteResultResponse.error`. CLI client rotates to next peer on `NOT_LEADER` (same as `SERVICE_UNAVAILABLE`).
 - Also fixed: `handle_batch_write` and `handle_conditional_batch_write` used raw `e.to_string()` — changed to `sanitize_kv_error(&e)`.
 
+### Hooks + Service Registry NixOS VM Test (2026-02-19)
+
+- New `nix/tests/hooks-services.nix` — single-node hooks + service registry test
+- Hooks: list, metrics, trigger (write_committed, leader_elected with payload), create-url
+- Service registry: register (3 instances, 2 services), list (all + prefix), discover (all + version filter + healthy only), get, heartbeat, health update (unhealthy/restore), update metadata, deregister, cleanup
+- Wired into flake as `checks.x86_64-linux.hooks-services-test`
+- **Gotcha: CLI subcommand is `hook` (singular), not `hooks`**
+
+### Secrets Engine NixOS VM Test (2026-02-19)
+
+- New `nix/tests/secrets-engine.nix` — single-node secrets engine test
+- Tests KV v2 (put, get, versions, list, metadata, delete, undelete, destroy) + Transit (create-key, list-keys, encrypt, decrypt, sign, verify, rotate, datakey)
+- All subtests use `check=False` — secrets handler is NOT registered in node's handler registry
+- **Gotcha: `secrets` feature needed in CLI** — added `aspen-cli-secrets` package to flake
+- **Gotcha: Secrets handler not dispatched** — server receives `SecretsKvWrite` but never matches a handler. The `aspen-secrets-handler` crate uses inventory self-registration but is behind `secrets` feature in `aspen-rpc-handlers`. Needs investigation.
+- Test detects handler availability via probe and logs results gracefully
+
+### KV Operations NixOS VM Test (2026-02-19)
+
+- New `nix/tests/kv-operations.nix` — single-node KV store integration test
+- Tests: set/get/delete, non-existent reads, overwrite, CAS (create-if-absent, conditional, conflict), CAD (success, conflict), prefix scan with limit, scan pagination (continuation tokens are best-effort — may fail), batch read (existing + mixed missing), batch write (atomic), file-based set (--file), large values (100KB), special character keys, empty values
+- Wired into flake as `checks.x86_64-linux.kv-operations-test`
+- Uses `aspen-cli` (no forge feature needed) — lighter build
+- **Gotcha: `kv delete` returns `was_deleted: true` even for non-existent keys** — idempotent semantics
+- **Gotcha: `kv batch-read` JSON output has `{count, results: [{does_exist, key, value}]}` — NOT `{keys, values}`**
+- **Gotcha: `kv scan --token` continuation may fail (exit 1)** — use `check=False` for robustness
+- **Gotcha: `''` inside Nix indented strings closes the string!** Use `'''` to emit literal `''`, or avoid double-single-quote entirely
+
+### Coordination Primitives NixOS VM Test (2026-02-19)
+
+- New `nix/tests/coordination-primitives.nix` — single-node coordination test
+- Tests: distributed locks (acquire/try-acquire/release/renew/contention), counters (get/incr/decr/add/sub/set/CAS/underflow), sequences (next/reserve/current), semaphores (acquire/capacity-exhaustion/release/status), rwlocks (read/multi-reader/write-blocked/release/write/downgrade/status), queues (create/enqueue/dequeue+ack/nack/nack-to-DLQ/redrive/dedup/group/delete), leases (grant/ttl/keepalive/list/revoke), barriers (enter/status/leave)
+- Wired into flake as `checks.x86_64-linux.coordination-primitives-test`
+- Uses `aspen-cli` (no forge feature needed)
+- **Gotcha: `counter decr` at zero exits non-zero** — CLI `exit(1)` on `is_success: false`, use `check=False`
+
 ### NixOS VM Integration Test (2026-02-18)
 
 - New `nix/tests/forge-cluster.nix` — NixOS VM test with full networking

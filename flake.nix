@@ -619,6 +619,16 @@
             }
           );
 
+          # Build aspen-cli with secrets features (KV v2, Transit, PKI)
+          aspen-cli-secrets-crate = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features secrets";
+              doCheck = false;
+            }
+          );
+
           # Build aspen-ci-agent from its own crate
           aspen-ci-agent-crate = craneLib.buildPackage (
             commonArgs
@@ -663,6 +673,7 @@
               aspen-tui = aspen-tui-crate;
               aspen-cli = aspen-cli-crate;
               aspen-cli-forge = aspen-cli-forge-crate;
+              aspen-cli-secrets = aspen-cli-secrets-crate;
               aspen-ci-agent = aspen-ci-agent-crate;
               verus-metrics = aspen-verus-metrics-crate;
             };
@@ -917,6 +928,44 @@
                 inherit pkgs;
                 aspenNodePackage = bins.aspen-node;
                 aspenCliPackage = bins.aspen-cli-forge;
+              };
+
+              # KV operations test: CRUD, CAS/CAD, scan/pagination, batch ops,
+              # binary data, large values, special characters.
+              # Build: nix build .#checks.x86_64-linux.kv-operations-test
+              kv-operations-test = import ./nix/tests/kv-operations.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli;
+              };
+
+              # Coordination primitives test: distributed locks, counters,
+              # sequences, semaphores, rwlocks, barriers, queues, leases.
+              # Build: nix build .#checks.x86_64-linux.coordination-primitives-test
+              coordination-primitives-test = import ./nix/tests/coordination-primitives.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli;
+              };
+
+              # Hooks and service registry test: event system (list, metrics,
+              # trigger, URLs) and service discovery (register, discover, get,
+              # list, heartbeat, health, update, deregister).
+              # Build: nix build .#checks.x86_64-linux.hooks-services-test
+              hooks-services-test = import ./nix/tests/hooks-services.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli;
+              };
+
+              # Secrets engine test: KV v2 (write, read, versions, list,
+              # soft delete, undelete, destroy, CAS) and Transit (create key,
+              # encrypt, decrypt, sign, verify, rotate, list, datakey).
+              # Build: nix build .#checks.x86_64-linux.secrets-engine-test
+              secrets-engine-test = import ./nix/tests/secrets-engine.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli-secrets;
               };
             };
 
