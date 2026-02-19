@@ -26,6 +26,9 @@ pub enum PatchCommand {
     /// Show patch details.
     Show(PatchShowArgs),
 
+    /// Update a patch (push new commits).
+    Update(PatchUpdateArgs),
+
     /// Approve a patch.
     Approve(PatchApproveArgs),
 
@@ -85,6 +88,24 @@ pub struct PatchShowArgs {
 }
 
 #[derive(Args)]
+pub struct PatchUpdateArgs {
+    /// Repository ID.
+    #[arg(short, long)]
+    pub repo: String,
+
+    /// Patch ID (hex-encoded).
+    pub patch: String,
+
+    /// New head commit hash.
+    #[arg(long)]
+    pub head: String,
+
+    /// Update message describing the changes.
+    #[arg(short, long)]
+    pub message: Option<String>,
+}
+
+#[derive(Args)]
 pub struct PatchApproveArgs {
     /// Repository ID.
     #[arg(short, long)]
@@ -133,6 +154,7 @@ impl PatchCommand {
             PatchCommand::List(args) => patch_list(client, args, json).await,
             PatchCommand::Create(args) => patch_create(client, args, json).await,
             PatchCommand::Show(args) => patch_show(client, args, json).await,
+            PatchCommand::Update(args) => patch_update(client, args, json).await,
             PatchCommand::Approve(args) => patch_approve(client, args, json).await,
             PatchCommand::Merge(args) => patch_merge(client, args, json).await,
             PatchCommand::Close(args) => patch_close(client, args, json).await,
@@ -308,6 +330,56 @@ async fn patch_show(client: &AspenClient, args: PatchShowArgs, json: bool) -> Re
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             anyhow::bail!("{}", result.error.unwrap_or_else(|| "not found".to_string()))
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn patch_update(client: &AspenClient, args: PatchUpdateArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::ForgeUpdatePatch {
+            repo_id: args.repo,
+            patch_id: args.patch.clone(),
+            head: args.head,
+            message: args.message,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::ForgePatchResult(result) => {
+            if result.is_success {
+                if let Some(patch) = result.patch {
+                    let output = PatchOutput {
+                        id: patch.id,
+                        title: patch.title,
+                        state: patch.state,
+                        base: patch.base,
+                        head: patch.head,
+                        labels: patch.labels,
+                        revision_count: patch.revision_count,
+                        approval_count: patch.approval_count,
+                        created_at_ms: patch.created_at_ms,
+                        updated_at_ms: patch.updated_at_ms,
+                    };
+                    print_output(&output, json);
+                } else if !json {
+                    println!("Patch {} updated", args.patch);
+                }
+                Ok(())
+            } else {
+                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+            }
+        }
+        ClientRpcResponse::ForgeOperationResult(result) => {
+            if result.is_success {
+                if !json {
+                    println!("Patch {} updated", args.patch);
+                }
+                Ok(())
+            } else {
+                anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
+            }
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),

@@ -37,6 +37,9 @@ pub enum GitCommand {
     /// Create a new commit.
     Commit(CommitArgs),
 
+    /// Show commit details by hash.
+    ShowCommit(ShowCommitArgs),
+
     /// Show commit history.
     Log(LogArgs),
 
@@ -143,6 +146,12 @@ pub struct CommitArgs {
     /// Commit message.
     #[arg(short, long)]
     pub message: String,
+}
+
+#[derive(Args)]
+pub struct ShowCommitArgs {
+    /// Commit hash (hex-encoded BLAKE3).
+    pub hash: String,
 }
 
 #[derive(Args)]
@@ -290,6 +299,7 @@ impl GitCommand {
             GitCommand::Clone(args) => git_clone(client, args, json).await,
             GitCommand::Show(args) => git_show(client, args, json).await,
             GitCommand::Commit(args) => git_commit(client, args, json).await,
+            GitCommand::ShowCommit(args) => git_show_commit(client, args, json).await,
             GitCommand::Log(args) => git_log(client, args, json).await,
             #[cfg(feature = "forge")]
             GitCommand::Push(args) => git_push(client, args, json).await,
@@ -830,6 +840,43 @@ async fn git_commit(client: &AspenClient, args: CommitArgs, json: bool) -> Resul
     }
 }
 
+async fn git_show_commit(client: &AspenClient, args: ShowCommitArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::ForgeGetCommit {
+            hash: args.hash.clone(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::ForgeCommitResult(result) => {
+            if result.is_success {
+                if let Some(commit) = result.commit {
+                    let output = CommitOutput {
+                        hash: commit.hash,
+                        tree: commit.tree,
+                        parents: commit.parents,
+                        author_name: commit.author_name,
+                        author_email: commit.author_email,
+                        message: commit.message,
+                        timestamp_ms: commit.timestamp_ms,
+                    };
+                    print_output(&output, json);
+                } else if !json {
+                    println!("Commit not found: {}", args.hash);
+                }
+                Ok(())
+            } else {
+                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+            }
+        }
+        ClientRpcResponse::ForgeOperationResult(result) => {
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "not found".to_string()))
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
 async fn git_log(client: &AspenClient, args: LogArgs, json: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::ForgeLog {
@@ -998,7 +1045,7 @@ async fn git_push_send_request(
     timestamp_ms: Option<u64>,
 ) -> Result<ClientRpcResponse> {
     if args.is_force {
-        client
+        Ok(client
             .send(ClientRpcRequest::ForgeSetRef {
                 repo_id: args.repo.clone(),
                 ref_name: args.ref_name.clone(),
@@ -1007,10 +1054,9 @@ async fn git_push_send_request(
                 signature,
                 timestamp_ms,
             })
-            .await
-            .map_err(Into::into)
+            .await?)
     } else {
-        client
+        Ok(client
             .send(ClientRpcRequest::ForgeCasRef {
                 repo_id: args.repo.clone(),
                 ref_name: args.ref_name.clone(),
@@ -1020,8 +1066,7 @@ async fn git_push_send_request(
                 signature,
                 timestamp_ms,
             })
-            .await
-            .map_err(Into::into)
+            .await?)
     }
 }
 

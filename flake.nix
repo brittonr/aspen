@@ -609,6 +609,16 @@
             }
           );
 
+          # Build aspen-cli with forge features (push, signed tags, export-key)
+          aspen-cli-forge-crate = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features forge";
+              doCheck = false;
+            }
+          );
+
           # Build aspen-ci-agent from its own crate
           aspen-ci-agent-crate = craneLib.buildPackage (
             commonArgs
@@ -650,6 +660,7 @@
             // {
               aspen-tui = aspen-tui-crate;
               aspen-cli = aspen-cli-crate;
+              aspen-cli-forge = aspen-cli-forge-crate;
               aspen-ci-agent = aspen-ci-agent-crate;
               verus-metrics = aspen-verus-metrics-crate;
             };
@@ -885,6 +896,17 @@
                   '';
                 }
               );
+            }
+            // lib.optionalAttrs (system == "x86_64-linux") {
+              # NixOS VM integration test for the Forge.
+              # Spins up a cluster with real networking and exercises
+              # every forge CLI command end-to-end.
+              # Build: nix build .#checks.x86_64-linux.forge-cluster-test
+              forge-cluster-test = import ./nix/tests/forge-cluster.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli-forge;
+              };
             };
 
           # Base apps available on all systems
@@ -2218,6 +2240,7 @@
               aspen-node = bins.aspen-node;
               aspen-tui = bins.aspen-tui;
               aspen-cli = bins.aspen-cli;
+              aspen-cli-forge = bins.aspen-cli-forge;
               aspen-ci-agent = bins.aspen-ci-agent;
               git-remote-aspen = bins.git-remote-aspen;
               netwatch = netwatch;

@@ -140,3 +140,24 @@
 - `PluginHostContext.scheduler_requests` is `Arc<Mutex<Vec<SchedulerCommand>>>` — shared between host context and handler
 - Handler has `new_with_scheduler()` for registry to pass the shared queue
 - `PluginScheduler` created in `call_init()` success path via `OnceLock`, processes commands after each guest call
+
+### CLI Forge Coverage (2026-02-18)
+
+- Added `git show-commit <hash>` → `ForgeGetCommit` (was handler-only, no CLI)
+- Added `patch update` → `ForgeUpdatePatch` (was handler-only, no CLI)
+- Fixed pre-existing clippy `useless_conversion` in `git_push_send_request` (`.map_err(Into::into)` → `Ok(..?)`)
+- GitBridge operations (6 request types) are intentionally git-HTTP-protocol-only, not CLI gaps
+- ForgeHandler has 44 request types total; all are now CLI-accessible except the 6 GitBridge protocol-only ones
+- `ForgeRequest` enum (36 variants) is a subset of the 44 forge-related `ClientRpcRequest` variants — 8 federation variants live directly in `ClientRpcRequest`
+
+### NixOS VM Integration Test (2026-02-18)
+
+- New `nix/tests/forge-cluster.nix` — NixOS VM test with full networking
+- Tests all forge CLI commands E2E: repo, blob, tree, commit, show-commit, log, push, get-ref, branch, tag, issue, patch (including update), clone, federation
+- Single-node QEMU VM with aspen-node service + aspen-cli (forge features)
+- Ticket read from `/var/lib/aspen/cluster-ticket.txt` (written by aspen-node on boot)
+- Wired into `flake.nix` as `checks.x86_64-linux.forge-cluster-test`
+- New `aspen-cli-forge` package: CLI built with `--features forge` (needed for push, tag create)
+- NixOS test framework provides real kernel networking — no sandbox restrictions
+- Run: `nix build .#checks.x86_64-linux.forge-cluster-test`
+- Debug: `nix build .#checks.x86_64-linux.forge-cluster-test.driverInteractive`
