@@ -754,6 +754,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-automerge-plugin"
+version = "0.1.0"
+dependencies = [
+ "aspen-client-api",
+ "aspen-wasm-guest-sdk",
+ "base64 0.22.1",
+ "hex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "aspen-blob"
 version = "0.1.0"
 dependencies = [
@@ -2246,6 +2258,18 @@ dependencies = [
  "iroh",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "aspen-secrets-plugin"
+version = "0.1.0"
+dependencies = [
+ "aspen-client-api",
+ "aspen-wasm-guest-sdk",
+ "base64 0.22.1",
+ "hex",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

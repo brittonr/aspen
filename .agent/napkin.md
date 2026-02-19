@@ -83,6 +83,29 @@
 - Pattern matching: NATS-style `*` (one segment) and `>` (trailing), same as hooks service
 - Event delivery: `PluginEventRouter::deliver(topic, event_json)` → `spawn_blocking` → `call_guest_function`
 
+### aspen-secrets-plugin: WASM Secrets Engine
+
+- New crate: `crates/aspen-secrets-plugin/` — cdylib WASM plugin
+- KV prefix: `__secrets:`, priority: 940, app_id: `secrets`
+- Handles 18 request types: SecretsKv{Read,Write,Delete,Destroy,Undelete,List,Metadata,UpdateMetadata,DeleteMetadata} + SecretsTransit{CreateKey,Encrypt,Decrypt,Sign,Verify,RotateKey,ListKeys,Rewrap,Datakey}
+- KV v2: Versioned secrets with soft/hard delete, CAS, metadata — pure KV operations
+- Transit: BLAKE3-hash-based symmetric encryption (keystream XOR + MAC), Ed25519 signing via host `sign()`/`verify()`
+- Key storage: `__secrets:kv:{mount}:data:{path}:v{version}`, `__secrets:kv:{mount}:meta:{path}`, `__secrets:transit:{mount}:key:{name}`
+- Wire format: `aspen:v{version}:{base64(nonce ++ ciphertext ++ mac)}`
+- Permissions: kv_read, kv_write, blob_read, blob_write, randomness, signing
+- Skips PKI (X.509/rcgen too complex for WASM) and NixCache (lower priority)
+
+### aspen-automerge-plugin: WASM Automerge CRDT Plugin
+
+- New crate: `crates/aspen-automerge-plugin/` — cdylib WASM plugin
+- KV prefix: `automerge:`, priority: 935, app_id: `automerge`
+- Handles 11 request types: Automerge{Create,Get,Save,Delete,ApplyChanges,Merge,List,GetMetadata,Exists,GenerateSyncMessage,ReceiveSyncMessage}
+- Document content stored as base64 in `automerge:{doc_id}`, metadata as JSON in `automerge:_meta:{doc_id}`
+- Sync state per peer: `automerge:_sync:{doc_id}:{peer_id}` — simplified hash-based sync (full snapshots)
+- Does NOT link the `automerge` crate — documents are opaque base64 blobs, CRDT logic is client-side
+- Permissions: kv_read, kv_write, blob_read, blob_write, randomness
+- `aspen-client-api` automerge types are behind `#[cfg(feature = "automerge")]` — plugin Cargo.toml must enable it
+
 ## Domain Notes
 
 - Aspen is a Rust project with a WASM plugin system using `hyperlight-wasm`
