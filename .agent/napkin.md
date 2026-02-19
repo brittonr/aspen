@@ -160,6 +160,21 @@
 - Test `cli()` helper uses temp file approach: `>/tmp/_cli_out.json 2>/dev/null` then `cat` — serial console mixes stdout/stderr
 - Federation subtests use `node1.execute()` (non-fatal) since `global-discovery` feature not enabled in test build
 
+### Multi-Node NixOS VM Test (2026-02-19)
+
+- New `nix/tests/multi-node-cluster.nix` — 3-node Raft cluster test
+- Tests: cluster formation, consensus, data replication, cross-node ops, leader failover, node rejoin
+- `add-learner --addr` requires JSON EndpointAddr (not ticket) — format: `{"id":"<hex>","addrs":[{"Ip":"host:port"}]}`
+- Bare EndpointId (public key hex) creates empty `addrs: {}` — Raft can't connect without socket addresses
+- Extract endpoint addr from journal: `grep 'cluster ticket generated'` → parse endpoint_id + 192.168.x.x addrs
+- `cluster status` JSON only shows voters in `nodes`, NOT learners — check after change-membership, not after add-learner
+- After failover: writes must go to NEW leader node's ticket, not any survivor
+- Forge blob-backed operations (issue show/list, get-blob) use `wait_available_all` — fails when ANY node is down or has stale blobs
+- Pure KV operations (repo list, branch list, cluster status) work fine with 2/3 quorum
+- Blob replication does NOT auto-catch-up after node restart — `wait_available_all remaining=1` persists
+- NixOS test VLAN: node1=192.168.1.1, node2=192.168.1.2, node3=192.168.1.3
+- Iroh bind port from `--bind-port 7777` may not match actual reported port — extract from journal
+
 ### NixOS VM Integration Test (2026-02-18)
 
 - New `nix/tests/forge-cluster.nix` — NixOS VM test with full networking

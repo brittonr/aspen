@@ -909,6 +909,15 @@
                 aspenNodePackage = bins.aspen-node;
                 aspenCliPackage = bins.aspen-cli-forge;
               };
+
+              # Multi-node cluster test: 3-node Raft consensus, replication,
+              # leader failover, cross-node operations, and node rejoin.
+              # Build: nix build .#checks.x86_64-linux.multi-node-cluster-test
+              multi-node-cluster-test = import ./nix/tests/multi-node-cluster.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli-forge;
+              };
             };
 
           # Base apps available on all systems
