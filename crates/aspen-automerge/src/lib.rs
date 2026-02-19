@@ -119,6 +119,7 @@ pub use sync_protocol::SyncError;
 pub use sync_protocol::SyncProtocolMessage;
 // Sync protocol exports
 pub use sync_protocol::sync_with_peer;
+pub use sync_protocol::sync_with_peer_cap;
 pub use types::ApplyResult;
 pub use types::DocumentChange;
 pub use types::DocumentEvent;

@@ -11,7 +11,11 @@ use aspen::cluster::config::NodeConfig;
 use aspen_automerge::AUTOMERGE_SYNC_ALPN;
 use aspen_automerge::AspenAutomergeStore;
 use aspen_automerge::AutomergeSyncHandler;
+use aspen_automerge::Permission;
+use aspen_automerge::SignedCapability;
+use aspen_automerge::SyncCapability;
 use aspen_core::context::WatchRegistry;
+use base64::Engine as _;
 use tracing::info;
 use tracing::warn;
 
@@ -99,9 +103,10 @@ pub fn setup_router(
 
     // Add automerge sync protocol handler
     let am_store = Arc::new(AspenAutomergeStore::new(kv_store.clone()));
-    let am_handler = Arc::new(AutomergeSyncHandler::new(am_store));
+    let node_public_key = node_mode.iroh_manager().endpoint().id();
+    let am_handler = Arc::new(AutomergeSyncHandler::with_capability_auth(am_store, node_public_key));
     builder = builder.accept(AUTOMERGE_SYNC_ALPN, am_handler);
-    info!("Automerge sync protocol handler registered");
+    info!("Automerge sync protocol handler registered with capability auth");
 
     // Add log subscriber protocol handler if log broadcast is enabled
     if let Some(log_sender) = node_mode.log_broadcast() {
@@ -204,7 +209,11 @@ pub async fn start_dns_server(_config: &NodeConfig) {
 }
 
 /// Generate and print cluster ticket for TUI connection.
-pub fn print_cluster_ticket(config: &NodeConfig, endpoint_addr: &iroh::EndpointAddr) {
+pub fn print_cluster_ticket(
+    config: &NodeConfig,
+    endpoint_addr: &iroh::EndpointAddr,
+    secret_key: &iroh_base::SecretKey,
+) {
     use std::io::Write;
 
     use aspen::cluster::ticket::AspenClusterTicket;
@@ -250,8 +259,23 @@ pub fn print_cluster_ticket(config: &NodeConfig, endpoint_addr: &iroh::EndpointA
         ),
     }
 
+    // Generate wildcard capability token for automerge sync
+    let capability = SyncCapability {
+        document_id: "*".into(),
+        permission: Permission::ReadWrite,
+        node_id: None,
+        expires_at: None,
+    };
+    let signed_cap = SignedCapability::sign(secret_key, &capability);
+    let cap_bytes = signed_cap.to_bytes();
+    // Use base64 URL-safe encoding for the capability token
+    let cap_token = format!("aspen-cap1{}", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&cap_bytes));
+
     println!();
     println!("Connect with TUI:");
     println!("  aspen-tui --ticket {}", ticket_str);
+    println!();
+    println!("Automerge sync capability token (wildcard ReadWrite):");
+    println!("  {}", cap_token);
     println!();
 }

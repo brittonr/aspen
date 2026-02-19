@@ -230,7 +230,7 @@ async fn async_main() -> Result<()> {
     start_dns_server(&config).await;
 
     // Generate and print cluster ticket (V2 with direct addresses)
-    print_cluster_ticket(&config, &endpoint_addr);
+    print_cluster_ticket(&config, &endpoint_addr, node_mode.iroh_manager().endpoint().secret_key());
 
     // Wait for shutdown signal
     shutdown_signal().await;
