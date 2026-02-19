@@ -649,7 +649,9 @@
                   # docs: iroh-docs CRDT document operations
                   # hooks: Event-driven automation (requires jobs)
                   # shell-worker: Execute shell commands for CI shell jobs
-                  features = ["ci" "docs" "hooks" "shell-worker" "plugins"];
+                  # Note: "plugins" excluded — hyperlight-wasm build.rs needs network access
+                  # which is unavailable in Nix's sandbox.
+                  features = ["ci" "docs" "hooks" "shell-worker" "automerge"];
                 }
                 {
                   name = "git-remote-aspen";

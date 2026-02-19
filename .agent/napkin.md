@@ -150,6 +150,16 @@
 - ForgeHandler has 44 request types total; all are now CLI-accessible except the 6 GitBridge protocol-only ones
 - `ForgeRequest` enum (36 variants) is a subset of the 44 forge-related `ClientRpcRequest` variants — 8 federation variants live directly in `ClientRpcRequest`
 
+### NixOS VM Test Fixes (2026-02-19)
+
+- `pkgs.nixosTest` → `pkgs.testers.nixosTest` (renamed in newer nixpkgs)
+- aspen-node package needed `automerge` feature added (required-features in Cargo.toml)
+- `plugins` feature removed from nix package — `hyperlight-wasm` build.rs needs network access (incompatible with Nix sandbox)
+- f-string lint: NixOS test framework lints Python f-strings; `f"..."` without `{...}` placeholders fails
+- **Critical: tracing subscriber wrote to stdout** — `tracing_subscriber::fmt()` defaults to stdout, corrupting JSON output. Fixed with `.with_writer(std::io::stderr)`
+- Test `cli()` helper uses temp file approach: `>/tmp/_cli_out.json 2>/dev/null` then `cat` — serial console mixes stdout/stderr
+- Federation subtests use `node1.execute()` (non-fatal) since `global-discovery` feature not enabled in test build
+
 ### NixOS VM Integration Test (2026-02-18)
 
 - New `nix/tests/forge-cluster.nix` — NixOS VM test with full networking
