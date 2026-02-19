@@ -184,13 +184,13 @@ pub enum SyncError {
 /// Protocol handler for Automerge document synchronization.
 ///
 /// Accepts incoming sync connections and handles the document sync protocol.
-/// If `require_capability` is set, every sync request must include a valid
-/// [`SignedCapability`] token signed by this key.
+/// If `verifier` is set, every sync request must include a valid
+/// [`CapabilityToken`].
 pub struct AutomergeSyncHandler<S: DocumentStore> {
     /// Document store for loading/saving documents.
     store: Arc<S>,
-    /// If set, incoming sync requests must present a capability signed by this key.
-    require_capability: Option<iroh_base::PublicKey>,
+    /// If set, incoming sync requests must present a valid CapabilityToken.
+    verifier: Option<Arc<aspen_auth::TokenVerifier>>,
     /// Semaphore for bounding concurrent connections.
     connection_semaphore: Arc<Semaphore>,
 }
@@ -206,16 +206,17 @@ impl<S: DocumentStore + 'static> AutomergeSyncHandler<S> {
     pub fn new(store: Arc<S>) -> Self {
         Self {
             store,
-            require_capability: None,
+            verifier: None,
             connection_semaphore: Arc::new(Semaphore::new(MAX_SYNC_CONNECTIONS)),
         }
     }
 
     /// Create a sync handler that requires capability tokens signed by this key.
-    pub fn with_capability_auth(store: Arc<S>, issuer_public_key: iroh_base::PublicKey) -> Self {
+    pub fn with_capability_auth(store: Arc<S>, issuer_public_key: iroh::PublicKey) -> Self {
+        let verifier = aspen_auth::TokenVerifier::new().with_trusted_root(issuer_public_key);
         Self {
             store,
-            require_capability: Some(issuer_public_key),
+            verifier: Some(Arc::new(verifier)),
             connection_semaphore: Arc::new(Semaphore::new(MAX_SYNC_CONNECTIONS)),
         }
     }
@@ -246,12 +247,12 @@ impl<S: DocumentStore + 'static> AutomergeSyncHandler<S> {
 
             // Spawn task to handle this stream
             let store = self.store.clone();
-            let require_cap = self.require_capability;
+            let verifier = self.verifier.clone();
             let remote_id = connection.remote_id();
             let (send, recv) = stream;
             tokio::spawn(async move {
                 let _permit = permit;
-                if let Err(e) = handle_sync_stream(store, recv, send, require_cap, remote_id).await {
+                if let Err(e) = handle_sync_stream(store, recv, send, verifier, remote_id).await {
                     error!(error = %e, "sync stream error");
                 }
             });
@@ -294,8 +295,8 @@ async fn handle_sync_stream<S: DocumentStore>(
     store: Arc<S>,
     mut recv: RecvStream,
     mut send: SendStream,
-    require_capability: Option<iroh_base::PublicKey>,
-    remote_id: iroh_base::PublicKey,
+    verifier: Option<Arc<aspen_auth::TokenVerifier>>,
+    remote_id: iroh::PublicKey,
 ) -> Result<(), SyncError> {
     // Read sync request
     let request = SyncProtocolMessage::read_from(&mut recv).await?;
@@ -330,7 +331,7 @@ async fn handle_sync_stream<S: DocumentStore>(
     };
 
     // Verify capability if auth is required
-    if let Some(ref issuer_key) = require_capability {
+    if let Some(ref verifier) = verifier {
         let cap_bytes = match capability_bytes {
             Some(bytes) => bytes,
             None => {
@@ -342,19 +343,25 @@ async fn handle_sync_stream<S: DocumentStore>(
                 return Err(SyncError::Rejected("capability token required".into()));
             }
         };
-        let signed = match crate::SignedCapability::from_bytes(&cap_bytes) {
-            Ok(s) => s,
+        let token = match aspen_auth::CapabilityToken::decode(&cap_bytes) {
+            Ok(t) => t,
             Err(e) => {
                 let response = SyncProtocolMessage::SyncResponse {
                     accepted: false,
-                    error: Some(format!("invalid capability: {}", e)),
+                    error: Some(format!("invalid token: {}", e)),
                 };
                 response.write_to(&mut send).await?;
-                return Err(SyncError::Rejected(format!("invalid capability: {}", e)));
+                return Err(SyncError::Rejected(format!("invalid token: {}", e)));
             }
         };
-        // Sync is bidirectional (read+write) so require write permission
-        if let Err(e) = signed.authorize(issuer_key, &document_id, &remote_id, true) {
+        // Automerge documents are stored at "automerge:{doc_id}" keys in the KV store.
+        // Sync is bidirectional so we require Write permission (which subsumes Read
+        // for the Full capability variant).
+        let operation = aspen_auth::Operation::Write {
+            key: format!("automerge:{}", document_id),
+            value: vec![],
+        };
+        if let Err(e) = verifier.authorize(&token, &operation, Some(&remote_id)) {
             let response = SyncProtocolMessage::SyncResponse {
                 accepted: false,
                 error: Some(format!("unauthorized: {}", e)),
@@ -526,7 +533,7 @@ pub async fn sync_with_peer_cap<S: DocumentStore>(
     store: &S,
     document_id: &DocumentId,
     connection: &Connection,
-    capability: Option<&crate::SignedCapability>,
+    capability: Option<&aspen_auth::CapabilityToken>,
 ) -> Result<(), SyncError> {
     // Open bidirectional stream
     let (mut send, mut recv) =
@@ -535,7 +542,7 @@ pub async fn sync_with_peer_cap<S: DocumentStore>(
     // Send sync request with optional capability
     let request = SyncProtocolMessage::SyncRequest {
         document_id: document_id.to_string(),
-        capability: capability.map(|c| c.to_bytes()),
+        capability: capability.and_then(|c| c.encode().ok()),
     };
     request.write_to(&mut send).await?;
 

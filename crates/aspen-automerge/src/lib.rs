@@ -88,7 +88,6 @@
 //! - `MAX_SCAN_RESULTS` = 1,000
 //! - `MAX_DOCUMENTS_PER_NAMESPACE` = 100,000
 
-pub mod capability;
 pub mod constants;
 pub mod error;
 pub mod store;
@@ -96,10 +95,9 @@ pub mod sync_protocol;
 pub mod types;
 
 // Re-export main types for convenience
-pub use capability::CapabilityError;
-pub use capability::Permission;
-pub use capability::SignedCapability;
-pub use capability::SyncCapability;
+// Auth re-exports for downstream consumers
+pub use aspen_auth::CapabilityToken;
+pub use aspen_auth::TokenVerifier;
 pub use constants::AUTOMERGE_TICKET_PREFIX;
 pub use constants::DEFAULT_LIST_LIMIT;
 pub use constants::DOC_KEY_PREFIX;
