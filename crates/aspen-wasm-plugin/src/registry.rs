@@ -391,8 +391,9 @@ async fn load_plugin(
         .build()
         .map_err(|e| anyhow::anyhow!("failed to create sandbox for '{}': {e}", manifest.name))?;
 
-    // Create shared scheduler requests queue for host↔handler communication
+    // Create shared request queues for host↔handler communication
     let scheduler_requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let subscription_requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 
     // Register host functions
     let host_ctx = Arc::new(
@@ -407,6 +408,7 @@ async fn load_plugin(
         .with_secret_key(secret_key.clone())
         .with_hlc(Arc::clone(hlc))
         .with_scheduler_requests(Arc::clone(&scheduler_requests))
+        .with_subscription_requests(Arc::clone(&subscription_requests))
         .with_permissions(manifest.permissions.clone()),
     );
     register_plugin_host_functions(&mut proto, host_ctx)?;
@@ -453,6 +455,7 @@ async fn load_plugin(
         loaded,
         execution_timeout,
         scheduler_requests,
+        subscription_requests,
     ));
 
     // Register app capability with the federation app registry

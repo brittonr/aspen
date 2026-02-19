@@ -53,6 +53,18 @@ pub enum SchedulerCommand {
     Cancel(String),
 }
 
+/// A hook subscription command from a WASM guest plugin.
+///
+/// Guest plugins enqueue these during execution; the host processes them
+/// after the guest call completes to update the event router.
+#[derive(Debug)]
+pub enum SubscriptionCommand {
+    /// Subscribe to hook events matching a NATS-style topic pattern.
+    Subscribe(String),
+    /// Unsubscribe from a previously registered pattern.
+    Unsubscribe(String),
+}
+
 /// Host context for WASM handler plugin callbacks.
 ///
 /// Holds references to cluster services that the guest can interact with
@@ -89,6 +101,11 @@ pub struct PluginHostContext {
     ///
     /// Checked before each host function call. Default: all denied.
     pub permissions: PluginPermissions,
+    /// Pending hook subscription requests from the guest.
+    ///
+    /// Shared with [`WasmPluginHandler`] which processes these after each
+    /// guest call completes to update the plugin's event router.
+    pub subscription_requests: Arc<std::sync::Mutex<Vec<SubscriptionCommand>>>,
 }
 
 impl PluginHostContext {
@@ -111,6 +128,7 @@ impl PluginHostContext {
             allowed_kv_prefixes: Vec::new(),
             scheduler_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
             permissions: PluginPermissions::default(),
+            subscription_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
         }
     }
 
@@ -156,6 +174,16 @@ impl PluginHostContext {
     /// Set the capability permissions from the plugin manifest.
     pub fn with_permissions(mut self, permissions: PluginPermissions) -> Self {
         self.permissions = permissions;
+        self
+    }
+
+    /// Set a shared subscription requests queue.
+    ///
+    /// This lets the handler and host context share the same queue so that
+    /// hook subscription commands enqueued by host functions during guest
+    /// execution can be processed by the handler afterward.
+    pub fn with_subscription_requests(mut self, reqs: Arc<std::sync::Mutex<Vec<SubscriptionCommand>>>) -> Self {
+        self.subscription_requests = reqs;
         self
     }
 }
@@ -936,6 +964,45 @@ pub fn register_plugin_host_functions(
             }
         })
         .map_err(|e| anyhow::anyhow!("failed to register cancel_timer: {e}"))?;
+
+    // -- Hook Subscriptions --
+    let ctx_hook_sub = Arc::clone(&ctx);
+    proto
+        .register("hook_subscribe", move |pattern: String| -> String {
+            if let Err(e) = check_permission(&ctx_hook_sub.plugin_name, "hooks", ctx_hook_sub.permissions.hooks) {
+                return format!("\x01{e}");
+            }
+            if pattern.is_empty() {
+                return "\x01hook pattern must not be empty".to_string();
+            }
+            if pattern.len() > aspen_plugin_api::MAX_HOOK_PATTERN_LENGTH {
+                return format!("\x01hook pattern too long (max {} bytes)", aspen_plugin_api::MAX_HOOK_PATTERN_LENGTH);
+            }
+            match ctx_hook_sub.subscription_requests.lock() {
+                Ok(mut reqs) => {
+                    reqs.push(SubscriptionCommand::Subscribe(pattern));
+                    "\0".to_string()
+                }
+                Err(e) => format!("\x01subscription lock failed: {e}"),
+            }
+        })
+        .map_err(|e| anyhow::anyhow!("failed to register hook_subscribe: {e}"))?;
+
+    let ctx_hook_unsub = Arc::clone(&ctx);
+    proto
+        .register("hook_unsubscribe", move |pattern: String| -> String {
+            if let Err(e) = check_permission(&ctx_hook_unsub.plugin_name, "hooks", ctx_hook_unsub.permissions.hooks) {
+                return format!("\x01{e}");
+            }
+            match ctx_hook_unsub.subscription_requests.lock() {
+                Ok(mut reqs) => {
+                    reqs.push(SubscriptionCommand::Unsubscribe(pattern));
+                    "\0".to_string()
+                }
+                Err(e) => format!("\x01subscription lock failed: {e}"),
+            }
+        })
+        .map_err(|e| anyhow::anyhow!("failed to register hook_unsubscribe: {e}"))?;
 
     Ok(())
 }

@@ -156,3 +156,16 @@ pub const MIN_TIMER_INTERVAL_MS: u64 = 1_000;
 
 /// Maximum timer interval in milliseconds (24 hours).
 pub const MAX_TIMER_INTERVAL_MS: u64 = 86_400_000;
+
+// ---------------------------------------------------------------------------
+// Hook Event Subscriptions
+// ---------------------------------------------------------------------------
+
+/// Maximum number of active hook subscriptions per plugin.
+///
+/// Tiger Style: Bounded resource allocation prevents a single plugin
+/// from consuming unbounded memory with subscriptions.
+pub const MAX_HOOK_SUBSCRIPTIONS_PER_PLUGIN: usize = 16;
+
+/// Maximum length of a hook subscription pattern string.
+pub const MAX_HOOK_PATTERN_LENGTH: usize = 256;

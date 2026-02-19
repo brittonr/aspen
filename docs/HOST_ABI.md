@@ -1,6 +1,6 @@
 # WASM Plugin Host ABI Reference
 
-> Formal contract for the 20 host functions available to WASM handler plugins
+> Formal contract for the 22 host functions available to WASM handler plugins
 > running in hyperlight-wasm 0.12 primitive-mode sandboxes.
 
 ## Overview
@@ -136,6 +136,22 @@ See [Namespace Isolation](#namespace-isolation) below.
 |----------|-----------|---------|-------------|
 | `random_bytes` | `count: u32` | `Vec<u8>` | CSPRNG bytes via `getrandom`. **Capped at 4,096 bytes per call.** Returns zeroed bytes if CSPRNG fails. |
 
+### Hook Subscriptions
+
+| Function | Parameters | Returns | Description |
+|----------|-----------|---------|-------------|
+| `hook_subscribe` | `pattern: String` | `String` | Subscribe to hook events matching a NATS-style topic pattern. Tagged result: `\0` = ok, `\x01msg` = err. Max 16 subscriptions per plugin, max 256 byte pattern. Idempotent. |
+| `hook_unsubscribe` | `pattern: String` | `String` | Unsubscribe from a previously registered pattern. Tagged result: `\0` = ok, `\x01msg` = err. |
+
+Hook patterns use NATS-style wildcards over dot-delimited topics:
+
+- `hooks.kv.*` — matches `hooks.kv.write_committed`, `hooks.kv.delete_committed`, etc.
+- `hooks.>` — matches all events under `hooks.`
+- `>` — matches everything
+
+When a matching event fires, the host calls the guest's `plugin_on_hook_event`
+export with a JSON payload `{"topic": "...", "event": {...}}`.
+
 ## Namespace Isolation
 
 Every KV operation validates the key (or scan prefix) against the plugin's
@@ -166,15 +182,22 @@ Plugin "forge" with kv_prefixes: ["forge:", "forge-cobs:"]
 | kv_scan results | 1,000 | 10,000 | Clamped in `kv_scan` host function |
 | random_bytes | — | 4,096 | Clamped in `random_bytes` host function |
 | Plugin count | — | 100 | `MAX_PLUGINS` constant |
+| Hook subscriptions | — | 16/plugin | `MAX_HOOK_SUBSCRIPTIONS_PER_PLUGIN` |
+| Hook pattern length | — | 256 bytes | `MAX_HOOK_PATTERN_LENGTH` |
 
 ## Guest Exports
 
 Plugins must export these functions:
 
-| Export | Signature | Description |
-|--------|----------|-------------|
-| `plugin_info` | `() -> Vec<u8>` | Returns JSON-serialized `PluginInfo` struct |
-| `handle_request` | `Vec<u8> -> Vec<u8>` | Receives JSON `ClientRpcRequest`, returns JSON `ClientRpcResponse` |
+| Export | Signature | Required | Description |
+|--------|----------|----------|-------------|
+| `plugin_info` | `() -> Vec<u8>` | Yes | Returns JSON-serialized `PluginInfo` struct |
+| `handle_request` | `Vec<u8> -> Vec<u8>` | Yes | Receives JSON `ClientRpcRequest`, returns JSON `ClientRpcResponse` |
+| `plugin_init` | `Vec<u8> -> Vec<u8>` | No | Called once after load. Returns JSON `{"ok": true/false, "error": "..."}` |
+| `plugin_shutdown` | `Vec<u8> -> Vec<u8>` | No | Called before unload. Returns JSON `{"ok": true}` |
+| `plugin_health` | `Vec<u8> -> Vec<u8>` | No | Periodic health check. Returns JSON `{"ok": true/false, "message": "..."}` |
+| `plugin_on_timer` | `Vec<u8> -> Vec<u8>` | No | Called when a scheduled timer fires. Input is JSON string (timer name) |
+| `plugin_on_hook_event` | `Vec<u8> -> Vec<u8>` | No | Called when a subscribed hook event fires. Input is JSON `{"topic": "...", "event": {...}}` |
 
 ## Version History
 
@@ -183,3 +206,4 @@ Plugins must export these functions:
 | v1 | Initial | Mixed error encoding: blob_put used `\0`/`\x01`, kv_put/delete/cas used empty-string convention, kv_get/blob_get returned empty vec for both not-found and error |
 | v2 | 2026-02-18 | Standardized all Result-returning functions to `\0`/`\x01` tag prefix. Added execution timeout. Guest SDK `decode_tagged_unit_result()` handles both v1 and v2. |
 | v3 | 2026-02-18 | Standardized kv_get/blob_get to `[0x00]/[0x01]/[0x02]` tagged encoding (found/not-found/error). Standardized kv_scan to `[0x00]/[0x01]` tagged encoding (ok/error). Guest SDK `decode_tagged_option_result()` handles backwards compat. |
+| v4 | 2026-02-18 | Added `hook_subscribe`/`hook_unsubscribe` host functions and `plugin_on_hook_event` guest export. Added `hooks` permission to `PluginPermissions`. 22 host functions total. |

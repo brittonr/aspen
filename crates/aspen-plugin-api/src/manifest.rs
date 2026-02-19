@@ -90,6 +90,9 @@ pub struct PluginPermissions {
     /// Allow scheduling timers.
     #[serde(default)]
     pub timers: bool,
+    /// Allow subscribing to hook events.
+    #[serde(default)]
+    pub hooks: bool,
 }
 
 impl Default for PluginPermissions {
@@ -104,6 +107,7 @@ impl Default for PluginPermissions {
             randomness: false,
             signing: false,
             timers: false,
+            hooks: false,
         }
     }
 }
@@ -122,6 +126,7 @@ impl PluginPermissions {
             randomness: true,
             signing: true,
             timers: true,
+            hooks: true,
         }
     }
 }

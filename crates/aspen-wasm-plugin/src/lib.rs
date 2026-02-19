@@ -18,6 +18,7 @@
 //! logging, clock) plus additional identity, randomness, and cluster-state
 //! functions. See the `host` module for details.
 
+pub mod events;
 mod handler;
 mod host;
 mod marshal;

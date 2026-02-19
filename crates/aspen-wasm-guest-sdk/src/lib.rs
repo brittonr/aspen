@@ -90,6 +90,16 @@ pub trait AspenPlugin {
     ///
     /// The default implementation does nothing.
     fn on_timer(_name: &str) {}
+
+    /// Called by the host when a subscribed hook event fires.
+    ///
+    /// Subscribe to events via [`host::subscribe_hook_events`] (typically
+    /// in your `init` method). The `topic` is the full event topic
+    /// (e.g., `hooks.kv.write_committed`) and `event` is the JSON-serialized
+    /// hook event payload.
+    ///
+    /// The default implementation does nothing.
+    fn on_hook_event(_topic: &str, _event: &[u8]) {}
 }
 
 /// Register a plugin type by generating the `handle_request` and `plugin_info`
@@ -158,6 +168,16 @@ macro_rules! register_plugin {
         pub extern "C" fn plugin_on_timer(input: Vec<u8>) -> Vec<u8> {
             let name: String = serde_json::from_slice(&input).unwrap_or_default();
             <$plugin_type as $crate::AspenPlugin>::on_timer(&name);
+            serde_json::to_vec(&serde_json::json!({"ok": true})).unwrap_or_default()
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn plugin_on_hook_event(input: Vec<u8>) -> Vec<u8> {
+            // Input is JSON: {"topic": "...", "event": {...}}
+            let parsed: serde_json::Value = serde_json::from_slice(&input).unwrap_or_default();
+            let topic = parsed["topic"].as_str().unwrap_or("");
+            let event_bytes = serde_json::to_vec(&parsed["event"]).unwrap_or_default();
+            <$plugin_type as $crate::AspenPlugin>::on_hook_event(topic, &event_bytes);
             serde_json::to_vec(&serde_json::json!({"ok": true})).unwrap_or_default()
         }
     };

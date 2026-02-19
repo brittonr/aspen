@@ -31,6 +31,8 @@ unsafe extern "C" {
     fn hlc_now() -> u64;
     fn schedule_timer(config: Vec<u8>) -> String;
     fn cancel_timer(name: String) -> String;
+    fn hook_subscribe(pattern: String) -> String;
+    fn hook_unsubscribe(pattern: String) -> String;
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +228,34 @@ pub fn schedule_timer_on_host(config: &aspen_plugin_api::TimerConfig) -> Result<
 /// Cancel a named timer on the host.
 pub fn cancel_timer_on_host(name: &str) -> Result<(), String> {
     let result = unsafe { cancel_timer(name.to_string()) };
+    decode_tagged_unit_result(&result)
+}
+
+// ---------------------------------------------------------------------------
+// Hook Event Subscriptions
+// ---------------------------------------------------------------------------
+
+/// Subscribe to hook events matching a NATS-style topic pattern.
+///
+/// The host will call the plugin's `on_hook_event` method when matching
+/// events occur. Patterns use dot-delimited segments with wildcards:
+///
+/// - `hooks.kv.*` — matches `hooks.kv.write_committed`, `hooks.kv.delete_committed`, etc.
+/// - `hooks.>` — matches all hook events
+/// - `hooks.cluster.*` — matches cluster events (leader_elected, membership_changed, etc.)
+///
+/// Subscriptions are idempotent — subscribing to the same pattern twice is a no-op.
+/// Maximum subscriptions per plugin: `MAX_HOOK_SUBSCRIPTIONS_PER_PLUGIN`.
+pub fn subscribe_hook_events(pattern: &str) -> Result<(), String> {
+    let result = unsafe { hook_subscribe(pattern.to_string()) };
+    decode_tagged_unit_result(&result)
+}
+
+/// Unsubscribe from a previously registered hook event pattern.
+///
+/// The pattern must exactly match a previously subscribed pattern.
+pub fn unsubscribe_hook_events(pattern: &str) -> Result<(), String> {
+    let result = unsafe { hook_unsubscribe(pattern.to_string()) };
     decode_tagged_unit_result(&result)
 }
 

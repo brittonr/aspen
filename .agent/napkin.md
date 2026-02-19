@@ -67,6 +67,22 @@
 - `check_permission()` called before every host function (kv_get, kv_put, kv_delete, kv_scan, kv_cas, kv_batch, blob_has, blob_get, blob_put, random_bytes, is_leader, leader_id, sign, public_key_hex, schedule_timer, cancel_timer)
 - CLI install defaults to `PluginPermissions::all()` for backward compat
 
+### WASM Plugin Hook Event Subscriptions
+
+- New `SubscriptionCommand` enum in `host.rs` (Subscribe/Unsubscribe), mirrors `SchedulerCommand` pattern
+- `PluginHostContext.subscription_requests` — shared `Arc<Mutex<Vec>>` between host context and handler
+- Two new host functions: `hook_subscribe(pattern)`, `hook_unsubscribe(pattern)` — enqueue commands
+- New `events.rs` module: `PluginEventRouter` per plugin — holds patterns, delivers via `plugin_on_hook_event` guest export
+- `WasmPluginHandler.event_router` — `OnceLock<Arc<PluginEventRouter>>`, created in `call_init`
+- `new_with_scheduler()` now takes 6 args (added `subscription_requests`)
+- Guest SDK: `subscribe_hook_events(pattern)` / `unsubscribe_hook_events(pattern)` safe wrappers
+- `AspenPlugin::on_hook_event(topic, event)` trait method with default no-op
+- `plugin_on_hook_event` export in `register_plugin!` macro — receives JSON `{"topic": "...", "event": {...}}`
+- `PluginPermissions.hooks` — new permission field, default false
+- Constants: `MAX_HOOK_SUBSCRIPTIONS_PER_PLUGIN = 16`, `MAX_HOOK_PATTERN_LENGTH = 256`
+- Pattern matching: NATS-style `*` (one segment) and `>` (trailing), same as hooks service
+- Event delivery: `PluginEventRouter::deliver(topic, event_json)` → `spawn_blocking` → `call_guest_function`
+
 ## Domain Notes
 
 - Aspen is a Rust project with a WASM plugin system using `hyperlight-wasm`

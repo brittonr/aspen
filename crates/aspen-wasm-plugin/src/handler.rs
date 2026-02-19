@@ -19,6 +19,7 @@ use aspen_plugin_api::PluginState;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;
 
+use crate::events::PluginEventRouter;
 use crate::marshal;
 use crate::scheduler::PluginScheduler;
 
@@ -52,6 +53,10 @@ pub struct WasmPluginHandler {
     scheduler: std::sync::OnceLock<Arc<PluginScheduler>>,
     /// Pending scheduler requests from guest calls. Shared with host context.
     scheduler_requests: Arc<std::sync::Mutex<Vec<crate::host::SchedulerCommand>>>,
+    /// Hook event router. Initialized after successful `call_init`.
+    event_router: std::sync::OnceLock<Arc<PluginEventRouter>>,
+    /// Pending subscription requests from guest calls. Shared with host context.
+    subscription_requests: Arc<std::sync::Mutex<Vec<crate::host::SubscriptionCommand>>>,
 }
 
 impl WasmPluginHandler {
@@ -77,19 +82,22 @@ impl WasmPluginHandler {
             state: Arc::new(AtomicU8::new(0)), // Loading
             scheduler: std::sync::OnceLock::new(),
             scheduler_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
+            event_router: std::sync::OnceLock::new(),
+            subscription_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
         }
     }
 
-    /// Create a new handler with a shared scheduler requests queue.
+    /// Create a new handler with shared scheduler and subscription request queues.
     ///
-    /// The queue is shared with the [`PluginHostContext`] so that host
-    /// functions can enqueue scheduler commands during guest execution.
+    /// The queues are shared with the [`PluginHostContext`] so that host
+    /// functions can enqueue commands during guest execution.
     pub fn new_with_scheduler(
         name: String,
         handles: Vec<String>,
         sandbox: hyperlight_wasm::LoadedWasmSandbox,
         execution_timeout: Duration,
         scheduler_requests: Arc<std::sync::Mutex<Vec<crate::host::SchedulerCommand>>>,
+        subscription_requests: Arc<std::sync::Mutex<Vec<crate::host::SubscriptionCommand>>>,
     ) -> Self {
         Self {
             name: Box::leak(name.into_boxed_str()),
@@ -99,6 +107,8 @@ impl WasmPluginHandler {
             state: Arc::new(AtomicU8::new(0)),
             scheduler: std::sync::OnceLock::new(),
             scheduler_requests,
+            event_router: std::sync::OnceLock::new(),
+            subscription_requests,
         }
     }
 
@@ -175,8 +185,16 @@ impl WasmPluginHandler {
                         self.execution_timeout,
                     ));
                     let _ = self.scheduler.set(scheduler);
-                    // Process any scheduler commands enqueued during init
+                    // Create event router now that sandbox is available
+                    let router = Arc::new(PluginEventRouter::new(
+                        self.name.to_string(),
+                        Arc::clone(&self.sandbox),
+                        self.execution_timeout,
+                    ));
+                    let _ = self.event_router.set(router);
+                    // Process any commands enqueued during init
                     self.process_scheduler_commands().await;
+                    self.process_subscription_commands().await;
                     Ok(())
                 } else {
                     let error = response["error"].as_str().unwrap_or("unknown error").to_string();
@@ -218,9 +236,12 @@ impl WasmPluginHandler {
     pub async fn call_shutdown(&self) -> anyhow::Result<()> {
         self.set_state(PluginState::Stopping);
 
-        // Cancel all timers before calling guest shutdown
+        // Cancel all timers and subscriptions before calling guest shutdown
         if let Some(scheduler) = self.scheduler.get() {
             scheduler.cancel_all().await;
+        }
+        if let Some(router) = self.event_router.get() {
+            router.unsubscribe_all().await;
         }
 
         let sandbox = Arc::clone(&self.sandbox);
@@ -252,6 +273,39 @@ impl WasmPluginHandler {
                 );
                 // Still set to Stopped even if timeout
                 Ok(())
+            }
+        }
+    }
+
+    /// Get the event router for this plugin, if initialized.
+    ///
+    /// Returns `None` if `call_init` has not been called or failed.
+    /// External code uses this to deliver hook events to the plugin.
+    pub fn event_router(&self) -> Option<&Arc<PluginEventRouter>> {
+        self.event_router.get()
+    }
+
+    /// Process pending subscription commands enqueued by the guest.
+    async fn process_subscription_commands(&self) {
+        let Some(router) = self.event_router.get() else {
+            return;
+        };
+        let commands: Vec<_> = {
+            let Ok(mut reqs) = self.subscription_requests.lock() else {
+                return;
+            };
+            reqs.drain(..).collect()
+        };
+        for cmd in commands {
+            match cmd {
+                crate::host::SubscriptionCommand::Subscribe(pattern) => {
+                    if let Err(e) = router.subscribe(pattern).await {
+                        tracing::warn!(plugin = self.name, error = %e, "failed to add hook subscription");
+                    }
+                }
+                crate::host::SubscriptionCommand::Unsubscribe(pattern) => {
+                    router.unsubscribe(&pattern).await;
+                }
             }
         }
     }
@@ -380,8 +434,9 @@ impl RequestHandler for WasmPluginHandler {
         })?
         .map_err(|e| anyhow::anyhow!("WASM plugin task panicked: {e}"))??;
 
-        // Process any scheduler commands enqueued during this request
+        // Process any commands enqueued during this request
         self.process_scheduler_commands().await;
+        self.process_subscription_commands().await;
 
         marshal::deserialize_response(&output)
     }
