@@ -19,7 +19,7 @@ required-features = ["git-bridge"]
 name = "aspen-node"
 path = "src/bin/aspen_node/main.rs"
 # Bootstrap module requires blob, docs, jobs, hooks for full cluster initialization
-required-features = ["jobs", "docs", "blob", "hooks"]
+required-features = ["jobs", "docs", "blob", "hooks", "automerge"]
 
 [[bin]]
 name = "aspen-generate-schema"

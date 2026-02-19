@@ -310,12 +310,36 @@ async fn handle_sync_stream<S: DocumentStore>(
     let mut doc = match store.get(&doc_id).await {
         Ok(Some(doc)) => doc,
         Ok(None) => {
-            let response = SyncProtocolMessage::SyncResponse {
-                accepted: false,
-                error: Some("document not found".into()),
-            };
-            response.write_to(&mut send).await?;
-            return Err(SyncError::DocumentNotFound(document_id));
+            // Auto-create document when not found
+            debug!(document_id = %document_id, "auto-creating document");
+            if let Err(e) = store.create(Some(doc_id.clone()), None).await {
+                let response = SyncProtocolMessage::SyncResponse {
+                    accepted: false,
+                    error: Some(format!("failed to create document: {}", e)),
+                };
+                response.write_to(&mut send).await?;
+                return Err(SyncError::Store(e.to_string()));
+            }
+            // Load the freshly created document
+            match store.get(&doc_id).await {
+                Ok(Some(doc)) => doc,
+                Ok(None) => {
+                    let response = SyncProtocolMessage::SyncResponse {
+                        accepted: false,
+                        error: Some("failed to load newly created document".into()),
+                    };
+                    response.write_to(&mut send).await?;
+                    return Err(SyncError::Store("failed to load newly created document".into()));
+                }
+                Err(e) => {
+                    let response = SyncProtocolMessage::SyncResponse {
+                        accepted: false,
+                        error: Some(format!("failed to load document: {}", e)),
+                    };
+                    response.write_to(&mut send).await?;
+                    return Err(SyncError::Store(e.to_string()));
+                }
+            }
         }
         Err(e) => {
             let response = SyncProtocolMessage::SyncResponse {

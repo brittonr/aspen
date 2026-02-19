@@ -8,6 +8,9 @@ use std::sync::Arc;
 use aspen::ClientProtocolHandler;
 use aspen::api::KeyValueStore;
 use aspen::cluster::config::NodeConfig;
+use aspen_automerge::AUTOMERGE_SYNC_ALPN;
+use aspen_automerge::AspenAutomergeStore;
+use aspen_automerge::AutomergeSyncHandler;
 use aspen_core::context::WatchRegistry;
 use tracing::info;
 use tracing::warn;
@@ -15,7 +18,6 @@ use tracing::warn;
 use crate::node_mode::NodeMode;
 
 /// Setup the Iroh Router with all protocol handlers.
-#[allow(unused_variables)] // kv_store used only with nix-cache-gateway feature
 pub fn setup_router(
     config: &NodeConfig,
     node_mode: &NodeMode,
@@ -94,6 +96,12 @@ pub fn setup_router(
             "Docs sync protocol handler registered"
         );
     }
+
+    // Add automerge sync protocol handler
+    let am_store = Arc::new(AspenAutomergeStore::new(kv_store.clone()));
+    let am_handler = Arc::new(AutomergeSyncHandler::new(am_store));
+    builder = builder.accept(AUTOMERGE_SYNC_ALPN, am_handler);
+    info!("Automerge sync protocol handler registered");
 
     // Add log subscriber protocol handler if log broadcast is enabled
     if let Some(log_sender) = node_mode.log_broadcast() {
