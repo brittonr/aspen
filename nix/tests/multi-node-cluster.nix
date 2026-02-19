@@ -460,10 +460,41 @@ in
               f"node{other_nid} sees repo created after failover"
           )
 
+      with subtest("writes to follower auto-route to new leader"):
+          # Send a write through a follower's ticket. The server returns
+          # NOT_LEADER and the CLI rotates to the next bootstrap peer
+          # (the actual leader), so the write succeeds transparently.
+          follower_nid, follower_node = [
+              (nid, nref) for nid, nref in follower_nodes
+              if nid != new_leader
+          ][0]
+          follower_ticket = get_ticket(follower_node)
+
+          out = cli(
+              follower_node,
+              "git init follower-write-test "
+              "--description 'Written via follower'",
+              ticket=follower_ticket,
+          )
+          fwt_id = out.get("id") or out.get("repo_id", "")
+          assert fwt_id, \
+              f"write via follower should succeed via NOT_LEADER rotation: {out}"
+          follower_node.log(
+              f"node{follower_nid} (follower) write routed to leader"
+          )
+
+          time.sleep(2)
+
+          # Verify the repo is visible from the leader
+          repos = cli(
+              new_leader_node, "git list",
+              ticket=new_leader_ticket
+          )
+          repo_names = [r["name"] for r in repos.get("repos", [])]
+          assert "follower-write-test" in repo_names, \
+              f"follower-write-test not visible on leader: {repo_names}"
+
       with subtest("raft reads work with 2-node quorum"):
-          # Raft KV reads (like git list) work with 2/3 quorum.
-          # Blob-backed reads (like issue show) require all nodes
-          # via wait_available_all, so we only test KV reads here.
           repos = cli(
               new_leader_node, "git list",
               ticket=new_leader_ticket
@@ -512,12 +543,8 @@ in
               f"node{old_leader} rejoined — cluster data intact"
           )
 
-      with subtest("kv operations work after full rejoin"):
-          # Verify KV-backed operations work with all 3 nodes.
-          # NOTE: Forge commands involving blob content (issue show/list,
-          # get-blob) use wait_available_all which requires blob
-          # replication to all nodes — a separate concern from Raft
-          # KV replication. Here we verify pure Raft KV operations.
+      with subtest("kv and blob operations work after full rejoin"):
+          # KV-backed operations (branch list, repo list)
           branches = cli(
               new_leader_node,
               f"branch list -r {repo_id}",
@@ -532,6 +559,22 @@ in
               f"multi-node-branch missing after rejoin: {branch_names}"
           new_leader_node.log(
               "KV operations work with all 3 nodes after rejoin"
+          )
+
+          # Blob-backed operations: issue show requires fetching
+          # signed COB objects from the blob store. With all 3 nodes
+          # back, blobs created before failover should be reachable.
+          # (Blob reads now fail fast at 5s instead of blocking 30s,
+          # so this won't hang even if replication is still catching up.)
+          si = cli(
+              new_leader_node,
+              f"issue show -r {repo_id} {issue_id}",
+              ticket=new_leader_ticket,
+          )
+          assert si.get("title") == "Cross-node issue", \
+              f"issue show failed after rejoin: {si}"
+          new_leader_node.log(
+              "Blob-backed issue show works after full rejoin"
           )
 
       # ── done ─────────────────────────────────────────────────────────
