@@ -45,5 +45,7 @@ base64 = "0.22"
 iroh = "0.95"
 
 [dev-dependencies]
+aspen-auth = { workspace = true }
 aspen-testing = { workspace = true }
+rand = { workspace = true }
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "test-util"] }
