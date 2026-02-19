@@ -14,7 +14,6 @@ use aspen_automerge::AUTOMERGE_SYNC_ALPN;
 use aspen_automerge::AspenAutomergeStore;
 use aspen_automerge::AutomergeSyncHandler;
 use aspen_core::context::WatchRegistry;
-use base64::Engine as _;
 use tracing::info;
 use tracing::warn;
 
@@ -258,23 +257,29 @@ pub fn print_cluster_ticket(
         ),
     }
 
-    // Generate wildcard capability token for automerge sync
-    // Full capability grants all operations on all keys (including automerge:*)
+    // Generate wildcard capability token for automerge sync.
+    // Full capability grants read+write on all automerge:* keys.
     let token = TokenBuilder::new(secret_key.clone())
         .with_capability(Capability::Full {
             prefix: "automerge:".into(),
         })
         .build()
         .expect("token building should not fail");
-    let cap_bytes = token.encode().expect("token encoding should not fail");
-    // Use base64 URL-safe encoding for the capability token
-    let cap_token = format!("aspen-cap1{}", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&cap_bytes));
+
+    // Bundle endpoint address + capability into a single sync ticket
+    let sync_ticket = aspen_automerge::AutomergeSyncTicket::new(endpoint_addr.clone(), &token);
+    let sync_ticket_str = sync_ticket.serialize();
+
+    info!(
+        sync_ticket = %sync_ticket_str,
+        "automerge sync ticket generated"
+    );
 
     println!();
     println!("Connect with TUI:");
     println!("  aspen-tui --ticket {}", ticket_str);
     println!();
-    println!("Automerge sync capability token (wildcard ReadWrite):");
-    println!("  {}", cap_token);
+    println!("Automerge sync (one string, includes auth):");
+    println!("  irohscii --cluster {}", sync_ticket_str);
     println!();
 }

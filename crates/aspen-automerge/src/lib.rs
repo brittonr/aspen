@@ -92,6 +92,7 @@ pub mod constants;
 pub mod error;
 pub mod store;
 pub mod sync_protocol;
+pub mod ticket;
 pub mod types;
 
 // Re-export main types for convenience
@@ -118,6 +119,8 @@ pub use sync_protocol::SyncProtocolMessage;
 // Sync protocol exports
 pub use sync_protocol::sync_with_peer;
 pub use sync_protocol::sync_with_peer_cap;
+pub use ticket::AutomergeSyncTicket;
+pub use ticket::TicketError;
 pub use types::ApplyResult;
 pub use types::DocumentChange;
 pub use types::DocumentEvent;
