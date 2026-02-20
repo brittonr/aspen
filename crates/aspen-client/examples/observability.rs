@@ -114,6 +114,7 @@ async fn main() -> Result<()> {
             .await
             .unwrap_or_else(|e| {
                 println!("Operation failed (as expected): {}", e);
+                String::new()
             });
 
         println!();
