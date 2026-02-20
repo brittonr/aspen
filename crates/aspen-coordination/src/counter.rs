@@ -30,8 +30,6 @@ use crate::verified::counter::ParseSignedResult;
 use crate::verified::counter::ParseUnsignedResult;
 use crate::verified::counter::compute_approximate_total;
 use crate::verified::counter::compute_retry_delay;
-use crate::verified::counter::compute_signed_cas_expected;
-use crate::verified::counter::compute_unsigned_cas_expected;
 use crate::verified::counter::parse_signed_counter;
 use crate::verified::counter::parse_unsigned_counter;
 use crate::verified::counter::should_flush_buffer;
@@ -81,19 +79,28 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
 
     /// Get the current counter value.
     pub async fn get(&self) -> Result<u64, CoordinationError> {
+        Ok(self.get_raw().await?.unwrap_or(0))
+    }
+
+    /// Get the current counter value, distinguishing "not found" from "0".
+    ///
+    /// Returns `None` if the key doesn't exist, `Some(v)` if it does.
+    /// This distinction matters for CAS: a non-existent key needs
+    /// `expected=None`, while a key holding "0" needs `expected=Some("0")`.
+    async fn get_raw(&self) -> Result<Option<u64>, CoordinationError> {
         match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
                 match parse_unsigned_counter(&value_str) {
-                    ParseUnsignedResult::Value(v) => Ok(v),
-                    ParseUnsignedResult::Empty => Ok(0),
+                    ParseUnsignedResult::Value(v) => Ok(Some(v)),
+                    ParseUnsignedResult::Empty => Ok(None),
                     ParseUnsignedResult::Invalid => Err(CoordinationError::CorruptedData {
                         key: self.key.clone(),
                         reason: "not a valid u64".to_string(),
                     }),
                 }
             }
-            Err(KeyValueStoreError::NotFound { .. }) => Ok(0),
+            Err(KeyValueStoreError::NotFound { .. }) => Ok(None),
             Err(e) => Err(CoordinationError::Storage { source: e }),
         }
     }
@@ -128,8 +135,8 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
         let mut attempt = 0;
 
         loop {
-            let current = self.get().await?;
-            let expected = compute_unsigned_cas_expected(current).map(|v| v.to_string());
+            let current = self.get_raw().await?;
+            let expected = current.map(|v| v.to_string());
 
             match self
                 .store
@@ -167,7 +174,18 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
     /// Returns true if the swap succeeded, false if the current value
     /// didn't match the expected value.
     pub async fn compare_and_set(&self, expected: u64, new_value: u64) -> Result<bool, CoordinationError> {
-        let expected_str = compute_unsigned_cas_expected(expected).map(|v| v.to_string());
+        // Read the raw storage state to determine the correct CAS expected.
+        // When expected=0, we need to know whether the key holds "0" or
+        // doesn't exist — both map to logical value 0 but need different
+        // CAS expectations.
+        let current_raw = self.get_raw().await?;
+        let current_value = current_raw.unwrap_or(0);
+
+        if current_value != expected {
+            return Ok(false);
+        }
+
+        let expected_str = current_raw.map(|v| v.to_string());
 
         match self
             .store
@@ -196,7 +214,8 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
         let mut attempt = 0;
 
         loop {
-            let current = self.get().await?;
+            let current_raw = self.get_raw().await?;
+            let current = current_raw.unwrap_or(0);
 
             // Ghost: capture pre-state
             ghost! {
@@ -205,7 +224,7 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
 
             let new_value = f(current);
 
-            let expected = compute_unsigned_cas_expected(current).map(|v| v.to_string());
+            let expected = current_raw.map(|v| v.to_string());
 
             match self
                 .store
@@ -277,19 +296,24 @@ impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
 
     /// Get the current counter value.
     pub async fn get(&self) -> Result<i64, CoordinationError> {
+        Ok(self.get_raw().await?.unwrap_or(0))
+    }
+
+    /// Get the current counter value, distinguishing "not found" from "0".
+    async fn get_raw(&self) -> Result<Option<i64>, CoordinationError> {
         match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
                 match parse_signed_counter(&value_str) {
-                    ParseSignedResult::Value(v) => Ok(v),
-                    ParseSignedResult::Empty => Ok(0),
+                    ParseSignedResult::Value(v) => Ok(Some(v)),
+                    ParseSignedResult::Empty => Ok(None),
                     ParseSignedResult::Invalid => Err(CoordinationError::CorruptedData {
                         key: self.key.clone(),
                         reason: "not a valid i64".to_string(),
                     }),
                 }
             }
-            Err(KeyValueStoreError::NotFound { .. }) => Ok(0),
+            Err(KeyValueStoreError::NotFound { .. }) => Ok(None),
             Err(e) => Err(CoordinationError::Storage { source: e }),
         }
     }
@@ -310,10 +334,11 @@ impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
         let mut attempt = 0;
 
         loop {
-            let current = self.get().await?;
+            let current_raw = self.get_raw().await?;
+            let current = current_raw.unwrap_or(0);
             let new_value = f(current);
 
-            let expected = compute_signed_cas_expected(current).map(|v| v.to_string());
+            let expected = current_raw.map(|v| v.to_string());
 
             match self
                 .store
@@ -513,6 +538,75 @@ mod tests {
         assert_eq!(counter.get().await.unwrap(), 0);
         assert_eq!(counter.add(-5).await.unwrap(), -5);
         assert_eq!(counter.add(10).await.unwrap(), 5);
+    }
+
+    /// Regression test: set counter to 0, then increment.
+    ///
+    /// Previously, `compute_unsigned_cas_expected(0)` returned `None`
+    /// (expecting non-existent key), but `set(0)` creates the key with
+    /// value "0". Every subsequent CAS used expected=None which always
+    /// failed because the key existed, creating an infinite retry loop.
+    #[tokio::test]
+    async fn test_set_zero_then_increment() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+
+        counter.set(0).await.unwrap();
+        assert_eq!(counter.get().await.unwrap(), 0);
+
+        // This used to fail with MaxRetriesExceeded
+        assert_eq!(counter.increment().await.unwrap(), 1);
+        assert_eq!(counter.increment().await.unwrap(), 2);
+        assert_eq!(counter.get().await.unwrap(), 2);
+    }
+
+    /// Regression test: decrement to 0, then increment.
+    #[tokio::test]
+    async fn test_decrement_to_zero_then_increment() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+
+        counter.set(1).await.unwrap();
+        assert_eq!(counter.decrement().await.unwrap(), 0);
+        // Key now holds "0" — same bug scenario as set(0)
+        assert_eq!(counter.increment().await.unwrap(), 1);
+    }
+
+    /// Regression test: set to 0, then set to non-zero.
+    #[tokio::test]
+    async fn test_set_zero_then_set_nonzero() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+
+        counter.set(0).await.unwrap();
+        counter.set(42).await.unwrap();
+        assert_eq!(counter.get().await.unwrap(), 42);
+    }
+
+    /// Regression test: compare-and-set with expected=0 on existing key.
+    #[tokio::test]
+    async fn test_cas_zero_on_existing_key() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+
+        counter.set(0).await.unwrap();
+        // CAS from 0 to 100 should succeed — key holds "0"
+        assert!(counter.compare_and_set(0, 100).await.unwrap());
+        assert_eq!(counter.get().await.unwrap(), 100);
+    }
+
+    /// Regression test: signed counter set to 0 then modify.
+    #[tokio::test]
+    async fn test_signed_set_zero_then_add() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let counter = SignedAtomicCounter::new(store, "test_counter", CounterConfig::default());
+
+        // Go to 5, subtract to 0, then add again
+        counter.add(5).await.unwrap();
+        counter.subtract(5).await.unwrap();
+        assert_eq!(counter.get().await.unwrap(), 0);
+        // Key holds "0" — must not deadlock
+        assert_eq!(counter.add(10).await.unwrap(), 10);
     }
 
     #[tokio::test]

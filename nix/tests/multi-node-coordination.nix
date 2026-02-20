@@ -246,13 +246,11 @@ in
       # ================================================================
 
       with subtest("counter increments from all nodes sum correctly"):
-          # Don't pre-set counter to 0 — compute_unsigned_cas_expected(0)
-          # returns None (expects non-existent key), but "counter set X 0"
-          # creates the key with value "0", causing all subsequent CAS ops
-          # to fail. Let counter start from implicit zero (non-existent).
-          #
-          # Use "counter add X 5" instead of 5 individual "counter incr"
-          # calls per node to reduce total connection count.
+          # Initialize counter to 0, then increment from all nodes.
+          # Uses "counter add X 5" per node instead of 5 individual incr
+          # calls to reduce total connection count.
+          cli(leader_node, "counter set mn-counter 0",
+              ticket=leader_ticket)
           time.sleep(1)
 
           cli(leader_node, "counter add mn-counter 5",
@@ -274,7 +272,8 @@ in
           leader_node.log("Counter linearizability: add 5 from 3 nodes = 15")
 
       with subtest("counter add from multiple nodes"):
-          # Don't pre-set to 0 — same CAS bug as above
+          cli(leader_node, "counter set add-counter 0",
+              ticket=leader_ticket)
           time.sleep(1)
 
           # Add different amounts from each node
