@@ -629,6 +629,16 @@
             }
           );
 
+          # Build aspen-cli with full features for comprehensive testing
+          aspen-cli-full-crate = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features automerge,sql";
+              doCheck = false;
+            }
+          );
+
           # Build aspen-ci-agent from its own crate
           aspen-ci-agent-crate = craneLib.buildPackage (
             commonArgs
@@ -674,6 +684,7 @@
               aspen-cli = aspen-cli-crate;
               aspen-cli-forge = aspen-cli-forge-crate;
               aspen-cli-secrets = aspen-cli-secrets-crate;
+              aspen-cli-full = aspen-cli-full-crate;
               aspen-ci-agent = aspen-ci-agent-crate;
               verus-metrics = aspen-verus-metrics-crate;
             };
@@ -939,6 +950,15 @@
                 aspenCliPackage = bins.aspen-cli;
               };
 
+              # Blob operations test: add, get, has, list, protect/unprotect,
+              # status, replication-status, delete, repair-cycle.
+              # Build: nix build .#checks.x86_64-linux.blob-operations-test
+              blob-operations-test = import ./nix/tests/blob-operations.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli;
+              };
+
               # Coordination primitives test: distributed locks, counters,
               # sequences, semaphores, rwlocks, barriers, queues, leases.
               # Build: nix build .#checks.x86_64-linux.coordination-primitives-test
@@ -956,6 +976,46 @@
                 inherit pkgs;
                 aspenNodePackage = bins.aspen-node;
                 aspenCliPackage = bins.aspen-cli;
+              };
+
+              # Rate limiter and verify test: token bucket rate limiting
+              # (try-acquire, available, reset, budget exhaustion, bucket isolation)
+              # and cluster verification (KV, blobs).
+              # Build: nix build .#checks.x86_64-linux.ratelimit-verify-test
+              ratelimit-verify-test = import ./nix/tests/ratelimit-verify.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli;
+              };
+
+              # Cluster management, docs namespace, peer, and verify test:
+              # cluster (status, health, metrics, ticket, prometheus);
+              # docs CRDT (set, get, delete, list); peer list;
+              # verify (kv, blob, docs, all).
+              # Build: nix build .#checks.x86_64-linux.cluster-docs-peer-test
+              cluster-docs-peer-test = import ./nix/tests/cluster-docs-peer.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli;
+              };
+
+              # Job queue and index management test: job submit, status,
+              # list, cancel, purge; index list, show (built-in indexes).
+              # Build: nix build .#checks.x86_64-linux.job-index-test
+              job-index-test = import ./nix/tests/job-index.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli;
+              };
+
+              # Automerge CRDT and SQL query test: automerge create, get,
+              # exists, list, get-metadata, delete; SQL queries (SELECT,
+              # WHERE, COUNT, LIMIT, ORDER BY, error handling).
+              # Build: nix build .#checks.x86_64-linux.automerge-sql-test
+              automerge-sql-test = import ./nix/tests/automerge-sql.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli-full;
               };
 
               # Secrets engine test: KV v2 (write, read, versions, list,

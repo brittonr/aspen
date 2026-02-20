@@ -219,6 +219,23 @@
 - Uses `aspen-cli` (no forge feature needed)
 - **Gotcha: `counter decr` at zero exits non-zero** — CLI `exit(1)` on `is_success: false`, use `check=False`
 
+### Expanded VM Test Coverage (2026-02-19)
+
+- **5 new test files** created, bringing total to 11 NixOS VM tests
+- New `blob-operations.nix`: blob add/get/has/list/protect/unprotect/status/delete/stdin/replication-status/repair-cycle
+- New `ratelimit-verify.nix`: ratelimit try-acquire/acquire/available/reset/bucket-isolation; verify kv/blob
+- New `cluster-docs-peer.nix`: cluster status/health/metrics/ticket/prometheus; docs CRDT (conditional); peer list; verify all
+- New `job-index.nix`: index list/show (4 built-in indexes); job submit/status/list/cancel/purge
+- New `automerge-sql.nix`: automerge create/get/exists/list/get-metadata/delete; SQL query/WHERE/COUNT/LIMIT/ORDER BY
+- New `aspen-cli-full` package: CLI built with `--features automerge,sql` for full feature testing
+- **Gotcha: blob delete only removes user tags** — blob data stays until GC; `has` still returns true after delete
+- **Gotcha: `blob add` positional file arg** — use `blob add -` for stdin, NOT `blob add --file -`
+- **Gotcha: `blob unprotect` takes positional tag** — NOT `--tag`, it's `blob unprotect <tag-name>`
+- **Gotcha: docs handler needs iroh-docs sync** — `ctx.docs_sync` is None when docs_sync not started; test must probe first
+- **Gotcha: ratelimit CLI exits 1 on is_success=false** — `std::process::exit(1)` in all ratelimit commands; use `check=False`
+- **Gotcha: Python type checker in NixOS tests** — `sorted()` on `Optional` values fails mypy; wrap with `str()`
+- **Coverage: 28/33 CLI commands tested (85%)** — remaining 5 (cache, ci, dns, pijul, plugin) need feature-gated CLI builds
+
 ### NixOS VM Integration Test (2026-02-18)
 
 - New `nix/tests/forge-cluster.nix` — NixOS VM test with full networking
