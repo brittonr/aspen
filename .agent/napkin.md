@@ -11,6 +11,10 @@
 | 2026-02-19 | self | NixOS VM tests with large data (100KB+ KV values, 200KB blobs) fail from log truncation | Reduce test data sizes: 5KB for KV values, 10KB for blobs. Also set logLevel="info" (not "aspen=debug") for multi-node tests to avoid debug tracing of large payloads. |
 | 2026-02-19 | self | Multi-node coordination test hit 50-connection client limit | MAX_CLIENT_CONNECTIONS was 50, too low for tests making 80+ sequential CLI calls. Increased to 200. Also batch operations (counter add X 5) instead of 5 individual incr calls. |
 
+| 2026-02-19 | self | delegate_task workers reported success AGAIN but zero file changes persisted | 4th time. delegate_task NEVER persists file edits. Always do edits directly. Only use delegate_task/scouts for read-only info gathering. |
+| 2026-02-19 | self | Missed aspen-secrets-handler and aspen-raft in initial scan — only found 7 of 8 broken crates | `cargo test --workspace` may attribute errors to wrong crate in parallel. Run `grep "could not compile"` AND `grep "error\[E"` to catch all. |
+| 2026-02-19 | self | Pre-existing: 2 watch tests in aspen-client fail (HLC timestamp drift) | `test_watch_event_from_set_operation` and `test_watch_event_from_delete_operation` — hardcoded timestamps vs real HLC. Not our bug. |
+
 ## User Preferences
 
 - User wants to improve plugin system iteratively — lifecycle + hot-reload first
