@@ -118,9 +118,11 @@ in
 
       secrets_available = False
       with subtest("secrets handler probe"):
+          # NOTE: All secret values must be strings (HashMap<String, String>)
+          # Non-string values (booleans, integers) cause a client-side parse error.
           out = cli(
               "secrets kv put _probe/test "
-              "'{\"probe\": true}'",
+              "'{\"probe\": \"true\"}'",
               check=False,
           )
           if isinstance(out, dict):
@@ -140,9 +142,10 @@ in
       # ================================================================
 
       with subtest("secrets kv put"):
+          # All values must be strings — HashMap<String, String> on the wire
           out = cli(
               "secrets kv put db/config "
-              "'{\"username\":\"admin\",\"password\":\"s3cret\",\"port\":5432}'",
+              "'{\"username\":\"admin\",\"password\":\"s3cret\",\"port\":\"5432\"}'",
               check=False,
           )
           node1.log(f"secrets kv put: {out}")
@@ -157,11 +160,15 @@ in
           out = cli("secrets kv get db/config", check=False)
           node1.log(f"secrets kv get: {out}")
           if isinstance(out, dict) and out.get("data"):
-              data = out.get("data", {})
+              data = out["data"]
               if isinstance(data, dict):
-                  node1.log(
-                      f"secrets kv data: username={data.get('username')}"
-                  )
+                  assert data.get("username") == "admin", \
+                      f"wrong username: {data}"
+                  assert data.get("password") == "s3cret", \
+                      f"wrong password: {data}"
+                  assert data.get("port") == "5432", \
+                      f"wrong port: {data}"
+                  node1.log("secrets kv get: OK (data verified)")
 
       with subtest("secrets kv put second version"):
           out = cli(
@@ -170,10 +177,10 @@ in
               check=False,
           )
           node1.log(f"secrets kv put v2: {out}")
-          if isinstance(out, dict):
-              v = out.get("version")
-              if v is not None:
-                  node1.log(f"secrets kv v2 version={v}")
+          if isinstance(out, dict) and out.get("version") is not None:
+              assert out["version"] == 2, \
+                  f"expected version 2: {out}"
+              node1.log("secrets kv put v2: OK")
 
       with subtest("secrets kv get specific version"):
           out = cli("secrets kv get db/config --version 1", check=False)

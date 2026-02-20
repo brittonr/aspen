@@ -620,11 +620,14 @@
           );
 
           # Build aspen-cli with secrets features (KV v2, Transit, PKI)
+          # Must include ci,automerge to match node's aspen-client-api feature set,
+          # otherwise postcard enum discriminants are misaligned and responses
+          # deserialize to wrong variants.
           aspen-cli-secrets-crate = craneLib.buildPackage (
             commonArgs
             // {
               inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
-              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features secrets";
+              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features secrets,ci,automerge";
               doCheck = false;
             }
           );
@@ -640,11 +643,12 @@
           );
 
           # Build aspen-cli with full features for comprehensive testing
+          # Must include ci to match node's aspen-client-api enum layout
           aspen-cli-full-crate = craneLib.buildPackage (
             commonArgs
             // {
               inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
-              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features automerge,sql";
+              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features automerge,sql,ci";
               doCheck = false;
             }
           );
