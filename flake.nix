@@ -629,6 +629,16 @@
             }
           );
 
+          # Build aspen-cli with plugin management features
+          aspen-cli-plugins-crate = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features plugins-rpc";
+              doCheck = false;
+            }
+          );
+
           # Build aspen-cli with full features for comprehensive testing
           aspen-cli-full-crate = craneLib.buildPackage (
             commonArgs
@@ -683,6 +693,7 @@
               aspen-tui = aspen-tui-crate;
               aspen-cli = aspen-cli-crate;
               aspen-cli-forge = aspen-cli-forge-crate;
+              aspen-cli-plugins = aspen-cli-plugins-crate;
               aspen-cli-secrets = aspen-cli-secrets-crate;
               aspen-cli-full = aspen-cli-full-crate;
               aspen-ci-agent = aspen-ci-agent-crate;
@@ -1016,6 +1027,16 @@
                 inherit pkgs;
                 aspenNodePackage = bins.aspen-node;
                 aspenCliPackage = bins.aspen-cli-full;
+              };
+
+              # Plugin CLI test: install, list, info, enable, disable, remove,
+              # reload, manifest-based install, flag overrides, resource limits,
+              # KV prefix configuration, reinstall/overwrite.
+              # Build: nix build .#checks.x86_64-linux.plugin-cli-test
+              plugin-cli-test = import ./nix/tests/plugin-cli.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli-plugins;
               };
 
               # Secrets engine test: KV v2 (write, read, versions, list,

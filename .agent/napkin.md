@@ -234,7 +234,19 @@
 - **Gotcha: docs handler needs iroh-docs sync** — `ctx.docs_sync` is None when docs_sync not started; test must probe first
 - **Gotcha: ratelimit CLI exits 1 on is_success=false** — `std::process::exit(1)` in all ratelimit commands; use `check=False`
 - **Gotcha: Python type checker in NixOS tests** — `sorted()` on `Optional` values fails mypy; wrap with `str()`
-- **Coverage: 28/33 CLI commands tested (85%)** — remaining 5 (cache, ci, dns, pijul, plugin) need feature-gated CLI builds
+- **Coverage: 29/33 CLI commands tested (88%)** — remaining 4 (cache, ci, dns, pijul) need feature-gated CLI builds
+
+### Plugin CLI NixOS VM Test (2026-02-19)
+
+- New `nix/tests/plugin-cli.nix` — single-node plugin management CLI test
+- Tests: list (empty), install (flags + manifest + overrides), info, enable, disable, remove, reinstall/overwrite, resource limits (fuel_limit, memory_limit), KV prefix config, reload (best-effort), cleanup
+- New `aspen-cli-plugins` package: CLI built with `--features plugins-rpc` for plugin management
+- Wired into flake as `checks.x86_64-linux.plugin-cli-test`
+- Plugin CLI stores manifests in KV (`plugins/handlers/` prefix) and WASM blobs in blob store — does NOT need WASM runtime on server
+- Reload is the only op that needs runtime; tested with `check=False` since test node lacks `plugins` feature
+- **Gotcha: `plugin remove` on non-existent key returns error** — use `check=False`
+- **Gotcha: `plugin info` on removed plugin returns error (not empty)** — use `check=False`
+- **Gotcha: dummy WASM files (random bytes) work fine for install** — CLI just uploads blob + writes manifest; validation at reload time
 
 ### NixOS VM Integration Test (2026-02-18)
 
