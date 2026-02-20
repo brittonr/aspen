@@ -13,7 +13,7 @@
 
 | 2026-02-19 | self | delegate_task workers reported success AGAIN but zero file changes persisted | 4th time. delegate_task NEVER persists file edits. Always do edits directly. Only use delegate_task/scouts for read-only info gathering. |
 | 2026-02-19 | self | Missed aspen-secrets-handler and aspen-raft in initial scan — only found 7 of 8 broken crates | `cargo test --workspace` may attribute errors to wrong crate in parallel. Run `grep "could not compile"` AND `grep "error\[E"` to catch all. |
-| 2026-02-19 | self | Pre-existing: 2 watch tests in aspen-client fail (HLC timestamp drift) | `test_watch_event_from_set_operation` and `test_watch_event_from_delete_operation` — hardcoded timestamps vs real HLC. Not our bug. |
+| 2026-02-19 | self | Pre-existing: 2 watch tests in aspen-client fail (HLC timestamp drift) | FIXED: Used `SerializableTimestamp::from_millis()` instead of real HLC. Tests were asserting hardcoded 2023 timestamps against wall clock. |
 
 ## User Preferences
 
@@ -137,6 +137,7 @@
 - All plugin crates have `plugin_info_matches_manifest` tests that check code ↔ plugin.json consistency
 - ~~Pre-existing: `aspen-constants` has a broken doctest~~ FIXED 2026-02-18
 - ~~Pre-existing: `aspen-cli` has unresolved `aspen_forge` import errors~~ FIXED 2026-02-18
+- ~~Pre-existing: 2 watch tests in aspen-client fail (HLC timestamp drift)~~ FIXED 2026-02-19: used `from_millis()` for deterministic timestamps
 - Pre-commit hooks: shellcheck warnings on scripts/ are pre-existing, not blockers
 - `HandlerRegistry` now uses `ArcSwap` for hot-reload — field access is `self.handlers.load()` not `self.handlers`
 - `add_handlers()` takes `&self` not `&mut self` (ArcSwap enables interior mutability)

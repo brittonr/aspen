@@ -1,12 +1,14 @@
 # WASM Plugin Hardening Plan
 
+> **Status: ✅ COMPLETE** — All five items implemented as of 2026-02-19.
+
 Five targeted improvements to the WASM plugin host: dispatch performance,
 resource limits, namespace isolation, error encoding consistency, and ABI
 documentation.
 
 ---
 
-## 1. Add `variant_name()` to `ClientRpcRequest`
+## 1. Add `variant_name()` to `ClientRpcRequest` — ✅ DONE
 
 **Problem:** `WasmPluginHandler::can_handle()` calls `marshal::extract_variant_name()`,
 which serializes the *entire* request to `serde_json::Value` just to read the
@@ -36,7 +38,7 @@ variant name as a `&'static str`. Use it in `can_handle`.
 
 ---
 
-## 2. Enforce execution time limits
+## 2. Enforce execution time limits — ✅ DONE
 
 **Problem:** `PluginManifest` carries a `fuel_limit: Option<u64>` and
 `aspen_constants::wasm` defines `DEFAULT_WASM_FUEL_LIMIT` / `MAX_WASM_FUEL_LIMIT`,
@@ -86,7 +88,7 @@ the `spawn_blocking` call in `handler.rs`.
 
 ---
 
-## 4. Consistent error encoding across all host functions
+## 4. Consistent error encoding across all host functions — ✅ DONE
 
 **Problem:** The 20 registered host functions use three different conventions
 for encoding success/error results:
@@ -140,7 +142,7 @@ coordinated with a guest SDK version bump. Options:
 
 ---
 
-## 5. Document the Host ABI — `docs/HOST_ABI.md`
+## 5. Document the Host ABI — `docs/HOST_ABI.md` — ✅ DONE
 
 **Problem:** The 20 host functions have no formal ABI contract. The type
 encoding rules are buried in a code comment in `host.rs`. Guest authors must
