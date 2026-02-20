@@ -115,6 +115,32 @@
 - Permissions: kv_read, kv_write, blob_read, blob_write, randomness
 - `aspen-client-api` automerge types are behind `#[cfg(feature = "automerge")]` — plugin Cargo.toml must enable it
 
+## Recent Changes (2026-02-20)
+
+### Three New VM Integration Tests
+
+- **dns-operations.nix**: Zone CRUD (create, get, list, delete with/without records), records (A, AAAA, CNAME, MX, TXT, SRV), resolve with wildcard fallback, scan with prefix/limit
+- **ci-cache.nix**: CI lifecycle (list, run, status, cancel, watch/unwatch, output) + Nix binary cache (stats, query, download). All ops use `check=False` since no actual forge repo exists
+- **pijul-operations.nix**: Repo management (init, list, info), channels (create, list, fork, delete, info), working directory (init, add, status, record), checkout. Defensive — probes for handler availability first
+
+### New Nix Packages
+
+- `aspen-cli-dns`: CLI with `dns` feature
+- `aspen-cli-ci`: CLI with `ci` feature
+- `aspen-cli-pijul`: CLI with `pijul,forge,git-bridge` features (pijul archive.rs needs flate2 from git-bridge)
+- `aspen-node-dns`: Node with default features + `dns`
+- `aspen-node-pijul`: Node with default features + `pijul`
+
+### Gotchas Discovered
+
+- **MX/SRV records via `--data` work but may fail**: The `--data` JSON format is handler-specific; format without `"type"` prefix works (e.g. `{"preference":10,"exchange":"mail.example.com"}` not `{"type":"MX","preference":10,...}`)
+- **`cache stats` exits 1 on empty cache**: CLI exits non-zero when handler returns error; use `check=False`
+- **`ci list` exits 1 with no CI config**: Same pattern — use `check=False`
+- **Nix `'''` in indented strings**: Emits `''` which breaks Python syntax; use f-strings with variables instead
+- **NixOS module `features` option is a no-op**: Defined but never passed to ExecStart args — features are compile-time only
+- **Pijul handler needs `blob_store` at runtime**: Handler returns None from `create()` if `ctx.pijul_store` is None; pijul store requires blob_store initialization
+- **aspen-cli pijul feature needs `forge,git-bridge`**: archive.rs unconditionally uses flate2 (git-bridge dep)
+
 ## Domain Notes
 
 - Aspen is a Rust project with a WASM plugin system using `hyperlight-wasm`

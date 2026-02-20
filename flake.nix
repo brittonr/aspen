@@ -649,6 +649,48 @@
             }
           );
 
+          # Build aspen-cli with DNS features
+          aspen-cli-dns-crate = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features dns";
+              doCheck = false;
+            }
+          );
+
+          # Build aspen-cli with CI features (CI pipelines + Nix cache)
+          aspen-cli-ci-crate = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features ci";
+              doCheck = false;
+            }
+          );
+
+          # Build aspen-cli with Pijul features (pijul needs forge, archive needs git-bridge for flate2)
+          aspen-cli-pijul-crate = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features pijul,forge,git-bridge";
+              doCheck = false;
+            }
+          );
+
+          # Build aspen-node with DNS support (default features + dns)
+          aspen-node-dns = bin {
+            name = "aspen-node";
+            features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "dns"];
+          };
+
+          # Build aspen-node with Pijul support (default features + pijul)
+          aspen-node-pijul = bin {
+            name = "aspen-node";
+            features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "pijul"];
+          };
+
           # Build aspen-ci-agent from its own crate
           aspen-ci-agent-crate = craneLib.buildPackage (
             commonArgs
@@ -696,6 +738,10 @@
               aspen-cli-plugins = aspen-cli-plugins-crate;
               aspen-cli-secrets = aspen-cli-secrets-crate;
               aspen-cli-full = aspen-cli-full-crate;
+              aspen-cli-dns = aspen-cli-dns-crate;
+              aspen-cli-ci = aspen-cli-ci-crate;
+              aspen-cli-pijul = aspen-cli-pijul-crate;
+              inherit aspen-node-dns aspen-node-pijul;
               aspen-ci-agent = aspen-ci-agent-crate;
               verus-metrics = aspen-verus-metrics-crate;
             };
@@ -1078,6 +1124,38 @@
                 inherit pkgs;
                 aspenNodePackage = bins.aspen-node;
                 aspenCliPackage = bins.aspen-cli-secrets;
+              };
+
+              # DNS operations test: zones (create, get, list, delete),
+              # records (A, AAAA, CNAME, MX, TXT, SRV), resolve with
+              # wildcard fallback, scan with prefix/limit, zone delete
+              # with cascading record deletion.
+              # Build: nix build .#checks.x86_64-linux.dns-operations-test
+              dns-operations-test = import ./nix/tests/dns-operations.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node-dns;
+                aspenCliPackage = bins.aspen-cli-dns;
+              };
+
+              # CI pipeline and Nix binary cache test: CI lifecycle
+              # (run, status, list, cancel, watch, unwatch, output) and
+              # cache operations (stats, query, download).
+              # Build: nix build .#checks.x86_64-linux.ci-cache-test
+              ci-cache-test = import ./nix/tests/ci-cache.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli-ci;
+              };
+
+              # Pijul version control test: repository management
+              # (init, list, info), channels (create, list, fork, delete,
+              # info), working directory (init, add, status, record),
+              # and checkout.
+              # Build: nix build .#checks.x86_64-linux.pijul-operations-test
+              pijul-operations-test = import ./nix/tests/pijul-operations.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node-pijul;
+                aspenCliPackage = bins.aspen-cli-pijul;
               };
             };
 
