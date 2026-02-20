@@ -681,7 +681,7 @@
                   # shell-worker: Execute shell commands for CI shell jobs
                   # Note: "plugins" excluded — hyperlight-wasm build.rs needs network access
                   # which is unavailable in Nix's sandbox.
-                  features = ["ci" "docs" "hooks" "shell-worker" "automerge"];
+                  features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets"];
                 }
                 {
                   name = "git-remote-aspen";

@@ -67,8 +67,14 @@ use std::sync::Arc;
 
 #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use anyhow::Result;
-// Secrets support imports
-#[cfg(feature = "secrets")]
+// Secrets support — used in create_client_protocol_context (requires full node feature set)
+#[cfg(all(
+    feature = "secrets",
+    feature = "jobs",
+    feature = "docs",
+    feature = "hooks",
+    feature = "federation"
+))]
 use aspen_rpc_handlers::SecretsService;
 #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use iroh::EndpointAddr;
@@ -462,19 +468,16 @@ impl Node {
         let endpoint_manager: Arc<dyn aspen_core::EndpointProvider> =
             Arc::new(EndpointProviderAdapter::new(self.handle.network.iroh_manager.clone()));
 
-        // Create secrets service if enabled
+        // Create secrets service — always available when the feature is compiled in.
+        // The secrets engine (KV v2, Transit, PKI) uses the Raft KV store as its
+        // backend and does not require SOPS configuration.
         #[cfg(feature = "secrets")]
-        let secrets_service = if self.handle.config.secrets.is_enabled {
-            // Create storage backend wrapping the Raft KV store
-            // Create mount registry for dynamic multi-mount support
-            // The registry creates stores on-demand with mount-specific storage prefixes
+        let secrets_service = {
             let mount_registry =
                 Arc::new(aspen_secrets::MountRegistry::new(raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>));
 
             tracing::info!("Secrets service initialized with multi-mount support");
             Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
-        } else {
-            None
         };
 
         // Create Pijul store if blob storage is available

@@ -48,7 +48,7 @@ in
           relayMode = "disabled";
           enableWorkers = false;
           enableCi = false;
-          features = [];
+          features = ["secrets"];
         };
 
         environment.systemPackages = [aspenCliPackage];
