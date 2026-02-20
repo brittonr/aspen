@@ -52,8 +52,10 @@ pub const NIX_CACHE_H3_ALPN: &[u8] = b"iroh+h3";
 
 /// Maximum concurrent Client connections.
 ///
-/// Tiger Style: Lower limit than Raft since client connections are less critical.
-pub const MAX_CLIENT_CONNECTIONS: u32 = 50;
+/// Set high enough to handle bursts of short-lived CLI connections.
+/// Each CLI invocation creates a new QUIC connection that persists briefly
+/// on the server after the client exits.
+pub const MAX_CLIENT_CONNECTIONS: u32 = 200;
 
 /// Maximum concurrent streams per Client connection.
 pub const MAX_CLIENT_STREAMS_PER_CONNECTION: u32 = 10;

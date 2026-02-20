@@ -43,7 +43,7 @@
       inherit nodeId cookie secretKey;
       storageBackend = "redb";
       dataDir = "/var/lib/aspen";
-      logLevel = "info,aspen=debug";
+      logLevel = "info";
       relayMode = "disabled";
       enableWorkers = false;
       enableCi = false;

@@ -40,7 +40,7 @@
       inherit nodeId cookie secretKey;
       storageBackend = "redb";
       dataDir = "/var/lib/aspen";
-      logLevel = "info,aspen=debug";
+      logLevel = "info";
       relayMode = "disabled";
       enableWorkers = false;
       enableCi = false;
@@ -327,9 +327,10 @@ in
       # ================================================================
 
       with subtest("large blob replicates across cluster"):
-          # Generate 200KB of data
+          # Generate 10KB of data (kept small to avoid debug-level tracing
+          # of raw byte arrays flooding the Nix builder log)
           leader_node.succeed(
-              "dd if=/dev/urandom bs=1024 count=200 2>/dev/null "
+              "dd if=/dev/urandom bs=1024 count=10 2>/dev/null "
               "> /tmp/large-blob.bin"
           )
           ticket = leader_ticket
@@ -343,7 +344,7 @@ in
           large_hash = out.get("hash")
           large_size = out.get("size_bytes")
           assert large_hash is not None, f"no hash for large blob: {out}"
-          assert large_size >= 200000, \
+          assert large_size >= 10000, \
               f"large blob too small: {large_size}"
           leader_node.log(
               f"Added large blob: {large_hash} ({large_size} bytes)"

@@ -38,7 +38,7 @@ verus! {
     pub const MAX_GIT_CHUNK_SIZE: u64 = 4 * 1024 * 1024;
 
     /// Maximum client connections
-    pub const MAX_CLIENT_CONNECTIONS: u64 = 50;
+    pub const MAX_CLIENT_CONNECTIONS: u64 = 200;
 
     /// Maximum streams per connection
     pub const MAX_CLIENT_STREAMS_PER_CONNECTION: u64 = 10;
@@ -318,7 +318,7 @@ verus! {
 
     /// Maximum possible streams
     pub open spec fn max_total_streams() -> u64 {
-        MAX_CLIENT_CONNECTIONS * MAX_CLIENT_STREAMS_PER_CONNECTION  // 500
+        MAX_CLIENT_CONNECTIONS * MAX_CLIENT_STREAMS_PER_CONNECTION  // 2000
     }
 
     // ========================================================================
