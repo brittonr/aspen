@@ -1006,12 +1006,12 @@ mod tests {
         let result = store
             .scan(ScanRequest {
                 prefix: "".to_string(),
-                limit: None,
+                limit_results: None,
                 continuation_token: None,
             })
             .await
             .unwrap();
-        assert_eq!(result.count, 0);
+        assert_eq!(result.result_count, 0);
     }
 
     #[tokio::test]
@@ -1130,13 +1130,13 @@ mod tests {
         let result = store
             .scan(ScanRequest {
                 prefix: "users/".to_string(),
-                limit: None,
+                limit_results: None,
                 continuation_token: None,
             })
             .await
             .unwrap();
 
-        assert_eq!(result.count, 2);
+        assert_eq!(result.result_count, 2);
         assert!(!result.is_truncated);
     }
 

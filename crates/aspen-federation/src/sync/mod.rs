@@ -585,7 +585,7 @@ mod tests {
             name: "my-repo".to_string(),
             description: Some("A test repository".to_string()),
             delegates: vec![[0xaa; 32], [0xbb; 32]],
-            threshold: 2,
+            threshold_replicas: 2,
             created_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
             updated_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
         };
@@ -604,7 +604,7 @@ mod tests {
                 let meta = metadata.unwrap();
                 assert_eq!(meta.name, "my-repo");
                 assert_eq!(meta.delegates.len(), 2);
-                assert_eq!(meta.threshold, 2);
+                assert_eq!(meta.threshold_replicas, 2);
             }
             _ => panic!("expected ResourceState"),
         }
@@ -807,7 +807,7 @@ mod tests {
             name: "test-repo".to_string(),
             description: Some("A description".to_string()),
             delegates: vec![[0xaa; 32]],
-            threshold: 1,
+            threshold_replicas: 1,
             created_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
             updated_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
         };
@@ -817,7 +817,7 @@ mod tests {
 
         assert_eq!(parsed.name, "test-repo");
         assert_eq!(parsed.description, Some("A description".to_string()));
-        assert_eq!(parsed.threshold, 1);
+        assert_eq!(parsed.threshold_replicas, 1);
     }
 
     #[test]
@@ -828,7 +828,7 @@ mod tests {
             name: "repo".to_string(),
             description: None,
             delegates: vec![],
-            threshold: 0,
+            threshold_replicas: 0,
             created_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
             updated_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
         };

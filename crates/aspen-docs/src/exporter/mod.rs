@@ -94,7 +94,7 @@ mod tests {
         let exporter = Arc::new(DocsExporter::new(writer.clone()));
 
         // Create broadcast channel (same as in bootstrap)
-        let (sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
+        let (sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE as usize);
 
         // Subscribe and spawn exporter
         let receiver = sender.subscribe();
@@ -136,7 +136,7 @@ mod tests {
         let writer = Arc::new(InMemoryDocsWriter::new());
         let exporter = Arc::new(DocsExporter::new(writer.clone()));
 
-        let (sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
+        let (sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE as usize);
         let receiver = sender.subscribe();
         let cancel = exporter.clone().spawn(receiver);
 
@@ -189,7 +189,7 @@ mod tests {
         let writer = Arc::new(InMemoryDocsWriter::new());
         let exporter = Arc::new(DocsExporter::new(writer.clone()));
 
-        let (sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
+        let (sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE as usize);
         let receiver = sender.subscribe();
         let cancel = exporter.clone().spawn(receiver);
 

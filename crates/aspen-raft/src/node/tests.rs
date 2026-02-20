@@ -426,7 +426,7 @@ async fn test_scan_requires_initialization() {
 
     let request = ScanRequest {
         prefix: "test".to_string(),
-        limit: None,
+        limit_results: None,
         continuation_token: None,
     };
     let result = KeyValueStore::scan(&node, request).await;
@@ -656,7 +656,7 @@ async fn test_scan_uses_read_index() {
 
     let request = ScanRequest {
         prefix: "test".to_string(),
-        limit: None,
+        limit_results: None,
         continuation_token: None,
     };
     let result = KeyValueStore::scan(&node, request).await;

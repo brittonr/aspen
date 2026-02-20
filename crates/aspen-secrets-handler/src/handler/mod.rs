@@ -1634,8 +1634,8 @@ mod tests {
     #[test]
     fn test_sanitize_value_too_large_shows_limits() {
         let error = aspen_secrets::SecretsError::ValueTooLarge {
-            size: 2_000_000,
-            max: 1_000_000,
+            size_bytes: 2_000_000,
+            max_bytes: 1_000_000,
         };
         let sanitized = sanitize_secrets_error(&error);
         // Shows limits for debugging

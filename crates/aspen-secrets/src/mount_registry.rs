@@ -298,54 +298,101 @@ mod tests {
 
     #[async_trait::async_trait]
     impl aspen_core::KeyValueStore for InMemoryKvStore {
-        async fn read(&self, key: &str) -> std::result::Result<Option<Vec<u8>>, aspen_core::KeyValueStoreError> {
-            Ok(self.data.blocking_read().get(key).cloned())
+        async fn read(
+            &self,
+            request: aspen_core::ReadRequest,
+        ) -> std::result::Result<aspen_core::ReadResult, aspen_core::KeyValueStoreError> {
+            let data = self.data.blocking_read();
+            let kv = data.get(&request.key).map(|v| aspen_core::KeyValueWithRevision {
+                key: request.key.clone(),
+                value: String::from_utf8_lossy(v).to_string(),
+                version: 1,
+                create_revision: 1,
+                mod_revision: 1,
+            });
+            Ok(aspen_core::ReadResult { kv })
         }
 
         async fn write(
             &self,
             request: aspen_core::WriteRequest,
-        ) -> std::result::Result<(), aspen_core::KeyValueStoreError> {
+        ) -> std::result::Result<aspen_core::WriteResult, aspen_core::KeyValueStoreError> {
+            use aspen_core::WriteCommand;
+            let cmd = request.command;
             let mut data = self.data.blocking_write();
-            match request {
-                aspen_core::WriteRequest::Set { key, value } => {
-                    data.insert(key, value);
+            match &cmd {
+                WriteCommand::Set { key, value } => {
+                    data.insert(key.clone(), value.clone().into_bytes());
                 }
-                aspen_core::WriteRequest::SetMulti { entries } => {
-                    for (key, value) in entries {
-                        data.insert(key, value);
+                WriteCommand::SetMulti { pairs } => {
+                    for (key, value) in pairs {
+                        data.insert(key.clone(), value.clone().into_bytes());
                     }
                 }
-                aspen_core::WriteRequest::Delete { key } => {
-                    data.remove(&key);
+                WriteCommand::Delete { key } => {
+                    data.remove(key);
                 }
-                aspen_core::WriteRequest::DeleteMulti { keys } => {
+                WriteCommand::DeleteMulti { keys } => {
                     for key in keys {
-                        data.remove(&key);
+                        data.remove(key);
                     }
                 }
+                _ => {}
             }
-            Ok(())
+            Ok(aspen_core::WriteResult {
+                command: Some(cmd),
+                batch_applied: None,
+                conditions_met: None,
+                failed_condition_index: None,
+                lease_id: None,
+                ttl_seconds: None,
+                keys_deleted: None,
+                succeeded: Some(true),
+                txn_results: None,
+                header_revision: None,
+                occ_conflict: None,
+                conflict_key: None,
+                conflict_expected_version: None,
+                conflict_actual_version: None,
+            })
         }
 
-        async fn delete(&self, key: &str) -> std::result::Result<(), aspen_core::KeyValueStoreError> {
-            self.data.blocking_write().remove(key);
-            Ok(())
+        async fn delete(
+            &self,
+            request: aspen_core::DeleteRequest,
+        ) -> std::result::Result<aspen_core::DeleteResult, aspen_core::KeyValueStoreError> {
+            let existed = self.data.blocking_write().remove(&request.key).is_some();
+            Ok(aspen_core::DeleteResult {
+                key: request.key,
+                is_deleted: existed,
+            })
         }
 
         async fn scan(
             &self,
-            prefix: &str,
-            limit: Option<usize>,
-        ) -> std::result::Result<Vec<(String, Vec<u8>)>, aspen_core::KeyValueStoreError> {
+            request: aspen_core::ScanRequest,
+        ) -> std::result::Result<aspen_core::ScanResult, aspen_core::KeyValueStoreError> {
             let data = self.data.blocking_read();
-            let limit = limit.unwrap_or(usize::MAX);
-            Ok(data
+            let limit = request.limit_results.unwrap_or(u32::MAX) as usize;
+            let entries: Vec<_> = data
                 .iter()
-                .filter(|(k, _)| k.starts_with(prefix))
+                .filter(|(k, _)| k.starts_with(&request.prefix))
                 .take(limit)
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect())
+                .map(|(k, v)| aspen_core::KeyValueWithRevision {
+                    key: k.clone(),
+                    value: String::from_utf8_lossy(v).to_string(),
+                    version: 1,
+                    create_revision: 1,
+                    mod_revision: 1,
+                })
+                .collect();
+            let count = entries.len() as u32;
+            Ok(aspen_core::ScanResult {
+                entries,
+                result_count: count,
+                is_truncated: false,
+                continuation_token: None,
+            })
         }
     }
 

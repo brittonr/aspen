@@ -766,7 +766,7 @@ mod tests {
         // Scan should find all keys
         let scan_req = ScanRequest {
             prefix: "prefix:".to_string(),
-            limit: Some(100),
+            limit_results: Some(100),
             continuation_token: None,
         };
         let result = store.scan(scan_req).await.unwrap();
