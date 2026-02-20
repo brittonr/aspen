@@ -656,11 +656,12 @@ mod tests {
 
     #[test]
     fn test_watch_event_from_set_operation() {
-        let hlc = create_hlc("test-node");
+        // Use a fixed timestamp so the assertion is deterministic
+        let fixed_ts = SerializableTimestamp::from_millis(1700000000000);
         let payload = LogEntryPayload {
             index: 100,
             term: 5,
-            hlc_timestamp: SerializableTimestamp::new(new_timestamp(&hlc)),
+            hlc_timestamp: fixed_ts,
             operation: KvOperation::Set {
                 key: b"test_key".to_vec(),
                 value: b"test_value".to_vec(),
@@ -690,11 +691,12 @@ mod tests {
 
     #[test]
     fn test_watch_event_from_delete_operation() {
-        let hlc = create_hlc("test-node");
+        // Use a fixed timestamp so the assertion is deterministic
+        let fixed_ts = SerializableTimestamp::from_millis(1700000100000);
         let payload = LogEntryPayload {
             index: 101,
             term: 5,
-            hlc_timestamp: SerializableTimestamp::new(new_timestamp(&hlc)),
+            hlc_timestamp: fixed_ts,
             operation: KvOperation::Delete {
                 key: b"deleted_key".to_vec(),
             },
@@ -713,7 +715,7 @@ mod tests {
                 assert_eq!(key, b"deleted_key");
                 assert_eq!(*index, 101);
                 assert_eq!(*term, 5);
-                assert_eq!(*committed_at_ms, 1700000000100);
+                assert_eq!(*committed_at_ms, 1700000100000);
             }
             _ => panic!("expected Delete event"),
         }
