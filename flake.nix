@@ -952,6 +952,37 @@
                 aspenCliPackage = bins.aspen-cli-forge;
               };
 
+              # Multi-node KV test: write/read replication, CAS across nodes,
+              # batch write replication, scan consistency, NOT_LEADER routing,
+              # delete propagation, large value replication, failover survival.
+              # Build: nix build .#checks.x86_64-linux.multi-node-kv-test
+              multi-node-kv-test = import ./nix/tests/multi-node-kv.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli;
+              };
+
+              # Multi-node coordination test: lock exclusion across nodes,
+              # counter linearizability, semaphore capacity enforcement,
+              # RW lock multi-node readers/writers, cross-node queues,
+              # sequence monotonicity, lease cross-node ops, failover survival.
+              # Build: nix build .#checks.x86_64-linux.multi-node-coordination-test
+              multi-node-coordination-test = import ./nix/tests/multi-node-coordination.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli;
+              };
+
+              # Multi-node blob test: cross-node blob retrieval, blobs from
+              # different nodes, replication status, large blob replication,
+              # protection across nodes, repair cycle, failover survival.
+              # Build: nix build .#checks.x86_64-linux.multi-node-blob-test
+              multi-node-blob-test = import ./nix/tests/multi-node-blob.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node;
+                aspenCliPackage = bins.aspen-cli;
+              };
+
               # KV operations test: CRUD, CAS/CAD, scan/pagination, batch ops,
               # binary data, large values, special characters.
               # Build: nix build .#checks.x86_64-linux.kv-operations-test

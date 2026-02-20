@@ -248,6 +248,17 @@
 - **Gotcha: `plugin info` on removed plugin returns error (not empty)** — use `check=False`
 - **Gotcha: dummy WASM files (random bytes) work fine for install** — CLI just uploads blob + writes manifest; validation at reload time
 
+### Multi-Node Test Expansion (2026-02-19)
+
+- **3 new multi-node tests** expanding coverage from 1 to 4 multi-node VM tests
+- `multi-node-kv.nix` — 3-node KV: write/read replication, NOT_LEADER forwarding, CAS across nodes, batch write replication, scan consistency, delete propagation, large value replication, failover survival + catch-up
+- `multi-node-coordination.nix` — 3-node coordination: lock exclusion across nodes (real distributed locking!), counter linearizability (15 increments from 3 nodes = 15), semaphore capacity across nodes, RW lock multi-node readers/writer exclusion, cross-node queue enqueue/dequeue, sequence monotonicity across nodes, lease cross-node ops, failover survival for locks + counters
+- `multi-node-blob.nix` — 3-node blob: cross-node retrieval, blobs from different nodes visible everywhere, replication-status with real replicas, large blob (200KB) replication, protection visible cross-node, failover survival
+- All wired into flake.nix as `checks.x86_64-linux.multi-node-{kv,coordination,blob}-test`
+- **Pattern: new files must be `git add`ed before `nix eval`** — Nix flake uses git-tracked files only
+- Multi-node tests use `aspen-cli` (not `aspen-cli-forge`) since they test KV/blob/coordination primitives, not forge ops
+- Blob test uses `features = ["blob"]` in node config; KV/coordination tests use `features = []`
+
 ### NixOS VM Integration Test (2026-02-18)
 
 - New `nix/tests/forge-cluster.nix` — NixOS VM test with full networking
