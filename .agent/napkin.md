@@ -8,6 +8,7 @@
 | 2026-02-18 | self | delegate_task worker reported CLI fix success but changes weren't on disk | Do surgical edits directly — delegate_task doesn't persist file writes reliably |
 | 2026-02-19 | self | Delegated 3 fix tasks to workers — all reported success but zero changes persisted | delegate_task STILL doesn't persist. Use scouts to gather info, then edit directly. Third time hitting this. |
 | 2026-02-19 | self | `counter set X 0` then `counter incr X` always fails CAS | `compute_unsigned_cas_expected(0)` returns None (expects non-existent key), but `set 0` creates key with value "0". Don't pre-set counters to 0 — let them start from implicit zero (non-existent). |
+| 2026-02-19 | self | Secrets handler never dispatched — 3 issues | 1. `secrets` feature missing from Nix aspen-node build. 2. `src/node/mod.rs` gated secrets_service on `config.secrets.is_enabled` (SOPS) but engine doesn't need SOPS. 3. Import cfg must match enclosing `impl Node` gate (jobs+docs+hooks+federation). |
 | 2026-02-19 | self | NixOS VM tests with large data (100KB+ KV values, 200KB blobs) fail from log truncation | Reduce test data sizes: 5KB for KV values, 10KB for blobs. Also set logLevel="info" (not "aspen=debug") for multi-node tests to avoid debug tracing of large payloads. |
 | 2026-02-19 | self | Multi-node coordination test hit 50-connection client limit | MAX_CLIENT_CONNECTIONS was 50, too low for tests making 80+ sequential CLI calls. Increased to 200. Also batch operations (counter add X 5) instead of 5 individual incr calls. |
 
