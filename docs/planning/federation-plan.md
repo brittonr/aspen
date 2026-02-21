@@ -264,12 +264,12 @@ Primitives are implemented in `crates/aspen-cluster/src/federation/`:
 - [x] Cross-cluster sync via iroh-docs CRDTs - `crates/aspen-docs/`
 - [x] Content exchange via iroh-blobs - `crates/aspen-blob/`
 
-### Phase 3: Application Federation Patterns - IN PROGRESS
+### Phase 3: Application Federation Patterns - COMPLETE
 
 - [x] Forge as reference implementation - `crates/aspen-forge/`
 - [x] CI integration with federation - `crates/aspen-ci/`
 - [x] Create `FederationTester` for madsim tests - `crates/aspen-testing/src/federation_tester.rs`
-- [ ] Federation guide in inline documentation
+- [x] Federation guide - `docs/FEDERATION.md`
 
 ## Design Decisions
 

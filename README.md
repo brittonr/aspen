@@ -38,6 +38,16 @@ isolation, and Ed25519 signing.
 
 See [Plugin Development Guide](docs/PLUGIN_DEVELOPMENT.md) for building your own plugins.
 
+## Federation
+
+Independent Aspen clusters can discover each other, share content, and synchronize
+resources across organizational boundaries — without HTTP, DNS, or any central
+authority. Federation is built on Ed25519 cluster identities, DHT-based discovery
+(BitTorrent Mainline BEP-44), rate-limited gossip, and a QUIC-based sync protocol
+with three-layer cryptographic verification.
+
+See [Federation Guide](docs/FEDERATION.md) for the full architecture and API reference.
+
 ## License
 
 AGPL-3.0-or-later
