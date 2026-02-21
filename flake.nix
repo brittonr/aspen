@@ -316,6 +316,177 @@
             CARGO_BUILD_INCREMENTAL = "true";
           };
 
+        # ── Hyperlight WASM Plugin Support ──────────────────────────────
+        # The plugins-rpc feature requires hyperlight-wasm, whose build.rs
+        # runs a nested cargo build that fails in Nix's sandbox (no network).
+        # We work around this by:
+        # 1. Pre-building the wasm_runtime binary in a separate derivation
+        # 2. Patching hyperlight-wasm's build.rs to use the pre-built binary
+        # 3. Building aspen-node with the patched vendor dir
+
+        # Pre-build the hyperlight wasm_runtime ELF binary
+        hyperlight-wasm-runtime = import ./nix/hyperlight-wasm-runtime.nix {
+          inherit pkgs lib;
+          rustToolChain = rustToolChain;
+        };
+
+        # Patched cargoVendorDir: modify hyperlight-wasm's build.rs to
+        # accept HYPERLIGHT_WASM_RUNTIME env var (skips nested cargo build)
+        pluginsCargoVendorDir = pkgs.runCommand "patched-vendor-for-plugins" {} ''
+                    # Deep-copy vendor dir, resolving symlinks so we can modify files
+                    cp -rL --no-preserve=mode ${cargoVendorDir} $out
+
+                    # Update config.toml to point to our local copies instead of
+                    # the original Nix store paths (which have unpatched files)
+                    ${pkgs.gnused}/bin/sed -i "s|${cargoVendorDir}|$out|g" $out/config.toml
+
+                    # Find the hyperlight-wasm crate in the vendor registry
+                    HLW_DIR=$(find $out -maxdepth 3 -type d -name "hyperlight-wasm-0.12.0" | head -1)
+                    if [ -z "$HLW_DIR" ]; then
+                      echo "ERROR: hyperlight-wasm-0.12.0 not found in vendor dir"
+                      echo "Contents:"
+                      find $out -maxdepth 3 -type d | head -20
+                      exit 1
+                    fi
+                    echo "Found hyperlight-wasm at: $HLW_DIR"
+
+                    # Replace the entire main() function with one that uses a pre-built
+                    # wasm_runtime binary (avoiding the nested cargo build entirely, which
+                    # also avoids the cargo-hyperlight dependency issue)
+                    cat > "$HLW_DIR/build.rs" << 'BUILDRS'
+          use std::path::{Path, PathBuf};
+          use std::{env, fs};
+          use anyhow::Result;
+          use built::write_built_file;
+
+          fn main() -> Result<()> {
+              let wasm_runtime_resource = PathBuf::from(
+                  env::var("HYPERLIGHT_WASM_RUNTIME")
+                      .expect("HYPERLIGHT_WASM_RUNTIME must be set for Nix builds")
+              );
+
+              println!("cargo:warning=Using pre-built wasm_runtime from {}", wasm_runtime_resource.display());
+
+              let out_dir = env::var_os("OUT_DIR").unwrap();
+              let dest_path = Path::new(&out_dir).join("wasm_runtime_resource.rs");
+              let contents = format!(
+                  "pub (super) static WASM_RUNTIME: [u8; include_bytes!({name:?}).len()] = *include_bytes!({name:?});",
+                  name = wasm_runtime_resource.as_os_str()
+              );
+              fs::write(dest_path, contents).unwrap();
+
+              let wasm_runtime_bytes = fs::read(&wasm_runtime_resource).unwrap();
+              let elf = goblin::elf::Elf::parse(&wasm_runtime_bytes).unwrap();
+
+              let section_name = ".note_hyperlight_metadata";
+              let wasmtime_version_number = if let Some(header) = elf.section_headers.iter().find(|hdr| {
+                  elf.shdr_strtab.get_at(hdr.sh_name).map_or(false, |name| name == section_name)
+              }) {
+                  let start = header.sh_offset as usize;
+                  let size = header.sh_size as usize;
+                  let metadata_bytes = &wasm_runtime_bytes[start..start + size];
+                  if let Some(null_pos) = metadata_bytes.iter().position(|&b| b == 0) {
+                      std::str::from_utf8(&metadata_bytes[..null_pos]).unwrap()
+                  } else {
+                      std::str::from_utf8(metadata_bytes).unwrap()
+                  }
+              } else {
+                  panic!(".note_hyperlight_metadata section not found in wasm_runtime binary");
+              };
+
+              write_built_file()?;
+
+              let built_path = Path::new(&out_dir).join("built.rs");
+              let mut file = std::fs::OpenOptions::new().create(false).append(true).open(built_path).unwrap();
+              use std::io::Write;
+
+              let metadata = fs::metadata(&wasm_runtime_resource).unwrap();
+              let created = metadata.modified().unwrap();
+              let created_datetime: chrono::DateTime<chrono::Local> = created.into();
+              writeln!(file, "static WASM_RUNTIME_CREATED: &str = \"{}\";", created_datetime).unwrap();
+              writeln!(file, "static WASM_RUNTIME_SIZE: &str = \"{}\";", metadata.len()).unwrap();
+              writeln!(file, "static WASM_RUNTIME_WASMTIME_VERSION: &str = \"{}\";", wasmtime_version_number).unwrap();
+
+              let hash = blake3::hash(&wasm_runtime_bytes);
+              writeln!(file, "static WASM_RUNTIME_BLAKE3_HASH: &str = \"{}\";", hash).unwrap();
+
+              println!("cargo:rerun-if-changed=build.rs");
+
+              cfg_aliases::cfg_aliases! {
+                  gdb: { all(feature = "gdb", debug_assertions) },
+              }
+
+              Ok(())
+          }
+          BUILDRS
+
+                    # Verify the patch applied
+                    grep -q "HYPERLIGHT_WASM_RUNTIME" "$HLW_DIR/build.rs" || {
+                      echo "ERROR: build.rs patch failed"
+                      cat "$HLW_DIR/build.rs" | head -20
+                      exit 1
+                    }
+
+                    # Verify config.toml points to our local copy
+                    grep -q "$out" "$out/config.toml" || {
+                      echo "ERROR: config.toml not updated"
+                      exit 1
+                    }
+
+                    echo "Patch applied successfully"
+        '';
+
+        # Cargo artifacts for plugin builds (uses patched vendor dir)
+        # Must NOT inherit from cargoArtifacts — the patched build.rs
+        # must be compiled fresh, not reused from the original cache.
+        pluginsCargoArtifacts = craneLib.buildDepsOnly (
+          basicArgs
+          // {
+            pname = "aspen-plugins";
+            cargoVendorDir = pluginsCargoVendorDir;
+            HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+            cargoExtraArgs = "--features plugins-rpc";
+          }
+        );
+
+        # Common args for plugins-enabled builds
+        pluginsCommonArgs =
+          basicArgs
+          // {
+            cargoVendorDir = pluginsCargoVendorDir;
+            cargoArtifacts = pluginsCargoArtifacts;
+            HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+            nativeBuildInputs =
+              basicArgs.nativeBuildInputs
+              ++ (with pkgs; [
+                autoPatchelfHook
+              ]);
+            buildInputs =
+              basicArgs.buildInputs
+              ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
+                with pkgs; [
+                  darwin.apple_sdk.frameworks.Security
+                ]
+              ));
+          };
+
+        # Build echo-plugin.wasm for WASM plugin integration tests
+        echoPluginWasm = craneLib.buildPackage (
+          commonArgs
+          // {
+            pname = "aspen-echo-plugin";
+            version = "0.1.0";
+            cargoExtraArgs = "--package aspen-echo-plugin --target wasm32-unknown-unknown";
+            doCheck = false;
+            # WASM builds produce .wasm files, not regular binaries
+            installPhaseCommand = ''
+              mkdir -p $out
+              cp target/wasm32-unknown-unknown/release/aspen_echo_plugin.wasm $out/echo-plugin.wasm 2>/dev/null \
+                || cp target/wasm32-unknown-unknown/debug/aspen_echo_plugin.wasm $out/echo-plugin.wasm
+            '';
+          }
+        );
+
         # Build the main package
         aspen = craneLib.buildPackage (
           commonArgs
@@ -711,6 +882,17 @@
             features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "proxy"];
           };
 
+          # Build aspen-node with WASM plugin support (plugins-rpc)
+          # Uses pre-built hyperlight wasm_runtime to avoid nested cargo build
+          aspen-node-plugins = craneLib.buildPackage (
+            pluginsCommonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+              cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc";
+              doCheck = false;
+            }
+          );
+
           # Build aspen-ci-agent from its own crate
           aspen-ci-agent-crate = craneLib.buildPackage (
             commonArgs
@@ -762,9 +944,11 @@
               aspen-cli-ci = aspen-cli-ci-crate;
               aspen-cli-pijul = aspen-cli-pijul-crate;
               aspen-cli-proxy = aspen-cli-proxy-crate;
-              inherit aspen-node-dns aspen-node-pijul aspen-node-proxy;
+              inherit aspen-node-dns aspen-node-pijul aspen-node-proxy aspen-node-plugins;
               aspen-ci-agent = aspen-ci-agent-crate;
               verus-metrics = aspen-verus-metrics-crate;
+              inherit echoPluginWasm;
+              inherit hyperlight-wasm-runtime;
             };
         in
           bins
@@ -1135,6 +1319,18 @@
                 inherit pkgs;
                 aspenNodePackage = bins.aspen-node;
                 aspenCliPackage = bins.aspen-cli-plugins;
+              };
+
+              # WASM plugin execution test: installs a real echo-plugin WASM
+              # binary, reloads the plugin runtime, then exercises actual
+              # request dispatch through the plugin (Ping→Pong, ReadKey via
+              # host KV, unhandled request error).
+              # Build: nix build .#checks.x86_64-linux.plugin-execution-test
+              plugin-execution-test = import ./nix/tests/plugin-execution.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node-plugins;
+                aspenCliPackage = bins.aspen-cli-plugins;
+                echoPluginWasm = echoPluginWasm;
               };
 
               # Secrets engine test: KV (write, read, versions, list,

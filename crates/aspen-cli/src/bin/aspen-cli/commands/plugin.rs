@@ -420,6 +420,7 @@ async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> 
         execution_timeout_secs: None,
         kv_prefixes: resolved.kv_prefixes,
         permissions: resolved.permissions.unwrap_or_default(),
+        signature: None,
     };
 
     let manifest_json = serde_json::to_string(&manifest)?;
