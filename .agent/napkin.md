@@ -151,6 +151,37 @@
 - **Pijul handler needs `blob_store` at runtime**: Handler returns None from `create()` if `ctx.pijul_store` is None; pijul store requires blob_store initialization
 - **aspen-cli pijul feature needs `forge,git-bridge`**: archive.rs unconditionally uses flate2 (git-bridge dep)
 
+## Recent Changes (2026-02-20) — n0-future + iroh-proxy-utils Integration
+
+### n0-future Migration
+
+- Replaced `futures` crate with `n0-future 0.3.2` across 12 Aspen crates
+- Removed unused `futures` dep from 7 additional crates
+- Kept `futures` in workspace deps for vendored openraft (untouched)
+- API differences from `futures` → `n0-future`:
+  - `futures_lite::StreamExt::filter_map` is **sync** (not async like `futures::StreamExt::filter_map`)
+  - `futures_lite::stream::once(val)` takes a **value** directly (not a future like `futures::stream::once`)
+  - `buffer_unordered` → `buffered_unordered` (from `futures-buffered`, re-exported via `n0_future`)
+  - `futures::stream::BoxStream<'a, T>` needs a local type alias for non-'static lifetimes
+    (`n0_future::stream::Boxed` is `'static`-only)
+  - `futures::future::join_all` → `n0_future::join_all` (from `futures-buffered`)
+
+### aspen-proxy Crate
+
+- New crate: `crates/aspen-proxy/` — wraps `iroh-proxy-utils` for HTTP proxying over iroh
+- `AspenUpstreamProxy`: `ProtocolHandler` with cluster cookie auth via `X-Aspen-Cookie` header
+- `DownstreamProxy`: re-exported from iroh-proxy-utils for client-side TCP→iroh tunneling
+- ALPN: `iroh-http-proxy/1`
+- `RouterBuilder::http_proxy()` added to `aspen-cluster` for registration
+- Bumped `n0-error 0.1.2 → 0.1.3` (semver-compatible, required by iroh-proxy-utils)
+
+### net-tools Decision
+
+- iroh 0.95.1 already depends on `netwatch 0.12.0` transitively
+- Adding `netwatch 0.14.0` directly would create two versions in dep tree
+- Decision: skip for now; iroh handles network monitoring internally
+- Revisit if Aspen needs to react to network changes above what iroh provides
+
 ## Domain Notes
 
 - Aspen is a Rust project with a WASM plugin system using `hyperlight-wasm`
