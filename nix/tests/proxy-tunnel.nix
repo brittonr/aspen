@@ -208,7 +208,6 @@ in
 
       with subtest("tcp tunnel concurrent requests"):
           # Fire off several curl requests in parallel.
-          pids = []
           for i in range(4):
               client.succeed(
                   f"curl -sf --max-time 10 "
@@ -224,7 +223,7 @@ in
           client.log("4 concurrent requests through TCP tunnel succeeded")
 
       # Kill the TCP tunnel proxy.
-      client.succeed("pkill -f 'proxy start' || true")
+      client.execute("pgrep -f 'aspen-cli.*proxy' | xargs -r kill 2>/dev/null; true")
       time.sleep(1)
 
       # ── HTTP forward proxy mode ─────────────────────────────────────
@@ -254,7 +253,7 @@ in
           client.log(f"HTTP forward proxy response: {resp}")
 
       # Kill the forward proxy.
-      client.succeed("pkill -f 'proxy forward' || true")
+      client.execute("pgrep -f 'aspen-cli.*proxy' | xargs -r kill 2>/dev/null; true")
       time.sleep(1)
 
       # ── tunnel restart resilience ────────────────────────────────────
@@ -273,7 +272,7 @@ in
           resp = curl_json(client, "http://127.0.0.1:19092/before-restart")
           assert resp["status"] == "ok", f"pre-restart request failed: {resp}"
 
-          client.succeed("pkill -f 'proxy start' || true")
+          client.execute("pgrep -f 'aspen-cli.*proxy' | xargs -r kill 2>/dev/null; true")
           time.sleep(2)
 
           # Restart on a new port (old one might linger briefly).
@@ -291,7 +290,7 @@ in
           client.log("Tunnel restart resilience verified")
 
       # Clean up.
-      client.succeed("pkill -f 'proxy' || true")
+      client.execute("pgrep -f 'aspen-cli.*proxy' | xargs -r kill 2>/dev/null; true")
 
       server.log("=== proxy-tunnel test complete ===")
     '';

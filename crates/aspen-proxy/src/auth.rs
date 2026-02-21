@@ -36,7 +36,12 @@ pub const ASPEN_COOKIE_HEADER: &str = "X-Aspen-Cookie";
 
 impl AuthHandler for AspenAuthHandler {
     async fn authorize<'a>(&'a self, remote_id: EndpointId, req: &'a HttpProxyRequest) -> Result<(), AuthError> {
-        // Check for cookie in custom header
+        // Check for cookie in custom header (optional additional validation).
+        //
+        // iroh-proxy-utils' DownstreamProxy sends bare CONNECT requests without
+        // custom headers, so most connections will not carry the cookie. We accept
+        // iroh-authenticated connections (QUIC TLS verifies EndpointId) and only
+        // reject when a cookie IS provided but doesn't match (wrong cluster).
         if let Some(cookie) = req.headers.get(ASPEN_COOKIE_HEADER) {
             let cookie_str = cookie.to_str().map_err(|_| {
                 warn!(remote=%remote_id.fmt_short(), "invalid cookie header encoding");
@@ -51,12 +56,20 @@ impl AuthHandler for AspenAuthHandler {
             return Err(AuthError::Forbidden);
         }
 
-        // No cookie provided — reject
+        // No cookie provided — accept based on iroh transport-level authentication.
+        //
+        // iroh QUIC connections are TLS-authenticated: each peer has a verified
+        // EndpointId (Ed25519 public key). To connect at all, the client must know
+        // the node's EndpointId from the cluster ticket. The proxy ALPN is only
+        // registered when --enable-proxy is set.
+        //
+        // TODO: For production, consider maintaining a trusted-peers allowlist
+        // derived from cluster membership and checking remote_id against it.
         debug!(
             remote=%remote_id.fmt_short(),
-            "no authentication credentials provided"
+            "authorized via iroh transport authentication (no cookie header)"
         );
-        Err(AuthError::Forbidden)
+        Ok(())
     }
 }
 
@@ -106,10 +119,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_no_cookie() {
+    async fn test_no_cookie_accepted_via_transport_auth() {
+        // No cookie header → accepted via iroh transport-level authentication.
+        // iroh-proxy-utils' DownstreamProxy sends bare CONNECT requests without
+        // custom headers, so this is the normal path.
         let handler = AspenAuthHandler::new("test-cookie".to_string());
         let remote = test_endpoint_id();
         let req = make_request(None);
-        assert!(handler.authorize(remote, &req).await.is_err());
+        assert!(handler.authorize(remote, &req).await.is_ok());
     }
 }

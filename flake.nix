@@ -1189,6 +1189,19 @@
                 aspenNodePackage = bins.aspen-node-proxy;
                 aspenCliPackage = bins.aspen-cli-proxy;
               };
+
+              # Multi-node proxy test: 3-node Raft cluster with proxy
+              # enabled + external client. Tests TCP tunneling through
+              # each node, cross-node tunneling, proxy during KV ops,
+              # HTTP forward proxy, concurrent streams through multiple
+              # nodes, proxy surviving leader failover, restarted node
+              # proxy, large payload transfer, and multi-target tunnels.
+              # Build: nix build .#checks.x86_64-linux.multi-node-proxy-test
+              multi-node-proxy-test = import ./nix/tests/multi-node-proxy.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node-proxy;
+                aspenCliPackage = bins.aspen-cli-proxy;
+              };
             };
 
           # Base apps available on all systems

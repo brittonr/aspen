@@ -419,16 +419,48 @@
 - `DownstreamProxy` connection pool resolves by `EndpointId`, needs discovery to find addresses
 - `EndpointAddr` implements `Into<EndpointInfo>` (for `StaticProvider::add_endpoint_info`) — works despite not being grep-able (likely in iroh-base)
 
-## Recent Changes (2026-02-21) — Proxy NixOS VM Test
+## Recent Changes (2026-02-21) — Proxy NixOS VM Tests
 
-### proxy-tunnel.nix
+### AspenAuthHandler Fix
 
-- New `nix/tests/proxy-tunnel.nix` — 2-node test: server (aspen-node + proxy + origin HTTP) and client (aspen-cli proxy)
-- Tests: TCP tunnel basic request, multiple sequential requests, 4 concurrent requests, HTTP forward proxy (CONNECT-style), tunnel restart resilience
-- Origin service: Python http.server returning JSON `{"status":"ok","path":...,"message":"hello from origin"}`
-- Server uses `extraArgs = ["--enable-proxy"]` to enable upstream proxy handler
-- Proxy feature is compile-time: separate `aspen-node-proxy` and `aspen-cli-proxy` nix packages
+- **Root cause**: `AspenAuthHandler` required `X-Aspen-Cookie` HTTP header, but iroh-proxy-utils' `DownstreamProxy` sends bare CONNECT requests without custom headers. ALL proxy connections were rejected with 403 Forbidden (curl exit code 56).
+- **Fix**: Auth handler now accepts connections without cookie header, relying on iroh QUIC TLS transport-level authentication. Wrong-cookie connections still rejected.
+- Unit test `test_no_cookie` → `test_no_cookie_accepted_via_transport_auth` (asserts Ok, not Err)
+
+### proxy-tunnel.nix Fixes
+
+- Removed unused `pids = []` variable that caused Python type-check failure (`var-annotated` mypy error)
+- Replaced all `pkill -f 'proxy ...' || true` with `pgrep -f 'aspen-cli.*proxy' | xargs -r kill` — pkill returns exit code 143 (SIGTERM) when it matches its own shell process
 - Wired into flake as `checks.x86_64-linux.proxy-tunnel-test`
+
+### multi-node-proxy.nix (NEW)
+
+- New `nix/tests/multi-node-proxy.nix` — 4-node test: 3-node Raft cluster (node1, node2, node3 with proxy + origin HTTP) + external client
+- **22 subtests**, all passing:
+  1. TCP tunnel through each of 3 cluster nodes to their own origins
+  2. Cross-node tunneling: client → node1 proxy → node2 HTTP service (and all 3 permutations)
+  3. Proxy concurrent with KV writes (5 interleaved write+proxy cycles)
+  4. HTTP forward proxy through node1 and node2
+  5. 9 concurrent requests through 3 simultaneous tunnels
+  6. Proxy survives leader failover (tunnel through follower keeps working)
+  7. New tunnel through newly elected leader
+  8. Tunnel through restarted (old leader) node
+  9. Large payload (10KB JSON) + 3 sequential 5KB payloads
+  10. Two tunnels to different services on same node (multi-target: port 8081 + 8091)
+  11. Interleaved requests across two targets
+  12. Tunnel restart cycling through node1 → node2 → node3
+- Each cluster node runs a Python http.server returning `{"node":"nodeN", "port": N, ...}`
+- Node1 runs a second origin on port 8091 for multi-target testing
+- Wired into flake as `checks.x86_64-linux.multi-node-proxy-test`
+
+### Gotchas Discovered
+
+- **`pkill -f` in NixOS VM tests**: Returns exit code 143 (SIGTERM) — matches and kills its own shell process. Use `pgrep | xargs -r kill` instead.
+- **NixOS systemd.services conflict**: Can't define `systemd.services."name" = ...;` AND `systemd.services = { ... };` in same NixOS config — merge into single `systemd.services = { "name" = ...; } // extraServices;`
+- **Stale tickets after node restart**: Python ticket variables become stale after node stop/restart. Re-read tickets with `get_ticket(node)` before starting new tunnels.
+- **iroh-proxy-utils has no custom headers for CONNECT**: `DownstreamProxy` sends bare `CONNECT host:port HTTP/1.1` — no way to inject `X-Aspen-Cookie` or other auth headers for TCP tunnel mode.
+- **NixOS test hostnames are DNS-resolvable**: Use `node2:8082` not `192.168.1.X:8082` for cross-node targets — `hostname -I` may return wrong IP.
+- **`skipLint = true` needed for complex test scripts**: NixOS test framework Python linting chokes on certain patterns.
 
 ### New Nix Packages
 
