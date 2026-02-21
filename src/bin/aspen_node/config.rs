@@ -96,6 +96,14 @@ pub fn build_cluster_config(args: &Args) -> NodeConfig {
         config.forge.enable_gossip = true;
     }
 
+    // Apply proxy configuration from CLI flags
+    if args.enable_proxy {
+        config.proxy.is_enabled = true;
+    }
+    if let Some(max_conn) = args.proxy_max_connections {
+        config.proxy.max_connections = max_conn;
+    }
+
     // Apply security defaults (e.g., auto-enable raft_auth when pkarr is on)
     config.apply_security_defaults();
 

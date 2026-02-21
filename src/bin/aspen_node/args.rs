@@ -219,6 +219,18 @@ pub struct Args {
     #[arg(long)]
     pub ci_auto_trigger: bool,
 
+    // === HTTP Proxy Configuration ===
+    /// Enable HTTP proxy for TCP tunneling over iroh.
+    ///
+    /// When enabled, the node accepts proxy requests from authenticated
+    /// peers and forwards them to local TCP services.
+    #[arg(long)]
+    pub enable_proxy: bool,
+
+    /// Maximum concurrent proxy connections (default: 128).
+    #[arg(long)]
+    pub proxy_max_connections: Option<u32>,
+
     // === Worker-Only Mode ===
     /// Run as an ephemeral CI worker without Raft consensus.
     ///

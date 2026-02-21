@@ -158,6 +158,27 @@ pub fn setup_router(
         }
     }
 
+    // Add HTTP proxy handler if enabled
+    #[cfg(feature = "proxy")]
+    if config.proxy.is_enabled {
+        use aspen_proxy::AspenUpstreamProxy;
+
+        let proxy = AspenUpstreamProxy::new(config.cookie.clone());
+        match proxy.into_handler() {
+            Ok(handler) => {
+                use aspen_proxy::HTTP_PROXY_ALPN;
+                builder = builder.accept(HTTP_PROXY_ALPN, handler);
+                info!(
+                    max_connections = config.proxy.max_connections,
+                    "HTTP proxy protocol handler registered (ALPN: iroh-http-proxy/1)"
+                );
+            }
+            Err(e) => {
+                warn!(error = %e, "failed to create HTTP proxy handler — proxy disabled");
+            }
+        }
+    }
+
     builder.spawn()
 }
 

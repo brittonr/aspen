@@ -70,6 +70,7 @@ mod forge;
 mod iroh;
 mod nix_cache;
 mod peer_sync;
+mod proxy;
 mod sharding;
 mod snix;
 mod worker;
@@ -133,6 +134,8 @@ use peer_sync::default_max_peer_subscriptions;
 use peer_sync::default_peer_reconnect_interval_secs;
 use peer_sync::default_peer_sync_priority;
 pub use peer_sync::*;
+use proxy::default_proxy_max_connections;
+pub use proxy::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -269,6 +272,13 @@ pub struct NodeConfig {
     #[serde(default)]
     pub dns_server: DnsServerConfig,
 
+    /// HTTP proxy configuration for TCP/HTTP tunneling over iroh.
+    ///
+    /// When enabled, the node registers an upstream proxy handler that accepts
+    /// authenticated peer connections and forwards TCP traffic to local services.
+    #[serde(default)]
+    pub proxy: ProxyConfig,
+
     /// Global content discovery configuration.
     ///
     /// When enabled, the node participates in the BitTorrent Mainline DHT
@@ -353,6 +363,7 @@ impl Default for NodeConfig {
             peers: vec![],
             batch_config: default_batch_config(),
             dns_server: DnsServerConfig::default(),
+            proxy: ProxyConfig::default(),
             #[cfg(feature = "blob")]
             content_discovery: ContentDiscoveryConfig::default(),
             worker: WorkerConfig::default(),
@@ -407,6 +418,7 @@ impl NodeConfig {
             peers: parse_env_vec("ASPEN_PEERS"),
             batch_config: default_batch_config(),
             dns_server: from_env_dns(),
+            proxy: from_env_proxy(),
             #[cfg(feature = "blob")]
             content_discovery: from_env_content_discovery(),
             worker: from_env_worker(),
@@ -440,6 +452,7 @@ impl NodeConfig {
             self.peers = other.peers;
         }
         merge_dns_config(&mut self.dns_server, other.dns_server);
+        merge_proxy_config(&mut self.proxy, other.proxy);
         #[cfg(feature = "blob")]
         merge_content_discovery_config(&mut self.content_discovery, other.content_discovery);
         merge_worker_config(&mut self.worker, other.worker);
@@ -880,6 +893,16 @@ fn merge_dns_config(target: &mut DnsServerConfig, other: DnsServerConfig) {
     }
 }
 
+/// Merge HTTP proxy configuration.
+fn merge_proxy_config(target: &mut ProxyConfig, other: ProxyConfig) {
+    if other.is_enabled {
+        target.is_enabled = other.is_enabled;
+    }
+    if other.max_connections != default_proxy_max_connections() {
+        target.max_connections = other.max_connections;
+    }
+}
+
 /// Merge global content discovery (DHT) configuration.
 #[cfg(feature = "blob")]
 fn merge_content_discovery_config(target: &mut ContentDiscoveryConfig, other: ContentDiscoveryConfig) {
@@ -1147,6 +1170,14 @@ fn from_env_dns() -> DnsServerConfig {
             upstreams
         },
         forwarding_enabled: parse_env("ASPEN_DNS_SERVER_FORWARDING_ENABLED").unwrap_or_else(default_dns_forwarding),
+    }
+}
+
+/// Parse HTTP proxy configuration from environment variables.
+fn from_env_proxy() -> ProxyConfig {
+    ProxyConfig {
+        is_enabled: parse_env("ASPEN_PROXY_ENABLED").unwrap_or(false),
+        max_connections: parse_env("ASPEN_PROXY_MAX_CONNECTIONS").unwrap_or_else(default_proxy_max_connections),
     }
 }
 

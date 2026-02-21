@@ -386,3 +386,35 @@
 - `docs/PLUGIN_DEVELOPMENT.md` — Full guide: quickstart, architecture, host functions, permissions, templates, signing, deployment, best practices, troubleshooting
 - Updated `README.md` with plugin section linking to guide
 - Updated `docs/planning/plugin-system.md` Phase 5 checklist (3/4 done, registry deferred)
+
+## Recent Changes (2026-02-21) — Proxy Integration into Node + CLI
+
+### Node-Side Integration
+
+- New `crates/aspen-cluster/src/config/proxy.rs` — `ProxyConfig` with `is_enabled` and `max_connections` (default 128)
+- Wired into `NodeConfig`: field, `Default`, `from_env()` (ASPEN_PROXY_ENABLED, ASPEN_PROXY_MAX_CONNECTIONS), `merge()`
+- Node args: `--enable-proxy`, `--proxy-max-connections`
+- Router registration: `#[cfg(feature = "proxy")]` block in `src/bin/aspen_node/setup/router.rs` creates `AspenUpstreamProxy` with cluster cookie auth
+- Feature flag: `proxy = ["dep:aspen-proxy"]` in root `Cargo.toml`, added to `full` feature and `check-cfg`
+
+### CLI Proxy Commands
+
+- New `crates/aspen-cli/src/bin/aspen-cli/commands/proxy.rs` with two subcommands:
+  - `proxy start --target host:port` — TCP tunnel mode (all traffic forwarded to fixed target)
+  - `proxy forward` — HTTP forward proxy mode (CONNECT tunneling + absolute-form URIs)
+- Uses `StaticProvider` to register remote node address for `DownstreamProxy` connection pool
+- Creates its own `iroh::Endpoint` (doesn't use `AspenClient`) — proxy needs QUIC stream access, not RPC
+- Feature-gated: `#[cfg(feature = "proxy")]` in commands/mod.rs, cli.rs
+- Special dispatch: handled before `AspenClient` creation (like `Index`), since it manages its own endpoint
+
+### aspen-proxy Re-exports
+
+- Added `Authority`, `HttpProxyOpts`, `StaticForwardProxy`, `StaticReverseProxy` to pub re-exports
+- These are needed by CLI downstream proxy for TCP tunnel and HTTP forward proxy modes
+
+### Gotchas
+
+- `iroh 0.95.1` has no `add_node_addr()` on `Endpoint` — use `StaticProvider` discovery instead
+- `iroh 0.95.1` has no `discovery_n0()` on `Builder` — use `discovery(StaticProvider)` explicitly
+- `DownstreamProxy` connection pool resolves by `EndpointId`, needs discovery to find addresses
+- `EndpointAddr` implements `Into<EndpointInfo>` (for `StaticProvider::add_endpoint_info`) — works despite not being grep-able (likely in iroh-base)

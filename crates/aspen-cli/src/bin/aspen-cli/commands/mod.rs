@@ -31,6 +31,8 @@ pub mod peer;
 pub mod pijul;
 #[cfg(feature = "plugins-rpc")]
 pub mod plugin;
+#[cfg(feature = "proxy")]
+pub mod proxy;
 pub mod queue;
 pub mod ratelimit;
 pub mod rwlock;

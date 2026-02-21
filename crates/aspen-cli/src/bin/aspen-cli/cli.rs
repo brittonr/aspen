@@ -41,6 +41,8 @@ use crate::commands::peer::PeerCommand;
 use crate::commands::pijul::PijulCommand;
 #[cfg(feature = "plugins-rpc")]
 use crate::commands::plugin::PluginCommand;
+#[cfg(feature = "proxy")]
+use crate::commands::proxy::ProxyCommand;
 use crate::commands::queue::QueueCommand;
 use crate::commands::ratelimit::RateLimitCommand;
 use crate::commands::rwlock::RWLockCommand;
@@ -238,6 +240,13 @@ pub enum Commands {
     #[command(subcommand)]
     Plugin(PluginCommand),
 
+    /// HTTP proxy for TCP tunneling over iroh.
+    ///
+    /// Start local proxies that tunnel TCP traffic through remote Aspen nodes.
+    #[cfg(feature = "proxy")]
+    #[command(subcommand)]
+    Proxy(ProxyCommand),
+
     /// Distributed queue operations.
     #[command(subcommand)]
     Queue(QueueCommand),
@@ -295,6 +304,17 @@ impl Cli {
             return cmd.run(self.global.is_json);
         }
 
+        // Handle proxy commands — they create their own iroh endpoint
+        #[cfg(feature = "proxy")]
+        if let Commands::Proxy(cmd) = self.command {
+            let ticket = self
+                .global
+                .ticket
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("--ticket is required (or set ASPEN_TICKET)"))?;
+            return cmd.run(ticket, self.global.is_json).await;
+        }
+
         // Validate ticket is provided for cluster commands
         let ticket = self
             .global
@@ -347,6 +367,8 @@ impl Cli {
             Commands::Pijul(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "plugins-rpc")]
             Commands::Plugin(cmd) => cmd.run(&client, self.global.is_json).await,
+            #[cfg(feature = "proxy")]
+            Commands::Proxy(_) => unreachable!("handled above"),
             Commands::Queue(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Ratelimit(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Rwlock(cmd) => cmd.run(&client, self.global.is_json).await,

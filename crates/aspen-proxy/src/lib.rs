@@ -53,7 +53,15 @@ pub mod auth;
 // Re-export the proxy ALPN for router registration.
 pub use iroh_proxy_utils::ALPN as HTTP_PROXY_ALPN;
 // Re-export downstream proxy (used as-is, no Aspen wrapper needed).
-pub use iroh_proxy_utils::downstream::{DownstreamProxy, EndpointAuthority, PoolOpts, ProxyMode, TunnelClientStreams};
+pub use iroh_proxy_utils::Authority;
+pub use iroh_proxy_utils::downstream::DownstreamProxy;
+pub use iroh_proxy_utils::downstream::EndpointAuthority;
+pub use iroh_proxy_utils::downstream::HttpProxyOpts;
+pub use iroh_proxy_utils::downstream::PoolOpts;
+pub use iroh_proxy_utils::downstream::ProxyMode;
+pub use iroh_proxy_utils::downstream::StaticForwardProxy;
+pub use iroh_proxy_utils::downstream::StaticReverseProxy;
+pub use iroh_proxy_utils::downstream::TunnelClientStreams;
 // Re-export upstream types for custom auth implementations.
 pub use iroh_proxy_utils::upstream::{AcceptAll, AuthHandler, DenyAll, UpstreamProxy};
 

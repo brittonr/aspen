@@ -324,6 +324,7 @@ aspen-snix = { workspace = true, optional = true }
 snix-castore = { workspace = true, optional = true }
 snix-store = { workspace = true, optional = true }
 aspen-nix-cache-gateway = { workspace = true, optional = true }
+aspen-proxy = { workspace = true, optional = true }
 # aspen-dns exists as a standalone crate for external consumers
 # The main aspen crate uses its own dns module for full integration
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
@@ -419,7 +420,7 @@ cloud-hypervisor-client = "0.3"
 default = []
 
 # Full production: all features enabled
-full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs", "federation"]
+full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs", "federation", "proxy"]
 
 # Forge preset: Git hosting with blob storage, content discovery, and docs
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
@@ -485,13 +486,15 @@ jobs = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance", "aspen-rpc-handle
 # Docs handler for iroh-docs CRDT document operations
 # Includes iroh-blobs since docs uses blob storage for content
 docs = ["dep:aspen-docs", "dep:iroh-docs", "dep:iroh-blobs", "blob", "aspen-rpc-handlers/docs", "aspen-cluster/docs"]
+# HTTP proxy: TCP/HTTP tunneling over iroh QUIC
+proxy = ["dep:aspen-proxy"]
 # Federation support for cross-cluster communication
 federation = ["aspen-cluster/federation"]
 # Deterministic simulation testing with madsim (for testing only)
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"nix-executor\", \"ci-vm-executor\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"nix-executor\", \"ci-vm-executor\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit
