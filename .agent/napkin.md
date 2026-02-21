@@ -41,6 +41,9 @@
 - `crates/aspen-jobs/src/vm_executor/` has the core worker implementations
 - `crates/aspen-ci-executor-vm/` has CloudHypervisorWorker
 - Feature flags control which backends are compiled in
+- **hyperlight-wasm in Nix**: Pre-build wasm_runtime in separate derivation (`nix/hyperlight-wasm-runtime.nix`), then patch vendored build.rs to use `HYPERLIGHT_WASM_RUNTIME` env var. The patched vendor dir must also update `config.toml` to point to local copies (not original store paths). Also need separate `pluginsCargoArtifacts` to avoid cached unpatched build scripts.
+- **Target spec naming matters**: JSON target spec filename becomes the target name for sysroot lookup. Name file `x86_64-hyperlight-none.json` so rustc looks for `sysroot/lib/rustlib/x86_64-hyperlight-none/lib/` (not `target/lib/`).
+- **cargo-hyperlight is a [patch.crates-io] override**: Can't be resolved in vendored builds without the workspace context. Solution: replace entire build.rs instead of patching one line, eliminating the cargo-hyperlight dependency.
 
 ## Patterns That Don't Work
 
