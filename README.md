@@ -32,7 +32,11 @@ Aspen ships a core key-value store backed by Raft for strongly consistent reads/
 
 ## Plugins
 
-Aspen includes a plugin system for job execution backends (VM/WASM/RPC) exposed via Cargo features.
+Aspen includes a WASM plugin system for extending clusters with custom request handlers.
+Plugins run sandboxed in hyperlight-wasm with capability-based permissions, KV namespace
+isolation, and Ed25519 signing.
+
+See [Plugin Development Guide](docs/PLUGIN_DEVELOPMENT.md) for building your own plugins.
 
 ## License
 

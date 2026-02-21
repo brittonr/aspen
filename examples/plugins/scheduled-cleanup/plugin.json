@@ -1,0 +1,17 @@
+{
+  "name": "scheduled-cleanup",
+  "version": "0.1.0",
+  "description": "Periodic cleanup of expired entries via scheduled timers",
+  "handles": [
+    "Ping",
+    "ReadKey",
+    "WriteKey"
+  ],
+  "priority": 945,
+  "kv_prefixes": ["cleanup:"],
+  "permissions": {
+    "kv_read": true,
+    "kv_write": true,
+    "timers": true
+  }
+}

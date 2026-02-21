@@ -1,0 +1,15 @@
+{
+  "name": "kv-counter",
+  "version": "0.1.0",
+  "description": "Distributed counter using KV store with CAS for safe increments",
+  "handles": [
+    "WriteKey",
+    "ReadKey"
+  ],
+  "priority": 940,
+  "kv_prefixes": ["counter:"],
+  "permissions": {
+    "kv_read": true,
+    "kv_write": true
+  }
+}

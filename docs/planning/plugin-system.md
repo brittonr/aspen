@@ -1145,10 +1145,12 @@ Based on FDB learnings, we should emphasize:
 
 **Tasks:**
 
-- [ ] Create `cargo-aspen-plugin` scaffolding tool
-- [ ] Write plugin development guide
-- [ ] Create plugin registry (optional central index)
-- [ ] Add plugin signing/verification
+- [x] Create `cargo-aspen-plugin` scaffolding tool (`crates/cargo-aspen-plugin/`)
+- [x] Write plugin development guide (`docs/PLUGIN_DEVELOPMENT.md`)
+- [ ] Create plugin registry (optional central index — deferred)
+- [x] Add plugin signing/verification (`crates/aspen-plugin-signing/`)
+- [x] Add example plugins: kv-counter, audit-logger, scheduled-cleanup
+- [x] Add `PluginSignatureInfo` to `PluginManifest`
 
 **Deliverables:**
 

@@ -56,6 +56,29 @@ pub struct PluginManifest {
     /// Checked at runtime before each host function call.
     #[serde(default)]
     pub permissions: PluginPermissions,
+    /// Optional Ed25519 signature of the plugin WASM binary.
+    ///
+    /// Populated by the signing tool (`cargo aspen-plugin sign`) and verified
+    /// on install. When present, the CLI checks the signature against trusted
+    /// author keys before loading the plugin.
+    #[serde(default)]
+    pub signature: Option<PluginSignatureInfo>,
+}
+
+/// Lightweight signature metadata embedded in plugin manifests.
+///
+/// This mirrors [`aspen_plugin_signing::PluginSignature`] but lives in
+/// `aspen-plugin-api` to avoid pulling in crypto dependencies.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginSignatureInfo {
+    /// Ed25519 public key of the signer (64 hex chars).
+    pub author_pubkey: String,
+    /// Ed25519 signature over BLAKE3(wasm_binary) (128 hex chars).
+    pub signature: String,
+    /// BLAKE3 hash of the signed WASM binary (64 hex chars).
+    pub wasm_hash: String,
+    /// Timestamp of signing (Unix milliseconds).
+    pub signed_at_ms: u64,
 }
 
 /// Capability permissions for a WASM plugin.

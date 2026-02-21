@@ -1,0 +1,16 @@
+{
+  "name": "audit-logger",
+  "version": "0.1.0",
+  "description": "Append-only audit log of KV write events via hook subscriptions",
+  "handles": [
+    "Ping",
+    "ReadKey"
+  ],
+  "priority": 960,
+  "kv_prefixes": ["audit:"],
+  "permissions": {
+    "kv_read": true,
+    "kv_write": true,
+    "hooks": true
+  }
+}

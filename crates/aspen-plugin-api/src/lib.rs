@@ -12,6 +12,7 @@ pub mod manifest;
 pub use manifest::PluginInfo;
 pub use manifest::PluginManifest;
 pub use manifest::PluginPermissions;
+pub use manifest::PluginSignatureInfo;
 
 /// Maximum priority value for WASM plugins.
 pub const MAX_PLUGIN_PRIORITY: u32 = 999;

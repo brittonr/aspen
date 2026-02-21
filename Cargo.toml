@@ -140,7 +140,12 @@ members = [
     "crates/aspen-secrets-plugin",
     "crates/aspen-automerge-plugin",
     "crates/aspen-wasm-guest-sdk",
+    "crates/aspen-plugin-signing",
+    "crates/cargo-aspen-plugin",
     "examples/plugins/echo-plugin",
+    "examples/plugins/kv-counter",
+    "examples/plugins/audit-logger",
+    "examples/plugins/scheduled-cleanup",
 ]
 
 # Required for vendored openraft workspace inheritance

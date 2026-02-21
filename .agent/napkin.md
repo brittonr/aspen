@@ -15,6 +15,9 @@
 | 2026-02-19 | self | Multi-node coordination test hit 50-connection client limit | MAX_CLIENT_CONNECTIONS was 50, too low for tests making 80+ sequential CLI calls. Increased to 200. Also batch operations (counter add X 5) instead of 5 individual incr calls. |
 
 | 2026-02-19 | self | delegate_task workers reported success AGAIN but zero file changes persisted | 4th time. delegate_task NEVER persists file edits. Always do edits directly. Only use delegate_task/scouts for read-only info gathering. |
+| 2026-02-20 | self | delegate_task for plugin-signing and cargo-aspen-plugin both reported success but zero files on disk | 5th time. CONFIRMED: delegate_task CANNOT create files. Used subagent/scout for planning, then wrote everything directly. |
+| 2026-02-20 | self | Example plugins used `String` for `ReadResultResponse.value` and `WriteKey.value` | Both are `Vec<u8>`, not `String`. Always check `crates/aspen-client-api/src/messages/` for actual types. |
+| 2026-02-20 | self | `ed25519-dalek 2.2` uses `rand_core 0.6` but workspace `rand 0.9` uses `rand_core 0.9` — incompatible | Use `rand_core = { version = "0.6", features = ["getrandom"] }` directly with `OsRng` instead of workspace rand for ed25519-dalek interop. |
 | 2026-02-19 | self | Missed aspen-secrets-handler and aspen-raft in initial scan — only found 7 of 8 broken crates | `cargo test --workspace` may attribute errors to wrong crate in parallel. Run `grep "could not compile"` AND `grep "error\[E"` to catch all. |
 | 2026-02-19 | self | Pre-existing: 2 watch tests in aspen-client fail (HLC timestamp drift) | FIXED: Used `SerializableTimestamp::from_millis()` instead of real HLC. Tests were asserting hardcoded 2023 timestamps against wall clock. |
 
@@ -307,3 +310,43 @@
 - NixOS test framework provides real kernel networking — no sandbox restrictions
 - Run: `nix build .#checks.x86_64-linux.forge-cluster-test`
 - Debug: `nix build .#checks.x86_64-linux.forge-cluster-test.driverInteractive`
+
+## Recent Changes (2026-02-20) — Plugin Ecosystem (Phase 5)
+
+### aspen-plugin-signing: New Crate
+
+- Ed25519 signing and verification for WASM plugin binaries
+- `sign_plugin(wasm_bytes, signing_key) -> PluginSignature`
+- `verify_plugin(wasm_bytes, signature) -> Result<()>`
+- Key management: `generate_keypair()`, `save_secret_key()`, `load_secret_key()`
+- `TrustedKeys` allowlist: `add()`, `remove()`, `is_trusted()`, `load()`, `save()`
+- 13 unit tests + 1 doctest all passing
+- Uses `rand_core 0.6` (not workspace `rand 0.9`) for ed25519-dalek compat
+
+### cargo-aspen-plugin: New Crate
+
+- Cargo subcommand for plugin development: `cargo aspen-plugin <cmd>`
+- Commands: `init`, `build`, `check`, `sign`, `verify`, `keygen`
+- 4 templates: basic (Ping→Pong), kv (read/write/delete), timer (periodic cleanup), hook (event logger)
+- Templates emit standalone projects with git dependencies (not path)
+- Generated `.cargo/config.toml` sets wasm32-unknown-unknown as default target
+- 3 unit tests passing
+
+### Plugin API: Signature Field
+
+- Added `PluginSignatureInfo` struct to `aspen-plugin-api`
+- Added `signature: Option<PluginSignatureInfo>` to `PluginManifest` (serde default)
+- Lightweight copy of signing crate's type — no crypto deps in plugin-api
+
+### 3 New Example Plugins
+
+- `examples/plugins/kv-counter/` — CAS-based distributed counter with retry loop
+- `examples/plugins/audit-logger/` — Hook subscription → append-only KV audit log
+- `examples/plugins/scheduled-cleanup/` — Timer-based TTL expiry with batch delete
+- All pass `plugin_info_matches_manifest` test
+
+### Documentation
+
+- `docs/PLUGIN_DEVELOPMENT.md` — Full guide: quickstart, architecture, host functions, permissions, templates, signing, deployment, best practices, troubleshooting
+- Updated `README.md` with plugin section linking to guide
+- Updated `docs/planning/plugin-system.md` Phase 5 checklist (3/4 done, registry deferred)
