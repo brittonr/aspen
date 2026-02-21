@@ -5,7 +5,7 @@
 //!
 //! # Test Categories
 //!
-//! 1. **KV v2 Tests** - Versioned key-value secrets operations
+//! 1. **KV Tests** - Versioned key-value secrets operations
 //! 2. **Transit Tests** - Encryption-as-a-service operations
 //! 3. **PKI Tests** - Certificate authority operations
 //!
@@ -50,10 +50,10 @@ const TRANSIT_MOUNT: &str = "transit";
 const PKI_MOUNT: &str = "pki";
 
 // ============================================================================
-// KV v2 Engine Tests
+// KV Engine Tests
 // ============================================================================
 
-/// Test: Write and read a secret using KV v2 engine.
+/// Test: Write and read a secret using KV engine.
 ///
 /// This test validates the basic KV secret lifecycle:
 /// 1. Start a single-node cluster
@@ -128,7 +128,7 @@ async fn test_secrets_kv_write_read() {
     tester.shutdown().await.expect("shutdown failed");
 }
 
-/// Test: KV v2 versioning - multiple writes create versions.
+/// Test: KV versioning - multiple writes create versions.
 ///
 /// This test validates versioning behavior:
 /// 1. Write a secret (version 1)
@@ -238,7 +238,7 @@ async fn test_secrets_kv_versioning() {
     tester.shutdown().await.expect("shutdown failed");
 }
 
-/// Test: KV v2 list secrets.
+/// Test: KV list secrets.
 ///
 /// This test validates listing secrets:
 /// 1. Write multiple secrets under different paths
@@ -303,7 +303,7 @@ async fn test_secrets_kv_list() {
     tester.shutdown().await.expect("shutdown failed");
 }
 
-/// Test: KV v2 Check-and-Set (CAS) conflict detection.
+/// Test: KV Check-and-Set (CAS) conflict detection.
 ///
 /// This test validates CAS semantics:
 /// 1. Write a secret (version 1)
@@ -401,7 +401,7 @@ async fn test_secrets_kv_cas_conflict() {
     tester.shutdown().await.expect("shutdown failed");
 }
 
-/// Test: KV v2 metadata operations.
+/// Test: KV metadata operations.
 ///
 /// This test validates metadata operations:
 /// 1. Write a secret
@@ -462,7 +462,7 @@ async fn test_secrets_kv_metadata() {
     tester.shutdown().await.expect("shutdown failed");
 }
 
-/// Test: KV v2 soft delete and undelete.
+/// Test: KV soft delete and undelete.
 ///
 /// This test validates soft delete behavior:
 /// 1. Write a secret

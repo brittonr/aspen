@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 // =============================================================================
-// KV v2 Storage Types
+// KV Storage Types
 // =============================================================================
 
 /// Versioned secret stored in KV.

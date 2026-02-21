@@ -300,7 +300,7 @@ impl NodeBuilder {
 
     /// Enable/disable secrets management (default: false).
     ///
-    /// When enabled, the node provides KV v2, Transit, and PKI secrets engines
+    /// When enabled, the node provides KV, Transit, and PKI secrets engines
     /// through the Client RPC interface.
     ///
     /// # Feature
@@ -469,7 +469,7 @@ impl Node {
             Arc::new(EndpointProviderAdapter::new(self.handle.network.iroh_manager.clone()));
 
         // Create secrets service — always available when the feature is compiled in.
-        // The secrets engine (KV v2, Transit, PKI) uses the Raft KV store as its
+        // The secrets engine (KV, Transit, PKI) uses the Raft KV store as its
         // backend and does not require SOPS configuration.
         #[cfg(feature = "secrets")]
         let secrets_service = {

@@ -1,4 +1,4 @@
-//! KV v2 secrets engine types.
+//! KV secrets engine types.
 //!
 //! Data structures for versioned secret storage, following HashiCorp Vault patterns.
 
@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use serde::Serialize;
 
-/// Secret data stored in KV v2.
+/// Secret data stored in KV.
 ///
 /// This is the actual secret content stored at each version.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -184,7 +184,7 @@ impl SecretMetadata {
     }
 }
 
-/// KV v2 engine configuration.
+/// KV engine configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KvConfig {
     /// Maximum number of versions to keep per secret.

@@ -1,4 +1,4 @@
-//! KV v2 secrets engine.
+//! KV secrets engine.
 //!
 //! Provides versioned key-value secrets storage with:
 //! - Multiple versions per secret

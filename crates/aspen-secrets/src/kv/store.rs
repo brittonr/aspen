@@ -1,4 +1,4 @@
-//! KV v2 secrets store implementation.
+//! KV secrets store implementation.
 //!
 //! Provides versioned key-value storage with soft delete, hard delete (destroy),
 //! and check-and-set semantics following HashiCorp Vault patterns.
@@ -34,7 +34,7 @@ use crate::kv::types::UpdateMetadataRequest;
 use crate::kv::types::WriteSecretRequest;
 use crate::kv::types::WriteSecretResponse;
 
-/// KV v2 secrets engine store.
+/// KV secrets engine store.
 ///
 /// Provides versioned key-value storage with:
 /// - Multiple versions per secret (configurable max)
@@ -82,7 +82,7 @@ pub trait KvStore: Send + Sync {
     async fn read_config(&self) -> KvConfig;
 }
 
-/// Default KV v2 store implementation using SecretsBackend.
+/// Default KV store implementation using SecretsBackend.
 pub struct DefaultKvStore {
     /// Storage backend.
     backend: Arc<dyn SecretsBackend>,

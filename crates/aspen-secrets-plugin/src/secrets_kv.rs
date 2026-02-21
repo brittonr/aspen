@@ -1,4 +1,4 @@
-//! KV v2 secrets engine handlers.
+//! KV secrets engine handlers.
 //!
 //! Implements versioned key-value secrets with soft/hard delete, CAS, and metadata.
 //! All data is stored in the plugin's `__secrets:` KV namespace.
@@ -93,7 +93,7 @@ fn kv_delete_err(msg: String) -> ClientRpcResponse {
 }
 
 // ---------------------------------------------------------------------------
-// KV v2 Handlers
+// KV Handlers
 // ---------------------------------------------------------------------------
 
 /// Read a secret, optionally at a specific version.

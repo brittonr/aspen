@@ -1,7 +1,7 @@
 //! Secrets engine commands.
 //!
 //! Commands for managing Vault-compatible secrets engines:
-//! - KV v2: Versioned key-value secrets with soft/hard delete
+//! - KV: Versioned key-value secrets with soft/hard delete
 //! - Transit: Encryption-as-a-service (encrypt, decrypt, sign, verify)
 //! - PKI: Certificate authority with role-based issuance
 
@@ -17,7 +17,7 @@ use crate::client::AspenClient;
 /// Secrets engine operations.
 #[derive(Subcommand)]
 pub enum SecretsCommand {
-    /// KV v2 secrets engine operations.
+    /// KV secrets engine operations.
     #[command(subcommand)]
     Kv(KvCommand),
 
@@ -38,7 +38,7 @@ pub enum SecretsCommand {
 // KV Commands
 // =============================================================================
 
-/// KV v2 secrets operations.
+/// KV secrets operations.
 #[derive(Subcommand)]
 pub enum KvCommand {
     /// Read a secret from the KV store.

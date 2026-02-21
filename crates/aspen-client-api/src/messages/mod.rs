@@ -2452,8 +2452,8 @@ pub enum ClientRpcRequest {
     // =========================================================================
     // Secrets operations - Vault-compatible secrets management
     // =========================================================================
-    // KV v2 Secrets Engine
-    /// Read a secret from the KV v2 secrets engine.
+    // KV Secrets Engine
+    /// Read a secret from the KV secrets engine.
     ///
     /// Returns the secret data and version metadata. Supports reading specific
     /// versions of secrets. Requires SecretsRead capability.
@@ -2466,7 +2466,7 @@ pub enum ClientRpcRequest {
         version: Option<u64>,
     },
 
-    /// Write a secret to the KV v2 secrets engine.
+    /// Write a secret to the KV secrets engine.
     ///
     /// Creates a new version of the secret. Supports check-and-set (CAS)
     /// for optimistic concurrency control. Requires SecretsWrite capability.
@@ -2481,7 +2481,7 @@ pub enum ClientRpcRequest {
         cas: Option<u64>,
     },
 
-    /// Soft-delete secret versions from KV v2.
+    /// Soft-delete secret versions from KV.
     ///
     /// Marks versions as deleted but recoverable via undelete.
     /// If no versions specified, deletes the current version.
@@ -2494,7 +2494,7 @@ pub enum ClientRpcRequest {
         versions: Vec<u64>,
     },
 
-    /// Permanently destroy secret versions from KV v2.
+    /// Permanently destroy secret versions from KV.
     ///
     /// Irreversibly removes version data. Cannot be recovered.
     SecretsKvDestroy {

@@ -12,7 +12,7 @@
 //!
 //! ## Vault-like Secrets Engines (Runtime)
 //!
-//! - **KV v2**: Versioned key-value secrets with soft/hard delete
+//! - **KV**: Versioned key-value secrets with soft/hard delete
 //! - **Transit**: Encryption as a service (encrypt, decrypt, sign, verify)
 //! - **PKI**: Certificate authority with role-based policies
 //!
@@ -61,7 +61,7 @@ pub use backend::SecretsBackend;
 pub use constants::*;
 pub use error::Result;
 pub use error::SecretsError;
-// Re-export KV v2 types
+// Re-export KV types
 pub use kv::DefaultKvStore;
 pub use kv::KvConfig;
 pub use kv::KvStore;

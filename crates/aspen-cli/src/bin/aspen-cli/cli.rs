@@ -252,7 +252,7 @@ pub enum Commands {
 
     /// Secrets engine operations.
     ///
-    /// Vault-compatible secrets management including KV v2, Transit, and PKI.
+    /// Vault-compatible secrets management including KV, Transit, and PKI.
     #[cfg(feature = "secrets")]
     #[command(subcommand)]
     Secrets(SecretsCommand),

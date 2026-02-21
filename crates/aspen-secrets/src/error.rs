@@ -116,7 +116,7 @@ pub enum SecretsError {
     ParseToken { name: String, reason: String },
 
     // ========================================================================
-    // KV v2 Errors
+    // KV Errors
     // ========================================================================
     /// Secret path too long.
     #[error("secret path too long: {length} characters (max: {max})")]

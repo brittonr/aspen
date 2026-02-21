@@ -3,7 +3,7 @@
 # Spins up a single-node Aspen cluster inside a QEMU VM with full networking,
 # then exercises the secrets engine CLI commands end-to-end:
 #
-#   - KV v2: write, read, version history, list, soft delete, undelete,
+#   - KV: write, read, version history, list, soft delete, undelete,
 #     destroy, metadata, check-and-set
 #   - Transit: create key, encrypt, decrypt, sign, verify, rotate, list keys,
 #     data key generation
@@ -138,7 +138,7 @@ in
               )
 
       # ================================================================
-      # SECRETS KV v2
+      # SECRETS KV
       # ================================================================
 
       with subtest("secrets kv put"):

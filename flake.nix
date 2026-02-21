@@ -619,7 +619,7 @@
             }
           );
 
-          # Build aspen-cli with secrets features (KV v2, Transit, PKI)
+          # Build aspen-cli with secrets features (KV, Transit, PKI)
           # Must include ci,automerge to match node's aspen-client-api feature set,
           # otherwise postcard enum discriminants are misaligned and responses
           # deserialize to wrong variants.
@@ -1120,7 +1120,7 @@
                 aspenCliPackage = bins.aspen-cli-plugins;
               };
 
-              # Secrets engine test: KV v2 (write, read, versions, list,
+              # Secrets engine test: KV (write, read, versions, list,
               # soft delete, undelete, destroy, CAS) and Transit (create key,
               # encrypt, decrypt, sign, verify, rotate, list, datakey).
               # Build: nix build .#checks.x86_64-linux.secrets-engine-test

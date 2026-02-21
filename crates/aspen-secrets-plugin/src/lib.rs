@@ -1,11 +1,11 @@
 //! WASM guest plugin for the Aspen secrets engine.
 //!
-//! Handles KV v2 (versioned secrets) and Transit (encryption-as-a-service)
+//! Handles KV (versioned secrets) and Transit (encryption-as-a-service)
 //! operations using the host-provided KV store, blob store, and crypto bindings.
 //!
 //! ## Scope
 //!
-//! - **KV v2**: Versioned key-value secrets with soft/hard delete, CAS, metadata
+//! - **KV**: Versioned key-value secrets with soft/hard delete, CAS, metadata
 //! - **Transit**: Symmetric encryption (XChaCha20-Poly1305 via host random bytes), Ed25519 signing
 //!   (via host crypto), key rotation, data key generation
 //!
@@ -32,7 +32,7 @@ impl AspenPlugin for SecretsPlugin {
             name: "secrets".to_string(),
             version: "0.1.0".to_string(),
             handles: vec![
-                // KV v2
+                // KV
                 "SecretsKvRead".to_string(),
                 "SecretsKvWrite".to_string(),
                 "SecretsKvDelete".to_string(),
@@ -70,7 +70,7 @@ impl AspenPlugin for SecretsPlugin {
 
     fn handle(request: ClientRpcRequest) -> ClientRpcResponse {
         match request {
-            // KV v2 secrets
+            // KV secrets
             ClientRpcRequest::SecretsKvRead { mount, path, version } => {
                 secrets_kv::handle_kv_read(mount, path, version)
             }

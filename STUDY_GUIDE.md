@@ -674,7 +674,7 @@ DISCOVERY LAYER
 
 | Engine | Description |
 |--------|-------------|
-| **KV v2** | Versioned key-value with soft/hard delete |
+| **KV** | Versioned key-value with soft/hard delete |
 | **Transit** | Encryption as a service (encrypt, decrypt, sign, verify) |
 | **PKI** | Certificate authority with role-based policies |
 

@@ -27,7 +27,7 @@ pub const MAX_SECRET_VALUE_SIZE: usize = 256 * 1024;
 pub const DEFAULT_CACHE_TTL_SECS: u64 = 300;
 
 // ============================================================================
-// KV v2 Secrets Engine
+// KV Secrets Engine
 // ============================================================================
 
 /// Maximum size of a versioned secret (1 MB).
@@ -108,7 +108,7 @@ pub const MAX_COMMON_NAME_LENGTH: usize = 256;
 /// System prefix for all secrets engine storage.
 pub const SECRETS_SYSTEM_PREFIX: &str = "_system:secrets:";
 
-/// KV v2 storage prefix.
+/// KV storage prefix.
 pub const KV_PREFIX: &str = "_system:secrets:kv:";
 
 /// Transit storage prefix.
@@ -179,7 +179,7 @@ const _: () = assert!(MAX_PREBUILT_TOKENS > 0);
 const _: () = assert!(MAX_SECRET_VALUE_SIZE > 0);
 const _: () = assert!(DEFAULT_CACHE_TTL_SECS > 0);
 
-// KV v2 limits must be positive
+// KV limits must be positive
 const _: () = assert!(MAX_KV_SECRET_SIZE > 0);
 const _: () = assert!(MAX_VERSIONS_PER_SECRET > 0);
 const _: () = assert!(DEFAULT_MAX_VERSIONS > 0);

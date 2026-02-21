@@ -1,4 +1,4 @@
-//! KV v2 handler functions.
+//! KV handler functions.
 //!
 //! Handles versioned key-value secrets with soft/hard delete.
 
@@ -29,7 +29,7 @@ use tracing::warn;
 use super::SecretsService;
 use super::sanitize_secrets_error;
 
-/// Sub-handler for KV v2 secrets operations.
+/// Sub-handler for KV secrets operations.
 pub(crate) struct KvSecretsHandler;
 
 impl KvSecretsHandler {

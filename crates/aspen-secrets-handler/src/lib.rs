@@ -4,7 +4,7 @@
 //! aspen-rpc-handlers for better modularity and faster incremental builds.
 //!
 //! Handles Vault-compatible secrets management:
-//! - KV v2: Versioned key-value secrets with soft/hard delete
+//! - KV: Versioned key-value secrets with soft/hard delete
 //! - Transit: Encryption-as-a-service (encrypt, decrypt, sign, verify)
 //! - PKI: Certificate authority with role-based issuance
 //! - Nix Cache: Signing key management for Nix binary caches

@@ -1,7 +1,7 @@
 //! Secrets/vault operation types.
 //!
 //! Request/response types for Vault-compatible secrets management including
-//! KV v2 secrets engine, Transit encryption, PKI certificates, and Nix cache signing.
+//! KV secrets engine, Transit encryption, PKI certificates, and Nix cache signing.
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -9,14 +9,14 @@ use serde::Serialize;
 /// Secrets domain request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SecretsRequest {
-    // KV v2 Secrets Engine
-    /// Read a secret from the KV v2 secrets engine.
+    // KV Secrets Engine
+    /// Read a secret from the KV secrets engine.
     SecretsKvRead {
         mount: String,
         path: String,
         version: Option<u64>,
     },
-    /// Write a secret to the KV v2 secrets engine.
+    /// Write a secret to the KV secrets engine.
     SecretsKvWrite {
         mount: String,
         path: String,
@@ -244,7 +244,7 @@ impl SecretsRequest {
 }
 
 // =============================================================================
-// Secrets KV v2 Response Types
+// Secrets KV Response Types
 // =============================================================================
 
 /// Version metadata for a KV secret.

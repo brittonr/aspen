@@ -3,7 +3,7 @@
 //! Handles: SecretsKv*, SecretsTransit*, SecretsPki*, SecretsNixCache* operations.
 //!
 //! Provides Vault-compatible secrets management through:
-//! - KV v2: Versioned key-value secrets with soft/hard delete
+//! - KV: Versioned key-value secrets with soft/hard delete
 //! - Transit: Encryption-as-a-service (encrypt, decrypt, sign, verify)
 //! - PKI: Certificate authority with role-based issuance
 //! - Nix Cache: Signing key management for Nix binary caches
@@ -33,7 +33,7 @@ use transit::TransitSecretsHandler;
 /// Handler for secrets engine operations.
 ///
 /// Dispatches requests to domain-specific sub-handlers:
-/// - `KvSecretsHandler` for KV v2 operations
+/// - `KvSecretsHandler` for KV operations
 /// - `TransitSecretsHandler` for encryption-as-a-service
 /// - `PkiSecretsHandler` for certificate authority
 /// - `NixCacheSecretsHandler` for Nix binary cache signing
@@ -641,7 +641,7 @@ mod tests {
     }
 
     // =========================================================================
-    // KV v2 Handler Tests
+    // KV Handler Tests
     // =========================================================================
 
     #[tokio::test]
