@@ -29,7 +29,6 @@ iroh-base = "0.95.1"
 
 # Async runtime
 tokio = { version = "1.48.0", features = ["sync", "time"] }
-futures = "0.3.31"
 async-trait = "0.1"
 
 # Error handling

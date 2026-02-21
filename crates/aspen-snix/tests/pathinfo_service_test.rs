@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use aspen_snix::RaftPathInfoService;
 use aspen_testing::DeterministicKeyValueStore;
-use futures::StreamExt;
+use n0_future::StreamExt;
 use nix_compat::store_path::StorePath;
 use proptest::prelude::*;
 use rstest::rstest;

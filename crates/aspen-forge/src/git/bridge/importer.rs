@@ -22,7 +22,8 @@ use std::sync::Arc;
 use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
 use aspen_core::hlc::HLC;
-use futures::StreamExt;
+use n0_future::BufferedStreamExt;
+use n0_future::StreamExt;
 
 use super::constants::MAX_IMPORT_BATCH_SIZE;
 use super::constants::MAX_IMPORT_CONCURRENCY;
@@ -183,9 +184,9 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             let wave_size = wave.len();
 
             // Process all objects in this wave concurrently
-            let results: Vec<BridgeResult<blake3::Hash>> = futures::stream::iter(wave)
+            let results: Vec<BridgeResult<blake3::Hash>> = n0_future::stream::iter(wave)
                 .map(|obj| async move { self.import_object(&repo_id, &obj.data).await })
-                .buffer_unordered(MAX_IMPORT_CONCURRENCY)
+                .buffered_unordered(MAX_IMPORT_CONCURRENCY)
                 .collect()
                 .await;
 

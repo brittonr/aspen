@@ -24,8 +24,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use base64::Engine;
-use futures::StreamExt;
-use futures::stream::BoxStream;
+use n0_future::StreamExt;
 use prost::Message;
 use snix_store::pathinfoservice::Error;
 use snix_store::pathinfoservice::PathInfo;
@@ -33,6 +32,7 @@ use snix_store::pathinfoservice::PathInfoService;
 use tracing::debug;
 use tracing::instrument;
 
+use crate::BoxStream;
 use crate::constants::PATHINFO_KEY_PREFIX;
 use crate::constants::STORE_PATH_DIGEST_LENGTH;
 

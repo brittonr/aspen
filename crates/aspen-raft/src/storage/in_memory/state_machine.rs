@@ -12,8 +12,8 @@ use std::sync::atomic::Ordering;
 
 use aspen_kv_types::KeyValueWithRevision;
 use aspen_kv_types::TxnOpResult;
-use futures::Stream;
-use futures::TryStreamExt;
+use n0_future::Stream;
+use n0_future::TryStreamExt;
 use openraft::EntryPayload;
 use openraft::OptionalSend;
 use openraft::StoredMembership;

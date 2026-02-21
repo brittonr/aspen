@@ -54,7 +54,7 @@ anyhow = "1.0"
 snafu = "0.8.9"
 
 # Async utilities
-futures = "0.3.31"
+n0-future = { workspace = true }
 tokio-util = "0.7"
 tokio = { version = "1.48", features = ["sync"] }
 

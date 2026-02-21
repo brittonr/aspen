@@ -317,7 +317,7 @@ async fn test_concurrent_blob_adds() {
     }
 
     // Wait for all operations to complete
-    let results: Vec<_> = futures::future::join_all(handles).await;
+    let results: Vec<_> = n0_future::join_all(handles).await;
 
     // Verify all blobs are unique and accessible
     let mut seen_hashes = std::collections::HashSet::new();

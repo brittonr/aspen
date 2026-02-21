@@ -52,7 +52,7 @@ use aspen_hooks::pubsub::Topic;
 use aspen_hooks::pubsub::TopicPattern;
 // TODO: Add EventStream tests that use StreamExt
 #[allow(unused_imports)]
-use futures::StreamExt;
+use n0_future::StreamExt;
 use tempfile::TempDir;
 use tokio::time::sleep;
 use tokio::time::timeout;

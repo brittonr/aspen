@@ -3,9 +3,9 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use futures::StreamExt;
 use iroh::PublicKey;
 use iroh_gossip::api::Event;
+use n0_future::StreamExt;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;

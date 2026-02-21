@@ -28,7 +28,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use async_trait::async_trait;
-use futures::io::AsyncWrite;
+use n0_future::io::AsyncWrite;
 use snix_castore::B3Digest;
 use snix_castore::blobservice::BlobReader;
 use snix_castore::blobservice::BlobService;

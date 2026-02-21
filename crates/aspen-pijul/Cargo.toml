@@ -32,7 +32,7 @@ blake3 = "1.5"
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "fs"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 async-trait = "0.1"
-futures = "0.3.31"
+n0-future = { workspace = true }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

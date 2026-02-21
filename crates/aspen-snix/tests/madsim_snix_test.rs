@@ -330,7 +330,7 @@ async fn test_high_concurrency_stress() {
         handles.push(handle);
     }
 
-    let results: Vec<_> = futures::future::join_all(handles).await;
+    let results: Vec<_> = n0_future::join_all(handles).await;
     let digests: Vec<_> = results.into_iter().map(|r| r.unwrap()).collect();
 
     // All unique (content-addressed)
@@ -379,7 +379,7 @@ async fn test_deep_directory_tree() {
     }
 
     // Traverse recursively
-    use futures::StreamExt;
+    use n0_future::StreamExt;
     let mut stream = service.get_recursive(&current_digest);
     let mut count = 0;
     while let Some(result) = stream.next().await {

@@ -9,7 +9,6 @@ authors = ["Aspen Contributors"]
 [dependencies]
 # Async runtime
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "sync", "time", "process", "io-util"] }
-futures = "0.3.31"
 async-trait = "0.1"
 
 # Error handling

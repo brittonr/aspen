@@ -18,7 +18,7 @@ use aspen_core::storage::KvEntry;
 use aspen_core::storage::SM_KV_TABLE;
 use datafusion::error::DataFusionError;
 use datafusion::physical_plan::RecordBatchStream;
-use futures::Stream;
+use n0_future::Stream;
 use redb::Database;
 
 use super::error::SqlError;

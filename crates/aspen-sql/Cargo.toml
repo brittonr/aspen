@@ -19,7 +19,7 @@ regex = "1.10"
 
 # Async
 async-trait = "0.1"
-futures = "0.3"
+n0-future = { workspace = true }
 tokio = { version = "1.48", features = ["time"] }
 
 # Serialization

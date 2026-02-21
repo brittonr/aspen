@@ -24,7 +24,7 @@ iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-p
 tokio = { workspace = true, features = ["rt", "io-util", "sync", "fs"] }
 tokio-stream = "0.1"
 async-trait = "0.1"
-futures = { workspace = true }
+n0-future = { workspace = true }
 async-stream = { workspace = true }
 
 # Error handling (Tiger Style)

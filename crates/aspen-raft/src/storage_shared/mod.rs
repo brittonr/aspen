@@ -890,7 +890,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_log_broadcast_on_apply() {
-        use futures::stream;
+        use n0_future::stream;
         use openraft::entry::RaftEntry;
         use openraft::storage::RaftStateMachine;
         use openraft::testing::log_id;

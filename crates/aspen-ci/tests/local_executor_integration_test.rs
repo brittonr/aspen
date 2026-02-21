@@ -663,11 +663,8 @@ async fn test_concurrent_execution() {
     }
 
     // Wait for all jobs
-    let results: Vec<_> = futures::future::join_all(handles)
-        .await
-        .into_iter()
-        .map(|r| r.expect("task should not panic"))
-        .collect();
+    let results: Vec<_> =
+        n0_future::join_all(handles).await.into_iter().map(|r| r.expect("task should not panic")).collect();
 
     // All should succeed
     for (i, result) in results.iter().enumerate() {

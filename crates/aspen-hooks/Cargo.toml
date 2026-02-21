@@ -20,7 +20,6 @@ aspen-client-api = { workspace = true }
 anyhow = "1"
 async-trait = "0.1"
 blake3 = "1"
-futures = "0.3"
 iroh = { version = "0.95.1" }
 iroh-tickets = "0.2"
 parking_lot = "0.12"

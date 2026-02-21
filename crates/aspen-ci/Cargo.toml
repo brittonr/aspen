@@ -45,7 +45,7 @@ serde_json = { workspace = true }
 # Async runtime
 tokio = { workspace = true }
 async-trait = "0.1"
-futures = { workspace = true }
+n0-future = { workspace = true }
 
 # Error handling
 snafu = "0.8.9"

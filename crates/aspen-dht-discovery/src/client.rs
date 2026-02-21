@@ -94,8 +94,8 @@ impl DhtClient {
 
     /// Get peers for the given infohash.
     pub(crate) async fn get_peers(&self, infohash: [u8; 20]) -> Vec<std::net::SocketAddrV4> {
-        use futures::StreamExt;
         use mainline::Id;
+        use n0_future::StreamExt;
 
         let id = Id::from(infohash);
         let mut stream = self.dht.get_peers(id);

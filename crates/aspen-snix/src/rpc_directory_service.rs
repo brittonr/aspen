@@ -31,7 +31,6 @@ use aspen_client_api::messages::SnixDirectoryGetResultResponse;
 use aspen_client_api::messages::SnixDirectoryPutResultResponse;
 use async_trait::async_trait;
 use base64::Engine;
-use futures::stream::BoxStream;
 use iroh::Endpoint;
 use iroh::PublicKey;
 use prost::Message;
@@ -47,6 +46,7 @@ use tracing::info;
 use tracing::instrument;
 use tracing::trace;
 
+use crate::BoxStream;
 use crate::constants::MAX_DIRECTORY_DEPTH;
 use crate::constants::MAX_RECURSIVE_BUFFER;
 

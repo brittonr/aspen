@@ -35,7 +35,7 @@ use aspen_cache::CacheIndex;
 use aspen_cache::CacheStats;
 use aspen_core::KeyValueStore;
 use async_trait::async_trait;
-use futures::StreamExt;
+use n0_future::StreamExt;
 use serde::Deserialize;
 use serde::Serialize;
 use snafu::Snafu;

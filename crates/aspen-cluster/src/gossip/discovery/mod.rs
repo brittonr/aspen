@@ -569,7 +569,7 @@ mod tests {
         // Cancel once, all should wake up
         cancel.cancel();
 
-        let results = futures::future::join_all([h1, h2, h3]).await;
+        let results = n0_future::join_all([h1, h2, h3]).await;
         for result in results {
             assert!(result.is_ok());
         }

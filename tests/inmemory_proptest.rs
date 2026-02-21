@@ -11,7 +11,7 @@ use aspen::raft::storage::InMemoryStateMachine;
 use aspen::raft::types::AppRequest;
 use aspen::raft::types::AppTypeConfig;
 use bolero::check;
-use futures::stream;
+use n0_future::stream;
 use openraft::LogId;
 use openraft::entry::RaftEntry;
 use openraft::storage::RaftSnapshotBuilder;
@@ -50,7 +50,7 @@ fn test_applied_log_indices_are_monotonic() {
                 );
 
                 // Apply entry
-                let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
+                let entries_stream = Box::pin(stream::once(Ok::<_, io::Error>((entry, None))));
                 sm.apply(entries_stream).await.unwrap();
 
                 // Verify last_applied increased
@@ -91,7 +91,7 @@ fn test_snapshot_captures_all_applied_data() {
                     },
                 );
 
-                let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
+                let entries_stream = Box::pin(stream::once(Ok::<_, io::Error>((entry, None))));
                 sm.apply(entries_stream).await.unwrap();
             }
 
@@ -139,13 +139,13 @@ fn test_applying_same_entry_twice_is_idempotent() {
 
             // Apply first time
             let entry_clone1 = entry.clone();
-            let entries_stream1 = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry_clone1, None)) }));
+            let entries_stream1 = Box::pin(stream::once(Ok::<_, io::Error>((entry_clone1, None))));
             sm.apply(entries_stream1).await.unwrap();
 
             let stored_value1 = sm.get(&key).await;
 
             // Apply same entry again (simulating replay)
-            let entries_stream2 = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
+            let entries_stream2 = Box::pin(stream::once(Ok::<_, io::Error>((entry, None))));
             sm.apply(entries_stream2).await.unwrap();
 
             let stored_value2 = sm.get(&key).await;
@@ -191,7 +191,7 @@ fn test_concurrent_reads_during_writes() {
                     },
                 );
 
-                let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
+                let entries_stream = Box::pin(stream::once(Ok::<_, io::Error>((entry, None))));
                 sm.apply(entries_stream).await.unwrap();
             }
 
@@ -231,7 +231,7 @@ fn test_concurrent_reads_during_writes() {
                     },
                 );
 
-                let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
+                let entries_stream = Box::pin(stream::once(Ok::<_, io::Error>((entry, None))));
                 sm.apply(entries_stream).await.unwrap();
 
                 // Yield to allow read task to progress
@@ -265,7 +265,7 @@ fn test_large_value_storage() {
                     value: value.clone(),
                 });
 
-            let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
+            let entries_stream = Box::pin(stream::once(Ok::<_, io::Error>((entry, None))));
             sm.apply(entries_stream).await.unwrap();
 
             // Verify large value was stored correctly
@@ -301,7 +301,7 @@ fn test_setmulti_applies_all_pairs() {
                 AppRequest::SetMulti { pairs: pairs.clone() },
             );
 
-            let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
+            let entries_stream = Box::pin(stream::once(Ok::<_, io::Error>((entry, None))));
             sm.apply(entries_stream).await.unwrap();
 
             // Verify all pairs were applied

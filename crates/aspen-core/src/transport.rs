@@ -103,8 +103,7 @@ impl DiscoveryHandle {
 }
 
 /// Callback type for handling discovered peers.
-pub type PeerDiscoveredCallback<A> =
-    Box<dyn Fn(DiscoveredPeer<A>) -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
+pub type PeerDiscoveredCallback<A> = Box<dyn Fn(DiscoveredPeer<A>) -> n0_future::boxed::BoxFuture<()> + Send + Sync>;
 
 /// Information about a stale topology detection.
 #[derive(Debug, Clone)]
@@ -123,8 +122,7 @@ pub struct StaleTopologyInfo {
 ///
 /// Called when a gossip announcement indicates a topology version higher than local.
 /// The callback should trigger a topology sync RPC to update local state.
-pub type TopologyStaleCallback =
-    Box<dyn Fn(StaleTopologyInfo) -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
+pub type TopologyStaleCallback = Box<dyn Fn(StaleTopologyInfo) -> n0_future::boxed::BoxFuture<()> + Send + Sync>;
 
 /// Information about a blob announced via gossip.
 #[derive(Debug, Clone)]
@@ -147,8 +145,7 @@ pub struct BlobAnnouncedInfo {
 ///
 /// Called when a peer announces that they have a blob available.
 /// The callback can decide whether to download the blob for redundancy.
-pub type BlobAnnouncedCallback =
-    Box<dyn Fn(BlobAnnouncedInfo) -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
+pub type BlobAnnouncedCallback = Box<dyn Fn(BlobAnnouncedInfo) -> n0_future::boxed::BoxFuture<()> + Send + Sync>;
 
 /// Trait for peer discovery mechanisms.
 #[async_trait]

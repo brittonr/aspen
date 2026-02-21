@@ -26,7 +26,6 @@ aspen-plugin-api = { path = "../aspen-plugin-api", optional = true }
 
 # Async runtime
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "process", "fs", "io-std"] }
-futures = "0.3.31"
 async-trait = "0.1"
 
 # CLI framework

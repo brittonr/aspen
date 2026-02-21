@@ -29,7 +29,6 @@ bytes = "1.7"
 # Async
 tokio = { workspace = true, features = ["rt", "sync", "time", "io-util"] }
 async-trait = "0.1"
-futures = { workspace = true }
 
 # Error handling
 snafu = "0.8"

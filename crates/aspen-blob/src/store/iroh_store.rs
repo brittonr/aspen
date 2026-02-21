@@ -11,7 +11,6 @@ use std::time::Instant;
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::StreamExt;
 use iroh::Endpoint;
 use iroh::PublicKey;
 use iroh_blobs::BlobFormat;
@@ -19,6 +18,7 @@ use iroh_blobs::Hash;
 use iroh_blobs::HashAndFormat;
 use iroh_blobs::store::fs::FsStore;
 use iroh_blobs::ticket::BlobTicket;
+use n0_future::StreamExt;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
@@ -192,7 +192,7 @@ impl IrohBlobStore {
     /// Bounded operation: iterates only user-prefixed tags, not all tags.
     #[instrument(skip(self))]
     pub async fn delete_user_tags_for_hash(&self, hash: &Hash) -> Result<u32, BlobStoreError> {
-        use futures::StreamExt;
+        use n0_future::StreamExt;
 
         // List all tags with user prefix
         let tags_stream =
@@ -203,16 +203,14 @@ impl IrohBlobStore {
 
         // Collect tags that match the target hash
         let tags_to_delete: Vec<String> = tags_stream
-            .filter_map(|result| async {
-                match result {
-                    Ok(tag_info) if tag_info.hash_and_format().hash == *hash => {
-                        // Convert tag name bytes to string (Tag implements AsRef<[u8]>)
-                        String::from_utf8(tag_info.name.as_ref().to_vec())
-                            .inspect_err(|e| tracing::debug!("tag name is not valid UTF-8: {e}"))
-                            .ok()
-                    }
-                    _ => None,
+            .filter_map(|result| match result {
+                Ok(tag_info) if tag_info.hash_and_format().hash == *hash => {
+                    // Convert tag name bytes to string (Tag implements AsRef<[u8]>)
+                    String::from_utf8(tag_info.name.as_ref().to_vec())
+                        .inspect_err(|e| tracing::debug!("tag name is not valid UTF-8: {e}"))
+                        .ok()
                 }
+                _ => None,
             })
             .collect()
             .await;

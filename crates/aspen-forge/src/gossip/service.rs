@@ -12,11 +12,11 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use futures::StreamExt;
 use iroh::PublicKey;
 use iroh::SecretKey;
 use iroh_gossip::net::Gossip;
 use iroh_gossip::proto::TopicId;
+use n0_future::StreamExt;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast;

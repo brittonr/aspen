@@ -22,7 +22,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use base64::Engine;
-use futures::stream::BoxStream;
 use prost::Message;
 use snix_castore::B3Digest;
 use snix_castore::Directory;
@@ -33,6 +32,7 @@ use snix_castore::directoryservice::DirectoryService;
 use tracing::debug;
 use tracing::instrument;
 
+use crate::BoxStream;
 use crate::constants::DIRECTORY_KEY_PREFIX;
 use crate::constants::MAX_DIRECTORY_DEPTH;
 use crate::constants::MAX_RECURSIVE_BUFFER;

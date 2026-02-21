@@ -260,8 +260,8 @@ async fn test_append_conflicts_seed_1001() {
 async fn test_stream_append_success_seed_1002() {
     use std::pin::pin;
 
-    use futures::StreamExt;
-    use futures::stream;
+    use n0_future::StreamExt;
+    use n0_future::stream;
 
     let seed = 1002_u64;
     let mut artifact = SimulationArtifactBuilder::new("madsim_stream_append_success", seed).start();
@@ -331,8 +331,8 @@ async fn test_stream_append_success_seed_1002() {
 async fn test_stream_append_conflict_seed_1003() {
     use std::pin::pin;
 
-    use futures::StreamExt;
-    use futures::stream;
+    use n0_future::StreamExt;
+    use n0_future::stream;
     use openraft::raft::StreamAppendError;
 
     let seed = 1003_u64;

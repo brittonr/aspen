@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use aspen_snix::RaftDirectoryService;
 use aspen_testing::DeterministicKeyValueStore;
-use futures::StreamExt;
+use n0_future::StreamExt;
 use proptest::prelude::*;
 use rstest::rstest;
 use snix_castore::B3Digest;

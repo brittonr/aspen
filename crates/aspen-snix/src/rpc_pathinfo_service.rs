@@ -31,7 +31,6 @@ use aspen_client_api::messages::SnixPathInfoGetResultResponse;
 use aspen_client_api::messages::SnixPathInfoPutResultResponse;
 use async_trait::async_trait;
 use base64::Engine;
-use futures::stream::BoxStream;
 use iroh::Endpoint;
 use iroh::PublicKey;
 use prost::Message;
@@ -46,6 +45,7 @@ use tracing::instrument;
 use tracing::trace;
 use tracing::warn;
 
+use crate::BoxStream;
 use crate::constants::STORE_PATH_DIGEST_LENGTH;
 
 /// RPC timeout for SNIX operations.
@@ -268,7 +268,7 @@ impl PathInfoService for RpcPathInfoService {
     /// Workers typically only need get/put operations, not listing.
     fn list(&self) -> BoxStream<'static, Result<PathInfo, Error>> {
         warn!("RpcPathInfoService::list() called - not supported for ephemeral workers");
-        Box::pin(futures::stream::empty())
+        Box::pin(n0_future::stream::empty())
     }
 }
 

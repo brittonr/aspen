@@ -54,6 +54,11 @@ pub use rpc_blob_service::RpcBlobService;
 pub use rpc_directory_service::RpcDirectoryService;
 pub use rpc_pathinfo_service::RpcPathInfoService;
 
+/// Type alias for a boxed stream, matching `futures::stream::BoxStream` for snix trait
+/// compatibility. The snix traits require a lifetime-parameterized boxed stream that
+/// `n0_future::stream::Boxed` (which is `'static`-only) cannot express.
+pub type BoxStream<'a, T> = std::pin::Pin<Box<dyn n0_future::Stream<Item = T> + Send + 'a>>;
+
 /// Re-export SNIX types for convenience.
 pub mod snix {
     pub use nix_compat::store_path::StorePath;
