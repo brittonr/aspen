@@ -14,6 +14,7 @@ aspen-ticket = { workspace = true }
 aspen-auth = { workspace = true }
 aspen-raft = { workspace = true }
 aspen-raft-types = { workspace = true }
+aspen-proxy = { workspace = true }
 aspen-transport = { workspace = true }
 aspen-sharding = { workspace = true }
 aspen-coordination = { workspace = true }

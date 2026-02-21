@@ -99,6 +99,18 @@ impl RouterBuilder {
         self
     }
 
+    /// Register the HTTP proxy protocol handler (optional).
+    ///
+    /// Enables TCP/HTTP proxying over iroh QUIC connections.
+    /// Uses [`iroh_proxy_utils`] for the proxy implementation.
+    ///
+    /// ALPN: `iroh-http-proxy/1`
+    pub fn http_proxy<P: iroh::protocol::ProtocolHandler>(mut self, handler: P) -> Self {
+        self.builder = self.builder.accept(aspen_proxy::HTTP_PROXY_ALPN, handler);
+        tracing::info!("registered HTTP proxy protocol handler (ALPN: iroh-http-proxy/1)");
+        self
+    }
+
     /// Register the Nix cache HTTP/3 gateway protocol handler (optional).
     ///
     /// This serves a Nix binary cache over HTTP/3 using h3-iroh.
