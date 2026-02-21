@@ -299,15 +299,125 @@ pub fn parse_trusted_cluster_keys(keys: &[String]) -> Result<Vec<iroh::PublicKey
 }
 
 /// Load Nix cache signer from Transit secrets engine if configured.
+///
+/// When `nix_cache.cache_name` and `nix_cache.signing_key_name` are both set,
+/// creates a [`TransitNarinfoSigner`] that uses the Transit secrets engine for
+/// Ed25519 signing. The signing key is auto-created if it doesn't exist.
+///
+/// The public key is stored in KV at `_system:nix-cache:public-key` so CI workers
+/// can add it to their `trusted-public-keys` for binary cache substitution.
 #[cfg(all(feature = "secrets", feature = "nix-cache-gateway"))]
 pub async fn load_nix_cache_signer(
-    _config: &NodeConfig,
+    config: &NodeConfig,
     _secrets_manager: Option<&std::sync::Arc<aspen_secrets::SecretsManager>>,
-    _kv_store: &std::sync::Arc<dyn aspen_core::KeyValueStore>,
+    kv_store: &std::sync::Arc<dyn aspen_core::KeyValueStore>,
 ) -> Result<Option<std::sync::Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>>> {
+    use aspen_nix_cache_gateway::NarinfoSigner;
+    use aspen_nix_cache_gateway::NarinfoSigningProvider;
+    use aspen_secrets::MountRegistry;
+    use aspen_secrets::transit::CreateKeyRequest;
+    use aspen_secrets::transit::KeyType;
     use tracing::debug;
+    use tracing::info;
+    use tracing::warn;
 
-    // TODO: Implement Transit secrets engine integration for Nix cache signing
-    debug!("Nix cache signing not yet implemented (Transit secrets integration pending)");
-    Ok(None)
+    let cache_name = match config.nix_cache.cache_name.as_ref() {
+        Some(name) => name.clone(),
+        None => {
+            debug!("Nix cache signing disabled: no cache_name configured");
+            return Ok(None);
+        }
+    };
+
+    let key_name = match config.nix_cache.signing_key_name.as_ref() {
+        Some(name) => name.clone(),
+        None => {
+            debug!("Nix cache signing disabled: no signing_key_name configured");
+            return Ok(None);
+        }
+    };
+
+    let transit_mount = &config.nix_cache.transit_mount;
+
+    info!(
+        cache_name = %cache_name,
+        key_name = %key_name,
+        transit_mount = %transit_mount,
+        "initializing Nix cache narinfo signing via Transit secrets engine"
+    );
+
+    // Create a MountRegistry to access the Transit store.
+    // This uses the same KV store as the secrets handler, so keys are shared.
+    let mount_registry = MountRegistry::new(kv_store.clone() as std::sync::Arc<dyn aspen_core::KeyValueStore>);
+    let transit_store = mount_registry
+        .get_or_create_transit_store(transit_mount)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to get Transit store for mount '{}': {}", transit_mount, e))?;
+
+    // Auto-create the Ed25519 signing key if it doesn't exist.
+    match transit_store.read_key(&key_name).await {
+        Ok(Some(key)) => {
+            info!(
+                key_name = %key_name,
+                version = key.current_version,
+                "using existing Transit signing key for narinfo"
+            );
+        }
+        Ok(None) => {
+            info!(key_name = %key_name, "creating Ed25519 Transit signing key for narinfo");
+            let request = CreateKeyRequest::new(&key_name).with_type(KeyType::Ed25519);
+            transit_store
+                .create_key(request)
+                .await
+                .map_err(|e| anyhow::anyhow!("failed to create Transit signing key '{}': {}", key_name, e))?;
+        }
+        Err(e) => {
+            warn!(key_name = %key_name, error = %e, "failed to check Transit key, attempting create");
+            let request = CreateKeyRequest::new(&key_name).with_type(KeyType::Ed25519);
+            transit_store
+                .create_key(request)
+                .await
+                .map_err(|e| anyhow::anyhow!("failed to create Transit signing key '{}': {}", key_name, e))?;
+        }
+    }
+
+    // Build the TransitNarinfoSigner (caches the public key during construction).
+    let signer: aspen_nix_cache_gateway::TransitNarinfoSigner =
+        NarinfoSigner::from_transit(cache_name.clone(), transit_store, key_name.clone())
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to create Transit narinfo signer: {}", e))?;
+
+    // Store the public key in KV for CI workers to discover.
+    let public_key = NarinfoSigningProvider::public_key(&signer)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to get narinfo signing public key: {}", e))?;
+
+    info!(
+        public_key = %public_key,
+        "Nix cache narinfo signing enabled"
+    );
+
+    // Best-effort write: don't fail startup if KV write fails (cluster may not be initialized yet).
+    {
+        use aspen_core::WriteRequest;
+        let write_req = WriteRequest::set("_system:nix-cache:public-key", &public_key);
+        match kv_store.write(write_req).await {
+            Ok(_) => {
+                debug!(
+                    key = "_system:nix-cache:public-key",
+                    "stored narinfo public key in KV for CI substituter discovery"
+                );
+            }
+            Err(e) => {
+                // Expected on first boot before cluster init — the key will be written
+                // when the cluster is initialized and the node restarts or reloads.
+                warn!(
+                    error = %e,
+                    "failed to store narinfo public key in KV (cluster may not be initialized yet)"
+                );
+            }
+        }
+    }
+
+    Ok(Some(std::sync::Arc::new(signer)))
 }

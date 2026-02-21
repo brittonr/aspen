@@ -24,6 +24,7 @@
 | 2026-02-20 | self | `#[cfg(feature = "secrets")]` in forge-handler test was dead code — feature doesn't exist in that crate | `SecretsKvRead`/`SecretsKvWrite` are NOT feature-gated in `aspen-client-api`. The cfg made the test always skip. Remove dead cfgs and verify the test actually runs. |
 | 2026-02-20 | self | `use std::sync::Arc` warnings in query-handler and nix-handler | `Arc` only used inside cfg-gated factory modules that use `super::*`. Move `Arc` import into each factory module instead of the crate root. |
 | 2026-02-20 | self | secrets-engine NixOS test used `check=False` everywhere despite handler being fixed | Secrets handler + CLI discriminant issues were fixed in commits 4c1ab025 and 9dd667b7. Updated test to use strict assertions. |
+| 2026-02-20 | self | `load_nix_cache_signer` used wrong API: `kv_store.write(key, bytes)` | KV store uses `WriteRequest::set(key, value)` — not a key+value method. Also `aspen_secrets::error::Result` ≠ `anyhow::Result` — use `.map_err()` not `.with_context()`. |
 
 ## User Preferences
 

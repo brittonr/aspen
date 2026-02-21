@@ -322,4 +322,144 @@ mod tests {
         let result = NarinfoSigner::from_seed_base64("test".to_string(), &seed_b64);
         assert!(result.is_err());
     }
+
+    // =========================================================================
+    // Transit signer integration tests
+    // =========================================================================
+
+    /// Helper to create a Transit store with in-memory backend.
+    fn make_transit_store() -> Arc<dyn TransitStore> {
+        let backend = Arc::new(aspen_secrets::InMemorySecretsBackend::new());
+        Arc::new(aspen_secrets::transit::DefaultTransitStore::new(backend))
+    }
+
+    #[tokio::test]
+    async fn test_transit_signer_auto_creates_key() {
+        let transit_store = make_transit_store();
+
+        // Create Ed25519 key first (as the node would during startup).
+        let request = aspen_secrets::transit::CreateKeyRequest::new("nix-signing")
+            .with_type(aspen_secrets::transit::KeyType::Ed25519);
+        transit_store.create_key(request).await.unwrap();
+
+        // Build the TransitNarinfoSigner.
+        let signer = NarinfoSigner::from_transit("test-cache".to_string(), transit_store, "nix-signing".to_string())
+            .await
+            .expect("from_transit should succeed");
+
+        // Verify public key format.
+        let pk = NarinfoSigningProvider::public_key(&signer).await.unwrap();
+        assert!(pk.starts_with("test-cache:"), "pk: {}", pk);
+        let parts: Vec<&str> = pk.splitn(2, ':').collect();
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(parts[1])
+            .expect("public key should be valid base64");
+        assert_eq!(decoded.len(), 32, "Ed25519 public key should be 32 bytes");
+    }
+
+    #[tokio::test]
+    async fn test_transit_signer_sign_verify_roundtrip() {
+        let transit_store = make_transit_store();
+
+        // Create Ed25519 key.
+        let request = aspen_secrets::transit::CreateKeyRequest::new("nix-signing")
+            .with_type(aspen_secrets::transit::KeyType::Ed25519);
+        transit_store.create_key(request).await.unwrap();
+
+        // Build Transit signer.
+        let transit_signer =
+            NarinfoSigner::from_transit("test-cache".to_string(), transit_store.clone(), "nix-signing".to_string())
+                .await
+                .unwrap();
+
+        // Sign a narinfo fingerprint.
+        let fingerprint = NarinfoSigner::fingerprint("/nix/store/abc-hello", "sha256:deadbeef", 12345, &[]);
+        let sig = NarinfoSigningProvider::sign(&transit_signer, &fingerprint).await.expect("signing should succeed");
+
+        // Verify signature format: cache_name:base64_signature
+        assert!(sig.starts_with("test-cache:"), "sig: {}", sig);
+        let parts: Vec<&str> = sig.splitn(2, ':').collect();
+        assert_eq!(parts.len(), 2);
+
+        // Verify signature is valid base64.
+        let sig_bytes = base64::engine::general_purpose::STANDARD
+            .decode(parts[1])
+            .expect("signature should be valid base64");
+        assert_eq!(sig_bytes.len(), 64, "Ed25519 signature should be 64 bytes");
+    }
+
+    #[tokio::test]
+    async fn test_transit_signer_nonexistent_key_fails() {
+        let transit_store = make_transit_store();
+
+        // Try to create signer with a key that doesn't exist.
+        let result =
+            NarinfoSigner::from_transit("test-cache".to_string(), transit_store, "nonexistent-key".to_string()).await;
+
+        assert!(result.is_err(), "should fail with nonexistent key");
+    }
+
+    #[tokio::test]
+    async fn test_transit_signer_sign_narinfo_convenience() {
+        let transit_store = make_transit_store();
+
+        // Create Ed25519 key.
+        let request = aspen_secrets::transit::CreateKeyRequest::new("narinfo-key")
+            .with_type(aspen_secrets::transit::KeyType::Ed25519);
+        transit_store.create_key(request).await.unwrap();
+
+        // Build Transit signer.
+        let signer = NarinfoSigner::from_transit("my-cache".to_string(), transit_store, "narinfo-key".to_string())
+            .await
+            .unwrap();
+
+        // Use the convenience sign_narinfo method.
+        let sig = NarinfoSigningProvider::sign_narinfo(&signer, "/nix/store/abc-hello", "sha256:deadbeef", 12345, &[
+            "/nix/store/dep1-foo".to_string(),
+        ])
+        .await
+        .expect("sign_narinfo should succeed");
+
+        assert!(sig.starts_with("my-cache:"), "sig: {}", sig);
+    }
+
+    #[tokio::test]
+    async fn test_transit_and_local_signers_produce_compatible_format() {
+        let transit_store = make_transit_store();
+
+        // Create Ed25519 key in Transit.
+        let request = aspen_secrets::transit::CreateKeyRequest::new("compat-key")
+            .with_type(aspen_secrets::transit::KeyType::Ed25519);
+        transit_store.create_key(request).await.unwrap();
+
+        // Create Transit signer.
+        let transit_signer =
+            NarinfoSigner::from_transit("compat-cache".to_string(), transit_store, "compat-key".to_string())
+                .await
+                .unwrap();
+
+        // Create local signer with a different key.
+        let local_signer = NarinfoSigner::new("compat-cache".to_string(), SigningKey::from_bytes(&[42u8; 32]));
+
+        // Both should produce signatures in the same format: cache_name:base64_sig
+        let fp = NarinfoSigner::fingerprint("/nix/store/test", "sha256:abc", 100, &[]);
+
+        let transit_sig = NarinfoSigningProvider::sign(&transit_signer, &fp).await.unwrap();
+        let local_sig = NarinfoSigningProvider::sign(&local_signer, &fp).await.unwrap();
+
+        // Same prefix format.
+        assert!(transit_sig.starts_with("compat-cache:"));
+        assert!(local_sig.starts_with("compat-cache:"));
+
+        // Both have 64-byte Ed25519 signatures (base64-encoded).
+        let transit_sig_bytes =
+            base64::engine::general_purpose::STANDARD.decode(transit_sig.split(':').nth(1).unwrap()).unwrap();
+        let local_sig_bytes =
+            base64::engine::general_purpose::STANDARD.decode(local_sig.split(':').nth(1).unwrap()).unwrap();
+        assert_eq!(transit_sig_bytes.len(), 64);
+        assert_eq!(local_sig_bytes.len(), 64);
+
+        // Signatures differ (different keys), but format is identical.
+        assert_ne!(transit_sig_bytes, local_sig_bytes);
+    }
 }

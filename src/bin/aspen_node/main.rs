@@ -207,6 +207,10 @@ async fn async_main() -> Result<()> {
     )
     .await?;
 
+    // Extract signer before client_context is consumed by the handler.
+    #[cfg(feature = "nix-cache-gateway")]
+    let nix_cache_signer = client_context.nix_cache_signer.clone();
+
     #[cfg(feature = "plugins-rpc")]
     let mut client_handler = ClientProtocolHandler::new(client_context);
     #[cfg(not(feature = "plugins-rpc"))]
@@ -216,7 +220,15 @@ async fn async_main() -> Result<()> {
     client_handler.load_wasm_plugins().await;
 
     // Spawn the Router with all protocol handlers
-    let router = setup_router(&config, &node_mode, client_handler, watch_registry, kv_store.clone());
+    let router = setup_router(
+        &config,
+        &node_mode,
+        client_handler,
+        watch_registry,
+        kv_store.clone(),
+        #[cfg(feature = "nix-cache-gateway")]
+        nix_cache_signer,
+    );
 
     // Get fresh endpoint address (may have discovered more addresses since startup)
     let endpoint_addr = node_mode.iroh_manager().endpoint().addr();

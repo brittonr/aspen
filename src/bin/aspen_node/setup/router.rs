@@ -26,6 +26,9 @@ pub fn setup_router(
     client_handler: ClientProtocolHandler,
     watch_registry: Arc<dyn WatchRegistry>,
     kv_store: Arc<dyn KeyValueStore>,
+    #[cfg(feature = "nix-cache-gateway")] nix_cache_signer: Option<
+        Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>,
+    >,
 ) -> iroh::protocol::Router {
     use aspen::CLIENT_ALPN;
     use aspen::LOG_SUBSCRIBER_ALPN;
@@ -140,12 +143,8 @@ pub fn setup_router(
                 ..NixCacheGatewayConfig::default()
             };
 
-            let handler = NixCacheProtocolHandler::new(
-                gateway_config,
-                cache_index,
-                blob_store.clone(),
-                None, // TODO: Add narinfo signing support
-            );
+            let handler =
+                NixCacheProtocolHandler::new(gateway_config, cache_index, blob_store.clone(), nix_cache_signer.clone());
             builder = builder.accept(NIX_CACHE_H3_ALPN, handler);
             info!(
                 priority = config.nix_cache.priority,
