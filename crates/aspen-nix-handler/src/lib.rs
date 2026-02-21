@@ -13,8 +13,6 @@ mod migration;
 #[cfg(feature = "snix")]
 mod snix;
 
-use std::sync::Arc;
-
 // Re-export core types for convenience
 pub use aspen_rpc_core::ClientProtocolContext;
 pub use aspen_rpc_core::HandlerFactory;
@@ -32,6 +30,8 @@ pub use snix::SnixHandler;
 
 #[cfg(feature = "snix")]
 mod snix_factory {
+    use std::sync::Arc;
+
     use super::*;
 
     /// Factory for creating `SnixHandler` instances.
@@ -72,6 +72,8 @@ mod snix_factory {
 
 #[cfg(feature = "cache")]
 mod cache_factory {
+    use std::sync::Arc;
+
     use super::*;
 
     /// Factory for creating `CacheHandler` instances.

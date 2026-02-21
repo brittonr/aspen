@@ -21,6 +21,10 @@
 | 2026-02-19 | self | Missed aspen-secrets-handler and aspen-raft in initial scan — only found 7 of 8 broken crates | `cargo test --workspace` may attribute errors to wrong crate in parallel. Run `grep "could not compile"` AND `grep "error\[E"` to catch all. |
 | 2026-02-19 | self | Pre-existing: 2 watch tests in aspen-client fail (HLC timestamp drift) | FIXED: Used `SerializableTimestamp::from_millis()` instead of real HLC. Tests were asserting hardcoded 2023 timestamps against wall clock. |
 
+| 2026-02-20 | self | `#[cfg(feature = "secrets")]` in forge-handler test was dead code — feature doesn't exist in that crate | `SecretsKvRead`/`SecretsKvWrite` are NOT feature-gated in `aspen-client-api`. The cfg made the test always skip. Remove dead cfgs and verify the test actually runs. |
+| 2026-02-20 | self | `use std::sync::Arc` warnings in query-handler and nix-handler | `Arc` only used inside cfg-gated factory modules that use `super::*`. Move `Arc` import into each factory module instead of the crate root. |
+| 2026-02-20 | self | secrets-engine NixOS test used `check=False` everywhere despite handler being fixed | Secrets handler + CLI discriminant issues were fixed in commits 4c1ab025 and 9dd667b7. Updated test to use strict assertions. |
+
 ## User Preferences
 
 - User wants to improve plugin system iteratively — lifecycle + hot-reload first

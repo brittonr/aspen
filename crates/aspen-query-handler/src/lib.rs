@@ -9,8 +9,6 @@ mod dns;
 #[cfg(feature = "sql")]
 mod sql;
 
-use std::sync::Arc;
-
 // Re-export core types for convenience
 pub use aspen_rpc_core::ClientProtocolContext;
 pub use aspen_rpc_core::HandlerFactory;
@@ -26,6 +24,8 @@ pub use sql::SqlHandler;
 
 #[cfg(feature = "sql")]
 mod sql_factory {
+    use std::sync::Arc;
+
     use super::*;
 
     /// Factory for creating `SqlHandler` instances.
@@ -68,6 +68,8 @@ mod sql_factory {
 
 #[cfg(feature = "dns")]
 mod dns_factory {
+    use std::sync::Arc;
+
     use super::*;
 
     /// Factory for creating `DnsHandler` instances.
@@ -110,19 +112,19 @@ mod dns_factory {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[cfg(feature = "sql")]
     #[test]
     fn test_sql_factory_priority() {
-        let factory = sql_factory::SqlHandlerFactory;
+        use super::HandlerFactory;
+        let factory = super::sql_factory::SqlHandlerFactory;
         assert_eq!(factory.priority(), 500);
     }
 
     #[cfg(feature = "dns")]
     #[test]
     fn test_dns_factory_priority() {
-        let factory = dns_factory::DnsHandlerFactory;
+        use super::HandlerFactory;
+        let factory = super::dns_factory::DnsHandlerFactory;
         assert_eq!(factory.priority(), 510);
     }
 }

@@ -578,8 +578,7 @@ mod tests {
             timeout_ms: 0,
         }));
 
-        // Secrets requests
-        #[cfg(feature = "secrets")]
+        // Secrets requests (forge handler should NOT handle these)
         {
             use std::collections::HashMap;
             assert!(!handler.can_handle(&ClientRpcRequest::SecretsKvRead {

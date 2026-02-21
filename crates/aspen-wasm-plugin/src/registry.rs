@@ -509,6 +509,7 @@ mod tests {
             execution_timeout_secs: None,
             kv_prefixes: vec!["forge:".to_string()],
             permissions: aspen_plugin_api::PluginPermissions::all(),
+            signature: None,
         };
 
         let registry = Arc::new(AppRegistry::new());
@@ -539,6 +540,7 @@ mod tests {
             execution_timeout_secs: None,
             kv_prefixes: vec![],
             permissions: aspen_plugin_api::PluginPermissions::default(),
+            signature: None,
         };
 
         let registry = Arc::new(AppRegistry::new());
