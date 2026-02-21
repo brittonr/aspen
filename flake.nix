@@ -683,6 +683,16 @@
             }
           );
 
+          # Build aspen-cli with proxy features (TCP tunnel + HTTP forward proxy)
+          aspen-cli-proxy-crate = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features proxy";
+              doCheck = false;
+            }
+          );
+
           # Build aspen-node with DNS support (default features + dns)
           aspen-node-dns = bin {
             name = "aspen-node";
@@ -693,6 +703,12 @@
           aspen-node-pijul = bin {
             name = "aspen-node";
             features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "pijul"];
+          };
+
+          # Build aspen-node with proxy support (default features + proxy)
+          aspen-node-proxy = bin {
+            name = "aspen-node";
+            features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "proxy"];
           };
 
           # Build aspen-ci-agent from its own crate
@@ -745,7 +761,8 @@
               aspen-cli-dns = aspen-cli-dns-crate;
               aspen-cli-ci = aspen-cli-ci-crate;
               aspen-cli-pijul = aspen-cli-pijul-crate;
-              inherit aspen-node-dns aspen-node-pijul;
+              aspen-cli-proxy = aspen-cli-proxy-crate;
+              inherit aspen-node-dns aspen-node-pijul aspen-node-proxy;
               aspen-ci-agent = aspen-ci-agent-crate;
               verus-metrics = aspen-verus-metrics-crate;
             };
@@ -1160,6 +1177,17 @@
                 inherit pkgs;
                 aspenNodePackage = bins.aspen-node-pijul;
                 aspenCliPackage = bins.aspen-cli-pijul;
+              };
+
+              # HTTP proxy test: TCP tunnel and HTTP forward proxy over
+              # iroh QUIC. Two nodes — server (aspen-node with proxy) and
+              # client (aspen-cli proxy commands). Tests tunnel creation,
+              # multiple/concurrent requests, forward proxy, and restart.
+              # Build: nix build .#checks.x86_64-linux.proxy-tunnel-test
+              proxy-tunnel-test = import ./nix/tests/proxy-tunnel.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.aspen-node-proxy;
+                aspenCliPackage = bins.aspen-cli-proxy;
               };
             };
 

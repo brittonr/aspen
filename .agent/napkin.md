@@ -418,3 +418,19 @@
 - `iroh 0.95.1` has no `discovery_n0()` on `Builder` — use `discovery(StaticProvider)` explicitly
 - `DownstreamProxy` connection pool resolves by `EndpointId`, needs discovery to find addresses
 - `EndpointAddr` implements `Into<EndpointInfo>` (for `StaticProvider::add_endpoint_info`) — works despite not being grep-able (likely in iroh-base)
+
+## Recent Changes (2026-02-21) — Proxy NixOS VM Test
+
+### proxy-tunnel.nix
+
+- New `nix/tests/proxy-tunnel.nix` — 2-node test: server (aspen-node + proxy + origin HTTP) and client (aspen-cli proxy)
+- Tests: TCP tunnel basic request, multiple sequential requests, 4 concurrent requests, HTTP forward proxy (CONNECT-style), tunnel restart resilience
+- Origin service: Python http.server returning JSON `{"status":"ok","path":...,"message":"hello from origin"}`
+- Server uses `extraArgs = ["--enable-proxy"]` to enable upstream proxy handler
+- Proxy feature is compile-time: separate `aspen-node-proxy` and `aspen-cli-proxy` nix packages
+- Wired into flake as `checks.x86_64-linux.proxy-tunnel-test`
+
+### New Nix Packages
+
+- `aspen-node-proxy`: Node with default features + `proxy`
+- `aspen-cli-proxy`: CLI with `proxy` feature
