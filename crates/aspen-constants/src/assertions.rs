@@ -246,7 +246,6 @@ const _: () = assert!(FAILURE_DETECTOR_CHANNEL_CAPACITY > 0);
 
 // All file size limits must be positive
 const _: () = assert!(MAX_CONFIG_FILE_SIZE > 0);
-const _: () = assert!(MAX_PIJUL_CONFIG_SIZE > 0);
 const _: () = assert!(MAX_JOB_SPEC_SIZE > 0);
 const _: () = assert!(MAX_SOPS_FILE_SIZE > 0);
 const _: () = assert!(MAX_SQL_FILE_SIZE > 0);
@@ -372,7 +371,6 @@ const _: () = assert!(MEMORY_RESERVED_FOR_RAFT_BYTES > 0);
 // ============================================================================
 
 const _: () = assert!(MAX_DEPENDENCY_QUEUE_SIZE > 0);
-const _: () = assert!(MAX_PIJUL_CHANGES_PER_SORT > 0);
 const _: () = assert!(MAX_WORKFLOW_HISTORY_SIZE > 0);
 
 // ============================================================================

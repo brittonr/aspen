@@ -40,7 +40,6 @@
 //!
 //! # Feature Flags
 //!
-//! - `pijul`: Include Pijul version control RPC variants
 //! - `forge`: Include Forge decentralized Git RPC variants
 
 mod client;

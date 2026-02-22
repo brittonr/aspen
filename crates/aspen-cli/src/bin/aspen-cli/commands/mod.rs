@@ -27,8 +27,6 @@ pub mod lease;
 pub mod lock;
 pub mod patch;
 pub mod peer;
-#[cfg(feature = "pijul")]
-pub mod pijul;
 #[cfg(feature = "plugins-rpc")]
 pub mod plugin;
 #[cfg(feature = "proxy")]

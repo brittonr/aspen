@@ -281,15 +281,6 @@ pub const SNAPSHOT_INSTALL_TIMEOUT_MS: u64 = 5000;
 /// - `git-remote-aspen`: Git config file reading
 pub const MAX_CONFIG_FILE_SIZE: u64 = 10 * 1024 * 1024;
 
-/// Maximum size for Pijul working directory files (1 MB).
-///
-/// Tiger Style: Fixed limit for Pijul metadata files.
-/// These are small config/state files that should never exceed 1 MB.
-///
-/// Used in:
-/// - `aspen-pijul/working_dir.rs`: Config and staged files
-pub const MAX_PIJUL_CONFIG_SIZE: u64 = 1024 * 1024;
-
 /// Maximum size for job specification files (1 MB).
 ///
 /// Tiger Style: Fixed limit for job spec JSON/TOML files.

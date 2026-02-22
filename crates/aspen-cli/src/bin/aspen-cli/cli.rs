@@ -37,8 +37,6 @@ use crate::commands::lease::LeaseCommand;
 use crate::commands::lock::LockCommand;
 use crate::commands::patch::PatchCommand;
 use crate::commands::peer::PeerCommand;
-#[cfg(feature = "pijul")]
-use crate::commands::pijul::PijulCommand;
 #[cfg(feature = "plugins-rpc")]
 use crate::commands::plugin::PluginCommand;
 #[cfg(feature = "proxy")]
@@ -225,14 +223,6 @@ pub enum Commands {
     #[command(subcommand)]
     Peer(PeerCommand),
 
-    /// Pijul patch-based version control.
-    ///
-    /// Manage repositories, channels, and changes with P2P distribution
-    /// via iroh-blobs and Raft-consistent channel refs.
-    #[cfg(feature = "pijul")]
-    #[command(subcommand)]
-    Pijul(PijulCommand),
-
     /// WASM plugin management.
     ///
     /// Install, list, enable, disable, and remove WASM handler plugins.
@@ -363,8 +353,6 @@ impl Cli {
             Commands::Lock(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Patch(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Peer(cmd) => cmd.run(&client, self.global.is_json).await,
-            #[cfg(feature = "pijul")]
-            Commands::Pijul(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "plugins-rpc")]
             Commands::Plugin(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "proxy")]

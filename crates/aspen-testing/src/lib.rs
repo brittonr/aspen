@@ -163,6 +163,9 @@ pub use federation_tester::SyncableObject;
 // CI pipeline testing utilities (requires ci feature which implies simulation)
 #[cfg(feature = "ci")]
 pub mod ci_pipeline_tester;
+// Network testing modules (requires network feature)
+#[cfg(feature = "network")]
+pub use aspen_testing_network as network_testing;
 #[cfg(feature = "ci")]
 pub use ci_pipeline_tester::CiPipelineTestConfig;
 #[cfg(feature = "ci")]
@@ -181,17 +184,6 @@ pub use ci_pipeline_tester::multi_stage_test_pipeline;
 pub use ci_pipeline_tester::simple_test_pipeline;
 #[cfg(feature = "ci")]
 pub use ci_pipeline_tester::test_pipeline_context;
-
-// Pijul multi-node testing (requires pijul feature)
-#[cfg(feature = "pijul")]
-pub mod pijul_tester;
-// Network testing modules (requires network feature)
-#[cfg(feature = "network")]
-pub use aspen_testing_network as network_testing;
-#[cfg(feature = "pijul")]
-pub use pijul_tester::PijulMultiNodeTester;
-#[cfg(feature = "pijul")]
-pub use pijul_tester::PijulTestNode;
 #[cfg(feature = "network")]
 pub mod fault_injection {
     //! Re-export of fault_injection module for backwards compatibility.

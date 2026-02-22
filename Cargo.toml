@@ -84,7 +84,6 @@ members = [
     "crates/aspen-auth",
     "crates/aspen-sharding",
     "crates/aspen-forge",
-    "crates/aspen-pijul",
     "crates/aspen-fuse",
     "crates/aspen-hooks-types",
     "crates/aspen-hooks",
@@ -116,7 +115,6 @@ members = [
     "crates/aspen-query-handler",
     "crates/aspen-hooks-handler",
     "crates/aspen-job-handler",
-    "crates/aspen-pijul-handler",
     "crates/aspen-kv-handler",
     "crates/aspen-core-essentials-handler",
     "crates/aspen-docs-handler",
@@ -230,7 +228,6 @@ aspen-testing-madsim = { path = "crates/aspen-testing-madsim" }
 aspen-testing-network = { path = "crates/aspen-testing-network" }
 aspen-ticket = { path = "crates/aspen-ticket" }
 aspen-forge = { path = "crates/aspen-forge" }
-aspen-pijul = { path = "crates/aspen-pijul" }
 aspen-fuse = { path = "crates/aspen-fuse" }
 aspen-hooks-types = { path = "crates/aspen-hooks-types" }
 aspen-hooks = { path = "crates/aspen-hooks" }
@@ -261,7 +258,7 @@ hmac = "0.12"  # Used by aspen-cluster and aspen-raft
 sha2 = "0.10"  # Used by aspen-cluster and aspen-raft
 static_assertions = "1.1"  # Compile-time type layout verification
 flate2 = "1.0"  # Used by git-remote-aspen and aspen-cli
-tar = "0.4"  # Used by aspen-cli for pijul archive
+tar = "0.4"  # Used by aspen-cli for archive operations
 bolero = "0.13"  # Property-based testing with Bolero
 bolero-generator = "0.13"  # Bolero generator support
 schemars = "0.8"  # JSON Schema generation (0.8 for Draft 7 compatibility with json-schema-to-nickel)
@@ -313,7 +310,6 @@ aspen-rpc-handlers = { workspace = true }
 aspen-hooks-types = { workspace = true }
 aspen-hooks = { workspace = true, optional = true }
 aspen-forge = { workspace = true, optional = true }
-aspen-pijul = { workspace = true, optional = true }
 aspen-testing = { workspace = true, optional = true }
 aspen-secrets = { workspace = true, optional = true }
 aspen-automerge = { workspace = true, optional = true }
@@ -419,7 +415,7 @@ cloud-hypervisor-client = "0.3"
 default = []
 
 # Full production: all features enabled
-full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs", "federation", "proxy"]
+full = ["sql", "dns", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs", "federation", "proxy"]
 
 # Forge preset: Git hosting with blob storage, content discovery, and docs
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
@@ -461,8 +457,6 @@ bolero = []
 # FUSE filesystem is now a separate crate: aspen-fuse
 # Global content discovery via BitTorrent Mainline DHT
 global-discovery = ["dep:mainline", "aspen-core/global-discovery", "aspen-rpc-handlers/global-discovery"]
-# Pijul native VCS - patch-based distributed version control (libpijul is GPL-2.0-or-later)
-pijul = ["forge", "dep:aspen-pijul", "aspen-rpc-handlers/pijul"]
 # SOPS-backed secrets management with age encryption
 secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/secrets"]
 # Automerge CRDT document layer for collaborative editing
@@ -493,7 +487,7 @@ federation = ["aspen-cluster/federation"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"nix-executor\", \"ci-vm-executor\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"nix-executor\", \"ci-vm-executor\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit
@@ -772,18 +766,6 @@ required-features = ["federation"]
 [[test]]
 name = "federation_integration_test"
 required-features = ["federation"]
-
-[[test]]
-name = "pijul_integration_test"
-required-features = ["pijul", "blob"]
-
-[[test]]
-name = "pijul_real_changes_test"
-required-features = ["pijul", "blob"]
-
-[[test]]
-name = "pijul_multi_node_test"
-required-features = ["pijul", "blob", "testing"]
 
 [[test]]
 name = "consumer_group_integration_test"

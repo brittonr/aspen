@@ -25,7 +25,6 @@ aspen-sql = { path = "../aspen-sql", optional = true }
 aspen-auth = { path = "../aspen-auth" }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-forge-handler = { path = "../aspen-forge-handler", optional = true }
-aspen-pijul-handler = { path = "../aspen-pijul-handler", optional = true }
 aspen-hooks-types = { path = "../aspen-hooks-types" }
 aspen-hooks = { path = "../aspen-hooks", optional = true }
 aspen-jobs = { path = "../aspen-jobs", optional = true }
@@ -73,7 +72,6 @@ default = []
 sql = ["dep:aspen-sql", "dep:aspen-query-handler", "aspen-query-handler?/sql", "aspen-rpc-core/sql"]
 dns = ["dep:aspen-dns", "dep:aspen-query-handler", "aspen-query-handler?/dns"]
 forge = ["dep:aspen-forge", "dep:aspen-forge-handler", "aspen-rpc-core/forge"]
-pijul = ["dep:aspen-pijul-handler", "aspen-client-api/pijul", "aspen-rpc-core/pijul"]
 blob = ["dep:aspen-blob", "dep:aspen-blob-handler", "aspen-rpc-core/blob"]
 global-discovery = ["aspen-core/global-discovery", "aspen-rpc-core/global-discovery"]
 git-bridge = ["forge", "aspen-forge/git-bridge"]

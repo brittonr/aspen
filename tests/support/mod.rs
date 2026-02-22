@@ -12,8 +12,7 @@
 pub mod bolero_generators;
 pub mod mock_gossip;
 pub mod mock_iroh;
-#[cfg(feature = "pijul")]
-pub mod pijul_tester;
+
 pub mod proptest_generators;
 #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 pub mod real_cluster;

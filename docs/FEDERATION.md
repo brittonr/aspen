@@ -579,7 +579,6 @@ are always handled locally. Plugin/application requests return their app ID:
 | Forge operations | `Some("forge")` |
 | CI operations | `Some("ci")` |
 | DNS operations | `Some("dns")` |
-| Pijul operations | `Some("pijul")` |
 | Automerge operations | `Some("automerge")` |
 | Secrets operations | `Some("secrets")` |
 

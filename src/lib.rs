@@ -71,15 +71,6 @@ pub mod protocol_adapters;
 /// Re-exported from the `aspen-forge` crate.
 #[cfg(feature = "forge")]
 pub use aspen_forge as forge;
-/// Pijul: Native patch-based version control.
-///
-/// Only available with the `pijul` feature enabled. Provides native Pijul
-/// integration with libpijul, using Pijul's patch-based model with commutative
-/// merges. Changes are stored in iroh-blobs for P2P distribution.
-///
-/// Re-exported from the `aspen-pijul` crate.
-#[cfg(feature = "pijul")]
-pub use aspen_pijul as pijul;
 /// Raft consensus implementation with direct async APIs.
 ///
 /// Re-exported from the `aspen-raft` crate.

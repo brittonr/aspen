@@ -15,7 +15,6 @@
 // Job handler moved to aspen-job-handler crate
 // KV handler moved to aspen-kv-handler crate
 // Lease handler moved to aspen-core-essentials-handler crate
-// Pijul handler moved to aspen-pijul-handler crate
 // Secrets handler moved to aspen-secrets-handler crate
 // Service registry handler migrated to aspen-service-registry-plugin (WASM)
 // SNIX handler moved to aspen-nix-handler crate
@@ -49,8 +48,6 @@ pub use aspen_nix_handler::CacheHandler;
 pub use aspen_nix_handler::CacheMigrationHandler;
 #[cfg(feature = "snix")]
 pub use aspen_nix_handler::SnixHandler;
-#[cfg(feature = "pijul")]
-pub use aspen_pijul_handler::PijulHandler;
 #[cfg(feature = "dns")]
 pub use aspen_query_handler::DnsHandler;
 #[cfg(feature = "sql")]

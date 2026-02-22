@@ -11,7 +11,6 @@ mod hooks_ops;
 mod jobs_ops;
 mod kv_ops;
 mod lease_ops;
-mod pijul_ops;
 mod secrets_ops;
 mod sql_ops;
 mod watch_ops;
@@ -43,7 +42,6 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Operation> {
         .or_else(|| ci_ops::to_operation(request))
         .or_else(|| secrets_ops::to_operation(request))
         .or_else(|| jobs_ops::to_operation(request))
-        .or_else(|| pijul_ops::to_operation(request))
         .or_else(|| automerge_ops::to_operation(request))
         // Flatten: Option<Option<Operation>> -> Option<Operation>
         .flatten()

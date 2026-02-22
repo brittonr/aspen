@@ -21,7 +21,6 @@ aspen-cluster = { path = "../aspen-cluster" }
 aspen-hooks-types = { path = "../aspen-hooks-types" }
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-forge = { path = "../aspen-forge", optional = true }
-aspen-pijul = { path = "../aspen-pijul", optional = true }
 aspen-plugin-api = { path = "../aspen-plugin-api", optional = true }
 aspen-proxy = { workspace = true, optional = true }
 
@@ -77,7 +76,6 @@ dirs = "5.0"
 
 # Git/Pijul operations
 flate2 = { version = "1.0", optional = true }  # for git-bridge
-libpijul = { version = "1.0.0-beta.10", optional = true }
 
 [features]
 default = []
@@ -85,7 +83,6 @@ blob = ["dep:aspen-blob"]
 ci = ["aspen-client-api/ci"]
 forge = ["dep:aspen-forge"]
 git-bridge = ["forge", "dep:flate2"]
-pijul = ["dep:aspen-pijul", "dep:libpijul", "aspen-client-api/pijul", "blob"]
 dns = []
 sql = []
 secrets = ["aspen-client-api/secrets"]

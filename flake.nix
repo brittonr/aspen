@@ -883,16 +883,6 @@
             }
           );
 
-          # Build aspen-cli with Pijul features (pijul needs forge, archive needs git-bridge for flate2)
-          aspen-cli-pijul-crate = craneLib.buildPackage (
-            commonArgs
-            // {
-              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
-              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features pijul,forge,git-bridge";
-              doCheck = false;
-            }
-          );
-
           # Build aspen-cli with proxy features (TCP tunnel + HTTP forward proxy)
           aspen-cli-proxy-crate = craneLib.buildPackage (
             commonArgs
@@ -907,12 +897,6 @@
           aspen-node-dns = bin {
             name = "aspen-node";
             features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "dns"];
-          };
-
-          # Build aspen-node with Pijul support (default features + pijul)
-          aspen-node-pijul = bin {
-            name = "aspen-node";
-            features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "pijul"];
           };
 
           # Build aspen-node with proxy support (default features + proxy)
@@ -981,9 +965,8 @@
               aspen-cli-full = aspen-cli-full-crate;
               aspen-cli-dns = aspen-cli-dns-crate;
               aspen-cli-ci = aspen-cli-ci-crate;
-              aspen-cli-pijul = aspen-cli-pijul-crate;
               aspen-cli-proxy = aspen-cli-proxy-crate;
-              inherit aspen-node-dns aspen-node-pijul aspen-node-proxy aspen-node-plugins;
+              inherit aspen-node-dns aspen-node-proxy aspen-node-plugins;
               aspen-ci-agent = aspen-ci-agent-crate;
               verus-metrics = aspen-verus-metrics-crate;
               inherit coordinationPluginWasm automergePluginWasm secretsPluginWasm serviceRegistryPluginWasm hooksPluginWasm;
@@ -1407,13 +1390,6 @@
               # (init, list, info), channels (create, list, fork, delete,
               # info), working directory (init, add, status, record),
               # and checkout.
-              # Build: nix build .#checks.x86_64-linux.pijul-operations-test
-              pijul-operations-test = import ./nix/tests/pijul-operations.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.aspen-node-pijul;
-                aspenCliPackage = bins.aspen-cli-pijul;
-              };
-
               # HTTP proxy test: TCP tunnel and HTTP forward proxy over
               # iroh QUIC. Two nodes — server (aspen-node with proxy) and
               # client (aspen-cli proxy commands). Tests tunnel creation,

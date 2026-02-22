@@ -84,16 +84,6 @@ pub async fn setup_client_protocol(
         Arc::new(aspen::forge::ForgeNode::new(blob_store.clone(), kv_store.clone(), secret_key))
     });
 
-    // Initialize PijulStore if blob_store and data_dir are available
-    #[cfg(feature = "pijul")]
-    let pijul_store = node_mode.blob_store().and_then(|blob_store| {
-        config.data_dir.as_ref().map(|data_dir| {
-            let store = Arc::new(aspen::pijul::PijulStore::new(blob_store.clone(), kv_store.clone(), data_dir.clone()));
-            info!("Pijul store initialized at {:?}", data_dir);
-            store
-        })
-    });
-
     // Initialize JobManager and start worker service if enabled
     let (job_manager, worker_service_handle, _worker_service_cancel) =
         initialize_job_system(config, node_mode, kv_store.clone(), token_verifier_arc.clone()).await?;
@@ -314,8 +304,6 @@ pub async fn setup_client_protocol(
         }),
         #[cfg(feature = "forge")]
         forge_node,
-        #[cfg(feature = "pijul")]
-        pijul_store,
         job_manager: Some(job_manager),
         worker_service: worker_service_handle.clone(),
         worker_coordinator: Some(worker_coordinator),

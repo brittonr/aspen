@@ -126,7 +126,6 @@ These handlers remain in `aspen-rpc-handlers/src/handlers/`:
 | `job.rs` + `worker.rs` | `aspen-job-handler` | Job queue, worker coordination | (always) | 5 |
 | ~~automerge~~ | `aspen-automerge-plugin` (WASM) | CRDT sync | `automerge` | 6 |
 | `cache.rs` + `cache_migration.rs` | `aspen-cache-handler` | CI build cache | `ci` | 7 |
-| `pijul.rs` | `aspen-pijul-handler` | Pijul VCS | `pijul` | 8 |
 
 ## Creating a New Application-Layer Handler Crate
 

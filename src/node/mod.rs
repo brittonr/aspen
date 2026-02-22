@@ -123,9 +123,6 @@ use crate::cluster::federation::FederationSettings;
 use crate::cluster::federation::TrustManager;
 #[cfg(feature = "federation")]
 use crate::cluster::federation::sync::FederationProtocolContext;
-// Pijul VCS integration
-#[cfg(feature = "pijul")]
-use crate::pijul::PijulStore;
 #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::protocol_adapters::EndpointProviderAdapter;
 #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
@@ -480,19 +477,6 @@ impl Node {
             Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
         };
 
-        // Create Pijul store if blob storage is available
-        #[cfg(feature = "pijul")]
-        let pijul_store = self.handle.network.blob_store.as_ref().map(|blob_store| {
-            let data_dir = self.handle.config.data_dir();
-            let store = Arc::new(PijulStore::new(
-                blob_store.clone(),
-                raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>,
-                data_dir.clone(),
-            ));
-            tracing::info!(?data_dir, "Pijul store initialized");
-            store
-        });
-
         ClientProtocolContext {
             node_id: self.handle.config.node_id,
             controller: raft_node.clone(),
@@ -517,8 +501,6 @@ impl Node {
             content_discovery: None,
             #[cfg(feature = "forge")]
             forge_node: None,
-            #[cfg(feature = "pijul")]
-            pijul_store,
             // Job-related fields are only available when jobs feature is enabled
             // The jobs feature enables aspen-rpc-core's jobs and worker features
             #[cfg(feature = "jobs")]

@@ -52,13 +52,6 @@ ignore = [
     # proc-macro-error crate - unmaintained but stable, used by derive macros (snafu, etc.)
     { id = "RUSTSEC-2024-0370", reason = "Proc macro helper crate, compile-time only. No runtime security impact. Used by derive macro ecosystem." },
 
-    # libpijul transitive dependencies - blocked by upstream:
-
-    # curve25519-dalek timing vulnerability (via libpijul -> ed25519-dalek -> curve25519-dalek)
-    { id = "RUSTSEC-2024-0344", reason = "Transitive dependency via libpijul. Timing side-channel in scalar operations. Blocked until libpijul upgrades to ed25519-dalek v2+." },
-
-    # ed25519-dalek double public key signing oracle attack (via libpijul)
-    { id = "RUSTSEC-2022-0093", reason = "Transitive dependency via libpijul. Requires misuse of hazmat APIs. Blocked until libpijul upgrades to ed25519-dalek v2+." },
 ]
 
 # -----------------------------------------------------------------------------
@@ -110,12 +103,6 @@ allow = [
     # LGPL-3.0-only (malachite via nickel-lang, compatible with AGPL)
     "LGPL-3.0-only",
 
-    # GPL-2.0-or-later (pijul and related dependencies)
-    "GPL-2.0-or-later",
-
-    # GPL-2.0 (deprecated SPDX identifier, used by pijul-macros)
-    # Note: This is the deprecated identifier; prefer GPL-2.0-only or GPL-2.0-or-later
-    "GPL-2.0",
 ]
 
 # Confidence threshold for license detection (0.0-1.0).

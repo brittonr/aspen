@@ -30,8 +30,6 @@ pub mod hooks;
 pub mod jobs;
 pub mod kv;
 pub mod lease;
-#[cfg(feature = "pijul")]
-pub mod pijul;
 pub mod secrets;
 pub mod sql;
 #[cfg(feature = "auth")]
@@ -286,38 +284,6 @@ pub use lease::LeaseListResultResponse;
 pub use lease::LeaseRequest;
 pub use lease::LeaseRevokeResultResponse;
 pub use lease::LeaseTimeToLiveResultResponse;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulApplyResponse;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulAuthorInfo;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulBlameEntry;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulBlameResponse;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulChannelListResponse;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulChannelResponse;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulCheckoutResponse;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulLogEntry;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulLogResponse;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulRecordResponse;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulRecordedChange;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulRepoListResponse;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulRepoResponse;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulRequest;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulShowResponse;
-#[cfg(feature = "pijul")]
-pub use pijul::PijulUnrecordResponse;
 pub use secrets::SecretsKvDeleteResultResponse;
 pub use secrets::SecretsKvListResultResponse;
 pub use secrets::SecretsKvMetadataResultResponse;
@@ -2842,163 +2808,6 @@ pub enum ClientRpcRequest {
     // =========================================================================
 
     // -------------------------------------------------------------------------
-    // Pijul operations - Patch-based version control
-    // -------------------------------------------------------------------------
-    /// Initialize a new Pijul repository.
-    #[cfg(feature = "pijul")]
-    PijulRepoInit {
-        /// Repository name.
-        name: String,
-        /// Optional description.
-        description: Option<String>,
-        /// Default channel name.
-        default_channel: String,
-    },
-
-    /// List Pijul repositories.
-    #[cfg(feature = "pijul")]
-    PijulRepoList {
-        /// Maximum results.
-        limit: u32,
-    },
-
-    /// Get Pijul repository info.
-    #[cfg(feature = "pijul")]
-    PijulRepoInfo {
-        /// Repository ID (hex-encoded).
-        repo_id: String,
-    },
-
-    /// List channels in a Pijul repository.
-    #[cfg(feature = "pijul")]
-    PijulChannelList {
-        /// Repository ID.
-        repo_id: String,
-    },
-
-    /// Create a new channel.
-    #[cfg(feature = "pijul")]
-    PijulChannelCreate {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        name: String,
-    },
-
-    /// Delete a channel.
-    #[cfg(feature = "pijul")]
-    PijulChannelDelete {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        name: String,
-    },
-
-    /// Fork a channel.
-    #[cfg(feature = "pijul")]
-    PijulChannelFork {
-        /// Repository ID.
-        repo_id: String,
-        /// Source channel.
-        source: String,
-        /// Target channel name.
-        target: String,
-    },
-
-    /// Get channel info.
-    #[cfg(feature = "pijul")]
-    PijulChannelInfo {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        name: String,
-    },
-
-    /// Record changes from working directory.
-    #[cfg(feature = "pijul")]
-    PijulRecord {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        channel: String,
-        /// Working directory path.
-        working_dir: String,
-        /// Change message.
-        message: String,
-        /// Author name.
-        author_name: Option<String>,
-        /// Author email.
-        author_email: Option<String>,
-    },
-
-    /// Apply a change to a channel.
-    #[cfg(feature = "pijul")]
-    PijulApply {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        channel: String,
-        /// Change hash (hex-encoded BLAKE3).
-        change_hash: String,
-    },
-
-    /// Unrecord (remove) a change from a channel.
-    #[cfg(feature = "pijul")]
-    PijulUnrecord {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        channel: String,
-        /// Change hash (hex-encoded BLAKE3).
-        change_hash: String,
-    },
-
-    /// Get change log for a channel.
-    #[cfg(feature = "pijul")]
-    PijulLog {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        channel: String,
-        /// Maximum entries.
-        limit: u32,
-    },
-
-    /// Checkout pristine state to working directory.
-    #[cfg(feature = "pijul")]
-    PijulCheckout {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        channel: String,
-        /// Output directory path.
-        output_dir: String,
-    },
-
-    /// Show details of a specific change.
-    #[cfg(feature = "pijul")]
-    PijulShow {
-        /// Repository ID.
-        repo_id: String,
-        /// Change hash (full or partial, hex-encoded).
-        change_hash: String,
-    },
-
-    /// Get blame/attribution for a file.
-    ///
-    /// Returns a list of changes that have contributed to the current
-    /// state of the specified file.
-    #[cfg(feature = "pijul")]
-    PijulBlame {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        channel: String,
-        /// File path to get blame for.
-        path: String,
-    },
-
-    // -------------------------------------------------------------------------
     // Automerge operations - CRDT document management
     // -------------------------------------------------------------------------
     /// Create a new Automerge document.
@@ -3451,36 +3260,6 @@ impl ClientRpcRequest {
             Self::LockRelease { .. } => "LockRelease",
             Self::LockRenew { .. } => "LockRenew",
             Self::LockTryAcquire { .. } => "LockTryAcquire",
-            #[cfg(feature = "pijul")]
-            Self::PijulApply { .. } => "PijulApply",
-            #[cfg(feature = "pijul")]
-            Self::PijulBlame { .. } => "PijulBlame",
-            #[cfg(feature = "pijul")]
-            Self::PijulChannelCreate { .. } => "PijulChannelCreate",
-            #[cfg(feature = "pijul")]
-            Self::PijulChannelDelete { .. } => "PijulChannelDelete",
-            #[cfg(feature = "pijul")]
-            Self::PijulChannelFork { .. } => "PijulChannelFork",
-            #[cfg(feature = "pijul")]
-            Self::PijulChannelInfo { .. } => "PijulChannelInfo",
-            #[cfg(feature = "pijul")]
-            Self::PijulChannelList { .. } => "PijulChannelList",
-            #[cfg(feature = "pijul")]
-            Self::PijulCheckout { .. } => "PijulCheckout",
-            #[cfg(feature = "pijul")]
-            Self::PijulLog { .. } => "PijulLog",
-            #[cfg(feature = "pijul")]
-            Self::PijulRecord { .. } => "PijulRecord",
-            #[cfg(feature = "pijul")]
-            Self::PijulRepoInfo { .. } => "PijulRepoInfo",
-            #[cfg(feature = "pijul")]
-            Self::PijulRepoInit { .. } => "PijulRepoInit",
-            #[cfg(feature = "pijul")]
-            Self::PijulRepoList { .. } => "PijulRepoList",
-            #[cfg(feature = "pijul")]
-            Self::PijulShow { .. } => "PijulShow",
-            #[cfg(feature = "pijul")]
-            Self::PijulUnrecord { .. } => "PijulUnrecord",
             Self::Ping => "Ping",
             Self::PromoteLearner { .. } => "PromoteLearner",
             Self::ProtectBlob { .. } => "ProtectBlob",
@@ -3881,24 +3660,6 @@ impl ClientRpcRequest {
             | Self::CacheMigrationStatus
             | Self::CacheMigrationCancel
             | Self::CacheMigrationValidate { .. } => Some("snix"),
-
-            // Feature-gated: Pijul
-            #[cfg(feature = "pijul")]
-            Self::PijulRepoInit { .. }
-            | Self::PijulRepoList { .. }
-            | Self::PijulRepoInfo { .. }
-            | Self::PijulChannelList { .. }
-            | Self::PijulChannelCreate { .. }
-            | Self::PijulChannelDelete { .. }
-            | Self::PijulChannelFork { .. }
-            | Self::PijulChannelInfo { .. }
-            | Self::PijulRecord { .. }
-            | Self::PijulApply { .. }
-            | Self::PijulUnrecord { .. }
-            | Self::PijulLog { .. }
-            | Self::PijulCheckout { .. }
-            | Self::PijulShow { .. }
-            | Self::PijulBlame { .. } => Some("pijul"),
 
             // Feature-gated: Automerge
             #[cfg(feature = "automerge")]
@@ -4571,56 +4332,6 @@ pub enum ClientRpcResponse {
     // =========================================================================
 
     // -------------------------------------------------------------------------
-    // Pijul responses
-    // -------------------------------------------------------------------------
-    /// Pijul repository result.
-    #[cfg(feature = "pijul")]
-    PijulRepoResult(PijulRepoResponse),
-
-    /// Pijul repository list result.
-    #[cfg(feature = "pijul")]
-    PijulRepoListResult(PijulRepoListResponse),
-
-    /// Pijul channel result.
-    #[cfg(feature = "pijul")]
-    PijulChannelResult(PijulChannelResponse),
-
-    /// Pijul channel list result.
-    #[cfg(feature = "pijul")]
-    PijulChannelListResult(PijulChannelListResponse),
-
-    /// Pijul record result.
-    #[cfg(feature = "pijul")]
-    PijulRecordResult(PijulRecordResponse),
-
-    /// Pijul apply result.
-    #[cfg(feature = "pijul")]
-    PijulApplyResult(PijulApplyResponse),
-
-    /// Pijul unrecord result.
-    #[cfg(feature = "pijul")]
-    PijulUnrecordResult(PijulUnrecordResponse),
-
-    /// Pijul log result.
-    #[cfg(feature = "pijul")]
-    PijulLogResult(PijulLogResponse),
-
-    /// Pijul checkout result.
-    #[cfg(feature = "pijul")]
-    PijulCheckoutResult(PijulCheckoutResponse),
-
-    /// Pijul show result.
-    #[cfg(feature = "pijul")]
-    PijulShowResult(PijulShowResponse),
-
-    /// Pijul blame result.
-    #[cfg(feature = "pijul")]
-    PijulBlameResult(PijulBlameResponse),
-
-    /// Pijul success (no payload).
-    #[cfg(feature = "pijul")]
-    PijulSuccess,
-
     // -------------------------------------------------------------------------
     // Automerge responses
     // -------------------------------------------------------------------------

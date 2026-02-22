@@ -568,7 +568,6 @@ DISCOVERY LAYER
 - **Collaborative Objects (COBs)**: Issues, patches, reviews as immutable DAGs
 - **Refs**: Branch/tag storage via Raft (strongly consistent)
 - **Git Bridge**: Bidirectional sync with GitHub/GitLab/Gitea via `git-remote-aspen` helper
-- **Pijul**: Alternative patch-based VCS (via libpijul, GPL-2.0-or-later)
 
 ### Design: Radicle-Inspired
 
@@ -770,7 +769,6 @@ Client → QUIC/Iroh → ClientProtocolHandler
 | `aspen-secrets-handler` | PKI + Nix cache signing (native crypto only) |
 | `aspen-ci-handler` | CI pipeline operations |
 | `aspen-query-handler` | SQL queries |
-| `aspen-pijul-handler` | Pijul VCS operations |
 | `aspen-nix-handler` | Nix store operations |
 
 ### Cross-Cluster Proxying
@@ -814,7 +812,6 @@ Most functionality is behind Cargo features. See `Cargo.toml` for all available 
 | `blob` | iroh-blobs storage |
 | `forge` | Decentralized Git |
 | `git-bridge` | GitHub/GitLab sync |
-| `pijul` | Pijul VCS (GPL-2.0-or-later) |
 | `plugins` | All plugin backends (umbrella) |
 | `plugins-wasm` | WASM plugin host (Hyperlight) |
 | `plugins-vm` | Hyperlight micro-VMs |
@@ -1051,8 +1048,6 @@ Verification coverage is tracked via the `aspen-verus-metrics` crate with termin
 | `aspen-layer` | FoundationDB-style layer primitives |
 | `aspen-traits` | Shared trait definitions |
 | `aspen-nix-cache-gateway` | HTTP/3 Nix cache proxy |
-| `aspen-pijul` | Pijul VCS integration |
-| `aspen-pijul-handler` | Pijul RPC handler |
 | `aspen-sql` | SQL query engine |
 
 ---

@@ -86,9 +86,6 @@ pub struct ClientProtocolContext {
     /// Forge node for decentralized Git operations (optional).
     #[cfg(feature = "forge")]
     pub forge_node: Option<Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>>,
-    /// Pijul store for patch-based version control (optional).
-    #[cfg(feature = "pijul")]
-    pub pijul_store: Option<Arc<aspen_pijul::PijulStore<aspen_blob::IrohBlobStore, dyn KeyValueStore>>>,
     /// Job manager for distributed job queue operations (optional).
     #[cfg(feature = "jobs")]
     pub job_manager: Option<Arc<aspen_jobs::JobManager<dyn KeyValueStore>>>,
@@ -337,8 +334,6 @@ pub mod test_support {
         hooks_config: Option<aspen_hooks_types::HooksConfig>,
         #[cfg(feature = "sql")]
         sql_executor: Option<Arc<dyn aspen_sql::SqlQueryExecutor>>,
-        #[cfg(feature = "pijul")]
-        pijul_store: Option<Arc<aspen_pijul::PijulStore<aspen_blob::IrohBlobStore, dyn KeyValueStore>>>,
     }
 
     impl Default for TestContextBuilder {
@@ -360,8 +355,6 @@ pub mod test_support {
                 hooks_config: None,
                 #[cfg(feature = "sql")]
                 sql_executor: None,
-                #[cfg(feature = "pijul")]
-                pijul_store: None,
             }
         }
 
@@ -414,16 +407,6 @@ pub mod test_support {
             self
         }
 
-        /// Set a custom Pijul store.
-        #[cfg(feature = "pijul")]
-        pub fn with_pijul_store(
-            mut self,
-            pijul_store: Arc<aspen_pijul::PijulStore<aspen_blob::IrohBlobStore, dyn KeyValueStore>>,
-        ) -> Self {
-            self.pijul_store = Some(pijul_store);
-            self
-        }
-
         /// Build the test context.
         ///
         /// Uses deterministic in-memory implementations for any dependencies
@@ -463,8 +446,6 @@ pub mod test_support {
                 content_discovery: None,
                 #[cfg(feature = "forge")]
                 forge_node: None,
-                #[cfg(feature = "pijul")]
-                pijul_store: self.pijul_store,
                 #[cfg(feature = "jobs")]
                 job_manager: None,
                 #[cfg(feature = "worker")]

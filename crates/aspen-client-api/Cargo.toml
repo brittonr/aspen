@@ -26,6 +26,5 @@ thiserror = "2.0"
 default = ["auth"]
 auth = ["dep:aspen-auth"]
 ci = []
-pijul = []
 secrets = []
 automerge = []
