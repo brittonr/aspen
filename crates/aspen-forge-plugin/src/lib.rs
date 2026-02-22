@@ -4,8 +4,10 @@
 //! using the host-provided KV store, blob store, and crypto bindings.
 //! COBs, federation, and git bridge are deferred to later phases.
 
+mod issues;
 mod kv;
 mod objects;
+mod patches;
 mod refs;
 mod repo;
 mod signing;
@@ -46,6 +48,21 @@ impl AspenPlugin for ForgePlugin {
                 "ForgeListBranches".to_string(),
                 "ForgeListTags".to_string(),
                 "ForgeGetDelegateKey".to_string(),
+                // Issues
+                "ForgeCreateIssue".to_string(),
+                "ForgeListIssues".to_string(),
+                "ForgeGetIssue".to_string(),
+                "ForgeCommentIssue".to_string(),
+                "ForgeCloseIssue".to_string(),
+                "ForgeReopenIssue".to_string(),
+                // Patches
+                "ForgeCreatePatch".to_string(),
+                "ForgeListPatches".to_string(),
+                "ForgeGetPatch".to_string(),
+                "ForgeUpdatePatch".to_string(),
+                "ForgeApprovePatch".to_string(),
+                "ForgeMergePatch".to_string(),
+                "ForgeClosePatch".to_string(),
             ],
             priority: 950,
             app_id: Some("forge".to_string()),
@@ -129,6 +146,75 @@ impl AspenPlugin for ForgePlugin {
             ClientRpcRequest::ForgeListTags { repo_id } => refs::handle_list_tags(repo_id),
 
             ClientRpcRequest::ForgeGetDelegateKey { repo_id: _ } => refs::handle_get_delegate_key(),
+
+            // Issues
+            ClientRpcRequest::ForgeCreateIssue {
+                repo_id,
+                title,
+                body,
+                labels,
+            } => issues::handle_create_issue(repo_id, title, body, labels),
+
+            ClientRpcRequest::ForgeListIssues { repo_id, state, limit } => {
+                issues::handle_list_issues(repo_id, state, limit)
+            }
+
+            ClientRpcRequest::ForgeGetIssue { repo_id, issue_id } => issues::handle_get_issue(repo_id, issue_id),
+
+            ClientRpcRequest::ForgeCommentIssue {
+                repo_id,
+                issue_id,
+                body,
+            } => issues::handle_comment_issue(repo_id, issue_id, body),
+
+            ClientRpcRequest::ForgeCloseIssue {
+                repo_id,
+                issue_id,
+                reason,
+            } => issues::handle_close_issue(repo_id, issue_id, reason),
+
+            ClientRpcRequest::ForgeReopenIssue { repo_id, issue_id } => issues::handle_reopen_issue(repo_id, issue_id),
+
+            // Patches
+            ClientRpcRequest::ForgeCreatePatch {
+                repo_id,
+                title,
+                description,
+                base,
+                head,
+            } => patches::handle_create_patch(repo_id, title, description, base, head),
+
+            ClientRpcRequest::ForgeListPatches { repo_id, state, limit } => {
+                patches::handle_list_patches(repo_id, state, limit)
+            }
+
+            ClientRpcRequest::ForgeGetPatch { repo_id, patch_id } => patches::handle_get_patch(repo_id, patch_id),
+
+            ClientRpcRequest::ForgeUpdatePatch {
+                repo_id,
+                patch_id,
+                head,
+                message,
+            } => patches::handle_update_patch(repo_id, patch_id, head, message),
+
+            ClientRpcRequest::ForgeApprovePatch {
+                repo_id,
+                patch_id,
+                commit,
+                message,
+            } => patches::handle_approve_patch(repo_id, patch_id, commit, message),
+
+            ClientRpcRequest::ForgeMergePatch {
+                repo_id,
+                patch_id,
+                merge_commit,
+            } => patches::handle_merge_patch(repo_id, patch_id, merge_commit),
+
+            ClientRpcRequest::ForgeClosePatch {
+                repo_id,
+                patch_id,
+                reason,
+            } => patches::handle_close_patch(repo_id, patch_id, reason),
 
             _ => ClientRpcResponse::Error(aspen_wasm_guest_sdk::response::error_response(
                 "UNHANDLED",

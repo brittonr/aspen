@@ -13,9 +13,7 @@
 mod federation;
 mod git_bridge;
 mod handlers;
-mod issues;
 mod objects;
-mod patches;
 mod refs;
 mod repo;
 
@@ -25,9 +23,7 @@ use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;
 use federation::FederationSubHandler;
 use git_bridge::GitBridgeSubHandler;
-use issues::IssuesSubHandler;
 use objects::ObjectsSubHandler;
-use patches::PatchesSubHandler;
 use refs::RefsSubHandler;
 use repo::RepoSubHandler;
 
@@ -40,16 +36,12 @@ impl RequestHandler for ForgeHandler {
         let repo = RepoSubHandler;
         let objects = ObjectsSubHandler;
         let refs = RefsSubHandler;
-        let issues = IssuesSubHandler;
-        let patches = PatchesSubHandler;
         let federation = FederationSubHandler;
         let git_bridge = GitBridgeSubHandler;
 
         repo.can_handle(request)
             || objects.can_handle(request)
             || refs.can_handle(request)
-            || issues.can_handle(request)
-            || patches.can_handle(request)
             || federation.can_handle(request)
             || git_bridge.can_handle(request)
     }
@@ -70,8 +62,6 @@ impl RequestHandler for ForgeHandler {
         let repo = RepoSubHandler;
         let objects = ObjectsSubHandler;
         let refs = RefsSubHandler;
-        let issues = IssuesSubHandler;
-        let patches = PatchesSubHandler;
         let federation = FederationSubHandler;
         let git_bridge = GitBridgeSubHandler;
 
@@ -83,12 +73,6 @@ impl RequestHandler for ForgeHandler {
         }
         if refs.can_handle(&request) {
             return refs.handle(request, ctx, forge_node).await;
-        }
-        if issues.can_handle(&request) {
-            return issues.handle(request, ctx, forge_node).await;
-        }
-        if patches.can_handle(&request) {
-            return patches.handle(request, ctx, forge_node).await;
         }
         if federation.can_handle(&request) {
             return federation.handle(request, ctx, forge_node).await;
@@ -276,139 +260,84 @@ mod tests {
         }));
     }
 
-    // --- Issue Operations ---
+    // --- Issue/Patch Operations (migrated to aspen-forge-plugin WASM) ---
 
     #[test]
-    fn test_can_handle_create_issue() {
+    fn test_issues_migrated_to_plugin() {
         let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeCreateIssue {
-            repo_id: "abcd1234".to_string(),
-            title: "Bug: Something is broken".to_string(),
-            body: "Description of the issue".to_string(),
-            labels: vec!["bug".to_string(), "priority-high".to_string()],
+        // Issues are now handled by the WASM forge plugin, not the native handler
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeCreateIssue {
+            repo_id: "x".into(),
+            title: "x".into(),
+            body: "x".into(),
+            labels: vec![],
+        }));
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeListIssues {
+            repo_id: "x".into(),
+            state: None,
+            limit: None,
+        }));
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeGetIssue {
+            repo_id: "x".into(),
+            issue_id: "x".into(),
+        }));
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeCommentIssue {
+            repo_id: "x".into(),
+            issue_id: "x".into(),
+            body: "x".into(),
+        }));
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeCloseIssue {
+            repo_id: "x".into(),
+            issue_id: "x".into(),
+            reason: None,
+        }));
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeReopenIssue {
+            repo_id: "x".into(),
+            issue_id: "x".into(),
         }));
     }
 
     #[test]
-    fn test_can_handle_list_issues() {
+    fn test_patches_migrated_to_plugin() {
         let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeListIssues {
-            repo_id: "abcd1234".to_string(),
-            state: Some("open".to_string()),
-            limit: Some(50),
+        // Patches are now handled by the WASM forge plugin, not the native handler
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeCreatePatch {
+            repo_id: "x".into(),
+            title: "x".into(),
+            description: "x".into(),
+            base: "x".into(),
+            head: "x".into(),
         }));
-    }
-
-    #[test]
-    fn test_can_handle_get_issue() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetIssue {
-            repo_id: "abcd1234".to_string(),
-            issue_id: "issue123".to_string(),
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeListPatches {
+            repo_id: "x".into(),
+            state: None,
+            limit: None,
         }));
-    }
-
-    #[test]
-    fn test_can_handle_comment_issue() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeCommentIssue {
-            repo_id: "abcd1234".to_string(),
-            issue_id: "issue123".to_string(),
-            body: "This is a comment".to_string(),
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeGetPatch {
+            repo_id: "x".into(),
+            patch_id: "x".into(),
         }));
-    }
-
-    #[test]
-    fn test_can_handle_close_issue() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeCloseIssue {
-            repo_id: "abcd1234".to_string(),
-            issue_id: "issue123".to_string(),
-            reason: Some("Resolved".to_string()),
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeUpdatePatch {
+            repo_id: "x".into(),
+            patch_id: "x".into(),
+            head: "x".into(),
+            message: None,
         }));
-    }
-
-    #[test]
-    fn test_can_handle_reopen_issue() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeReopenIssue {
-            repo_id: "abcd1234".to_string(),
-            issue_id: "issue123".to_string(),
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeApprovePatch {
+            repo_id: "x".into(),
+            patch_id: "x".into(),
+            commit: "x".into(),
+            message: None,
         }));
-    }
-
-    // --- Patch Operations ---
-
-    #[test]
-    fn test_can_handle_create_patch() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeCreatePatch {
-            repo_id: "abcd1234".to_string(),
-            title: "Add new feature".to_string(),
-            description: "This patch adds a new feature".to_string(),
-            base: "base_commit".to_string(),
-            head: "head_commit".to_string(),
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeMergePatch {
+            repo_id: "x".into(),
+            patch_id: "x".into(),
+            merge_commit: "x".into(),
         }));
-    }
-
-    #[test]
-    fn test_can_handle_list_patches() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeListPatches {
-            repo_id: "abcd1234".to_string(),
-            state: Some("open".to_string()),
-            limit: Some(20),
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_get_patch() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetPatch {
-            repo_id: "abcd1234".to_string(),
-            patch_id: "patch123".to_string(),
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_update_patch() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeUpdatePatch {
-            repo_id: "abcd1234".to_string(),
-            patch_id: "patch123".to_string(),
-            head: "new_head".to_string(),
-            message: Some("Updated the patch".to_string()),
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_approve_patch() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeApprovePatch {
-            repo_id: "abcd1234".to_string(),
-            patch_id: "patch123".to_string(),
-            commit: "approved_commit".to_string(),
-            message: Some("LGTM".to_string()),
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_merge_patch() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeMergePatch {
-            repo_id: "abcd1234".to_string(),
-            patch_id: "patch123".to_string(),
-            merge_commit: "merge_commit_hash".to_string(),
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_close_patch() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeClosePatch {
-            repo_id: "abcd1234".to_string(),
-            patch_id: "patch123".to_string(),
-            reason: Some("Superseded by another patch".to_string()),
+        assert!(!handler.can_handle(&ClientRpcRequest::ForgeClosePatch {
+            repo_id: "x".into(),
+            patch_id: "x".into(),
+            reason: None,
         }));
     }
 
@@ -605,9 +534,11 @@ mod tests {
     // Request Variant Coverage Tests
     // =========================================================================
 
-    /// Test all 44 Forge request variants are handled by can_handle()
+    /// Test native handler covers repos, objects, refs, delegate key, federation, git bridge.
+    /// Issues (6) and Patches (7) migrated to aspen-forge-plugin (WASM).
+    /// Native handler: 3 + 7 + 6 + 1 + 8 + 6 = 31 request types.
     #[test]
-    fn test_all_forge_variants_covered() {
+    fn test_native_handler_variants_covered() {
         let handler = ForgeHandler;
 
         // Repository Operations (3)
@@ -675,77 +606,6 @@ mod tests {
         assert!(handler.can_handle(&ClientRpcRequest::ForgeListBranches { repo_id: "x".into() }));
         assert!(handler.can_handle(&ClientRpcRequest::ForgeListTags { repo_id: "x".into() }));
 
-        // Issues (6)
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeCreateIssue {
-            repo_id: "x".into(),
-            title: "x".into(),
-            body: "x".into(),
-            labels: vec![]
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeListIssues {
-            repo_id: "x".into(),
-            state: None,
-            limit: None
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetIssue {
-            repo_id: "x".into(),
-            issue_id: "x".into()
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeCommentIssue {
-            repo_id: "x".into(),
-            issue_id: "x".into(),
-            body: "x".into()
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeCloseIssue {
-            repo_id: "x".into(),
-            issue_id: "x".into(),
-            reason: None
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeReopenIssue {
-            repo_id: "x".into(),
-            issue_id: "x".into()
-        }));
-
-        // Patches (7)
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeCreatePatch {
-            repo_id: "x".into(),
-            title: "x".into(),
-            description: "x".into(),
-            base: "x".into(),
-            head: "x".into()
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeListPatches {
-            repo_id: "x".into(),
-            state: None,
-            limit: None
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetPatch {
-            repo_id: "x".into(),
-            patch_id: "x".into()
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeUpdatePatch {
-            repo_id: "x".into(),
-            patch_id: "x".into(),
-            head: "x".into(),
-            message: None
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeApprovePatch {
-            repo_id: "x".into(),
-            patch_id: "x".into(),
-            commit: "x".into(),
-            message: None
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeMergePatch {
-            repo_id: "x".into(),
-            patch_id: "x".into(),
-            merge_commit: "x".into()
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeClosePatch {
-            repo_id: "x".into(),
-            patch_id: "x".into(),
-            reason: None
-        }));
-
         // Delegate Key (1)
         assert!(handler.can_handle(&ClientRpcRequest::ForgeGetDelegateKey { repo_id: "x".into() }));
 
@@ -801,8 +661,5 @@ mod tests {
             session_id: "x".into(),
             content_hash: [0; 32]
         }));
-
-        // Total: 3 + 7 + 6 + 6 + 7 + 1 + 8 + 6 = 44 distinct request types
-        // (matches the can_handle() match block)
     }
 }

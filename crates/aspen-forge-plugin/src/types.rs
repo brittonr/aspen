@@ -90,6 +90,87 @@ pub struct Author {
     pub timezone: String,
 }
 
+// ============================================================================
+// Issue & Patch types (KV-backed COBs)
+// ============================================================================
+
+/// Issue stored in KV.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueData {
+    pub title: String,
+    pub body: String,
+    /// "open" or "closed"
+    pub state: String,
+    pub close_reason: Option<String>,
+    pub labels: Vec<String>,
+    pub comments: Vec<CommentData>,
+    /// Hex-encoded public keys.
+    pub assignees: Vec<String>,
+    pub created_at_ms: u64,
+    pub updated_at_ms: u64,
+    /// Hex-encoded public key of the creator.
+    pub author: String,
+}
+
+/// Patch stored in KV.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PatchData {
+    pub title: String,
+    pub description: String,
+    /// "open", "merged", or "closed"
+    pub state: String,
+    pub close_reason: Option<String>,
+    /// Hex-encoded BLAKE3 hash.
+    pub base: String,
+    /// Hex-encoded BLAKE3 hash (current head).
+    pub head: String,
+    pub labels: Vec<String>,
+    pub comments: Vec<CommentData>,
+    pub revisions: Vec<RevisionData>,
+    pub approvals: Vec<ApprovalData>,
+    /// Hex-encoded public keys.
+    pub assignees: Vec<String>,
+    pub created_at_ms: u64,
+    pub updated_at_ms: u64,
+    /// Hex-encoded public key of the creator.
+    pub author: String,
+}
+
+/// Comment on an issue or patch.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommentData {
+    /// Hex-encoded BLAKE3 hash identifying this comment.
+    pub hash: String,
+    /// Hex-encoded public key of the author.
+    pub author: String,
+    pub body: String,
+    pub timestamp_ms: u64,
+}
+
+/// Patch revision (head update).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RevisionData {
+    /// Hex-encoded BLAKE3 hash identifying this revision.
+    pub hash: String,
+    /// Hex-encoded BLAKE3 hash of the new head commit.
+    pub head: String,
+    pub message: Option<String>,
+    /// Hex-encoded public key of the author.
+    pub author: String,
+    pub timestamp_ms: u64,
+}
+
+/// Patch approval.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApprovalData {
+    /// Hex-encoded public key of the approver.
+    pub author: String,
+    /// Hex-encoded BLAKE3 hash of the approved commit.
+    pub commit: String,
+    pub message: Option<String>,
+    pub timestamp_ms: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

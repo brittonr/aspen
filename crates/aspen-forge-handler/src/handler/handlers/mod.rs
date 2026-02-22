@@ -2,7 +2,6 @@
 //!
 //! Each module contains handlers for a specific category of operations.
 
-pub mod cob;
 pub mod federation;
 #[cfg(feature = "git-bridge")]
 pub mod git_bridge;
