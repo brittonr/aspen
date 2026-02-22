@@ -496,3 +496,37 @@
 
 - `aspen-node-proxy`: Node with default features + `proxy`
 - `aspen-cli-proxy`: CLI with `proxy` feature
+
+## Recent Changes (2026-02-22) — WASM Plugin VM Test Enablement
+
+### WASM Plugin Build Derivations
+
+- New `buildWasmPlugin` helper in flake.nix — DRY builder for cdylib WASM plugins
+- 5 new derivations: `coordinationPluginWasm`, `automergePluginWasm`, `secretsPluginWasm`, `serviceRegistryPluginWasm`, `hooksPluginWasm`
+- Each outputs `{name}-plugin.wasm` + `plugin.json` from the crate's existing manifest
+- Follows same pattern as `echoPluginWasm` (commonArgs, wasm32-unknown-unknown target)
+
+### Shared Test Helper: `nix/tests/lib/wasm-plugins.nix`
+
+- Reusable module for any VM test that needs WASM plugins
+- Takes `{ pkgs, aspenCliPlugins, plugins }` — plugins is list of `{ name, wasm }`
+- Provides `nixosConfig` (NixOS module placing WASM + manifests in `/etc/aspen-plugins/`)
+- Provides `pluginCli` wrapper (`aspen-plugin-cli` binary, avoids conflict with test CLI)
+- Provides `installPluginsScript` (Python snippet: install all plugins via CLI, reload, verify count)
+- **Pattern: two CLIs in VM** — `aspen-cli` (test features) + `aspen-plugin-cli` (plugins-rpc) avoids binary name conflict
+
+### 6 VM Tests Updated
+
+- **coordination-primitives.nix** → `aspen-node-plugins` + coordination WASM plugin
+- **multi-node-coordination.nix** → `aspen-node-plugins` + coordination WASM plugin (3 nodes)
+- **automerge-sql.nix** → `aspen-node-plugins` + automerge WASM plugin
+- **hooks-services.nix** → `aspen-node-plugins` + service-registry WASM plugin
+- **secrets-engine.nix** → `aspen-node-plugins` + secrets WASM plugin
+- **ratelimit-verify.nix** → `aspen-node-plugins` + coordination WASM plugin (rate limiter is in coord)
+- All tests: `skipLint = true` (f-string interpolation from Nix), `memorySize = 4096` (hyperlight needs more RAM)
+
+### Why These Tests
+
+- Native handlers DELETED: coordination, automerge, service-registry → WASM plugins are canonical
+- Native secrets handler slimmed to PKI-only → KV/Transit needs WASM secrets plugin
+- Rate limiter CLI commands (`RateLimiterTryAcquire` etc.) are in coordination plugin

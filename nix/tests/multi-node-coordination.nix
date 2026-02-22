@@ -21,6 +21,8 @@
   pkgs,
   aspenNodePackage,
   aspenCliPackage,
+  aspenCliPlugins,
+  coordinationPluginWasm,
 }: let
   secretKey1 = "0000000000000001000000000000000100000000000000010000000000000001";
   secretKey2 = "0000000000000002000000000000000200000000000000020000000000000002";
@@ -28,11 +30,25 @@
 
   cookie = "multi-node-coord-test";
 
+  # WASM plugin helpers (coordination handler is WASM-only)
+  pluginHelpers = import ./lib/wasm-plugins.nix {
+    inherit pkgs aspenCliPlugins;
+    plugins = [
+      {
+        name = "coordination";
+        wasm = coordinationPluginWasm;
+      }
+    ];
+  };
+
   mkNodeConfig = {
     nodeId,
     secretKey,
   }: {
-    imports = [../../nix/modules/aspen-node.nix];
+    imports = [
+      ../../nix/modules/aspen-node.nix
+      pluginHelpers.nixosConfig
+    ];
 
     services.aspen.node = {
       enable = true;
@@ -51,12 +67,13 @@
 
     networking.firewall.enable = false;
 
-    virtualisation.memorySize = 2048;
+    virtualisation.memorySize = 4096;
     virtualisation.cores = 2;
   };
 in
   pkgs.testers.nixosTest {
     name = "multi-node-coordination";
+    skipLint = true;
 
     nodes = {
       node1 = mkNodeConfig {
@@ -170,6 +187,9 @@ in
       voters = [n for n in status.get("nodes", []) if n.get("is_voter")]
       assert len(voters) == 3, f"expected 3 voters: {voters}"
       node1.log("3-node cluster formed successfully")
+
+      # ── install WASM plugins (coordination handler is WASM-only) ───
+      ${pluginHelpers.installPluginsScript}
 
       # Use leader ticket for all operations
       metrics = cli(node1, "cluster metrics")

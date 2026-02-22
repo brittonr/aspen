@@ -470,22 +470,59 @@
               ));
           };
 
-        # Build echo-plugin.wasm for WASM plugin integration tests
-        echoPluginWasm = craneLib.buildPackage (
-          commonArgs
-          // {
-            pname = "aspen-echo-plugin";
-            version = "0.1.0";
-            cargoExtraArgs = "--package aspen-echo-plugin --target wasm32-unknown-unknown";
-            doCheck = false;
-            # WASM builds produce .wasm files, not regular binaries
-            installPhaseCommand = ''
-              mkdir -p $out
-              cp target/wasm32-unknown-unknown/release/aspen_echo_plugin.wasm $out/echo-plugin.wasm 2>/dev/null \
-                || cp target/wasm32-unknown-unknown/debug/aspen_echo_plugin.wasm $out/echo-plugin.wasm
-            '';
-          }
-        );
+        # ── WASM plugin derivations for VM integration tests ────────────
+        # Each plugin is a cdylib crate built for wasm32-unknown-unknown.
+        # The output includes the .wasm binary and the plugin.json manifest.
+        buildWasmPlugin = {
+          package,
+          wasmName,
+          friendlyName,
+        }:
+          craneLib.buildPackage (
+            commonArgs
+            // {
+              pname = package;
+              version = "0.1.0";
+              cargoExtraArgs = "--package ${package} --target wasm32-unknown-unknown";
+              doCheck = false;
+              installPhaseCommand = ''
+                mkdir -p $out
+                cp target/wasm32-unknown-unknown/release/${wasmName}.wasm $out/${friendlyName}.wasm 2>/dev/null \
+                  || cp target/wasm32-unknown-unknown/debug/${wasmName}.wasm $out/${friendlyName}.wasm
+                cp crates/${package}/plugin.json $out/plugin.json
+              '';
+            }
+          );
+
+        coordinationPluginWasm = buildWasmPlugin {
+          package = "aspen-coordination-plugin";
+          wasmName = "aspen_coordination_plugin";
+          friendlyName = "coordination-plugin";
+        };
+
+        automergePluginWasm = buildWasmPlugin {
+          package = "aspen-automerge-plugin";
+          wasmName = "aspen_automerge_plugin";
+          friendlyName = "automerge-plugin";
+        };
+
+        secretsPluginWasm = buildWasmPlugin {
+          package = "aspen-secrets-plugin";
+          wasmName = "aspen_secrets_plugin";
+          friendlyName = "secrets-plugin";
+        };
+
+        serviceRegistryPluginWasm = buildWasmPlugin {
+          package = "aspen-service-registry-plugin";
+          wasmName = "aspen_service_registry_plugin";
+          friendlyName = "service-registry-plugin";
+        };
+
+        hooksPluginWasm = buildWasmPlugin {
+          package = "aspen-hooks-plugin";
+          wasmName = "aspen_hooks_plugin";
+          friendlyName = "hooks-plugin";
+        };
 
         # Build the main package
         aspen = craneLib.buildPackage (
@@ -804,11 +841,13 @@
           );
 
           # Build aspen-cli with plugin management features
+          # Must include ci,automerge to match node's aspen-client-api enum layout
+          # (postcard uses variant indices; cfg-gated variants shift indices)
           aspen-cli-plugins-crate = craneLib.buildPackage (
             commonArgs
             // {
               inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
-              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features plugins-rpc";
+              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features plugins-rpc,ci,automerge";
               doCheck = false;
             }
           );
@@ -947,7 +986,7 @@
               inherit aspen-node-dns aspen-node-pijul aspen-node-proxy aspen-node-plugins;
               aspen-ci-agent = aspen-ci-agent-crate;
               verus-metrics = aspen-verus-metrics-crate;
-              inherit echoPluginWasm;
+              inherit coordinationPluginWasm automergePluginWasm secretsPluginWasm serviceRegistryPluginWasm hooksPluginWasm;
               inherit hyperlight-wasm-runtime;
             };
         in
@@ -1217,11 +1256,13 @@
               # counter linearizability, semaphore capacity enforcement,
               # RW lock multi-node readers/writers, cross-node queues,
               # sequence monotonicity, lease cross-node ops, failover survival.
+              # Uses WASM coordination plugin (native handler deleted).
               # Build: nix build .#checks.x86_64-linux.multi-node-coordination-test
               multi-node-coordination-test = import ./nix/tests/multi-node-coordination.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
+                inherit pkgs coordinationPluginWasm;
+                aspenNodePackage = bins.aspen-node-plugins;
                 aspenCliPackage = bins.aspen-cli;
+                aspenCliPlugins = bins.aspen-cli-plugins;
               };
 
               # Multi-node blob test: cross-node blob retrieval, blobs from
@@ -1254,31 +1295,37 @@
 
               # Coordination primitives test: distributed locks, counters,
               # sequences, semaphores, rwlocks, barriers, queues, leases.
+              # Uses WASM coordination plugin (native handler deleted).
               # Build: nix build .#checks.x86_64-linux.coordination-primitives-test
               coordination-primitives-test = import ./nix/tests/coordination-primitives.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
+                inherit pkgs coordinationPluginWasm;
+                aspenNodePackage = bins.aspen-node-plugins;
                 aspenCliPackage = bins.aspen-cli;
+                aspenCliPlugins = bins.aspen-cli-plugins;
               };
 
               # Hooks and service registry test: event system (list, metrics,
               # trigger, URLs) and service discovery (register, discover, get,
               # list, heartbeat, health, update, deregister).
+              # Uses WASM service-registry plugin (native handler deleted).
               # Build: nix build .#checks.x86_64-linux.hooks-services-test
               hooks-services-test = import ./nix/tests/hooks-services.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
+                inherit pkgs serviceRegistryPluginWasm;
+                aspenNodePackage = bins.aspen-node-plugins;
                 aspenCliPackage = bins.aspen-cli;
+                aspenCliPlugins = bins.aspen-cli-plugins;
               };
 
               # Rate limiter and verify test: token bucket rate limiting
               # (try-acquire, available, reset, budget exhaustion, bucket isolation)
               # and cluster verification (KV, blobs).
+              # Uses WASM coordination plugin for rate limiter (native handler deleted).
               # Build: nix build .#checks.x86_64-linux.ratelimit-verify-test
               ratelimit-verify-test = import ./nix/tests/ratelimit-verify.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
+                inherit pkgs coordinationPluginWasm;
+                aspenNodePackage = bins.aspen-node-plugins;
                 aspenCliPackage = bins.aspen-cli;
+                aspenCliPlugins = bins.aspen-cli-plugins;
               };
 
               # Cluster management, docs namespace, peer, and verify test:
@@ -1304,11 +1351,13 @@
               # Automerge CRDT and SQL query test: automerge create, get,
               # exists, list, get-metadata, delete; SQL queries (SELECT,
               # WHERE, COUNT, LIMIT, ORDER BY, error handling).
+              # Uses WASM automerge plugin (native handler deleted).
               # Build: nix build .#checks.x86_64-linux.automerge-sql-test
               automerge-sql-test = import ./nix/tests/automerge-sql.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
+                inherit pkgs automergePluginWasm;
+                aspenNodePackage = bins.aspen-node-plugins;
                 aspenCliPackage = bins.aspen-cli-full;
+                aspenCliPlugins = bins.aspen-cli-plugins;
               };
 
               # Plugin CLI test: install, list, info, enable, disable, remove,
@@ -1321,26 +1370,16 @@
                 aspenCliPackage = bins.aspen-cli-plugins;
               };
 
-              # WASM plugin execution test: installs a real echo-plugin WASM
-              # binary, reloads the plugin runtime, then exercises actual
-              # request dispatch through the plugin (Ping→Pong, ReadKey via
-              # host KV, unhandled request error).
-              # Build: nix build .#checks.x86_64-linux.plugin-execution-test
-              plugin-execution-test = import ./nix/tests/plugin-execution.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.aspen-node-plugins;
-                aspenCliPackage = bins.aspen-cli-plugins;
-                echoPluginWasm = echoPluginWasm;
-              };
-
               # Secrets engine test: KV (write, read, versions, list,
               # soft delete, undelete, destroy, CAS) and Transit (create key,
               # encrypt, decrypt, sign, verify, rotate, list, datakey).
+              # Uses WASM secrets plugin for KV/Transit (native handler is PKI-only).
               # Build: nix build .#checks.x86_64-linux.secrets-engine-test
               secrets-engine-test = import ./nix/tests/secrets-engine.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
+                inherit pkgs secretsPluginWasm;
+                aspenNodePackage = bins.aspen-node-plugins;
                 aspenCliPackage = bins.aspen-cli-secrets;
+                aspenCliPlugins = bins.aspen-cli-plugins;
               };
 
               # DNS operations test: zones (create, get, list, delete),
@@ -2651,7 +2690,7 @@
               type = "app";
               program = "${pkgs.writeShellScript "build-plugins" ''
                 set -e
-                PLUGINS="aspen-forge-plugin aspen-service-registry-plugin aspen-echo-plugin"
+                PLUGINS="aspen-forge-plugin aspen-service-registry-plugin"
                 TARGET="wasm32-unknown-unknown"
                 echo "Building WASM plugins for $TARGET..."
                 for plugin in $PLUGINS; do
@@ -2687,13 +2726,9 @@
                     CRATE_DIR="crates/aspen-service-registry-plugin"
                     PKG_NAME="aspen-service-registry-plugin"
                     ;;
-                  echo)
-                    CRATE_DIR="examples/plugins/echo-plugin"
-                    PKG_NAME="aspen-echo-plugin"
-                    ;;
                   *)
                     echo "Unknown plugin: $PLUGIN_NAME"
-                    echo "Available: forge, service-registry, echo"
+                    echo "Available: forge, service-registry"
                     exit 1
                     ;;
                 esac

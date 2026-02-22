@@ -1424,14 +1424,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-echo-plugin"
-version = "0.1.0"
-dependencies = [
- "aspen-wasm-guest-sdk",
- "serde_json",
-]
-
-[[package]]
 name = "aspen-federation"
 version = "0.1.0"
 dependencies = [

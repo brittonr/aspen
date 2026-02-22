@@ -289,10 +289,12 @@ impl HandlerRegistry {
     #[cfg(feature = "plugins-rpc")]
     pub async fn load_wasm_plugins(&mut self, ctx: &ClientProtocolContext) -> anyhow::Result<u32> {
         let registry = Arc::new(aspen_wasm_plugin::LivePluginRegistry::new());
+        // Store the registry BEFORE load_all so that reload_wasm_plugins works
+        // even if the initial load fails (e.g., cluster not yet initialized).
+        self.plugin_registry = Some(Arc::clone(&registry));
         let handlers = registry.load_all(ctx).await?;
         let count = handlers.len() as u32;
         self.add_handlers(handlers);
-        self.plugin_registry = Some(registry);
         info!(plugin_count = count, "WASM plugin handlers loaded");
         Ok(count)
     }

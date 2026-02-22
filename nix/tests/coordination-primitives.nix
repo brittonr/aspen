@@ -22,19 +22,36 @@
   pkgs,
   aspenNodePackage,
   aspenCliPackage,
+  aspenCliPlugins,
+  coordinationPluginWasm,
 }: let
   # Deterministic Iroh secret key (64 hex chars = 32 bytes).
   secretKey = "0000000000000001000000000000000100000000000000010000000000000001";
 
   # Shared cluster cookie.
   cookie = "coord-vm-test";
+
+  # WASM plugin helpers (coordination handler is WASM-only)
+  pluginHelpers = import ./lib/wasm-plugins.nix {
+    inherit pkgs aspenCliPlugins;
+    plugins = [
+      {
+        name = "coordination";
+        wasm = coordinationPluginWasm;
+      }
+    ];
+  };
 in
   pkgs.testers.nixosTest {
     name = "coordination-primitives";
+    skipLint = true;
 
     nodes = {
       node1 = {
-        imports = [../../nix/modules/aspen-node.nix];
+        imports = [
+          ../../nix/modules/aspen-node.nix
+          pluginHelpers.nixosConfig
+        ];
 
         services.aspen.node = {
           enable = true;
@@ -55,7 +72,7 @@ in
 
         networking.firewall.enable = false;
 
-        virtualisation.memorySize = 2048;
+        virtualisation.memorySize = 4096;
         virtualisation.cores = 2;
       };
     };
@@ -115,6 +132,9 @@ in
 
       cli_text("cluster init")
       time.sleep(2)
+
+      # ── install WASM plugins (coordination handler is WASM-only) ───
+      ${pluginHelpers.installPluginsScript}
 
       status = cli("cluster status")
       node1.log(f"Cluster status: {status}")
