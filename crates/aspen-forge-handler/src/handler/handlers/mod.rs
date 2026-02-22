@@ -1,14 +1,12 @@
 //! Handler sub-modules for Forge operations.
 //!
-//! Each module contains handlers for a specific category of operations.
+//! Repos, objects, refs, issues, and patches have been migrated to
+//! `aspen-forge-plugin` (WASM). Only federation and git-bridge remain
+//! as native handlers (they require `ForgeNode` context access).
 
 pub mod federation;
 #[cfg(feature = "git-bridge")]
 pub mod git_bridge;
-pub mod log;
-pub mod objects;
-pub mod refs;
-pub mod repo;
 
 // Type alias for the concrete ForgeNode type used in the context
 pub(crate) type ForgeNodeRef =

@@ -28,7 +28,6 @@ iroh = { version = "0.95.1" }
 
 # Hash and encoding dependencies
 blake3 = { workspace = true }
-base64 = "0.22"
 hex = "0.4"
 uuid = { version = "1.0", features = ["v4"] }
 
