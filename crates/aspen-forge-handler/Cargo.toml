@@ -17,18 +17,15 @@ aspen-forge = { path = "../aspen-forge" }
 aspen-cluster = { path = "../aspen-cluster", features = ["federation"] }
 
 # Core dependencies
-tokio = { version = "1.0", features = ["sync"] }
 tracing = "0.1"
 anyhow = "1.0"
 async-trait = "0.1"
-serde_json = "1.0"
 
 # Iroh dependencies
 iroh = { version = "0.95.1" }
 
 # Hash and encoding dependencies
 blake3 = { workspace = true }
-base64 = "0.22"
 hex = "0.4"
 uuid = { version = "1.0", features = ["v4"] }
 

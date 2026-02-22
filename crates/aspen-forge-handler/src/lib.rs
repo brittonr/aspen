@@ -1,28 +1,12 @@
 //! Forge (decentralized Git) RPC handler for Aspen distributed cluster.
 //!
-//! This crate implements the RPC handler for Forge operations, providing:
-//! - Repository management (create, get, list)
-//! - Git object operations (blob, tree, commit)
-//! - Ref management (branches, tags)
-//! - Issue and patch tracking (CRDT-based)
-//! - Federation (cross-cluster sync)
-//! - Git Bridge (git-remote-aspen interop)
+//! This crate implements the **native-only** portion of the Forge handler.
+//! Repos, objects, refs, issues, and patches have been migrated to
+//! `aspen-forge-plugin` (WASM). This handler retains only operations
+//! that require `ForgeNode` context access:
 //!
-//! # Architecture
-//!
-//! The handler implements the `RequestHandler` trait from `aspen-rpc-core`,
-//! allowing it to be registered with the `HandlerRegistry` in `aspen-rpc-handlers`.
-//!
-//! ## Plugin Registration
-//!
-//! This handler supports self-registration via `HandlerFactory`:
-//!
-//! ```ignore
-//! // In your crate, enable self-registration:
-//! aspen_forge_handler::register_forge_handler_factory();
-//! ```
-//!
-//! Or use the `submit_handler_factory!` macro for automatic registration at link time.
+//! - Federation (cross-cluster sync, delegate keys) — 9 ops
+//! - Git Bridge (git-remote-aspen interop) — 6 ops
 //!
 //! ```text
 //! aspen-rpc-handlers
@@ -33,15 +17,18 @@
 //!        ├──► collect_handler_factories() <── inventory
 //!        │
 //!        ▼
-//!   ForgeHandler (this crate)
+//!   ForgeHandler (this crate, priority 540)
 //!        │
-//!        ├──► Repository Operations
-//!        ├──► Git Object Operations
-//!        ├──► Ref Operations
-//!        ├──► Issue Operations
-//!        ├──► Patch Operations
-//!        ├──► Federation Operations
-//!        └──► Git Bridge Operations
+//!        ├──► Federation Operations (9)
+//!        └──► Git Bridge Operations (6)
+//!
+//!   ForgePlugin (WASM, priority 950)
+//!        │
+//!        ├──► Repository Operations (3)
+//!        ├──► Git Object Operations (7)
+//!        ├──► Ref Operations (7)
+//!        ├──► Issue Operations (6)
+//!        └──► Patch Operations (7)
 //! ```
 
 mod handler;
