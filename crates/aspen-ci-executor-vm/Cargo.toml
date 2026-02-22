@@ -13,7 +13,7 @@ aspen-ci-core = { path = "../aspen-ci-core" }
 aspen-ci-executor-shell = { path = "../aspen-ci-executor-shell" }
 aspen-blob = { workspace = true }
 aspen-cache = { path = "../aspen-cache" }
-aspen-fuse = { workspace = true, features = ["virtiofs"] }
+aspen-fuse = { git = "https://github.com/brittonr/aspen-fuse.git", branch = "main", features = ["virtiofs"] }
 aspen-jobs = { workspace = true }
 aspen-ticket = { path = "../aspen-ticket" }
 

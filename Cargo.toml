@@ -83,7 +83,6 @@ members = [
     "crates/aspen-auth",
     "crates/aspen-sharding",
     "crates/aspen-forge",
-    "crates/aspen-fuse",
     "crates/aspen-hooks-types",
     "crates/aspen-hooks",
     "crates/aspen-jobs",
@@ -126,20 +125,10 @@ members = [
     "crates/aspen-proxy",
     "crates/aspen-snix",
     "crates/aspen-nix-cache-gateway",
-    "crates/aspen-verus-metrics",
     "crates/aspen-dht-discovery",
     "crates/aspen-plugin-api",
     "crates/aspen-wasm-plugin",
-    "crates/aspen-service-registry-plugin",
-    "crates/aspen-forge-plugin",
-    "crates/aspen-hooks-plugin",
-    "crates/aspen-secrets-plugin",
-    "crates/aspen-automerge-plugin",
-    "crates/aspen-coordination-plugin",
-    "crates/aspen-sql-plugin",
     "crates/aspen-wasm-guest-sdk",
-    "crates/aspen-plugin-signing",
-    "crates/cargo-aspen-plugin",
 
     "examples/plugins/kv-counter",
     "examples/plugins/audit-logger",
@@ -227,7 +216,6 @@ aspen-testing-madsim = { path = "crates/aspen-testing-madsim" }
 aspen-testing-network = { path = "crates/aspen-testing-network" }
 aspen-ticket = { path = "crates/aspen-ticket" }
 aspen-forge = { path = "crates/aspen-forge" }
-aspen-fuse = { path = "crates/aspen-fuse" }
 aspen-hooks-types = { path = "crates/aspen-hooks-types" }
 aspen-hooks = { path = "crates/aspen-hooks" }
 aspen-tui = { path = "crates/aspen-tui" }
@@ -393,10 +381,6 @@ anyerror = { version = "0.1", features = ["anyhow"] }
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 portpicker = "0.1"
 
-# FUSE filesystem integration tests
-aspen-fuse = { workspace = true }
-fuse-backend-rs = { version = "0.13", default-features = false, features = ["fusedev"] }
-
 # VM-based integration testing with Cloud Hypervisor
 cloud-hypervisor-client = "0.3"
 
@@ -443,7 +427,6 @@ ci-vm-executor = ["aspen-ci/plugins-vm"]
 fuzzing = []
 # Bolero property-based testing (for dev/CI, uses bolero dev-dependency)
 bolero = []
-# FUSE filesystem is now a separate crate: aspen-fuse
 # Global content discovery via BitTorrent Mainline DHT
 global-discovery = ["dep:mainline", "aspen-core/global-discovery", "aspen-rpc-handlers/global-discovery"]
 # SOPS-backed secrets management with age encryption

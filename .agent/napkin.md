@@ -656,3 +656,31 @@ aspen-sql-plugin (WASM, priority 940):
 - **aspen-nix-handler**: Still blocked (snix-castore, protobuf, iroh-blobs)
 - **aspen-blob-handler**: Still blocked (iroh-blobs dependency)
 - **aspen-hooks-handler**: Still blocked (needs hook_service context)
+
+## Recent Changes (2026-02-22) — Repo Cleanup
+
+### Commit 5869414d: Remove stale files, strip openraft vendor, delete unused scripts
+
+**Root-level files removed (6 deleted, 1 moved):**
+
+- `irohscii.md` — study guide for unrelated project (deleted)
+- `worker.md` — completed design doc, all phases done (deleted)
+- `n1.iroh.json` — runtime debug artifact (deleted)
+- `test-job-queue.sh` — one-off manual test (deleted)
+- `update_cluster_imports.sh`, `update_raft_imports.sh` — one-time migration scripts (deleted)
+- `tigerstyle.md` → moved to `docs/tigerstyle.md`
+
+**openraft/ vendor stripped (~350 files removed):**
+
+- Removed: examples/, tests/, stores/, cluster_benchmark/, guide/, rt-compio/, rt-monoio/, multiraft/, scripts/, change-log/, .github/, plus misc root files
+- Retained: `openraft/openraft/` and `openraft/macros/` (the only two path deps)
+- Updated `openraft/Cargo.toml` workspace members to `["openraft", "macros"]` only
+- Cargo.lock not affected — no dependency changes
+
+**scripts/ cleanup (15 removed, 5 retained):**
+
+- Removed: dogfood-*.sh (4), test-*.sh (5), cluster.sh, kitty-cluster.sh, start-test-cluster.sh, benchmark-blob-vs-base64.sh, run-examples.sh, vm-jobs-demo.sh
+- Retained: build-guest.sh, generate-fuzz-corpus.sh, verify-storage.sh, setup-ci-network.sh, generate_coverage_matrix.sh, tutorial-verify/
+- All removed scripts superseded by NixOS VM integration tests
+
+**Total: 373 files, ~43.6k lines removed**

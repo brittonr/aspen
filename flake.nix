@@ -470,59 +470,8 @@
               ));
           };
 
-        # ── WASM plugin derivations for VM integration tests ────────────
-        # Each plugin is a cdylib crate built for wasm32-unknown-unknown.
-        # The output includes the .wasm binary and the plugin.json manifest.
-        buildWasmPlugin = {
-          package,
-          wasmName,
-          friendlyName,
-        }:
-          craneLib.buildPackage (
-            commonArgs
-            // {
-              pname = package;
-              version = "0.1.0";
-              cargoExtraArgs = "--package ${package} --target wasm32-unknown-unknown";
-              doCheck = false;
-              installPhaseCommand = ''
-                mkdir -p $out
-                cp target/wasm32-unknown-unknown/release/${wasmName}.wasm $out/${friendlyName}.wasm 2>/dev/null \
-                  || cp target/wasm32-unknown-unknown/debug/${wasmName}.wasm $out/${friendlyName}.wasm
-                cp crates/${package}/plugin.json $out/plugin.json
-              '';
-            }
-          );
-
-        coordinationPluginWasm = buildWasmPlugin {
-          package = "aspen-coordination-plugin";
-          wasmName = "aspen_coordination_plugin";
-          friendlyName = "coordination-plugin";
-        };
-
-        automergePluginWasm = buildWasmPlugin {
-          package = "aspen-automerge-plugin";
-          wasmName = "aspen_automerge_plugin";
-          friendlyName = "automerge-plugin";
-        };
-
-        secretsPluginWasm = buildWasmPlugin {
-          package = "aspen-secrets-plugin";
-          wasmName = "aspen_secrets_plugin";
-          friendlyName = "secrets-plugin";
-        };
-
-        serviceRegistryPluginWasm = buildWasmPlugin {
-          package = "aspen-service-registry-plugin";
-          wasmName = "aspen_service_registry_plugin";
-          friendlyName = "service-registry-plugin";
-        };
-
-        hooksPluginWasm = buildWasmPlugin {
-          package = "aspen-hooks-plugin";
-          wasmName = "aspen_hooks_plugin";
-          friendlyName = "hooks-plugin";
-        };
+        # WASM plugins moved to ~/git/aspen-plugins repo
+        # TODO: Add aspen-plugins flake input to restore VM test plugin builds
 
         # Build the main package
         aspen = craneLib.buildPackage (
@@ -910,15 +859,7 @@
             }
           );
 
-          # Build aspen-verus-metrics from its own crate
-          aspen-verus-metrics-crate = craneLib.buildPackage (
-            commonArgs
-            // {
-              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-verus-metrics/Cargo.toml;}) pname version;
-              cargoExtraArgs = "--package aspen-verus-metrics --bin verus-metrics";
-              doCheck = false;
-            }
-          );
+          # aspen-verus-metrics moved to ~/git/aspen-verus-metrics repo
 
           bins =
             builtins.listToAttrs (
@@ -951,8 +892,6 @@
               aspen-cli-proxy = aspen-cli-proxy-crate;
               inherit aspen-node-proxy aspen-node-plugins;
               aspen-ci-agent = aspen-ci-agent-crate;
-              verus-metrics = aspen-verus-metrics-crate;
-              inherit coordinationPluginWasm automergePluginWasm secretsPluginWasm serviceRegistryPluginWasm hooksPluginWasm;
               inherit hyperlight-wasm-runtime;
             };
         in
@@ -1131,25 +1070,7 @@
                   touch $out
                 '';
 
-              # Verus sync validation check
-              # Validates that production verified functions have matching Verus specs
-              verus-sync-check =
-                pkgs.runCommand "aspen-verus-sync-check" {
-                  nativeBuildInputs = [bins.verus-metrics];
-                } ''
-                  cd ${src}
-
-                  echo "=== Verus Sync Validation ==="
-
-                  # Run sync validation (non-strict: drift is reported but not fatal)
-                  # The verus-check gate ensures specs verify correctly;
-                  # sync drift is tracked separately for incremental improvement.
-                  verus-metrics check --root ${src} \
-                    || echo "NOTE: Verus sync drift detected (non-fatal)"
-
-                  echo "=== Sync validation passed ==="
-                  touch $out
-                '';
+              # verus-sync-check: moved to ~/git/aspen-verus-metrics repo
             }
             // {
               # Run quick tests with cargo-nextest (for CI)
@@ -1239,18 +1160,8 @@
                 aspenCliPackage = bins.aspen-cli;
               };
 
-              # Multi-node coordination test: lock exclusion across nodes,
-              # counter linearizability, semaphore capacity enforcement,
-              # RW lock multi-node readers/writers, cross-node queues,
-              # sequence monotonicity, lease cross-node ops, failover survival.
-              # Uses WASM coordination plugin (native handler deleted).
-              # Build: nix build .#checks.x86_64-linux.multi-node-coordination-test
-              multi-node-coordination-test = import ./nix/tests/multi-node-coordination.nix {
-                inherit pkgs coordinationPluginWasm;
-                aspenNodePackage = bins.aspen-node-plugins;
-                aspenCliPackage = bins.aspen-cli;
-                aspenCliPlugins = bins.aspen-cli-plugins;
-              };
+              # multi-node-coordination-test: disabled — WASM plugins moved to aspen-plugins repo
+              # TODO: restore via aspen-plugins flake input
 
               # Multi-node blob test: cross-node blob retrieval, blobs from
               # different nodes, replication status, large blob replication,
@@ -1280,40 +1191,14 @@
                 aspenCliPackage = bins.aspen-cli;
               };
 
-              # Coordination primitives test: distributed locks, counters,
-              # sequences, semaphores, rwlocks, barriers, queues, leases.
-              # Uses WASM coordination plugin (native handler deleted).
-              # Build: nix build .#checks.x86_64-linux.coordination-primitives-test
-              coordination-primitives-test = import ./nix/tests/coordination-primitives.nix {
-                inherit pkgs coordinationPluginWasm;
-                aspenNodePackage = bins.aspen-node-plugins;
-                aspenCliPackage = bins.aspen-cli;
-                aspenCliPlugins = bins.aspen-cli-plugins;
-              };
+              # coordination-primitives-test: disabled — WASM plugins moved to aspen-plugins repo
+              # TODO: restore via aspen-plugins flake input
 
-              # Hooks and service registry test: event system (list, metrics,
-              # trigger, URLs) and service discovery (register, discover, get,
-              # list, heartbeat, health, update, deregister).
-              # Uses WASM service-registry plugin (native handler deleted).
-              # Build: nix build .#checks.x86_64-linux.hooks-services-test
-              hooks-services-test = import ./nix/tests/hooks-services.nix {
-                inherit pkgs serviceRegistryPluginWasm;
-                aspenNodePackage = bins.aspen-node-plugins;
-                aspenCliPackage = bins.aspen-cli;
-                aspenCliPlugins = bins.aspen-cli-plugins;
-              };
+              # hooks-services-test: disabled — WASM plugins moved to aspen-plugins repo
+              # TODO: restore via aspen-plugins flake input
 
-              # Rate limiter and verify test: token bucket rate limiting
-              # (try-acquire, available, reset, budget exhaustion, bucket isolation)
-              # and cluster verification (KV, blobs).
-              # Uses WASM coordination plugin for rate limiter (native handler deleted).
-              # Build: nix build .#checks.x86_64-linux.ratelimit-verify-test
-              ratelimit-verify-test = import ./nix/tests/ratelimit-verify.nix {
-                inherit pkgs coordinationPluginWasm;
-                aspenNodePackage = bins.aspen-node-plugins;
-                aspenCliPackage = bins.aspen-cli;
-                aspenCliPlugins = bins.aspen-cli-plugins;
-              };
+              # ratelimit-verify-test: disabled — WASM plugins moved to aspen-plugins repo
+              # TODO: restore via aspen-plugins flake input
 
               # Cluster management, docs namespace, peer, and verify test:
               # cluster (status, health, metrics, ticket, prometheus);
@@ -1335,17 +1220,8 @@
                 aspenCliPackage = bins.aspen-cli;
               };
 
-              # Automerge CRDT and SQL query test: automerge create, get,
-              # exists, list, get-metadata, delete; SQL queries (SELECT,
-              # WHERE, COUNT, LIMIT, ORDER BY, error handling).
-              # Uses WASM automerge plugin (native handler deleted).
-              # Build: nix build .#checks.x86_64-linux.automerge-sql-test
-              automerge-sql-test = import ./nix/tests/automerge-sql.nix {
-                inherit pkgs automergePluginWasm;
-                aspenNodePackage = bins.aspen-node-plugins;
-                aspenCliPackage = bins.aspen-cli-full;
-                aspenCliPlugins = bins.aspen-cli-plugins;
-              };
+              # automerge-sql-test: disabled — WASM plugins moved to aspen-plugins repo
+              # TODO: restore via aspen-plugins flake input
 
               # Plugin CLI test: install, list, info, enable, disable, remove,
               # reload, manifest-based install, flag overrides, resource limits,
@@ -1357,17 +1233,8 @@
                 aspenCliPackage = bins.aspen-cli-plugins;
               };
 
-              # Secrets engine test: KV (write, read, versions, list,
-              # soft delete, undelete, destroy, CAS) and Transit (create key,
-              # encrypt, decrypt, sign, verify, rotate, list, datakey).
-              # Uses WASM secrets plugin for KV/Transit (native handler is PKI-only).
-              # Build: nix build .#checks.x86_64-linux.secrets-engine-test
-              secrets-engine-test = import ./nix/tests/secrets-engine.nix {
-                inherit pkgs secretsPluginWasm;
-                aspenNodePackage = bins.aspen-node-plugins;
-                aspenCliPackage = bins.aspen-cli-secrets;
-                aspenCliPlugins = bins.aspen-cli-plugins;
-              };
+              # secrets-engine-test: disabled — WASM plugins moved to aspen-plugins repo
+              # TODO: restore via aspen-plugins flake input
 
               # CI pipeline and Nix binary cache test: CI lifecycle
               # (run, status, list, cancel, watch, unwatch, output) and
@@ -1747,24 +1614,7 @@
               ''}";
             };
 
-            # Verus sync validation - check for drift between production and specs
-            # Validates that src/verified/*.rs functions have matching verus/*.rs specs
-            # Usage: nix run .#verify-verus-sync [--verbose] [--crate <crate-name>] [--strict]
-            verify-verus-sync = {
-              type = "app";
-              program = "${pkgs.writeShellScript "verify-verus-sync" ''
-                exec ${bins.verus-metrics}/bin/verus-metrics check "$@"
-              ''}";
-            };
-
-            # Coverage report for Verus specifications
-            # Usage: nix run .#verus-coverage
-            verus-coverage = {
-              type = "app";
-              program = "${pkgs.writeShellScript "verus-coverage" ''
-                exec ${bins.verus-metrics}/bin/verus-metrics coverage "$@"
-              ''}";
-            };
+            # verify-verus-sync and verus-coverage: moved to ~/git/aspen-verus-metrics repo
 
             # 3-node cluster launcher
             # Usage: nix run .#cluster
@@ -2458,78 +2308,7 @@
               ''}";
             };
 
-            # Build all WASM plugins for wasm32-unknown-unknown
-            # Usage: nix run .#build-plugins (from inside nix develop)
-            build-plugins = {
-              type = "app";
-              program = "${pkgs.writeShellScript "build-plugins" ''
-                set -e
-                PLUGINS="aspen-forge-plugin aspen-service-registry-plugin"
-                TARGET="wasm32-unknown-unknown"
-                echo "Building WASM plugins for $TARGET..."
-                for plugin in $PLUGINS; do
-                  echo "  Building $plugin..."
-                  cargo build --package "$plugin" --target "$TARGET" --release
-                done
-                echo ""
-                echo "Built plugins:"
-                ls -lh "target/$TARGET/release/"*.wasm 2>/dev/null || echo "  (none found)"
-              ''}";
-            };
-
-            # Build and deploy a named WASM plugin using its plugin.json manifest
-            # Usage: nix run .#deploy-plugin -- <plugin-name> [--ticket <ticket>]
-            # Examples:
-            #   nix run .#deploy-plugin -- forge --ticket <ticket>
-            #   nix run .#deploy-plugin -- service-registry --ticket <ticket>
-            #   nix run .#deploy-plugin -- echo --ticket <ticket>
-            deploy-plugin = {
-              type = "app";
-              program = "${pkgs.writeShellScript "deploy-plugin" ''
-                set -e
-                PLUGIN_NAME="''${1:?Usage: deploy-plugin <name> [--ticket <ticket>]}"
-                shift
-
-                # Resolve crate directory and cargo package name
-                case "$PLUGIN_NAME" in
-                  forge)
-                    CRATE_DIR="crates/aspen-forge-plugin"
-                    PKG_NAME="aspen-forge-plugin"
-                    ;;
-                  service-registry)
-                    CRATE_DIR="crates/aspen-service-registry-plugin"
-                    PKG_NAME="aspen-service-registry-plugin"
-                    ;;
-                  *)
-                    echo "Unknown plugin: $PLUGIN_NAME"
-                    echo "Available: forge, service-registry"
-                    exit 1
-                    ;;
-                esac
-
-                MANIFEST="$CRATE_DIR/plugin.json"
-                if [ ! -f "$MANIFEST" ]; then
-                  echo "Error: manifest not found at $MANIFEST"
-                  exit 1
-                fi
-
-                TARGET="wasm32-unknown-unknown"
-                echo "Building $PKG_NAME for $TARGET..."
-                cargo build --package "$PKG_NAME" --target "$TARGET" --release
-
-                # Derive the .wasm filename from the package name (hyphens -> underscores)
-                WASM_NAME="$(echo "$PKG_NAME" | tr '-' '_').wasm"
-                WASM_PATH="target/$TARGET/release/$WASM_NAME"
-
-                if [ ! -f "$WASM_PATH" ]; then
-                  echo "Error: WASM binary not found at $WASM_PATH"
-                  exit 1
-                fi
-
-                echo "Deploying $PLUGIN_NAME from $WASM_PATH..."
-                aspen-cli plugin install "$WASM_PATH" --manifest "$MANIFEST" "$@"
-              ''}";
-            };
+            # build-plugins and deploy-plugin: moved to ~/git/aspen-plugins repo
           };
         }
         // {
