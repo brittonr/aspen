@@ -518,6 +518,32 @@
 - `nextest-quick`: `test_redb_log_gap_detection` fails with "disk usage too high: 95%" in Nix sandbox
 - VM tests: Resource-intensive, not validated individually
 
+## Recent Changes (2026-02-22) — Forge Handler Trimming
+
+### Forge Handler → Plugin Migration (commit 125796b7)
+
+- **30 request types moved** from native `aspen-forge-handler` to WASM `aspen-forge-plugin`
+- Repos (3), objects (7), refs (7), issues (6), patches (7) — all now WASM-only
+- Native handler retains **15 ops**: federation (9) + git bridge (6) — require `ForgeNode` context
+- **4307 → 1878 lines** (-57%), removed unused deps (tokio, serde_json)
+- Merged from detached branch (4 commits on top of 527a44d5), only napkin conflicted
+- Pre-existing: `aspen-ci` has stale `cfg(feature = "snix")` checks (not our change, blocks clippy pre-commit)
+- `kv_batch()` helper in forge-plugin is `#[allow(dead_code)]` — available for future batch ops
+
+### Forge Handler Architecture (post-trim)
+
+```text
+aspen-forge-handler (native, priority 540):
+  - FederationSubHandler: 9 ops (GetFederationStatus, ListDiscoveredClusters,
+    GetDiscoveredCluster, TrustCluster, UntrustCluster, FederateRepository,
+    ListFederatedRepositories, ForgeFetchFederated, ForgeGetDelegateKey)
+  - GitBridgeSubHandler: 6 ops (GitBridgeListRefs, GitBridgeFetch, GitBridgePush,
+    GitBridgePushStart, GitBridgePushChunk, GitBridgePushComplete)
+
+aspen-forge-plugin (WASM, priority 950):
+  - repos (3), objects (7), refs (7), issues (6), patches (7) = 30 ops
+```
+
 ## Recent Changes (2026-02-22) — WASM Plugin VM Test Enablement
 
 ### WASM Plugin Build Derivations
