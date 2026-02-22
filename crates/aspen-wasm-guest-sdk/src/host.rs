@@ -33,6 +33,7 @@ unsafe extern "C" {
     fn cancel_timer(name: String) -> String;
     fn hook_subscribe(pattern: String) -> String;
     fn hook_unsubscribe(pattern: String) -> String;
+    fn sql_query(request_json: String) -> String;
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +258,67 @@ pub fn subscribe_hook_events(pattern: &str) -> Result<(), String> {
 pub fn unsubscribe_hook_events(pattern: &str) -> Result<(), String> {
     let result = unsafe { hook_unsubscribe(pattern.to_string()) };
     decode_tagged_unit_result(&result)
+}
+
+// ---------------------------------------------------------------------------
+// SQL query
+// ---------------------------------------------------------------------------
+
+/// SQL query result from the host.
+#[derive(serde::Deserialize)]
+pub struct SqlQueryResult {
+    /// Column names.
+    pub columns: Vec<String>,
+    /// Result rows (each cell is a JSON value).
+    pub rows: Vec<Vec<serde_json::Value>>,
+    /// Number of rows returned.
+    pub row_count: u32,
+    /// Whether more rows exist beyond the limit.
+    pub is_truncated: bool,
+    /// Execution time in milliseconds.
+    pub execution_time_ms: u64,
+}
+
+/// Execute a read-only SQL query against the node's state machine.
+///
+/// # Arguments
+///
+/// * `query` - SQL SELECT or WITH...SELECT query string
+/// * `params_json` - JSON-serialized parameter array (empty string for no params)
+/// * `consistency` - `"linearizable"` (default) or `"stale"`
+/// * `limit` - Maximum rows to return
+/// * `timeout_ms` - Query timeout in milliseconds
+///
+/// # Errors
+///
+/// Returns an error if SQL is not supported, the query is invalid,
+/// or the `sql_query` permission is not granted.
+pub fn execute_sql(
+    query: &str,
+    params_json: &str,
+    consistency: &str,
+    limit: Option<u32>,
+    timeout_ms: Option<u32>,
+) -> Result<SqlQueryResult, String> {
+    let request = serde_json::json!({
+        "query": query,
+        "params_json": params_json,
+        "consistency": consistency,
+        "limit": limit,
+        "timeout_ms": timeout_ms,
+    });
+
+    let request_json = serde_json::to_string(&request).map_err(|e| format!("failed to serialize SQL request: {e}"))?;
+
+    let result = unsafe { sql_query(request_json) };
+
+    if let Some(json) = result.strip_prefix('\0') {
+        serde_json::from_str(json).map_err(|e| format!("failed to parse SQL result: {e}"))
+    } else if let Some(msg) = result.strip_prefix('\x01') {
+        Err(msg.to_string())
+    } else {
+        Err(result)
+    }
 }
 
 // ---------------------------------------------------------------------------

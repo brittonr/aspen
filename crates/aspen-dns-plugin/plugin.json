@@ -1,0 +1,31 @@
+{
+  "name": "dns",
+  "version": "0.1.0",
+  "description": "DNS record and zone management plugin",
+  "priority": 945,
+  "app_id": "dns",
+  "handles": [
+    "DnsSetRecord",
+    "DnsGetRecord",
+    "DnsGetRecords",
+    "DnsDeleteRecord",
+    "DnsResolve",
+    "DnsScanRecords",
+    "DnsSetZone",
+    "DnsGetZone",
+    "DnsListZones",
+    "DnsDeleteZone"
+  ],
+  "kv_prefixes": ["dns:"],
+  "permissions": {
+    "kv_read": true,
+    "kv_write": true,
+    "randomness": false,
+    "timers": false,
+    "hooks": false,
+    "signing": false,
+    "blob_read": false,
+    "blob_write": false,
+    "cluster_info": false
+  }
+}

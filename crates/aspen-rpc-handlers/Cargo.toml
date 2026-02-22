@@ -70,7 +70,8 @@ irpc = { workspace = true }
 [features]
 default = []
 sql = ["dep:aspen-sql", "dep:aspen-query-handler", "aspen-query-handler?/sql", "aspen-rpc-core/sql"]
-dns = ["dep:aspen-dns", "dep:aspen-query-handler", "aspen-query-handler?/dns"]
+# DNS handler migrated to aspen-dns-plugin (WASM). Feature retained for backward compat.
+dns = []
 forge = ["dep:aspen-forge", "dep:aspen-forge-handler", "aspen-rpc-core/forge"]
 blob = ["dep:aspen-blob", "dep:aspen-blob-handler", "aspen-rpc-core/blob"]
 global-discovery = ["aspen-core/global-discovery", "aspen-rpc-core/global-discovery"]

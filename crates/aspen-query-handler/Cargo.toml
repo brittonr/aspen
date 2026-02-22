@@ -2,7 +2,7 @@
 name = "aspen-query-handler"
 version = "0.1.0"
 edition = "2024"
-description = "SQL and DNS query RPC handlers for Aspen distributed cluster"
+description = "SQL query RPC handler for Aspen distributed cluster"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
@@ -13,10 +13,6 @@ aspen-rpc-core = { path = "../aspen-rpc-core" }
 aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 
-# DNS handler dependencies (optional)
-aspen-dns = { path = "../aspen-dns", optional = true }
-tracing = { version = "0.1", optional = true }
-
 # Core dependencies
 async-trait = "0.1"
 anyhow = "1.0"
@@ -26,7 +22,8 @@ base64 = { version = "0.22", optional = true }
 [features]
 default = []
 sql = ["dep:base64", "aspen-rpc-core/sql"]
-dns = ["dep:aspen-dns", "dep:tracing"]
+# dns feature retained for backward compat (handler migrated to aspen-dns-plugin)
+dns = []
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full", "test-util"] }

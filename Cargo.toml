@@ -137,6 +137,8 @@ members = [
     "crates/aspen-secrets-plugin",
     "crates/aspen-automerge-plugin",
     "crates/aspen-coordination-plugin",
+    "crates/aspen-dns-plugin",
+    "crates/aspen-sql-plugin",
     "crates/aspen-wasm-guest-sdk",
     "crates/aspen-plugin-signing",
     "crates/cargo-aspen-plugin",

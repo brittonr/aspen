@@ -396,21 +396,28 @@ async fn load_plugin(
     let subscription_requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 
     // Register host functions
-    let host_ctx = Arc::new(
-        PluginHostContext::new(
-            ctx.kv_store.clone(),
-            Arc::clone(blob_store) as Arc<dyn BlobStore>,
-            ctx.controller.clone(),
-            ctx.node_id,
-            manifest.name.clone(),
-        )
-        .with_kv_prefixes(manifest.kv_prefixes.clone())
-        .with_secret_key(secret_key.clone())
-        .with_hlc(Arc::clone(hlc))
-        .with_scheduler_requests(Arc::clone(&scheduler_requests))
-        .with_subscription_requests(Arc::clone(&subscription_requests))
-        .with_permissions(manifest.permissions.clone()),
-    );
+    #[allow(unused_mut)]
+    let mut host_ctx_val = PluginHostContext::new(
+        ctx.kv_store.clone(),
+        Arc::clone(blob_store) as Arc<dyn BlobStore>,
+        ctx.controller.clone(),
+        ctx.node_id,
+        manifest.name.clone(),
+    )
+    .with_kv_prefixes(manifest.kv_prefixes.clone())
+    .with_secret_key(secret_key.clone())
+    .with_hlc(Arc::clone(hlc))
+    .with_scheduler_requests(Arc::clone(&scheduler_requests))
+    .with_subscription_requests(Arc::clone(&subscription_requests))
+    .with_permissions(manifest.permissions.clone());
+
+    // Wire SQL executor if available (feature-gated by sql on rpc-core)
+    #[cfg(feature = "sql")]
+    {
+        host_ctx_val.sql_executor = Some(ctx.sql_executor.clone());
+    }
+
+    let host_ctx = Arc::new(host_ctx_val);
     register_plugin_host_functions(&mut proto, host_ctx)?;
 
     // Load runtime and module

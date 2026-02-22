@@ -1,6 +1,6 @@
 # WASM Plugin Host ABI Reference
 
-> Formal contract for the 22 host functions available to WASM handler plugins
+> Formal contract for the 23 host functions available to WASM handler plugins
 > running in hyperlight-wasm 0.12 primitive-mode sandboxes.
 
 ## Overview
@@ -143,6 +143,12 @@ See [Namespace Isolation](#namespace-isolation) below.
 | `hook_subscribe` | `pattern: String` | `String` | Subscribe to hook events matching a NATS-style topic pattern. Tagged result: `\0` = ok, `\x01msg` = err. Max 16 subscriptions per plugin, max 256 byte pattern. Idempotent. |
 | `hook_unsubscribe` | `pattern: String` | `String` | Unsubscribe from a previously registered pattern. Tagged result: `\0` = ok, `\x01msg` = err. |
 
+### SQL Query (feature-gated: `sql`)
+
+| Function | Parameters | Returns | Description |
+|----------|-----------|---------|-------------|
+| `sql_query` | `request_json: String` | `String` | Execute a read-only SQL query against the node's state machine. Input is JSON `{"query": "...", "params_json": "...", "consistency": "linearizable"/"stale", "limit": N, "timeout_ms": N}`. Tagged result: `\0` + JSON `{"columns": [...], "rows": [[...]], "row_count": N, "is_truncated": bool, "execution_time_ms": N}` = ok, `\x01msg` = err. Requires `sql_query` permission. Only available when the host node has SQL support enabled. |
+
 Hook patterns use NATS-style wildcards over dot-delimited topics:
 
 - `hooks.kv.*` — matches `hooks.kv.write_committed`, `hooks.kv.delete_committed`, etc.
@@ -207,3 +213,4 @@ Plugins must export these functions:
 | v2 | 2026-02-18 | Standardized all Result-returning functions to `\0`/`\x01` tag prefix. Added execution timeout. Guest SDK `decode_tagged_unit_result()` handles both v1 and v2. |
 | v3 | 2026-02-18 | Standardized kv_get/blob_get to `[0x00]/[0x01]/[0x02]` tagged encoding (found/not-found/error). Standardized kv_scan to `[0x00]/[0x01]` tagged encoding (ok/error). Guest SDK `decode_tagged_option_result()` handles backwards compat. |
 | v4 | 2026-02-18 | Added `hook_subscribe`/`hook_unsubscribe` host functions and `plugin_on_hook_event` guest export. Added `hooks` permission to `PluginPermissions`. 22 host functions total. |
+| v5 | 2026-02-22 | Added `sql_query` host function (feature-gated behind `sql`). Added `sql_query` permission to `PluginPermissions`. 23 host functions total (22 + 1 conditional). |

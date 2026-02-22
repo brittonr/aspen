@@ -116,6 +116,9 @@ pub struct PluginPermissions {
     /// Allow subscribing to hook events.
     #[serde(default)]
     pub hooks: bool,
+    /// Allow executing SQL queries via the sql_query host function.
+    #[serde(default)]
+    pub sql_query: bool,
 }
 
 impl Default for PluginPermissions {
@@ -131,6 +134,7 @@ impl Default for PluginPermissions {
             signing: false,
             timers: false,
             hooks: false,
+            sql_query: false,
         }
     }
 }
@@ -150,6 +154,7 @@ impl PluginPermissions {
             signing: true,
             timers: true,
             hooks: true,
+            sql_query: true,
         }
     }
 }

@@ -577,3 +577,82 @@ aspen-forge-plugin (WASM, priority 950):
 - Native handlers DELETED: coordination, automerge, service-registry → WASM plugins are canonical
 - Native secrets handler slimmed to PKI-only → KV/Transit needs WASM secrets plugin
 - Rate limiter CLI commands (`RateLimiterTryAcquire` etc.) are in coordination plugin
+
+## Recent Changes (2026-02-22) — DNS Plugin + SQL Host Function
+
+### aspen-dns-plugin Created
+
+- New WASM plugin: `crates/aspen-dns-plugin/` — 10 request types, 3 modules
+- Replaces native `DnsHandler` from `aspen-query-handler` (dns.rs deleted)
+- KV prefix: `dns:` for records (`dns:{domain}:{type}`), `dns:_zone:` for zones
+- Local type definitions match `aspen-dns` wire format exactly (same serde tags)
+- `DnsRecordData` uses `#[serde(tag = "type", rename_all = "UPPERCASE")]` — identical to native
+- Wildcard resolution: exact match → `*.parent` fallback, MX/SRV priority sorting
+- Priority 945, app_id "dns", permissions: kv_read + kv_write only
+- **Gotcha: RecordType enum uses `Aaaa` (PascalCase) with `#[serde(rename_all = "UPPERCASE")]`** — NOT `AAAA` variant directly. Serde renames `Aaaa` to `"AAAA"` in JSON.
+- **Gotcha: Explicit `#[serde(rename = "AAAA")]` needed on each non-A variant** since `rename_all = "UPPERCASE"` would produce `"AAAA"` from `Aaaa` anyway, but the other multi-char names need explicit annotation for clarity.
+
+### aspen-sql-plugin Created
+
+- New WASM plugin: `crates/aspen-sql-plugin/` — 1 request type (ExecuteSql)
+- Thin wrapper that delegates to `sql_query` host function
+- Priority 940, app_id "sql", permissions: sql_query only
+- Converts host JSON result → `SqlCellValue` / `SqlResultResponse`
+- Handles blob encoding: `"base64:{data}"` → `SqlCellValue::Blob(data)`
+
+### sql_query Host Function Added
+
+- New host function in `crates/aspen-wasm-plugin/src/host.rs` (feature-gated behind `sql`)
+- Input: JSON `{"query", "params_json", "consistency", "limit", "timeout_ms"}`
+- Output: Tagged string `\0{json_result}` or `\x01{error}`
+- Wired through `PluginHostContext.sql_executor: Option<Arc<dyn SqlQueryExecutor>>`
+- Registry passes `ctx.sql_executor` from `ClientProtocolContext` when `sql` feature is active
+- Permission: `permissions.sql_query` in `PluginPermissions`
+
+### PluginPermissions Extended
+
+- New field: `sql_query: bool` (default false, included in `all()`)
+- Backward compatible via `#[serde(default)]`
+
+### Guest SDK Extended
+
+- New FFI extern: `sql_query(request_json: String) -> String`
+- New safe wrapper: `host::execute_sql(query, params_json, consistency, limit, timeout_ms) -> Result<SqlQueryResult, String>`
+- `SqlQueryResult` struct with columns, rows (JSON values), row_count, is_truncated, execution_time_ms
+
+### Native DNS Handler Removed
+
+- Deleted `crates/aspen-query-handler/src/dns.rs` (370 lines)
+- `aspen-query-handler` retains SQL handler only
+- `dns` feature on `aspen-query-handler` is now empty (backward compat)
+- `dns` feature on `aspen-rpc-handlers` is now empty (backward compat)
+- Removed `DnsHandler` re-export from `aspen-rpc-handlers/src/handlers/mod.rs`
+- Removed `aspen-dns` dependency from `aspen-rpc-handlers` dns feature
+
+### HOST_ABI.md Updated
+
+- Added `sql_query` documentation (v5 entry)
+- 23 host functions total (22 base + 1 conditional sql_query)
+
+### Architecture Summary (post-migration)
+
+```text
+aspen-query-handler (native, priority 500):
+  - SqlHandler: ExecuteSql only — retained because native sql_executor
+    is needed. Can be migrated once sql_query host fn is proven.
+
+aspen-dns-plugin (WASM, priority 945):
+  - Records: DnsSetRecord, DnsGetRecord, DnsGetRecords, DnsDeleteRecord,
+    DnsResolve, DnsScanRecords (6 ops)
+  - Zones: DnsSetZone, DnsGetZone, DnsListZones, DnsDeleteZone (4 ops)
+
+aspen-sql-plugin (WASM, priority 940):
+  - ExecuteSql (1 op) — delegates to sql_query host function
+```
+
+### Migration Blockers Updated
+
+- **aspen-query-handler SQL**: Can now be migrated — `sql_query` host fn exists. Native handler retained as fallback.
+- **aspen-nix-handler**: Still blocked (snix-castore, protobuf, iroh-blobs)
+- **aspen-blob-handler**: Still blocked (iroh-blobs dependency)
+- **aspen-hooks-handler**: Still blocked (needs hook_service context)

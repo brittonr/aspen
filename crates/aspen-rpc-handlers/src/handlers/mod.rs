@@ -46,8 +46,7 @@ pub use aspen_nix_handler::CacheHandler;
 pub use aspen_nix_handler::CacheMigrationHandler;
 #[cfg(feature = "snix")]
 pub use aspen_nix_handler::SnixHandler;
-#[cfg(feature = "dns")]
-pub use aspen_query_handler::DnsHandler;
+// DNS handler migrated to aspen-dns-plugin (WASM)
 #[cfg(feature = "sql")]
 pub use aspen_query_handler::SqlHandler;
 #[cfg(feature = "secrets")]

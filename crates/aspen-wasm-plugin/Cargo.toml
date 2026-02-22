@@ -52,6 +52,7 @@ hex = "0.4"
 [features]
 default = []
 testing = []
+sql = ["aspen-rpc-core/sql", "aspen-core/sql"]
 
 [dev-dependencies]
 aspen-testing = { workspace = true }

@@ -106,6 +106,12 @@ pub struct PluginHostContext {
     /// Shared with [`WasmPluginHandler`] which processes these after each
     /// guest call completes to update the plugin's event router.
     pub subscription_requests: Arc<std::sync::Mutex<Vec<SubscriptionCommand>>>,
+    /// SQL query executor for plugins that need read-only SQL access.
+    ///
+    /// Optional because not all nodes have a SQL-capable storage backend.
+    /// Guarded by `permissions.sql_query`.
+    #[cfg(feature = "sql")]
+    pub sql_executor: Option<Arc<dyn aspen_core::SqlQueryExecutor>>,
 }
 
 impl PluginHostContext {
@@ -129,6 +135,8 @@ impl PluginHostContext {
             scheduler_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
             permissions: PluginPermissions::default(),
             subscription_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
+            #[cfg(feature = "sql")]
+            sql_executor: None,
         }
     }
 
@@ -184,6 +192,14 @@ impl PluginHostContext {
     /// execution can be processed by the handler afterward.
     pub fn with_subscription_requests(mut self, reqs: Arc<std::sync::Mutex<Vec<SubscriptionCommand>>>) -> Self {
         self.subscription_requests = reqs;
+        self
+    }
+
+    /// Set the SQL query executor for plugins that need read-only SQL access.
+    #[cfg(feature = "sql")]
+    #[allow(dead_code)]
+    pub fn with_sql_executor(mut self, executor: Arc<dyn aspen_core::SqlQueryExecutor>) -> Self {
+        self.sql_executor = Some(executor);
         self
     }
 }
@@ -1004,7 +1020,157 @@ pub fn register_plugin_host_functions(
         })
         .map_err(|e| anyhow::anyhow!("failed to register hook_unsubscribe: {e}"))?;
 
+    // -- SQL Query (feature-gated) --
+    // sql_query: executes a read-only SQL query against the state machine.
+    // Input: JSON-encoded SqlQueryHostRequest { query, params_json, consistency, limit, timeout_ms }
+    // Returns: String with \0 prefix = success (JSON-encoded result), \x01 prefix = error
+    #[cfg(feature = "sql")]
+    {
+        let ctx_sql = Arc::clone(&ctx);
+        proto
+            .register("sql_query", move |request_json: String| -> String {
+                if let Err(e) = check_permission(&ctx_sql.plugin_name, "sql_query", ctx_sql.permissions.sql_query) {
+                    return format!("\x01{e}");
+                }
+                let executor = match &ctx_sql.sql_executor {
+                    Some(ex) => Arc::clone(ex),
+                    None => return "\x01SQL query executor not available on this node".to_string(),
+                };
+
+                // Parse request
+                let req: SqlQueryHostRequest = match serde_json::from_str(&request_json) {
+                    Ok(r) => r,
+                    Err(e) => return format!("\x01invalid sql_query request: {e}"),
+                };
+
+                // Build the core request
+                let consistency = match req.consistency.to_lowercase().as_str() {
+                    "stale" => aspen_core::SqlConsistency::Stale,
+                    _ => aspen_core::SqlConsistency::Linearizable,
+                };
+
+                let params: Vec<aspen_core::SqlValue> = if req.params_json.is_empty() {
+                    Vec::new()
+                } else {
+                    match serde_json::from_str::<Vec<serde_json::Value>>(&req.params_json) {
+                        Ok(values) => values
+                            .into_iter()
+                            .map(|v| match v {
+                                serde_json::Value::Null => aspen_core::SqlValue::Null,
+                                serde_json::Value::Bool(b) => aspen_core::SqlValue::Integer(if b { 1 } else { 0 }),
+                                serde_json::Value::Number(n) => {
+                                    if let Some(i) = n.as_i64() {
+                                        aspen_core::SqlValue::Integer(i)
+                                    } else if let Some(f) = n.as_f64() {
+                                        aspen_core::SqlValue::Real(f)
+                                    } else {
+                                        aspen_core::SqlValue::Text(n.to_string())
+                                    }
+                                }
+                                serde_json::Value::String(s) => aspen_core::SqlValue::Text(s),
+                                _ => aspen_core::SqlValue::Text(v.to_string()),
+                            })
+                            .collect(),
+                        Err(e) => return format!("\x01invalid params JSON: {e}"),
+                    }
+                };
+
+                let sql_request = aspen_core::SqlQueryRequest {
+                    query: req.query,
+                    params,
+                    consistency,
+                    limit: req.limit,
+                    timeout_ms: req.timeout_ms,
+                };
+
+                // Execute via tokio runtime
+                let handle = tokio::runtime::Handle::current();
+                match handle.block_on(async { executor.execute_sql(sql_request).await }) {
+                    Ok(result) => {
+                        // Convert SqlValue to JSON-friendly format
+                        let columns: Vec<String> = result.columns.into_iter().map(|c| c.name).collect();
+                        let rows: Vec<Vec<serde_json::Value>> = result
+                            .rows
+                            .into_iter()
+                            .map(|row| {
+                                row.into_iter()
+                                    .map(|v| match v {
+                                        aspen_core::SqlValue::Null => serde_json::Value::Null,
+                                        aspen_core::SqlValue::Integer(i) => serde_json::Value::Number(i.into()),
+                                        aspen_core::SqlValue::Real(f) => serde_json::json!(f),
+                                        aspen_core::SqlValue::Text(s) => serde_json::Value::String(s),
+                                        aspen_core::SqlValue::Blob(b) => {
+                                            serde_json::Value::String(format!("base64:{}", base64_encode(&b)))
+                                        }
+                                    })
+                                    .collect()
+                            })
+                            .collect();
+
+                        let response = serde_json::json!({
+                            "columns": columns,
+                            "rows": rows,
+                            "row_count": result.row_count,
+                            "is_truncated": result.is_truncated,
+                            "execution_time_ms": result.execution_time_ms,
+                        });
+
+                        match serde_json::to_string(&response) {
+                            Ok(json) => format!("\0{json}"),
+                            Err(e) => format!("\x01failed to serialize SQL result: {e}"),
+                        }
+                    }
+                    Err(e) => format!("\x01{e}"),
+                }
+            })
+            .map_err(|e| anyhow::anyhow!("failed to register sql_query: {e}"))?;
+    }
+
     Ok(())
+}
+
+/// Request payload for the `sql_query` host function.
+#[cfg(feature = "sql")]
+#[derive(serde::Deserialize)]
+struct SqlQueryHostRequest {
+    query: String,
+    #[serde(default)]
+    params_json: String,
+    #[serde(default = "default_consistency")]
+    consistency: String,
+    limit: Option<u32>,
+    timeout_ms: Option<u32>,
+}
+
+#[cfg(feature = "sql")]
+fn default_consistency() -> String {
+    "linearizable".to_string()
+}
+
+/// Simple base64 encoding without pulling in the base64 crate dependency.
+#[cfg(feature = "sql")]
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = chunk.get(1).copied().unwrap_or(0) as u32;
+        let b2 = chunk.get(2).copied().unwrap_or(0) as u32;
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        result.push(CHARS[((n >> 18) & 0x3F) as usize] as char);
+        result.push(CHARS[((n >> 12) & 0x3F) as usize] as char);
+        if chunk.len() > 1 {
+            result.push(CHARS[((n >> 6) & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+        if chunk.len() > 2 {
+            result.push(CHARS[(n & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+    }
+    result
 }
 
 // =============================================================================

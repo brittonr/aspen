@@ -1346,6 +1346,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-dns-plugin"
+version = "0.1.0"
+dependencies = [
+ "aspen-client-api",
+ "aspen-wasm-guest-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "aspen-docs"
 version = "0.1.0"
 dependencies = [
@@ -1930,13 +1940,11 @@ dependencies = [
  "anyhow",
  "aspen-client-api",
  "aspen-core",
- "aspen-dns",
  "aspen-rpc-core",
  "async-trait",
  "base64 0.22.1",
  "serde_json",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -2287,6 +2295,16 @@ dependencies = [
  "snafu 0.8.9",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "aspen-sql-plugin"
+version = "0.1.0"
+dependencies = [
+ "aspen-client-api",
+ "aspen-wasm-guest-sdk",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

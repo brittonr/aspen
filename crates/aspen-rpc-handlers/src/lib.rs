@@ -24,7 +24,7 @@
 //!        ├──► KvHandler (ReadKey, WriteKey, DeleteKey, ScanKeys, BatchRead, BatchWrite)
 //!        ├──► CoordinationHandler (Lock, Counter, Sequence, RateLimiter, Barrier, Semaphore, RWLock, Queue)
 //!        ├──► BlobHandler (AddBlob, GetBlob, DownloadBlob, etc.)
-//!        ├──► DnsHandler (DnsSetRecord, DnsGetRecord, etc.)
+//!        ├──► [WASM] DnsPlugin (DnsSetRecord, DnsGetRecord, etc.)
 //!        ├──► DocsHandler (DocsSet, DocsGet, PeerCluster ops)
 //!        ├──► ForgeHandler (all Forge* operations)
 //!        ├──► PijulHandler (all Pijul* operations)
