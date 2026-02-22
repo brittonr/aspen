@@ -433,20 +433,27 @@ verus! {
     ///
     /// Expiration time (0 if no expiration, saturating add otherwise).
     pub fn compute_item_expiration(
-        current_time_ms: u64,
         ttl_ms: u64,
+        default_ttl_ms: u64,
+        max_ttl_ms: u64,
+        now_ms: u64,
     ) -> (result: u64)
         ensures
-            ttl_ms == 0 ==> result == 0,
-            ttl_ms > 0 && current_time_ms <= u64::MAX - ttl_ms ==>
-                result == current_time_ms + ttl_ms,
-            ttl_ms > 0 && current_time_ms > u64::MAX - ttl_ms ==>
-                result == u64::MAX
+            ttl_ms == 0 && default_ttl_ms == 0 ==> result == 0,
+            ttl_ms == 0 && default_ttl_ms > 0 ==>
+                result == now_ms.saturating_add(default_ttl_ms.min(max_ttl_ms)) ||
+                result == 0,
+            ttl_ms > 0 ==>
+                result == now_ms.saturating_add(ttl_ms.min(max_ttl_ms)) ||
+                result == 0
     {
-        if ttl_ms == 0 {
-            0
+        let effective_ttl = if ttl_ms > 0 { ttl_ms } else { default_ttl_ms };
+        let capped_ttl = effective_ttl.min(max_ttl_ms);
+
+        if capped_ttl > 0 {
+            now_ms.saturating_add(capped_ttl)
         } else {
-            current_time_ms.saturating_add(ttl_ms)
+            0
         }
     }
 

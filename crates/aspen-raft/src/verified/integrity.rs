@@ -335,6 +335,109 @@ pub fn hash_from_hex(hex_str: &str) -> Option<ChainHash> {
     Some(hash)
 }
 
+// ============================================================================
+// Chain Hash Helper Functions (ported from verus specs for sync parity)
+// ============================================================================
+
+/// Check if a hash has the expected size.
+///
+/// # Arguments
+///
+/// * `hash_len` - Length of the hash
+///
+/// # Returns
+///
+/// `true` if hash has the expected 32-byte size.
+#[inline]
+#[allow(dead_code)]
+pub const fn is_valid_hash_size(hash_len: u64) -> bool {
+    hash_len == 32
+}
+
+/// Compute the input size for entry hash computation.
+///
+/// Input is: prev_hash (32 bytes) + index (8 bytes) + term (8 bytes) + data
+///
+/// # Arguments
+///
+/// * `prev_hash_len` - Length of previous hash (should be 32)
+/// * `data_len` - Length of entry data
+///
+/// # Returns
+///
+/// Total input size (saturating at u64::MAX).
+#[inline]
+#[allow(dead_code)]
+pub const fn compute_hash_input_size(prev_hash_len: u64, data_len: u64) -> u64 {
+    prev_hash_len.saturating_add(16).saturating_add(data_len)
+}
+
+/// Check if an index is the genesis index.
+///
+/// # Arguments
+///
+/// * `index` - Log index
+///
+/// # Returns
+///
+/// `true` if this is the genesis (first) index.
+#[inline]
+#[allow(dead_code)]
+pub const fn is_genesis_index(index: u64) -> bool {
+    index == 0
+}
+
+/// Compute the previous index for chain linking.
+///
+/// # Arguments
+///
+/// * `index` - Current log index
+///
+/// # Returns
+///
+/// Previous index (saturating at 0 for index 0).
+#[inline]
+#[allow(dead_code)]
+pub const fn compute_prev_index(index: u64) -> u64 {
+    index.saturating_sub(1)
+}
+
+/// Check if chain range is valid.
+///
+/// # Arguments
+///
+/// * `first_index` - First index in range
+/// * `last_index` - Last index in range
+///
+/// # Returns
+///
+/// `true` if range is valid (first <= last).
+#[inline]
+#[allow(dead_code)]
+pub const fn is_valid_chain_range(first_index: u64, last_index: u64) -> bool {
+    first_index <= last_index
+}
+
+/// Compute the length of a chain range.
+///
+/// # Arguments
+///
+/// * `first_index` - First index in range
+/// * `last_index` - Last index in range
+///
+/// # Returns
+///
+/// Number of entries in range (0 if invalid range).
+#[inline]
+#[allow(dead_code)]
+pub fn compute_chain_length(first_index: u64, last_index: u64) -> u64 {
+    if first_index <= last_index {
+        (last_index - first_index).saturating_add(1)
+    } else {
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

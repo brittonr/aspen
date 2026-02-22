@@ -573,18 +573,23 @@ verus! {
     ///
     /// `true` if extension is valid (doesn't exceed max).
     pub fn can_extend_visibility(
-        current_deadline_ms: u64,
-        requested_extension_ms: u64,
-        max_visibility_ms: u64,
-        current_time_ms: u64,
+        is_inflight: bool,
+        receipt_matches: bool,
+        additional_timeout_ms: u64,
     ) -> (result: bool)
         ensures result == (
-            requested_extension_ms <= max_visibility_ms &&
-            current_deadline_ms > current_time_ms
+            is_inflight &&
+            receipt_matches &&
+            additional_timeout_ms > 0 &&
+            additional_timeout_ms <= 3_600_000
         )
     {
-        requested_extension_ms <= max_visibility_ms &&
-        current_deadline_ms > current_time_ms
+        const MAX_EXTENSION_MS: u64 = 3_600_000; // 1 hour
+
+        let message_eligible = is_inflight && receipt_matches;
+        let extension_valid = additional_timeout_ms > 0 && additional_timeout_ms <= MAX_EXTENSION_MS;
+
+        message_eligible && extension_valid
     }
 
     /// Calculate new visibility deadline after extension.

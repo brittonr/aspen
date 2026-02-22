@@ -16,6 +16,8 @@
 
 use vstd::prelude::*;
 
+use crate::types::LockEntry;
+
 verus! {
     /// Abstract lock entry structure
     ///
@@ -354,7 +356,9 @@ verus! {
             acquired_at_ms as int + ttl_ms as int > u64::MAX as int ==>
                 result == u64::MAX
     {
-        acquired_at_ms.saturating_add(ttl_ms)
+        let deadline = acquired_at_ms.saturating_add(ttl_ms);
+        assert!(deadline >= acquired_at_ms, "LOCK: deadline must be >= acquired_at: {deadline} < {acquired_at_ms}");
+        deadline
     }
 
     /// Calculate remaining TTL for a lock.
@@ -377,14 +381,14 @@ verus! {
         deadline_ms.saturating_sub(now_ms)
     }
 
-    /// Compute the next fencing token based on current token.
+    /// Compute the next fencing token based on current lock state.
     ///
     /// Fencing tokens are monotonically increasing to prevent split-brain scenarios.
     /// Uses saturating arithmetic to handle u64::MAX edge case.
     ///
     /// # Arguments
     ///
-    /// * `current_token` - The current fencing token (None if no previous lock)
+    /// * `current_entry` - The current lock entry, if any exists
     ///
     /// # Returns
     ///
@@ -394,16 +398,23 @@ verus! {
     ///
     /// Proves:
     /// - Result is always >= 1 (never 0)
-    /// - Result is >= current_token (monotonicity)
-    pub fn compute_next_fencing_token(current_token: Option<u64>) -> (result: u64)
-        ensures
-            result >= 1,
-            current_token.is_some() ==> result >= current_token.unwrap()
+    /// - Result is >= current entry's token (monotonicity)
+    #[verifier(external_body)]
+    pub fn compute_next_fencing_token(current_entry: Option<&LockEntry>) -> (result: u64)
     {
-        match current_token {
-            Some(token) => token.saturating_add(1).max(1),
+        let result = match current_entry {
+            Some(entry) => entry.fencing_token.saturating_add(1),
             None => 1,
+        };
+        assert!(result >= 1, "LOCK-1: fencing token must be >= 1, got {result}");
+        if let Some(entry) = current_entry {
+            assert!(
+                result >= entry.fencing_token,
+                "LOCK-1: fencing token must be monotonically increasing: {result} < {}",
+                entry.fencing_token
+            );
         }
+        result
     }
 
     /// Result of backoff calculation.
@@ -446,19 +457,22 @@ verus! {
             result.sleep_ms >= current_backoff_ms,
             result.next_backoff_ms <= u64::MAX
     {
-        // Jitter is bounded to half the current backoff + 1
         let max_jitter = current_backoff_ms.saturating_div(2).saturating_add(1);
         let jitter = jitter_seed % max_jitter;
 
         let sleep_ms = current_backoff_ms.saturating_add(jitter);
 
-        // Double for next iteration, capped at max
         let doubled = current_backoff_ms.saturating_mul(2);
         let next_backoff_ms = if doubled < max_backoff_ms {
             doubled
         } else {
             max_backoff_ms
         };
+
+        assert!(
+            sleep_ms >= current_backoff_ms,
+            "LOCK: sleep_ms must be >= base backoff: {sleep_ms} < {current_backoff_ms}"
+        );
 
         BackoffResult {
             sleep_ms,

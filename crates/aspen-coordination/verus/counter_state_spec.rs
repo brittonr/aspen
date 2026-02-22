@@ -316,7 +316,6 @@ verus! {
             result.saturated <==> (current as int + amount as int > u64::MAX as int)
     {
         let new_value = current.saturating_add(amount);
-        // Detect saturation by checking if wrapping add would differ
         let saturated = new_value != current.wrapping_add(amount);
         CounterOpResult { new_value, saturated }
     }
@@ -416,7 +415,8 @@ verus! {
             result >= stored_value,
             result >= local_value
     {
-        stored_value.saturating_add(local_value)
+        let total = stored_value.saturating_add(local_value);
+        total
     }
 
     /// Check if a buffered counter should flush based on threshold.

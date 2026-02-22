@@ -332,40 +332,66 @@ verus! {
     /// * `max_readers` - Maximum allowed readers
     ///
     /// # Returns
+    /// Check if a read lock can be acquired.
     ///
-    /// `true` if read lock can be acquired.
-    #[verifier(external_body)]
-    pub fn can_acquire_read(
-        mode: RWLockMode,
-        reader_count: u32,
-        pending_writers: u32,
-        max_readers: u32,
-    ) -> (result: bool)
-        ensures result == (
-            (mode == RWLockMode::Free) ||
-            (mode == RWLockMode::Read && pending_writers == 0 && reader_count < max_readers)
-        )
-    {
-        matches!(mode, RWLockMode::Free) ||
-        (matches!(mode, RWLockMode::Read) && pending_writers == 0 && reader_count < max_readers)
-    }
-
-    /// Check if a write lock can be acquired.
-    ///
-    /// A write lock can only be acquired when the lock is free.
+    /// A read lock can be acquired if:
+    /// - No writer is holding the lock (mode != Write)
+    /// - No writers are pending (writer-preference fairness)
     ///
     /// # Arguments
     ///
     /// * `mode` - Current lock mode
+    /// * `pending_writers` - Number of writers waiting
+    /// * `writer_expired` - Whether the current writer (if any) has expired
     ///
     /// # Returns
     ///
-    /// `true` if write lock can be acquired.
+    /// `true` if a read lock can be acquired.
     #[verifier(external_body)]
-    pub fn can_acquire_write(mode: RWLockMode) -> (result: bool)
-        ensures result == (mode == RWLockMode::Free)
+    pub fn can_acquire_read(mode: RWLockMode, pending_writers: u32, writer_expired: bool) -> (result: bool)
     {
-        matches!(mode, RWLockMode::Free)
+        // Can't acquire if writer is holding (unless expired)
+        if mode == RWLockMode::Write && !writer_expired {
+            return false;
+        }
+
+        // Writer-preference: block new readers if writers are waiting
+        if pending_writers > 0 {
+            return false;
+        }
+
+        true
+    }
+
+    /// Check if a write lock can be acquired.
+    ///
+    /// A write lock can be acquired if:
+    /// - No active readers (or all expired)
+    /// - No active writer (or expired)
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    /// * `active_readers` - Number of non-expired readers
+    /// * `writer_expired` - Whether the current writer (if any) has expired
+    ///
+    /// # Returns
+    ///
+    /// `true` if a write lock can be acquired.
+    #[verifier(external_body)]
+    pub fn can_acquire_write(mode: RWLockMode, active_readers: u32, writer_expired: bool) -> (result: bool)
+    {
+        // Can't acquire if readers are holding
+        if mode == RWLockMode::Read && active_readers > 0 {
+            return false;
+        }
+
+        // Can't acquire if another writer is holding (unless expired)
+        if mode == RWLockMode::Write && !writer_expired {
+            return false;
+        }
+
+        true
     }
 
     /// Compute next fencing token for write acquisition.

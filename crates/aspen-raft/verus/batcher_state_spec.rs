@@ -353,7 +353,8 @@ verus! {
     /// # Returns
     ///
     /// `true` if either limit would be exceeded.
-    pub fn would_exceed(check: BatchLimitCheck) -> (result: bool)
+    #[inline]
+    pub const fn would_exceed(check: &BatchLimitCheck) -> (result: bool)
         ensures result == (check.exceeds_entries || check.exceeds_bytes)
     {
         check.exceeds_entries || check.exceeds_bytes
@@ -454,11 +455,6 @@ verus! {
                 current_bytes < max_bytes && !max_wait_is_zero ==>
                 result == FlushDecision::Delayed
     {
-        // No pending items means no flush needed (check first)
-        if pending_count == 0 {
-            return FlushDecision::None;
-        }
-
         // Immediate flush if batch is full (entries)
         if pending_count >= max_entries {
             return FlushDecision::Immediate;
@@ -467,6 +463,11 @@ verus! {
         // Immediate flush if batch is full (bytes)
         if current_bytes >= max_bytes {
             return FlushDecision::Immediate;
+        }
+
+        // No pending items means no flush needed
+        if pending_count == 0 {
+            return FlushDecision::None;
         }
 
         // Batching disabled (max_wait = 0) means immediate flush
@@ -499,7 +500,7 @@ verus! {
             key_len as int + value_len as int > u64::MAX as int ==>
                 result == u64::MAX
     {
-        key_len.saturating_add(value_len)
+        key_len + value_len
     }
 
     /// Calculate the size of a Delete operation in bytes.

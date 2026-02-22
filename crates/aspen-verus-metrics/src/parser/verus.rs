@@ -476,9 +476,15 @@ impl<'a> VerusBlockParser<'a> {
         }
     }
 
-    /// Skip to the end of a spec clause (until { or next clause keyword).
+    /// Skip to the end of a spec clause (until the function body `{`).
+    ///
+    /// Handles nested braces in ensures/requires expressions (e.g., `match` expressions).
+    /// Strategy: any `{` at brace_depth 0 is tracked. When we see `}` that closes it,
+    /// we continue. The function body `{` is the first `{` at depth 0 that ISN'T
+    /// inside a nested brace group from the clause.
     fn skip_to_clause_end(&mut self) {
-        let mut paren_depth = 0;
+        let mut paren_depth: i32 = 0;
+        let mut brace_depth: i32 = 0;
 
         while self.pos < self.chars.len() {
             let c = self.chars[self.pos];
@@ -487,23 +493,53 @@ impl<'a> VerusBlockParser<'a> {
                 paren_depth += 1;
             } else if c == ')' {
                 paren_depth -= 1;
-            } else if paren_depth == 0 {
-                if c == '{' {
-                    return;
-                }
-                if c == ',' {
-                    // Could be end of clause, check for next keyword
-                    self.pos += 1;
-                    self.skip_trivia();
-                    if self.lookahead_keyword("ensures")
-                        || self.lookahead_keyword("requires")
-                        || self.lookahead_keyword("recommends")
-                        || self.lookahead_keyword("decreases")
-                    {
+            } else if c == '{' {
+                if brace_depth == 0 && paren_depth == 0 {
+                    // Is this an expression brace (match/if/etc) or the function body?
+                    // Look at the last non-whitespace token before this `{`
+                    let mut look = self.pos.wrapping_sub(1);
+                    while look < self.chars.len() && self.chars[look].is_whitespace() {
+                        look = look.wrapping_sub(1);
+                    }
+                    // Check if the preceding context looks like a match/if/else
+                    let is_expression_brace = if look < self.chars.len() {
+                        // Look back up to 40 chars to find match/if/else/loop
+                        // This handles patterns like `match some_long_expr {`
+                        let start = look.saturating_sub(40);
+                        let context: String = self.chars[start..=look].iter().collect();
+                        // Check if there's a match/if/else keyword in this context
+                        // that would make this `{` an expression brace
+                        let words: Vec<&str> = context.split_whitespace().collect();
+                        words.iter().any(|w| matches!(*w, "match" | "if" | "else" | "loop"))
+                    } else {
+                        false
+                    };
+
+                    if is_expression_brace {
+                        brace_depth += 1;
+                    } else {
+                        // This is the function body `{`
                         return;
                     }
-                    continue;
+                } else {
+                    brace_depth += 1;
                 }
+            } else if c == '}' {
+                if brace_depth > 0 {
+                    brace_depth -= 1;
+                }
+            } else if paren_depth == 0 && brace_depth == 0 && c == ',' {
+                // Could be end of clause, check for next keyword
+                self.pos += 1;
+                self.skip_trivia();
+                if self.lookahead_keyword("ensures")
+                    || self.lookahead_keyword("requires")
+                    || self.lookahead_keyword("recommends")
+                    || self.lookahead_keyword("decreases")
+                {
+                    return;
+                }
+                continue;
             }
 
             self.pos += 1;

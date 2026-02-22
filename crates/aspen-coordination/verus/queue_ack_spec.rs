@@ -630,21 +630,17 @@ verus! {
     ///
     /// `true` if extend visibility is valid.
     pub fn is_extend_visibility_valid(
-        is_inflight: bool,
-        receipt_matches: bool,
-        additional_timeout_ms: u64,
+        current_deadline_ms: u64,
+        requested_extension_ms: u64,
+        max_visibility_ms: u64,
+        current_time_ms: u64,
     ) -> (result: bool)
         ensures result == (
-            is_inflight &&
-            receipt_matches &&
-            additional_timeout_ms > 0 &&
-            additional_timeout_ms <= 3_600_000
+            requested_extension_ms <= max_visibility_ms &&
+            current_deadline_ms > current_time_ms
         )
     {
-        is_inflight &&
-        receipt_matches &&
-        additional_timeout_ms > 0 &&
-        additional_timeout_ms <= 3_600_000
+        requested_extension_ms <= max_visibility_ms && current_deadline_ms > current_time_ms
     }
 
     /// Compute new visibility deadline.

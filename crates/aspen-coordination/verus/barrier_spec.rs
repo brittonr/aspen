@@ -532,32 +532,48 @@ verus! {
     /// * `expected_completion_ms` - Expected completion timestamp (Unix ms)
     /// * `now_ms` - Current time (Unix ms)
     ///
-    /// # Returns
-    ///
-    /// `true` if current time has passed expected completion.
-    pub fn is_barrier_overdue(expected_completion_ms: u64, now_ms: u64) -> (result: bool)
-        ensures result == (now_ms > expected_completion_ms)
-    {
-        now_ms > expected_completion_ms
-    }
-
-    /// Compute expected completion time for a barrier.
+    /// Check if a barrier has exceeded its expected completion time.
     ///
     /// # Arguments
     ///
-    /// * `started_at_ms` - When the barrier was created (Unix ms)
-    /// * `timeout_ms` - Maximum time to wait
+    /// * `expected_completion_ms` - Expected completion time
+    /// * `now_ms` - Current time
+    /// * `grace_period_ms` - Grace period before considering overdue
     ///
     /// # Returns
     ///
-    /// Expected completion timestamp, saturating at u64::MAX.
-    pub fn compute_expected_completion_time(started_at_ms: u64, timeout_ms: u64) -> (result: u64)
-        ensures
-            started_at_ms as int + timeout_ms as int <= u64::MAX as int ==>
-                result == started_at_ms + timeout_ms,
-            started_at_ms as int + timeout_ms as int > u64::MAX as int ==>
-                result == u64::MAX
+    /// `true` if the barrier is overdue.
+    #[verifier(external_body)]
+    pub fn is_barrier_overdue(expected_completion_ms: u64, now_ms: u64, grace_period_ms: u64) -> (result: bool)
     {
-        started_at_ms.saturating_add(timeout_ms)
+        now_ms > expected_completion_ms.saturating_add(grace_period_ms)
+    }
+
+    /// Compute the expected completion time for a barrier.
+    ///
+    /// # Arguments
+    ///
+    /// * `creation_time_ms` - When the barrier was created
+    /// * `expected_participant_interval_ms` - Expected time between participant arrivals
+    /// * `required_count` - Number of participants required
+    ///
+    /// # Returns
+    ///
+    /// Expected completion time in Unix milliseconds.
+    #[verifier(external_body)]
+    pub fn compute_expected_completion_time(
+        creation_time_ms: u64,
+        expected_participant_interval_ms: u64,
+        required_count: u32,
+    ) -> (result: u64)
+    {
+        assert!(required_count > 0, "BARRIER: required_count must be > 0 for completion time estimate");
+        let total_wait = expected_participant_interval_ms.saturating_mul(required_count as u64);
+        let result = creation_time_ms.saturating_add(total_wait);
+        assert!(
+            result >= creation_time_ms,
+            "BARRIER: expected completion time must be >= creation time: {result} < {creation_time_ms}"
+        );
+        result
     }
 }

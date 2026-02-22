@@ -424,6 +424,131 @@ pub fn is_lease_expired(expires_at_ms: u64, now_ms: u64) -> bool {
     now_ms > expires_at_ms
 }
 
+// ============================================================================
+// Key TTL Checks
+// ============================================================================
+
+/// Check if a key has expired based on its expiration timestamp.
+///
+/// # Arguments
+///
+/// * `expires_at_ms` - Optional expiration timestamp (None means no TTL)
+/// * `current_time_ms` - Current time
+///
+/// # Returns
+///
+/// `true` if the key has expired (current_time >= expires_at).
+///
+/// # Example
+///
+/// ```
+/// use aspen_raft::verified::kv::is_key_expired;
+///
+/// assert!(is_key_expired(Some(1000), 2000));   // Expired
+/// assert!(!is_key_expired(Some(2000), 1000));  // Not expired
+/// assert!(is_key_expired(Some(1000), 1000));   // At boundary - expired
+/// assert!(!is_key_expired(None, 1000));        // No TTL - never expires
+/// ```
+#[inline]
+#[allow(dead_code)]
+pub fn is_key_expired(expires_at_ms: Option<u64>, current_time_ms: u64) -> bool {
+    match expires_at_ms {
+        Some(expires_at) => current_time_ms >= expires_at,
+        None => false,
+    }
+}
+
+/// Check if a key is live (not expired).
+///
+/// # Arguments
+///
+/// * `expires_at_ms` - Optional expiration timestamp (None means no TTL)
+/// * `current_time_ms` - Current time
+///
+/// # Returns
+///
+/// `true` if the key is live (not expired).
+///
+/// # Example
+///
+/// ```
+/// use aspen_raft::verified::kv::is_key_live;
+///
+/// assert!(!is_key_live(Some(1000), 2000));   // Expired, not live
+/// assert!(is_key_live(Some(2000), 1000));    // Not expired, live
+/// assert!(!is_key_live(Some(1000), 1000));   // At boundary - not live
+/// assert!(is_key_live(None, 1000));          // No TTL - always live
+/// ```
+#[inline]
+#[allow(dead_code)]
+pub fn is_key_live(expires_at_ms: Option<u64>, current_time_ms: u64) -> bool {
+    !is_key_expired(expires_at_ms, current_time_ms)
+}
+
+/// Calculate time remaining until expiration.
+///
+/// # Arguments
+///
+/// * `expires_at_ms` - Optional expiration timestamp (None means no TTL)
+/// * `current_time_ms` - Current time
+///
+/// # Returns
+///
+/// - `None` if no TTL is set
+/// - `Some(0)` if already expired
+/// - `Some(remaining_ms)` if not yet expired
+///
+/// # Example
+///
+/// ```
+/// use aspen_raft::verified::kv::time_remaining_exec;
+///
+/// assert_eq!(time_remaining_exec(Some(2000), 1000), Some(1000)); // 1000ms remaining
+/// assert_eq!(time_remaining_exec(Some(1000), 2000), Some(0));    // Already expired
+/// assert_eq!(time_remaining_exec(Some(1000), 1000), Some(0));    // At boundary
+/// assert_eq!(time_remaining_exec(None, 1000), None);             // No TTL
+/// ```
+#[inline]
+#[allow(dead_code)]
+pub fn time_remaining_exec(expires_at_ms: Option<u64>, current_time_ms: u64) -> Option<u64> {
+    match expires_at_ms {
+        None => None,
+        Some(expires_at) => {
+            if current_time_ms >= expires_at {
+                Some(0)
+            } else {
+                Some(expires_at - current_time_ms)
+            }
+        }
+    }
+}
+
+/// Check if TTL is within safe bounds.
+///
+/// # Arguments
+///
+/// * `ttl_seconds` - TTL in seconds
+///
+/// # Returns
+///
+/// `true` if TTL is within the maximum allowed (30 days).
+///
+/// # Example
+///
+/// ```
+/// use aspen_raft::verified::kv::is_ttl_valid;
+///
+/// assert!(is_ttl_valid(3600));                       // 1 hour - valid
+/// assert!(is_ttl_valid(30 * 24 * 60 * 60));          // 30 days - valid
+/// assert!(!is_ttl_valid(31 * 24 * 60 * 60));         // 31 days - invalid
+/// ```
+#[inline]
+#[allow(dead_code)]
+pub const fn is_ttl_valid(ttl_seconds: u64) -> bool {
+    const MAX_TTL_SECONDS: u64 = 30 * 24 * 60 * 60; // 30 days
+    ttl_seconds <= MAX_TTL_SECONDS
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

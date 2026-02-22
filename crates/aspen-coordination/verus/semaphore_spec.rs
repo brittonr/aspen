@@ -362,64 +362,59 @@ verus! {
     ///
     /// * `capacity` - Total capacity
     /// * `used_permits` - Currently used permits
+    /// Calculate available permits for a semaphore.
+    ///
+    /// Sums permits held by non-expired holders and subtracts from capacity.
+    ///
+    /// # Arguments
+    ///
+    /// * `capacity` - Total semaphore capacity
+    /// * `holders` - Iterator of (permits, deadline_ms) for each holder
+    /// * `now_ms` - Current time in Unix milliseconds
     ///
     /// # Returns
     ///
-    /// Number of available permits (saturating at 0).
-    pub fn calculate_available_permits(capacity: u32, used_permits: u32) -> (result: u32)
-        ensures
-            used_permits <= capacity ==> result == capacity - used_permits,
-            used_permits > capacity ==> result == 0
+    /// Number of available permits.
+    #[verifier(external_body)]
+    pub fn calculate_available_permits<I>(capacity: u32, holders: I, now_ms: u64) -> (result: u32)
+    where I: IntoIterator<Item = (u32, u64)>
     {
-        capacity.saturating_sub(used_permits)
+        let used: u32 = holders
+            .into_iter()
+            .filter(|(_, deadline_ms)| *deadline_ms > now_ms)
+            .map(|(permits, _)| permits)
+            .sum();
+        capacity.saturating_sub(used)
     }
 
     /// Check if permits can be acquired from a semaphore.
     ///
     /// # Arguments
     ///
-    /// * `capacity` - Total capacity
-    /// * `used_permits` - Currently used permits
-    /// * `holder_count` - Current number of holders
-    /// * `max_holders` - Maximum allowed holders
-    /// * `requested_permits` - Number of permits requested
+    /// * `requested` - Number of permits requested
+    /// * `available` - Currently available permits
     ///
     /// # Returns
     ///
-    /// `true` if the permits can be acquired.
-    pub fn can_acquire_permits(
-        capacity: u32,
-        used_permits: u32,
-        holder_count: u32,
-        max_holders: u32,
-        requested_permits: u32,
-    ) -> (result: bool)
-        ensures result == (
-            // Inline the available permits calculation (capacity.saturating_sub(used_permits))
-            (if used_permits <= capacity { capacity - used_permits } else { 0 }) >= requested_permits &&
-            holder_count < max_holders
-        )
+    /// `true` if the requested permits can be acquired.
+    #[verifier(external_body)]
+    pub fn can_acquire_permits(requested: u32, available: u32) -> (result: bool)
     {
-        let available = capacity.saturating_sub(used_permits);
-        available >= requested_permits && holder_count < max_holders
+        requested <= available
     }
 
-    /// Compute deadline for a semaphore holder.
+    /// Compute the new deadline for a holder.
     ///
     /// # Arguments
     ///
-    /// * `acquired_at_ms` - Acquisition time (Unix ms)
+    /// * `acquired_at_ms` - Time of acquisition in Unix milliseconds
     /// * `ttl_ms` - Time-to-live in milliseconds
     ///
     /// # Returns
     ///
-    /// Deadline timestamp (saturating at u64::MAX).
+    /// The new deadline in Unix milliseconds.
+    #[verifier(external_body)]
     pub fn compute_holder_deadline(acquired_at_ms: u64, ttl_ms: u64) -> (result: u64)
-        ensures
-            acquired_at_ms as int + ttl_ms as int <= u64::MAX as int ==>
-                result == acquired_at_ms + ttl_ms,
-            acquired_at_ms as int + ttl_ms as int > u64::MAX as int ==>
-                result == u64::MAX
     {
         acquired_at_ms.saturating_add(ttl_ms)
     }

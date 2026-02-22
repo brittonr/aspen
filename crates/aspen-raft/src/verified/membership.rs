@@ -171,6 +171,153 @@ pub const fn would_exceed_max_voters(current_voter_count: u32, max_voters: u32) 
     current_voter_count >= max_voters
 }
 
+/// Check if a cluster has quorum with given healthy node count.
+///
+/// # Arguments
+///
+/// * `total_voters` - Total number of voters in the cluster
+/// * `healthy_count` - Number of healthy/responsive voters
+///
+/// # Returns
+///
+/// `true` if the healthy count meets quorum requirements.
+///
+/// # Example
+///
+/// ```rust
+/// use aspen_raft::verified::has_quorum;
+///
+/// assert!(has_quorum(5, 3));  // 3 >= (5/2 + 1) = 3
+/// assert!(!has_quorum(5, 2)); // 2 < 3
+/// ```
+#[inline]
+#[allow(dead_code)]
+pub const fn has_quorum(total_voters: u32, healthy_count: u32) -> bool {
+    healthy_count >= calculate_quorum_size(total_voters)
+}
+
+/// Check if a learner is eligible for promotion.
+///
+/// Combines lag check with additional health/stability criteria.
+///
+/// # Arguments
+///
+/// * `leader_last_log` - The leader's last log index
+/// * `learner_matched` - The learner's matched log index
+/// * `threshold` - Maximum acceptable lag for promotion
+/// * `is_healthy` - Whether the learner is currently healthy
+///
+/// # Returns
+///
+/// `true` if the learner is eligible for promotion.
+///
+/// # Example
+///
+/// ```rust
+/// use aspen_raft::verified::is_promotion_eligible;
+///
+/// assert!(is_promotion_eligible(100, 95, 10, true));  // lag=5 <= 10, healthy
+/// assert!(!is_promotion_eligible(100, 95, 10, false)); // not healthy
+/// assert!(!is_promotion_eligible(100, 80, 10, true));  // lag=20 > 10
+/// ```
+#[inline]
+#[allow(dead_code)]
+pub const fn is_promotion_eligible(
+    leader_last_log: u64,
+    learner_matched: u64,
+    threshold: u64,
+    is_healthy: bool,
+) -> bool {
+    is_healthy && compute_learner_lag(leader_last_log, learner_matched) <= threshold
+}
+
+/// Calculate required lag threshold for learner promotion.
+///
+/// # Arguments
+///
+/// * `base_threshold` - Base threshold in log entries
+/// * `safety_margin` - Additional safety margin
+///
+/// # Returns
+///
+/// Effective threshold for learner promotion eligibility.
+///
+/// # Example
+///
+/// ```rust
+/// use aspen_raft::verified::calculate_promotion_threshold;
+///
+/// assert_eq!(calculate_promotion_threshold(100, 50), 150);
+/// assert_eq!(calculate_promotion_threshold(u64::MAX, 1), u64::MAX); // Saturates
+/// ```
+#[inline]
+#[allow(dead_code)]
+pub const fn calculate_promotion_threshold(base_threshold: u64, safety_margin: u64) -> u64 {
+    base_threshold.saturating_add(safety_margin)
+}
+
+/// Calculate minimum cluster size for fault tolerance.
+///
+/// Returns the minimum number of voters needed to tolerate `f` failures.
+/// Formula: 2f + 1 (to maintain majority after f failures)
+///
+/// # Arguments
+///
+/// * `fault_tolerance` - Number of failures to tolerate
+///
+/// # Returns
+///
+/// Minimum cluster size, saturating at u32::MAX.
+///
+/// # Example
+///
+/// ```rust
+/// use aspen_raft::verified::min_cluster_size_for_tolerance;
+///
+/// assert_eq!(min_cluster_size_for_tolerance(0), 1); // 2*0 + 1
+/// assert_eq!(min_cluster_size_for_tolerance(1), 3); // 2*1 + 1
+/// assert_eq!(min_cluster_size_for_tolerance(2), 5); // 2*2 + 1
+/// ```
+#[inline]
+#[allow(dead_code)]
+pub fn min_cluster_size_for_tolerance(fault_tolerance: u32) -> u32 {
+    let doubled = if fault_tolerance > u32::MAX / 2 {
+        u32::MAX
+    } else {
+        fault_tolerance * 2
+    };
+    if doubled > u32::MAX - 1 { u32::MAX } else { doubled + 1 }
+}
+
+/// Calculate fault tolerance from cluster size.
+///
+/// Returns the number of failures that can be tolerated with given cluster size.
+/// Formula: (voters - 1) / 2
+///
+/// # Arguments
+///
+/// * `voter_count` - Number of voters in the cluster
+///
+/// # Returns
+///
+/// Number of failures that can be tolerated.
+///
+/// # Example
+///
+/// ```rust
+/// use aspen_raft::verified::fault_tolerance_for_size;
+///
+/// assert_eq!(fault_tolerance_for_size(1), 0); // (1-1)/2 = 0
+/// assert_eq!(fault_tolerance_for_size(3), 1); // (3-1)/2 = 1
+/// assert_eq!(fault_tolerance_for_size(5), 2); // (5-1)/2 = 2
+/// assert_eq!(fault_tolerance_for_size(7), 3); // (7-1)/2 = 3
+/// ```
+#[inline]
+#[allow(dead_code)]
+pub const fn fault_tolerance_for_size(voter_count: u32) -> u32 {
+    if voter_count == 0 { 0 } else { (voter_count - 1) / 2 }
+}
+
 /// Build a new membership set by promoting a learner and optionally replacing a voter.
 ///
 /// This function handles the pure logic of membership set construction:

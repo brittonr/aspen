@@ -19,11 +19,17 @@ pub fn compare_functions(
 ) -> Vec<(String, ComparisonResult)> {
     let mut results = Vec::new();
 
-    // Build lookup maps
-    let prod_by_name: HashMap<&str, &ParsedFunction> = production.iter().map(|f| (f.name.as_str(), f)).collect();
+    // Build lookup maps — use Vec for production to handle name collisions
+    let mut prod_by_name: HashMap<&str, Vec<&ParsedFunction>> = HashMap::new();
+    for f in production {
+        prod_by_name.entry(f.name.as_str()).or_default().push(f);
+    }
 
     let verus_by_name: HashMap<&str, &ParsedFunction> =
         verus.iter().filter(|f| f.kind.is_executable()).map(|f| (f.name.as_str(), f)).collect();
+
+    // Track which production functions are matched
+    let mut matched_prod_names: std::collections::HashSet<&str> = std::collections::HashSet::new();
 
     // Check all Verus exec functions have production counterparts
     for (name, verus_fn) in &verus_by_name {
@@ -32,9 +38,17 @@ pub fn compare_functions(
             continue;
         }
 
-        if let Some(prod_fn) = prod_by_name.get(name) {
-            let result = compare_single_function(prod_fn, verus_fn, config);
+        if let Some(prod_fns) = prod_by_name.get(name) {
+            // If multiple production functions with same name, pick the best match:
+            // 1. Prefer signature-compatible match
+            // 2. Fall back to first one
+            let best = prod_fns
+                .iter()
+                .find(|pf| signatures_compatible(&pf.signature, &verus_fn.signature, config))
+                .unwrap_or(&prod_fns[0]);
+            let result = compare_single_function(best, verus_fn, config);
             results.push((name.to_string(), result));
+            matched_prod_names.insert(name);
         } else {
             results.push((name.to_string(), ComparisonResult::MissingProduction {
                 verus_function: name.to_string(),
@@ -44,11 +58,12 @@ pub fn compare_functions(
     }
 
     // Check for production functions without Verus specs (informational only)
-    for (name, prod_fn) in &prod_by_name {
+    // Only report one per unique name, preferring the first
+    for (name, prod_fns) in &prod_by_name {
         if !verus_by_name.contains_key(name) && !config.skip_functions.contains(&name.to_string()) {
             results.push((name.to_string(), ComparisonResult::MissingVerus {
                 production_function: name.to_string(),
-                production_file: prod_fn.file_path.clone(),
+                production_file: prod_fns[0].file_path.clone(),
             }));
         }
     }
@@ -101,8 +116,10 @@ fn signatures_compatible(prod: &FunctionSignature, verus: &FunctionSignature, co
 
     // Check each parameter
     for (p, v) in prod.params.iter().zip(verus.params.iter()) {
-        // Names should match
-        if p.name != v.name {
+        // Names should match (ignoring leading underscore prefix for unused params)
+        let p_name = p.name.strip_prefix('_').unwrap_or(&p.name);
+        let v_name = v.name.strip_prefix('_').unwrap_or(&v.name);
+        if p_name != v_name {
             return false;
         }
 
@@ -139,6 +156,9 @@ fn normalize_type(ty: &str) -> String {
     ty.replace(' ', "")
         .replace("&'_", "&") // Elided lifetimes
         .replace("'static", "") // Static lifetime
+        .replace("std::collections::", "") // Fully-qualified std paths
+        .replace("std::vec::", "")
+        .replace("std::string::", "")
 }
 
 #[cfg(test)]

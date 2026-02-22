@@ -18,6 +18,7 @@
 use vstd::prelude::*;
 
 use super::rwlock_state_spec::*;
+use crate::rwlock::RWLockMode;
 
 verus! {
     // ========================================================================
@@ -457,29 +458,45 @@ verus! {
     ///
     /// # Returns
     ///
+    /// Check if a read lock can be acquired.
+    ///
+    /// A read lock can be acquired when:
+    /// - Lock is not in write mode
+    /// - No active writer
+    /// - No pending writers (writer preference)
+    /// - Reader count under limit
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    /// * `has_writer` - Whether there's an active writer
+    /// * `pending_writers` - Number of writers waiting
+    /// * `reader_count` - Current reader count
+    /// * `max_readers` - Maximum allowed readers
+    ///
+    /// # Returns
+    ///
     /// `true` if read lock can be acquired.
     #[verifier(external_body)]
     pub fn can_acquire_read_lock(
-        mode: super::rwlock_state_spec::RWLockModeSpec,
+        mode: RWLockMode,
         has_writer: bool,
         pending_writers: u32,
         reader_count: u32,
         max_readers: u32,
     ) -> (result: bool)
-        ensures result == (
-            !matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
-            !has_writer &&
-            pending_writers == 0 &&
-            reader_count < max_readers
-        )
     {
-        !matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
-        !has_writer &&
-        pending_writers == 0 &&
-        reader_count < max_readers
+        // Cannot acquire read in write mode
+        let mode_allows_read = !matches!(mode, RWLockMode::Write);
+        // Writer starvation prevention: no reads while writers wait
+        let no_writers_waiting = !has_writer && pending_writers == 0;
+        // Bounded reader count for fairness
+        let under_reader_limit = reader_count < max_readers;
+
+        mode_allows_read && no_writers_waiting && under_reader_limit
     }
 
-    /// Check if write lock can be acquired.
+    /// Check if a write lock can be acquired.
     ///
     /// A write lock can only be acquired when the lock is free and
     /// the fencing token can be incremented.
@@ -493,20 +510,16 @@ verus! {
     ///
     /// `true` if write lock can be acquired.
     #[verifier(external_body)]
-    pub fn can_acquire_write_lock(
-        mode: super::rwlock_state_spec::RWLockModeSpec,
-        fencing_token: u64,
-    ) -> (result: bool)
-        ensures result == (
-            mode == super::rwlock_state_spec::RWLockModeSpec::Free &&
-            fencing_token < u64::MAX
-        )
+    pub fn can_acquire_write_lock(mode: RWLockMode, fencing_token: u64) -> (result: bool)
     {
-        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Free) &&
-        fencing_token < u64::MAX
+        matches!(mode, RWLockMode::Free) && fencing_token < u64::MAX
     }
 
-    /// Check if read lock can be released.
+    /// Check if a read lock can be released.
+    ///
+    /// A read lock can be released when:
+    /// - Mode is Read
+    /// - There are active readers
     ///
     /// # Arguments
     ///
@@ -517,84 +530,45 @@ verus! {
     ///
     /// `true` if read lock can be released.
     #[verifier(external_body)]
-    pub fn can_release_read_lock(
-        mode: super::rwlock_state_spec::RWLockModeSpec,
-        reader_count: u32,
-    ) -> (result: bool)
-        ensures result == (
-            mode == super::rwlock_state_spec::RWLockModeSpec::Read &&
-            reader_count > 0
-        )
+    pub fn can_release_read_lock(mode: RWLockMode, reader_count: u32) -> (result: bool)
     {
-        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Read) &&
-        reader_count > 0
+        mode == RWLockMode::Read && reader_count > 0
     }
 
-    /// Check if write lock can be released.
+    /// Check if a write lock can be released.
+    ///
+    /// A write lock can be released when:
+    /// - Mode is Write
     ///
     /// # Arguments
     ///
     /// * `mode` - Current lock mode
-    /// * `has_writer` - Whether a writer is present
-    /// * `writer_token` - The writer's fencing token
-    /// * `provided_token` - The token provided for release
     ///
     /// # Returns
     ///
     /// `true` if write lock can be released.
     #[verifier(external_body)]
-    pub fn can_release_write_lock(
-        mode: super::rwlock_state_spec::RWLockModeSpec,
-        has_writer: bool,
-        writer_token: u64,
-        provided_token: u64,
-    ) -> (result: bool)
-        ensures result == (
-            mode == super::rwlock_state_spec::RWLockModeSpec::Write &&
-            has_writer &&
-            writer_token == provided_token
-        )
+    pub fn can_release_write_lock(mode: RWLockMode) -> (result: bool)
     {
-        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
-        has_writer &&
-        writer_token == provided_token
+        mode == RWLockMode::Write
     }
 
-    /// Check if lock can be downgraded.
+    /// Check if a write lock can be downgraded to read.
     ///
-    /// Downgrade requires holding a write lock and having capacity
-    /// for at least one reader.
+    /// A write lock can be downgraded when:
+    /// - Mode is Write
     ///
     /// # Arguments
     ///
     /// * `mode` - Current lock mode
-    /// * `has_writer` - Whether a writer is present
-    /// * `writer_token` - The writer's fencing token
-    /// * `provided_token` - The token provided for downgrade
-    /// * `max_readers` - Maximum allowed readers
     ///
     /// # Returns
     ///
     /// `true` if lock can be downgraded.
     #[verifier(external_body)]
-    pub fn can_downgrade_lock(
-        mode: super::rwlock_state_spec::RWLockModeSpec,
-        has_writer: bool,
-        writer_token: u64,
-        provided_token: u64,
-        max_readers: u32,
-    ) -> (result: bool)
-        ensures result == (
-            mode == super::rwlock_state_spec::RWLockModeSpec::Write &&
-            has_writer &&
-            writer_token == provided_token &&
-            max_readers >= 1
-        )
+    pub fn can_downgrade_lock(mode: RWLockMode) -> (result: bool)
     {
-        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
-        has_writer &&
-        writer_token == provided_token &&
-        max_readers >= 1
+        mode == RWLockMode::Write
     }
 
     /// Compute reader count after read acquisition.
@@ -633,6 +607,8 @@ verus! {
 
     /// Compute mode after read release.
     ///
+    /// If no readers remain, mode becomes Free. Otherwise stays Read.
+    ///
     /// # Arguments
     ///
     /// * `reader_count_after` - Reader count after release
@@ -640,17 +616,15 @@ verus! {
     /// # Returns
     ///
     /// New mode (Free if no readers, Read otherwise).
+    #[verifier(external_body)]
     pub fn compute_mode_after_read_release(
         reader_count_after: u32,
-    ) -> (result: super::rwlock_state_spec::RWLockModeSpec)
-        ensures
-            reader_count_after == 0 ==> result == super::rwlock_state_spec::RWLockModeSpec::Free,
-            reader_count_after > 0 ==> result == super::rwlock_state_spec::RWLockModeSpec::Read
+    ) -> (result: RWLockMode)
     {
         if reader_count_after == 0 {
-            super::rwlock_state_spec::RWLockModeSpec::Free
+            RWLockMode::Free
         } else {
-            super::rwlock_state_spec::RWLockModeSpec::Read
+            RWLockMode::Read
         }
     }
 

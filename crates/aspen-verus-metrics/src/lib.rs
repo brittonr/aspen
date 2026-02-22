@@ -420,10 +420,10 @@ impl VerificationEngine {
         let config = self.load_crate_config(&crate_dir)?;
 
         // Parse production functions
-        let production_fns = parser::production::parse_verified_dir(&verified_dir)?;
+        let production_fns = parser::production::parse_verified_dir_recursive(&verified_dir)?;
 
         // Parse Verus functions
-        let verus_fns = parser::verus::parse_verus_dir(&verus_dir)?;
+        let verus_fns = parser::verus::parse_verus_dir_recursive(&verus_dir)?;
 
         // Compare functions
         let comparisons = comparison::matcher::compare_functions(&production_fns, &verus_fns, &config);

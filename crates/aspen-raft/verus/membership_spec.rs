@@ -225,6 +225,7 @@ verus! {
     /// # Returns
     ///
     /// Minimum cluster size, saturating at u32::MAX.
+    #[inline]
     pub fn min_cluster_size_for_tolerance(fault_tolerance: u32) -> (result: u32)
         ensures
             fault_tolerance as int * 2 + 1 <= u32::MAX as int ==>
@@ -232,16 +233,15 @@ verus! {
             fault_tolerance as int * 2 + 1 > u32::MAX as int ==>
                 result == u32::MAX
     {
-        // Manual saturating_mul(2) then saturating_add(1)
         let doubled = if fault_tolerance > u32::MAX / 2 {
             u32::MAX
         } else {
-            (fault_tolerance * 2) as u32
+            fault_tolerance * 2
         };
         if doubled > u32::MAX - 1 {
             u32::MAX
         } else {
-            (doubled + 1) as u32
+            doubled + 1
         }
     }
 

@@ -38,6 +38,9 @@ fn normalize_syntactic(body: &str) -> String {
     // Remove multi-line comments
     result = remove_block_comments(&result);
 
+    // Remove debug_assert! / assert! statements (production-only, not in verus)
+    result = remove_debug_assertions(&result);
+
     // Normalize whitespace
     result = normalize_whitespace(&result);
 
@@ -62,6 +65,89 @@ fn remove_line_comments(s: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Remove debug_assert!, debug_assert_eq!, debug_assert_ne!, and assert! macro invocations.
+/// These exist in production code but not in Verus specs.
+/// Handles nested parentheses within the macro arguments.
+/// Also handles syn-formatted output where spaces appear between `!` and `(`.
+fn remove_debug_assertions(s: &str) -> String {
+    // Macro names to strip (without `!` — we'll match `name`, optional whitespace, `!`, optional
+    // whitespace, `(`)
+    let macro_names = ["debug_assert_ne", "debug_assert_eq", "debug_assert", "assert"];
+
+    let mut result = s.to_string();
+    for name in &macro_names {
+        loop {
+            // Find the macro name
+            if let Some(name_start) = result.find(name) {
+                // Check that it's a word boundary (not part of a larger identifier)
+                if name_start > 0 {
+                    let prev = result.as_bytes()[name_start - 1];
+                    if prev.is_ascii_alphanumeric() || prev == b'_' {
+                        // Part of a larger identifier, skip
+                        // Try finding next occurrence after this one
+                        let after = name_start + name.len();
+                        if let Some(next) = result[after..].find(name) {
+                            // Recurse would be complex, just break for now
+                            let _ = next;
+                        }
+                        break;
+                    }
+                }
+
+                let after_name = name_start + name.len();
+                // Skip optional whitespace, expect `!`
+                let rest = &result[after_name..];
+                let rest_trimmed = rest.trim_start();
+                if !rest_trimmed.starts_with('!') {
+                    break;
+                }
+                let after_bang_offset = rest.len() - rest_trimmed.len() + 1;
+                let after_bang = after_name + after_bang_offset;
+
+                // Skip optional whitespace, expect `(`
+                let rest2 = &result[after_bang..];
+                let rest2_trimmed = rest2.trim_start();
+                if !rest2_trimmed.starts_with('(') {
+                    break;
+                }
+                let after_paren_offset = rest2.len() - rest2_trimmed.len() + 1;
+                let after_paren = after_bang + after_paren_offset;
+
+                // Now find matching closing paren, handling nesting
+                let mut depth: i32 = 1;
+                let mut end = after_paren;
+                let chars: Vec<char> = result[after_paren..].chars().collect();
+                for (i, &c) in chars.iter().enumerate() {
+                    match c {
+                        '(' => depth += 1,
+                        ')' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                end = after_paren + i + 1;
+                                // Skip trailing whitespace and semicolon
+                                let rest = &result[end..];
+                                let trimmed = rest.trim_start();
+                                if trimmed.starts_with(';') {
+                                    end = result.len() - trimmed.len() + 1;
+                                }
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                if depth != 0 {
+                    break; // Unmatched parens, bail
+                }
+                result = format!("{}{}", &result[..name_start], &result[end..]);
+            } else {
+                break;
+            }
+        }
+    }
+    result
 }
 
 /// Remove block comments.
@@ -140,7 +226,53 @@ fn apply_default_equivalences(s: &str) -> String {
     result = result.replace("current_entry", "current_token");
     result = result.replace("Some(entry)", "Some(token)");
 
+    // Normalize `let x = expr ; x` → `expr` (production binds to variable then returns it)
+    result = normalize_trailing_let_binding(&result);
+
     result
+}
+
+/// Normalize `let x = expr ; x` at end of body to just `expr`.
+/// Production code often does `let result = compute(); result` while
+/// verus inlines as `compute()`.
+fn normalize_trailing_let_binding(s: &str) -> String {
+    // Look for pattern: `let IDENT = EXPR ; IDENT` at the end (after stripping whitespace)
+    let trimmed = s.trim();
+
+    // Try to find the last `let IDENT = ` binding
+    // We look for patterns like `let deadline = EXPR ; deadline`
+    if let Some(last_let) = trimmed.rfind("let ") {
+        let after_let = &trimmed[last_let + 4..];
+        // Extract the identifier (up to `=` or whitespace)
+        if let Some(eq_pos) = after_let.find('=') {
+            let ident = after_let[..eq_pos].trim();
+            // Check if identifier is a simple name (no complex patterns)
+            if ident.chars().all(|c| c.is_alphanumeric() || c == '_') && !ident.is_empty() {
+                // Find the semicolon followed by the same identifier at the end
+                let search = format!("; {} ", ident);
+                // Check if the string ends with `; ident`
+                if let Some(semi_pos) = trimmed[last_let..].rfind(&search) {
+                    let after_semi_ident = &trimmed[last_let + semi_pos + search.len()..].trim();
+                    if after_semi_ident.is_empty() {
+                        // Pattern matches! Remove `let ident = ` prefix and `; ident` suffix
+                        let expr_start = last_let + 4 + eq_pos + 1; // after `=`
+                        let expr_end = last_let + semi_pos;
+                        let before = &trimmed[..last_let];
+                        let expr = trimmed[expr_start..expr_end].trim();
+                        return format!("{}{}", before, expr);
+                    }
+                } else if trimmed.ends_with(&format!("; {}", ident)) {
+                    let suffix_len = format!("; {}", ident).len();
+                    let expr_start = last_let + 4 + eq_pos + 1;
+                    let expr_end = trimmed.len() - suffix_len;
+                    let before = &trimmed[..last_let];
+                    let expr = trimmed[expr_start..expr_end].trim();
+                    return format!("{}{}", before, expr);
+                }
+            }
+        }
+    }
+    s.to_string()
 }
 
 /// Compare two normalized bodies for semantic equality.

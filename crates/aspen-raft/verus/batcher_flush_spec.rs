@@ -313,8 +313,8 @@ verus! {
     // Flush Timing
     // ========================================================================
 
-    /// Reasons for flush
-    pub enum FlushReason {
+    /// Reasons for flush (spec-level)
+    pub enum FlushReasonSpec {
         /// Batch reached max_entries
         EntriesFull,
         /// Batch reached max_bytes
@@ -326,18 +326,18 @@ verus! {
     }
 
     /// Determine flush reason
-    pub open spec fn determine_flush_reason(state: BatcherState) -> FlushReason {
+    pub open spec fn determine_flush_reason(state: BatcherState) -> FlushReasonSpec {
         if state.pending.len() >= state.config.max_entries as int {
-            FlushReason::EntriesFull
+            FlushReasonSpec::EntriesFull
         } else if state.current_bytes >= state.config.max_bytes {
-            FlushReason::BytesFull
+            FlushReasonSpec::BytesFull
         } else if state.config.max_wait_ms == 0 {
-            FlushReason::Immediate
+            FlushReasonSpec::Immediate
         } else if timeout_elapsed(state) {
-            FlushReason::Timeout
+            FlushReasonSpec::Timeout
         } else {
             // Should not happen if should_flush is true
-            FlushReason::Immediate
+            FlushReasonSpec::Immediate
         }
     }
 
@@ -347,7 +347,7 @@ verus! {
         requires
             batcher_invariant(state),
             state.pending.len() >= state.config.max_entries as int,
-        ensures matches!(determine_flush_reason(state), FlushReason::EntriesFull)
+        ensures matches!(determine_flush_reason(state), FlushReasonSpec::EntriesFull)
     {
         // Entries check comes first
     }
@@ -518,7 +518,7 @@ verus! {
 
     /// Flush reason enumeration for exec functions.
     #[derive(PartialEq, Eq, Clone, Copy)]
-    pub enum FlushReasonExec {
+    pub enum FlushReason {
         EntriesFull,
         BytesFull,
         Timeout,
@@ -539,6 +539,7 @@ verus! {
     /// # Returns
     ///
     /// The reason for flushing.
+    #[inline]
     pub fn determine_flush_reason_exec(
         pending_len: u32,
         max_entries: u32,
@@ -546,21 +547,21 @@ verus! {
         max_bytes: u64,
         max_wait_ms: u64,
         timeout_elapsed: bool,
-    ) -> (result: FlushReasonExec)
+    ) -> (result: FlushReason)
         ensures
-            pending_len >= max_entries ==> result == FlushReasonExec::EntriesFull,
-            pending_len < max_entries && current_bytes >= max_bytes ==> result == FlushReasonExec::BytesFull,
-            pending_len < max_entries && current_bytes < max_bytes && max_wait_ms == 0 ==> result == FlushReasonExec::Immediate,
-            pending_len < max_entries && current_bytes < max_bytes && max_wait_ms > 0 && timeout_elapsed ==> result == FlushReasonExec::Timeout
+            pending_len >= max_entries ==> result == FlushReason::EntriesFull,
+            pending_len < max_entries && current_bytes >= max_bytes ==> result == FlushReason::BytesFull,
+            pending_len < max_entries && current_bytes < max_bytes && max_wait_ms == 0 ==> result == FlushReason::Immediate,
+            pending_len < max_entries && current_bytes < max_bytes && max_wait_ms > 0 && timeout_elapsed ==> result == FlushReason::Timeout
     {
         if pending_len >= max_entries {
-            FlushReasonExec::EntriesFull
+            FlushReason::EntriesFull
         } else if current_bytes >= max_bytes {
-            FlushReasonExec::BytesFull
+            FlushReason::BytesFull
         } else if max_wait_ms == 0 {
-            FlushReasonExec::Immediate
+            FlushReason::Immediate
         } else {
-            FlushReasonExec::Timeout
+            FlushReason::Timeout
         }
     }
 
@@ -633,10 +634,6 @@ verus! {
             result <= max_wait_ms
     {
         let elapsed = current_time_ms.saturating_sub(batch_start_ms);
-        if elapsed >= max_wait_ms {
-            0
-        } else {
-            max_wait_ms - elapsed
-        }
+        max_wait_ms.saturating_sub(elapsed)
     }
 }

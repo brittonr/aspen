@@ -262,7 +262,9 @@ verus! {
             result >= max_token,
             max_token < u64::MAX ==> result == max_token + 1
     {
-        max_token.saturating_add(1)
+        let result = max_token.saturating_add(1);
+        assert!(result >= max_token, "LOCK-1: new fencing token must be >= current max: {result} < {max_token}");
+        result
     }
 
     /// Compute the deadline for a lock acquisition.

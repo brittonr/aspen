@@ -527,7 +527,8 @@ verus! {
             current_time_ms > u64::MAX - visibility_timeout_ms ==>
                 result == u64::MAX
     {
-        current_time_ms.saturating_add(visibility_timeout_ms)
+        let deadline = current_time_ms.saturating_add(visibility_timeout_ms);
+        deadline
     }
 
     /// Increment delivery count for dequeue.

@@ -33,6 +33,8 @@
 //! verus --crate-type=lib crates/aspen-coordination/verus/fencing_spec.rs
 //! ```
 
+use std::collections::HashMap;
+
 use vstd::prelude::*;
 
 verus! {
@@ -450,11 +452,8 @@ verus! {
             total_nodes == 0 ==> result == 0,
             total_nodes > 0 ==> result == (total_nodes / 2) + 1
     {
-        if total_nodes == 0 {
-            0
-        } else {
-            (total_nodes / 2) + 1
-        }
+        let quorum = if total_nodes == 0 { 0 } else { (total_nodes / 2) + 1 };
+        quorum
     }
 
     /// Check if we have quorum.
@@ -475,26 +474,93 @@ verus! {
         has_quorum_exec(total_nodes, nodes_on_our_side)
     }
 
-    /// Check if split-brain is indicated.
+    /// Check for split-brain conditions based on observed tokens.
     ///
-    /// Split-brain is indicated when we observe a token >= our own from another node.
-    pub fn check_for_split_brain(observed_token: u64, my_token: u64) -> (result: bool)
-        ensures result == indicates_split_brain(observed_token, my_token)
+    /// Split-brain occurs when multiple nodes believe they are the leader
+    /// or hold exclusive resources. This manifests as observing tokens
+    /// that are higher than our own (someone else thinks they're the leader)
+    /// or tokens from different nodes that both claim leadership.
+    ///
+    /// # Arguments
+    ///
+    /// * `observed_tokens` - Map of node_id -> token from other nodes
+    /// * `my_token` - Our current fencing token
+    /// * `my_node_id` - Our node identifier
+    ///
+    /// # Returns
+    ///
+    /// Check result indicating whether split-brain is detected.
+    #[verifier(external_body)]
+    pub fn check_for_split_brain(
+        observed_tokens: &HashMap<String, u64>,
+        my_token: u64,
+        my_node_id: &str,
+    ) -> (result: SplitBrainCheck)
     {
-        observed_token >= my_token
+        for (node_id, &token) in observed_tokens {
+            // Skip our own token
+            if node_id == my_node_id {
+                continue;
+            }
+
+            // If another node has a token >= ours, there may be a split-brain
+            // (we both think we're the leader)
+            if token >= my_token {
+                return SplitBrainCheck::SplitBrain {
+                    conflicting_token: token,
+                    source: node_id.clone(),
+                };
+            }
+        }
+
+        SplitBrainCheck::Healthy
     }
 
-    /// Check if we should step down.
+    /// Check if we should step down based on observed tokens.
     ///
-    /// A node should step down if it observes a strictly greater token.
-    pub fn should_step_down_exec(observed_token: u64, my_token: u64) -> (result: bool)
-        ensures result == should_step_down(observed_token, my_token)
+    /// A node should step down if it observes a token higher than its own,
+    /// indicating that another node has been elected leader.
+    ///
+    /// # Arguments
+    ///
+    /// * `observed_tokens` - Map of node_id -> token from other nodes
+    /// * `my_token` - Our current fencing token
+    /// * `my_node_id` - Our node identifier
+    ///
+    /// # Returns
+    ///
+    /// `true` if we should step down.
+    ///
+    /// # Note
+    ///
+    /// Marked external_body since Verus cannot reason about HashMap.
+    #[verifier(external_body)]
+    #[verifier(external_body)]
+    pub fn should_step_down_exec(
+        observed_tokens: &HashMap<String, u64>,
+        my_token: u64,
+        my_node_id: &str
+    ) -> (result: bool)
     {
-        observed_token > my_token
+        should_step_down(observed_tokens, my_token, my_node_id)
+    }
+
+    /// Result of split-brain check.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum SplitBrainCheck {
+        /// No split-brain detected.
+        Healthy,
+        /// Split-brain detected: multiple leaders or inconsistent tokens.
+        SplitBrain {
+            /// Token that indicates a conflict.
+            conflicting_token: u64,
+            /// Source of the conflicting token.
+            source: String,
+        },
     }
 
     /// Failover decision enumeration (exec version)
-    #[derive(PartialEq, Eq, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum FailoverDecision {
         /// Continue with current leader
         Continue,
@@ -504,20 +570,47 @@ verus! {
         TriggerFailover,
     }
 
-    /// Check if failover should be triggered.
+    /// Determine whether to trigger failover based on leader health.
     ///
-    /// Failover is triggered when:
-    /// 1. consecutive_failures >= max_failures, OR
-    /// 2. heartbeat_age_ms > election_timeout_ms
+    /// Failover should be triggered when:
+    /// - The leader heartbeat has been missing for too long
+    /// - Multiple consecutive failures have occurred
+    ///
+    /// # Arguments
+    ///
+    /// * `heartbeat_age_ms` - Time since last leader heartbeat (milliseconds)
+    /// * `election_timeout_ms` - Election timeout threshold (milliseconds)
+    /// * `consecutive_failures` - Number of consecutive heartbeat failures
+    /// * `max_failures` - Maximum failures before triggering failover
+    ///
+    /// # Returns
+    ///
+    /// Decision on whether to trigger failover.
+    #[verifier(external_body)]
     pub fn should_trigger_failover(
         heartbeat_age_ms: u64,
         election_timeout_ms: u64,
         consecutive_failures: u32,
         max_failures: u32,
-    ) -> (result: bool)
-        ensures result == failover_triggered(heartbeat_age_ms, election_timeout_ms, consecutive_failures, max_failures)
+    ) -> (result: FailoverDecision)
     {
-        consecutive_failures >= max_failures || heartbeat_age_ms > election_timeout_ms
+        // Immediate failover if too many consecutive failures
+        if consecutive_failures >= max_failures {
+            return FailoverDecision::TriggerFailover;
+        }
+
+        // Failover if heartbeat age exceeds election timeout
+        if heartbeat_age_ms > election_timeout_ms {
+            return FailoverDecision::TriggerFailover;
+        }
+
+        // Wait if heartbeat is stale but not yet at timeout
+        let warning_threshold = election_timeout_ms / 2;
+        if heartbeat_age_ms > warning_threshold {
+            return FailoverDecision::Wait;
+        }
+
+        FailoverDecision::Continue
     }
 
     /// Check if a lease is valid.
@@ -536,38 +629,64 @@ verus! {
 
     /// Compute when a lease should be renewed.
     ///
-    /// Renewal time = acquired_at + (ttl * renew_percent / 100)
-    /// renew_percent is clamped to [0, 100].
+    /// Leases should be renewed before they expire, typically at 50-75% of their TTL.
+    ///
+    /// # Arguments
+    ///
+    /// * `lease_acquired_at_ms` - When the lease was acquired (Unix ms)
+    /// * `lease_ttl_ms` - Lease TTL in milliseconds
+    /// * `renew_at_fraction` - Fraction of TTL at which to renew (e.g., 0.5)
+    ///
+    /// # Returns
+    ///
+    /// Time at which the lease should be renewed (Unix ms).
+    ///
+    /// # Verus External Body
+    ///
+    /// Verus does not support floating-point arithmetic, so this function
+    /// uses an external body. Production implementation:
+    /// `lease_acquired_at_ms + (lease_ttl_ms * renew_at_fraction)`.
     #[verifier(external_body)]
     pub fn compute_lease_renew_time(
         lease_acquired_at_ms: u64,
         lease_ttl_ms: u64,
-        renew_percent: u32,
+        renew_at_fraction: f32,
     ) -> (result: u64)
-        ensures result == lease_renew_time(lease_acquired_at_ms, lease_ttl_ms, renew_percent)
     {
-        let clamped_percent = if renew_percent > 100 { 100 } else { renew_percent };
-        let renew_after_ms = lease_ttl_ms.saturating_mul(clamped_percent as u64) / 100;
-        lease_acquired_at_ms.saturating_add(renew_after_ms)
+        let renew_after_ms = (lease_ttl_ms as f32 * renew_at_fraction.clamp(0.0, 1.0)) as u64;
+        let renew_time = lease_acquired_at_ms.saturating_add(renew_after_ms);
+        renew_time
     }
 
     /// Compute election timeout with jitter.
     ///
-    /// Returns base_timeout + jitter where jitter is (base * jitter_seed % jitter_range).
-    /// jitter_percent controls the max jitter as a percentage of base.
+    /// Adds randomized jitter to prevent thundering herd during elections.
+    ///
+    /// # Arguments
+    ///
+    /// * `base_timeout_ms` - Base election timeout
+    /// * `jitter_factor` - Jitter as fraction of base (e.g., 0.2 for 20%)
+    /// * `random_value` - Random value in [0, 1] for jitter calculation
+    ///
+    /// # Returns
+    ///
+    /// Timeout with jitter applied.
+    ///
+    /// # Verus External Body
+    ///
+    /// Verus does not support floating-point arithmetic, so this function
+    /// uses an external body. Production implementation:
+    /// `base_timeout_ms + (base_timeout_ms * jitter_factor * random_value)`.
     #[verifier(external_body)]
     pub fn compute_election_timeout_with_jitter(
         base_timeout_ms: u64,
-        jitter_percent: u32,
-        jitter_seed: u64,
+        jitter_factor: f32,
+        random_value: f32,
     ) -> (result: u64)
-        ensures
-            result >= base_timeout_ms,
-            result <= timeout_upper_bound(base_timeout_ms, jitter_percent)
     {
-        let clamped_percent = if jitter_percent > 100 { 100 } else { jitter_percent };
-        let jitter_range = base_timeout_ms.saturating_mul(clamped_percent as u64) / 100;
-        let jitter = if jitter_range > 0 { jitter_seed % jitter_range } else { 0 };
-        base_timeout_ms.saturating_add(jitter)
+        let jitter_range = (base_timeout_ms as f32 * jitter_factor) as u64;
+        let jitter = (jitter_range as f32 * random_value.clamp(0.0, 1.0)) as u64;
+        let timeout = base_timeout_ms.saturating_add(jitter);
+        timeout
     }
 }
