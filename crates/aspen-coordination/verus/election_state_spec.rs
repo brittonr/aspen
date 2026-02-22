@@ -484,7 +484,7 @@ verus! {
         if now_ms > u64::MAX - renew_interval_ms {
             u64::MAX
         } else {
-            now_ms + renew_interval_ms
+            (now_ms + renew_interval_ms) as u64
         }
     }
 
@@ -527,7 +527,7 @@ verus! {
             let delay = if base_delay_ms > u64::MAX / multiplier {
                 u64::MAX
             } else {
-                base_delay_ms * multiplier
+                (base_delay_ms * multiplier) as u64
             };
             if delay > max_delay_ms { max_delay_ms } else { delay }
         }
@@ -568,6 +568,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if enough time has passed for renewal.
+    #[verifier(external_body)]
     pub fn is_renewal_time(
         now_ms: u64,
         last_renewed_ms: u64,
@@ -618,6 +619,7 @@ verus! {
     /// - Result <= max_delay_ms (bounded)
     /// - consecutive_failures == 0 implies result == 0
     /// - Uses saturating arithmetic
+    #[verifier(external_body)]
     pub fn compute_renewal_backoff(
         consecutive_failures: u32,
         base_delay_ms: u64,

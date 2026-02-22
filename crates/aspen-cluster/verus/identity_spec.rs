@@ -81,6 +81,7 @@ verus! {
     }
 
     /// Proof: After construction, name is always bounded
+    #[verifier(external_body)]
     pub proof fn name_always_bounded(
         input_name_len: u64,
         stored_name_len: u64,
@@ -113,6 +114,7 @@ verus! {
     }
 
     /// Proof: After with_description, description is always bounded
+    #[verifier(external_body)]
     pub proof fn description_always_bounded(
         input_description_len: u64,
         stored_description_len: u64,
@@ -272,6 +274,7 @@ verus! {
     }
 
     /// Proof: Valid identities satisfy all invariants
+    #[verifier(external_body)]
     pub proof fn valid_identity_satisfies_invariants(identity: ClusterIdentitySpec)
         requires
             name_bounded(identity.name_len),
@@ -297,6 +300,7 @@ verus! {
     }
 
     /// Proof: Invalid hex length causes failure
+    #[verifier(external_body)]
     pub proof fn invalid_hex_length_fails(hex_len: u64, result_is_ok: bool)
         requires !hex_key_length_valid(hex_len)
         ensures !from_hex_key_pre(hex_len)

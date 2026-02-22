@@ -25,7 +25,7 @@ verus! {
 
     /// Precondition for starting election
     pub open spec fn start_election_pre(state: ElectionState) -> bool {
-        state.running &&
+        state.is_running &&
         is_follower(state)
     }
 
@@ -34,7 +34,7 @@ verus! {
         ElectionState {
             state: LeadershipStateSpec::Transitioning,
             max_fencing_token: pre.max_fencing_token,
-            running: pre.running,
+            is_running: pre.is_running,
         }
     }
 
@@ -62,7 +62,7 @@ verus! {
         ElectionState {
             state: LeadershipStateSpec::Leader { fencing_token: new_token },
             max_fencing_token: new_token,
-            running: pre.running,
+            is_running: pre.is_running,
         }
     }
 
@@ -80,7 +80,7 @@ verus! {
         ElectionState {
             state: LeadershipStateSpec::Follower,
             max_fencing_token: pre.max_fencing_token,
-            running: pre.running,
+            is_running: pre.is_running,
         }
     }
 
@@ -98,7 +98,7 @@ verus! {
         ElectionState {
             state: LeadershipStateSpec::Follower,
             max_fencing_token: pre.max_fencing_token,
-            running: false,  // Stepdown stops the election loop
+            is_running: false,  // Stepdown stops the election loop
         }
     }
 
@@ -116,7 +116,7 @@ verus! {
         ElectionState {
             state: LeadershipStateSpec::Follower,
             max_fencing_token: pre.max_fencing_token,
-            running: pre.running,
+            is_running: pre.is_running,
         }
     }
 

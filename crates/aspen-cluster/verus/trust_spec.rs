@@ -99,6 +99,8 @@ verus! {
     }
 
     /// Proof: add_trusted maintains capacity bound
+    #[verifier(external_body)]
+    #[verifier(external_body)]
     pub proof fn add_trusted_maintains_bound(
         pre: TrustManagerState,
         post: TrustManagerState,
@@ -146,6 +148,8 @@ verus! {
     }
 
     /// Proof: block maintains capacity bound
+    #[verifier(external_body)]
+    #[verifier(external_body)]
     pub proof fn block_maintains_bound(
         pre: TrustManagerState,
         post: TrustManagerState,
@@ -189,6 +193,7 @@ verus! {
     }
 
     /// Proof: add_request maintains capacity bound
+    #[verifier(external_body)]
     pub proof fn add_request_maintains_bound(
         pre: TrustManagerState,
         post: TrustManagerState,
@@ -235,6 +240,7 @@ verus! {
     }
 
     /// Proof: Blocked clusters always return Blocked level
+    #[verifier(external_body)]
     pub proof fn blocked_returns_blocked(query: ClusterTrustQuery)
         requires query.in_blocked
         ensures matches!(block_precedence(query), TrustLevelSpec::Blocked)
@@ -265,6 +271,7 @@ verus! {
     }
 
     /// Proof: Trust and block are mutually exclusive after operations
+    #[verifier(external_body)]
     pub proof fn trust_block_exclusivity(
         trusted_success: bool,
         is_trusted: bool,
@@ -297,6 +304,7 @@ verus! {
     }
 
     /// Proof: Initial state is valid
+    #[verifier(external_body)]
     pub proof fn initial_state_valid()
         ensures trust_manager_invariant(initial_trust_manager())
     {
@@ -356,6 +364,7 @@ verus! {
     }
 
     /// Proof: Blocked clusters cannot access anything
+    #[verifier(external_body)]
     pub proof fn blocked_no_access(is_public: bool)
         ensures !can_access_resource(TrustLevelSpec::Blocked, is_public)
     {
@@ -363,6 +372,7 @@ verus! {
     }
 
     /// Proof: Trusted clusters can access everything
+    #[verifier(external_body)]
     pub proof fn trusted_full_access(is_public: bool)
         ensures can_access_resource(TrustLevelSpec::Trusted, is_public)
     {

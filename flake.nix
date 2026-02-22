@@ -916,12 +916,12 @@
             }
           );
 
-          # Build aspen-ci-agent from its own crate
+          # Build aspen-ci-agent binary from the aspen-ci crate
           aspen-ci-agent-crate = craneLib.buildPackage (
             commonArgs
             // {
-              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-ci-agent/Cargo.toml;}) pname version;
-              cargoExtraArgs = "--package aspen-ci-agent --bin aspen-ci-agent";
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-ci/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-ci --bin aspen-ci-agent";
               doCheck = false;
             }
           );
@@ -1041,7 +1041,17 @@
               deny = craneLib.cargoDeny commonArgs;
 
               audit = craneLib.cargoAudit {
-                inherit src advisory-db;
+                inherit src;
+                # Patch advisory-db: strip CVSS 4.0 lines which cargo-audit can't parse
+                advisory-db = pkgs.runCommand "advisory-db-patched" {} ''
+                  cp -r ${advisory-db} $out
+                  chmod -R u+w $out
+                  find $out -name '*.md' -exec \
+                    ${pkgs.gnused}/bin/sed -i '/^cvss = "CVSS:4\./d' {} +
+                '';
+                # RUSTSEC-2023-0071: rsa crate timing sidechannel — no fix available,
+                # transitive dep via ssh-key → aspen-forge
+                cargoAuditExtraArgs = "--ignore RUSTSEC-2023-0071";
               };
 
               # Verus formal verification check
@@ -1115,9 +1125,18 @@
               # Verifies that production code with ghost annotations compiles with verus feature
               verus-inline-check =
                 pkgs.runCommand "aspen-verus-inline-check" {
-                  nativeBuildInputs = [rustToolChain pkgs.pkg-config pkgs.openssl];
+                  nativeBuildInputs = [rustToolChain pkgs.pkg-config pkgs.openssl pkgs.protobuf pkgs.clang pkgs.mold pkgs.zlib pkgs.stdenv.cc.cc];
+                  LD_LIBRARY_PATH = lib.makeLibraryPath [pkgs.zlib pkgs.stdenv.cc.cc.lib];
+                  SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
+                  PROTO_ROOT = "${snix-src}";
                 } ''
-                  cd ${src}
+                  cp -r ${src} src
+                  chmod -R u+w src
+                  cd src
+
+                  # Use vendored dependencies (no network access in sandbox)
+                  mkdir -p .cargo
+                  cp ${cargoVendorDir}/config.toml .cargo/config.toml
 
                   echo "=== Verus Inline Ghost Code Check ==="
 

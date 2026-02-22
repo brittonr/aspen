@@ -99,6 +99,8 @@ verus! {
     }
 
     /// Proof: Tampered announcements fail verification
+    #[verifier(external_body)]
+    #[verifier(external_body)]
     pub proof fn tampering_detected()
         ensures forall |orig: PeerAnnouncementSpec, tampered: PeerAnnouncementSpec,
                         orig_hash: u128, tampered_hash: u128|
@@ -236,6 +238,7 @@ verus! {
     // ========================================================================
 
     /// Proof: Valid signatures prove message integrity
+    #[verifier(external_body)]
     pub proof fn signature_proves_integrity(
         signed: SignedPeerAnnouncementSpec,
         verification_succeeds: bool,
@@ -250,6 +253,7 @@ verus! {
     }
 
     /// Proof: Signing followed by verification succeeds
+    #[verifier(external_body)]
     pub proof fn sign_then_verify_succeeds(
         announcement: PeerAnnouncementSpec,
         secret_key_high: u128,

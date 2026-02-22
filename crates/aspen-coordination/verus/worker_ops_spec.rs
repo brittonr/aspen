@@ -53,7 +53,7 @@ verus! {
             registered_at_ms: current_time_ms,
             last_heartbeat_ms: current_time_ms,
             lease_deadline_ms: (current_time_ms + lease_duration_ms) as u64,
-            active: true,
+            is_active: true,
             capabilities: capabilities,
         };
 
@@ -83,7 +83,7 @@ verus! {
             let post = register_worker_post(pre, worker_id, capacity, capabilities, lease_duration_ms, current_time_ms);
             // Worker exists and is active
             post.workers.contains_key(worker_id) &&
-            post.workers[worker_id].active &&
+            post.workers[worker_id].is_active &&
             // Load is zero
             post.workers[worker_id].current_load == 0 &&
             // No assigned tasks
@@ -142,7 +142,7 @@ verus! {
         let new_entry = WorkerEntrySpec {
             last_heartbeat_ms: current_time_ms,
             lease_deadline_ms: (current_time_ms + lease_duration_ms) as u64,
-            active: true,
+            is_active: true,
             ..old_entry
         };
 
@@ -186,7 +186,7 @@ verus! {
             current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - lease_duration_ms,
         ensures ({
             let post = heartbeat_post(pre, worker_id, lease_duration_ms, current_time_ms);
-            post.workers[worker_id].active
+            post.workers[worker_id].is_active
         })
     {
         // active set to true
@@ -497,7 +497,7 @@ verus! {
 
         // Update worker to inactive with empty assignments
         let new_worker = WorkerEntrySpec {
-            active: false,
+            is_active: false,
             assigned_tasks: Set::empty(),
             current_load: 0,
             ..old_worker
@@ -593,7 +593,7 @@ verus! {
             is_lease_expired(pre.workers[worker_id], pre.current_time_ms),
         ensures ({
             let post = expire_worker_post(pre, worker_id);
-            !post.workers[worker_id].active
+            !post.workers[worker_id].is_active
         })
     {
         // active set to false
