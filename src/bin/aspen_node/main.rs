@@ -82,7 +82,6 @@ use crate::node_mode::extract_node_components;
 use crate::setup::print_cluster_ticket;
 use crate::setup::setup_client_protocol;
 use crate::setup::setup_router;
-use crate::setup::start_dns_server;
 use crate::signals::shutdown_signal;
 
 /// Main entry point for aspen-node.
@@ -237,9 +236,6 @@ async fn async_main() -> Result<()> {
         sharding = config.sharding.is_enabled,
         "Iroh Router spawned - all client API available via Iroh Client RPC (ALPN: aspen-tui)"
     );
-
-    // Start DNS protocol server if enabled
-    start_dns_server(&config).await;
 
     // Generate and print cluster ticket (V2 with direct addresses)
     print_cluster_ticket(&config, &endpoint_addr, node_mode.iroh_manager().endpoint().secret_key());

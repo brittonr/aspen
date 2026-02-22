@@ -66,7 +66,6 @@ members = [
     "crates/aspen-crypto-types",
     "crates/aspen-coordination",
     "crates/aspen-blob",
-    "crates/aspen-dns",
     "crates/aspen-raft-types",
     "crates/aspen-raft-network",
     "crates/aspen-raft",
@@ -137,7 +136,6 @@ members = [
     "crates/aspen-secrets-plugin",
     "crates/aspen-automerge-plugin",
     "crates/aspen-coordination-plugin",
-    "crates/aspen-dns-plugin",
     "crates/aspen-sql-plugin",
     "crates/aspen-wasm-guest-sdk",
     "crates/aspen-plugin-signing",
@@ -212,7 +210,6 @@ aspen-crypto-types = { path = "crates/aspen-crypto-types" }
 aspen-traits = { path = "crates/aspen-traits" }
 aspen-coordination = { path = "crates/aspen-coordination" }
 aspen-blob = { path = "crates/aspen-blob" }
-aspen-dns = { path = "crates/aspen-dns" }
 aspen-sql = { path = "crates/aspen-sql" }
 aspen-auth = { path = "crates/aspen-auth" }
 aspen-sharding = { path = "crates/aspen-sharding" }
@@ -302,7 +299,6 @@ aspen-raft-types = { workspace = true }
 aspen-raft = { workspace = true }
 aspen-cluster = { workspace = true }
 aspen-client-api = { workspace = true }
-aspen-dns = { workspace = true, optional = true }
 aspen-docs = { workspace = true, optional = true }
 aspen-jobs = { workspace = true, optional = true }
 aspen-jobs-worker-maintenance = { workspace = true, optional = true }
@@ -322,8 +318,6 @@ snix-castore = { workspace = true, optional = true }
 snix-store = { workspace = true, optional = true }
 aspen-nix-cache-gateway = { workspace = true, optional = true }
 aspen-proxy = { workspace = true, optional = true }
-# aspen-dns exists as a standalone crate for external consumers
-# The main aspen crate uses its own dns module for full integration
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
 iroh-gossip = "0.95"
@@ -371,11 +365,6 @@ arrow = { version = "54", optional = true }
 # regex is used for SQL validation when sql feature is enabled
 regex = { version = "1.10", optional = true }
 
-# DNS protocol server (optional, gated by 'dns' feature)
-hickory-server = { version = "0.25", default-features = false, features = ["resolver"], optional = true }
-hickory-resolver = { version = "0.25", default-features = false, features = ["tokio"], optional = true }
-hickory-proto = { version = "0.25", optional = true }
-
 # Global content discovery via BitTorrent Mainline DHT (optional)
 mainline = { version = "6.0", optional = true, default-features = false, features = ["async"] }
 
@@ -417,7 +406,7 @@ cloud-hypervisor-client = "0.3"
 default = []
 
 # Full production: all features enabled
-full = ["sql", "dns", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy"]
+full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy"]
 
 # Forge preset: Git hosting with blob storage, content discovery, and docs
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
@@ -433,8 +422,6 @@ forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge"]
 git-bridge = ["forge", "aspen-forge/git-bridge", "aspen-rpc-handlers/git-bridge", "dep:flate2"]
 # DataFusion SQL query engine for Redb storage backend
 sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-handlers/sql", "aspen-raft/sql", "aspen-testing?/sql"]
-# DNS record management layer with hickory-server protocol support
-dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto"]
 # Blob storage support for iroh-blobs operations
 blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-handlers/blob", "aspen-cluster/blob", "aspen-client/blob-store"]
 # Plugin umbrella: all hyperlight-based execution backends
@@ -465,7 +452,7 @@ secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/sec
 automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
 # CI/CD pipeline system - basic shell/VM pipelines with Nickel configuration
 # Does NOT include Nix binary cache integration (snix, nix-cache-proxy)
-ci-basic = ["dep:aspen-ci", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "jobs", "blob", "forge"]
+ci-basic = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "jobs", "blob", "forge"]
 # CI/CD with VM executor instead of shell executor
 ci-vm = ["dep:aspen-ci", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/plugins-vm", "jobs", "blob", "forge"]
 # Full CI/CD with Nix binary cache integration (snix + HTTP/3 cache proxy)
@@ -487,7 +474,7 @@ federation = ["aspen-cluster/federation"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"nix-executor\", \"ci-vm-executor\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"nix-executor\", \"ci-vm-executor\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit
@@ -731,10 +718,6 @@ name = "node_builder_integration"
 required-features = ["jobs", "docs", "hooks", "federation"]
 
 # Feature-gated crate imports
-[[test]]
-name = "dns_integration_test"
-required-features = ["dns"]
-
 [[test]]
 name = "docs_sync_integration_test"
 required-features = ["docs"]

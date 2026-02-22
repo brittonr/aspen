@@ -23,8 +23,6 @@ use crate::commands::cache::CacheCommand;
 use crate::commands::ci::CiCommand;
 use crate::commands::cluster::ClusterCommand;
 use crate::commands::counter::CounterCommand;
-#[cfg(feature = "dns")]
-use crate::commands::dns::DnsCommand;
 use crate::commands::docs::DocsCommand;
 use crate::commands::federation::FederationCommand;
 use crate::commands::git::GitCommand;
@@ -152,14 +150,6 @@ pub enum Commands {
     /// Atomic counter operations.
     #[command(subcommand)]
     Counter(CounterCommand),
-
-    /// DNS record and zone management.
-    ///
-    /// Manage DNS records stored with Raft consensus and synchronized
-    /// via iroh-docs to clients for local DNS resolution.
-    #[cfg(feature = "dns")]
-    #[command(subcommand)]
-    Dns(DnsCommand),
 
     /// CRDT-replicated docs namespace operations.
     #[command(subcommand)]
@@ -339,8 +329,6 @@ impl Cli {
             Commands::Ci(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Cluster(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Counter(cmd) => cmd.run(&client, self.global.is_json).await,
-            #[cfg(feature = "dns")]
-            Commands::Dns(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Docs(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Federation(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Git(cmd) => cmd.run(&client, self.global.is_json).await,

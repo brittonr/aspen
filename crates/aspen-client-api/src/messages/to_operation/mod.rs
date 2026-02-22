@@ -4,7 +4,6 @@ mod blob_ops;
 mod ci_ops;
 mod cluster_ops;
 mod coordination_ops;
-mod dns_ops;
 mod docs_ops;
 mod forge_ops;
 mod hooks_ops;
@@ -36,7 +35,6 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Operation> {
         .or_else(|| sql_ops::to_operation(request))
         .or_else(|| watch_ops::to_operation(request))
         .or_else(|| lease_ops::to_operation(request))
-        .or_else(|| dns_ops::to_operation(request))
         .or_else(|| forge_ops::to_operation(request))
         .or_else(|| hooks_ops::to_operation(request))
         .or_else(|| ci_ops::to_operation(request))

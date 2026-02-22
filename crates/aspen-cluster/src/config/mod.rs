@@ -63,7 +63,6 @@
 mod blobs;
 mod ci;
 mod cluster;
-mod dns;
 mod docs;
 mod federation;
 mod forge;
@@ -101,11 +100,6 @@ use ci::default_ci_pipeline_timeout_secs;
 use ci::default_ci_resource_isolation;
 pub use ci::*;
 pub use cluster::*;
-use dns::default_dns_bind_addr;
-use dns::default_dns_forwarding;
-use dns::default_dns_upstreams;
-use dns::default_dns_zones;
-pub use dns::*;
 use docs::default_background_sync_interval_secs;
 use docs::default_docs_enabled;
 use docs::default_enable_background_sync;
@@ -264,14 +258,6 @@ pub struct NodeConfig {
     #[serde(default = "default_batch_config")]
     pub batch_config: Option<aspen_raft::BatchConfig>,
 
-    /// DNS protocol server configuration.
-    ///
-    /// When enabled, the node runs a DNS server that resolves queries for
-    /// configured zones from the Aspen DNS layer, with optional forwarding
-    /// of unknown queries to upstream DNS servers.
-    #[serde(default)]
-    pub dns_server: DnsServerConfig,
-
     /// HTTP proxy configuration for TCP/HTTP tunneling over iroh.
     ///
     /// When enabled, the node registers an upstream proxy handler that accepts
@@ -362,7 +348,6 @@ impl Default for NodeConfig {
             sharding: ShardingConfig::default(),
             peers: vec![],
             batch_config: default_batch_config(),
-            dns_server: DnsServerConfig::default(),
             proxy: ProxyConfig::default(),
             #[cfg(feature = "blob")]
             content_discovery: ContentDiscoveryConfig::default(),
@@ -417,7 +402,6 @@ impl NodeConfig {
             sharding: from_env_sharding(),
             peers: parse_env_vec("ASPEN_PEERS"),
             batch_config: default_batch_config(),
-            dns_server: from_env_dns(),
             proxy: from_env_proxy(),
             #[cfg(feature = "blob")]
             content_discovery: from_env_content_discovery(),
@@ -451,7 +435,6 @@ impl NodeConfig {
         if !other.peers.is_empty() {
             self.peers = other.peers;
         }
-        merge_dns_config(&mut self.dns_server, other.dns_server);
         merge_proxy_config(&mut self.proxy, other.proxy);
         #[cfg(feature = "blob")]
         merge_content_discovery_config(&mut self.content_discovery, other.content_discovery);
@@ -874,25 +857,6 @@ fn merge_sharding_config(target: &mut ShardingConfig, other: ShardingConfig) {
     }
 }
 
-/// Merge DNS protocol server configuration.
-fn merge_dns_config(target: &mut DnsServerConfig, other: DnsServerConfig) {
-    if other.is_enabled {
-        target.is_enabled = other.is_enabled;
-    }
-    if other.bind_addr != default_dns_bind_addr() {
-        target.bind_addr = other.bind_addr;
-    }
-    if other.zones != default_dns_zones() {
-        target.zones = other.zones;
-    }
-    if other.upstreams != default_dns_upstreams() {
-        target.upstreams = other.upstreams;
-    }
-    if other.forwarding_enabled != default_dns_forwarding() {
-        target.forwarding_enabled = other.forwarding_enabled;
-    }
-}
-
 /// Merge HTTP proxy configuration.
 fn merge_proxy_config(target: &mut ProxyConfig, other: ProxyConfig) {
     if other.is_enabled {
@@ -1151,25 +1115,6 @@ fn from_env_sharding() -> ShardingConfig {
         is_enabled: parse_env("ASPEN_SHARDING_ENABLED").unwrap_or(false),
         num_shards: parse_env("ASPEN_SHARDING_NUM_SHARDS").unwrap_or_else(default_num_shards),
         local_shards: parse_env_vec("ASPEN_SHARDING_LOCAL_SHARDS").into_iter().filter_map(|s| s.parse().ok()).collect(),
-    }
-}
-
-/// Parse DNS server configuration from environment variables.
-fn from_env_dns() -> DnsServerConfig {
-    let zones = parse_env_vec("ASPEN_DNS_SERVER_ZONES");
-    let upstreams: Vec<SocketAddr> =
-        parse_env_vec("ASPEN_DNS_SERVER_UPSTREAMS").into_iter().filter_map(|s| s.parse().ok()).collect();
-
-    DnsServerConfig {
-        is_enabled: parse_env("ASPEN_DNS_SERVER_ENABLED").unwrap_or(false),
-        bind_addr: parse_env("ASPEN_DNS_SERVER_BIND_ADDR").unwrap_or_else(default_dns_bind_addr),
-        zones: if zones.is_empty() { default_dns_zones() } else { zones },
-        upstreams: if upstreams.is_empty() {
-            default_dns_upstreams()
-        } else {
-            upstreams
-        },
-        forwarding_enabled: parse_env("ASPEN_DNS_SERVER_FORWARDING_ENABLED").unwrap_or_else(default_dns_forwarding),
     }
 }
 

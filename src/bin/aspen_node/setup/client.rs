@@ -565,25 +565,6 @@ async fn initialize_job_system(
             let cache_index: Option<Arc<dyn CacheIndex>> =
                 Some(Arc::new(KvCacheIndex::new(kv_store.clone())) as Arc<dyn CacheIndex>);
 
-            #[cfg(feature = "snix")]
-            #[allow(clippy::type_complexity)]
-            let (snix_blob_service, snix_directory_service, snix_pathinfo_service): (
-                Option<Arc<dyn snix_castore::blobservice::BlobService>>,
-                Option<Arc<dyn snix_castore::directoryservice::DirectoryService>>,
-                Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>>,
-            ) = if config.snix.is_enabled {
-                warn!(
-                    "SNIX services requested but Raft-based services need fixes. \
-                     Use worker-only mode with RPC services for SNIX uploads."
-                );
-                (None, None, None)
-            } else {
-                (None, None, None)
-            };
-
-            #[cfg(not(feature = "snix"))]
-            let (snix_blob_service, snix_directory_service, snix_pathinfo_service) = (None, None, None);
-
             let use_cluster_cache = config.nix_cache.is_enabled && config.nix_cache.enable_ci_substituter;
 
             let iroh_endpoint = if use_cluster_cache {
@@ -632,9 +613,9 @@ async fn initialize_job_system(
                     cluster_id: config.cookie.clone(),
                     blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
                     cache_index: cache_index.clone(),
-                    snix_blob_service: snix_blob_service.clone(),
-                    snix_directory_service: snix_directory_service.clone(),
-                    snix_pathinfo_service: snix_pathinfo_service.clone(),
+                    snix_blob_service: None,
+                    snix_directory_service: None,
+                    snix_pathinfo_service: None,
                     output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
                     nix_binary: "nix".to_string(),
                     is_verbose: false,
@@ -688,9 +669,6 @@ async fn initialize_job_system(
                     let local_config = LocalExecutorWorkerConfig {
                         workspace_dir: workspace_dir.clone(),
                         should_cleanup_workspaces: true,
-                        snix_blob_service: snix_blob_service.clone(),
-                        snix_directory_service: snix_directory_service.clone(),
-                        snix_pathinfo_service: snix_pathinfo_service.clone(),
                         cache_index: cache_index.clone(),
                         kv_store: Some(kv_store.clone()),
                         use_cluster_cache,
@@ -713,7 +691,7 @@ async fn initialize_job_system(
                         .context("failed to register Local Executor worker")?;
                     info!(
                         workspace_dir = %workspace_dir.display(),
-                        snix_enabled = snix_blob_service.is_some(),
+                        snix_enabled = false,
                         cache_substituter = use_cluster_cache,
                         "Local Executor worker registered for CI jobs (no VM isolation)"
                     );

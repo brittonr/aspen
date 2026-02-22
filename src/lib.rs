@@ -40,15 +40,6 @@ pub use aspen_cluster as cluster;
 ///
 /// Re-exported from the `aspen-coordination` crate.
 pub use aspen_coordination as coordination;
-/// DNS record management layer built on iroh-docs.
-///
-/// Only available with the `dns` feature enabled. Provides DNS record
-/// management with CRUD operations, wildcard resolution, zone management,
-/// and a hickory-based DNS protocol server.
-///
-/// Re-exported from the `aspen-dns` crate.
-#[cfg(feature = "dns")]
-pub use aspen_dns as dns;
 /// CRDT-based document synchronization using iroh-docs.
 ///
 /// Re-exported from the `aspen-docs` crate.

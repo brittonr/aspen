@@ -13,8 +13,6 @@ pub mod cache;
 pub mod ci;
 pub mod cluster;
 pub mod counter;
-#[cfg(feature = "dns")]
-pub mod dns;
 pub mod docs;
 pub mod federation;
 pub mod git;

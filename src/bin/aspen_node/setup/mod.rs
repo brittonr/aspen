@@ -9,4 +9,3 @@ pub mod router;
 pub use client::setup_client_protocol;
 pub use router::print_cluster_ticket;
 pub use router::setup_router;
-pub use router::start_dns_server;

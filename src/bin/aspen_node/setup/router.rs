@@ -182,50 +182,6 @@ pub fn setup_router(
     builder.spawn()
 }
 
-/// Start the DNS protocol server if enabled.
-pub async fn start_dns_server(_config: &NodeConfig) {
-    #[cfg(feature = "dns")]
-    let config = _config;
-    #[cfg(feature = "dns")]
-    if config.dns_server.is_enabled {
-        use aspen::dns::AspenDnsClient;
-        use aspen::dns::DnsProtocolServer;
-        use tracing::error;
-
-        let dns_client = Arc::new(AspenDnsClient::new());
-        let dns_config = config.dns_server.clone();
-
-        info!("DNS cache sync disabled - docs_sync feature not yet implemented");
-
-        let dns_server_config = aspen::dns::DnsServerConfig {
-            is_enabled: dns_config.is_enabled,
-            bind_addr: dns_config.bind_addr,
-            zones: dns_config.zones.clone(),
-            upstreams: dns_config.upstreams.clone(),
-            forwarding_enabled: dns_config.forwarding_enabled,
-        };
-        match DnsProtocolServer::new(dns_server_config, Arc::clone(&dns_client)).await {
-            Ok(dns_server) => {
-                info!(
-                    bind_addr = %dns_config.bind_addr,
-                    zones = ?dns_config.zones,
-                    forwarding = dns_config.forwarding_enabled,
-                    "DNS protocol server starting"
-                );
-
-                tokio::spawn(async move {
-                    if let Err(e) = dns_server.run().await {
-                        error!(error = %e, "DNS protocol server error");
-                    }
-                });
-            }
-            Err(e) => {
-                warn!(error = %e, "Failed to create DNS protocol server");
-            }
-        }
-    }
-}
-
 /// Generate and print cluster ticket for TUI connection.
 pub fn print_cluster_ticket(
     config: &NodeConfig,

@@ -22,7 +22,6 @@ pub mod blob;
 pub mod ci;
 pub mod cluster;
 pub mod coordination;
-pub mod dns;
 pub mod docs;
 pub mod federation;
 pub mod forge;
@@ -177,15 +176,6 @@ pub use coordination::ServiceRegisterResultResponse;
 pub use coordination::ServiceUpdateHealthResultResponse;
 pub use coordination::ServiceUpdateMetadataResultResponse;
 pub use coordination::SignedCounterResultResponse;
-pub use dns::DnsDeleteRecordResultResponse;
-pub use dns::DnsDeleteZoneResultResponse;
-pub use dns::DnsRecordResponse;
-pub use dns::DnsRecordResultResponse;
-pub use dns::DnsRecordsResultResponse;
-pub use dns::DnsRequest;
-pub use dns::DnsZoneResponse;
-pub use dns::DnsZoneResultResponse;
-pub use dns::DnsZonesResultResponse;
 pub use docs::AddPeerClusterResultResponse;
 pub use docs::DocsDeleteResultResponse;
 pub use docs::DocsGetResultResponse;
@@ -1644,104 +1634,6 @@ pub enum ClientRpcRequest {
     },
 
     // =========================================================================
-    // DNS operations - Record and zone management
-    // =========================================================================
-    /// Set a DNS record.
-    ///
-    /// Creates or updates a DNS record. The record data is JSON-encoded.
-    DnsSetRecord {
-        /// Domain name (e.g., "api.example.com").
-        domain: String,
-        /// Record type (A, AAAA, CNAME, MX, TXT, SRV, NS, SOA, PTR, CAA).
-        record_type: String,
-        /// TTL in seconds.
-        ttl_seconds: u32,
-        /// JSON-encoded record data (format depends on record type).
-        data_json: String,
-    },
-
-    /// Get a DNS record.
-    ///
-    /// Returns the record for the specified domain and type.
-    DnsGetRecord {
-        /// Domain name.
-        domain: String,
-        /// Record type (A, AAAA, CNAME, MX, TXT, SRV, NS, SOA, PTR, CAA).
-        record_type: String,
-    },
-
-    /// Get all DNS records for a domain.
-    ///
-    /// Returns all record types for the specified domain.
-    DnsGetRecords {
-        /// Domain name.
-        domain: String,
-    },
-
-    /// Delete a DNS record.
-    ///
-    /// Removes the record for the specified domain and type.
-    DnsDeleteRecord {
-        /// Domain name.
-        domain: String,
-        /// Record type (A, AAAA, CNAME, MX, TXT, SRV, NS, SOA, PTR, CAA).
-        record_type: String,
-    },
-
-    /// Resolve a domain (with wildcard matching).
-    ///
-    /// Looks up DNS records using wildcard fallback.
-    DnsResolve {
-        /// Domain name to resolve.
-        domain: String,
-        /// Record type (A, AAAA, CNAME, MX, TXT, SRV, NS, SOA, PTR, CAA).
-        record_type: String,
-    },
-
-    /// Scan DNS records by prefix.
-    ///
-    /// Returns all records matching the domain prefix.
-    DnsScanRecords {
-        /// Domain prefix to match (empty matches all).
-        prefix: String,
-        /// Maximum results to return.
-        limit: u32,
-    },
-
-    /// Create or update a DNS zone.
-    ///
-    /// Zones provide organizational grouping for records.
-    DnsSetZone {
-        /// Zone name (e.g., "example.com").
-        name: String,
-        /// Whether the zone is enabled.
-        #[serde(rename = "enabled")]
-        is_enabled: bool,
-        /// Default TTL for records in this zone (seconds).
-        default_ttl_secs: u32,
-        /// Optional description.
-        description: Option<String>,
-    },
-
-    /// Get a DNS zone.
-    DnsGetZone {
-        /// Zone name.
-        name: String,
-    },
-
-    /// List all DNS zones.
-    DnsListZones,
-
-    /// Delete a DNS zone.
-    DnsDeleteZone {
-        /// Zone name.
-        name: String,
-        /// Whether to also delete all records in the zone.
-        #[serde(rename = "delete_records")]
-        should_delete_records: bool,
-    },
-
-    // =========================================================================
     // Sharding operations - Topology management
     // =========================================================================
     /// Get the current shard topology.
@@ -3158,16 +3050,6 @@ impl ClientRpcRequest {
             Self::CounterSubtract { .. } => "CounterSubtract",
             Self::DeleteBlob { .. } => "DeleteBlob",
             Self::DeleteKey { .. } => "DeleteKey",
-            Self::DnsDeleteRecord { .. } => "DnsDeleteRecord",
-            Self::DnsDeleteZone { .. } => "DnsDeleteZone",
-            Self::DnsGetRecord { .. } => "DnsGetRecord",
-            Self::DnsGetRecords { .. } => "DnsGetRecords",
-            Self::DnsGetZone { .. } => "DnsGetZone",
-            Self::DnsListZones => "DnsListZones",
-            Self::DnsResolve { .. } => "DnsResolve",
-            Self::DnsScanRecords { .. } => "DnsScanRecords",
-            Self::DnsSetRecord { .. } => "DnsSetRecord",
-            Self::DnsSetZone { .. } => "DnsSetZone",
             Self::DocsDelete { .. } => "DocsDelete",
             Self::DocsGet { .. } => "DocsGet",
             Self::DocsList { .. } => "DocsList",
@@ -3567,18 +3449,6 @@ impl ClientRpcRequest {
 
             // SQL
             Self::ExecuteSql { .. } => Some("sql"),
-
-            // DNS
-            Self::DnsSetRecord { .. }
-            | Self::DnsGetRecord { .. }
-            | Self::DnsGetRecords { .. }
-            | Self::DnsDeleteRecord { .. }
-            | Self::DnsResolve { .. }
-            | Self::DnsScanRecords { .. }
-            | Self::DnsSetZone { .. }
-            | Self::DnsGetZone { .. }
-            | Self::DnsListZones
-            | Self::DnsDeleteZone { .. } => Some("dns"),
 
             // Job operations
             Self::JobSubmit { .. }
@@ -4037,39 +3907,6 @@ pub enum ClientRpcResponse {
 
     /// Service update metadata result.
     ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse),
-
-    // =========================================================================
-    // DNS responses
-    // =========================================================================
-    /// DNS set record result.
-    DnsSetRecordResult(DnsRecordResultResponse),
-
-    /// DNS get record result.
-    DnsGetRecordResult(DnsRecordResultResponse),
-
-    /// DNS get records result.
-    DnsGetRecordsResult(DnsRecordsResultResponse),
-
-    /// DNS delete record result.
-    DnsDeleteRecordResult(DnsDeleteRecordResultResponse),
-
-    /// DNS resolve result.
-    DnsResolveResult(DnsRecordsResultResponse),
-
-    /// DNS scan records result.
-    DnsScanRecordsResult(DnsRecordsResultResponse),
-
-    /// DNS set zone result.
-    DnsSetZoneResult(DnsZoneResultResponse),
-
-    /// DNS get zone result.
-    DnsGetZoneResult(DnsZoneResultResponse),
-
-    /// DNS list zones result.
-    DnsListZonesResult(DnsZonesResultResponse),
-
-    /// DNS delete zone result.
-    DnsDeleteZoneResult(DnsDeleteZoneResultResponse),
 
     // =========================================================================
     // Sharding responses

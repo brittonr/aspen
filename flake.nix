@@ -863,16 +863,6 @@
             }
           );
 
-          # Build aspen-cli with DNS features
-          aspen-cli-dns-crate = craneLib.buildPackage (
-            commonArgs
-            // {
-              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
-              cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features dns";
-              doCheck = false;
-            }
-          );
-
           # Build aspen-cli with CI features (CI pipelines + Nix cache)
           aspen-cli-ci-crate = craneLib.buildPackage (
             commonArgs
@@ -892,12 +882,6 @@
               doCheck = false;
             }
           );
-
-          # Build aspen-node with DNS support (default features + dns)
-          aspen-node-dns = bin {
-            name = "aspen-node";
-            features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "dns"];
-          };
 
           # Build aspen-node with proxy support (default features + proxy)
           aspen-node-proxy = bin {
@@ -963,10 +947,9 @@
               aspen-cli-plugins = aspen-cli-plugins-crate;
               aspen-cli-secrets = aspen-cli-secrets-crate;
               aspen-cli-full = aspen-cli-full-crate;
-              aspen-cli-dns = aspen-cli-dns-crate;
               aspen-cli-ci = aspen-cli-ci-crate;
               aspen-cli-proxy = aspen-cli-proxy-crate;
-              inherit aspen-node-dns aspen-node-proxy aspen-node-plugins;
+              inherit aspen-node-proxy aspen-node-plugins;
               aspen-ci-agent = aspen-ci-agent-crate;
               verus-metrics = aspen-verus-metrics-crate;
               inherit coordinationPluginWasm automergePluginWasm secretsPluginWasm serviceRegistryPluginWasm hooksPluginWasm;
@@ -1384,17 +1367,6 @@
                 aspenNodePackage = bins.aspen-node-plugins;
                 aspenCliPackage = bins.aspen-cli-secrets;
                 aspenCliPlugins = bins.aspen-cli-plugins;
-              };
-
-              # DNS operations test: zones (create, get, list, delete),
-              # records (A, AAAA, CNAME, MX, TXT, SRV), resolve with
-              # wildcard fallback, scan with prefix/limit, zone delete
-              # with cascading record deletion.
-              # Build: nix build .#checks.x86_64-linux.dns-operations-test
-              dns-operations-test = import ./nix/tests/dns-operations.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.aspen-node-dns;
-                aspenCliPackage = bins.aspen-cli-dns;
               };
 
               # CI pipeline and Nix binary cache test: CI lifecycle

@@ -243,14 +243,6 @@ pub use orchestrator::StageStatus;
 // ============================================================================
 // Re-exports from other Aspen crates
 // ============================================================================
-
-// Re-export SNIX trait types for NixBuildWorkerConfig construction
-#[cfg(feature = "snix")]
-pub use snix_castore::blobservice::BlobService as SnixBlobService;
-#[cfg(feature = "snix")]
-pub use snix_castore::directoryservice::DirectoryService as SnixDirectoryService;
-#[cfg(feature = "snix")]
-pub use snix_store::pathinfoservice::PathInfoService as SnixPathInfoService;
 #[cfg(feature = "nickel")]
 pub use trigger::CiTriggerHandler;
 // Re-export trigger traits for external implementations (requires nickel feature)
