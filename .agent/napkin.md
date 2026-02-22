@@ -26,6 +26,33 @@
 | 2026-02-20 | self | secrets-engine NixOS test used `check=False` everywhere despite handler being fixed | Secrets handler + CLI discriminant issues were fixed in commits 4c1ab025 and 9dd667b7. Updated test to use strict assertions. |
 | 2026-02-20 | self | `load_nix_cache_signer` used wrong API: `kv_store.write(key, bytes)` | KV store uses `WriteRequest::set(key, value)` — not a key+value method. Also `aspen_secrets::error::Result` ≠ `anyhow::Result` — use `.map_err()` not `.with_context()`. |
 
+## Recent Changes (2026-02-22) — Handler → Plugin Migrations
+
+### 3 Native Handlers Deleted (commit bb4e91e8)
+
+- **aspen-service-registry-handler** → deleted, `aspen-service-registry-plugin` (WASM) is canonical
+- **aspen-automerge-handler** → deleted, `aspen-automerge-plugin` (WASM) is canonical
+- **aspen-secrets-handler** → slimmed to PKI + NixCache only (kv.rs + transit.rs deleted). KV/Transit handled by `aspen-secrets-plugin`
+
+### aspen-coordination-plugin Created (commit d6e18ed2)
+
+- New WASM plugin: `crates/aspen-coordination-plugin/` — 46 request types, 8 modules
+- Replaces `aspen-coordination-handler` (deleted, 2323 lines)
+- All state under `__coord:` KV prefix: `__coord:lock:`, `__coord:counter:`, `__coord:seq:`, etc.
+- CAS retry helpers in `kv.rs`: `cas_loop_json()`, `cas_loop_string()`, `cas_json()`, `cas_string()`
+- Host functions from `aspen_wasm_guest_sdk::host::*` (NOT top-level re-exports)
+- `aspen-coordination` crate (core library) retained — used by aspen-rpc-handlers for client rate-limiting
+- **Gotcha: Response types are per-operation** — e.g., `QueueCreateResult(QueueCreateResultResponse)`, NOT generic `QueueResult`
+- **Gotcha: Barrier has `BarrierEnterResult` / `BarrierLeaveResult` / `BarrierStatusResult`** — NOT generic `BarrierResult`
+- **Gotcha: `ClientRpcRequest` field names differ from what you'd guess** — always check `aspen-client-api/src/messages/` (e.g., `receipt_handle` not `item_id`, `required_count` not `threshold`, `capacity_permits` not `capacity`)
+
+### Migration Blockers for Remaining Handlers
+
+- **aspen-nix-handler**: Depends on native `snix-castore`, `snix-store` (protobuf), `iroh-blobs` — NOT WASM-compatible
+- **aspen-query-handler**: SQL part needs `sql_executor` host function (doesn't exist). DNS part is pure KV and could migrate.
+- **aspen-hooks-handler**: Needs `hook_service` access from context (not in host ABI)
+- **aspen-blob-handler**: Heavy `iroh-blobs` and `aspen-blob` dependency for replication, download, repair
+
 ## User Preferences
 
 - User wants to improve plugin system iteratively — lifecycle + hot-reload first
