@@ -273,8 +273,7 @@ verus! {
             next >= batch_end ==> result == 0,
             next < batch_end ==> result == batch_end - next
     {
-        let remaining = batch_end.saturating_sub(next);
-        remaining
+        batch_end.saturating_sub(next)
     }
 
     /// Compute the end of a batch given start and size.
@@ -294,8 +293,7 @@ verus! {
             batch_start as int + batch_size as int > u64::MAX as int ==>
                 result.is_none()
     {
-        let end = batch_start.checked_add(batch_size);
-        end
+        batch_start.checked_add(batch_size)
     }
 
     /// Compute the next ID pointer after refilling a batch.
@@ -349,9 +347,7 @@ verus! {
                 result is Overflow
     {
         match current.checked_add(count) {
-            Some(new_value) => {
-                SequenceReservationResult::Success { new_value }
-            }
+            Some(new_value) => SequenceReservationResult::Success { new_value },
             None => SequenceReservationResult::Overflow,
         }
     }
@@ -408,8 +404,7 @@ verus! {
             start_value > 0 ==> result == start_value - 1,
             start_value == 0 ==> result == 0
     {
-        let initial = start_value.saturating_sub(1);
-        initial
+        start_value.saturating_sub(1)
     }
 
     /// Compute the expected value for CAS operation.
@@ -430,7 +425,10 @@ verus! {
             current < start_value ==> result.is_none(),
             current >= start_value ==> result == Some(current)
     {
-        let result = if current < start_value { None } else { Some(current) };
-        result
+        if current < start_value {
+            None
+        } else {
+            Some(current)
+        }
     }
 }

@@ -259,8 +259,7 @@ verus! {
             consumed <= current_tokens ==> result == current_tokens - consumed,
             consumed > current_tokens ==> result == 0
     {
-        let remaining = current_tokens.saturating_sub(consumed);
-        remaining
+        current_tokens.saturating_sub(consumed)
     }
 
     /// Calculate tokens after refill.
@@ -283,8 +282,7 @@ verus! {
                 result == capacity
     {
         let sum = current_tokens.saturating_add(refill_amount);
-        let result = if sum > capacity { capacity } else { sum };
-        result
+        if sum > capacity { capacity } else { sum }
     }
 
     /// Calculate number of refill intervals elapsed.
@@ -305,8 +303,12 @@ verus! {
                 result == ((now_ms - last_refill_ms) as int / interval_ms as int) as u64,
             now_ms < last_refill_ms ==> result == 0
     {
-        let elapsed = now_ms.saturating_sub(last_refill_ms);
-        elapsed.checked_div(interval_ms).unwrap_or(0)
+        if interval_ms == 0 {
+            0
+        } else {
+            let elapsed = now_ms.saturating_sub(last_refill_ms);
+            elapsed / interval_ms
+        }
     }
 
     /// Check if a refill is needed based on time.

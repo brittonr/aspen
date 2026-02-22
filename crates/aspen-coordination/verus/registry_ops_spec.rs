@@ -520,33 +520,12 @@ verus! {
     ///
     /// * `ttl_ms` - TTL in milliseconds
     /// * `current_time_ms` - Current time
-    /// * `service_name` - Service name
-    /// * `instance_id` - Instance identifier
-    ///
-    /// # Returns
-    ///
-    /// `true` if registration parameters are valid (non-empty names).
-    #[verifier(external_body)]
-    pub fn is_valid_registration(
-        service_name: &str,
-        instance_id: &str,
-    ) -> (result: bool)
-    {
-        !service_name.is_empty() && !instance_id.is_empty()
-    }
-
-    /// Check if registration parameters are valid.
-    ///
-    /// # Arguments
-    ///
-    /// * `ttl_ms` - Time-to-live in milliseconds
-    /// * `current_time_ms` - Current time in milliseconds
     /// * `max_fencing_token` - Current max fencing token
     ///
     /// # Returns
     ///
     /// `true` if registration parameters are valid.
-    pub fn is_valid_registration_params(
+    pub fn is_valid_registration(
         ttl_ms: u64,
         current_time_ms: u64,
         max_fencing_token: u64,
@@ -558,11 +537,10 @@ verus! {
             max_fencing_token < u64::MAX
         )
     {
-        let ttl_in_bounds = ttl_ms > 0 && ttl_ms <= MAX_REGISTRY_TTL_MS;
-        let deadline_safe = current_time_ms <= u64::MAX - ttl_ms;
-        let can_increment_token = max_fencing_token < u64::MAX;
-
-        ttl_in_bounds && deadline_safe && can_increment_token
+        ttl_ms > 0 &&
+        ttl_ms <= MAX_REGISTRY_TTL_MS &&
+        current_time_ms <= u64::MAX - ttl_ms &&
+        max_fencing_token < u64::MAX
     }
 
     /// Normalize service weight to valid bounds.
@@ -659,7 +637,7 @@ verus! {
         // Inline: is_service_expired returns (current_time_ms > deadline_ms)
         ensures result == (!(current_time_ms > deadline_ms) && healthy)
     {
-        (current_time_ms <= deadline_ms) && healthy
+        !(current_time_ms > deadline_ms) && healthy
     }
 
     /// Check if a heartbeat is valid (fencing token matches).

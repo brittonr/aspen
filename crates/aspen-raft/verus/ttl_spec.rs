@@ -494,10 +494,18 @@ verus! {
             ttl_seconds as int * 1000 + now_ms as int > u64::MAX as int ==>
                 result == u64::MAX
     {
-        let ttl_ms = (ttl_seconds as u64).saturating_mul(1000);
-        let expires_at = now_ms.saturating_add(ttl_ms);
-        debug_assert!(expires_at >= now_ms, "expires_at must be >= now_ms");
-        expires_at
+        let ttl_u64 = ttl_seconds as u64;
+        // Manual saturating_mul(1000) then saturating_add
+        let ttl_ms = if ttl_u64 > u64::MAX / 1000 {
+            u64::MAX
+        } else {
+            (ttl_u64 * 1000) as u64
+        };
+        if now_ms > u64::MAX - ttl_ms {
+            u64::MAX
+        } else {
+            (now_ms + ttl_ms) as u64
+        }
     }
 
     /// Calculate expiration for an optional TTL.
@@ -557,9 +565,7 @@ verus! {
     pub fn compute_lease_refresh(ttl_seconds: u32, now_ms: u64) -> (result: u64)
         ensures result == calculate_expires_at_ms_spec(now_ms, ttl_seconds as u64)
     {
-        let new_expires = calculate_expires_at_ms(now_ms, ttl_seconds);
-        debug_assert!(new_expires >= now_ms, "new_expires must be >= now_ms");
-        new_expires
+        calculate_expires_at_ms(now_ms, ttl_seconds)
     }
 
     /// Check if TTL is within safe bounds.
@@ -572,10 +578,9 @@ verus! {
     ///
     /// `true` if TTL is within the maximum allowed (30 days).
     #[inline]
-    pub const fn is_ttl_valid(ttl_seconds: u64) -> (result: bool)
+    pub fn is_ttl_valid(ttl_seconds: u64) -> (result: bool)
         ensures result == (ttl_seconds <= MAX_TTL_SECONDS)
     {
-        const MAX_TTL_SECONDS: u64 = 30 * 24 * 60 * 60; // 30 days
         ttl_seconds <= MAX_TTL_SECONDS
     }
 }

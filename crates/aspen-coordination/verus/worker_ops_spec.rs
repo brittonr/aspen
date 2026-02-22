@@ -696,8 +696,7 @@ verus! {
             current_load <= capacity ==> result == capacity - current_load,
             current_load > capacity ==> result == 0
     {
-        let result = capacity.saturating_sub(current_load);
-        result
+        capacity.saturating_sub(current_load)
     }
 
     /// Increment worker load after task assignment.
@@ -769,10 +768,10 @@ verus! {
         // Inline: is_worker_lease_expired returns (current_time_ms > lease_deadline_ms)
         ensures result == (active && !(current_time_ms > lease_deadline_ms))
     {
-        active && (current_time_ms <= lease_deadline_ms)
+        active && !(current_time_ms > lease_deadline_ms)
     }
 
-    /// Calculate load factor (ratio of current load to capacity).
+    /// Calculate load factor as percentage.
     ///
     /// # Arguments
     ///
@@ -781,21 +780,17 @@ verus! {
     ///
     /// # Returns
     ///
-    /// Load factor as f64 in range [0.0, 1.0], or 0.0 if capacity is 0.
-    ///
-    /// # Verus External Body
-    ///
-    /// Verus does not support floating-point arithmetic, so this function
-    /// uses an external body. The production implementation returns
-    /// `current_load as f64 / capacity as f64`.
-    #[verifier(external_body)]
-    #[verifier(external_body)]
-    pub fn calculate_load_factor(current_load: u32, capacity: u32) -> (result: f64)
+    /// Load factor as percentage (0-100), 100 if capacity is 0.
+    pub fn calculate_load_factor(current_load: u32, capacity: u32) -> (result: u32)
+        ensures
+            capacity == 0 ==> result == 100,
+            capacity > 0 ==> result == (current_load as int * 100 / capacity as int) as u32
     {
         if capacity == 0 {
-            return 0.0;
+            100
+        } else {
+            ((current_load as u64 * 100) / capacity as u64) as u32
         }
-        current_load as f64 / capacity as f64
     }
 
     /// Check if task can be assigned to worker.

@@ -455,11 +455,7 @@ verus! {
             tokens >= amount
         )
     {
-        let is_positive_amount = amount > 0;
-        let is_within_capacity = amount <= capacity;
-        let has_sufficient_tokens = tokens >= amount;
-
-        is_positive_amount && is_within_capacity && has_sufficient_tokens
+        amount > 0 && amount <= capacity && tokens >= amount
     }
 
     /// Compute tokens after acquire.
@@ -480,8 +476,7 @@ verus! {
             tokens >= amount ==> result == tokens - amount,
             tokens < amount ==> result == 0
     {
-        let remaining = tokens.saturating_sub(amount);
-        remaining
+        tokens.saturating_sub(amount)
     }
 
     /// Check if refill is needed.
@@ -541,10 +536,10 @@ verus! {
                 result == ((current_time_ms - last_refill_ms) as int / refill_interval_ms as int) as u64,
             current_time_ms < last_refill_ms ==> result == 0
     {
-        if refill_interval_ms == 0 || current_time_ms < last_refill_ms {
-            0
-        } else {
+        if current_time_ms >= last_refill_ms {
             (current_time_ms - last_refill_ms) / refill_interval_ms
+        } else {
+            0
         }
     }
 
@@ -569,8 +564,7 @@ verus! {
     {
         // Use saturating multiplication, then cap at capacity
         let raw = intervals.saturating_mul(refill_amount);
-        let result = if raw > capacity { capacity } else { raw };
-        result
+        if raw > capacity { capacity } else { raw }
     }
 
     /// Compute tokens after refill.
@@ -592,8 +586,7 @@ verus! {
         ensures result <= capacity
     {
         let sum = current_tokens.saturating_add(tokens_to_add);
-        let result = if sum > capacity { capacity } else { sum };
-        result
+        if sum > capacity { capacity } else { sum }
     }
 
     /// Compute new last_refill_ms after refill.
@@ -616,8 +609,7 @@ verus! {
         ensures result >= last_refill_ms
     {
         let increment = intervals.saturating_mul(refill_interval_ms);
-        let new_last = last_refill_ms.saturating_add(increment);
-        new_last
+        last_refill_ms.saturating_add(increment)
     }
 
     /// Check if burst can be handled.
@@ -655,9 +647,6 @@ verus! {
         ensures result == ((refill_amount as int * 1000) / refill_interval_ms as int) as u64 ||
                 result == u64::MAX  // overflow case
     {
-        if refill_interval_ms == 0 {
-            return 0;
-        }
         // Use saturating multiplication to prevent overflow
         let numerator = refill_amount.saturating_mul(1000);
         numerator / refill_interval_ms

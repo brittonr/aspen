@@ -27,8 +27,6 @@
 
 use vstd::prelude::*;
 
-use crate::election::LeadershipState;
-
 verus! {
     // ========================================================================
     // State Model
@@ -273,10 +271,10 @@ verus! {
     ///
     /// `true` if currently the leader.
     #[verifier(external_body)]
-    pub fn is_leader_exec(state: &LeadershipState) -> (result: bool)
-        ensures result == matches!(state, LeadershipState::Leader { .. })
+    pub fn is_leader_exec(state: LeadershipState) -> (result: bool)
+        ensures result == (state == LeadershipState::Leader)
     {
-        matches!(state, LeadershipState::Leader { .. })
+        matches!(state, LeadershipState::Leader)
     }
 
     /// Check if state indicates follower.
@@ -289,8 +287,8 @@ verus! {
     ///
     /// `true` if currently a follower.
     #[verifier(external_body)]
-    pub fn is_follower_exec(state: &LeadershipState) -> (result: bool)
-        ensures result == matches!(state, LeadershipState::Follower)
+    pub fn is_follower_exec(state: LeadershipState) -> (result: bool)
+        ensures result == (state == LeadershipState::Follower)
     {
         matches!(state, LeadershipState::Follower)
     }
@@ -305,8 +303,8 @@ verus! {
     ///
     /// `true` if transitioning between states.
     #[verifier(external_body)]
-    pub fn is_transitioning_exec(state: &LeadershipState) -> (result: bool)
-        ensures result == matches!(state, LeadershipState::Transitioning)
+    pub fn is_transitioning_exec(state: LeadershipState) -> (result: bool)
+        ensures result == (state == LeadershipState::Transitioning)
     {
         matches!(state, LeadershipState::Transitioning)
     }
@@ -346,17 +344,25 @@ verus! {
     ///
     /// `true` if transition is valid.
     #[verifier(external_body)]
-    pub fn is_valid_state_transition(from: &LeadershipState, to: &LeadershipState) -> (result: bool)
+    pub fn is_valid_state_transition(from: LeadershipState, to: LeadershipState) -> (result: bool)
+        ensures result == match (from, to) {
+            (LeadershipState::Follower, LeadershipState::Transitioning) => true,
+            (LeadershipState::Transitioning, LeadershipState::Leader) => true,
+            (LeadershipState::Transitioning, LeadershipState::Follower) => true,
+            (LeadershipState::Leader, LeadershipState::Follower) => true,
+            (LeadershipState::Follower, LeadershipState::Follower) => true,
+            (LeadershipState::Leader, LeadershipState::Leader) => true,
+            (LeadershipState::Transitioning, LeadershipState::Transitioning) => true,
+            _ => false,
+        }
     {
         match (from, to) {
             (LeadershipState::Follower, LeadershipState::Transitioning) => true,
-            (LeadershipState::Transitioning, LeadershipState::Leader { .. }) => true,
+            (LeadershipState::Transitioning, LeadershipState::Leader) => true,
             (LeadershipState::Transitioning, LeadershipState::Follower) => true,
-            (LeadershipState::Leader { .. }, LeadershipState::Follower) => true,
+            (LeadershipState::Leader, LeadershipState::Follower) => true,
             (LeadershipState::Follower, LeadershipState::Follower) => true,
-            (LeadershipState::Leader { fencing_token: t1 }, LeadershipState::Leader { fencing_token: t2 }) => {
-                t1.value() == t2.value()  // Token can't change while leader
-            }
+            (LeadershipState::Leader, LeadershipState::Leader) => true,
             (LeadershipState::Transitioning, LeadershipState::Transitioning) => true,
             _ => false,
         }
@@ -431,7 +437,7 @@ verus! {
     /// `true` if we should start an election.
     #[verifier(external_body)]
     pub fn should_start_election(
-        state: &LeadershipState,
+        state: LeadershipState,
         running: bool,
         last_heartbeat_ms: u64,
         current_time_ms: u64,
@@ -439,7 +445,7 @@ verus! {
     ) -> (result: bool)
         ensures result == (
             running &&
-            matches!(state, LeadershipState::Follower) &&
+            state == LeadershipState::Follower &&
             current_time_ms.saturating_sub(last_heartbeat_ms) >= election_timeout_ms
         )
     {
@@ -459,7 +465,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if we should step down.
-    pub fn should_step_down_exec(
+    pub fn should_step_down(
         is_leader: bool,
         lease_deadline_ms: u64,
         current_time_ms: u64,
@@ -627,12 +633,12 @@ verus! {
             return 0;
         }
 
-        // 2^failures, capped at 10 to prevent overflow
-        let exponent = consecutive_failures.min(10);
-        let multiplier = 1u64 << exponent;
+        // Cap exponent at 10 to prevent overflow
+        let exponent = if consecutive_failures > 10 { 10u32 } else { consecutive_failures };
+        let multiplier = 1u64 << exponent as u64;
         let delay = base_delay_ms.saturating_mul(multiplier);
 
-        delay.min(max_delay_ms)
+        if delay > max_delay_ms { max_delay_ms } else { delay }
     }
 
     // ========================================================================
