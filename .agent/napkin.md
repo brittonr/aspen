@@ -521,11 +521,17 @@
 - Comment/revision hashes: `blake3::hash(format!("{parent_id}:{discriminator}:{timestamp}"))` → hex-encoded
 - **Key difference from native**: Native used COB DAG-based resolution (change graphs with merge conflict resolution). Plugin stores materialized state directly — simpler but no CRDT merge semantics.
 
+### Native Forge Handler Slimmed Further (commit 76559ae1)
+
+- **Repos (3), objects (7), refs (6), log removed from native handler** — 7 files deleted, -1303 lines
+- Native handler now ONLY contains: federation (9 ops) + git bridge (6 ops) = **15 request types**
+- `base64` dep removed (was only used by objects.rs)
+- Remaining deps still needed: `blake3` (git_bridge), `hex` (federation), `uuid` (git_bridge), `iroh` (federation)
+
 ### Migration Blockers Remaining for forge-handler
 
-- **Federation (8 ops)**: Needs `aspen-cluster` federation features, `ForgeNode` context access
-- **Git Bridge (6 ops)**: Needs native git protocol handling, `blob_store` for packfile operations
-- **Repos/Objects/Refs (16 ops)**: Already in plugin BUT also still in native handler — native uses `ForgeNode` with blob-backed storage, plugin uses KV. Both coexist; plugin has higher priority (950 > native 550) so plugin wins when loaded.
+- **Federation (9 ops)**: Needs `aspen-cluster` federation features, `ForgeNode` context, `iroh::PublicKey` for cluster trust
+- **Git Bridge (6 ops)**: Needs native git protocol handling, `ForgeNode` for packfile import/export, SHA-1↔BLAKE3 hash mapping
 
 ## Recent Changes (2026-02-22) — WASM Plugin VM Test Enablement
 
