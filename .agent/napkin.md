@@ -497,6 +497,36 @@
 - `aspen-node-proxy`: Node with default features + `proxy`
 - `aspen-cli-proxy`: CLI with `proxy` feature
 
+## Recent Changes (2026-02-22) — Forge Issues + Patches → WASM Plugin
+
+### aspen-forge-handler Slimmed (commit 26497dd7)
+
+- **Issues (6 ops) deleted from native handler** → `ForgeCreateIssue`, `ForgeListIssues`, `ForgeGetIssue`, `ForgeCommentIssue`, `ForgeCloseIssue`, `ForgeReopenIssue`
+- **Patches (7 ops) deleted from native handler** → `ForgeCreatePatch`, `ForgeListPatches`, `ForgeGetPatch`, `ForgeUpdatePatch`, `ForgeApprovePatch`, `ForgeMergePatch`, `ForgeClosePatch`
+- Native handler retains: repos (3), objects (7), refs (6), delegate key (1), federation (8), git bridge (6) = **31 request types**
+- Deleted: `issues.rs`, `patches.rs`, `handlers/cob/` directory (issues.rs, patches.rs, mod.rs)
+- Tests updated: `test_issues_migrated_to_plugin` and `test_patches_migrated_to_plugin` assert `!can_handle`
+
+### aspen-forge-plugin Expanded (commit 26497dd7)
+
+- Plugin now handles **30 request types** (was 17): repos, objects, refs, delegate key + issues (6) + patches (7)
+- New modules: `issues.rs` (6 handlers), `patches.rs` (7 handlers)
+- New types in `types.rs`: `IssueData`, `PatchData`, `CommentData`, `RevisionData`, `ApprovalData`
+- KV layout:
+  - `forge:{repo_id}:issues:{issue_id}` → JSON issue data
+  - `forge:{repo_id}:issues:idx` → JSON array of issue IDs
+  - `forge:{repo_id}:patches:{patch_id}` → JSON patch data
+  - `forge:{repo_id}:patches:idx` → JSON array of patch IDs
+- ID generation: `blake3::hash(format!("{title}:{timestamp}"))` → hex-encoded
+- Comment/revision hashes: `blake3::hash(format!("{parent_id}:{discriminator}:{timestamp}"))` → hex-encoded
+- **Key difference from native**: Native used COB DAG-based resolution (change graphs with merge conflict resolution). Plugin stores materialized state directly — simpler but no CRDT merge semantics.
+
+### Migration Blockers Remaining for forge-handler
+
+- **Federation (8 ops)**: Needs `aspen-cluster` federation features, `ForgeNode` context access
+- **Git Bridge (6 ops)**: Needs native git protocol handling, `blob_store` for packfile operations
+- **Repos/Objects/Refs (16 ops)**: Already in plugin BUT also still in native handler — native uses `ForgeNode` with blob-backed storage, plugin uses KV. Both coexist; plugin has higher priority (950 > native 550) so plugin wins when loaded.
+
 ## Recent Changes (2026-02-22) — WASM Plugin VM Test Enablement
 
 ### WASM Plugin Build Derivations
