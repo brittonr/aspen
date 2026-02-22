@@ -2105,7 +2105,6 @@ dependencies = [
  "aspen-coordination",
  "aspen-core",
  "aspen-core-essentials-handler",
- "aspen-dns",
  "aspen-docs",
  "aspen-docs-handler",
  "aspen-forge",

@@ -20,7 +20,7 @@ aspen-core-essentials-handler = { path = "../aspen-core-essentials-handler" }
 aspen-cluster-handler = { path = "../aspen-cluster-handler" }
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-blob-handler = { path = "../aspen-blob-handler", optional = true }
-aspen-dns = { path = "../aspen-dns", optional = true }
+
 aspen-sql = { path = "../aspen-sql", optional = true }
 aspen-auth = { path = "../aspen-auth" }
 aspen-forge = { path = "../aspen-forge", optional = true }
@@ -70,8 +70,6 @@ irpc = { workspace = true }
 [features]
 default = []
 sql = ["dep:aspen-sql", "dep:aspen-query-handler", "aspen-query-handler?/sql", "aspen-rpc-core/sql"]
-# DNS handler migrated to aspen-dns-plugin (WASM). Feature retained for backward compat.
-dns = []
 forge = ["dep:aspen-forge", "dep:aspen-forge-handler", "aspen-rpc-core/forge"]
 blob = ["dep:aspen-blob", "dep:aspen-blob-handler", "aspen-rpc-core/blob"]
 global-discovery = ["aspen-core/global-discovery", "aspen-rpc-core/global-discovery"]

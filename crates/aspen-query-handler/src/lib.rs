@@ -3,8 +3,7 @@
 //! Provides the `ExecuteSql` handler (feature-gated behind `sql`).
 //!
 //! **Note:** DNS operations have been migrated to the `aspen-dns-plugin`
-//! WASM plugin. The `dns` feature is retained for backward compatibility
-//! but the handler factory is no longer registered.
+//! WASM plugin.
 
 #[cfg(feature = "sql")]
 mod sql;

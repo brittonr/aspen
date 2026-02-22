@@ -434,7 +434,7 @@ git-bridge = ["forge", "aspen-forge/git-bridge", "aspen-rpc-handlers/git-bridge"
 # DataFusion SQL query engine for Redb storage backend
 sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-handlers/sql", "aspen-raft/sql", "aspen-testing?/sql"]
 # DNS record management layer with hickory-server protocol support
-dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto", "aspen-rpc-handlers/dns"]
+dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto"]
 # Blob storage support for iroh-blobs operations
 blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-handlers/blob", "aspen-cluster/blob", "aspen-client/blob-store"]
 # Plugin umbrella: all hyperlight-based execution backends

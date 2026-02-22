@@ -22,8 +22,6 @@ base64 = { version = "0.22", optional = true }
 [features]
 default = []
 sql = ["dep:base64", "aspen-rpc-core/sql"]
-# dns feature retained for backward compat (handler migrated to aspen-dns-plugin)
-dns = []
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full", "test-util"] }
