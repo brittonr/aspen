@@ -6,7 +6,7 @@
 // Cache handler moved to aspen-nix-handler crate
 // CI handler moved to aspen-ci-handler crate
 // Cluster handler moved to aspen-cluster-handler crate
-// Coordination handler moved to aspen-coordination-handler crate
+// Coordination handler migrated to aspen-coordination-plugin (WASM)
 // Core handler moved to aspen-core-essentials-handler crate
 // DNS handler moved to aspen-query-handler crate
 // Docs handler moved to aspen-docs-handler crate
@@ -29,7 +29,6 @@ pub use aspen_blob_handler::BlobHandler;
 #[cfg(feature = "ci")]
 pub use aspen_ci_handler::CiHandler;
 pub use aspen_cluster_handler::ClusterHandler;
-pub use aspen_coordination_handler::CoordinationHandler;
 pub use aspen_core_essentials_handler::CoreHandler;
 pub use aspen_core_essentials_handler::LeaseHandler;
 pub use aspen_core_essentials_handler::WatchHandler;

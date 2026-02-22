@@ -1240,17 +1240,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-coordination-handler"
+name = "aspen-coordination-plugin"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "aspen-client-api",
- "aspen-coordination",
- "aspen-core",
- "aspen-rpc-core",
- "async-trait",
+ "aspen-wasm-guest-sdk",
+ "hex",
+ "serde",
  "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -2195,7 +2192,6 @@ dependencies = [
  "aspen-cluster",
  "aspen-cluster-handler",
  "aspen-coordination",
- "aspen-coordination-handler",
  "aspen-core",
  "aspen-core-essentials-handler",
  "aspen-dns",

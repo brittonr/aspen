@@ -759,7 +759,7 @@ Client → QUIC/Iroh → ClientProtocolHandler
 | Crate | Handles |
 |-------|---------|
 | `aspen-kv-handler` | KV CRUD, batch, transactions |
-| `aspen-coordination-handler` | Locks, counters, queues, etc. |
+
 | `aspen-blob-handler` | Blob CRUD, replication |
 | `aspen-forge-handler` | All forge operations |
 | `aspen-cluster-handler` | Init, membership, metrics |

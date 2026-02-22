@@ -1,0 +1,29 @@
+{
+  "name": "coordination",
+  "version": "0.1.0",
+  "description": "Distributed coordination primitives: locks, counters, sequences, rate limiters, barriers, semaphores, RW locks, and queues",
+  "handles": [
+    "LockAcquire", "LockTryAcquire", "LockRelease", "LockRenew",
+    "CounterGet", "CounterIncrement", "CounterDecrement", "CounterAdd",
+    "CounterSubtract", "CounterSet", "CounterCompareAndSet",
+    "SignedCounterGet", "SignedCounterAdd",
+    "SequenceNext", "SequenceReserve", "SequenceCurrent",
+    "RateLimiterTryAcquire", "RateLimiterAcquire", "RateLimiterAvailable", "RateLimiterReset",
+    "BarrierEnter", "BarrierLeave", "BarrierStatus",
+    "SemaphoreAcquire", "SemaphoreTryAcquire", "SemaphoreRelease", "SemaphoreStatus",
+    "RWLockAcquireRead", "RWLockTryAcquireRead", "RWLockAcquireWrite", "RWLockTryAcquireWrite",
+    "RWLockReleaseRead", "RWLockReleaseWrite", "RWLockDowngrade", "RWLockStatus",
+    "QueueCreate", "QueueDelete", "QueueEnqueue", "QueueEnqueueBatch",
+    "QueueDequeue", "QueueDequeueWait", "QueuePeek", "QueueAck", "QueueNack",
+    "QueueExtendVisibility", "QueueStatus", "QueueGetDLQ", "QueueRedriveDLQ"
+  ],
+  "priority": 930,
+  "app_id": "coordination",
+  "kv_prefixes": ["__coord:"],
+  "permissions": {
+    "kv_read": true,
+    "kv_write": true,
+    "randomness": true,
+    "timers": true
+  }
+}

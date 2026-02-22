@@ -100,7 +100,7 @@ members = [
     "crates/aspen-rpc-handlers",
     "crates/aspen-forge-handler",
     "crates/aspen-secrets-handler",
-    "crates/aspen-coordination-handler",
+
     "crates/aspen-blob-handler",
     "crates/aspen-cli",
     "crates/aspen-secrets",
@@ -138,6 +138,7 @@ members = [
     "crates/aspen-hooks-plugin",
     "crates/aspen-secrets-plugin",
     "crates/aspen-automerge-plugin",
+    "crates/aspen-coordination-plugin",
     "crates/aspen-wasm-guest-sdk",
     "crates/aspen-plugin-signing",
     "crates/cargo-aspen-plugin",

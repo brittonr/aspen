@@ -1,0 +1,16 @@
+[package]
+name = "aspen-coordination-plugin"
+version = "0.1.0"
+edition = "2024"
+description = "WASM guest plugin for distributed coordination primitives"
+license = "AGPL-3.0-or-later"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+aspen-client-api = { path = "../aspen-client-api", default-features = false }
+aspen-wasm-guest-sdk = { path = "../aspen-wasm-guest-sdk" }
+hex = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

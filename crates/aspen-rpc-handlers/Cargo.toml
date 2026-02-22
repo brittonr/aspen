@@ -15,7 +15,6 @@ aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-ticket = { workspace = true }
 aspen-coordination = { path = "../aspen-coordination" }
-aspen-coordination-handler = { path = "../aspen-coordination-handler" }
 aspen-kv-handler = { path = "../aspen-kv-handler" }
 aspen-core-essentials-handler = { path = "../aspen-core-essentials-handler" }
 aspen-cluster-handler = { path = "../aspen-cluster-handler" }
