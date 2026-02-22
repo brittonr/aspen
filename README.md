@@ -767,13 +767,11 @@ Client → QUIC/Iroh → ClientProtocolHandler
 | `aspen-docs-handler` | CRDT document operations |
 | `aspen-job-handler` | Job submission, status |
 | `aspen-hooks-handler` | Hook management |
-| `aspen-secrets-handler` | Secrets engine operations |
+| `aspen-secrets-handler` | PKI + Nix cache signing (native crypto only) |
 | `aspen-ci-handler` | CI pipeline operations |
 | `aspen-query-handler` | SQL queries |
-| `aspen-automerge-handler` | Automerge operations |
 | `aspen-pijul-handler` | Pijul VCS operations |
 | `aspen-nix-handler` | Nix store operations |
-| `aspen-service-registry-handler` | Service discovery |
 
 ### Cross-Cluster Proxying
 

@@ -749,22 +749,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-automerge-handler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-automerge",
- "aspen-client-api",
- "aspen-core",
- "aspen-rpc-core",
- "async-trait",
- "automerge",
- "base64 0.22.1",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "aspen-automerge-plugin"
 version = "0.1.0"
 dependencies = [
@@ -2202,7 +2186,6 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "aspen-auth",
- "aspen-automerge-handler",
  "aspen-blob",
  "aspen-blob-handler",
  "aspen-ci",
@@ -2234,7 +2217,6 @@ dependencies = [
  "aspen-rpc-core",
  "aspen-secrets",
  "aspen-secrets-handler",
- "aspen-service-registry-handler",
  "aspen-sharding",
  "aspen-sql",
  "aspen-testing",
@@ -2326,21 +2308,6 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "aspen-service-registry-handler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-client-api",
- "aspen-coordination",
- "aspen-rpc-core",
- "aspen-testing",
- "async-trait",
- "serde_json",
- "tokio",
- "tracing",
 ]
 
 [[package]]

@@ -124,7 +124,7 @@ These handlers remain in `aspen-rpc-handlers/src/handlers/`:
 | `sql.rs` | `aspen-query-handler` | SQL queries | `sql` | 3 |
 | `hooks.rs` | `aspen-hooks-handler` | Event automation | (always) | 4 |
 | `job.rs` + `worker.rs` | `aspen-job-handler` | Job queue, worker coordination | (always) | 5 |
-| `automerge.rs` | `aspen-automerge-handler` | CRDT sync | `automerge` | 6 |
+| ~~automerge~~ | `aspen-automerge-plugin` (WASM) | CRDT sync | `automerge` | 6 |
 | `cache.rs` + `cache_migration.rs` | `aspen-cache-handler` | CI build cache | `ci` | 7 |
 | `pijul.rs` | `aspen-pijul-handler` | Pijul VCS | `pijul` | 8 |
 

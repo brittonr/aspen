@@ -1,7 +1,7 @@
 //! Domain-specific request handlers for Client RPC.
 
 // All handlers have been extracted to separate crates:
-// Automerge handler moved to aspen-automerge-handler crate
+// Automerge handler migrated to aspen-automerge-plugin (WASM)
 // Blob handler moved to aspen-blob-handler crate
 // Cache handler moved to aspen-nix-handler crate
 // CI handler moved to aspen-ci-handler crate
@@ -17,15 +17,13 @@
 // Lease handler moved to aspen-core-essentials-handler crate
 // Pijul handler moved to aspen-pijul-handler crate
 // Secrets handler moved to aspen-secrets-handler crate
-// Service registry handler moved to aspen-service-registry-handler crate
+// Service registry handler migrated to aspen-service-registry-plugin (WASM)
 // SNIX handler moved to aspen-nix-handler crate
 // SQL handler moved to aspen-query-handler crate
 // Watch handler moved to aspen-core-essentials-handler crate
 // Worker handler moved to aspen-job-handler crate
 
 // Re-export handlers
-#[cfg(feature = "automerge")]
-pub use aspen_automerge_handler::AutomergeHandler;
 #[cfg(feature = "blob")]
 pub use aspen_blob_handler::BlobHandler;
 #[cfg(feature = "ci")]
@@ -62,6 +60,5 @@ pub use aspen_query_handler::SqlHandler;
 pub use aspen_secrets_handler::SecretsHandler;
 #[cfg(feature = "secrets")]
 pub use aspen_secrets_handler::SecretsService;
-pub use aspen_service_registry_handler::ServiceRegistryHandler;
 #[cfg(feature = "plugins-rpc")]
 pub use aspen_wasm_plugin;

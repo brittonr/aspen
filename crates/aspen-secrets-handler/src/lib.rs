@@ -1,13 +1,11 @@
-//! Secrets engine RPC handler for Aspen.
+//! Secrets engine RPC handler for Aspen (native subset).
 //!
-//! This crate provides the secrets management handler extracted from
-//! aspen-rpc-handlers for better modularity and faster incremental builds.
-//!
-//! Handles Vault-compatible secrets management:
-//! - KV: Versioned key-value secrets with soft/hard delete
-//! - Transit: Encryption-as-a-service (encrypt, decrypt, sign, verify)
-//! - PKI: Certificate authority with role-based issuance
+//! Handles only operations that require native crypto libraries:
+//! - PKI: Certificate authority with role-based issuance (rcgen/X.509)
 //! - Nix Cache: Signing key management for Nix binary caches
+//!
+//! KV and Transit secrets operations have been migrated to the
+//! `aspen-secrets-plugin` WASM plugin.
 
 mod handler;
 
