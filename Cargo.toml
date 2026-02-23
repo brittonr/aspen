@@ -268,7 +268,7 @@ ed25519-dalek = "2.1"  # Narinfo signing
 
 [dependencies]
 aspen-client = { workspace = true }
-aspen-core = { workspace = true }  # global-discovery forwarded via feature
+aspen-core = { workspace = true, features = ["layer"] }  # global-discovery forwarded via feature
 aspen-coordination = { workspace = true }
 aspen-blob = { workspace = true, optional = true }
 aspen-sql = { workspace = true, optional = true }

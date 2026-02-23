@@ -45,10 +45,15 @@ pub use crate::hlc::to_unix_ms;
 // Re-export pure validation function from kv module
 pub use crate::kv::validate_write_command;
 // Re-export pure layer types (tuple and subspace are pure)
+#[cfg(feature = "layer")]
 pub use crate::layer::Element;
+#[cfg(feature = "layer")]
 pub use crate::layer::Subspace;
+#[cfg(feature = "layer")]
 pub use crate::layer::SubspaceError;
+#[cfg(feature = "layer")]
 pub use crate::layer::Tuple;
+#[cfg(feature = "layer")]
 pub use crate::layer::TupleError;
 pub use crate::types::NodeId;
 // Re-export pure type helpers

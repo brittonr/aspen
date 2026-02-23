@@ -44,6 +44,7 @@
 //! - [FoundationDB Data Modeling](https://apple.github.io/foundationdb/data-modeling.html)
 
 // Re-export from aspen-layer for backward compatibility
+#[cfg(feature = "layer")]
 pub use aspen_layer::*;
 
 // Storage-dependent modules (depend on KeyValueStore trait)

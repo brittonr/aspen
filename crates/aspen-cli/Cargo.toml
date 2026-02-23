@@ -15,7 +15,7 @@ path = "src/bin/aspen-cli/main.rs"
 # Core Aspen dependencies
 aspen-client = { path = "../aspen-client" }
 aspen-client-api = { workspace = true }
-aspen-core = { path = "../aspen-core" }
+aspen-core = { path = "../aspen-core", features = ["layer"] }
 aspen-auth = { path = "../aspen-auth" }
 aspen-cluster = { path = "../aspen-cluster" }
 aspen-hooks-types = { path = "../aspen-hooks-types" }

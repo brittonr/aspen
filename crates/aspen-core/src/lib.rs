@@ -23,6 +23,7 @@ pub mod crypto;
 pub mod error;
 pub mod hlc;
 pub mod kv;
+#[cfg(feature = "layer")]
 pub mod layer;
 pub mod prelude;
 pub mod simulation;
@@ -132,16 +133,26 @@ pub use kv::WriteOp;
 pub use kv::WriteRequest;
 pub use kv::WriteResult;
 pub use kv::validate_write_command;
-// Layer types (Tuple, Subspace, Directory)
+// Layer types (Tuple, Subspace, Directory) — requires aspen-layer
+#[cfg(feature = "layer")]
 pub use layer::AllocationError;
+#[cfg(feature = "layer")]
 pub use layer::DirectoryError;
+#[cfg(feature = "layer")]
 pub use layer::DirectoryLayer;
+#[cfg(feature = "layer")]
 pub use layer::DirectorySubspace;
+#[cfg(feature = "layer")]
 pub use layer::Element;
+#[cfg(feature = "layer")]
 pub use layer::HighContentionAllocator;
+#[cfg(feature = "layer")]
 pub use layer::Subspace;
+#[cfg(feature = "layer")]
 pub use layer::SubspaceError;
+#[cfg(feature = "layer")]
 pub use layer::Tuple;
+#[cfg(feature = "layer")]
 pub use layer::TupleError;
 // Simulation types
 pub use simulation::SimulationArtifact;

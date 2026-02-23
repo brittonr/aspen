@@ -22,7 +22,7 @@ aspen-kv-types = { path = "../aspen-kv-types" }
 aspen-traits = { path = "../aspen-traits" }
 
 # Layer types (FoundationDB-compatible tuple encoding and subspace layer)
-aspen-layer = { path = "../../../aspen-layer/crates/aspen-layer" }
+aspen-layer = { path = "../../../aspen-layer/crates/aspen-layer", optional = true }
 
 # Time utilities (extracted from utils.rs)
 aspen-time = { path = "../aspen-time" }
@@ -77,5 +77,6 @@ proptest = "1.0"
 
 [features]
 default = []
+layer = ["dep:aspen-layer"]
 sql = ["aspen-constants/sql"]
 global-discovery = ["dep:iroh-blobs"]
