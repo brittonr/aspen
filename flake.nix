@@ -180,6 +180,29 @@
         # Use lib.fileset for precise source inclusion — only Rust/Cargo files
         # and vendored sources. Changes to docs, scripts, .agent/, etc. won't
         # trigger rebuilds.
+        # Extracted sibling repos — fetched via builtins.fetchGit
+        # (respects .gitignore, no flake input overhead).
+        # Requires `--impure` or `--option allow-import-from-derivation true`.
+        siblingRepo = name:
+          builtins.fetchGit {
+            url = "/home/brittonr/git/${name}";
+            allRefs = true;
+          };
+
+        aspen-layer-src = siblingRepo "aspen-layer";
+        aspen-coordination-src = siblingRepo "aspen-coordination";
+        aspen-forge-src = siblingRepo "aspen-forge";
+        aspen-secrets-src = siblingRepo "aspen-secrets";
+        aspen-docs-src = siblingRepo "aspen-docs";
+        aspen-hooks-src = siblingRepo "aspen-hooks";
+        aspen-federation-src = siblingRepo "aspen-federation";
+        aspen-jobs-src = siblingRepo "aspen-jobs";
+        aspen-sql-src = siblingRepo "aspen-sql";
+        aspen-dht-discovery-src = siblingRepo "aspen-dht-discovery";
+        aspen-ci-src = siblingRepo "aspen-ci";
+        aspen-nix-src = siblingRepo "aspen-nix";
+        aspen-automerge-src = siblingRepo "aspen-automerge";
+
         rawSrc = lib.fileset.toSource {
           root = ./.;
           fileset = lib.fileset.unions [
@@ -216,178 +239,171 @@
         #   in the Nix sandbox. We create empty stub crates so cargo can parse the
         #   workspace manifest. Features gated behind these deps are not built.
         snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559"'';
+        # Patch source for Nix builds:
+        # 1. Remove [patch] sections (not needed with vendored + sibling repos)
+        # 2. Add git source lines to snix packages in Cargo.lock
+        # Sibling repos are placed at build time via preBuild hooks.
         src = pkgs.runCommand "aspen-src-patched" {} ''
-            cp -r ${rawSrc} $out
-            chmod -R u+w $out
+          cp -r ${rawSrc} $out
+          chmod -R u+w $out
 
-            # Remove [patch.*] sections from cargo config for Nix builds
-            if [ -f $out/.cargo/config.toml ]; then
-              ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/.cargo/config.toml
-            fi
+          # Remove [patch.*] sections from cargo config for Nix builds
+          if [ -f $out/.cargo/config.toml ]; then
+            ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/.cargo/config.toml
+          fi
 
-            # Add git source lines to snix packages in Cargo.lock (idempotent)
-            # This is needed because local dev with [patch] removes the source lines
-            # Use awk to check if source already exists before inserting
-            for pkg in nix-compat nix-compat-derive snix-castore snix-cli snix-store snix-tracing; do
-              ${pkgs.gawk}/bin/awk -v pkg="$pkg" -v src='${snixGitSource}' '
-                /^name = "/ && $0 ~ "\"" pkg "\"" { found=1 }
-                found && /^version = "0.1.0"$/ {
-                  print
-                  if ((getline nextline) > 0) {
-                    if (nextline !~ /^source = /) {
-                      print src
-                    }
-                    print nextline
-                  } else {
+          # Add git source lines to snix packages in Cargo.lock (idempotent)
+          for pkg in nix-compat nix-compat-derive snix-castore snix-cli snix-store snix-tracing; do
+            ${pkgs.gawk}/bin/awk -v pkg="$pkg" -v src='${snixGitSource}' '
+              /^name = "/ && $0 ~ "\"" pkg "\"" { found=1 }
+              found && /^version = "0.1.0"$/ {
+                print
+                if ((getline nextline) > 0) {
+                  if (nextline !~ /^source = /) {
                     print src
                   }
-                  found=0
-                  next
+                  print nextline
+                } else {
+                  print src
                 }
-                { print }
-              ' $out/Cargo.lock > $out/Cargo.lock.tmp && mv $out/Cargo.lock.tmp $out/Cargo.lock
-            done
+                found=0
+                next
+              }
+              { print }
+            ' $out/Cargo.lock > $out/Cargo.lock.tmp && mv $out/Cargo.lock.tmp $out/Cargo.lock
+          done
 
-            # ── Stub crates for extracted sibling repos ─────────────────
-            # These repos live at ../aspen-{tui,automerge,ci,nix}/ locally but
-            # don't exist in the Nix sandbox. Create minimal stub crates inside
-            # the source tree at .nix-stubs/ and rewrite all path references
-            # to point there instead. The actual code behind these optional
-            # features is not compiled in Nix builds.
-            stub_crate() {
-              local dir="$1" name="$2"
-              shift 2
-              mkdir -p "$dir/src"
-              {
-                echo '[package]'
-                echo "name = \"$name\""
-                echo 'version = "0.1.0"'
-                echo 'edition = "2024"'
-                echo 'license = "AGPL-3.0-or-later"'
-                echo '[features]'
-                for feat in "$@"; do
-                  echo "$feat = []"
-                done
-              } > "$dir/Cargo.toml"
-              echo "// stub for Nix builds" > "$dir/src/lib.rs"
-            }
+          # Remove [patch."https://github.com/..."] from Cargo.toml
+          # Sibling repos will be placed at build time; git→local overrides not needed.
+          # Keep [patch.crates-io] for cargo-hyperlight.
+          ${pkgs.gnused}/bin/sed -i '/^\[patch\."https/,$d' $out/Cargo.toml
+        '';
 
-            STUBS="$out/.nix-stubs"
-            stub_crate "$STUBS/aspen-tui" "aspen-tui"
-            stub_crate "$STUBS/aspen-automerge" "aspen-automerge"
-            stub_crate "$STUBS/aspen-nickel" "aspen-nickel"
-            stub_crate "$STUBS/aspen-ci" "aspen-ci" nickel shell-executor plugins-vm
-            stub_crate "$STUBS/aspen-ci-core" "aspen-ci-core"
-            stub_crate "$STUBS/aspen-ci-executor-shell" "aspen-ci-executor-shell"
-            stub_crate "$STUBS/aspen-ci-executor-nix" "aspen-ci-executor-nix"
-            stub_crate "$STUBS/aspen-ci-executor-vm" "aspen-ci-executor-vm"
-            stub_crate "$STUBS/aspen-cache" "aspen-cache"
-            stub_crate "$STUBS/aspen-snix" "aspen-snix"
-            stub_crate "$STUBS/aspen-nix-cache-gateway" "aspen-nix-cache-gateway"
-            stub_crate "$STUBS/aspen-nix-handler" "aspen-nix-handler" cache snix
+        # Script to place sibling repos as ../aspen-* relative to build dir.
+        # Cargo.toml references ../aspen-layer/crates/..., etc.
+        # By symlinking them as siblings, all path deps resolve naturally.
+        placeSiblingRepos = ''
+          # Place sibling repos next to the source directory.
+          PARENT=$(dirname $(pwd))
 
-            # Rounds 2-4 extractions
-            stub_crate "$STUBS/aspen-layer" "aspen-layer"
-            stub_crate "$STUBS/aspen-sql" "aspen-sql"
-            stub_crate "$STUBS/aspen-dht-discovery" "aspen-dht-discovery" global-discovery
-            stub_crate "$STUBS/aspen-coordination" "aspen-coordination" verus bolero
-            stub_crate "$STUBS/aspen-coordination-protocol" "aspen-coordination-protocol"
-            stub_crate "$STUBS/aspen-forge" "aspen-forge" git-bridge
-            stub_crate "$STUBS/aspen-forge-protocol" "aspen-forge-protocol"
-            stub_crate "$STUBS/aspen-secrets" "aspen-secrets"
-            stub_crate "$STUBS/aspen-docs" "aspen-docs"
-            stub_crate "$STUBS/aspen-hooks" "aspen-hooks"
-            stub_crate "$STUBS/aspen-federation" "aspen-federation" global-discovery
-            stub_crate "$STUBS/aspen-jobs" "aspen-jobs" blob plugins-vm plugins-wasm
-            stub_crate "$STUBS/aspen-jobs-protocol" "aspen-jobs-protocol"
-            stub_crate "$STUBS/aspen-jobs-worker-blob" "aspen-jobs-worker-blob"
-            stub_crate "$STUBS/aspen-jobs-worker-maintenance" "aspen-jobs-worker-maintenance"
-            stub_crate "$STUBS/aspen-jobs-worker-replication" "aspen-jobs-worker-replication"
-            stub_crate "$STUBS/aspen-jobs-worker-shell" "aspen-jobs-worker-shell"
-            stub_crate "$STUBS/aspen-jobs-worker-sql" "aspen-jobs-worker-sql"
+          # Determine source dir name for path rewrites
+          SRCDIR=$(basename $(pwd))
 
-            # Rewrite workspace path deps from sibling repos to .nix-stubs/
+          # Copy all sibling repos as writable (many have git deps needing rewrite)
+          for entry in \
+            "${aspen-layer-src}:aspen-layer" \
+            "${aspen-coordination-src}:aspen-coordination" \
+            "${aspen-forge-src}:aspen-forge" \
+            "${aspen-secrets-src}:aspen-secrets" \
+            "${aspen-docs-src}:aspen-docs" \
+            "${aspen-hooks-src}:aspen-hooks" \
+            "${aspen-federation-src}:aspen-federation" \
+            "${aspen-jobs-src}:aspen-jobs" \
+            "${aspen-sql-src}:aspen-sql" \
+            "${aspen-dht-discovery-src}:aspen-dht-discovery" \
+            "${aspen-ci-src}:aspen-ci" \
+            "${aspen-nix-src}:aspen-nix" \
+            "${aspen-automerge-src}:aspen-automerge"; do
+            src_path="''${entry%%:*}"
+            name="''${entry##*:}"
+            cp -r "$src_path" "$PARENT/$name"
+          done
+          chmod -R u+w $PARENT
+          # Stub aspen-tui (never compiled in node/CLI builds)
+          mkdir -p $PARENT/aspen-tui/crates/aspen-tui/src
+          cat > $PARENT/aspen-tui/crates/aspen-tui/Cargo.toml << 'EOF'
+          [package]
+          name = "aspen-tui"
+          version = "0.1.0"
+          edition = "2024"
+          EOF
+          echo "// stub" > $PARENT/aspen-tui/crates/aspen-tui/src/lib.rs
+          # Stub aspen-fuse (extracted to separate repo, only used by ci-executor-vm)
+          mkdir -p $PARENT/aspen-fuse/crates/aspen-fuse/src
+          cat > $PARENT/aspen-fuse/crates/aspen-fuse/Cargo.toml << 'EOF'
+          [package]
+          name = "aspen-fuse"
+          version = "0.1.0"
+          edition = "2024"
+          [features]
+          virtiofs = []
+          EOF
+          echo "// stub" > $PARENT/aspen-fuse/crates/aspen-fuse/src/lib.rs
+
+          # Rewrite workspace Cargo.tomls in sibling repos that use git deps
+          # to point to local paths instead (git fetch blocked in sandbox).
+          # Rewrite git deps to local paths in sibling repos that use {workspace = true}
+          rewrite_git_to_path() {
+            local toml="$1"
+            if [ -f "$toml" ]; then
+              ${pkgs.gnused}/bin/sed -i \
+                -e "s|aspen-core = { git = \"[^\"]*\"[^}]* }|aspen-core = { path = \"../$SRCDIR/crates/aspen-core\" }|g" \
+                -e "s|aspen-auth = { git = \"[^\"]*\"[^}]* }|aspen-auth = { path = \"../$SRCDIR/crates/aspen-auth\" }|g" \
+                -e "s|aspen-blob = { git = \"[^\"]*\"[^}]* }|aspen-blob = { path = \"../$SRCDIR/crates/aspen-blob\" }|g" \
+                -e "s|aspen-cache = { git = \"[^\"]*\"[^}]* }|aspen-cache = { path = \"../aspen-nix/crates/aspen-cache\" }|g" \
+                -e "s|aspen-jobs = { git = \"[^\"]*\"[^}]* }|aspen-jobs = { path = \"../aspen-jobs/crates/aspen-jobs\" }|g" \
+                -e "s|aspen-forge = { git = \"[^\"]*\"[^}]* }|aspen-forge = { path = \"../aspen-forge/crates/aspen-forge\" }|g" \
+                -e "s|aspen-ticket = { git = \"[^\"]*\"[^}]* }|aspen-ticket = { path = \"../$SRCDIR/crates/aspen-ticket\" }|g" \
+                -e "s|aspen-testing = { git = \"[^\"]*\"[^}]* }|aspen-testing = { path = \"../$SRCDIR/crates/aspen-testing\" }|g" \
+                -e "s|aspen-client-api = { git = \"[^\"]*\"[^}]*}|aspen-client-api = { path = \"../$SRCDIR/crates/aspen-client-api\" }|g" \
+                -e "s|aspen-client = { git = \"[^\"]*\"[^}]* }|aspen-client = { path = \"../$SRCDIR/crates/aspen-client\" }|g" \
+                -e "s|aspen-wasm-guest-sdk = { git = \"[^\"]*\"[^}]* }|aspen-wasm-guest-sdk = { path = \"../$SRCDIR/crates/aspen-wasm-guest-sdk\" }|g" \
+                -e "s|aspen-plugin-api = { git = \"[^\"]*\"[^}]* }|aspen-plugin-api = { path = \"../$SRCDIR/crates/aspen-plugin-api\" }|g" \
+                -e "s|aspen-coordination = { git = \"[^\"]*\"[^}]* }|aspen-coordination = { path = \"../aspen-coordination/crates/aspen-coordination\" }|g" \
+                -e "s|aspen-hooks = { git = \"[^\"]*\"[^}]* }|aspen-hooks = { path = \"../aspen-hooks/crates/aspen-hooks\" }|g" \
+                -e "s|aspen-secrets = { git = \"[^\"]*\"[^}]* }|aspen-secrets = { path = \"../aspen-secrets/crates/aspen-secrets\" }|g" \
+                -e "s|aspen-fuse = { path = \"[^\"]*\"[^}]* }|aspen-fuse = { path = \"../aspen-fuse/crates/aspen-fuse\", features = [\"virtiofs\"] }|g" \
+                "$toml"
+            fi
+          }
+          # Rewrite git deps → path deps in all sibling repo Cargo.tomls.
+          # Workspace-level Cargo.toml:
+          for repo in aspen-automerge aspen-ci aspen-nix aspen-coordination aspen-forge aspen-secrets aspen-docs aspen-hooks aspen-federation aspen-sql aspen-jobs aspen-layer aspen-dht-discovery; do
+            rewrite_git_to_path "$PARENT/$repo/Cargo.toml"
+          done
+          # Crate-level Cargo.tomls — replace any remaining git = "...aspen.git" deps
+          # These are `aspen-X = { git = "...aspen.git", ... }` → `aspen-X = { path = "..." }`
+          # Crate-level Cargo.tomls in sibling repos: ../../../aspen/crates/X → ../../../$SRCDIR/crates/X
+          find $PARENT -path "*/$SRCDIR" -prune -o -name Cargo.toml -print | while read f; do
             ${pkgs.gnused}/bin/sed -i \
-              -e 's|path = "\.\./aspen-tui/crates/aspen-tui"|path = ".nix-stubs/aspen-tui"|g' \
-              -e 's|path = "\.\./aspen-automerge/crates/aspen-automerge"|path = ".nix-stubs/aspen-automerge"|g' \
-              -e 's|path = "\.\./aspen-ci/crates/aspen-nickel"|path = ".nix-stubs/aspen-nickel"|g' \
-              -e 's|path = "\.\./aspen-ci/crates/aspen-ci"|path = ".nix-stubs/aspen-ci"|g' \
-              -e 's|path = "\.\./aspen-ci/crates/aspen-ci-core"|path = ".nix-stubs/aspen-ci-core"|g' \
-              -e 's|path = "\.\./aspen-ci/crates/aspen-ci-executor-shell"|path = ".nix-stubs/aspen-ci-executor-shell"|g' \
-              -e 's|path = "\.\./aspen-ci/crates/aspen-ci-executor-nix"|path = ".nix-stubs/aspen-ci-executor-nix"|g' \
-              -e 's|path = "\.\./aspen-ci/crates/aspen-ci-executor-vm"|path = ".nix-stubs/aspen-ci-executor-vm"|g' \
-              -e 's|path = "\.\./aspen-nix/crates/aspen-cache"|path = ".nix-stubs/aspen-cache"|g' \
-              -e 's|path = "\.\./aspen-nix/crates/aspen-snix"|path = ".nix-stubs/aspen-snix"|g' \
-              -e 's|path = "\.\./aspen-nix/crates/aspen-nix-cache-gateway"|path = ".nix-stubs/aspen-nix-cache-gateway"|g' \
-              -e 's|path = "\.\./aspen-nix/crates/aspen-nix-handler"|path = ".nix-stubs/aspen-nix-handler"|g' \
-              -e 's|path = "\.\./aspen-layer/crates/aspen-layer"|path = ".nix-stubs/aspen-layer"|g' \
-              -e 's|path = "\.\./aspen-sql/crates/aspen-sql"|path = ".nix-stubs/aspen-sql"|g' \
-              -e 's|path = "\.\./aspen-dht-discovery/crates/aspen-dht-discovery"|path = ".nix-stubs/aspen-dht-discovery"|g' \
-              -e 's|path = "\.\./aspen-coordination/crates/aspen-coordination"|path = ".nix-stubs/aspen-coordination"|g' \
-              -e 's|path = "\.\./aspen-coordination/crates/aspen-coordination-protocol"|path = ".nix-stubs/aspen-coordination-protocol"|g' \
-              -e 's|path = "\.\./aspen-forge/crates/aspen-forge"|path = ".nix-stubs/aspen-forge"|g' \
-              -e 's|path = "\.\./aspen-forge/crates/aspen-forge-protocol"|path = ".nix-stubs/aspen-forge-protocol"|g' \
-              -e 's|path = "\.\./aspen-secrets/crates/aspen-secrets"|path = ".nix-stubs/aspen-secrets"|g' \
-              -e 's|path = "\.\./aspen-docs/crates/aspen-docs"|path = ".nix-stubs/aspen-docs"|g' \
-              -e 's|path = "\.\./aspen-hooks/crates/aspen-hooks"|path = ".nix-stubs/aspen-hooks"|g' \
-              -e 's|path = "\.\./aspen-federation/crates/aspen-federation"|path = ".nix-stubs/aspen-federation"|g' \
-              -e 's|path = "\.\./aspen-jobs/crates/aspen-jobs"|path = ".nix-stubs/aspen-jobs"|g' \
-              -e 's|path = "\.\./aspen-jobs/crates/aspen-jobs-protocol"|path = ".nix-stubs/aspen-jobs-protocol"|g' \
-              -e 's|path = "\.\./aspen-jobs/crates/aspen-jobs-worker-blob"|path = ".nix-stubs/aspen-jobs-worker-blob"|g' \
-              -e 's|path = "\.\./aspen-jobs/crates/aspen-jobs-worker-maintenance"|path = ".nix-stubs/aspen-jobs-worker-maintenance"|g' \
-              -e 's|path = "\.\./aspen-jobs/crates/aspen-jobs-worker-replication"|path = ".nix-stubs/aspen-jobs-worker-replication"|g' \
-              -e 's|path = "\.\./aspen-jobs/crates/aspen-jobs-worker-shell"|path = ".nix-stubs/aspen-jobs-worker-shell"|g' \
-              -e 's|path = "\.\./aspen-jobs/crates/aspen-jobs-worker-sql"|path = ".nix-stubs/aspen-jobs-worker-sql"|g' \
-              $out/Cargo.toml
-
-            # Remove [patch."https://github.com/..."] from Cargo.toml
-            ${pkgs.gnused}/bin/sed -i '/^\[patch\."https/,$d' $out/Cargo.toml
-
-            # Strip 'layer' feature from aspen-core deps (aspen-layer is a stub in Nix)
-            ${pkgs.gnused}/bin/sed -i 's|, features = \["layer"\]||g' \
-              $out/Cargo.toml \
-              $out/crates/aspen-cli/Cargo.toml \
-              $out/crates/aspen-raft/Cargo.toml
-
-            # Also rewrite crate-level path deps that point to sibling repos.
-            # From crates/X/, "../../../repo/crates/Y" → "../../.nix-stubs/Y"
-            find $out/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
-              -e 's|path = "\.\./\.\./\.\./aspen-ci/crates/aspen-ci"|path = "../../.nix-stubs/aspen-ci"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-ci/crates/aspen-nickel"|path = "../../.nix-stubs/aspen-nickel"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-nix/crates/aspen-cache"|path = "../../.nix-stubs/aspen-cache"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-nix/crates/aspen-nix-cache-gateway"|path = "../../.nix-stubs/aspen-nix-cache-gateway"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-nix/crates/aspen-nix-handler"|path = "../../.nix-stubs/aspen-nix-handler"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-layer/crates/aspen-layer"|path = "../../.nix-stubs/aspen-layer"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-sql/crates/aspen-sql"|path = "../../.nix-stubs/aspen-sql"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-dht-discovery/crates/aspen-dht-discovery"|path = "../../.nix-stubs/aspen-dht-discovery"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-coordination/crates/aspen-coordination"|path = "../../.nix-stubs/aspen-coordination"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-coordination/crates/aspen-coordination-protocol"|path = "../../.nix-stubs/aspen-coordination-protocol"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-forge/crates/aspen-forge"|path = "../../.nix-stubs/aspen-forge"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-forge/crates/aspen-forge-protocol"|path = "../../.nix-stubs/aspen-forge-protocol"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-secrets/crates/aspen-secrets"|path = "../../.nix-stubs/aspen-secrets"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-docs/crates/aspen-docs"|path = "../../.nix-stubs/aspen-docs"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-hooks/crates/aspen-hooks"|path = "../../.nix-stubs/aspen-hooks"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-federation/crates/aspen-federation"|path = "../../.nix-stubs/aspen-federation"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-jobs/crates/aspen-jobs"|path = "../../.nix-stubs/aspen-jobs"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-jobs/crates/aspen-jobs-protocol"|path = "../../.nix-stubs/aspen-jobs-protocol"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-jobs/crates/aspen-jobs-worker-blob"|path = "../../.nix-stubs/aspen-jobs-worker-blob"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-jobs/crates/aspen-jobs-worker-maintenance"|path = "../../.nix-stubs/aspen-jobs-worker-maintenance"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-jobs/crates/aspen-jobs-worker-replication"|path = "../../.nix-stubs/aspen-jobs-worker-replication"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-jobs/crates/aspen-jobs-worker-shell"|path = "../../.nix-stubs/aspen-jobs-worker-shell"|g' \
-              -e 's|path = "\.\./\.\./\.\./aspen-jobs/crates/aspen-jobs-worker-sql"|path = "../../.nix-stubs/aspen-jobs-worker-sql"|g' \
-              {} \;
-
-          '';
+              -e "s|path = \"\.\./\.\./\.\./aspen/crates/|path = \"../../../$SRCDIR/crates/|g" \
+              -e "s|path = \"\.\./\.\./aspen/crates/|path = \"../../$SRCDIR/crates/|g" \
+              -e "s|path = \"\.\./aspen/crates/|path = \"../$SRCDIR/crates/|g" \
+              "$f"
+          done
+          # Also rewrite any remaining git = "...aspen.git" deps in crate-level Cargo.tomls
+          find $PARENT -path "*/$SRCDIR" -prune -o -name Cargo.toml -print | while read f; do
+            ${pkgs.gnused}/bin/sed -i \
+              -e "s|aspen-core = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-core = { path = \"../../../$SRCDIR/crates/aspen-core\" }|g" \
+              -e "s|aspen-auth = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-auth = { path = \"../../../$SRCDIR/crates/aspen-auth\" }|g" \
+              -e "s|aspen-blob = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-blob = { path = \"../../../$SRCDIR/crates/aspen-blob\" }|g" \
+              -e "s|aspen-constants = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-constants = { path = \"../../../$SRCDIR/crates/aspen-constants\" }|g" \
+              -e "s|aspen-kv-types = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-kv-types = { path = \"../../../$SRCDIR/crates/aspen-kv-types\" }|g" \
+              -e "s|aspen-traits = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-traits = { path = \"../../../$SRCDIR/crates/aspen-traits\" }|g" \
+              -e "s|aspen-time = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-time = { path = \"../../../$SRCDIR/crates/aspen-time\" }|g" \
+              -e "s|aspen-storage-types = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-storage-types = { path = \"../../../$SRCDIR/crates/aspen-storage-types\" }|g" \
+              -e "s|aspen-transport = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-transport = { path = \"../../../$SRCDIR/crates/aspen-transport\" }|g" \
+              -e "s|aspen-ticket = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-ticket = { path = \"../../../$SRCDIR/crates/aspen-ticket\" }|g" \
+              -e "s|aspen-testing = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-testing = { path = \"../../../$SRCDIR/crates/aspen-testing\" }|g" \
+              -e "s|aspen-client-api = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-client-api = { path = \"../../../$SRCDIR/crates/aspen-client-api\" }|g" \
+              -e "s|aspen-client = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-client = { path = \"../../../$SRCDIR/crates/aspen-client\" }|g" \
+              -e "s|aspen-rpc-core = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-rpc-core = { path = \"../../../$SRCDIR/crates/aspen-rpc-core\" }|g" \
+              -e "s|aspen-wasm-guest-sdk = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-wasm-guest-sdk = { path = \"../../../$SRCDIR/crates/aspen-wasm-guest-sdk\" }|g" \
+              -e "s|aspen-plugin-api = { git = \"[^\"]*aspen\.git\"[^}]* }|aspen-plugin-api = { path = \"../../../$SRCDIR/crates/aspen-plugin-api\" }|g" \
+              "$f"
+          done
+        '';
 
         basicArgs = {
           inherit src;
           inherit pname;
           strictDeps = true;
 
-          # Use --offline instead of --locked because stub crates for extracted
-          # sibling repos (.nix-stubs/) cause Cargo.lock drift. Cargo can update
-          # the lockfile offline since all deps are vendored.
+          # Use --offline because sibling repos may cause Cargo.lock drift.
           cargoExtraArgs = "--offline";
+
+          # Place sibling repos before cargo runs (they're ../aspen-* from src)
+          preBuild = placeSiblingRepos;
 
           nativeBuildInputs = with pkgs; [
             git
@@ -421,7 +437,7 @@
         # This substitutes git.snix.dev fetches with our snix-src flake input
         # Must use vendorCargoDeps directly to pass overrideVendorGitCheckout
         cargoVendorDir = craneLib.vendorCargoDeps {
-          inherit src;
+          src = rawSrc;
           overrideVendorGitCheckout = ps: drv: let
             isSnixRepo =
               builtins.any (
