@@ -1108,21 +1108,18 @@
           # Set of checks that are run: `nix flake check`
           checks =
             {
-              # Run clippy (and deny all warnings) on the crate source,
-              # again, reusing the dependency artifacts from above.
-              #
-              # Note that this is done as a separate derivation so that
-              # we can block the CI if there are issues here, but not
-              # prevent downstream consumers from building our crate by itself.
-              # NOTE: clippy and doc disabled — require extracted sibling repo sources
+              # NOTE: clippy and doc checks disabled — they compile the full
+              # workspace which depends on extracted sibling repos (aspen-layer,
+              # aspen-coordination, etc.) that are stubs in the Nix sandbox.
+              # Run locally: cargo clippy --workspace -- -D warnings
               clippy = pkgs.runCommand "aspen-clippy-stub" {} ''
-                echo "SKIPPED: requires extracted sibling repo sources"
+                echo "SKIPPED: clippy requires extracted sibling repo sources"
                 echo "Run locally: cargo clippy --workspace -- -D warnings"
                 touch $out
               '';
 
               doc = pkgs.runCommand "aspen-doc-stub" {} ''
-                echo "SKIPPED: requires extracted sibling repo sources"
+                echo "SKIPPED: doc check requires extracted sibling repo sources"
                 echo "Run locally: cargo doc --workspace --no-deps"
                 touch $out
               '';
@@ -1239,23 +1236,27 @@
             }
             // {
               # Run quick tests with cargo-nextest (for CI)
-              # Uses -P quick profile which skips slow proptest/chaos/madsim tests
-              # NOTE: nextest disabled — requires extracted sibling repo sources
+              # NOTE: nextest checks disabled — they compile the full workspace
+              # which depends on extracted sibling repos that are stubs in Nix.
+              # Run locally: cargo nextest run -P quick
               nextest-quick = pkgs.runCommand "aspen-nextest-quick-stub" {} ''
-                echo "SKIPPED: requires extracted sibling repo sources"
+                echo "SKIPPED: nextest requires extracted sibling repo sources"
                 echo "Run locally: cargo nextest run -P quick"
                 touch $out
               '';
 
               nextest = pkgs.runCommand "aspen-nextest-stub" {} ''
-                echo "SKIPPED: requires extracted sibling repo sources"
+                echo "SKIPPED: nextest requires extracted sibling repo sources"
                 echo "Run locally: cargo nextest run"
                 touch $out
               '';
             }
             // lib.optionalAttrs (system == "x86_64-linux" && false) {
-              # NOTE: VM integration tests disabled — require building
-              # aspen-node/aspen-cli which depend on extracted sibling repos.
+              # NOTE: VM integration tests disabled — they require building
+              # aspen-node/aspen-cli which depend on extracted sibling repos
+              # (aspen-coordination, aspen-forge, aspen-secrets, etc.) that
+              # are empty stubs in the Nix sandbox.
+              # Run individually: nix build .#checks.x86_64-linux.forge-cluster-test --impure
               # NixOS VM integration test for the Forge.
               # Spins up a cluster with real networking and exercises
               # every forge CLI command end-to-end.
