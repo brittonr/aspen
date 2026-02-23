@@ -191,6 +191,7 @@
             ./deny.toml
             ./rustfmt.toml
             ./rust-toolchain.toml
+            ./.config
             ./src
             ./crates
             ./openraft
