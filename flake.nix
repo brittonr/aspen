@@ -330,6 +330,12 @@
           # Keep [patch.crates-io] for cargo-hyperlight.
           ${pkgs.gnused}/bin/sed -i '/^\[patch\."https/,$d' $out/Cargo.toml
 
+          # Strip 'layer' feature from aspen-core deps (aspen-layer is a stub in Nix).
+          ${pkgs.gnused}/bin/sed -i 's|, features = \["layer"\]||g' \
+            $out/Cargo.toml \
+            $out/crates/aspen-cli/Cargo.toml \
+            $out/crates/aspen-raft/Cargo.toml
+
           # Also rewrite crate-level path deps that point to sibling repos.
           # From crates/X/, "../../../repo/crates/Y" → "../../.nix-stubs/Y"
           find $out/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
