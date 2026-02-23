@@ -798,3 +798,18 @@ aspen-sql-plugin (WASM, priority 940):
 | ~/git/aspen-docs | 1 | ~4.5K |
 | ~/git/aspen-federation | 1 | ~6.3K |
 | ~/git/aspen-hooks | 1 | ~9.1K |
+| ~/git/aspen-jobs | 7 | ~25K |
+
+### aspen-jobs Extraction (commit d9d83298)
+
+- 7 crates: aspen-jobs (20K), aspen-jobs-guest, 5 workers (blob, maintenance, replication, shell, sql)
+- Retained: aspen-job-handler (RPC glue), aspen-jobs-protocol (client-api types)
+- Also updated aspen-hooks and aspen-nix cross-workspace paths for aspen-jobs
+- **54 crates remain** in main workspace (was 83 at start)
+
+### aspen-nix Workspace Fixes
+
+- Fixed stale paths: aspen-ci-core, aspen-ci-executor-shell → `../aspen-ci/crates/...`
+- Removed aspen-ci-executor-nix from aspen-nix workspace (lives in aspen-ci)
+- Added `default-members` to exclude aspen-nix-cache-gateway from default builds (h3-iroh 0.96 vs iroh 0.95.1 mismatch)
+- `cargo metadata --all-features` passes; `cargo check --workspace` still fails on cache-gateway (pre-existing)
