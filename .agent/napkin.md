@@ -26,6 +26,7 @@
 | 2026-02-20 | self | secrets-engine NixOS test used `check=False` everywhere despite handler being fixed | Secrets handler + CLI discriminant issues were fixed in commits 4c1ab025 and 9dd667b7. Updated test to use strict assertions. |
 | 2026-02-20 | self | `load_nix_cache_signer` used wrong API: `kv_store.write(key, bytes)` | KV store uses `WriteRequest::set(key, value)` — not a key+value method. Also `aspen_secrets::error::Result` ≠ `anyhow::Result` — use `.map_err()` not `.with_context()`. |
 | 2026-02-23 | self | Extraction worker used `../../aspen-nix/` for subcrate cross-workspace paths (wrong depth) | Subcrates at `crates/{name}/Cargo.toml` need 3 `../` to reach git root: `../../../aspen-nix/crates/...`. Existing CI pattern (`../../../aspen-ci/crates/aspen-ci`) was the reference. |
+| 2026-02-23 | auto-test | `aspen-jobs-guest` (no_std VM guest with `#[panic_handler]`) fails `cargo test` — duplicate `panic_impl` lang item | Root cause: test harness links std (→ panic_impl), AND Cargo feature unification activates serde/std from sibling crates. `cfg_attr(not(test), no_std)` does NOT work — cfg(test) is only set for the test binary, not the lib target compiled as its dependency. Fix: `test = false` + `doctest = false` in `[lib]` to skip test compilation entirely. `default-members` exclusion as defense-in-depth. `no-tests = "pass"` in nextest config so zero test binaries isn't an error. |
 
 ## Recent Changes (2026-02-22) — Handler → Plugin Migrations
 
