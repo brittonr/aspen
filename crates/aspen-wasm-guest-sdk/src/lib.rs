@@ -43,10 +43,24 @@ pub mod host;
 pub mod response;
 
 // Re-export types that plugin authors need.
+// KV response types for handler plugins.
+pub use aspen_client_api::BatchCondition;
+pub use aspen_client_api::BatchReadResultResponse;
+pub use aspen_client_api::BatchWriteOperation;
+pub use aspen_client_api::BatchWriteResultResponse;
 pub use aspen_client_api::ClientRpcRequest;
 pub use aspen_client_api::ClientRpcResponse;
+pub use aspen_client_api::CompareAndSwapResultResponse;
+pub use aspen_client_api::ConditionalBatchWriteResultResponse;
+pub use aspen_client_api::DeleteResultResponse;
 pub use aspen_client_api::ErrorResponse;
 pub use aspen_client_api::ReadResultResponse;
+pub use aspen_client_api::ScanEntry;
+pub use aspen_client_api::ScanResultResponse;
+// SQL response types for handler plugins.
+pub use aspen_client_api::SqlCellValue;
+pub use aspen_client_api::SqlResultResponse;
+pub use aspen_client_api::WriteResultResponse;
 pub use aspen_plugin_api::KvBatchOp;
 pub use aspen_plugin_api::PluginHealth;
 pub use aspen_plugin_api::PluginInfo;

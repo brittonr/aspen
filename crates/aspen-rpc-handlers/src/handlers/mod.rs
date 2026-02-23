@@ -19,6 +19,21 @@
 //   Coordination     → aspen-coordination-plugin
 //   Secrets KV/Transit → aspen-secrets-plugin
 //   Service Registry → aspen-service-registry-plugin
+//
+// WASM plugin equivalents available (native handlers retained for now):
+//   KV               → aspen-kv-handler-plugin  (examples/plugins/kv-handler)
+//   SQL              → aspen-sql-handler-plugin  (examples/plugins/sql-handler)
+//
+// Not migratable to WASM (require native system access):
+//   Blob       — network I/O, replication, DHT, ticket generation
+//   CI         — cross-cutting orchestration (forge + jobs + blob + nickel)
+//   Cluster    — Raft control plane, membership, snapshots
+//   Core/Lease/Watch — Raft metrics, lease state machine, streaming
+//   Docs       — iroh-docs sync protocol, peer federation
+//   Forge      — git bridge streaming, federation trust/discovery
+//   Hooks      — could migrate with new host functions (hook_list, hook_trigger)
+//   Job/Worker — distributed queue orchestration, worker coordination
+//   Secrets    — native X.509 crypto (rcgen), Ed25519 signing
 
 // Re-export handlers
 #[cfg(feature = "blob")]

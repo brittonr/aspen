@@ -1126,6 +1126,21 @@ pub fn register_plugin_host_functions(
             .map_err(|e| anyhow::anyhow!("failed to register sql_query: {e}"))?;
     }
 
+    // -- Full-fidelity KV operations --
+    let ctx_kv_execute = Arc::clone(&ctx);
+    proto
+        .register("kv_execute", move |request_json: String| -> String {
+            if let Err(e) = check_permission(
+                &ctx_kv_execute.plugin_name,
+                "kv_read",
+                ctx_kv_execute.permissions.kv_read || ctx_kv_execute.permissions.kv_write,
+            ) {
+                return format!("\x01{e}");
+            }
+            kv_execute_impl(&ctx_kv_execute, &request_json)
+        })
+        .map_err(|e| anyhow::anyhow!("failed to register kv_execute: {e}"))?;
+
     Ok(())
 }
 
@@ -1147,11 +1162,456 @@ fn default_consistency() -> String {
     "linearizable".to_string()
 }
 
+// ---------------------------------------------------------------------------
+// Full-fidelity KV operations (kv_execute)
+// ---------------------------------------------------------------------------
+
+/// Execute a full-fidelity KV operation.
+///
+/// Takes a JSON request with an "op" field and operation-specific parameters.
+/// Returns structured JSON results with error codes, version metadata, etc.
+///
+/// This function provides complete KV protocol support for handler plugins
+/// that need to replace native KV handlers (NOT_LEADER propagation, CAS
+/// actual-value on failure, scan version metadata, conditional batch writes).
+fn kv_execute_impl(ctx: &PluginHostContext, request_json: &str) -> String {
+    let request: serde_json::Value = match serde_json::from_str(request_json) {
+        Ok(r) => r,
+        Err(e) => return format!("\x01invalid JSON: {e}"),
+    };
+
+    let op = request["op"].as_str().unwrap_or("");
+
+    let handle = tokio::runtime::Handle::current();
+    let result = handle.block_on(async {
+        match op {
+            "read" => kv_exec_read(ctx, &request).await,
+            "write" => kv_exec_write(ctx, &request).await,
+            "delete" => kv_exec_delete(ctx, &request).await,
+            "scan" => kv_exec_scan(ctx, &request).await,
+            "batch_read" => kv_exec_batch_read(ctx, &request).await,
+            "batch_write" => kv_exec_batch_write(ctx, &request).await,
+            "cas" => kv_exec_cas(ctx, &request).await,
+            "cad" => kv_exec_cad(ctx, &request).await,
+            "conditional_batch" => kv_exec_conditional_batch(ctx, &request).await,
+            _ => Err(format!("unknown kv_execute op: {op}")),
+        }
+    });
+
+    match result {
+        Ok(json) => match serde_json::to_string(&json) {
+            Ok(s) => format!("\0{s}"),
+            Err(e) => format!("\x01serialize failed: {e}"),
+        },
+        Err(e) => format!("\x01{e}"),
+    }
+}
+
+async fn kv_exec_read(ctx: &PluginHostContext, request: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let key = request["key"].as_str().ok_or("missing 'key'")?;
+    let req = aspen_kv_types::ReadRequest::new(key);
+    match ctx.kv_store.read(req).await {
+        Ok(result) => match result.kv {
+            Some(entry) => {
+                let value_b64 = base64_encode_bytes(entry.value.as_bytes());
+                Ok(serde_json::json!({
+                    "value": value_b64,
+                    "was_found": true,
+                    "error": null,
+                }))
+            }
+            None => Ok(serde_json::json!({"value": null, "was_found": false, "error": null})),
+        },
+        Err(aspen_core::KeyValueStoreError::NotFound { .. }) => {
+            Ok(serde_json::json!({"value": null, "was_found": false, "error": null}))
+        }
+        Err(e) => Ok(serde_json::json!({"value": null, "was_found": false, "error": format!("{e}")})),
+    }
+}
+
+async fn kv_exec_write(ctx: &PluginHostContext, request: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let key = request["key"].as_str().ok_or("missing 'key'")?;
+    let value_b64 = request["value"].as_str().ok_or("missing 'value'")?;
+    let value_bytes = base64_decode_bytes(value_b64).map_err(|e| format!("invalid base64 value: {e}"))?;
+    let value_str = String::from_utf8_lossy(&value_bytes).into_owned();
+
+    let req = aspen_kv_types::WriteRequest {
+        command: aspen_kv_types::WriteCommand::Set {
+            key: key.to_string(),
+            value: value_str,
+        },
+    };
+    match ctx.kv_store.write(req).await {
+        Ok(_) => Ok(serde_json::json!({"is_success": true, "error": null, "error_code": null, "leader_id": null})),
+        Err(aspen_core::KeyValueStoreError::NotLeader { leader, .. }) => Ok(serde_json::json!({
+            "is_success": false,
+            "error": format!("not leader; leader is node {}", leader.unwrap_or(0)),
+            "error_code": "NOT_LEADER",
+            "leader_id": leader,
+        })),
+        Err(e) => {
+            Ok(serde_json::json!({"is_success": false, "error": format!("{e}"), "error_code": null, "leader_id": null}))
+        }
+    }
+}
+
+async fn kv_exec_delete(ctx: &PluginHostContext, request: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let key = request["key"].as_str().ok_or("missing 'key'")?;
+    let req = aspen_kv_types::WriteRequest {
+        command: aspen_kv_types::WriteCommand::Delete { key: key.to_string() },
+    };
+    match ctx.kv_store.write(req).await {
+        Ok(_) => Ok(serde_json::json!({
+            "key": key, "was_deleted": true, "error": null, "error_code": null, "leader_id": null,
+        })),
+        Err(aspen_core::KeyValueStoreError::NotLeader { leader, .. }) => Ok(serde_json::json!({
+            "key": key, "was_deleted": false,
+            "error": format!("not leader; leader is node {}", leader.unwrap_or(0)),
+            "error_code": "NOT_LEADER", "leader_id": leader,
+        })),
+        Err(e) => Ok(serde_json::json!({
+            "key": key, "was_deleted": false, "error": format!("{e}"), "error_code": null, "leader_id": null,
+        })),
+    }
+}
+
+async fn kv_exec_scan(ctx: &PluginHostContext, request: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let prefix = request["prefix"].as_str().ok_or("missing 'prefix'")?;
+    let limit = request["limit"].as_u64().map(|v| v as u32);
+    let continuation_token = request["continuation_token"].as_str().map(String::from);
+
+    let req = aspen_kv_types::ScanRequest {
+        prefix: prefix.to_string(),
+        limit_results: limit,
+        continuation_token,
+    };
+    match ctx.kv_store.scan(req).await {
+        Ok(scan_resp) => {
+            let entries: Vec<serde_json::Value> = scan_resp
+                .entries
+                .into_iter()
+                .map(|e| {
+                    serde_json::json!({
+                        "key": e.key,
+                        "value": base64_encode_bytes(e.value.as_bytes()),
+                        "version": e.version,
+                        "create_revision": e.create_revision,
+                        "mod_revision": e.mod_revision,
+                    })
+                })
+                .collect();
+            Ok(serde_json::json!({
+                "entries": entries,
+                "count": scan_resp.result_count,
+                "is_truncated": scan_resp.is_truncated,
+                "continuation_token": scan_resp.continuation_token,
+                "error": null,
+            }))
+        }
+        Err(e) => Ok(serde_json::json!({
+            "entries": [], "count": 0, "is_truncated": false,
+            "continuation_token": null, "error": format!("{e}"),
+        })),
+    }
+}
+
+async fn kv_exec_batch_read(ctx: &PluginHostContext, request: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let keys: Vec<String> = request["keys"]
+        .as_array()
+        .ok_or("missing 'keys' array")?
+        .iter()
+        .filter_map(|v| v.as_str().map(String::from))
+        .collect();
+
+    let mut values = Vec::with_capacity(keys.len());
+    for key in &keys {
+        let req = aspen_kv_types::ReadRequest::new(key);
+        match ctx.kv_store.read(req).await {
+            Ok(result) => {
+                let value = result.kv.map(|kv| base64_encode_bytes(kv.value.as_bytes()));
+                values.push(serde_json::json!(value));
+            }
+            Err(aspen_core::KeyValueStoreError::NotFound { .. }) => {
+                values.push(serde_json::Value::Null);
+            }
+            Err(e) => {
+                return Ok(serde_json::json!({
+                    "is_success": false, "values": null, "error": format!("{e}"),
+                }));
+            }
+        }
+    }
+    Ok(serde_json::json!({"is_success": true, "values": values, "error": null}))
+}
+
+async fn kv_exec_batch_write(
+    ctx: &PluginHostContext,
+    request: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let ops_json = request["operations"].as_array().ok_or("missing 'operations' array")?;
+
+    let mut batch_ops = Vec::with_capacity(ops_json.len());
+    for op in ops_json {
+        if let Some(set) = op.get("Set") {
+            let key = set["key"].as_str().ok_or("missing Set.key")?;
+            let value_b64 = set["value"].as_str().ok_or("missing Set.value")?;
+            let value_bytes = base64_decode_bytes(value_b64).map_err(|e| format!("invalid base64: {e}"))?;
+            batch_ops.push(aspen_core::BatchOperation::Set {
+                key: key.to_string(),
+                value: String::from_utf8_lossy(&value_bytes).into_owned(),
+            });
+        } else if let Some(del) = op.get("Delete") {
+            let key = del["key"].as_str().ok_or("missing Delete.key")?;
+            batch_ops.push(aspen_core::BatchOperation::Delete { key: key.to_string() });
+        } else {
+            return Err("unknown batch operation".to_string());
+        }
+    }
+
+    let req = aspen_kv_types::WriteRequest {
+        command: aspen_kv_types::WriteCommand::Batch { operations: batch_ops },
+    };
+    match ctx.kv_store.write(req).await {
+        Ok(result) => Ok(serde_json::json!({
+            "is_success": true,
+            "operations_applied": result.batch_applied,
+            "error": null, "error_code": null, "leader_id": null,
+        })),
+        Err(aspen_core::KeyValueStoreError::NotLeader { leader, .. }) => Ok(serde_json::json!({
+            "is_success": false, "operations_applied": null,
+            "error": format!("not leader; leader is node {}", leader.unwrap_or(0)),
+            "error_code": "NOT_LEADER", "leader_id": leader,
+        })),
+        Err(e) => Ok(serde_json::json!({
+            "is_success": false, "operations_applied": null,
+            "error": format!("{e}"), "error_code": null, "leader_id": null,
+        })),
+    }
+}
+
+async fn kv_exec_cas(ctx: &PluginHostContext, request: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let key = request["key"].as_str().ok_or("missing 'key'")?;
+    let expected = match request["expected"].as_str() {
+        Some(b64) => {
+            let bytes = base64_decode_bytes(b64).map_err(|e| format!("invalid base64 expected: {e}"))?;
+            Some(String::from_utf8_lossy(&bytes).into_owned())
+        }
+        None => None,
+    };
+    let new_value_b64 = request["new_value"].as_str().ok_or("missing 'new_value'")?;
+    let new_value_bytes = base64_decode_bytes(new_value_b64).map_err(|e| format!("invalid base64 new_value: {e}"))?;
+
+    let req = aspen_kv_types::WriteRequest {
+        command: aspen_kv_types::WriteCommand::CompareAndSwap {
+            key: key.to_string(),
+            expected,
+            new_value: String::from_utf8_lossy(&new_value_bytes).into_owned(),
+        },
+    };
+    match ctx.kv_store.write(req).await {
+        Ok(_) => Ok(serde_json::json!({
+            "is_success": true, "actual_value": null, "error": null, "error_code": null, "leader_id": null,
+        })),
+        Err(aspen_core::KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => {
+            let actual_b64 = actual.as_ref().map(|v| base64_encode_bytes(v.as_bytes()));
+            Ok(serde_json::json!({
+                "is_success": false, "actual_value": actual_b64, "error": null,
+                "error_code": "CAS_FAILED", "leader_id": null,
+            }))
+        }
+        Err(aspen_core::KeyValueStoreError::NotLeader { leader, .. }) => Ok(serde_json::json!({
+            "is_success": false, "actual_value": null,
+            "error": format!("not leader; leader is node {}", leader.unwrap_or(0)),
+            "error_code": "NOT_LEADER", "leader_id": leader,
+        })),
+        Err(e) => Ok(serde_json::json!({
+            "is_success": false, "actual_value": null,
+            "error": format!("{e}"), "error_code": null, "leader_id": null,
+        })),
+    }
+}
+
+async fn kv_exec_cad(ctx: &PluginHostContext, request: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let key = request["key"].as_str().ok_or("missing 'key'")?;
+    let expected_b64 = request["expected"].as_str().ok_or("missing 'expected'")?;
+    let expected_bytes = base64_decode_bytes(expected_b64).map_err(|e| format!("invalid base64 expected: {e}"))?;
+
+    let req = aspen_kv_types::WriteRequest {
+        command: aspen_kv_types::WriteCommand::CompareAndDelete {
+            key: key.to_string(),
+            expected: String::from_utf8_lossy(&expected_bytes).into_owned(),
+        },
+    };
+    match ctx.kv_store.write(req).await {
+        Ok(_) => Ok(serde_json::json!({
+            "is_success": true, "actual_value": null, "error": null, "error_code": null, "leader_id": null,
+        })),
+        Err(aspen_core::KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => {
+            let actual_b64 = actual.as_ref().map(|v| base64_encode_bytes(v.as_bytes()));
+            Ok(serde_json::json!({
+                "is_success": false, "actual_value": actual_b64, "error": null,
+                "error_code": "CAS_FAILED", "leader_id": null,
+            }))
+        }
+        Err(aspen_core::KeyValueStoreError::NotLeader { leader, .. }) => Ok(serde_json::json!({
+            "is_success": false, "actual_value": null,
+            "error": format!("not leader; leader is node {}", leader.unwrap_or(0)),
+            "error_code": "NOT_LEADER", "leader_id": leader,
+        })),
+        Err(e) => Ok(serde_json::json!({
+            "is_success": false, "actual_value": null,
+            "error": format!("{e}"), "error_code": null, "leader_id": null,
+        })),
+    }
+}
+
+async fn kv_exec_conditional_batch(
+    ctx: &PluginHostContext,
+    request: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let conditions_json = request["conditions"].as_array().ok_or("missing 'conditions' array")?;
+    let ops_json = request["operations"].as_array().ok_or("missing 'operations' array")?;
+
+    // Parse conditions
+    let mut conditions = Vec::with_capacity(conditions_json.len());
+    for c in conditions_json {
+        if let Some(ve) = c.get("ValueEquals") {
+            let key = ve["key"].as_str().ok_or("missing ValueEquals.key")?;
+            let expected_b64 = ve["expected"].as_str().ok_or("missing ValueEquals.expected")?;
+            let expected_bytes = base64_decode_bytes(expected_b64).map_err(|e| format!("invalid base64: {e}"))?;
+            conditions.push(aspen_core::BatchCondition::ValueEquals {
+                key: key.to_string(),
+                expected: String::from_utf8_lossy(&expected_bytes).into_owned(),
+            });
+        } else if let Some(ke) = c.get("KeyExists") {
+            let key = ke["key"].as_str().ok_or("missing KeyExists.key")?;
+            conditions.push(aspen_core::BatchCondition::KeyExists { key: key.to_string() });
+        } else if let Some(kne) = c.get("KeyNotExists") {
+            let key = kne["key"].as_str().ok_or("missing KeyNotExists.key")?;
+            conditions.push(aspen_core::BatchCondition::KeyNotExists { key: key.to_string() });
+        } else {
+            return Err("unknown condition type".to_string());
+        }
+    }
+
+    // Parse operations
+    let mut batch_ops = Vec::with_capacity(ops_json.len());
+    for op in ops_json {
+        if let Some(set) = op.get("Set") {
+            let key = set["key"].as_str().ok_or("missing Set.key")?;
+            let value_b64 = set["value"].as_str().ok_or("missing Set.value")?;
+            let value_bytes = base64_decode_bytes(value_b64).map_err(|e| format!("invalid base64: {e}"))?;
+            batch_ops.push(aspen_core::BatchOperation::Set {
+                key: key.to_string(),
+                value: String::from_utf8_lossy(&value_bytes).into_owned(),
+            });
+        } else if let Some(del) = op.get("Delete") {
+            let key = del["key"].as_str().ok_or("missing Delete.key")?;
+            batch_ops.push(aspen_core::BatchOperation::Delete { key: key.to_string() });
+        } else {
+            return Err("unknown batch operation".to_string());
+        }
+    }
+
+    let req = aspen_kv_types::WriteRequest {
+        command: aspen_kv_types::WriteCommand::ConditionalBatch {
+            conditions,
+            operations: batch_ops,
+        },
+    };
+    match ctx.kv_store.write(req).await {
+        Ok(result) => {
+            let conditions_met = result.conditions_met.unwrap_or(false);
+            Ok(serde_json::json!({
+                "is_success": conditions_met,
+                "conditions_met": conditions_met,
+                "operations_applied": result.batch_applied,
+                "failed_condition_index": result.failed_condition_index,
+                "failed_condition_reason": null,
+                "error": null, "error_code": null, "leader_id": null,
+            }))
+        }
+        Err(aspen_core::KeyValueStoreError::NotLeader { leader, .. }) => Ok(serde_json::json!({
+            "is_success": false, "conditions_met": false, "operations_applied": null,
+            "failed_condition_index": null, "failed_condition_reason": null,
+            "error": format!("not leader; leader is node {}", leader.unwrap_or(0)),
+            "error_code": "NOT_LEADER", "leader_id": leader,
+        })),
+        Err(e) => Ok(serde_json::json!({
+            "is_success": false, "conditions_met": false, "operations_applied": null,
+            "failed_condition_index": null, "failed_condition_reason": null,
+            "error": format!("{e}"), "error_code": null, "leader_id": null,
+        })),
+    }
+}
+
+/// Base64-encode bytes for JSON transport.
+fn base64_encode_bytes(data: &[u8]) -> String {
+    const CHARS: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::with_capacity(data.len().div_ceil(3) * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = chunk.get(1).copied().unwrap_or(0) as u32;
+        let b2 = chunk.get(2).copied().unwrap_or(0) as u32;
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        result.push(CHARS[((n >> 18) & 0x3F) as usize] as char);
+        result.push(CHARS[((n >> 12) & 0x3F) as usize] as char);
+        if chunk.len() > 1 {
+            result.push(CHARS[((n >> 6) & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+        if chunk.len() > 2 {
+            result.push(CHARS[(n & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+    }
+    result
+}
+
+/// Base64-decode bytes from JSON transport.
+fn base64_decode_bytes(input: &str) -> Result<Vec<u8>, String> {
+    const DECODE: [u8; 128] = {
+        let mut table = [0xFFu8; 128];
+        let chars = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut i = 0;
+        while i < 64 {
+            table[chars[i] as usize] = i as u8;
+            i += 1;
+        }
+        table
+    };
+
+    let input = input.trim_end_matches('=');
+    let mut output = Vec::with_capacity(input.len() * 3 / 4);
+    let bytes = input.as_bytes();
+    let chunks = bytes.chunks(4);
+
+    for chunk in chunks {
+        let mut n: u32 = 0;
+        for (i, &b) in chunk.iter().enumerate() {
+            if b >= 128 || DECODE[b as usize] == 0xFF {
+                return Err(format!("invalid base64 character: {}", b as char));
+            }
+            n |= (DECODE[b as usize] as u32) << (18 - i * 6);
+        }
+        output.push((n >> 16) as u8);
+        if chunk.len() > 2 {
+            output.push((n >> 8) as u8);
+        }
+        if chunk.len() > 3 {
+            output.push(n as u8);
+        }
+    }
+    Ok(output)
+}
+
 /// Simple base64 encoding without pulling in the base64 crate dependency.
 #[cfg(feature = "sql")]
 fn base64_encode(data: &[u8]) -> String {
     const CHARS: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::with_capacity((data.len() + 2) / 3 * 4);
+    let mut result = String::with_capacity(data.len().div_ceil(3) * 4);
     for chunk in data.chunks(3) {
         let b0 = chunk[0] as u32;
         let b1 = chunk.get(1).copied().unwrap_or(0) as u32;

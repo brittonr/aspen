@@ -1601,6 +1601,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-kv-handler-plugin"
+version = "0.1.0"
+dependencies = [
+ "aspen-wasm-guest-sdk",
+ "serde_json",
+]
+
+[[package]]
 name = "aspen-kv-types"
 version = "0.1.0"
 dependencies = [
@@ -2038,6 +2046,14 @@ dependencies = [
  "snafu 0.8.9",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "aspen-sql-handler-plugin"
+version = "0.1.0"
+dependencies = [
+ "aspen-wasm-guest-sdk",
+ "serde_json",
 ]
 
 [[package]]

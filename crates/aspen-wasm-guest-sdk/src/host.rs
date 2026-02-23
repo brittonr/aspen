@@ -34,6 +34,7 @@ unsafe extern "C" {
     fn hook_subscribe(pattern: String) -> String;
     fn hook_unsubscribe(pattern: String) -> String;
     fn sql_query(request_json: String) -> String;
+    fn kv_execute(request_json: String) -> String;
 }
 
 // ---------------------------------------------------------------------------
@@ -318,6 +319,380 @@ pub fn execute_sql(
         Err(msg.to_string())
     } else {
         Err(result)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Full-fidelity KV operations (for handler plugins)
+// ---------------------------------------------------------------------------
+
+/// Result from a full-fidelity KV read operation.
+#[derive(serde::Deserialize)]
+pub struct KvReadResult {
+    /// The value bytes (base64-encoded in JSON transport).
+    pub value: Option<String>,
+    /// Whether the key was found.
+    pub was_found: bool,
+    /// Error message, if any.
+    pub error: Option<String>,
+}
+
+/// Result from a full-fidelity KV write operation.
+#[derive(serde::Deserialize)]
+pub struct KvWriteResult {
+    /// Whether the write succeeded.
+    pub is_success: bool,
+    /// Error message, if any.
+    pub error: Option<String>,
+    /// Structured error code (e.g., "NOT_LEADER").
+    pub error_code: Option<String>,
+    /// Leader node ID hint when error_code is NOT_LEADER.
+    pub leader_id: Option<u64>,
+}
+
+/// Result from a full-fidelity KV delete operation.
+#[derive(serde::Deserialize)]
+pub struct KvDeleteResult {
+    /// The key that was deleted.
+    pub key: String,
+    /// Whether the key was actually deleted.
+    pub was_deleted: bool,
+    /// Error message, if any.
+    pub error: Option<String>,
+    /// Structured error code (e.g., "NOT_LEADER").
+    pub error_code: Option<String>,
+    /// Leader node ID hint when error_code is NOT_LEADER.
+    pub leader_id: Option<u64>,
+}
+
+/// A single entry in a full-fidelity scan result.
+#[derive(serde::Deserialize)]
+pub struct KvScanEntry {
+    /// Key name.
+    pub key: String,
+    /// Value (base64-encoded in JSON transport).
+    pub value: String,
+    /// Version number.
+    pub version: u64,
+    /// Revision at which the key was created.
+    pub create_revision: u64,
+    /// Revision at which the key was last modified.
+    pub mod_revision: u64,
+}
+
+/// Result from a full-fidelity KV scan operation.
+#[derive(serde::Deserialize)]
+pub struct KvScanResult {
+    /// Matching entries.
+    pub entries: Vec<KvScanEntry>,
+    /// Total count of entries returned.
+    pub count: u32,
+    /// Whether more entries exist beyond the limit.
+    pub is_truncated: bool,
+    /// Opaque token for fetching the next page.
+    pub continuation_token: Option<String>,
+    /// Error message, if any.
+    pub error: Option<String>,
+}
+
+/// Result from a full-fidelity KV batch read operation.
+#[derive(serde::Deserialize)]
+pub struct KvBatchReadResult {
+    /// Whether the batch read succeeded.
+    pub is_success: bool,
+    /// Values for each requested key (None = key not found).
+    pub values: Option<Vec<Option<String>>>,
+    /// Error message, if any.
+    pub error: Option<String>,
+}
+
+/// Result from a full-fidelity KV batch write operation.
+#[derive(serde::Deserialize)]
+pub struct KvBatchWriteResult {
+    /// Whether the batch write succeeded.
+    pub is_success: bool,
+    /// Number of operations applied.
+    pub operations_applied: Option<u32>,
+    /// Error message, if any.
+    pub error: Option<String>,
+    /// Structured error code (e.g., "NOT_LEADER").
+    pub error_code: Option<String>,
+    /// Leader node ID hint when error_code is NOT_LEADER.
+    pub leader_id: Option<u64>,
+}
+
+/// Result from a full-fidelity KV compare-and-swap operation.
+#[derive(serde::Deserialize)]
+pub struct KvCasResult {
+    /// Whether the CAS succeeded.
+    pub is_success: bool,
+    /// Actual value on CAS failure (base64-encoded).
+    pub actual_value: Option<String>,
+    /// Error message, if any.
+    pub error: Option<String>,
+    /// Structured error code (e.g., "NOT_LEADER", "CAS_FAILED").
+    pub error_code: Option<String>,
+    /// Leader node ID hint when error_code is NOT_LEADER.
+    pub leader_id: Option<u64>,
+}
+
+/// Result from a full-fidelity KV conditional batch write.
+#[derive(serde::Deserialize)]
+pub struct KvConditionalBatchResult {
+    /// Whether the conditional batch succeeded.
+    pub is_success: bool,
+    /// Whether all conditions were met.
+    pub conditions_met: bool,
+    /// Number of operations applied.
+    pub operations_applied: Option<u32>,
+    /// Index of the first failed condition.
+    pub failed_condition_index: Option<u32>,
+    /// Reason the condition failed.
+    pub failed_condition_reason: Option<String>,
+    /// Error message, if any.
+    pub error: Option<String>,
+    /// Structured error code (e.g., "NOT_LEADER").
+    pub error_code: Option<String>,
+    /// Leader node ID hint when error_code is NOT_LEADER.
+    pub leader_id: Option<u64>,
+}
+
+/// Execute a full-fidelity KV operation via the host.
+///
+/// This host function provides complete KV protocol support including
+/// structured error codes (NOT_LEADER, CAS_FAILED), version metadata
+/// in scan results, batch operations, and conditional writes.
+///
+/// # Arguments
+///
+/// * `request` - JSON value describing the operation. Must have an "op" field.
+///
+/// # Supported operations
+///
+/// - `{"op":"read","key":"..."}`
+/// - `{"op":"write","key":"...","value":"base64..."}`
+/// - `{"op":"delete","key":"..."}`
+/// - `{"op":"scan","prefix":"...","limit":N,"continuation_token":null}`
+/// - `{"op":"batch_read","keys":["k1","k2"]}`
+/// - `{"op":"batch_write","operations":[{"Set":{"key":"k","value":"base64:v"}},{"Delete":{"key":"k"
+///   }}]}`
+/// - `{"op":"cas","key":"...","expected":null,"new_value":"base64..."}`
+/// - `{"op":"cad","key":"...","expected":"base64..."}`
+/// - `{"op":"conditional_batch","conditions":[...],"operations":[...]}`
+fn kv_execute_raw(request_json: &str) -> Result<serde_json::Value, String> {
+    let result = unsafe { kv_execute(request_json.to_string()) };
+    if let Some(json_str) = result.strip_prefix('\0') {
+        serde_json::from_str(json_str).map_err(|e| format!("failed to parse kv_execute result: {e}"))
+    } else if let Some(err) = result.strip_prefix('\x01') {
+        Err(err.to_string())
+    } else {
+        Err(result)
+    }
+}
+
+/// Read a key with full result metadata.
+pub fn kv_read_full(key: &str) -> KvReadResult {
+    let req = serde_json::json!({"op": "read", "key": key});
+    match kv_execute_raw(&req.to_string()) {
+        Ok(v) => serde_json::from_value(v).unwrap_or(KvReadResult {
+            value: None,
+            was_found: false,
+            error: Some("failed to parse read result".to_string()),
+        }),
+        Err(e) => KvReadResult {
+            value: None,
+            was_found: false,
+            error: Some(e),
+        },
+    }
+}
+
+/// Write a key with structured error codes (including NOT_LEADER).
+pub fn kv_write_full(key: &str, value_b64: &str) -> KvWriteResult {
+    let req = serde_json::json!({"op": "write", "key": key, "value": value_b64});
+    match kv_execute_raw(&req.to_string()) {
+        Ok(v) => serde_json::from_value(v).unwrap_or(KvWriteResult {
+            is_success: false,
+            error: Some("failed to parse write result".to_string()),
+            error_code: None,
+            leader_id: None,
+        }),
+        Err(e) => KvWriteResult {
+            is_success: false,
+            error: Some(e),
+            error_code: None,
+            leader_id: None,
+        },
+    }
+}
+
+/// Delete a key with structured error codes (including NOT_LEADER).
+pub fn kv_delete_full(key: &str) -> KvDeleteResult {
+    let req = serde_json::json!({"op": "delete", "key": key});
+    match kv_execute_raw(&req.to_string()) {
+        Ok(v) => serde_json::from_value(v).unwrap_or(KvDeleteResult {
+            key: key.to_string(),
+            was_deleted: false,
+            error: Some("failed to parse delete result".to_string()),
+            error_code: None,
+            leader_id: None,
+        }),
+        Err(e) => KvDeleteResult {
+            key: key.to_string(),
+            was_deleted: false,
+            error: Some(e),
+            error_code: None,
+            leader_id: None,
+        },
+    }
+}
+
+/// Scan keys with full metadata (version, revision, continuation token).
+pub fn kv_scan_full(prefix: &str, limit: Option<u32>, continuation_token: Option<&str>) -> KvScanResult {
+    let req = serde_json::json!({
+        "op": "scan",
+        "prefix": prefix,
+        "limit": limit,
+        "continuation_token": continuation_token,
+    });
+    match kv_execute_raw(&req.to_string()) {
+        Ok(v) => serde_json::from_value(v).unwrap_or(KvScanResult {
+            entries: vec![],
+            count: 0,
+            is_truncated: false,
+            continuation_token: None,
+            error: Some("failed to parse scan result".to_string()),
+        }),
+        Err(e) => KvScanResult {
+            entries: vec![],
+            count: 0,
+            is_truncated: false,
+            continuation_token: None,
+            error: Some(e),
+        },
+    }
+}
+
+/// Batch read multiple keys.
+pub fn kv_batch_read_full(keys: &[String]) -> KvBatchReadResult {
+    let req = serde_json::json!({"op": "batch_read", "keys": keys});
+    match kv_execute_raw(&req.to_string()) {
+        Ok(v) => serde_json::from_value(v).unwrap_or(KvBatchReadResult {
+            is_success: false,
+            values: None,
+            error: Some("failed to parse batch read result".to_string()),
+        }),
+        Err(e) => KvBatchReadResult {
+            is_success: false,
+            values: None,
+            error: Some(e),
+        },
+    }
+}
+
+/// Batch write with atomic semantics and structured error codes.
+pub fn kv_batch_write_full(operations: &serde_json::Value) -> KvBatchWriteResult {
+    let req = serde_json::json!({"op": "batch_write", "operations": operations});
+    match kv_execute_raw(&req.to_string()) {
+        Ok(v) => serde_json::from_value(v).unwrap_or(KvBatchWriteResult {
+            is_success: false,
+            operations_applied: None,
+            error: Some("failed to parse batch write result".to_string()),
+            error_code: None,
+            leader_id: None,
+        }),
+        Err(e) => KvBatchWriteResult {
+            is_success: false,
+            operations_applied: None,
+            error: Some(e),
+            error_code: None,
+            leader_id: None,
+        },
+    }
+}
+
+/// Compare-and-swap with actual value on failure.
+pub fn kv_cas_full(key: &str, expected: Option<&str>, new_value: &str) -> KvCasResult {
+    let req = serde_json::json!({
+        "op": "cas",
+        "key": key,
+        "expected": expected,
+        "new_value": new_value,
+    });
+    match kv_execute_raw(&req.to_string()) {
+        Ok(v) => serde_json::from_value(v).unwrap_or(KvCasResult {
+            is_success: false,
+            actual_value: None,
+            error: Some("failed to parse CAS result".to_string()),
+            error_code: None,
+            leader_id: None,
+        }),
+        Err(e) => KvCasResult {
+            is_success: false,
+            actual_value: None,
+            error: Some(e),
+            error_code: None,
+            leader_id: None,
+        },
+    }
+}
+
+/// Compare-and-delete with actual value on failure.
+pub fn kv_cad_full(key: &str, expected: &str) -> KvCasResult {
+    let req = serde_json::json!({
+        "op": "cad",
+        "key": key,
+        "expected": expected,
+    });
+    match kv_execute_raw(&req.to_string()) {
+        Ok(v) => serde_json::from_value(v).unwrap_or(KvCasResult {
+            is_success: false,
+            actual_value: None,
+            error: Some("failed to parse CAD result".to_string()),
+            error_code: None,
+            leader_id: None,
+        }),
+        Err(e) => KvCasResult {
+            is_success: false,
+            actual_value: None,
+            error: Some(e),
+            error_code: None,
+            leader_id: None,
+        },
+    }
+}
+
+/// Conditional batch write with condition evaluation and structured errors.
+pub fn kv_conditional_batch_full(
+    conditions: &serde_json::Value,
+    operations: &serde_json::Value,
+) -> KvConditionalBatchResult {
+    let req = serde_json::json!({
+        "op": "conditional_batch",
+        "conditions": conditions,
+        "operations": operations,
+    });
+    match kv_execute_raw(&req.to_string()) {
+        Ok(v) => serde_json::from_value(v).unwrap_or(KvConditionalBatchResult {
+            is_success: false,
+            conditions_met: false,
+            operations_applied: None,
+            failed_condition_index: None,
+            failed_condition_reason: None,
+            error: Some("failed to parse conditional batch result".to_string()),
+            error_code: None,
+            leader_id: None,
+        }),
+        Err(e) => KvConditionalBatchResult {
+            is_success: false,
+            conditions_met: false,
+            operations_applied: None,
+            failed_condition_index: None,
+            failed_condition_reason: None,
+            error: Some(e),
+            error_code: None,
+            leader_id: None,
+        },
     }
 }
 

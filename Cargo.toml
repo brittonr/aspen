@@ -119,6 +119,8 @@ members = [
     "examples/plugins/kv-counter",
     "examples/plugins/audit-logger",
     "examples/plugins/scheduled-cleanup",
+    "examples/plugins/kv-handler",
+    "examples/plugins/sql-handler",
 ]
 
 # Required for vendored openraft workspace inheritance

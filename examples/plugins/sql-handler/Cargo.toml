@@ -1,0 +1,13 @@
+[package]
+name = "aspen-sql-handler-plugin"
+version = "0.1.0"
+edition = "2024"
+description = "Aspen WASM plugin: SQL query handler (migrated from native aspen-query-handler)"
+license = "AGPL-3.0-or-later"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+aspen-wasm-guest-sdk = { path = "../../../crates/aspen-wasm-guest-sdk" }
+serde_json = "1.0"
