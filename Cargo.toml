@@ -104,7 +104,6 @@ members = [
     # aspen-automerge extracted to ~/git/aspen-automerge
     # CI subsystem extracted to ~/git/aspen-ci
     "crates/aspen-ci-handler",
-    "crates/aspen-nix-handler",
     "crates/aspen-query-handler",
     "crates/aspen-hooks-handler",
     "crates/aspen-job-handler",
@@ -116,10 +115,7 @@ members = [
     "crates/aspen-coordination-protocol",
     "crates/aspen-forge-protocol",
     "crates/aspen-jobs-protocol",
-    "crates/aspen-cache",
     "crates/aspen-proxy",
-    "crates/aspen-snix",
-    "crates/aspen-nix-cache-gateway",
     "crates/aspen-dht-discovery",
     "crates/aspen-plugin-api",
     "crates/aspen-wasm-plugin",
@@ -232,7 +228,7 @@ aspen-ci-core = { path = "../aspen-ci/crates/aspen-ci-core" }
 aspen-ci-executor-shell = { path = "../aspen-ci/crates/aspen-ci-executor-shell" }
 aspen-ci-executor-nix = { path = "../aspen-ci/crates/aspen-ci-executor-nix" }
 aspen-ci-executor-vm = { path = "../aspen-ci/crates/aspen-ci-executor-vm" }
-aspen-cache = { path = "crates/aspen-cache" }
+aspen-cache = { path = "../aspen-nix/crates/aspen-cache" }
 irpc = { version = "0.11.0", features = ["derive"] }
 n0-future = "0.3.2"
 nickel-lang = "2.0"
@@ -255,8 +251,8 @@ nix-compat = { git = "https://git.snix.dev/snix/snix.git", rev = "8fe3bade2013be
 prost = "0.13"  # Protobuf encoding for SNIX types
 tonic = { version = "0.12", features = ["transport"] }  # gRPC for SNIX services
 async-stream = "0.3"  # Async stream utilities for SNIX
-aspen-snix = { path = "crates/aspen-snix" }
-aspen-nix-cache-gateway = { path = "crates/aspen-nix-cache-gateway" }
+aspen-snix = { path = "../aspen-nix/crates/aspen-snix" }
+aspen-nix-cache-gateway = { path = "../aspen-nix/crates/aspen-nix-cache-gateway" }
 aspen-federation = { path = "crates/aspen-federation" }
 aspen-proxy = { path = "crates/aspen-proxy" }
 aspen-coordination-protocol = { path = "crates/aspen-coordination-protocol" }
@@ -774,7 +770,7 @@ cargo-hyperlight = { path = "vendor/cargo-hyperlight" }
 [patch."https://github.com/brittonr/aspen.git"]
 aspen-core = { path = "crates/aspen-core" }
 aspen-blob = { path = "crates/aspen-blob" }
-aspen-cache = { path = "crates/aspen-cache" }
+aspen-cache = { path = "../aspen-nix/crates/aspen-cache" }
 aspen-jobs = { path = "crates/aspen-jobs" }
 aspen-auth = { path = "crates/aspen-auth" }
 aspen-forge = { path = "crates/aspen-forge" }

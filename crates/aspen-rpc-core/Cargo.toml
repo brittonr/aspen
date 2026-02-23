@@ -36,7 +36,7 @@ aspen-forge = { path = "../aspen-forge", optional = true }
 # and defined in aspen-rpc-handlers. Handler extraction will need trait abstraction.
 aspen-ci = { path = "../../../aspen-ci/crates/aspen-ci", optional = true }
 aspen-cluster = { path = "../aspen-cluster", optional = true, features = ["federation"] }
-aspen-nix-cache-gateway = { path = "../aspen-nix-cache-gateway", optional = true }
+aspen-nix-cache-gateway = { path = "../../../aspen-nix/crates/aspen-nix-cache-gateway", optional = true }
 aspen-testing = { workspace = true, optional = true }
 # Iroh for mock endpoint provider in tests
 iroh = { version = "0.95.1", optional = true }

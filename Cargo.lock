@@ -764,7 +764,6 @@ version = "0.1.0"
 dependencies = [
  "aspen-blob",
  "aspen-core",
- "aspen-testing",
  "async-trait",
  "hex",
  "serde",
@@ -1710,7 +1709,6 @@ dependencies = [
  "aspen-core",
  "aspen-secrets",
  "aspen-snix",
- "aspen-testing",
  "aspen-transport",
  "async-trait",
  "base64 0.22.1",
@@ -1725,7 +1723,6 @@ dependencies = [
  "schemars 0.8.22",
  "serde",
  "snafu 0.8.9",
- "tempfile",
  "tokio",
  "tracing",
 ]
@@ -1749,7 +1746,6 @@ dependencies = [
  "serde_json",
  "snix-castore",
  "snix-store",
- "tokio",
  "tracing",
 ]
 
@@ -2072,7 +2068,6 @@ dependencies = [
  "aspen-cache",
  "aspen-client-api",
  "aspen-core",
- "aspen-testing",
  "async-stream",
  "async-trait",
  "base64 0.22.1",
@@ -2080,20 +2075,15 @@ dependencies = [
  "hex",
  "iroh 0.95.1",
  "iroh-blobs",
- "madsim",
  "n0-future",
  "nix-compat",
  "postcard",
- "proptest",
  "prost 0.13.5",
- "rstest",
- "rstest_reuse",
  "serde",
  "serde_json",
  "snafu 0.8.9",
  "snix-castore",
  "snix-store",
- "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
@@ -5862,12 +5852,6 @@ name = "futures-task"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "037711b3d59c33004d3856fbdc83b99d4ff37a24768fa1be9ce3538a1cde4393"
-
-[[package]]
-name = "futures-timer"
-version = "3.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f288b0a4f20f9a56b5d1da57e2227c661b7b16168e2f72365f57b63326e29b24"
 
 [[package]]
 name = "futures-util"
@@ -11585,12 +11569,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a96887878f22d7bad8a3b6dc5b7440e0ada9a245242924394987b21cf2210a4c"
 
 [[package]]
-name = "relative-path"
-version = "1.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
-
-[[package]]
 name = "rend"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11791,47 +11769,6 @@ dependencies = [
  "spki 0.7.3",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "rstest"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fc39292f8613e913f7df8fa892b8944ceb47c247b78e1b1ae2f09e019be789d"
-dependencies = [
- "futures-timer",
- "futures-util",
- "rstest_macros",
- "rustc_version",
-]
-
-[[package]]
-name = "rstest_macros"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f168d99749d307be9de54d23fd226628d99768225ef08f6ffb52e0182a27746"
-dependencies = [
- "cfg-if",
- "glob",
- "proc-macro-crate 3.4.0",
- "proc-macro2",
- "quote",
- "regex",
- "relative-path",
- "rustc_version",
- "syn 2.0.117",
- "unicode-ident",
-]
-
-[[package]]
-name = "rstest_reuse"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3a8fb4672e840a587a66fc577a5491375df51ddb88f2a2c2a792598c326fe14"
-dependencies = [
- "quote",
- "rand 0.8.5",
- "syn 2.0.117",
 ]
 
 [[package]]

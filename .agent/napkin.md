@@ -25,6 +25,7 @@
 | 2026-02-20 | self | `use std::sync::Arc` warnings in query-handler and nix-handler | `Arc` only used inside cfg-gated factory modules that use `super::*`. Move `Arc` import into each factory module instead of the crate root. |
 | 2026-02-20 | self | secrets-engine NixOS test used `check=False` everywhere despite handler being fixed | Secrets handler + CLI discriminant issues were fixed in commits 4c1ab025 and 9dd667b7. Updated test to use strict assertions. |
 | 2026-02-20 | self | `load_nix_cache_signer` used wrong API: `kv_store.write(key, bytes)` | KV store uses `WriteRequest::set(key, value)` — not a key+value method. Also `aspen_secrets::error::Result` ≠ `anyhow::Result` — use `.map_err()` not `.with_context()`. |
+| 2026-02-23 | self | Extraction worker used `../../aspen-nix/` for subcrate cross-workspace paths (wrong depth) | Subcrates at `crates/{name}/Cargo.toml` need 3 `../` to reach git root: `../../../aspen-nix/crates/...`. Existing CI pattern (`../../../aspen-ci/crates/aspen-ci`) was the reference. |
 
 ## Recent Changes (2026-02-22) — Handler → Plugin Migrations
 
@@ -732,9 +733,24 @@ aspen-sql-plugin (WASM, priority 940):
 - `aspen-testing-madsim` has path dep to `../../openraft/openraft`
 - Too many cross-deps to cleanly extract without restructuring
 
+### Extracted to ~/git/aspen-nix (4 crates, ~10.7K lines)
+
+- `aspen-snix`: SNIX storage integration (~3.3K lines, 10 .rs files + tests + verus specs)
+- `aspen-nix-cache-gateway`: HTTP/3 Nix binary cache gateway (~2K lines, 11 .rs files)
+- `aspen-nix-handler`: Nix RPC handlers for snix + cache (~1.1K lines, 4 .rs files)
+- `aspen-cache`: Distributed Nix binary cache layer (~1.1K lines + verus specs)
+- **Retained in main repo**: `aspen-ci-handler` (has non-optional dep on aspen-cache, uses cross-workspace path)
+- aspen-nix workspace already existed with `aspen-ci-executor-nix`; now holds 5 crates total
+- aspen-nix workspace uses `path = "../aspen/crates/..."` for deps back to main repo
+- **Gotcha: subcrate path depth is 3 levels (`../../../aspen-nix/crates/...`), not 2** — subcrates are at `crates/{name}/Cargo.toml`, need 3 `../` to reach git root
+- aspen-nix-cache-gateway was already broken (h3-iroh version mismatch) — extraction removes it from workspace check
+- `[patch."https://github.com/brittonr/aspen.git"]` updated for aspen-cache → `../aspen-nix/crates/aspen-cache`
+
 ### Post-Extraction State
 
-- **71 crates** in main workspace (was 79, down from 83 before round 1)
-- **~223K lines** remaining (was ~250K)
-- **148 files, ~34K lines removed** in this round
-- Pre-existing: `aspen-nix-cache-gateway` fails workspace check (iroh version mismatch in h3-iroh)
+- **67 crates** in main workspace (was 71 before nix extraction, was 79 before round 2, was 83 before round 1)
+- **~212K lines** remaining (was ~223K)
+- **~10.7K lines removed** in nix extraction round
+- **52 files changed**: 4 crate directories deleted, 4 Cargo.toml path updates
+- `cargo check --workspace` passes clean
+- Pre-existing: aspen-nix-cache-gateway still broken in aspen-nix repo (h3-iroh version mismatch) — but no longer blocks main workspace

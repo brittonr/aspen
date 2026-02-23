@@ -13,7 +13,7 @@ aspen-rpc-core = { path = "../aspen-rpc-core", features = ["ci", "forge", "blob"
 aspen-client-api = { workspace = true, features = ["ci"] }
 aspen-core = { path = "../aspen-core" }
 aspen-ci = { path = "../../../aspen-ci/crates/aspen-ci", features = ["nickel"] }
-aspen-cache = { path = "../aspen-cache" }
+aspen-cache = { path = "../../../aspen-nix/crates/aspen-cache" }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-jobs = { path = "../aspen-jobs" }
