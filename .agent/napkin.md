@@ -746,7 +746,7 @@ aspen-sql-plugin (WASM, priority 940):
 - aspen-nix-cache-gateway was already broken (h3-iroh version mismatch) — extraction removes it from workspace check
 - `[patch."https://github.com/brittonr/aspen.git"]` updated for aspen-cache → `../aspen-nix/crates/aspen-cache`
 
-### Post-Extraction State
+### Post-Extraction State (after nix round)
 
 - **67 crates** in main workspace (was 71 before nix extraction, was 79 before round 2, was 83 before round 1)
 - **~212K lines** remaining (was ~223K)
@@ -754,3 +754,47 @@ aspen-sql-plugin (WASM, priority 940):
 - **52 files changed**: 4 crate directories deleted, 4 Cargo.toml path updates
 - `cargo check --workspace` passes clean
 - Pre-existing: aspen-nix-cache-gateway still broken in aspen-nix repo (h3-iroh version mismatch) — but no longer blocks main workspace
+
+## Recent Changes (2026-02-23) — Domain Crate Extractions Round 3
+
+### 6 Domain Crates Extracted (~77K lines)
+
+| Crate | Lines | Destination | Retained in Main |
+|-------|-------|-------------|------------------|
+| aspen-forge | 14.9K | ~/git/aspen-forge | forge-handler (1.9K), forge-protocol (490) |
+| aspen-secrets | 7K | ~/git/aspen-secrets | secrets-handler (1.4K) |
+| aspen-coordination | 34.6K | ~/git/aspen-coordination | coordination-protocol (498) |
+| aspen-docs | 4.5K | ~/git/aspen-docs | docs-handler (945) |
+| aspen-federation | 6.3K | ~/git/aspen-federation | — (cluster has optional dep) |
+| aspen-hooks | 9.1K | ~/git/aspen-hooks | hooks-handler (375), hooks-types (2K) |
+
+### Pattern: NO workspace = true in Extracted Crates
+
+- **Gotcha**: Extracted crates using `{ workspace = true }` → git deps → pulls entire aspen repo from git → type duplication with local workspace crates (two versions of aspen-raft, aspen-kv-types, etc.)
+- **Fix**: ALL extracted crates must use direct `path = "../../../aspen/crates/..."` deps, NOT `{ workspace = true }` with git URLs
+- Extracted workspace Cargo.toml can still exist but subcrate deps must be explicit paths
+- The [patch] section handles cross-workspace git dep overrides for crates that use `{ git = "..." }` in OTHER repos (aspen-ci, aspen-nix)
+
+### Post-Extraction State (after round 3)
+
+- **61 crates** in main workspace (was 67 before round 3, was 83 before round 1)
+- **255 files changed, 77,191 lines removed**
+- `cargo check --workspace` passes clean
+- Also updated aspen-nix/Cargo.toml to point aspen-secrets to new extracted location
+
+### Total Extractions Across All Rounds
+
+| Repo | Crates | Lines |
+|------|--------|-------|
+| ~/git/aspen-ci | 6 | ~19.5K |
+| ~/git/aspen-automerge | 1 | ~2.4K |
+| ~/git/aspen-tui | 1 | ~2K |
+| ~/git/aspen-nix | 4 | ~10.7K |
+| ~/git/aspen-pijul | (extracted earlier) | — |
+| ~/git/aspen-dns | (extracted earlier) | — |
+| ~/git/aspen-forge | 1 | ~14.9K |
+| ~/git/aspen-secrets | 1 | ~7K |
+| ~/git/aspen-coordination | 1 | ~34.6K |
+| ~/git/aspen-docs | 1 | ~4.5K |
+| ~/git/aspen-federation | 1 | ~6.3K |
+| ~/git/aspen-hooks | 1 | ~9.1K |
