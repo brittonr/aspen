@@ -964,3 +964,53 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 - `aspen-rpc-core` depends on `aspen-client-api` (has request/response types) but `aspen-core` does NOT
 - Feature flags propagate: job-handler needs `aspen-rpc-core/jobs` + `aspen-rpc-core/worker` for ctx fields
 - `ClientRpcRequest::variant_name()` exists on the request enum — use it for `can_handle()` dispatch
+
+## Recent Changes (2026-02-23) — Crate Extractions Round 4
+
+### 6 Crates Extracted + 2 Inlined (~10K lines)
+
+| Crate | Lines | Destination | Notes |
+|-------|-------|-------------|-------|
+| aspen-layer | 4,439 | ~/git/aspen-layer | Standalone (zero workspace deps) |
+| aspen-dht-discovery | 1,344 | ~/git/aspen-dht-discovery | Standalone (zero workspace deps) |
+| aspen-sql | 2,574 | ~/git/aspen-sql | Deps: aspen-core, aspen-storage-types |
+| aspen-coordination-protocol | 498 | ~/git/aspen-coordination/crates/ | Pure serde types, zero deps |
+| aspen-forge-protocol | 490 | ~/git/aspen-forge/crates/ | Pure serde types, zero deps |
+| aspen-jobs-protocol | 263 | ~/git/aspen-jobs/crates/ | Pure serde types, zero deps |
+| aspen-crypto-types | 353 | inlined → aspen-core/src/crypto.rs | Was just re-exported |
+| aspen-vault | 199 | inlined → aspen-core/src/vault.rs | Was just re-exported |
+
+### Post-Extraction State
+
+- **46 crates** in main workspace (was 54 before, was 83 at start)
+- **~191K lines** remaining (was ~201K before round 4)
+- **16 extracted repos** total
+- `cargo check --workspace` passes clean
+
+### Clippy Fixes (pre-commit)
+
+- Added `Default` impls for `DocsHandlerFactory` and `JobHandlerFactory`
+- `.iter().cloned().collect()` → `.to_vec()` in job_to_details
+- `#[allow(clippy::too_many_arguments)]` on handle_submit (9 args)
+
+### Cross-Workspace Path Deps Updated
+
+- `aspen-client-api/Cargo.toml`: 3 protocol crate paths → `../../../aspen-{name}/crates/...`
+- `aspen-job-handler/Cargo.toml`: jobs-protocol path → `../../../aspen-jobs/crates/...`
+- `aspen-core/Cargo.toml`: aspen-layer path → `../../../aspen-layer/crates/...`
+- Root Cargo.toml [patch] section: 6 new entries for extracted crates
+
+### Remaining Extraction Candidates
+
+**Hard (many cross-deps, skip for now):**
+- aspen-raft (34.8K, 8 reverse deps, vendored openraft)
+- aspen-cluster (18.6K, 12 reverse deps)
+- aspen-core (12.4K, 29 reverse deps — central hub)
+- aspen-client-api (9.6K, 16 reverse deps)
+- aspen-client (11.9K, 15 reverse deps)
+- aspen-auth (5.2K, 9 reverse deps)
+- aspen-transport (4K, 6 reverse deps)
+- aspen-sharding (4.5K, 6 reverse deps)
+- aspen-testing cluster (5 crates, ~12K, many cross-deps)
+- aspen-cluster-bridges (2.3K, 5 workspace deps)
+- aspen-hooks-types (2K, 5 reverse deps)
