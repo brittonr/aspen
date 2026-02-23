@@ -616,8 +616,8 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "blake3",
- "bolero 0.13.4",
- "bolero-generator 0.13.5",
+ "bolero",
+ "bolero-generator",
  "bytes",
  "cargo-nextest",
  "chrono",
@@ -1127,11 +1127,9 @@ dependencies = [
  "aspen-constants",
  "aspen-core",
  "aspen-kv-types",
- "aspen-testing",
  "aspen-time",
  "aspen-traits",
  "async-trait",
- "bolero 0.11.1",
  "rand 0.9.2",
  "serde",
  "serde_json",
@@ -1248,7 +1246,6 @@ dependencies = [
  "aspen-client",
  "aspen-core",
  "aspen-raft",
- "aspen-testing",
  "async-channel",
  "async-trait",
  "base64 0.22.1",
@@ -1261,12 +1258,10 @@ dependencies = [
  "iroh-docs",
  "iroh-tickets 0.2.0",
  "postcard",
- "proptest",
  "rand 0.9.2",
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -1297,7 +1292,6 @@ dependencies = [
  "aspen-core",
  "aspen-hlc",
  "aspen-sharding",
- "aspen-testing",
  "async-trait",
  "blake3",
  "bytes",
@@ -1328,7 +1322,6 @@ dependencies = [
  "aspen-blob",
  "aspen-cluster",
  "aspen-core",
- "aspen-testing",
  "async-trait",
  "base64 0.22.1",
  "bincode",
@@ -1349,16 +1342,13 @@ dependencies = [
  "n0-future",
  "parking_lot",
  "postcard",
- "rand 0.9.2",
  "serde",
  "serde_json",
  "sha1 0.10.6",
  "snafu 0.8.9",
  "ssh-key",
- "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "tokio-test",
  "tokio-util",
  "tracing",
 ]
@@ -1445,7 +1435,6 @@ dependencies = [
  "nix 0.29.0",
  "parking_lot",
  "postcard",
- "proptest",
  "rand 0.9.2",
  "rmp-serde",
  "schemars 0.8.22",
@@ -1816,8 +1805,8 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "blake3",
- "bolero 0.13.4",
- "bolero-generator 0.13.5",
+ "bolero",
+ "bolero-generator",
  "bytes",
  "chrono",
  "datafusion",
@@ -1971,8 +1960,8 @@ dependencies = [
  "aspen-wasm-plugin",
  "async-trait",
  "blake3",
- "bolero 0.13.4",
- "bolero-generator 0.13.5",
+ "bolero",
+ "bolero-generator",
  "iroh 0.95.1",
  "iroh-gossip",
  "irpc",
@@ -2010,14 +1999,12 @@ dependencies = [
  "hex",
  "iroh 0.95.1",
  "postcard",
- "proptest",
  "rand 0.9.2",
  "rcgen 0.13.2",
  "schemars 0.8.22",
  "serde",
  "serde_json",
  "snafu 0.8.9",
- "tempfile",
  "thiserror 2.0.18",
  "time",
  "tokio",
@@ -2927,44 +2914,18 @@ dependencies = [
 
 [[package]]
 name = "bolero"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "449a08ce58d0325f2a1df902aa326a84ab49c6aa2844f1a88fe5e0fc23c75010"
-dependencies = [
- "bolero-afl 0.11.0",
- "bolero-engine 0.11.2",
- "bolero-generator 0.11.1",
- "bolero-honggfuzz 0.11.0",
- "bolero-kani 0.11.2",
- "bolero-libfuzzer 0.11.0",
- "cfg-if",
- "rand 0.8.5",
-]
-
-[[package]]
-name = "bolero"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ff44d278fc0062c95327087ed96b3d256906d1d8f579e534a3de8d6b386913a"
 dependencies = [
- "bolero-afl 0.13.0",
- "bolero-engine 0.13.4",
- "bolero-generator 0.13.5",
- "bolero-honggfuzz 0.13.0",
- "bolero-kani 0.13.0",
- "bolero-libfuzzer 0.13.0",
+ "bolero-afl",
+ "bolero-engine",
+ "bolero-generator",
+ "bolero-honggfuzz",
+ "bolero-kani",
+ "bolero-libfuzzer",
  "cfg-if",
  "rand 0.9.2",
-]
-
-[[package]]
-name = "bolero-afl"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73c04ea97df540ec2224453cb006f4ab6cacc99636f9f6660b381970448bbaac"
-dependencies = [
- "bolero-engine 0.11.2",
- "cc",
 ]
 
 [[package]]
@@ -2973,23 +2934,8 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9bf4cbd0bacf9356d3c7e5d9d088480f2076ba3c595c15ee9a6a378cdd7b297"
 dependencies = [
- "bolero-engine 0.13.4",
+ "bolero-engine",
  "cc",
-]
-
-[[package]]
-name = "bolero-engine"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2558810916445396d4fa12415183c96cfeac7c9e84ef230dc33e2e1f8beca41e"
-dependencies = [
- "anyhow",
- "backtrace",
- "bolero-generator 0.11.1",
- "lazy_static",
- "pretty-hex",
- "rand 0.8.5",
- "rand_xoshiro 0.6.0",
 ]
 
 [[package]]
@@ -2999,7 +2945,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dca199170a7c92c669c1019f9219a316b66bcdcfa4b36cac5a460a4c1a851aba"
 dependencies = [
  "anyhow",
- "bolero-generator 0.13.5",
+ "bolero-generator",
  "lazy_static",
  "pretty-hex",
  "rand 0.9.2",
@@ -3008,38 +2954,15 @@ dependencies = [
 
 [[package]]
 name = "bolero-generator"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c6b00e768523c6e13397f1e5e6cef7f8dbd01621ffd7aa6dec74b5ba3e1cf94"
-dependencies = [
- "bolero-generator-derive 0.11.0",
- "either",
- "rand_core 0.6.4",
-]
-
-[[package]]
-name = "bolero-generator"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98a5782f2650f80d533f58ec339c6dce4cc5428f9c2755894f98156f52af81f2"
 dependencies = [
- "bolero-generator-derive 0.13.4",
+ "bolero-generator-derive",
  "either",
  "getrandom 0.3.4",
  "rand_core 0.9.5",
  "rand_xoshiro 0.7.0",
-]
-
-[[package]]
-name = "bolero-generator-derive"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bea8182a94fa5c6d0db1666969d0094e79d6b93eb68689325a375b1d8804a12b"
-dependencies = [
- "proc-macro-crate 2.0.0",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -3056,29 +2979,11 @@ dependencies = [
 
 [[package]]
 name = "bolero-honggfuzz"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b744c6bda3711a1c88ab7cbd5053b53daca1c7380d05cfa3af39c99d0ec52c0"
-dependencies = [
- "bolero-engine 0.11.2",
-]
-
-[[package]]
-name = "bolero-honggfuzz"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a118ef27295eddefadc6a99728ee698d1b18d2e80dc4777d21bee3385096ffd"
 dependencies = [
- "bolero-engine 0.13.4",
-]
-
-[[package]]
-name = "bolero-kani"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aee97a8044096c7b4a6fb4f5f5003544ad98277ebc7a65567a6c4ea912393388"
-dependencies = [
- "bolero-engine 0.11.2",
+ "bolero-engine",
 ]
 
 [[package]]
@@ -3087,17 +2992,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "852ea5784a9f3e68bfd302ca80b8b863bce140593eb5770fee6ab110899c28fc"
 dependencies = [
- "bolero-engine 0.13.4",
-]
-
-[[package]]
-name = "bolero-libfuzzer"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aae3b3751a4b0dc94696063eace32fd9d3ddea904ae9e18d87c81de787023508"
-dependencies = [
- "bolero-engine 0.11.2",
- "cc",
+ "bolero-engine",
 ]
 
 [[package]]
@@ -3106,7 +3001,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "858dc57c11725c52662501fa79fdbc6f7050339a05ca1bf1e587add0fed40d62"
 dependencies = [
- "bolero-engine 0.13.4",
+ "bolero-engine",
  "cc",
 ]
 

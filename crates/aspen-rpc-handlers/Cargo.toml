@@ -14,7 +14,7 @@ aspen-client = { path = "../aspen-client" }
 aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-ticket = { workspace = true }
-aspen-coordination = { path = "../aspen-coordination" }
+aspen-coordination = { path = "../../../aspen-coordination/crates/aspen-coordination" }
 aspen-kv-handler = { path = "../aspen-kv-handler" }
 aspen-core-essentials-handler = { path = "../aspen-core-essentials-handler" }
 aspen-cluster-handler = { path = "../aspen-cluster-handler" }
@@ -23,18 +23,18 @@ aspen-blob-handler = { path = "../aspen-blob-handler", optional = true }
 
 aspen-sql = { path = "../aspen-sql", optional = true }
 aspen-auth = { path = "../aspen-auth" }
-aspen-forge = { path = "../aspen-forge", optional = true }
+aspen-forge = { path = "../../../aspen-forge/crates/aspen-forge", optional = true }
 aspen-forge-handler = { path = "../aspen-forge-handler", optional = true }
 aspen-hooks-types = { path = "../aspen-hooks-types" }
-aspen-hooks = { path = "../aspen-hooks", optional = true }
+aspen-hooks = { path = "../../../aspen-hooks/crates/aspen-hooks", optional = true }
 aspen-jobs = { path = "../aspen-jobs", optional = true }
 aspen-raft = { path = "../aspen-raft" }
 aspen-cluster = { path = "../aspen-cluster" }
 aspen-transport = { path = "../aspen-transport" }
 aspen-sharding = { path = "../aspen-sharding" }
-aspen-docs = { path = "../aspen-docs", optional = true }
+aspen-docs = { path = "../../../aspen-docs/crates/aspen-docs", optional = true }
 aspen-docs-handler = { path = "../aspen-docs-handler", optional = true }
-aspen-secrets = { path = "../aspen-secrets", optional = true }
+aspen-secrets = { path = "../../../aspen-secrets/crates/aspen-secrets", optional = true }
 aspen-secrets-handler = { path = "../aspen-secrets-handler", optional = true }
 aspen-ci = { path = "../../../aspen-ci/crates/aspen-ci", optional = true }
 aspen-ci-handler = { path = "../aspen-ci-handler", optional = true }

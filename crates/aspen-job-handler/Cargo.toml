@@ -13,7 +13,7 @@ aspen-rpc-core = { path = "../aspen-rpc-core", features = ["worker", "jobs"] }
 aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-jobs = { path = "../aspen-jobs" }
-aspen-coordination = { path = "../aspen-coordination" }
+aspen-coordination = { path = "../../../aspen-coordination/crates/aspen-coordination" }
 aspen-cluster = { path = "../aspen-cluster" }
 
 # Core dependencies

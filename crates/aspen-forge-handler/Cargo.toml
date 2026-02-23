@@ -13,7 +13,7 @@ aspen-rpc-core = { path = "../aspen-rpc-core", features = ["blob", "forge"] }
 aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-blob = { path = "../aspen-blob" }
-aspen-forge = { path = "../aspen-forge" }
+aspen-forge = { path = "../../../aspen-forge/crates/aspen-forge" }
 aspen-cluster = { path = "../aspen-cluster", features = ["federation"] }
 
 # Core dependencies

@@ -18,7 +18,7 @@ plugins-wasm = ["dep:hyperlight-wasm", "blob"]
 [dependencies]
 # Core dependencies
 aspen-core = { path = "../aspen-core" }
-aspen-coordination = { path = "../aspen-coordination" }
+aspen-coordination = { path = "../../../aspen-coordination/crates/aspen-coordination" }
 
 # Extracted crates for lighter dependencies
 aspen-constants = { path = "../aspen-constants" }

@@ -12,11 +12,11 @@ aspen-constants = { path = "../aspen-constants" }
 aspen-core = { path = "../aspen-core" }
 aspen-auth = { path = "../aspen-auth" }
 aspen-hooks-types = { path = "../aspen-hooks-types" }
-aspen-hooks = { path = "../aspen-hooks", optional = true }
+aspen-hooks = { path = "../../../aspen-hooks/crates/aspen-hooks", optional = true }
 aspen-jobs = { path = "../aspen-jobs", optional = true }
 aspen-raft = { path = "../aspen-raft" }
 aspen-sharding = { path = "../aspen-sharding" }
-aspen-coordination = { path = "../aspen-coordination" }
+aspen-coordination = { path = "../../../aspen-coordination/crates/aspen-coordination" }
 
 # Async/trait support
 tokio = { version = "1.0", features = ["sync"] }
@@ -31,7 +31,7 @@ inventory = "0.3"
 # Optional dependencies (feature-gated)
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-sql = { path = "../aspen-sql", optional = true }
-aspen-forge = { path = "../aspen-forge", optional = true }
+aspen-forge = { path = "../../../aspen-forge/crates/aspen-forge", optional = true }
 # Note: aspen-secrets is NOT included here because SecretsService is handler-specific
 # and defined in aspen-rpc-handlers. Handler extraction will need trait abstraction.
 aspen-ci = { path = "../../../aspen-ci/crates/aspen-ci", optional = true }

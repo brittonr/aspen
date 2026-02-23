@@ -12,7 +12,7 @@ aspen-rpc-core = { path = "../aspen-rpc-core" }
 # Local crates
 aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
-aspen-docs = { path = "../aspen-docs" }
+aspen-docs = { path = "../../../aspen-docs/crates/aspen-docs" }
 
 # Core dependencies
 async-trait = "0.1"

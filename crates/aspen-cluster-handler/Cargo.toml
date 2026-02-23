@@ -14,7 +14,7 @@ aspen-client-api = { workspace = true }
 aspen-client = { path = "../aspen-client" }
 aspen-core = { path = "../aspen-core" }
 aspen-ticket = { workspace = true }
-aspen-docs = { path = "../aspen-docs", optional = true }
+aspen-docs = { path = "../../../aspen-docs/crates/aspen-docs", optional = true }
 
 # Core dependencies
 async-trait = "0.1"

@@ -12,7 +12,7 @@ aspen-rpc-core = { path = "../aspen-rpc-core" }
 # Local crates
 aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
-aspen-secrets = { path = "../aspen-secrets" }
+aspen-secrets = { path = "../../../aspen-secrets/crates/aspen-secrets" }
 
 # Core dependencies
 tokio = { version = "1.0", features = ["macros"] }
