@@ -58,12 +58,11 @@ members = [
     "crates/aspen-traits",
     "crates/aspen-core",
     "crates/aspen-hlc",
-    "crates/aspen-layer",
+    # aspen-layer extracted to ~/git/aspen-layer
     "crates/aspen-time",
     "crates/aspen-disk",
     "crates/aspen-storage-types",
-    "crates/aspen-vault",
-    "crates/aspen-crypto-types",
+    # aspen-vault and aspen-crypto-types inlined into aspen-core
     # aspen-coordination extracted to ~/git/aspen-coordination
     "crates/aspen-blob",
     "crates/aspen-raft-types",
@@ -79,7 +78,7 @@ members = [
     "crates/aspen-testing-madsim",
     "crates/aspen-testing-network",
     "crates/aspen-ticket",
-    "crates/aspen-sql",
+    # aspen-sql extracted to ~/git/aspen-sql
     "crates/aspen-auth",
     "crates/aspen-sharding",
     # aspen-forge extracted to ~/git/aspen-forge
@@ -109,11 +108,11 @@ members = [
     "crates/aspen-docs-handler",
     "crates/aspen-cluster-handler",
     # aspen-federation extracted to ~/git/aspen-federation
-    "crates/aspen-coordination-protocol",
-    "crates/aspen-forge-protocol",
-    "crates/aspen-jobs-protocol",
+    # aspen-coordination-protocol → ~/git/aspen-coordination
+    # aspen-forge-protocol → ~/git/aspen-forge
+    # aspen-jobs-protocol → ~/git/aspen-jobs
     "crates/aspen-proxy",
-    "crates/aspen-dht-discovery",
+    # aspen-dht-discovery extracted to ~/git/aspen-dht-discovery
     "crates/aspen-plugin-api",
     "crates/aspen-wasm-plugin",
     "crates/aspen-wasm-guest-sdk",
@@ -182,16 +181,15 @@ aspen-cluster-types = { path = "crates/aspen-cluster-types" }
 aspen-core = { path = "crates/aspen-core" }
 aspen-hlc = { path = "crates/aspen-hlc" }
 aspen-kv-types = { path = "crates/aspen-kv-types" }
-aspen-layer = { path = "crates/aspen-layer" }
+aspen-layer = { path = "../aspen-layer/crates/aspen-layer" }
 aspen-time = { path = "crates/aspen-time" }
 aspen-disk = { path = "crates/aspen-disk" }
 aspen-storage-types = { path = "crates/aspen-storage-types" }
-aspen-vault = { path = "crates/aspen-vault" }
-aspen-crypto-types = { path = "crates/aspen-crypto-types" }
+# aspen-vault and aspen-crypto-types inlined into aspen-core
 aspen-traits = { path = "crates/aspen-traits" }
 aspen-coordination = { path = "../aspen-coordination/crates/aspen-coordination" }
 aspen-blob = { path = "crates/aspen-blob" }
-aspen-sql = { path = "crates/aspen-sql" }
+aspen-sql = { path = "../aspen-sql/crates/aspen-sql" }
 aspen-auth = { path = "crates/aspen-auth" }
 aspen-sharding = { path = "crates/aspen-sharding" }
 aspen-raft-types = { path = "crates/aspen-raft-types" }
@@ -256,10 +254,10 @@ aspen-snix = { path = "../aspen-nix/crates/aspen-snix" }
 aspen-nix-cache-gateway = { path = "../aspen-nix/crates/aspen-nix-cache-gateway" }
 aspen-federation = { path = "../aspen-federation/crates/aspen-federation" }
 aspen-proxy = { path = "crates/aspen-proxy" }
-aspen-coordination-protocol = { path = "crates/aspen-coordination-protocol" }
-aspen-forge-protocol = { path = "crates/aspen-forge-protocol" }
-aspen-jobs-protocol = { path = "crates/aspen-jobs-protocol" }
-aspen-dht-discovery = { path = "crates/aspen-dht-discovery" }
+aspen-coordination-protocol = { path = "../aspen-coordination/crates/aspen-coordination-protocol" }
+aspen-forge-protocol = { path = "../aspen-forge/crates/aspen-forge-protocol" }
+aspen-jobs-protocol = { path = "../aspen-jobs/crates/aspen-jobs-protocol" }
+aspen-dht-discovery = { path = "../aspen-dht-discovery/crates/aspen-dht-discovery" }
 aspen-plugin-api = { path = "crates/aspen-plugin-api" }
 aspen-wasm-plugin = { path = "crates/aspen-wasm-plugin" }
 
@@ -782,7 +780,13 @@ aspen-testing = { path = "crates/aspen-testing" }
 aspen-wasm-guest-sdk = { path = "crates/aspen-wasm-guest-sdk" }
 aspen-plugin-api = { path = "crates/aspen-plugin-api" }
 aspen-coordination = { path = "../aspen-coordination/crates/aspen-coordination" }
+aspen-coordination-protocol = { path = "../aspen-coordination/crates/aspen-coordination-protocol" }
 aspen-docs = { path = "../aspen-docs/crates/aspen-docs" }
 aspen-secrets = { path = "../aspen-secrets/crates/aspen-secrets" }
 aspen-hooks = { path = "../aspen-hooks/crates/aspen-hooks" }
 aspen-federation = { path = "../aspen-federation/crates/aspen-federation" }
+aspen-forge-protocol = { path = "../aspen-forge/crates/aspen-forge-protocol" }
+aspen-jobs-protocol = { path = "../aspen-jobs/crates/aspen-jobs-protocol" }
+aspen-layer = { path = "../aspen-layer/crates/aspen-layer" }
+aspen-sql = { path = "../aspen-sql/crates/aspen-sql" }
+aspen-dht-discovery = { path = "../aspen-dht-discovery/crates/aspen-dht-discovery" }

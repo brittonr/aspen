@@ -26,6 +26,12 @@ pub use executor::DocsServiceExecutor;
 /// Registers the docs handler with the RPC framework via inventory.
 pub struct DocsHandlerFactory;
 
+impl Default for DocsHandlerFactory {
+    fn default() -> Self {
+        Self
+    }
+}
+
 impl DocsHandlerFactory {
     /// Create a new docs handler factory.
     pub const fn new() -> Self {

@@ -30,7 +30,7 @@ inventory = "0.3"
 
 # Optional dependencies (feature-gated)
 aspen-blob = { path = "../aspen-blob", optional = true }
-aspen-sql = { path = "../aspen-sql", optional = true }
+aspen-sql = { path = "../../../aspen-sql/crates/aspen-sql", optional = true }
 aspen-forge = { path = "../../../aspen-forge/crates/aspen-forge", optional = true }
 # Note: aspen-secrets is NOT included here because SecretsService is handler-specific
 # and defined in aspen-rpc-handlers. Handler extraction will need trait abstraction.

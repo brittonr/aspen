@@ -1154,15 +1154,13 @@ dependencies = [
  "anyhow",
  "aspen-cluster-types",
  "aspen-constants",
- "aspen-crypto-types",
  "aspen-disk",
  "aspen-hlc",
  "aspen-kv-types",
  "aspen-layer",
- "aspen-storage-types",
+ "aspen-storage-types 0.1.0",
  "aspen-time",
  "aspen-traits",
- "aspen-vault",
  "async-trait",
  "base64 0.22.1",
  "bincode",
@@ -1196,15 +1194,6 @@ dependencies = [
  "aspen-testing",
  "async-trait",
  "tokio",
-]
-
-[[package]]
-name = "aspen-crypto-types"
-version = "0.1.0"
-dependencies = [
- "postcard",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1601,9 +1590,7 @@ dependencies = [
 name = "aspen-layer"
 version = "0.1.0"
 dependencies = [
- "proptest",
  "serde",
- "serde_json",
  "snafu 0.8.9",
 ]
 
@@ -1712,7 +1699,7 @@ dependencies = [
  "aspen-redb-storage",
  "aspen-sharding",
  "aspen-sql",
- "aspen-storage-types",
+ "aspen-storage-types 0.1.0",
  "aspen-testing",
  "aspen-time",
  "aspen-traits",
@@ -1997,7 +1984,7 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "aspen-core",
- "aspen-storage-types",
+ "aspen-storage-types 0.1.0 (git+https://github.com/brittonr/aspen.git?branch=main)",
  "async-trait",
  "bincode",
  "datafusion",
@@ -2006,7 +1993,6 @@ dependencies = [
  "regex",
  "serde",
  "snafu 0.8.9",
- "tempfile",
  "tokio",
 ]
 
@@ -2024,6 +2010,16 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "postcard",
+ "redb 2.6.3",
+ "serde",
+]
+
+[[package]]
+name = "aspen-storage-types"
+version = "0.1.0"
+source = "git+https://github.com/brittonr/aspen.git?branch=main#cc38b482459cee2e19d04c3cd4f5d640c5f197ea"
+dependencies = [
+ "bincode",
  "redb 2.6.3",
  "serde",
 ]
@@ -2194,13 +2190,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
-]
-
-[[package]]
-name = "aspen-vault"
-version = "0.1.0"
-dependencies = [
- "thiserror 2.0.18",
 ]
 
 [[package]]

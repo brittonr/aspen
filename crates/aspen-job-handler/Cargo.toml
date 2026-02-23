@@ -19,7 +19,7 @@ aspen-core = { path = "../aspen-core" }
 aspen-jobs = { path = "../../../aspen-jobs/crates/aspen-jobs" }
 
 # Jobs protocol response types (in main aspen repo)
-aspen-jobs-protocol = { path = "../aspen-jobs-protocol" }
+aspen-jobs-protocol = { path = "../../../aspen-jobs/crates/aspen-jobs-protocol" }
 
 # Worker coordination
 aspen-coordination = { path = "../../../aspen-coordination/crates/aspen-coordination" }

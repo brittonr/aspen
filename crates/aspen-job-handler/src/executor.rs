@@ -7,7 +7,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
-use aspen_client_api::{ClientRpcRequest, ClientRpcResponse};
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use aspen_cluster::worker_service::WorkerService;
 use aspen_coordination::DistributedWorkerCoordinator;
 use aspen_coordination::WorkerInfo as CoordWorkerInfo;
@@ -95,7 +96,10 @@ impl ServiceExecutor for JobServiceExecutor {
                 retry_delay_ms,
                 schedule,
                 tags,
-            } => self.handle_submit(job_type, payload, priority, timeout_ms, max_retries, retry_delay_ms, schedule, tags).await,
+            } => {
+                self.handle_submit(job_type, payload, priority, timeout_ms, max_retries, retry_delay_ms, schedule, tags)
+                    .await
+            }
             ClientRpcRequest::JobGet { job_id } => self.handle_get(job_id).await,
             ClientRpcRequest::JobList {
                 status,
@@ -117,10 +121,9 @@ impl ServiceExecutor for JobServiceExecutor {
                 capabilities,
                 capacity_jobs,
             } => self.handle_worker_register(worker_id, capabilities, capacity_jobs).await,
-            ClientRpcRequest::WorkerHeartbeat {
-                worker_id,
-                active_jobs,
-            } => self.handle_worker_heartbeat(worker_id, active_jobs).await,
+            ClientRpcRequest::WorkerHeartbeat { worker_id, active_jobs } => {
+                self.handle_worker_heartbeat(worker_id, active_jobs).await
+            }
             ClientRpcRequest::WorkerDeregister { worker_id } => self.handle_worker_deregister(worker_id).await,
             _ => anyhow::bail!("unhandled request for jobs service"),
         }
@@ -163,7 +166,7 @@ fn job_to_details(job: &aspen_jobs::Job) -> JobDetails {
         progress: job.progress.unwrap_or(0),
         progress_message: job.progress_message.clone(),
         payload: serde_json::to_string(&job.spec.payload).unwrap_or_default(),
-        tags: job.spec.config.tags.iter().cloned().collect(),
+        tags: job.spec.config.tags.to_vec(),
         submitted_at: job.created_at.to_rfc3339(),
         started_at: job.started_at.map(|t| t.to_rfc3339()),
         completed_at: job.completed_at.map(|t| t.to_rfc3339()),
@@ -191,6 +194,7 @@ fn job_to_details(job: &aspen_jobs::Job) -> JobDetails {
 // =============================================================================
 
 impl JobServiceExecutor {
+    #[allow(clippy::too_many_arguments)]
     async fn handle_submit(
         &self,
         job_type: String,
@@ -369,13 +373,8 @@ impl JobServiceExecutor {
     async fn handle_cancel(&self, job_id_str: String) -> Result<ClientRpcResponse> {
         let job_id = JobId::from_string(job_id_str);
 
-        let previous_status = self
-            .job_manager
-            .get_job(&job_id)
-            .await
-            .ok()
-            .flatten()
-            .map(|j| job_status_to_string(&j.status));
+        let previous_status =
+            self.job_manager.get_job(&job_id).await.ok().flatten().map(|j| job_status_to_string(&j.status));
 
         match self.job_manager.cancel_job(&job_id).await {
             Ok(()) => Ok(ClientRpcResponse::JobCancelResult(JobCancelResultResponse {
@@ -403,18 +402,14 @@ impl JobServiceExecutor {
         let job_id = JobId::from_string(job_id_str);
 
         match self.job_manager.update_progress(&job_id, progress, message).await {
-            Ok(()) => Ok(ClientRpcResponse::JobUpdateProgressResult(
-                JobUpdateProgressResultResponse {
-                    is_success: true,
-                    error: None,
-                },
-            )),
-            Err(e) => Ok(ClientRpcResponse::JobUpdateProgressResult(
-                JobUpdateProgressResultResponse {
-                    is_success: false,
-                    error: Some(e.to_string()),
-                },
-            )),
+            Ok(()) => Ok(ClientRpcResponse::JobUpdateProgressResult(JobUpdateProgressResultResponse {
+                is_success: true,
+                error: None,
+            })),
+            Err(e) => Ok(ClientRpcResponse::JobUpdateProgressResult(JobUpdateProgressResultResponse {
+                is_success: false,
+                error: Some(e.to_string()),
+            })),
         }
     }
 
@@ -571,13 +566,11 @@ impl JobServiceExecutor {
 
     async fn handle_worker_heartbeat(&self, worker_id: String, active_jobs: Vec<String>) -> Result<ClientRpcResponse> {
         let Some(ref wc) = self.worker_coordinator else {
-            return Ok(ClientRpcResponse::WorkerHeartbeatResult(
-                WorkerHeartbeatResultResponse {
-                    is_success: false,
-                    jobs_to_process: vec![],
-                    error: Some("worker coordinator not available".to_string()),
-                },
-            ));
+            return Ok(ClientRpcResponse::WorkerHeartbeatResult(WorkerHeartbeatResultResponse {
+                is_success: false,
+                jobs_to_process: vec![],
+                error: Some("worker coordinator not available".to_string()),
+            }));
         };
 
         let stats = WorkerStats {
@@ -591,46 +584,36 @@ impl JobServiceExecutor {
         };
 
         match wc.heartbeat(&worker_id, stats).await {
-            Ok(()) => Ok(ClientRpcResponse::WorkerHeartbeatResult(
-                WorkerHeartbeatResultResponse {
-                    is_success: true,
-                    jobs_to_process: vec![],
-                    error: None,
-                },
-            )),
-            Err(e) => Ok(ClientRpcResponse::WorkerHeartbeatResult(
-                WorkerHeartbeatResultResponse {
-                    is_success: false,
-                    jobs_to_process: vec![],
-                    error: Some(e.to_string()),
-                },
-            )),
+            Ok(()) => Ok(ClientRpcResponse::WorkerHeartbeatResult(WorkerHeartbeatResultResponse {
+                is_success: true,
+                jobs_to_process: vec![],
+                error: None,
+            })),
+            Err(e) => Ok(ClientRpcResponse::WorkerHeartbeatResult(WorkerHeartbeatResultResponse {
+                is_success: false,
+                jobs_to_process: vec![],
+                error: Some(e.to_string()),
+            })),
         }
     }
 
     async fn handle_worker_deregister(&self, worker_id: String) -> Result<ClientRpcResponse> {
         let Some(ref wc) = self.worker_coordinator else {
-            return Ok(ClientRpcResponse::WorkerDeregisterResult(
-                WorkerDeregisterResultResponse {
-                    is_success: false,
-                    error: Some("worker coordinator not available".to_string()),
-                },
-            ));
+            return Ok(ClientRpcResponse::WorkerDeregisterResult(WorkerDeregisterResultResponse {
+                is_success: false,
+                error: Some("worker coordinator not available".to_string()),
+            }));
         };
 
         match wc.deregister_worker(&worker_id).await {
-            Ok(()) => Ok(ClientRpcResponse::WorkerDeregisterResult(
-                WorkerDeregisterResultResponse {
-                    is_success: true,
-                    error: None,
-                },
-            )),
-            Err(e) => Ok(ClientRpcResponse::WorkerDeregisterResult(
-                WorkerDeregisterResultResponse {
-                    is_success: false,
-                    error: Some(e.to_string()),
-                },
-            )),
+            Ok(()) => Ok(ClientRpcResponse::WorkerDeregisterResult(WorkerDeregisterResultResponse {
+                is_success: true,
+                error: None,
+            })),
+            Err(e) => Ok(ClientRpcResponse::WorkerDeregisterResult(WorkerDeregisterResultResponse {
+                is_success: false,
+                error: Some(e.to_string()),
+            })),
         }
     }
 }

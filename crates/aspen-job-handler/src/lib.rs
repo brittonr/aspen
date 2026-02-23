@@ -16,11 +16,16 @@ use aspen_rpc_core::HandlerFactory;
 use aspen_rpc_core::RequestHandler;
 use aspen_rpc_core::ServiceHandler;
 use aspen_rpc_core::submit_handler_factory;
-
 pub use executor::JobServiceExecutor;
 
 /// Handler factory for the job/worker service.
 pub struct JobHandlerFactory;
+
+impl Default for JobHandlerFactory {
+    fn default() -> Self {
+        Self
+    }
+}
 
 impl JobHandlerFactory {
     pub const fn new() -> Self {
@@ -36,13 +41,8 @@ impl HandlerFactory for JobHandlerFactory {
         let worker_coordinator = ctx.worker_coordinator.clone();
         let node_id = ctx.node_id;
 
-        let executor = Arc::new(JobServiceExecutor::new(
-            job_manager,
-            kv_store,
-            worker_service,
-            worker_coordinator,
-            node_id,
-        ));
+        let executor =
+            Arc::new(JobServiceExecutor::new(job_manager, kv_store, worker_service, worker_coordinator, node_id));
         Some(Arc::new(ServiceHandler::new(executor)))
     }
 

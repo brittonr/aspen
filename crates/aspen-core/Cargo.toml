@@ -22,7 +22,7 @@ aspen-kv-types = { path = "../aspen-kv-types" }
 aspen-traits = { path = "../aspen-traits" }
 
 # Layer types (FoundationDB-compatible tuple encoding and subspace layer)
-aspen-layer = { path = "../aspen-layer" }
+aspen-layer = { path = "../../../aspen-layer/crates/aspen-layer" }
 
 # Time utilities (extracted from utils.rs)
 aspen-time = { path = "../aspen-time" }
@@ -33,11 +33,8 @@ aspen-disk = { path = "../aspen-disk" }
 # Storage types (extracted from storage.rs)
 aspen-storage-types = { path = "../aspen-storage-types" }
 
-# Vault key validation (extracted from vault.rs)
-aspen-vault = { path = "../aspen-vault" }
-
-# Crypto types (extracted from crypto.rs)
-aspen-crypto-types = { path = "../aspen-crypto-types" }
+# thiserror used by inlined vault module
+# (aspen-vault and aspen-crypto-types inlined into this crate)
 
 # Async traits
 async-trait = "0.1"

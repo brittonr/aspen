@@ -21,7 +21,7 @@ aspen-cluster-handler = { path = "../aspen-cluster-handler" }
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-blob-handler = { path = "../aspen-blob-handler", optional = true }
 
-aspen-sql = { path = "../aspen-sql", optional = true }
+aspen-sql = { path = "../../../aspen-sql/crates/aspen-sql", optional = true }
 aspen-auth = { path = "../aspen-auth" }
 aspen-forge = { path = "../../../aspen-forge/crates/aspen-forge", optional = true }
 aspen-forge-handler = { path = "../aspen-forge-handler", optional = true }

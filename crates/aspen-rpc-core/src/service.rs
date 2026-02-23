@@ -91,11 +91,12 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use aspen_client_api::{ClientRpcRequest, ClientRpcResponse};
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use async_trait::async_trait;
 
-use crate::handler::RequestHandler;
 use crate::ClientProtocolContext;
+use crate::handler::RequestHandler;
 
 /// Typed executor for domain-specific request handling.
 ///
@@ -210,11 +211,7 @@ impl RequestHandler for ServiceHandler {
         self.handles.contains(&variant)
     }
 
-    async fn handle(
-        &self,
-        request: ClientRpcRequest,
-        _ctx: &ClientProtocolContext,
-    ) -> Result<ClientRpcResponse> {
+    async fn handle(&self, request: ClientRpcRequest, _ctx: &ClientProtocolContext) -> Result<ClientRpcResponse> {
         self.executor.execute(request).await
     }
 
