@@ -48,19 +48,35 @@
     keepOutputs = true;
     max-jobs = "auto";
     builders = "";
-    # Binary caches
+    # ── Binary Caches ─────────────────────────────────────────────────
+    # Cargo dependency artifacts (cargoArtifacts, nodeCargoArtifacts,
+    # cliCargoArtifacts) are the most expensive derivations (~2000 crates).
+    # Push them to a binary cache to save 10-30 min per CI run:
+    #
+    #   Option A — Cachix (hosted):
+    #     $ cachix create aspen
+    #     $ nix build .#cargoArtifacts .#nodeCargoArtifacts .#cliCargoArtifacts
+    #     $ cachix push aspen ./result
+    #
+    #   Option B — Attic (self-hosted):
+    #     $ attic cache create aspen
+    #     $ nix build .#cargoArtifacts .#nodeCargoArtifacts .#cliCargoArtifacts
+    #     $ attic push aspen ./result
+    #     Then uncomment the substituter/key lines below.
+    #
     extra-substituters = [
       "https://cache.nixos.org"
       # microvm.nix provides pre-built Cloud Hypervisor kernels and VM components
       "https://microvm.cachix.org"
-      # TODO: Add your Harmonia/Attic URL for project-specific cache, e.g.:
-      # "https://cache.yourserver.com"
+      # Uncomment after setting up your project cache:
+      # "https://aspen.cachix.org"           # Cachix
+      # "https://cache.yourserver.com/aspen"  # Attic / Harmonia
     ];
     extra-trusted-public-keys = [
       "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
       "microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys="
-      # TODO: Add your cache public key, e.g.:
-      # "cache.yourserver.com-1:AAAA..."
+      # Uncomment after setting up your project cache:
+      # "aspen.cachix.org-1:XXXX..."
     ];
     # Network reliability
     connect-timeout = 30;
@@ -161,59 +177,148 @@
           }
         );
 
-        # Use crane's path to properly include vendored openraft
-        rawSrc = craneLib.path {
-          path = ./.;
-          # Include everything - vendored openraft needs to be included
-          filter = path: type: true;
+        # Use lib.fileset for precise source inclusion — only Rust/Cargo files
+        # and vendored sources. Changes to docs, scripts, .agent/, etc. won't
+        # trigger rebuilds.
+        rawSrc = lib.fileset.toSource {
+          root = ./.;
+          fileset = lib.fileset.unions [
+            ./Cargo.toml
+            ./Cargo.lock
+            ./.cargo
+            ./build.rs
+            ./rust-toolchain.toml
+            ./src
+            ./crates
+            ./openraft
+            ./vendor
+            ./tests
+            ./benches
+            ./examples
+            ./scripts/tutorial-verify
+          ];
         };
 
         # Patch source for Nix builds:
         # 1. Remove [patch] section from .cargo/config.toml
         # 2. Add git source lines to snix packages in Cargo.lock
+        # 3. Create stub crates for extracted sibling-repo dependencies
         # This is needed because:
         # - Local dev uses [patch] to point to ../snix/snix/* for fast iteration
         # - The [patch] section causes Cargo.lock to have path deps (no source line)
         # - Nix builds need git sources in Cargo.lock for Crane to vendor them
         # - overrideVendorGitCheckout then substitutes snix-src for the git fetch
+        # - Sibling repos (aspen-tui, aspen-automerge, aspen-ci, aspen-nix) are
+        #   referenced via path = "../repo/..." in workspace deps but don't exist
+        #   in the Nix sandbox. We create empty stub crates so cargo can parse the
+        #   workspace manifest. Features gated behind these deps are not built.
         snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559"'';
         src = pkgs.runCommand "aspen-src-patched" {} ''
-          cp -r ${rawSrc} $out
-          chmod -R u+w $out
+            cp -r ${rawSrc} $out
+            chmod -R u+w $out
 
-          # Remove [patch.*] sections from cargo config for Nix builds
-          if [ -f $out/.cargo/config.toml ]; then
-            ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/.cargo/config.toml
-          fi
+            # Remove [patch.*] sections from cargo config for Nix builds
+            if [ -f $out/.cargo/config.toml ]; then
+              ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/.cargo/config.toml
+            fi
 
-          # Add git source lines to snix packages in Cargo.lock (idempotent)
-          # This is needed because local dev with [patch] removes the source lines
-          # Use awk to check if source already exists before inserting
-          for pkg in nix-compat nix-compat-derive snix-castore snix-cli snix-store snix-tracing; do
-            ${pkgs.gawk}/bin/awk -v pkg="$pkg" -v src='${snixGitSource}' '
-              /^name = "/ && $0 ~ "\"" pkg "\"" { found=1 }
-              found && /^version = "0.1.0"$/ {
-                print
-                if ((getline nextline) > 0) {
-                  if (nextline !~ /^source = /) {
+            # Add git source lines to snix packages in Cargo.lock (idempotent)
+            # This is needed because local dev with [patch] removes the source lines
+            # Use awk to check if source already exists before inserting
+            for pkg in nix-compat nix-compat-derive snix-castore snix-cli snix-store snix-tracing; do
+              ${pkgs.gawk}/bin/awk -v pkg="$pkg" -v src='${snixGitSource}' '
+                /^name = "/ && $0 ~ "\"" pkg "\"" { found=1 }
+                found && /^version = "0.1.0"$/ {
+                  print
+                  if ((getline nextline) > 0) {
+                    if (nextline !~ /^source = /) {
+                      print src
+                    }
+                    print nextline
+                  } else {
                     print src
                   }
-                  print nextline
-                } else {
-                  print src
+                  found=0
+                  next
                 }
-                found=0
-                next
-              }
-              { print }
-            ' $out/Cargo.lock > $out/Cargo.lock.tmp && mv $out/Cargo.lock.tmp $out/Cargo.lock
-          done
-        '';
+                { print }
+              ' $out/Cargo.lock > $out/Cargo.lock.tmp && mv $out/Cargo.lock.tmp $out/Cargo.lock
+            done
+
+            # ── Stub crates for extracted sibling repos ─────────────────
+            # These repos live at ../aspen-{tui,automerge,ci,nix}/ locally but
+            # don't exist in the Nix sandbox. Create minimal stub crates inside
+            # the source tree at .nix-stubs/ and rewrite all path references
+            # to point there instead. The actual code behind these optional
+            # features is not compiled in Nix builds.
+            stub_crate() {
+              local dir="$1" name="$2"
+              shift 2
+              mkdir -p "$dir/src"
+              {
+                echo '[package]'
+                echo "name = \"$name\""
+                echo 'version = "0.1.0"'
+                echo 'edition = "2024"'
+                echo '[features]'
+                for feat in "$@"; do
+                  echo "$feat = []"
+                done
+              } > "$dir/Cargo.toml"
+              echo "// stub for Nix builds" > "$dir/src/lib.rs"
+            }
+
+            STUBS="$out/.nix-stubs"
+            stub_crate "$STUBS/aspen-tui" "aspen-tui"
+            stub_crate "$STUBS/aspen-automerge" "aspen-automerge"
+            stub_crate "$STUBS/aspen-nickel" "aspen-nickel"
+            stub_crate "$STUBS/aspen-ci" "aspen-ci" nickel shell-executor plugins-vm
+            stub_crate "$STUBS/aspen-ci-core" "aspen-ci-core"
+            stub_crate "$STUBS/aspen-ci-executor-shell" "aspen-ci-executor-shell"
+            stub_crate "$STUBS/aspen-ci-executor-nix" "aspen-ci-executor-nix"
+            stub_crate "$STUBS/aspen-ci-executor-vm" "aspen-ci-executor-vm"
+            stub_crate "$STUBS/aspen-cache" "aspen-cache"
+            stub_crate "$STUBS/aspen-snix" "aspen-snix"
+            stub_crate "$STUBS/aspen-nix-cache-gateway" "aspen-nix-cache-gateway"
+            stub_crate "$STUBS/aspen-nix-handler" "aspen-nix-handler" cache snix
+
+            # Rewrite workspace path deps from sibling repos to .nix-stubs/
+            ${pkgs.gnused}/bin/sed -i \
+              -e 's|path = "\.\./aspen-tui/crates/aspen-tui"|path = ".nix-stubs/aspen-tui"|g' \
+              -e 's|path = "\.\./aspen-automerge/crates/aspen-automerge"|path = ".nix-stubs/aspen-automerge"|g' \
+              -e 's|path = "\.\./aspen-ci/crates/aspen-nickel"|path = ".nix-stubs/aspen-nickel"|g' \
+              -e 's|path = "\.\./aspen-ci/crates/aspen-ci"|path = ".nix-stubs/aspen-ci"|g' \
+              -e 's|path = "\.\./aspen-ci/crates/aspen-ci-core"|path = ".nix-stubs/aspen-ci-core"|g' \
+              -e 's|path = "\.\./aspen-ci/crates/aspen-ci-executor-shell"|path = ".nix-stubs/aspen-ci-executor-shell"|g' \
+              -e 's|path = "\.\./aspen-ci/crates/aspen-ci-executor-nix"|path = ".nix-stubs/aspen-ci-executor-nix"|g' \
+              -e 's|path = "\.\./aspen-ci/crates/aspen-ci-executor-vm"|path = ".nix-stubs/aspen-ci-executor-vm"|g' \
+              -e 's|path = "\.\./aspen-nix/crates/aspen-cache"|path = ".nix-stubs/aspen-cache"|g' \
+              -e 's|path = "\.\./aspen-nix/crates/aspen-snix"|path = ".nix-stubs/aspen-snix"|g' \
+              -e 's|path = "\.\./aspen-nix/crates/aspen-nix-cache-gateway"|path = ".nix-stubs/aspen-nix-cache-gateway"|g' \
+              -e 's|path = "\.\./aspen-nix/crates/aspen-nix-handler"|path = ".nix-stubs/aspen-nix-handler"|g' \
+              $out/Cargo.toml
+
+            # Also rewrite crate-level path deps that point to sibling repos.
+            # From crates/X/, "../../../repo/crates/Y" → "../../.nix-stubs/Y"
+            find $out/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
+              -e 's|path = "\.\./\.\./\.\./aspen-ci/crates/aspen-ci"|path = "../../.nix-stubs/aspen-ci"|g' \
+              -e 's|path = "\.\./\.\./\.\./aspen-ci/crates/aspen-nickel"|path = "../../.nix-stubs/aspen-nickel"|g' \
+              -e 's|path = "\.\./\.\./\.\./aspen-nix/crates/aspen-cache"|path = "../../.nix-stubs/aspen-cache"|g' \
+              -e 's|path = "\.\./\.\./\.\./aspen-nix/crates/aspen-nix-cache-gateway"|path = "../../.nix-stubs/aspen-nix-cache-gateway"|g' \
+              -e 's|path = "\.\./\.\./\.\./aspen-nix/crates/aspen-nix-handler"|path = "../../.nix-stubs/aspen-nix-handler"|g' \
+              {} \;
+
+          '';
 
         basicArgs = {
           inherit src;
           inherit pname;
           strictDeps = true;
+
+          # Use --offline instead of --locked because stub crates for extracted
+          # sibling repos (.nix-stubs/) cause Cargo.lock drift. Cargo can update
+          # the lockfile offline since all deps are vendored.
+          cargoExtraArgs = "--offline";
 
           nativeBuildInputs = with pkgs; [
             git
@@ -262,12 +367,38 @@
             else drv;
         };
 
-        # Build *just* the cargo dependencies, so we can reuse
-        # all of that work (e.g. via cachix) when running in CI
+        # ── Cargo Dependency Artifacts ───────────────────────────────
+        # Split by feature set so each build variant hits a warm cache.
+        # Push all three to your binary cache for fastest CI.
+
+        # Base cargo artifacts — deps only, no feature flags.
+        # Used by builds without special features (TUI, CI agent).
         cargoArtifacts = craneLib.buildDepsOnly (
           basicArgs
           // {
             inherit cargoVendorDir;
+          }
+        );
+
+        # Node-specific cargo artifacts — pre-compiles deps with the full
+        # node feature set so aspen-node builds hit warm cache.
+        nodeCargoArtifacts = craneLib.buildDepsOnly (
+          basicArgs
+          // {
+            inherit cargoVendorDir;
+            pnameSuffix = "-deps-node";
+            cargoExtraArgs = "--offline --features ci,docs,hooks,shell-worker,automerge,secrets";
+          }
+        );
+
+        # CLI-specific cargo artifacts — pre-compiles deps with the union
+        # of all CLI feature flags so every CLI variant hits warm cache.
+        cliCargoArtifacts = craneLib.buildDepsOnly (
+          basicArgs
+          // {
+            inherit cargoVendorDir;
+            pnameSuffix = "-deps-cli";
+            cargoExtraArgs = "--offline -p aspen-cli --features forge,secrets,ci,automerge,proxy,sql";
           }
         );
 
@@ -314,6 +445,20 @@
             CARGO_INCREMENTAL = "1";
             # Use more aggressive caching
             CARGO_BUILD_INCREMENTAL = "true";
+          };
+
+        # Node-specific arguments — uses nodeCargoArtifacts for faster node builds
+        nodeCommonArgs =
+          commonArgs
+          // {
+            cargoArtifacts = nodeCargoArtifacts;
+          };
+
+        # CLI-specific arguments — uses cliCommonArgs for faster CLI builds
+        cliCommonArgs =
+          commonArgs
+          // {
+            cargoArtifacts = cliCargoArtifacts;
           };
 
         # ── Hyperlight WASM Plugin Support ──────────────────────────────
@@ -736,7 +881,7 @@
             features ? [],
           }:
             craneLib.buildPackage (
-              commonArgs
+              nodeCommonArgs
               // {
                 inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
                 cargoExtraArgs =
@@ -750,7 +895,7 @@
 
           # Build aspen-cli from its own crate
           aspen-cli-crate = craneLib.buildPackage (
-            commonArgs
+            cliCommonArgs
             // {
               inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
               cargoExtraArgs = "--package aspen-cli --bin aspen-cli";
@@ -760,7 +905,7 @@
 
           # Build aspen-cli with forge features (push, signed tags, export-key)
           aspen-cli-forge-crate = craneLib.buildPackage (
-            commonArgs
+            cliCommonArgs
             // {
               inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
               cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features forge";
@@ -773,7 +918,7 @@
           # otherwise postcard enum discriminants are misaligned and responses
           # deserialize to wrong variants.
           aspen-cli-secrets-crate = craneLib.buildPackage (
-            commonArgs
+            cliCommonArgs
             // {
               inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
               cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features secrets,ci,automerge";
@@ -785,7 +930,7 @@
           # Must include ci,automerge to match node's aspen-client-api enum layout
           # (postcard uses variant indices; cfg-gated variants shift indices)
           aspen-cli-plugins-crate = craneLib.buildPackage (
-            commonArgs
+            cliCommonArgs
             // {
               inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
               cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features plugins-rpc,ci,automerge";
@@ -796,7 +941,7 @@
           # Build aspen-cli with full features for comprehensive testing
           # Must include ci to match node's aspen-client-api enum layout
           aspen-cli-full-crate = craneLib.buildPackage (
-            commonArgs
+            cliCommonArgs
             // {
               inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
               cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features automerge,sql,ci";
@@ -806,7 +951,7 @@
 
           # Build aspen-cli with CI features (CI pipelines + Nix cache)
           aspen-cli-ci-crate = craneLib.buildPackage (
-            commonArgs
+            cliCommonArgs
             // {
               inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
               cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features ci";
@@ -816,7 +961,7 @@
 
           # Build aspen-cli with proxy features (TCP tunnel + HTTP forward proxy)
           aspen-cli-proxy-crate = craneLib.buildPackage (
-            commonArgs
+            cliCommonArgs
             // {
               inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
               cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features proxy";
@@ -2269,10 +2414,10 @@
               netwatch = netwatch;
               vm-test-setup = vm-test-setup;
               vm-test-run = vm-test-run;
-              # Pre-built cargo dependencies for CI VM builds
-              # Building this on host before VM spawn allows the VM to skip
-              # recompiling 2000+ cargo crate derivations
-              inherit cargoArtifacts;
+              # Pre-built cargo dependencies for CI and binary cache.
+              # Push these to your cache first — they're the most expensive derivations.
+              #   nix build .#cargoArtifacts .#nodeCargoArtifacts .#cliCargoArtifacts
+              inherit cargoArtifacts nodeCargoArtifacts cliCargoArtifacts;
               # Verus formal verification tool (binary release with proper library setup)
               inherit verus;
               # Direct access to all Verus binaries (rust_verify, cargo-verus, z3, etc.)
