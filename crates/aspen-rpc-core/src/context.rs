@@ -126,6 +126,12 @@ pub struct ClientProtocolContext {
     /// Nix cache signer for narinfo signing (optional).
     #[cfg(feature = "nix-cache-gateway")]
     pub nix_cache_signer: Option<Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>>,
+    /// Service executors for WASM plugin host function dispatch.
+    ///
+    /// Each executor handles a domain (docs, jobs, etc.) and is called
+    /// by the `service_execute` host function. Created during node setup
+    /// by the handler crates that own the concrete service types.
+    pub service_executors: Vec<Arc<dyn aspen_core::ServiceExecutor>>,
     /// Application registry for capability-aware dispatch and federation advertisement.
     ///
     /// Populated automatically during handler registration. Used to:
@@ -185,7 +191,7 @@ impl ClientProtocolContext {
 // Test Support
 // =============================================================================
 
-#[cfg(any(test, feature = "testing"))]
+#[cfg(feature = "testing")]
 pub mod test_support {
     //! Test utilities for creating mock `ClientProtocolContext` instances.
     //!
@@ -469,6 +475,7 @@ pub mod test_support {
                 ci_trigger_service: None,
                 #[cfg(feature = "nix-cache-gateway")]
                 nix_cache_signer: None,
+                service_executors: Vec::new(),
                 app_registry: aspen_core::shared_registry(),
                 proxy_config: ProxyConfig::default(),
             }

@@ -123,6 +123,12 @@ pub struct PluginHostContext {
     /// Contains the static handler config (names, patterns, types).
     #[cfg(feature = "hooks")]
     pub hooks_config: aspen_hooks_types::HooksConfig,
+    /// Service executors for domain-specific operations.
+    ///
+    /// Each executor handles a domain (docs, jobs, CI, etc.) invoked
+    /// by the `service_execute` host function. Created during node
+    /// setup and passed through `ClientProtocolContext`.
+    pub service_executors: Vec<Arc<dyn aspen_core::ServiceExecutor>>,
 }
 
 impl PluginHostContext {
@@ -152,6 +158,7 @@ impl PluginHostContext {
             hook_service: None,
             #[cfg(feature = "hooks")]
             hooks_config: aspen_hooks_types::HooksConfig::default(),
+            service_executors: Vec::new(),
         }
     }
 
@@ -229,6 +236,12 @@ impl PluginHostContext {
     #[cfg(feature = "hooks")]
     pub fn with_hooks_config(mut self, config: aspen_hooks_types::HooksConfig) -> Self {
         self.hooks_config = config;
+        self
+    }
+
+    /// Set the service executors for domain-specific operations.
+    pub fn with_service_executors(mut self, executors: Vec<Arc<dyn aspen_core::ServiceExecutor>>) -> Self {
+        self.service_executors = executors;
         self
     }
 }
@@ -1217,6 +1230,16 @@ pub fn register_plugin_host_functions(
         })
         .map_err(|e| anyhow::anyhow!("failed to register kv_execute: {e}"))?;
 
+    // -- Generic service executor dispatch --
+    if !ctx.service_executors.is_empty() {
+        let ctx_service = Arc::clone(&ctx);
+        proto
+            .register("service_execute", move |request_json: String| -> String {
+                service_execute_impl(&ctx_service, &request_json)
+            })
+            .map_err(|e| anyhow::anyhow!("failed to register service_execute: {e}"))?;
+    }
+
     Ok(())
 }
 
@@ -1619,6 +1642,44 @@ async fn kv_exec_conditional_batch(
             "error": format!("{e}"), "error_code": null, "leader_id": null,
         })),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Generic service executor dispatch
+// ---------------------------------------------------------------------------
+
+/// Execute a domain-specific service operation.
+///
+/// Takes a JSON request with a `"service"` field to identify the executor
+/// and forwards the rest to `ServiceExecutor::execute()`.
+///
+/// # Request Format
+///
+/// ```json
+/// {"service": "docs", "op": "set", "key": "my-key", "value": "..."}
+/// ```
+///
+/// # Response Format
+///
+/// Returns the executor's tagged string: `\0{json}` or `\x01{error}`.
+fn service_execute_impl(ctx: &PluginHostContext, request_json: &str) -> String {
+    let request: serde_json::Value = match serde_json::from_str(request_json) {
+        Ok(r) => r,
+        Err(e) => return format!("\x01invalid JSON: {e}"),
+    };
+
+    let service = match request["service"].as_str() {
+        Some(s) => s,
+        None => return "\x01missing 'service' field".to_string(),
+    };
+
+    let executor = match ctx.service_executors.iter().find(|e| e.service_name() == service) {
+        Some(e) => Arc::clone(e),
+        None => return format!("\x01unknown service: {service}"),
+    };
+
+    let handle = tokio::runtime::Handle::current();
+    handle.block_on(async { executor.execute(request_json).await })
 }
 
 /// Base64-encode bytes for JSON transport.

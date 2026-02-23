@@ -41,9 +41,10 @@
 mod context;
 mod handler;
 pub mod proxy;
+pub mod service;
 
 pub use context::ClientProtocolContext;
-#[cfg(any(test, feature = "testing"))]
+#[cfg(feature = "testing")]
 pub use context::test_support;
 pub use handler::HandlerFactory;
 pub use handler::RequestHandler;
@@ -51,3 +52,5 @@ pub use handler::collect_handler_factories;
 // Re-export inventory for use in submit_handler_factory! macro
 pub use inventory;
 pub use proxy::ProxyConfig;
+pub use service::ServiceExecutor;
+pub use service::ServiceHandler;

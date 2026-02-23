@@ -426,6 +426,9 @@ async fn load_plugin(
         host_ctx_val = host_ctx_val.with_hooks_config(ctx.hooks_config.clone());
     }
 
+    // Wire service executors from context
+    host_ctx_val = host_ctx_val.with_service_executors(ctx.service_executors.clone());
+
     let host_ctx = Arc::new(host_ctx_val);
     register_plugin_host_functions(&mut proto, host_ctx)?;
 

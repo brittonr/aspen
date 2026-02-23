@@ -44,6 +44,8 @@ pub mod response;
 
 // Re-export types that plugin authors need.
 // KV response types for handler plugins.
+// Docs response types for handler plugins.
+pub use aspen_client_api::AddPeerClusterResultResponse;
 pub use aspen_client_api::BatchCondition;
 pub use aspen_client_api::BatchReadResultResponse;
 pub use aspen_client_api::BatchWriteOperation;
@@ -53,6 +55,12 @@ pub use aspen_client_api::ClientRpcResponse;
 pub use aspen_client_api::CompareAndSwapResultResponse;
 pub use aspen_client_api::ConditionalBatchWriteResultResponse;
 pub use aspen_client_api::DeleteResultResponse;
+pub use aspen_client_api::DocsDeleteResultResponse;
+pub use aspen_client_api::DocsGetResultResponse;
+pub use aspen_client_api::DocsListEntry;
+pub use aspen_client_api::DocsListResultResponse;
+pub use aspen_client_api::DocsSetResultResponse;
+pub use aspen_client_api::DocsStatusResultResponse;
 pub use aspen_client_api::ErrorResponse;
 // Hook response types for handler plugins.
 pub use aspen_client_api::HookHandlerInfo;
@@ -60,12 +68,33 @@ pub use aspen_client_api::HookHandlerMetrics;
 pub use aspen_client_api::HookListResultResponse;
 pub use aspen_client_api::HookMetricsResultResponse;
 pub use aspen_client_api::HookTriggerResultResponse;
+// Job/Worker response types for handler plugins.
+pub use aspen_client_api::JobCancelResultResponse;
+pub use aspen_client_api::JobDetails;
+pub use aspen_client_api::JobGetResultResponse;
+pub use aspen_client_api::JobListResultResponse;
+pub use aspen_client_api::JobQueueStatsResultResponse;
+pub use aspen_client_api::JobSubmitResultResponse;
+pub use aspen_client_api::JobUpdateProgressResultResponse;
+pub use aspen_client_api::KeyOriginResultResponse;
+pub use aspen_client_api::ListPeerClustersResultResponse;
+pub use aspen_client_api::PeerClusterInfo;
+pub use aspen_client_api::PeerClusterStatusResponse;
 pub use aspen_client_api::ReadResultResponse;
+pub use aspen_client_api::RemovePeerClusterResultResponse;
 pub use aspen_client_api::ScanEntry;
 pub use aspen_client_api::ScanResultResponse;
+pub use aspen_client_api::SetPeerClusterEnabledResultResponse;
 // SQL response types for handler plugins.
 pub use aspen_client_api::SqlCellValue;
 pub use aspen_client_api::SqlResultResponse;
+pub use aspen_client_api::UpdatePeerClusterFilterResultResponse;
+pub use aspen_client_api::UpdatePeerClusterPriorityResultResponse;
+pub use aspen_client_api::WorkerDeregisterResultResponse;
+pub use aspen_client_api::WorkerHeartbeatResultResponse;
+pub use aspen_client_api::WorkerInfo;
+pub use aspen_client_api::WorkerRegisterResultResponse;
+pub use aspen_client_api::WorkerStatusResultResponse;
 pub use aspen_client_api::WriteResultResponse;
 pub use aspen_plugin_api::KvBatchOp;
 pub use aspen_plugin_api::PluginHealth;

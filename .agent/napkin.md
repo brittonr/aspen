@@ -864,3 +864,103 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 - Removed aspen-ci-executor-nix from aspen-nix workspace (lives in aspen-ci)
 - Added `default-members` to exclude aspen-nix-cache-gateway from default builds (h3-iroh 0.96 vs iroh 0.95.1 mismatch)
 - `cargo metadata --all-features` passes; `cargo check --workspace` still fails on cache-gateway (pre-existing)
+
+## Recent Changes (2026-02-23) — Docs + Job Handler WASM Migration
+
+### ServiceExecutor Pattern (commit 29c2d2d0)
+
+- New `ServiceExecutor` trait in `aspen-core/src/context/service.rs`: `service_name() -> &str`, `execute(json) -> tagged_string`
+- Single `service_execute` host function in aspen-wasm-plugin: dispatches by `"service"` field in JSON request
+- `PluginHostContext.service_executors: Vec<Arc<dyn ServiceExecutor>>` — passed from `ClientProtocolContext`
+- Guest SDK: `execute_service(service, op, params) -> Result<Value, String>` safe wrapper
+- **Pattern: zero new deps in aspen-wasm-plugin** — trait is in aspen-core (already a dep), concrete impls in handler crates
+
+### aspen-docs-handler → aspen-docs-plugin (13 ops)
+
+- Native handler (RequestHandler + inventory) deleted, replaced by `DocsServiceExecutor` (implements ServiceExecutor)
+- WASM plugin at `crates/aspen-docs-plugin/`: priority 930, app_id "docs"
+- Uses `service_execute("docs", op, params)` to call DocsServiceExecutor on host
+- Executor captures `Arc<dyn DocsSyncProvider>` + `Option<Arc<dyn PeerManager>>` from aspen-core traits
+- Ops: set, get, delete, list, status, get_key_origin, add_peer, remove_peer, list_peers, get_peer_status, update_filter, update_priority, set_enabled
+- **Handler crate retains executor code** — just stripped inventory registration + RequestHandler impl
+
+### aspen-job-handler → aspen-job-plugin (10 ops)
+
+- Native handler (RequestHandler + inventory) deleted, replaced by `JobServiceExecutor`
+- WASM plugin at `crates/aspen-job-plugin/`: priority 960, app_id "jobs"
+- Uses `service_execute("jobs", op, params)` to call JobServiceExecutor on host
+- Executor captures `JobManager`, `WorkerService`, `DistributedWorkerCoordinator`, `kv_store`, `node_id`
+- Ops: submit, get, list, cancel, update_progress, queue_stats, worker_status, worker_register, worker_heartbeat, worker_deregister
+- **aspen-cluster needs `features = ["jobs"]`** for worker_service module visibility
+- **API gotchas**: `cancel_job` (not `cancel`), `update_progress` takes `u8` (not `u32`), `register_worker` takes `WorkerInfo` struct (not individual params), `heartbeat` takes `WorkerStats` (not `Vec<String>`)
+
+### Guest SDK Type Re-exports Added
+
+- 15 docs types: DocsSet/Get/Delete/ListResult, DocsStatusResult, KeyOriginResult, AddPeerCluster/RemovePeerCluster/ListPeerClusters/PeerClusterStatus/UpdateFilter/UpdatePriority/SetEnabledResult
+- 12 jobs types: JobSubmit/Get/List/Cancel/UpdateProgress/QueueStatsResult, WorkerStatus/Register/Heartbeat/DeregisterResult, WorkerInfo, JobDetails
+
+### Remaining Native Handlers (NOT migratable)
+
+```text
+aspen-blob-handler (1710 lines) — iroh-blobs, DHT, replication
+aspen-ci-handler (1640 lines) — forge tree walking, filesystem checkout, orchestration
+aspen-cluster-handler (1161 lines) — Raft control plane, membership
+aspen-core-essentials-handler (1136 lines) — Raft metrics, leases, watches
+aspen-forge-handler (1878 lines) — federation + git bridge only
+aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
+```
+
+### Migration Summary (cumulative)
+
+| Handler | Lines | Migration | Commit |
+|---------|-------|-----------|--------|
+| Coordination | 2323 | WASM plugin | d6e18ed2 |
+| Automerge | ~800 | WASM plugin | bb4e91e8 |
+| Secrets KV/Transit | ~1500 | WASM plugin | bb4e91e8 |
+| Service Registry | ~600 | WASM plugin | bb4e91e8 |
+| Forge (30 ops) | 2429 | WASM plugin | 125796b7 |
+| DNS | 370 | WASM plugin | a2b13405 |
+| SQL | 269 | WASM plugin | 5fe5de0f |
+| KV | 1104 | WASM plugin | 5fe5de0f |
+| Hooks | 375 | WASM plugin | 5fe5de0f |
+| Docs | 945 | WASM plugin | 29c2d2d0 |
+| Jobs/Workers | 1469 | WASM plugin | 29c2d2d0 |
+| **Total migrated** | **~12,184** | | |
+
+## Handler Unification (2026-02-23) — ServiceExecutor + ServiceHandler
+
+### New Pattern: Three-Tier Handler Architecture
+
+| Tier | Abstraction | Use Case | Registration |
+|------|-------------|----------|--------------|
+| 1 | Direct `RequestHandler` | Deep integration (blob, cluster, Raft) | `submit_handler_factory!` |
+| 2 | `ServiceExecutor` → `ServiceHandler` | Domain services (docs, jobs) | `submit_handler_factory!` via factory |
+| 3 | WASM `AspenPlugin` → `WasmPluginHandler` | Third-party sandboxed plugins | KV store manifest |
+
+### Key Types (aspen-rpc-core/src/service.rs)
+
+- **`ServiceExecutor`** trait: `service_name()`, `handles()`, `priority()`, `app_id()`, `execute(ClientRpcRequest) -> Result<ClientRpcResponse>`
+- **`ServiceHandler`** struct: wraps `Arc<dyn ServiceExecutor>` → implements `RequestHandler`
+- **Factory pattern**: `HandlerFactory::create()` extracts deps from ctx, creates executor, wraps in ServiceHandler
+
+### What Was Eliminated
+
+- `aspen-docs-plugin/` (515 lines) — pure WASM routing boilerplate
+- `aspen-job-plugin/` (482 lines) — pure WASM routing boilerplate
+- JSON ser/de roundtrip through WASM boundary for 23 operations
+- `spawn_blocking` + `Mutex` contention for first-party service calls
+- Manual field-by-field JSON→struct reconstruction (error-prone)
+
+### Coexistence with Old JSON ServiceExecutor
+
+- **Old**: `aspen_core::ServiceExecutor` (JSON strings in/out) — still exists for `service_execute` WASM host function
+- **New**: `aspen_rpc_core::ServiceExecutor` (typed) — for ServiceHandler dispatch
+- Both coexist. Old one used by remaining WASM plugins. New one used by native ServiceHandler.
+- `ClientProtocolContext.service_executors` still references old trait (for WASM).
+
+### Gotchas Learned
+
+- Workers may rewrite files you've already written — verify their output matches your spec
+- `aspen-rpc-core` depends on `aspen-client-api` (has request/response types) but `aspen-core` does NOT
+- Feature flags propagate: job-handler needs `aspen-rpc-core/jobs` + `aspen-rpc-core/worker` for ctx fields
+- `ClientRpcRequest::variant_name()` exists on the request enum — use it for `can_handle()` dispatch

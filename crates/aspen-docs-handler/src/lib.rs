@@ -1,66 +1,44 @@
-//! Docs/Sync RPC handler for Aspen.
+//! Docs/Sync service for Aspen.
 //!
-//! This crate provides the DocsHandler extracted from aspen-rpc-handlers
-//! for better modularity and faster incremental builds.
+//! Provides the `DocsServiceExecutor` for typed RPC dispatch and the
+//! `DocsHandlerFactory` for registering the handler with the RPC framework.
 //!
-//! Handles docs operations:
-//! - DocsSet: Set a document entry
-//! - DocsGet: Get a document entry
-//! - DocsDelete: Delete a document entry
-//! - DocsList: List document entries
-//! - DocsStatus: Get sync status
-//!
-//! Handles peer cluster operations:
-//! - AddPeerCluster: Add a peer cluster for sync
-//! - RemovePeerCluster: Remove a peer cluster
-//! - ListPeerClusters: List all peer clusters
-//! - GetPeerClusterStatus: Get status of a peer cluster
-//! - UpdatePeerClusterFilter: Update sync filter
-//! - UpdatePeerClusterPriority: Update sync priority
-//! - SetPeerClusterEnabled: Enable/disable sync
-//! - GetKeyOrigin: Get origin cluster for a key
+//! Handles docs operations via ClientRpcRequest:
+//! - set/get/delete/list: Document CRUD
+//! - status: Sync namespace status
+//! - get_key_origin: Origin cluster for a key
+//! - add_peer/remove_peer/list_peers: Peer federation
+//! - get_peer_status/update_filter/update_priority/set_enabled: Peer config
 
-mod handler;
+pub mod executor;
 
 use std::sync::Arc;
 
-// Re-export core types for convenience
-pub use aspen_rpc_core::ClientProtocolContext;
-pub use aspen_rpc_core::HandlerFactory;
-pub use aspen_rpc_core::RequestHandler;
-pub use handler::DocsHandler;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::HandlerFactory;
+use aspen_rpc_core::RequestHandler;
+use aspen_rpc_core::ServiceHandler;
+use aspen_rpc_core::submit_handler_factory;
+pub use executor::DocsServiceExecutor;
 
-// =============================================================================
-// Handler Factory (Plugin Registration)
-// =============================================================================
-
-/// Factory for creating `DocsHandler` instances.
+/// Handler factory for docs service.
 ///
-/// Only creates handler if docs_sync or peer_manager is available.
-/// Priority 530 (feature handler range: 500-599).
+/// Registers the docs handler with the RPC framework via inventory.
 pub struct DocsHandlerFactory;
 
 impl DocsHandlerFactory {
-    /// Create a new factory instance.
+    /// Create a new docs handler factory.
     pub const fn new() -> Self {
         Self
     }
 }
 
-impl Default for DocsHandlerFactory {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl HandlerFactory for DocsHandlerFactory {
     fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        // Only create handler if docs_sync or peer_manager is available
-        if ctx.docs_sync.is_some() || ctx.peer_manager.is_some() {
-            Some(Arc::new(DocsHandler))
-        } else {
-            None
-        }
+        let docs_sync = ctx.docs_sync.as_ref()?.clone();
+        let peer_manager = ctx.peer_manager.clone();
+        let executor = Arc::new(DocsServiceExecutor::new(docs_sync, peer_manager));
+        Some(Arc::new(ServiceHandler::new(executor)))
     }
 
     fn name(&self) -> &'static str {
@@ -70,7 +48,10 @@ impl HandlerFactory for DocsHandlerFactory {
     fn priority(&self) -> u32 {
         530
     }
+
+    fn app_id(&self) -> Option<&'static str> {
+        Some("docs")
+    }
 }
 
-// Self-register via inventory
-aspen_rpc_core::submit_handler_factory!(DocsHandlerFactory);
+submit_handler_factory!(DocsHandlerFactory);

@@ -2,28 +2,33 @@
 name = "aspen-docs-handler"
 version = "0.1.0"
 edition = "2024"
-description = "Docs/Sync RPC handler for Aspen distributed cluster"
+description = "Docs/Sync service executor for Aspen WASM plugin host dispatch"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
-# RPC core abstractions (RequestHandler trait, ClientProtocolContext)
+# Core types (DocsSyncProvider, PeerManager, SubscriptionFilter, AspenDocsTicket)
+aspen-core = { path = "../aspen-core" }
+
+# RPC types (ServiceExecutor trait, HandlerFactory, etc.)
 aspen-rpc-core = { path = "../aspen-rpc-core" }
 
-# Local crates
+# Client API types (ClientRpcRequest, ClientRpcResponse)
 aspen-client-api = { workspace = true }
-aspen-core = { path = "../aspen-core" }
-aspen-docs = { path = "../../../aspen-docs/crates/aspen-docs" }
 
-# Core dependencies
-async-trait = "0.1"
+# Error handling
 anyhow = "1.0"
+
+# Serialization
 serde_json = "1.0"
+
+# Async
+async-trait = "0.1"
+
+# Logging
 tracing = "0.1"
+
+# Factory registration
+inventory = "0.3"
 
 [features]
 default = []
-
-[dev-dependencies]
-aspen-testing = { workspace = true }
-aspen-rpc-core = { path = "../aspen-rpc-core", features = ["testing"] }
-tokio = { version = "1.0", features = ["full", "test-util"] }

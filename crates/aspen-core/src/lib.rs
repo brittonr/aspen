@@ -88,6 +88,8 @@ pub use context::PeerConnectionState;
 pub use context::PeerImporter;
 pub use context::PeerInfo;
 pub use context::PeerManager;
+// Service executor for WASM plugin host dispatch
+pub use context::ServiceExecutor;
 pub use context::ShardTopology;
 pub use context::StateMachineProvider;
 pub use context::SubscriptionFilter;

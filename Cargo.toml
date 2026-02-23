@@ -102,8 +102,10 @@ members = [
     # aspen-query-handler → replaced by aspen-sql-plugin (WASM)
     # aspen-hooks-handler → replaced by aspen-hooks-plugin (WASM)
     # aspen-kv-handler → replaced by aspen-kv-plugin (WASM)
+    # aspen-job-handler → typed ServiceExecutor (native handler via ServiceHandler)
     "crates/aspen-job-handler",
     "crates/aspen-core-essentials-handler",
+    # aspen-docs-handler → typed ServiceExecutor (native handler via ServiceHandler)
     "crates/aspen-docs-handler",
     "crates/aspen-cluster-handler",
     # aspen-federation extracted to ~/git/aspen-federation
@@ -122,6 +124,7 @@ members = [
     "crates/aspen-kv-plugin",
     "crates/aspen-sql-plugin",
     "crates/aspen-hooks-plugin",
+
 ]
 
 # Required for vendored openraft workspace inheritance

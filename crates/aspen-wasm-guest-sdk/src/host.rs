@@ -38,6 +38,7 @@ unsafe extern "C" {
     fn hook_list(unused: String) -> String;
     fn hook_metrics(handler_name: String) -> String;
     fn hook_trigger(request_json: String) -> String;
+    fn service_execute(request_json: String) -> String;
 }
 
 // ---------------------------------------------------------------------------
@@ -829,6 +830,44 @@ pub fn kv_conditional_batch_full(
             leader_id: None,
         },
     }
+}
+
+// ---------------------------------------------------------------------------
+// Generic service executor
+// ---------------------------------------------------------------------------
+
+/// Execute a domain-specific service operation via the host.
+///
+/// Calls the `service_execute` host function with a JSON request containing
+/// a `"service"` field and an `"op"` field plus operation-specific parameters.
+///
+/// Returns the parsed JSON result on success, or an error string on failure.
+///
+/// # Example
+///
+/// ```ignore
+/// let result = execute_service("docs", "set", &json!({"key": "k", "value": "v"}))?;
+/// ```
+pub fn execute_service(service: &str, op: &str, params: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let mut request = params.clone();
+    if let Some(obj) = request.as_object_mut() {
+        obj.insert("service".to_string(), serde_json::Value::String(service.to_string()));
+        obj.insert("op".to_string(), serde_json::Value::String(op.to_string()));
+    } else {
+        return Err("params must be a JSON object".to_string());
+    }
+
+    let request_str = serde_json::to_string(&request).map_err(|e| format!("serialize failed: {e}"))?;
+    let result = unsafe { service_execute(request_str) };
+    decode_tagged_json_result::<serde_json::Value>(&result)
+}
+
+/// Execute a raw service call with a pre-built JSON request string.
+///
+/// The request must contain `"service"` and `"op"` fields.
+/// Returns the raw tagged response string from the host.
+pub fn execute_service_raw(request_json: &str) -> String {
+    unsafe { service_execute(request_json.to_string()) }
 }
 
 // ---------------------------------------------------------------------------

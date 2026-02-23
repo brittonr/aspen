@@ -1275,12 +1275,10 @@ dependencies = [
  "anyhow",
  "aspen-client-api",
  "aspen-core",
- "aspen-docs",
  "aspen-rpc-core",
- "aspen-testing",
  "async-trait",
+ "inventory",
  "serde_json",
- "tokio",
  "tracing",
 ]
 
@@ -1481,11 +1479,12 @@ dependencies = [
  "aspen-coordination",
  "aspen-core",
  "aspen-jobs",
+ "aspen-jobs-protocol",
  "aspen-rpc-core",
  "async-trait",
- "base64 0.22.1",
+ "chrono",
+ "inventory",
  "serde_json",
- "tokio",
  "tracing",
 ]
 

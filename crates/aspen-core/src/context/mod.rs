@@ -17,6 +17,7 @@ mod discovery;
 mod docs;
 mod peer;
 mod protocol;
+mod service;
 mod watch;
 
 // Re-export all public types at module root for backwards compatibility
@@ -48,6 +49,8 @@ pub use protocol::NetworkFactory;
 // Shard topology
 pub use protocol::ShardTopology;
 pub use protocol::StateMachineProvider;
+// Service executor
+pub use service::ServiceExecutor;
 // Watch types
 pub use watch::InMemoryWatchRegistry;
 pub use watch::KeyOrigin;
