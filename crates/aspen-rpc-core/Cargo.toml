@@ -13,7 +13,7 @@ aspen-core = { path = "../aspen-core" }
 aspen-auth = { path = "../aspen-auth" }
 aspen-hooks-types = { path = "../aspen-hooks-types" }
 aspen-hooks = { path = "../../../aspen-hooks/crates/aspen-hooks", optional = true }
-aspen-jobs = { path = "../aspen-jobs", optional = true }
+aspen-jobs = { path = "../../../aspen-jobs/crates/aspen-jobs", optional = true }
 aspen-raft = { path = "../aspen-raft" }
 aspen-sharding = { path = "../aspen-sharding" }
 aspen-coordination = { path = "../../../aspen-coordination/crates/aspen-coordination" }

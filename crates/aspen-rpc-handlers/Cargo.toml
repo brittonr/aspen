@@ -27,7 +27,7 @@ aspen-forge = { path = "../../../aspen-forge/crates/aspen-forge", optional = tru
 aspen-forge-handler = { path = "../aspen-forge-handler", optional = true }
 aspen-hooks-types = { path = "../aspen-hooks-types" }
 aspen-hooks = { path = "../../../aspen-hooks/crates/aspen-hooks", optional = true }
-aspen-jobs = { path = "../aspen-jobs", optional = true }
+aspen-jobs = { path = "../../../aspen-jobs/crates/aspen-jobs", optional = true }
 aspen-raft = { path = "../aspen-raft" }
 aspen-cluster = { path = "../aspen-cluster" }
 aspen-transport = { path = "../aspen-transport" }

@@ -16,8 +16,8 @@ aspen-ci = { path = "../../../aspen-ci/crates/aspen-ci", features = ["nickel"] }
 aspen-cache = { path = "../../../aspen-nix/crates/aspen-cache" }
 aspen-forge = { path = "../../../aspen-forge/crates/aspen-forge", optional = true }
 aspen-blob = { path = "../aspen-blob", optional = true }
-aspen-jobs = { path = "../aspen-jobs" }
-aspen-jobs-worker-shell = { path = "../aspen-jobs-worker-shell" }
+aspen-jobs = { path = "../../../aspen-jobs/crates/aspen-jobs" }
+aspen-jobs-worker-shell = { path = "../../../aspen-jobs/crates/aspen-jobs-worker-shell" }
 
 # Core dependencies
 tokio = { version = "1.0", features = ["sync"] }
