@@ -746,15 +746,7 @@
               }
             );
 
-          # Build aspen-tui from its own crate
-          aspen-tui-crate = craneLib.buildPackage (
-            commonArgs
-            // {
-              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-tui/Cargo.toml;}) pname version;
-              cargoExtraArgs = "--package aspen-tui --bin aspen-tui";
-              doCheck = false;
-            }
-          );
+          # aspen-tui extracted to ~/git/aspen-tui
 
           # Build aspen-cli from its own crate
           aspen-cli-crate = craneLib.buildPackage (
@@ -849,15 +841,7 @@
             }
           );
 
-          # Build aspen-ci-agent binary from the aspen-ci crate
-          aspen-ci-agent-crate = craneLib.buildPackage (
-            commonArgs
-            // {
-              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-ci/Cargo.toml;}) pname version;
-              cargoExtraArgs = "--package aspen-ci --bin aspen-ci-agent";
-              doCheck = false;
-            }
-          );
+          # aspen-ci extracted to ~/git/aspen-ci
 
           # aspen-verus-metrics moved to ~/git/aspen-verus-metrics repo
 
@@ -882,7 +866,7 @@
               ]
             )
             // {
-              aspen-tui = aspen-tui-crate;
+              # aspen-tui extracted to ~/git/aspen-tui
               aspen-cli = aspen-cli-crate;
               aspen-cli-forge = aspen-cli-forge-crate;
               aspen-cli-plugins = aspen-cli-plugins-crate;
@@ -891,7 +875,7 @@
               aspen-cli-ci = aspen-cli-ci-crate;
               aspen-cli-proxy = aspen-cli-proxy-crate;
               inherit aspen-node-proxy aspen-node-plugins;
-              aspen-ci-agent = aspen-ci-agent-crate;
+              # aspen-ci-agent extracted to ~/git/aspen-ci
               inherit hyperlight-wasm-runtime;
             };
         in
@@ -910,14 +894,7 @@
               }
             );
 
-            dev-aspen-tui = craneLib.buildPackage (
-              devArgs
-              // {
-                inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-tui/Cargo.toml;}) pname version;
-                cargoExtraArgs = "--package aspen-tui --bin aspen-tui";
-                doCheck = false;
-              }
-            );
+            # dev-aspen-tui extracted to ~/git/aspen-tui
 
             # Convenience alias for the most commonly used dev build
             dev = dev-aspen-node;
@@ -1282,10 +1259,7 @@
               exePath = "/bin/aspen-node";
             };
 
-            aspen-tui = flake-utils.lib.mkApp {
-              drv = bins.aspen-tui;
-              exePath = "/bin/aspen-tui";
-            };
+            # aspen-tui extracted to ~/git/aspen-tui
 
             aspen-cli = flake-utils.lib.mkApp {
               drv = bins.aspen-cli;
@@ -1650,37 +1624,7 @@
               ''}";
             };
 
-            # Kitty terminal cluster (N nodes + TUI in tabs)
-            # Usage: nix run .#kitty-cluster
-            # Opens a kitty window with node tabs + TUI tab
-            kitty-cluster = let
-              # Bundle scripts directory so lib/cluster-common.sh is available
-              scriptsDir = pkgs.runCommand "aspen-scripts" {} ''
-                mkdir -p $out
-                cp -r ${./scripts}/* $out/
-                chmod -R +w $out
-              '';
-            in {
-              type = "app";
-              program = "${pkgs.writeShellScript "aspen-kitty-cluster" ''
-                export PATH="${
-                  pkgs.lib.makeBinPath [
-                    bins.aspen-node
-                    bins.aspen-cli
-                    bins.aspen-tui
-                    pkgs.kitty
-                    pkgs.coreutils
-                    pkgs.gnugrep
-                    pkgs.gawk
-                    pkgs.gnused
-                  ]
-                }:$PATH"
-                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
-                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
-                export ASPEN_TUI_BIN="${bins.aspen-tui}/bin/aspen-tui"
-                exec ${scriptsDir}/kitty-cluster.sh "$@"
-              ''}";
-            };
+            # kitty-cluster removed (script deleted, aspen-tui extracted)
 
             # Default: single development node with sensible defaults
             # Usage: nix run
@@ -2317,10 +2261,10 @@
             {
               default = bins.aspen-node;
               aspen-node = bins.aspen-node;
-              aspen-tui = bins.aspen-tui;
+              # aspen-tui extracted to ~/git/aspen-tui
               aspen-cli = bins.aspen-cli;
               aspen-cli-forge = bins.aspen-cli-forge;
-              aspen-ci-agent = bins.aspen-ci-agent;
+              # aspen-ci-agent extracted to ~/git/aspen-ci
               git-remote-aspen = bins.git-remote-aspen;
               netwatch = netwatch;
               vm-test-setup = vm-test-setup;

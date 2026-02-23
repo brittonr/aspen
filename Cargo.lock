@@ -595,7 +595,6 @@ dependencies = [
  "aspen-core",
  "aspen-docs",
  "aspen-forge",
- "aspen-fuse",
  "aspen-hooks",
  "aspen-hooks-types",
  "aspen-jobs",
@@ -628,7 +627,6 @@ dependencies = [
  "datafusion",
  "env_logger",
  "flate2",
- "fuse-backend-rs 0.13.1",
  "hex",
  "iroh 0.95.1",
  "iroh-base 0.95.1",
@@ -704,7 +702,6 @@ dependencies = [
  "anyhow",
  "aspen-auth",
  "aspen-core",
- "aspen-testing",
  "async-trait",
  "automerge",
  "base64 0.22.1",
@@ -712,25 +709,12 @@ dependencies = [
  "hex",
  "iroh 0.95.1",
  "postcard",
- "rand 0.9.2",
  "serde",
  "serde_json",
  "snafu 0.8.9",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "aspen-automerge-plugin"
-version = "0.1.0"
-dependencies = [
- "aspen-client-api",
- "aspen-wasm-guest-sdk",
- "base64 0.22.1",
- "hex",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -798,7 +782,6 @@ dependencies = [
  "aspen-blob",
  "aspen-cache",
  "aspen-ci-core",
- "aspen-ci-executor-nix",
  "aspen-ci-executor-shell",
  "aspen-ci-executor-vm",
  "aspen-core",
@@ -818,17 +801,14 @@ dependencies = [
  "nickel-lang",
  "nix 0.29.0",
  "postcard",
- "proptest",
  "rand 0.9.2",
  "schemars 0.8.22",
  "serde",
  "serde_json",
  "snafu 0.8.9",
  "stacker",
- "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "tokio-test",
  "tokio-util",
  "tokio-vsock",
  "toml_edit 0.22.27",
@@ -842,39 +822,11 @@ name = "aspen-ci-core"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "proptest",
  "schemars 0.8.22",
  "serde",
  "serde_json",
  "snafu 0.8.9",
  "uuid",
-]
-
-[[package]]
-name = "aspen-ci-executor-nix"
-version = "0.1.0"
-dependencies = [
- "aspen-blob",
- "aspen-cache",
- "aspen-ci-core",
- "aspen-ci-executor-shell",
- "aspen-core",
- "aspen-jobs",
- "async-trait",
- "glob",
- "hex",
- "iroh 0.95.1",
- "nix-compat",
- "proptest",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "snix-castore",
- "snix-store",
- "tempfile",
- "tokio",
- "tokio-test",
- "tracing",
 ]
 
 [[package]]
@@ -887,32 +839,18 @@ dependencies = [
  "aspen-core",
  "aspen-jobs",
  "async-trait",
- "bytes",
  "command-group",
  "flate2",
  "glob",
- "h3",
- "h3-iroh",
  "hex",
- "http 1.4.0",
- "http-body-util",
- "hyper",
- "hyper-util",
  "iroh 0.95.1",
  "iroh-blobs",
  "nix 0.29.0",
- "nix-compat",
- "proptest",
  "serde",
  "serde_json",
  "snafu 0.8.9",
- "snix-castore",
- "snix-store",
  "tar",
- "tempfile",
  "tokio",
- "tokio-stream",
- "tokio-test",
  "tracing",
 ]
 
@@ -942,14 +880,11 @@ dependencies = [
  "iroh-blobs",
  "nix 0.29.0",
  "postcard",
- "proptest",
  "serde",
  "serde_json",
  "snafu 0.8.9",
  "tar",
- "tempfile",
  "tokio",
- "tokio-test",
  "tokio-vsock",
  "tracing",
  "uuid",
@@ -1208,17 +1143,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-coordination-plugin"
-version = "0.1.0"
-dependencies = [
- "aspen-client-api",
- "aspen-wasm-guest-sdk",
- "hex",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "aspen-coordination-protocol"
 version = "0.1.0"
 dependencies = [
@@ -1461,18 +1385,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-forge-plugin"
-version = "0.1.0"
-dependencies = [
- "aspen-client-api",
- "aspen-wasm-guest-sdk",
- "blake3",
- "hex",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "aspen-forge-protocol"
 version = "0.1.0"
 dependencies = [
@@ -1492,10 +1404,8 @@ dependencies = [
  "fuse-backend-rs 0.13.1",
  "iroh 0.95.1",
  "libc",
- "nix 0.29.0",
  "postcard",
  "rand 0.9.2",
- "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1504,7 +1414,6 @@ dependencies = [
  "virtio-queue",
  "vm-memory 0.14.1",
  "vmm-sys-util 0.12.1",
- "xattr",
 ]
 
 [[package]]
@@ -1563,16 +1472,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "aspen-hooks-plugin"
-version = "0.1.0"
-dependencies = [
- "aspen-client-api",
- "aspen-wasm-guest-sdk",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1798,7 +1697,6 @@ dependencies = [
  "serde",
  "serde_json",
  "snafu 0.8.9",
- "tempfile",
  "thiserror 2.0.18",
  "tracing",
 ]
@@ -1861,20 +1759,6 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "aspen-plugin-signing"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "ed25519-dalek 2.2.0",
- "hex",
- "rand_core 0.6.4",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2165,28 +2049,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-secrets-plugin"
-version = "0.1.0"
-dependencies = [
- "aspen-client-api",
- "aspen-wasm-guest-sdk",
- "base64 0.22.1",
- "hex",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "aspen-service-registry-plugin"
-version = "0.1.0"
-dependencies = [
- "aspen-client-api",
- "aspen-wasm-guest-sdk",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "aspen-sharding"
 version = "0.1.0"
 dependencies = [
@@ -2255,16 +2117,6 @@ dependencies = [
  "snafu 0.8.9",
  "tempfile",
  "tokio",
-]
-
-[[package]]
-name = "aspen-sql-plugin"
-version = "0.1.0"
-dependencies = [
- "aspen-client-api",
- "aspen-wasm-guest-sdk",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -2446,58 +2298,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-tui"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-client",
- "aspen-core",
- "async-trait",
- "clap",
- "color-eyre",
- "crossterm 0.28.1",
- "dirs 5.0.1",
- "iroh 0.95.1",
- "log",
- "postcard",
- "rand 0.9.2",
- "ratatui",
- "serde_json",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "tui-logger",
-]
-
-[[package]]
 name = "aspen-vault"
 version = "0.1.0"
 dependencies = [
  "thiserror 2.0.18",
-]
-
-[[package]]
-name = "aspen-verus-metrics"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "blake3",
- "clap",
- "colored",
- "notify",
- "notify-debouncer-mini",
- "proc-macro2",
- "quote",
- "rayon",
- "serde",
- "serde_json",
- "similar",
- "syn 2.0.117",
- "tempfile",
- "thiserror 2.0.18",
- "toml 0.8.23",
- "walkdir",
 ]
 
 [[package]]
@@ -3488,18 +3292,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cargo-aspen-plugin"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-plugin-api",
- "aspen-plugin-signing",
- "clap",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "cargo-hyperlight"
 version = "0.1.5"
 dependencies = [
@@ -3599,25 +3391,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "cassowary"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df8670b8c7b9dae1793364eafadf7239c40d669904660c5960d74cfd80b46a53"
-
-[[package]]
 name = "cast"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
-
-[[package]]
-name = "castaway"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dec551ab6e7578819132c713a93c022a05d60159dc86e7a7050223577484c55a"
-dependencies = [
- "rustversion",
-]
 
 [[package]]
 name = "cc"
@@ -3967,20 +3744,6 @@ dependencies = [
  "nix 0.27.1",
  "tokio",
  "winapi",
-]
-
-[[package]]
-name = "compact_str"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b79c4069c6cad78e2e0cdfcbd26275770669fb39fd308a752dc110e83b9af32"
-dependencies = [
- "castaway",
- "cfg-if",
- "itoa",
- "rustversion",
- "ryu",
- "static_assertions",
 ]
 
 [[package]]
@@ -4522,16 +4285,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "darling"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25ae13da2f202d56bd7f91c25fba009e7717a1e4a1cc98a76d844b65ae912e9d"
-dependencies = [
- "darling_core 0.23.0",
- "darling_macro 0.23.0",
-]
-
-[[package]]
 name = "darling_core"
 version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4574,19 +4327,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "darling_core"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9865a50f7c335f53564bb694ef660825eb8610e0a53d3e11bf1b0d3df31e03b0"
-dependencies = [
- "ident_case",
- "proc-macro2",
- "quote",
- "strsim 0.11.1",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "darling_macro"
 version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4615,17 +4355,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81"
 dependencies = [
  "darling_core 0.21.3",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "darling_macro"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac3984ec7bd6cfa798e62b4a642426a5be0e68f9401cfc2a01e3fa9ea2fcdb8d"
-dependencies = [
- "darling_core 0.23.0",
  "quote",
  "syn 2.0.117",
 ]
@@ -5473,7 +5202,6 @@ checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
 dependencies = [
  "curve25519-dalek 4.1.3",
  "ed25519 2.2.3",
- "rand_core 0.6.4",
  "serde",
  "sha2 0.10.9",
  "signature 2.2.0",
@@ -6156,15 +5884,6 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "slab",
-]
-
-[[package]]
-name = "fxhash"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
-dependencies = [
- "byteorder",
 ]
 
 [[package]]
@@ -7615,19 +7334,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf64c2edc8226891a71f127587a2861b132d2b942310843814d5001d99a1d307"
 dependencies = [
  "smallvec",
-]
-
-[[package]]
-name = "instability"
-version = "0.3.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "357b7205c6cd18dd2c86ed312d1e70add149aea98e7ef72b9fdf0270e555c11d"
-dependencies = [
- "darling 0.23.0",
- "indoc",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -11705,27 +11411,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ratatui"
-version = "0.28.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdef7f9be5c0122f890d58bdf4d964349ba6a6161f705907526d891efabba57d"
-dependencies = [
- "bitflags 2.11.0",
- "cassowary",
- "compact_str",
- "crossterm 0.28.1",
- "instability",
- "itertools 0.13.0",
- "lru 0.12.5",
- "paste",
- "strum 0.26.3",
- "strum_macros 0.26.4",
- "unicode-segmentation",
- "unicode-truncate",
- "unicode-width 0.1.14",
-]
-
-[[package]]
 name = "rayon"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13078,12 +12763,6 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
-
-[[package]]
-name = "similar"
-version = "2.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "simple-counter"
@@ -14634,22 +14313,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tui-logger"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "618b8256e4b8f2abf852121f2d72f9d0e7f091a6456e46d0e786b640e86ad130"
-dependencies = [
- "chrono",
- "fxhash",
- "lazy_static",
- "log",
- "parking_lot",
- "ratatui",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "turmoil"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14803,17 +14466,6 @@ name = "unicode-segmentation"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6ccf251212114b54433ec949fd6a7841275f9ada20dddd2f29e9ceea4501493"
-
-[[package]]
-name = "unicode-truncate"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3644627a5af5fa321c95b9b235a72fd24cd29c648c2c379431e6628655627bf"
-dependencies = [
- "itertools 0.13.0",
- "unicode-segmentation",
- "unicode-width 0.1.14",
-]
 
 [[package]]
 name = "unicode-width"

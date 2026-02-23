@@ -684,3 +684,57 @@ aspen-sql-plugin (WASM, priority 940):
 - All removed scripts superseded by NixOS VM integration tests
 
 **Total: 373 files, ~43.6k lines removed**
+
+## Recent Changes (2026-02-23) — Crate Extractions Round 2
+
+### Extracted to ~/git/aspen-ci (6 crates, ~19.5K lines)
+
+- `aspen-ci-core`: Pure CI pipeline types (zero workspace deps)
+- `aspen-ci-executor-shell`: Shell/local executor
+- `aspen-ci-executor-nix`: Nix build executor
+- `aspen-ci-executor-vm`: Cloud Hypervisor VM executor
+- `aspen-ci`: CI/CD pipeline system with Nickel config
+- `aspen-nickel`: Nickel language support (leaf, only used by CI)
+- **Retained in main repo**: `aspen-ci-handler` (RPC integration glue)
+- CI workspace uses git deps for aspen-core/blob/cache/jobs/auth/forge/ticket
+- Main repo has `[patch."https://github.com/brittonr/aspen.git"]` to unify types
+
+### Extracted to ~/git/aspen-automerge (1 crate, ~2.4K lines)
+
+- `aspen-automerge`: Automerge CRDT document layer
+- Zero reverse deps in main workspace
+- Uses git dep for aspen-core, aspen-auth
+
+### Extracted to ~/git/aspen-tui (1 crate, ~2K lines)
+
+- `aspen-tui`: Terminal UI for cluster monitoring
+- Zero reverse deps in main workspace
+- Uses git deps for aspen-client, aspen-core
+
+### Flake Cleanup
+
+- Removed `aspen-tui` package/app/dev-build derivations
+- Removed `aspen-ci-agent` package derivation
+- Removed `kitty-cluster` app (referenced deleted script + extracted TUI)
+- Cleaned stale artifacts: n1-n5.log, supervisord.log, result* symlinks
+
+### Cross-Workspace Path Deps Pattern
+
+- Extracted repos use `git = "https://github.com/brittonr/aspen.git"` in their workspace deps
+- Main repo references extracted crates via `path = "../aspen-{name}/crates/{crate}"`
+- Main repo has `[patch."https://github.com/brittonr/aspen.git"]` section to override git deps with local paths, preventing type duplication
+- **Without the patch section**: types from git aspen-core ≠ types from workspace aspen-core → trait implementation failures (E0277)
+- Pattern: ci-handler/rpc-core/rpc-handlers use `path = "../../../aspen-ci/crates/aspen-ci"` for direct deps
+
+### Testing Cluster NOT Extracted
+
+- `aspen-testing` depends on many optional workspace crates + vendored openraft
+- `aspen-testing-madsim` has path dep to `../../openraft/openraft`
+- Too many cross-deps to cleanly extract without restructuring
+
+### Post-Extraction State
+
+- **71 crates** in main workspace (was 79, down from 83 before round 1)
+- **~223K lines** remaining (was ~250K)
+- **148 files, ~34K lines removed** in this round
+- Pre-existing: `aspen-nix-cache-gateway` fails workspace check (iroh version mismatch in h3-iroh)

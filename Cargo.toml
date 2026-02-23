@@ -91,7 +91,7 @@ members = [
     "crates/aspen-jobs-worker-sql",
     "crates/aspen-jobs-worker-maintenance",
     "crates/aspen-jobs-worker-shell",
-    "crates/aspen-tui",
+    # aspen-tui extracted to ~/git/aspen-tui
     "crates/aspen-transport",
     "crates/aspen-rpc-core",
     "crates/aspen-rpc-handlers",
@@ -101,13 +101,8 @@ members = [
     "crates/aspen-blob-handler",
     "crates/aspen-cli",
     "crates/aspen-secrets",
-    "crates/aspen-automerge",
-    "crates/aspen-nickel",
-    "crates/aspen-ci",
-    "crates/aspen-ci-core",
-    "crates/aspen-ci-executor-shell",
-    "crates/aspen-ci-executor-nix",
-    "crates/aspen-ci-executor-vm",
+    # aspen-automerge extracted to ~/git/aspen-automerge
+    # CI subsystem extracted to ~/git/aspen-ci
     "crates/aspen-ci-handler",
     "crates/aspen-nix-handler",
     "crates/aspen-query-handler",
@@ -218,7 +213,7 @@ aspen-ticket = { path = "crates/aspen-ticket" }
 aspen-forge = { path = "crates/aspen-forge" }
 aspen-hooks-types = { path = "crates/aspen-hooks-types" }
 aspen-hooks = { path = "crates/aspen-hooks" }
-aspen-tui = { path = "crates/aspen-tui" }
+aspen-tui = { path = "../aspen-tui/crates/aspen-tui" }
 aspen-transport = { path = "crates/aspen-transport" }
 aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers", default-features = false }
 aspen-cli = { path = "crates/aspen-cli" }
@@ -229,13 +224,14 @@ aspen-jobs-worker-sql = { path = "crates/aspen-jobs-worker-sql" }
 aspen-jobs-worker-maintenance = { path = "crates/aspen-jobs-worker-maintenance" }
 aspen-jobs-worker-shell = { path = "crates/aspen-jobs-worker-shell" }
 aspen-secrets = { path = "crates/aspen-secrets" }
-aspen-automerge = { path = "crates/aspen-automerge" }
-aspen-nickel = { path = "crates/aspen-nickel" }
-aspen-ci = { path = "crates/aspen-ci" }
-aspen-ci-core = { path = "crates/aspen-ci-core" }
-aspen-ci-executor-shell = { path = "crates/aspen-ci-executor-shell" }
-aspen-ci-executor-nix = { path = "crates/aspen-ci-executor-nix" }
-aspen-ci-executor-vm = { path = "crates/aspen-ci-executor-vm" }
+aspen-automerge = { path = "../aspen-automerge/crates/aspen-automerge" }
+# CI subsystem (extracted to ~/git/aspen-ci)
+aspen-nickel = { path = "../aspen-ci/crates/aspen-nickel" }
+aspen-ci = { path = "../aspen-ci/crates/aspen-ci" }
+aspen-ci-core = { path = "../aspen-ci/crates/aspen-ci-core" }
+aspen-ci-executor-shell = { path = "../aspen-ci/crates/aspen-ci-executor-shell" }
+aspen-ci-executor-nix = { path = "../aspen-ci/crates/aspen-ci-executor-nix" }
+aspen-ci-executor-vm = { path = "../aspen-ci/crates/aspen-ci-executor-vm" }
 aspen-cache = { path = "crates/aspen-cache" }
 irpc = { version = "0.11.0", features = ["derive"] }
 n0-future = "0.3.2"
@@ -773,3 +769,18 @@ required-features = ["jobs", "docs", "hooks", "federation"]
 # (removed in Cargo 1.93) with stable --message-format=json.
 [patch.crates-io]
 cargo-hyperlight = { path = "vendor/cargo-hyperlight" }
+
+# Override git deps from extracted repos to use local workspace crates
+[patch."https://github.com/brittonr/aspen.git"]
+aspen-core = { path = "crates/aspen-core" }
+aspen-blob = { path = "crates/aspen-blob" }
+aspen-cache = { path = "crates/aspen-cache" }
+aspen-jobs = { path = "crates/aspen-jobs" }
+aspen-auth = { path = "crates/aspen-auth" }
+aspen-forge = { path = "crates/aspen-forge" }
+aspen-ticket = { path = "crates/aspen-ticket" }
+aspen-client-api = { path = "crates/aspen-client-api" }
+aspen-client = { path = "crates/aspen-client" }
+aspen-testing = { path = "crates/aspen-testing" }
+aspen-wasm-guest-sdk = { path = "crates/aspen-wasm-guest-sdk" }
+aspen-plugin-api = { path = "crates/aspen-plugin-api" }

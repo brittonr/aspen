@@ -36,7 +36,7 @@ aspen-docs = { path = "../aspen-docs", optional = true }
 aspen-docs-handler = { path = "../aspen-docs-handler", optional = true }
 aspen-secrets = { path = "../aspen-secrets", optional = true }
 aspen-secrets-handler = { path = "../aspen-secrets-handler", optional = true }
-aspen-ci = { path = "../aspen-ci", optional = true }
+aspen-ci = { path = "../../../aspen-ci/crates/aspen-ci", optional = true }
 aspen-ci-handler = { path = "../aspen-ci-handler", optional = true }
 aspen-nix-handler = { path = "../aspen-nix-handler", optional = true }
 aspen-query-handler = { path = "../aspen-query-handler", optional = true }
