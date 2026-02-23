@@ -246,6 +246,7 @@
               echo "name = \"$name\""
               echo 'version = "0.1.0"'
               echo 'edition = "2024"'
+              echo 'license = "AGPL-3.0-or-later"'
               echo '[features]'
               for feat in "$@"; do
                 echo "$feat = []"
@@ -1193,6 +1194,7 @@
                   echo "[PASS] Raft specifications verified"
 
                   # NOTE: Coordination verus specs extracted to ~/git/aspen-coordination
+                  # Verify via: cd ~/git/aspen-coordination && nix run .#verify-verus
 
                   echo "[3/4] Verifying Cluster specifications..."
                   ${verusRoot}/rust_verify \
@@ -1218,9 +1220,10 @@
 
               # Verus inline ghost code check
               # Verifies that production code with ghost annotations compiles with verus feature
-              # NOTE: verus-inline-check disabled — requires aspen-layer (extracted)
+              # NOTE: verus-inline-check disabled — requires aspen-layer (extracted
+              # to sibling repo). Run locally: cargo check -p aspen-raft --features verus
               verus-inline-check = pkgs.runCommand "aspen-verus-inline-check" {} ''
-                echo "SKIPPED: requires extracted sibling repos"
+                echo "SKIPPED: verus-inline-check requires extracted sibling repos (aspen-layer)"
                 echo "Run locally: cargo check -p aspen-raft --features verus"
                 touch $out
               '';
