@@ -1448,18 +1448,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-hooks-handler"
+name = "aspen-hooks-plugin"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "aspen-client-api",
- "aspen-core",
- "aspen-hooks",
- "aspen-rpc-core",
- "async-trait",
+ "aspen-wasm-guest-sdk",
  "serde_json",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -1588,20 +1581,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-kv-handler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-client-api",
- "aspen-core",
- "aspen-rpc-core",
- "aspen-testing",
- "async-trait",
- "tokio",
-]
-
-[[package]]
-name = "aspen-kv-handler-plugin"
+name = "aspen-kv-plugin"
 version = "0.1.0"
 dependencies = [
  "aspen-wasm-guest-sdk",
@@ -1713,20 +1693,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "aspen-query-handler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-client-api",
- "aspen-core",
- "aspen-rpc-core",
- "async-trait",
- "base64 0.22.1",
- "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -1892,14 +1858,11 @@ dependencies = [
  "aspen-forge",
  "aspen-forge-handler",
  "aspen-hooks",
- "aspen-hooks-handler",
  "aspen-hooks-types",
  "aspen-job-handler",
  "aspen-jobs",
- "aspen-kv-handler",
  "aspen-nix-cache-gateway",
  "aspen-nix-handler",
- "aspen-query-handler",
  "aspen-raft",
  "aspen-rpc-core",
  "aspen-secrets",
@@ -2049,7 +2012,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-sql-handler-plugin"
+name = "aspen-sql-plugin"
 version = "0.1.0"
 dependencies = [
  "aspen-wasm-guest-sdk",
@@ -2261,6 +2224,8 @@ dependencies = [
  "aspen-constants",
  "aspen-core",
  "aspen-hlc",
+ "aspen-hooks",
+ "aspen-hooks-types",
  "aspen-kv-types",
  "aspen-plugin-api",
  "aspen-rpc-core",

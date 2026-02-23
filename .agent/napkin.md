@@ -808,6 +808,56 @@ aspen-sql-plugin (WASM, priority 940):
 - Also updated aspen-hooks and aspen-nix cross-workspace paths for aspen-jobs
 - **54 crates remain** in main workspace (was 83 at start)
 
+## Recent Changes (2026-02-23) — Handler → WASM Plugin Migrations (KV, SQL, Hooks)
+
+### 3 Native Handlers Deleted
+
+- **aspen-kv-handler** (1104 lines) → deleted, replaced by `aspen-kv-plugin` (WASM cdylib)
+- **aspen-query-handler** (269 lines) → deleted, replaced by `aspen-sql-plugin` (WASM cdylib)
+- **aspen-hooks-handler** (375 lines) → deleted, replaced by `aspen-hooks-plugin` (WASM cdylib)
+
+### 3 New WASM Plugin Crates Created
+
+- `crates/aspen-kv-plugin/` — promoted from `examples/plugins/kv-handler/`, handles 9 KV ops (ReadKey, WriteKey, DeleteKey, ScanKeys, BatchRead, BatchWrite, ConditionalBatchWrite, CompareAndSwapKey, CompareAndDeleteKey), priority 110, uses `kv_execute` host function
+- `crates/aspen-sql-plugin/` — promoted from `examples/plugins/sql-handler/`, handles ExecuteSql, priority 500, uses `sql_query` host function
+- `crates/aspen-hooks-plugin/` — new WASM plugin, handles HookList, HookGetMetrics, HookTrigger, priority 570, uses 3 new hook host functions
+
+### 3 New Hook Host Functions Added
+
+- `hook_list` — returns JSON with `is_enabled` and `handlers[]` (name, pattern, type, mode, timeout, retry)
+- `hook_metrics` — returns JSON with `is_enabled`, `total_events_processed`, per-handler metrics; optional handler_name filter
+- `hook_trigger` — input JSON `{"event_type", "payload"}`, dispatches synthetic HookEvent via HookService
+- All feature-gated behind `hooks` feature on `aspen-wasm-plugin`
+- `PluginHostContext` gains `hook_service: Option<Arc<HookService>>` and `hooks_config: HooksConfig`
+- Registry wires `ctx.hook_service` and `ctx.hooks_config` from `ClientProtocolContext` when hooks feature active
+
+### Guest SDK Extended
+
+- 3 new FFI externs: `hook_list`, `hook_metrics`, `hook_trigger`
+- 6 new types: `HookHandlerInfo`, `HookListResult`, `HookHandlerMetricsInfo`, `HookMetricsResult`, `HookTriggerResult`
+- 3 safe wrappers: `list_hooks()`, `get_hook_metrics(handler_name)`, `trigger_hook(event_type, payload)`
+- Generic `decode_tagged_json_result<T>()` helper for `\0{json}`/`\x01{error}` pattern
+- Re-exports added: `HookHandlerInfo`, `HookHandlerMetrics`, `HookListResultResponse`, `HookMetricsResultResponse`, `HookTriggerResultResponse`
+
+### Test Infrastructure Updated
+
+- Deleted `stress_kv.rs`, `proptest_kv.rs`, `bolero_kv.rs` from aspen-rpc-handlers (tested native KvHandler directly)
+- KV plugin tested via NixOS VM integration tests (kv-operations.nix, multi-node-kv.nix)
+- Old example plugins removed from examples/plugins/ (promoted to crates/)
+
+### Remaining Native Handlers (NOT migratable)
+
+```text
+aspen-blob-handler (1710 lines) — iroh-blobs, DHT, replication
+aspen-ci-handler (1640 lines) — cross-cutting orchestration
+aspen-cluster-handler (1161 lines) — Raft control plane
+aspen-core-essentials-handler (1136 lines) — Raft metrics, leases, streaming
+aspen-docs-handler (945 lines) — iroh-docs sync, peer federation
+aspen-forge-handler (1878 lines) — federation + git bridge only
+aspen-job-handler (1469 lines) — distributed queue orchestration
+aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
+```
+
 ### aspen-nix Workspace Fixes
 
 - Fixed stale paths: aspen-ci-core, aspen-ci-executor-shell → `../aspen-ci/crates/...`

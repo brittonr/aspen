@@ -21,13 +21,14 @@
 //!        ▼
 //!   HandlerRegistry::dispatch()
 //!        │
-//!        ├──► KvHandler (ReadKey, WriteKey, DeleteKey, ScanKeys, BatchRead, BatchWrite)
-//!        ├──► CoordinationHandler (Lock, Counter, Sequence, RateLimiter, Barrier, Semaphore, RWLock, Queue)
-//!        ├──► BlobHandler (AddBlob, GetBlob, DownloadBlob, etc.)
+//!        ├──► [WASM] KvPlugin (ReadKey, WriteKey, DeleteKey, ScanKeys, BatchRead, BatchWrite)
+//!        ├──► [WASM] CoordinationPlugin (Lock, Counter, Sequence, RateLimiter, etc.)
+//!        ├──► [WASM] HooksPlugin (HookList, HookGetMetrics, HookTrigger)
+//!        ├──► [WASM] SqlPlugin (ExecuteSql)
 //!        ├──► [WASM] DnsPlugin (DnsSetRecord, DnsGetRecord, etc.)
+//!        ├──► BlobHandler (AddBlob, GetBlob, DownloadBlob, etc.)
 //!        ├──► DocsHandler (DocsSet, DocsGet, PeerCluster ops)
-//!        ├──► ForgeHandler (all Forge* operations)
-//!        ├──► PijulHandler (all Pijul* operations)
+//!        ├──► ForgeHandler (federation + git bridge only)
 //!        ├──► ClusterHandler (Init, AddLearner, Membership, etc.)
 //!        └──► CoreHandler (Ping, Health, Metrics, NodeInfo)
 //! ```

@@ -172,28 +172,27 @@ pub trait HandlerFactory: Send + Sync + 'static {
     ///
     /// ## Priority Ranges
     ///
-    /// - 100-199: Core handlers
+    /// - 100-199: Core native handlers
     ///   - 100: CoreHandler (health, metrics, node info)
-    ///   - 110: KvHandler (key-value operations)
+    ///   - 110: [WASM] KvPlugin (key-value operations)
     ///   - 120: ClusterHandler (cluster management)
-    /// - 200-299: Essential handlers
+    /// - 200-299: Essential native handlers
     ///   - 200: LeaseHandler (TTL leases)
     ///   - 210: WatchHandler (key change notifications)
-    ///   - 220: CoordinationHandler (locks, counters, queues, etc.)
+    ///   - 220: [WASM] CoordinationPlugin (locks, counters, queues)
     /// - 300-399: Infrastructure
-    ///   - 300: ServiceRegistryHandler (service discovery)
+    ///   - 300: [WASM] ServiceRegistryPlugin (service discovery)
     /// - 400-499: Reserved
     /// - 500-599: Feature handlers
-    ///   - 500: SqlHandler (SQL queries)
-    ///   - 510: DnsHandler (DNS records)
+    ///   - 500: [WASM] SqlPlugin (SQL queries)
+    ///   - 510: [WASM] DnsPlugin (DNS records)
     ///   - 520: BlobHandler (blob storage)
     ///   - 530: DocsHandler (document sync)
-    ///   - 540: ForgeHandler (Git hosting)
-    ///   - 550: PijulHandler (Pijul VCS)
+    ///   - 540: ForgeHandler (federation + git bridge)
     ///   - 560: JobHandler (job queue)
-    ///   - 570: HooksHandler (event hooks)
-    ///   - 580: SecretsHandler (secrets engine)
-    ///   - 590: AutomergeHandler (CRDT documents)
+    ///   - 570: [WASM] HooksPlugin (event hooks)
+    ///   - 580: SecretsHandler (PKI/X.509 only)
+    ///   - 590: [WASM] AutomergePlugin (CRDT documents)
     /// - 600-699: Worker/CI handlers
     ///   - 600: CiHandler (CI/CD pipelines)
     ///   - 640: WorkerHandler (job worker coordination)

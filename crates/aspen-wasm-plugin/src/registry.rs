@@ -417,6 +417,15 @@ async fn load_plugin(
         host_ctx_val.sql_executor = Some(ctx.sql_executor.clone());
     }
 
+    // Wire hook service + config if available (feature-gated by hooks)
+    #[cfg(feature = "hooks")]
+    {
+        if let Some(ref hook_service) = ctx.hook_service {
+            host_ctx_val = host_ctx_val.with_hook_service(Arc::clone(hook_service));
+        }
+        host_ctx_val = host_ctx_val.with_hooks_config(ctx.hooks_config.clone());
+    }
+
     let host_ctx = Arc::new(host_ctx_val);
     register_plugin_host_functions(&mut proto, host_ctx)?;
 

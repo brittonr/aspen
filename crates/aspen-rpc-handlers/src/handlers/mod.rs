@@ -1,39 +1,25 @@
 //! Domain-specific request handlers for Client RPC.
 
-// Native handler crates:
-//   Blob       → aspen-blob-handler
-//   Cache/SNIX → aspen-nix-handler
-//   CI         → aspen-ci-handler
-//   Cluster    → aspen-cluster-handler
-//   Core/Lease/Watch → aspen-core-essentials-handler
-//   DNS/SQL    → aspen-query-handler
-//   Docs       → aspen-docs-handler
-//   Forge      → aspen-forge-handler
-//   Hooks      → aspen-hooks-handler
-//   Job/Worker → aspen-job-handler
-//   KV         → aspen-kv-handler
-//   Secrets    → aspen-secrets-handler (PKI + NixCache only)
+// Native handler crates (require native system access):
+//   Blob       → aspen-blob-handler (network I/O, replication, DHT)
+//   Cache/SNIX → aspen-nix-handler (snix-castore, protobuf, iroh-blobs)
+//   CI         → aspen-ci-handler (cross-cutting orchestration)
+//   Cluster    → aspen-cluster-handler (Raft control plane, membership)
+//   Core/Lease/Watch → aspen-core-essentials-handler (Raft metrics, streaming)
+//   Docs       → aspen-docs-handler (iroh-docs sync, peer federation)
+//   Forge      → aspen-forge-handler (git bridge, federation only)
+//   Job/Worker → aspen-job-handler (distributed queue orchestration)
+//   Secrets    → aspen-secrets-handler (PKI/X.509 crypto only)
 //
 // Migrated to WASM plugins (native handlers deleted):
 //   Automerge        → aspen-automerge-plugin
 //   Coordination     → aspen-coordination-plugin
+//   DNS              → aspen-dns-plugin
+//   Hooks            → aspen-hooks-plugin
+//   KV               → aspen-kv-plugin
 //   Secrets KV/Transit → aspen-secrets-plugin
 //   Service Registry → aspen-service-registry-plugin
-//
-// WASM plugin equivalents available (native handlers retained for now):
-//   KV               → aspen-kv-handler-plugin  (examples/plugins/kv-handler)
-//   SQL              → aspen-sql-handler-plugin  (examples/plugins/sql-handler)
-//
-// Not migratable to WASM (require native system access):
-//   Blob       — network I/O, replication, DHT, ticket generation
-//   CI         — cross-cutting orchestration (forge + jobs + blob + nickel)
-//   Cluster    — Raft control plane, membership, snapshots
-//   Core/Lease/Watch — Raft metrics, lease state machine, streaming
-//   Docs       — iroh-docs sync protocol, peer federation
-//   Forge      — git bridge streaming, federation trust/discovery
-//   Hooks      — could migrate with new host functions (hook_list, hook_trigger)
-//   Job/Worker — distributed queue orchestration, worker coordination
-//   Secrets    — native X.509 crypto (rcgen), Ed25519 signing
+//   SQL              → aspen-sql-plugin
 
 // Re-export handlers
 #[cfg(feature = "blob")]
@@ -48,22 +34,19 @@ pub use aspen_core_essentials_handler::WatchHandler;
 pub use aspen_docs_handler::DocsHandler;
 #[cfg(feature = "forge")]
 pub use aspen_forge_handler::ForgeHandler;
-#[cfg(feature = "hooks")]
-pub use aspen_hooks_handler::HooksHandler;
 #[cfg(feature = "jobs")]
 pub use aspen_job_handler::JobHandler;
 #[cfg(feature = "jobs")]
 pub use aspen_job_handler::WorkerHandler;
-pub use aspen_kv_handler::KvHandler;
+// KV handler migrated to WASM plugin (aspen-kv-plugin)
+// SQL handler migrated to WASM plugin (aspen-sql-plugin)
+// Hooks handler migrated to WASM plugin (aspen-hooks-plugin)
 #[cfg(feature = "ci")]
 pub use aspen_nix_handler::CacheHandler;
 #[cfg(feature = "ci")]
 pub use aspen_nix_handler::CacheMigrationHandler;
 #[cfg(feature = "snix")]
 pub use aspen_nix_handler::SnixHandler;
-// DNS handler moved to aspen-dns repo
-#[cfg(feature = "sql")]
-pub use aspen_query_handler::SqlHandler;
 #[cfg(feature = "secrets")]
 pub use aspen_secrets_handler::SecretsHandler;
 #[cfg(feature = "secrets")]

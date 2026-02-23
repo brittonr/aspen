@@ -1,7 +1,7 @@
 {
   "name": "aspen-sql-handler",
   "version": "0.1.0",
-  "description": "SQL query handler — executes read-only SQL against the Aspen state machine. Migrated from native aspen-query-handler.",
+  "description": "SQL query handler — executes read-only SQL against the Aspen state machine. Replaces native aspen-query-handler.",
   "handles": [
     "ExecuteSql"
   ],

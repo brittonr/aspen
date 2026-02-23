@@ -112,6 +112,17 @@ pub struct PluginHostContext {
     /// Guarded by `permissions.sql_query`.
     #[cfg(feature = "sql")]
     pub sql_executor: Option<Arc<dyn aspen_core::SqlQueryExecutor>>,
+    /// Hook service for hook management operations (list, metrics, trigger).
+    ///
+    /// Optional because hooks may not be enabled on this node.
+    /// Guarded by `permissions.hooks`.
+    #[cfg(feature = "hooks")]
+    pub hook_service: Option<Arc<aspen_hooks::HookService>>,
+    /// Hooks configuration for handler listing.
+    ///
+    /// Contains the static handler config (names, patterns, types).
+    #[cfg(feature = "hooks")]
+    pub hooks_config: aspen_hooks_types::HooksConfig,
 }
 
 impl PluginHostContext {
@@ -137,6 +148,10 @@ impl PluginHostContext {
             subscription_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
             #[cfg(feature = "sql")]
             sql_executor: None,
+            #[cfg(feature = "hooks")]
+            hook_service: None,
+            #[cfg(feature = "hooks")]
+            hooks_config: aspen_hooks_types::HooksConfig::default(),
         }
     }
 
@@ -200,6 +215,20 @@ impl PluginHostContext {
     #[allow(dead_code)]
     pub fn with_sql_executor(mut self, executor: Arc<dyn aspen_core::SqlQueryExecutor>) -> Self {
         self.sql_executor = Some(executor);
+        self
+    }
+
+    /// Set the hook service for hook management operations.
+    #[cfg(feature = "hooks")]
+    pub fn with_hook_service(mut self, service: Arc<aspen_hooks::HookService>) -> Self {
+        self.hook_service = Some(service);
+        self
+    }
+
+    /// Set the hooks configuration for handler listing.
+    #[cfg(feature = "hooks")]
+    pub fn with_hooks_config(mut self, config: aspen_hooks_types::HooksConfig) -> Self {
+        self.hooks_config = config;
         self
     }
 }
@@ -1020,6 +1049,53 @@ pub fn register_plugin_host_functions(
         })
         .map_err(|e| anyhow::anyhow!("failed to register hook_unsubscribe: {e}"))?;
 
+    // -- Hook Management (feature-gated) --
+    // hook_list: list configured hook handlers and enabled status.
+    // hook_metrics: get execution metrics for hook handlers.
+    // hook_trigger: manually trigger a hook event.
+    // All return: String with \0 prefix = success (JSON result), \x01 prefix = error
+    #[cfg(feature = "hooks")]
+    {
+        let ctx_hook_list = Arc::clone(&ctx);
+        proto
+            .register("hook_list", move |_unused: String| -> String {
+                if let Err(e) = check_permission(&ctx_hook_list.plugin_name, "hooks", ctx_hook_list.permissions.hooks) {
+                    return format!("\x01{e}");
+                }
+                hook_list_impl(&ctx_hook_list)
+            })
+            .map_err(|e| anyhow::anyhow!("failed to register hook_list: {e}"))?;
+
+        let ctx_hook_metrics = Arc::clone(&ctx);
+        proto
+            .register("hook_metrics", move |handler_name: String| -> String {
+                if let Err(e) =
+                    check_permission(&ctx_hook_metrics.plugin_name, "hooks", ctx_hook_metrics.permissions.hooks)
+                {
+                    return format!("\x01{e}");
+                }
+                let filter = if handler_name.is_empty() {
+                    None
+                } else {
+                    Some(handler_name)
+                };
+                hook_metrics_impl(&ctx_hook_metrics, filter)
+            })
+            .map_err(|e| anyhow::anyhow!("failed to register hook_metrics: {e}"))?;
+
+        let ctx_hook_trigger = Arc::clone(&ctx);
+        proto
+            .register("hook_trigger", move |request_json: String| -> String {
+                if let Err(e) =
+                    check_permission(&ctx_hook_trigger.plugin_name, "hooks", ctx_hook_trigger.permissions.hooks)
+                {
+                    return format!("\x01{e}");
+                }
+                hook_trigger_impl(&ctx_hook_trigger, &request_json)
+            })
+            .map_err(|e| anyhow::anyhow!("failed to register hook_trigger: {e}"))?;
+    }
+
     // -- SQL Query (feature-gated) --
     // sql_query: executes a read-only SQL query against the state machine.
     // Input: JSON-encoded SqlQueryHostRequest { query, params_json, consistency, limit, timeout_ms }
@@ -1631,6 +1707,229 @@ fn base64_encode(data: &[u8]) -> String {
         }
     }
     result
+}
+
+// =============================================================================
+// Hook management host functions (feature-gated)
+// =============================================================================
+
+/// List configured hook handlers and enabled status.
+///
+/// Returns JSON with `is_enabled` and `handlers` array, each containing:
+/// name, pattern, handler_type, execution_mode, is_enabled, timeout_ms, retry_count.
+#[cfg(feature = "hooks")]
+fn hook_list_impl(ctx: &PluginHostContext) -> String {
+    let is_enabled = ctx.hook_service.as_ref().map(|s| s.is_enabled()).unwrap_or(false);
+
+    let handlers: Vec<serde_json::Value> = ctx
+        .hooks_config
+        .handlers
+        .iter()
+        .map(|cfg| {
+            serde_json::json!({
+                "name": cfg.name,
+                "pattern": cfg.pattern,
+                "handler_type": cfg.handler_type.type_name(),
+                "execution_mode": match cfg.execution_mode {
+                    aspen_hooks::config::ExecutionMode::Direct => "direct",
+                    aspen_hooks::config::ExecutionMode::Job => "job",
+                },
+                "enabled": cfg.is_enabled,
+                "timeout_ms": cfg.timeout_ms,
+                "retry_count": cfg.retry_count,
+            })
+        })
+        .collect();
+
+    let result = serde_json::json!({
+        "is_enabled": is_enabled,
+        "handlers": handlers,
+    });
+
+    match serde_json::to_string(&result) {
+        Ok(s) => format!("\0{s}"),
+        Err(e) => format!("\x01serialize failed: {e}"),
+    }
+}
+
+/// Get execution metrics for hook handlers.
+///
+/// Returns JSON with `is_enabled`, `total_events_processed`, and `handlers`
+/// array with per-handler metrics. If `handler_name` is Some, filters to
+/// that handler only.
+#[cfg(feature = "hooks")]
+fn hook_metrics_impl(ctx: &PluginHostContext, handler_name: Option<String>) -> String {
+    let Some(ref service) = ctx.hook_service else {
+        let result = serde_json::json!({
+            "is_enabled": false,
+            "total_events_processed": 0,
+            "handlers": [],
+        });
+        return match serde_json::to_string(&result) {
+            Ok(s) => format!("\0{s}"),
+            Err(e) => format!("\x01serialize failed: {e}"),
+        };
+    };
+
+    let snapshot = service.metrics().snapshot();
+
+    let handlers: Vec<serde_json::Value> = if let Some(ref name) = handler_name {
+        snapshot
+            .handlers
+            .iter()
+            .filter(|(n, _)| *n == name)
+            .map(|(name, m)| {
+                serde_json::json!({
+                    "name": name,
+                    "success_count": m.successes,
+                    "failure_count": m.failures,
+                    "dropped_count": m.dropped,
+                    "jobs_submitted": m.jobs_submitted,
+                    "avg_duration_us": m.avg_latency_us,
+                    "max_duration_us": 0u64,
+                })
+            })
+            .collect()
+    } else {
+        snapshot
+            .handlers
+            .iter()
+            .map(|(name, m)| {
+                serde_json::json!({
+                    "name": name,
+                    "success_count": m.successes,
+                    "failure_count": m.failures,
+                    "dropped_count": m.dropped,
+                    "jobs_submitted": m.jobs_submitted,
+                    "avg_duration_us": m.avg_latency_us,
+                    "max_duration_us": 0u64,
+                })
+            })
+            .collect()
+    };
+
+    let total = snapshot.global.successes + snapshot.global.failures;
+
+    let result = serde_json::json!({
+        "is_enabled": service.is_enabled(),
+        "total_events_processed": total,
+        "handlers": handlers,
+    });
+
+    match serde_json::to_string(&result) {
+        Ok(s) => format!("\0{s}"),
+        Err(e) => format!("\x01serialize failed: {e}"),
+    }
+}
+
+/// Manually trigger a hook event.
+///
+/// Input JSON: `{"event_type": "...", "payload": {...}}`
+/// Returns JSON with `is_success`, `dispatched_count`, `error`, `handler_failures`.
+#[cfg(feature = "hooks")]
+fn hook_trigger_impl(ctx: &PluginHostContext, request_json: &str) -> String {
+    let request: serde_json::Value = match serde_json::from_str(request_json) {
+        Ok(r) => r,
+        Err(e) => return format!("\x01invalid JSON: {e}"),
+    };
+
+    let event_type_str = match request["event_type"].as_str() {
+        Some(s) => s,
+        None => return "\x01missing 'event_type'".to_string(),
+    };
+
+    let payload = request.get("payload").cloned().unwrap_or(serde_json::json!({}));
+
+    // Parse event type
+    let hook_event_type = match event_type_str {
+        "write_committed" => aspen_hooks::HookEventType::WriteCommitted,
+        "delete_committed" => aspen_hooks::HookEventType::DeleteCommitted,
+        "membership_changed" => aspen_hooks::HookEventType::MembershipChanged,
+        "leader_elected" => aspen_hooks::HookEventType::LeaderElected,
+        "snapshot_created" => aspen_hooks::HookEventType::SnapshotCreated,
+        other => {
+            let result = serde_json::json!({
+                "is_success": false,
+                "dispatched_count": 0,
+                "error": format!("unknown event type: {other}"),
+                "handler_failures": [],
+            });
+            return match serde_json::to_string(&result) {
+                Ok(s) => format!("\0{s}"),
+                Err(e) => format!("\x01serialize failed: {e}"),
+            };
+        }
+    };
+
+    let Some(ref service) = ctx.hook_service else {
+        let result = serde_json::json!({
+            "is_success": false,
+            "dispatched_count": 0,
+            "error": "hooks not enabled",
+            "handler_failures": [],
+        });
+        return match serde_json::to_string(&result) {
+            Ok(s) => format!("\0{s}"),
+            Err(e) => format!("\x01serialize failed: {e}"),
+        };
+    };
+
+    if !service.is_enabled() {
+        let result = serde_json::json!({
+            "is_success": false,
+            "dispatched_count": 0,
+            "error": "hooks not enabled",
+            "handler_failures": [],
+        });
+        return match serde_json::to_string(&result) {
+            Ok(s) => format!("\0{s}"),
+            Err(e) => format!("\x01serialize failed: {e}"),
+        };
+    }
+
+    // Create synthetic event and dispatch
+    let event = aspen_hooks::HookEvent::new(hook_event_type, ctx.node_id, payload);
+
+    let handle = tokio::runtime::Handle::current();
+    let result = handle.block_on(async { service.dispatch(&event).await });
+
+    match result {
+        Ok(dispatch_result) => {
+            let dispatched_count = dispatch_result.handler_count();
+            let handler_failures: Vec<Vec<String>> = match dispatch_result {
+                aspen_hooks::service::DispatchResult::Disabled => vec![],
+                aspen_hooks::service::DispatchResult::Dispatched { direct_results, .. } => direct_results
+                    .into_iter()
+                    .filter_map(|(name, r)| r.err().map(|e| vec![name, e.to_string()]))
+                    .collect(),
+            };
+
+            let is_success = handler_failures.is_empty();
+
+            let result = serde_json::json!({
+                "is_success": is_success,
+                "dispatched_count": dispatched_count,
+                "error": null,
+                "handler_failures": handler_failures,
+            });
+            match serde_json::to_string(&result) {
+                Ok(s) => format!("\0{s}"),
+                Err(e) => format!("\x01serialize failed: {e}"),
+            }
+        }
+        Err(e) => {
+            let result = serde_json::json!({
+                "is_success": false,
+                "dispatched_count": 0,
+                "error": e.to_string(),
+                "handler_failures": [],
+            });
+            match serde_json::to_string(&result) {
+                Ok(s) => format!("\0{s}"),
+                Err(e) => format!("\x01serialize failed: {e}"),
+            }
+        }
+    }
 }
 
 // =============================================================================

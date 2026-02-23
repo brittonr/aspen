@@ -1,0 +1,13 @@
+[package]
+name = "aspen-hooks-plugin"
+version = "0.1.0"
+edition = "2024"
+description = "Aspen WASM plugin: Hooks handler (replaces native aspen-hooks-handler)"
+license = "AGPL-3.0-or-later"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+aspen-wasm-guest-sdk = { path = "../aspen-wasm-guest-sdk" }
+serde_json = "1.0"

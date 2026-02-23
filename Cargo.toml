@@ -99,10 +99,10 @@ members = [
     # aspen-automerge extracted to ~/git/aspen-automerge
     # CI subsystem extracted to ~/git/aspen-ci
     "crates/aspen-ci-handler",
-    "crates/aspen-query-handler",
-    "crates/aspen-hooks-handler",
+    # aspen-query-handler → replaced by aspen-sql-plugin (WASM)
+    # aspen-hooks-handler → replaced by aspen-hooks-plugin (WASM)
+    # aspen-kv-handler → replaced by aspen-kv-plugin (WASM)
     "crates/aspen-job-handler",
-    "crates/aspen-kv-handler",
     "crates/aspen-core-essentials-handler",
     "crates/aspen-docs-handler",
     "crates/aspen-cluster-handler",
@@ -119,8 +119,9 @@ members = [
     "examples/plugins/kv-counter",
     "examples/plugins/audit-logger",
     "examples/plugins/scheduled-cleanup",
-    "examples/plugins/kv-handler",
-    "examples/plugins/sql-handler",
+    "crates/aspen-kv-plugin",
+    "crates/aspen-sql-plugin",
+    "crates/aspen-hooks-plugin",
 ]
 
 # Required for vendored openraft workspace inheritance

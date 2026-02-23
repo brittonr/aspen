@@ -35,6 +35,9 @@ unsafe extern "C" {
     fn hook_unsubscribe(pattern: String) -> String;
     fn sql_query(request_json: String) -> String;
     fn kv_execute(request_json: String) -> String;
+    fn hook_list(unused: String) -> String;
+    fn hook_metrics(handler_name: String) -> String;
+    fn hook_trigger(request_json: String) -> String;
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +262,138 @@ pub fn subscribe_hook_events(pattern: &str) -> Result<(), String> {
 pub fn unsubscribe_hook_events(pattern: &str) -> Result<(), String> {
     let result = unsafe { hook_unsubscribe(pattern.to_string()) };
     decode_tagged_unit_result(&result)
+}
+
+// ---------------------------------------------------------------------------
+// Hook management
+// ---------------------------------------------------------------------------
+
+/// Handler info returned by `list_hooks`.
+#[derive(serde::Deserialize)]
+pub struct HookHandlerInfo {
+    /// Handler name.
+    pub name: String,
+    /// Topic pattern this handler subscribes to.
+    pub pattern: String,
+    /// Handler type: "in_process", "shell", or "forward".
+    pub handler_type: String,
+    /// Execution mode: "direct" or "job".
+    pub execution_mode: String,
+    /// Whether the handler is enabled.
+    pub enabled: bool,
+    /// Timeout in milliseconds.
+    pub timeout_ms: u64,
+    /// Number of retries on failure.
+    pub retry_count: u32,
+}
+
+/// Hook list result from the host.
+#[derive(serde::Deserialize)]
+pub struct HookListResult {
+    /// Whether the hook service is enabled.
+    pub is_enabled: bool,
+    /// List of configured handlers.
+    pub handlers: Vec<HookHandlerInfo>,
+}
+
+/// Metrics for a single hook handler.
+#[derive(serde::Deserialize)]
+pub struct HookHandlerMetricsInfo {
+    /// Handler name.
+    pub name: String,
+    /// Total successful executions.
+    pub success_count: u64,
+    /// Total failed executions.
+    pub failure_count: u64,
+    /// Total dropped events.
+    pub dropped_count: u64,
+    /// Total jobs submitted (for job mode handlers).
+    pub jobs_submitted: u64,
+    /// Average execution duration in microseconds.
+    pub avg_duration_us: u64,
+    /// Maximum execution duration in microseconds.
+    pub max_duration_us: u64,
+}
+
+/// Hook metrics result from the host.
+#[derive(serde::Deserialize)]
+pub struct HookMetricsResult {
+    /// Whether the hook service is enabled.
+    pub is_enabled: bool,
+    /// Global total events processed.
+    pub total_events_processed: u64,
+    /// Per-handler metrics.
+    pub handlers: Vec<HookHandlerMetricsInfo>,
+}
+
+/// Hook trigger result from the host.
+#[derive(serde::Deserialize)]
+pub struct HookTriggerResult {
+    /// Whether the trigger was successful.
+    pub is_success: bool,
+    /// Number of handlers dispatched to.
+    pub dispatched_count: u32,
+    /// Error message if failed.
+    pub error: Option<String>,
+    /// Handler failures (each is [name, error]).
+    pub handler_failures: Vec<Vec<String>>,
+}
+
+/// List configured hook handlers and their enabled status.
+///
+/// # Errors
+///
+/// Returns an error if the `hooks` permission is not granted.
+pub fn list_hooks() -> Result<HookListResult, String> {
+    let result = unsafe { hook_list(String::new()) };
+    decode_tagged_json_result(&result)
+}
+
+/// Get execution metrics for hook handlers.
+///
+/// Pass an empty string to get all handlers, or a handler name to filter.
+///
+/// # Errors
+///
+/// Returns an error if the `hooks` permission is not granted.
+pub fn get_hook_metrics(handler_name: &str) -> Result<HookMetricsResult, String> {
+    let result = unsafe { hook_metrics(handler_name.to_string()) };
+    decode_tagged_json_result(&result)
+}
+
+/// Manually trigger a hook event.
+///
+/// # Arguments
+///
+/// * `event_type` - One of: "write_committed", "delete_committed", "membership_changed",
+///   "leader_elected", "snapshot_created"
+/// * `payload` - JSON payload for the event
+///
+/// # Errors
+///
+/// Returns an error if the `hooks` permission is not granted,
+/// or the event type is invalid.
+pub fn trigger_hook(event_type: &str, payload: &serde_json::Value) -> Result<HookTriggerResult, String> {
+    let request = serde_json::json!({
+        "event_type": event_type,
+        "payload": payload,
+    });
+    let request_json = serde_json::to_string(&request).map_err(|e| format!("serialize failed: {e}"))?;
+    let result = unsafe { hook_trigger(request_json) };
+    decode_tagged_json_result(&result)
+}
+
+/// Decode a tagged JSON result string.
+///
+/// `\0{json}` = success, `\x01{error}` = error.
+fn decode_tagged_json_result<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, String> {
+    if let Some(json) = s.strip_prefix('\0') {
+        serde_json::from_str(json).map_err(|e| format!("parse result failed: {e}"))
+    } else if let Some(err) = s.strip_prefix('\x01') {
+        Err(err.to_string())
+    } else {
+        Err("unexpected host response format".to_string())
+    }
 }
 
 // ---------------------------------------------------------------------------

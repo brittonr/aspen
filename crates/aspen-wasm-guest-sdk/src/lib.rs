@@ -54,6 +54,12 @@ pub use aspen_client_api::CompareAndSwapResultResponse;
 pub use aspen_client_api::ConditionalBatchWriteResultResponse;
 pub use aspen_client_api::DeleteResultResponse;
 pub use aspen_client_api::ErrorResponse;
+// Hook response types for handler plugins.
+pub use aspen_client_api::HookHandlerInfo;
+pub use aspen_client_api::HookHandlerMetrics;
+pub use aspen_client_api::HookListResultResponse;
+pub use aspen_client_api::HookMetricsResultResponse;
+pub use aspen_client_api::HookTriggerResultResponse;
 pub use aspen_client_api::ReadResultResponse;
 pub use aspen_client_api::ScanEntry;
 pub use aspen_client_api::ScanResultResponse;
