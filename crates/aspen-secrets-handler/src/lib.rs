@@ -7,6 +7,7 @@
 //! KV and Transit secrets operations have been migrated to the
 //! `aspen-secrets-plugin` WASM plugin.
 
+pub mod executor;
 mod handler;
 
 use std::sync::Arc;
@@ -15,7 +16,8 @@ use std::sync::Arc;
 pub use aspen_rpc_core::ClientProtocolContext;
 pub use aspen_rpc_core::HandlerFactory;
 pub use aspen_rpc_core::RequestHandler;
-pub use handler::SecretsHandler;
+pub use aspen_rpc_core::ServiceHandler;
+pub use executor::SecretsServiceExecutor;
 pub use handler::SecretsService;
 
 // =============================================================================
@@ -47,12 +49,11 @@ impl Default for SecretsHandlerFactory {
 
 impl HandlerFactory for SecretsHandlerFactory {
     fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        // Only create handler if secrets service is configured
-        if ctx.secrets_service.is_some() {
-            Some(Arc::new(SecretsHandler))
-        } else {
-            None
-        }
+        let secrets_any = ctx.secrets_service.as_ref()?;
+        let secrets_service = secrets_any.clone().downcast::<SecretsService>().ok()?;
+        let kv_store = ctx.kv_store.clone();
+        let executor = Arc::new(SecretsServiceExecutor::new(secrets_service, kv_store));
+        Some(Arc::new(ServiceHandler::new(executor)))
     }
 
     fn name(&self) -> &'static str {

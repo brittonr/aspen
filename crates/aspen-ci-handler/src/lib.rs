@@ -11,7 +11,7 @@
 //!
 //! # Architecture
 //!
-//! The handler implements the `RequestHandler` trait from `aspen-rpc-core`,
+//! The handler uses the `ServiceExecutor` pattern from `aspen-rpc-core`,
 //! allowing it to be registered with the `HandlerRegistry` in `aspen-rpc-handlers`.
 //!
 //! ```text
@@ -21,7 +21,7 @@
 //!   HandlerRegistry
 //!        |
 //!        v
-//!   CiHandler (this crate)
+//!   ServiceHandler<CiServiceExecutor> (this crate)
 //!        |
 //!        +---> Pipeline Operations (trigger, status, list, cancel)
 //!        +---> Watch Operations (watch/unwatch repo)
@@ -29,7 +29,8 @@
 //!        +---> Log Operations (get logs, subscribe, get output)
 //! ```
 
-mod handler;
+mod executor;
+pub mod handler;
 
 use std::sync::Arc;
 
@@ -37,13 +38,14 @@ use std::sync::Arc;
 pub use aspen_rpc_core::ClientProtocolContext;
 pub use aspen_rpc_core::HandlerFactory;
 pub use aspen_rpc_core::RequestHandler;
-pub use handler::CiHandler;
+pub use aspen_rpc_core::ServiceHandler;
+pub use executor::CiServiceExecutor;
 
 // =============================================================================
 // Handler Factory (Plugin Registration)
 // =============================================================================
 
-/// Factory for creating `CiHandler` instances.
+/// Factory for creating CI service handler instances.
 ///
 /// This factory enables plugin-style registration via the `inventory` crate.
 /// The handler is only created if CI services (orchestrator or trigger) are
@@ -73,7 +75,16 @@ impl HandlerFactory for CiHandlerFactory {
         let has_orchestrator = ctx.ci_orchestrator.is_some();
         let has_trigger = ctx.ci_trigger_service.is_some();
         if has_orchestrator || has_trigger {
-            Some(Arc::new(CiHandler))
+            let executor = Arc::new(CiServiceExecutor::new(
+                ctx.ci_orchestrator.clone(),
+                ctx.ci_trigger_service.clone(),
+                #[cfg(all(feature = "forge", feature = "blob"))]
+                ctx.forge_node.clone(),
+                #[cfg(feature = "blob")]
+                ctx.blob_store.clone(),
+                ctx.kv_store.clone(),
+            ));
+            Some(Arc::new(ServiceHandler::new(executor)))
         } else {
             None
         }

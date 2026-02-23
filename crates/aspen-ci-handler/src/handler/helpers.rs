@@ -2,13 +2,13 @@
 
 /// CI config file path within a repository.
 #[cfg(all(feature = "forge", feature = "blob"))]
-pub(crate) const CI_CONFIG_PATH: &[&str] = &[".aspen", "ci.ncl"];
+pub const CI_CONFIG_PATH: &[&str] = &[".aspen", "ci.ncl"];
 
 /// Walk a tree recursively to find a file by path components.
 ///
 /// Returns the file content as bytes if found, None if not found.
 #[cfg(all(feature = "forge", feature = "blob"))]
-pub(crate) async fn walk_tree_for_file<B: aspen_blob::BlobStore>(
+pub async fn walk_tree_for_file<B: aspen_blob::BlobStore>(
     git: &aspen_forge::git::GitBlobStore<B>,
     root_tree_hash: &blake3::Hash,
     path: &[&str],
@@ -54,7 +54,7 @@ pub(crate) async fn walk_tree_for_file<B: aspen_blob::BlobStore>(
 
 /// Parse a commit hash from hex string to [u8; 32].
 #[cfg(all(feature = "forge", feature = "blob"))]
-pub(crate) fn parse_commit_hash(hex_str: &str) -> Result<[u8; 32], anyhow::Error> {
+pub fn parse_commit_hash(hex_str: &str) -> Result<[u8; 32], anyhow::Error> {
     let bytes = hex::decode(hex_str)?;
     if bytes.len() != 32 {
         anyhow::bail!("commit hash must be 32 bytes (64 hex chars), got {}", bytes.len());
@@ -65,7 +65,7 @@ pub(crate) fn parse_commit_hash(hex_str: &str) -> Result<[u8; 32], anyhow::Error
 }
 
 /// Convert PipelineStatus to string representation.
-pub(crate) fn pipeline_status_to_string(status: &aspen_ci::orchestrator::PipelineStatus) -> String {
+pub fn pipeline_status_to_string(status: &aspen_ci::orchestrator::PipelineStatus) -> String {
     match status {
         aspen_ci::orchestrator::PipelineStatus::Initializing => "initializing".to_string(),
         aspen_ci::orchestrator::PipelineStatus::CheckingOut => "checking_out".to_string(),

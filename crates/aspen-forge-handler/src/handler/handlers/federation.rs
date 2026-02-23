@@ -1,7 +1,8 @@
 //! Federation operations.
 
+use std::sync::Arc;
+
 use aspen_client_api::ClientRpcResponse;
-use aspen_rpc_core::ClientProtocolContext;
 
 use super::ForgeNodeRef;
 
@@ -22,31 +23,24 @@ async fn count_federated_repos(forge_node: &ForgeNodeRef) -> u32 {
     }
 }
 
+#[cfg(feature = "global-discovery")]
 pub(crate) async fn handle_get_federation_status(
-    ctx: &ClientProtocolContext,
     forge_node: &ForgeNodeRef,
+    content_discovery: Option<&Arc<dyn aspen_core::ContentDiscovery>>,
+    federation_discovery: Option<&Arc<aspen_cluster::federation::FederationDiscoveryService>>,
+    federation_identity: Option<&Arc<aspen_cluster::federation::SignedClusterIdentity>>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_api::FederationStatusResponse;
 
-    // Check DHT availability via content_discovery service
-    #[cfg(feature = "global-discovery")]
-    let dht_enabled = ctx.content_discovery.is_some();
-    #[cfg(not(feature = "global-discovery"))]
-    let dht_enabled = false;
-
-    // Get discovered cluster count from federation discovery service
-    #[cfg(feature = "global-discovery")]
-    let discovered_clusters =
-        ctx.federation_discovery.as_ref().map(|d| d.get_discovered_clusters().len() as u32).unwrap_or(0);
-    #[cfg(not(feature = "global-discovery"))]
-    let discovered_clusters = 0u32;
+    let dht_enabled = content_discovery.is_some();
+    let discovered_clusters = federation_discovery.map(|d| d.get_discovered_clusters().len() as u32).unwrap_or(0);
 
     // Count federated repos by scanning for persisted federation settings
     // Repos with FederationSettings where mode != Disabled are considered federated
     let federated_repos = count_federated_repos(forge_node).await;
 
     // Check if federation identity is configured
-    match &ctx.federation_identity {
+    match federation_identity {
         Some(identity) => Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
             is_enabled: true,
             cluster_name: identity.name().to_string(),
@@ -70,13 +64,51 @@ pub(crate) async fn handle_get_federation_status(
     }
 }
 
-pub(crate) async fn handle_list_discovered_clusters(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
+#[cfg(not(feature = "global-discovery"))]
+pub(crate) async fn handle_get_federation_status(
+    forge_node: &ForgeNodeRef,
+    federation_identity: Option<&Arc<aspen_cluster::federation::SignedClusterIdentity>>,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::FederationStatusResponse;
+
+    let dht_enabled = false;
+    let discovered_clusters = 0u32;
+    let federated_repos = count_federated_repos(forge_node).await;
+
+    match federation_identity {
+        Some(identity) => Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
+            is_enabled: true,
+            cluster_name: identity.name().to_string(),
+            cluster_key: identity.public_key().to_string(),
+            dht_enabled,
+            gossip_enabled: forge_node.has_gossip(),
+            discovered_clusters,
+            federated_repos,
+            error: None,
+        })),
+        None => Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
+            is_enabled: false,
+            cluster_name: String::new(),
+            cluster_key: String::new(),
+            dht_enabled,
+            gossip_enabled: forge_node.has_gossip(),
+            discovered_clusters,
+            federated_repos,
+            error: Some("Federation not configured for this node".to_string()),
+        })),
+    }
+}
+
+#[cfg(feature = "global-discovery")]
+pub(crate) async fn handle_list_discovered_clusters(
+    federation_discovery: Option<&Arc<aspen_cluster::federation::FederationDiscoveryService>>,
+) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_api::DiscoveredClustersResponse;
 
     #[cfg(feature = "global-discovery")]
     {
         use aspen_client_api::DiscoveredClusterInfo;
-        let discovery = match &ctx.federation_discovery {
+        let discovery = match federation_discovery {
             Some(d) => d,
             None => {
                 return Ok(ClientRpcResponse::DiscoveredClusters(DiscoveredClustersResponse {
@@ -109,7 +141,7 @@ pub(crate) async fn handle_list_discovered_clusters(ctx: &ClientProtocolContext)
 
     #[cfg(not(feature = "global-discovery"))]
     {
-        let _ = ctx; // Suppress unused warning
+        let _ = federation_discovery; // Suppress unused warning
         Ok(ClientRpcResponse::DiscoveredClusters(DiscoveredClustersResponse {
             clusters: vec![],
             count: 0,
@@ -118,15 +150,26 @@ pub(crate) async fn handle_list_discovered_clusters(ctx: &ClientProtocolContext)
     }
 }
 
+#[cfg(not(feature = "global-discovery"))]
+pub(crate) async fn handle_list_discovered_clusters() -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::DiscoveredClustersResponse;
+    Ok(ClientRpcResponse::DiscoveredClusters(DiscoveredClustersResponse {
+        clusters: vec![],
+        count: 0,
+        error: Some("Federation discovery requires 'forge' and 'global-discovery' features".to_string()),
+    }))
+}
+
+#[cfg(feature = "global-discovery")]
 pub(crate) async fn handle_get_discovered_cluster(
-    ctx: &ClientProtocolContext,
+    federation_discovery: Option<&Arc<aspen_cluster::federation::FederationDiscoveryService>>,
     cluster_key: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_api::DiscoveredClusterResponse;
 
     #[cfg(feature = "global-discovery")]
     {
-        let discovery = match &ctx.federation_discovery {
+        let discovery = match federation_discovery {
             Some(d) => d,
             None => {
                 return Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
@@ -201,7 +244,7 @@ pub(crate) async fn handle_get_discovered_cluster(
 
     #[cfg(not(feature = "global-discovery"))]
     {
-        let _ = (ctx, cluster_key); // Suppress unused warnings
+        let _ = (federation_discovery, cluster_key); // Suppress unused warnings
         Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
             was_found: false,
             cluster_key: None,
@@ -214,13 +257,27 @@ pub(crate) async fn handle_get_discovered_cluster(
     }
 }
 
+#[cfg(not(feature = "global-discovery"))]
+pub(crate) async fn handle_get_discovered_cluster(_cluster_key: String) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::DiscoveredClusterResponse;
+    Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
+        was_found: false,
+        cluster_key: None,
+        name: None,
+        node_count: None,
+        capabilities: None,
+        relay_urls: None,
+        discovered_at: None,
+    }))
+}
+
 pub(crate) async fn handle_trust_cluster(
-    ctx: &ClientProtocolContext,
+    federation_trust_manager: Option<&Arc<aspen_cluster::federation::TrustManager>>,
     cluster_key: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_api::TrustClusterResultResponse;
 
-    let trust_manager = match &ctx.federation_trust_manager {
+    let trust_manager = match federation_trust_manager {
         Some(tm) => tm,
         None => {
             return Ok(ClientRpcResponse::TrustClusterResult(TrustClusterResultResponse {
@@ -265,12 +322,12 @@ pub(crate) async fn handle_trust_cluster(
 }
 
 pub(crate) async fn handle_untrust_cluster(
-    ctx: &ClientProtocolContext,
+    federation_trust_manager: Option<&Arc<aspen_cluster::federation::TrustManager>>,
     cluster_key: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_api::UntrustClusterResultResponse;
 
-    let trust_manager = match &ctx.federation_trust_manager {
+    let trust_manager = match federation_trust_manager {
         Some(tm) => tm,
         None => {
             return Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {

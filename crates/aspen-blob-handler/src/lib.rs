@@ -12,7 +12,8 @@
 //! - BlobReplicatePull, GetBlobReplicationStatus, TriggerBlobReplication: Replication
 //! - RunBlobRepairCycle: Cluster-wide blob repair
 
-mod handler;
+mod executor;
+pub(crate) mod handler;
 
 use std::sync::Arc;
 
@@ -20,7 +21,8 @@ use std::sync::Arc;
 pub use aspen_rpc_core::ClientProtocolContext;
 pub use aspen_rpc_core::HandlerFactory;
 pub use aspen_rpc_core::RequestHandler;
-pub use handler::BlobHandler;
+pub use aspen_rpc_core::ServiceHandler;
+pub use executor::BlobServiceExecutor;
 
 // =============================================================================
 // Handler Factory (Plugin Registration)
@@ -53,7 +55,8 @@ impl HandlerFactory for BlobHandlerFactory {
     fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
         // Only create handler if blob store is configured
         if ctx.blob_store.is_some() {
-            Some(Arc::new(BlobHandler))
+            let executor = Arc::new(BlobServiceExecutor::new(ctx.clone()));
+            Some(Arc::new(ServiceHandler::new(executor)))
         } else {
             None
         }

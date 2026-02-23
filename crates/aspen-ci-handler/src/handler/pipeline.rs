@@ -2,6 +2,7 @@
 
 #[cfg(all(feature = "forge", feature = "blob"))]
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use aspen_client_api::CiCancelRunResponse;
 use aspen_client_api::CiGetStatusResponse;
@@ -10,11 +11,14 @@ use aspen_client_api::CiStageInfo;
 #[cfg(all(feature = "forge", feature = "blob"))]
 use aspen_client_api::CiTriggerPipelineResponse;
 use aspen_client_api::ClientRpcResponse;
-use aspen_rpc_core::ClientProtocolContext;
 use tracing::debug;
 use tracing::info;
 
 use super::helpers::pipeline_status_to_string;
+
+/// Type alias for forge node to match executor.
+#[cfg(all(feature = "forge", feature = "blob"))]
+pub type ForgeNodeRef = Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
 
 /// Handle CiTriggerPipeline request.
 ///
@@ -29,8 +33,9 @@ use super::helpers::pipeline_status_to_string;
 /// 5. Create PipelineContext
 /// 6. Execute pipeline via orchestrator
 #[cfg(all(feature = "forge", feature = "blob"))]
-pub(crate) async fn handle_trigger_pipeline(
-    ctx: &ClientProtocolContext,
+pub async fn handle_trigger_pipeline(
+    orchestrator: Option<&Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+    forge_node: Option<&ForgeNodeRef>,
     repo_id: String,
     ref_name: String,
     commit_hash_opt: Option<String>,
@@ -47,7 +52,7 @@ pub(crate) async fn handle_trigger_pipeline(
     use super::helpers::parse_commit_hash;
     use super::helpers::walk_tree_for_file;
 
-    let Some(orchestrator) = &ctx.ci_orchestrator else {
+    let Some(orchestrator) = orchestrator else {
         return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
             is_success: false,
             run_id: None,
@@ -55,7 +60,7 @@ pub(crate) async fn handle_trigger_pipeline(
         }));
     };
 
-    let Some(forge_node) = &ctx.forge_node else {
+    let Some(forge_node) = forge_node else {
         return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
             is_success: false,
             run_id: None,
@@ -250,11 +255,11 @@ pub(crate) async fn handle_trigger_pipeline(
 /// Handle CiGetStatus request.
 ///
 /// Returns the current status of a pipeline run.
-pub(crate) async fn handle_get_status(
-    ctx: &ClientProtocolContext,
+pub async fn handle_get_status(
+    orchestrator: Option<&Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
     run_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    let Some(orchestrator) = &ctx.ci_orchestrator else {
+    let Some(orchestrator) = orchestrator else {
         return Ok(ClientRpcResponse::CiGetStatusResult(CiGetStatusResponse {
             was_found: false,
             run_id: None,
@@ -332,8 +337,8 @@ pub(crate) async fn handle_get_status(
 ///
 /// Lists pipeline runs with optional filtering.
 #[cfg(feature = "forge")]
-pub(crate) async fn handle_list_runs(
-    ctx: &ClientProtocolContext,
+pub async fn handle_list_runs(
+    orchestrator: Option<&Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
     repo_id: Option<String>,
     status: Option<String>,
     limit: Option<u32>,
@@ -343,7 +348,7 @@ pub(crate) async fn handle_list_runs(
     use aspen_forge::identity::RepoId;
     use tracing::warn;
 
-    let Some(orchestrator) = &ctx.ci_orchestrator else {
+    let Some(orchestrator) = orchestrator else {
         return Ok(ClientRpcResponse::CiListRunsResult(CiListRunsResponse { runs: vec![] }));
     };
 
@@ -384,12 +389,12 @@ pub(crate) async fn handle_list_runs(
 /// Handle CiCancelRun request.
 ///
 /// Cancels a running pipeline.
-pub(crate) async fn handle_cancel_run(
-    ctx: &ClientProtocolContext,
+pub async fn handle_cancel_run(
+    orchestrator: Option<&Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
     run_id: String,
     reason: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    let Some(orchestrator) = &ctx.ci_orchestrator else {
+    let Some(orchestrator) = orchestrator else {
         return Ok(ClientRpcResponse::CiCancelRunResult(CiCancelRunResponse {
             is_success: false,
             error: Some("CI orchestrator not available".to_string()),

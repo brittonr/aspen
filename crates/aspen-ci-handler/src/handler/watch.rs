@@ -1,12 +1,16 @@
 //! Repository watch operations: watch, unwatch.
 
+use std::sync::Arc;
+
 use aspen_client_api::CiUnwatchRepoResponse;
 use aspen_client_api::CiWatchRepoResponse;
 use aspen_client_api::ClientRpcResponse;
-use aspen_rpc_core::ClientProtocolContext;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
+
+/// Type alias for forge node to match executor.
+pub type ForgeNodeRef = Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
 
 /// Handle CiWatchRepo request.
 ///
@@ -15,13 +19,14 @@ use tracing::warn;
 /// 1. Registers the repo with TriggerService (in-memory watch list)
 /// 2. Subscribes to the repo's gossip topic for multi-node announcements
 #[cfg(feature = "forge")]
-pub(crate) async fn handle_watch_repo(
-    ctx: &ClientProtocolContext,
+pub async fn handle_watch_repo(
+    trigger_service: Option<&Arc<aspen_ci::TriggerService>>,
+    forge_node: Option<&ForgeNodeRef>,
     repo_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_forge::identity::RepoId;
 
-    let Some(trigger_service) = &ctx.ci_trigger_service else {
+    let Some(trigger_service) = trigger_service else {
         return Ok(ClientRpcResponse::CiWatchRepoResult(CiWatchRepoResponse {
             is_success: false,
             error: Some("CI trigger service not available".to_string()),
@@ -51,7 +56,7 @@ pub(crate) async fn handle_watch_repo(
 
     // Step 2: Subscribe to gossip topic for multi-node announcements
     #[cfg(feature = "forge")]
-    if let Some(forge_node) = &ctx.forge_node {
+    if let Some(forge_node) = forge_node {
         if let Err(e) = forge_node.subscribe_repo_gossip(&repo_id_parsed).await {
             warn!(
                 repo_id = %repo_id,
@@ -87,13 +92,14 @@ pub(crate) async fn handle_watch_repo(
 /// 1. Unregisters the repo from TriggerService
 /// 2. Unsubscribes from the repo's gossip topic
 #[cfg(feature = "forge")]
-pub(crate) async fn handle_unwatch_repo(
-    ctx: &ClientProtocolContext,
+pub async fn handle_unwatch_repo(
+    trigger_service: Option<&Arc<aspen_ci::TriggerService>>,
+    forge_node: Option<&ForgeNodeRef>,
     repo_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_forge::identity::RepoId;
 
-    let Some(trigger_service) = &ctx.ci_trigger_service else {
+    let Some(trigger_service) = trigger_service else {
         return Ok(ClientRpcResponse::CiUnwatchRepoResult(CiUnwatchRepoResponse {
             is_success: false,
             error: Some("CI trigger service not available".to_string()),
@@ -118,7 +124,7 @@ pub(crate) async fn handle_unwatch_repo(
 
     // Step 2: Unsubscribe from gossip topic
     #[cfg(feature = "forge")]
-    if let Some(forge_node) = &ctx.forge_node {
+    if let Some(forge_node) = forge_node {
         if let Err(e) = forge_node.unsubscribe_repo_gossip(&repo_id_parsed).await {
             warn!(
                 repo_id = %repo_id,

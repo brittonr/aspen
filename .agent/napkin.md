@@ -1003,6 +1003,7 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 ### Remaining Extraction Candidates
 
 **Hard (many cross-deps, skip for now):**
+
 - aspen-raft (34.8K, 8 reverse deps, vendored openraft)
 - aspen-cluster (18.6K, 12 reverse deps)
 - aspen-core (12.4K, 29 reverse deps — central hub)
@@ -1014,3 +1015,38 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 - aspen-testing cluster (5 crates, ~12K, many cross-deps)
 - aspen-cluster-bridges (2.3K, 5 workspace deps)
 - aspen-hooks-types (2K, 5 reverse deps)
+
+## Recent Changes (2026-02-23) — ServiceExecutor Migrations + Planning Doc Update
+
+### Planning Doc Updated
+
+- `docs/planning/plugin-system.md` status changed from "Planning" to "Complete"
+- All Phase 1–5 checklist items updated to reflect actual implementation
+- Added "Current Handler Architecture" section documenting three-tier dispatch
+
+### 4 Handlers Migrated to ServiceExecutor Pattern
+
+| Handler | Priority | Deps Captured | Tests |
+|---------|----------|---------------|-------|
+| `aspen-secrets-handler` | 580 | `secrets_service`, `kv_store` | 7 |
+| `aspen-forge-handler` | 540 | `forge_node`, `content_discovery`, `federation_discovery`, `federation_identity`, `federation_trust_manager` | 23 |
+| `aspen-blob-handler` | 520 | `blob_store`, `blob_replication_manager`, `content_discovery`, `kv_store` | 15 |
+| `aspen-ci-handler` | 600 | `ci_orchestrator`, `ci_trigger_service`, `forge_node`, `blob_store`, `kv_store` | 15 |
+
+### Pattern Applied
+
+- Old: `HandlerFactory::create()` → `Arc::new(XHandler)` + `RequestHandler` impl with `ctx` parameter
+- New: `HandlerFactory::create()` → extract deps from ctx → `Arc::new(XServiceExecutor::new(...))` → `ServiceHandler::new()`
+- Sub-handler functions changed from `fn handle(ctx: &ClientProtocolContext, ...)` to `fn handle(dep1: &Arc<...>, dep2: &Arc<...>, ...)`
+- Executor captures deps at construction, doesn't receive ctx during execution
+
+### 2 Handlers Remain as Direct RequestHandler
+
+- **cluster-handler** (priority 120): Tightly coupled to Raft control plane
+- **core-essentials-handler** (priority 100–210): 3 sub-handlers (core, lease, watch) heavily use ctx fields for Raft metrics, state machine access, watch registry
+- Both are in the "core handler" range (100–299) where direct ctx access is appropriate
+
+### ServiceExecutor Totals (6 of 8 native handlers)
+
+- docs-handler, job-handler (migrated earlier)
+- blob-handler, ci-handler, forge-handler, secrets-handler (migrated this session)

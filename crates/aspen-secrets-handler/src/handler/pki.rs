@@ -10,7 +10,6 @@ use aspen_client_api::SecretsPkiListResultResponse;
 use aspen_client_api::SecretsPkiRevokeResultResponse;
 use aspen_client_api::SecretsPkiRoleConfig;
 use aspen_client_api::SecretsPkiRoleResultResponse;
-use aspen_rpc_core::ClientProtocolContext;
 use aspen_secrets::pki::CreateRoleRequest;
 use aspen_secrets::pki::GenerateIntermediateRequest;
 use aspen_secrets::pki::GenerateRootRequest;
@@ -48,7 +47,6 @@ impl PkiSecretsHandler {
         &self,
         request: ClientRpcRequest,
         service: &SecretsService,
-        _ctx: &ClientProtocolContext,
     ) -> anyhow::Result<ClientRpcResponse> {
         match request {
             ClientRpcRequest::SecretsPkiGenerateRoot {

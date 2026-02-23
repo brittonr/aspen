@@ -2,13 +2,14 @@
 //!
 //! Handles Nix signing key management for binary caches.
 
+use std::sync::Arc;
+
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::SecretsNixCacheDeleteResultResponse;
 use aspen_client_api::SecretsNixCacheKeyResultResponse;
 use aspen_client_api::SecretsNixCacheListResultResponse;
 use aspen_core::ReadRequest;
-use aspen_rpc_core::ClientProtocolContext;
 use base64::Engine;
 use tracing::debug;
 use tracing::warn;
@@ -35,14 +36,14 @@ impl NixCacheSecretsHandler {
         &self,
         request: ClientRpcRequest,
         service: &SecretsService,
-        ctx: &ClientProtocolContext,
+        kv_store: &Arc<dyn aspen_core::KeyValueStore>,
     ) -> anyhow::Result<ClientRpcResponse> {
         match request {
             ClientRpcRequest::SecretsNixCacheCreateKey { mount, cache_name } => {
                 handle_nix_cache_create_key(service, &mount, cache_name).await
             }
             ClientRpcRequest::SecretsNixCacheGetPublicKey { mount, cache_name } => {
-                handle_nix_cache_get_public_key(service, &mount, cache_name, ctx).await
+                handle_nix_cache_get_public_key(service, &mount, cache_name, kv_store).await
             }
             ClientRpcRequest::SecretsNixCacheRotateKey { mount, cache_name } => {
                 handle_nix_cache_rotate_key(service, &mount, cache_name).await
@@ -139,13 +140,13 @@ async fn handle_nix_cache_get_public_key(
     service: &SecretsService,
     mount: &str,
     cache_name: String,
-    ctx: &ClientProtocolContext,
+    kv_store: &Arc<dyn aspen_core::KeyValueStore>,
 ) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, cache_name = %cache_name, "Nix cache get public key request");
 
     // First try to read from Raft KV store (faster, distributed)
     let read_request = ReadRequest::new("_system:nix-cache:public-key");
-    match ctx.kv_store.read(read_request).await {
+    match kv_store.read(read_request).await {
         Ok(read_result) => {
             if let Some(kv) = read_result.kv {
                 let public_key = kv.value;

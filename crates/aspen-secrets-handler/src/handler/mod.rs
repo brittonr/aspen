@@ -8,81 +8,12 @@
 //! they depend on native crypto libraries (rcgen, ed25519) that
 //! cannot yet run inside the WASM sandbox.
 
-mod nix_cache;
-mod pki;
+pub(crate) mod nix_cache;
+pub(crate) mod pki;
 
 use std::sync::Arc;
 
-use aspen_client_api::ClientRpcRequest;
-use aspen_client_api::ClientRpcResponse;
-use aspen_rpc_core::ClientProtocolContext;
-use aspen_rpc_core::RequestHandler;
 use aspen_secrets::PkiStore;
-use nix_cache::NixCacheSecretsHandler;
-use pki::PkiSecretsHandler;
-
-/// Handler for native-only secrets engine operations (PKI + Nix Cache).
-///
-/// KV and Transit operations are now served by the WASM secrets plugin.
-/// This handler retains only the operations that require native crypto.
-pub struct SecretsHandler;
-
-impl SecretsHandler {
-    /// Obtain the secrets service from the context, or return an error response.
-    #[allow(clippy::result_large_err)]
-    fn get_secrets_service(ctx: &ClientProtocolContext) -> Result<Arc<SecretsService>, ClientRpcResponse> {
-        let Some(ref secrets_any) = ctx.secrets_service else {
-            return Err(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
-                code: "SECRETS_NOT_ENABLED".to_string(),
-                message: "Secrets engine is not enabled on this node".to_string(),
-            }));
-        };
-
-        secrets_any.clone().downcast::<SecretsService>().map_err(|_| {
-            ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
-                code: "SECRETS_SERVICE_ERROR".to_string(),
-                message: "Secrets service has wrong type".to_string(),
-            })
-        })
-    }
-}
-
-#[async_trait::async_trait]
-impl RequestHandler for SecretsHandler {
-    fn can_handle(&self, request: &ClientRpcRequest) -> bool {
-        let pki = PkiSecretsHandler;
-        let nix_cache = NixCacheSecretsHandler;
-
-        pki.can_handle(request) || nix_cache.can_handle(request)
-    }
-
-    async fn handle(
-        &self,
-        request: ClientRpcRequest,
-        ctx: &ClientProtocolContext,
-    ) -> anyhow::Result<ClientRpcResponse> {
-        let secrets_service = match Self::get_secrets_service(ctx) {
-            Ok(service) => service,
-            Err(error_response) => return Ok(error_response),
-        };
-
-        let pki = PkiSecretsHandler;
-        let nix_cache = NixCacheSecretsHandler;
-
-        if pki.can_handle(&request) {
-            return pki.handle(request, &secrets_service, ctx).await;
-        }
-        if nix_cache.can_handle(&request) {
-            return nix_cache.handle(request, &secrets_service, ctx).await;
-        }
-
-        Err(anyhow::anyhow!("request not handled by SecretsHandler"))
-    }
-
-    fn name(&self) -> &'static str {
-        "SecretsHandler"
-    }
-}
 
 /// Secrets service with multi-mount support.
 ///
@@ -216,204 +147,73 @@ mod tests {
 
     use aspen_client_api::ClientRpcRequest;
     use aspen_client_api::ClientRpcResponse;
-    use aspen_rpc_core::test_support::TestContextBuilder;
 
     use super::*;
-
-    // =========================================================================
-    // Mock EndpointProvider for Testing
-    // =========================================================================
-
-    struct MockEndpointProvider {
-        endpoint: iroh::Endpoint,
-        node_addr: iroh::EndpointAddr,
-        public_key: Vec<u8>,
-        peer_id: String,
-    }
-
-    impl MockEndpointProvider {
-        async fn new() -> Self {
-            let mut key_bytes = [0u8; 32];
-            key_bytes[0..8].copy_from_slice(&0u64.to_le_bytes());
-            let secret_key = iroh::SecretKey::from_bytes(&key_bytes);
-
-            let endpoint = iroh::Endpoint::builder()
-                .secret_key(secret_key.clone())
-                .bind_addr_v4("127.0.0.1:0".parse().unwrap())
-                .bind()
-                .await
-                .expect("failed to create mock endpoint");
-
-            let node_addr = endpoint.addr();
-            let public_key = secret_key.public().as_bytes().to_vec();
-            let peer_id = node_addr.id.fmt_short().to_string();
-
-            Self {
-                endpoint,
-                node_addr,
-                public_key,
-                peer_id,
-            }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl aspen_core::EndpointProvider for MockEndpointProvider {
-        async fn public_key(&self) -> Vec<u8> {
-            self.public_key.clone()
-        }
-
-        async fn peer_id(&self) -> String {
-            self.peer_id.clone()
-        }
-
-        async fn addresses(&self) -> Vec<String> {
-            vec!["127.0.0.1:0".to_string()]
-        }
-
-        fn node_addr(&self) -> &iroh::EndpointAddr {
-            &self.node_addr
-        }
-
-        fn endpoint(&self) -> &iroh::Endpoint {
-            &self.endpoint
-        }
-    }
 
     fn make_secrets_service(kv_store: Arc<dyn aspen_core::KeyValueStore>) -> SecretsService {
         let mount_registry = Arc::new(aspen_secrets::MountRegistry::new(kv_store));
         SecretsService::new(mount_registry)
     }
 
-    async fn setup_test_context_with_secrets() -> ClientProtocolContext {
+    async fn setup_test_executor() -> crate::SecretsServiceExecutor {
         use aspen_testing::DeterministicKeyValueStore;
 
-        let mock_endpoint: Arc<dyn aspen_core::EndpointProvider> = Arc::new(MockEndpointProvider::new().await);
         let kv_store: Arc<dyn aspen_core::KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());
         let secrets_service = Arc::new(make_secrets_service(Arc::clone(&kv_store)));
 
-        let builder = TestContextBuilder::new()
-            .with_node_id(1)
-            .with_endpoint_manager(mock_endpoint)
-            .with_cookie("test_cluster")
-            .with_kv_store(kv_store);
-
-        let mut ctx = builder.build();
-        ctx.secrets_service = Some(secrets_service);
-        ctx
-    }
-
-    async fn setup_test_context_without_secrets() -> ClientProtocolContext {
-        let mock_endpoint: Arc<dyn aspen_core::EndpointProvider> = Arc::new(MockEndpointProvider::new().await);
-
-        let builder = TestContextBuilder::new()
-            .with_node_id(1)
-            .with_endpoint_manager(mock_endpoint)
-            .with_cookie("test_cluster");
-
-        builder.build()
+        crate::SecretsServiceExecutor::new(secrets_service, kv_store)
     }
 
     // =========================================================================
-    // Dispatch Tests
-    // =========================================================================
-
-    #[test]
-    fn test_can_handle_pki_generate_root() {
-        let handler = SecretsHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::SecretsPkiGenerateRoot {
-            mount: "pki".to_string(),
-            common_name: "Test CA".to_string(),
-            ttl_days: Some(365),
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_pki_issue() {
-        let handler = SecretsHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::SecretsPkiIssue {
-            mount: "pki".to_string(),
-            role: "web-servers".to_string(),
-            common_name: "www.example.com".to_string(),
-            alt_names: vec![],
-            ttl_days: Some(30),
-        }));
-    }
-
-    #[test]
-    fn test_rejects_kv_requests() {
-        let handler = SecretsHandler;
-        // KV requests are now handled by WASM plugin
-        assert!(!handler.can_handle(&ClientRpcRequest::SecretsKvRead {
-            mount: "secret".to_string(),
-            path: "test/path".to_string(),
-            version: None,
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::SecretsKvWrite {
-            mount: "secret".to_string(),
-            path: "test/path".to_string(),
-            data: std::collections::HashMap::new(),
-            cas: None,
-        }));
-    }
-
-    #[test]
-    fn test_rejects_transit_requests() {
-        let handler = SecretsHandler;
-        // Transit requests are now handled by WASM plugin
-        assert!(!handler.can_handle(&ClientRpcRequest::SecretsTransitCreateKey {
-            mount: "transit".to_string(),
-            name: "my-key".to_string(),
-            key_type: "aes256-gcm".to_string(),
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::SecretsTransitEncrypt {
-            mount: "transit".to_string(),
-            name: "my-key".to_string(),
-            plaintext: b"test".to_vec(),
-            context: None,
-        }));
-    }
-
-    #[test]
-    fn test_rejects_unrelated_requests() {
-        let handler = SecretsHandler;
-        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
-        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
-        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
-            key: "test".to_string(),
-        }));
-    }
-
-    #[test]
-    fn test_handler_name() {
-        let handler = SecretsHandler;
-        assert_eq!(handler.name(), "SecretsHandler");
-    }
-
-    // =========================================================================
-    // Secrets Service Availability
+    // Executor Tests
     // =========================================================================
 
     #[tokio::test]
-    async fn test_secrets_not_enabled_error() {
-        let ctx = setup_test_context_without_secrets().await;
-        let handler = SecretsHandler;
+    async fn test_executor_handles_pki_requests() {
+        use aspen_rpc_core::ServiceExecutor;
 
-        let request = ClientRpcRequest::SecretsPkiGenerateRoot {
-            mount: "pki".to_string(),
-            common_name: "Test CA".to_string(),
-            ttl_days: Some(365),
-        };
+        let executor = setup_test_executor().await;
 
-        let result = handler.handle(request, &ctx).await;
-        assert!(result.is_ok());
+        // Check that the executor handles PKI requests
+        assert!(executor.handles().contains(&"SecretsPkiGenerateRoot"));
+        assert!(executor.handles().contains(&"SecretsPkiIssue"));
+        assert!(executor.handles().contains(&"SecretsPkiCreateRole"));
+    }
 
-        match result.unwrap() {
-            ClientRpcResponse::Error(err) => {
-                assert_eq!(err.code, "SECRETS_NOT_ENABLED");
-            }
-            other => panic!("expected Error response, got {:?}", other),
-        }
+    #[tokio::test]
+    async fn test_executor_handles_nix_cache_requests() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+
+        // Check that the executor handles Nix Cache requests
+        assert!(executor.handles().contains(&"SecretsNixCacheCreateKey"));
+        assert!(executor.handles().contains(&"SecretsNixCacheGetPublicKey"));
+        assert!(executor.handles().contains(&"SecretsNixCacheListKeys"));
+    }
+
+    #[tokio::test]
+    async fn test_executor_service_name() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+        assert_eq!(executor.service_name(), "secrets");
+    }
+
+    #[tokio::test]
+    async fn test_executor_priority() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+        assert_eq!(executor.priority(), 580);
+    }
+
+    #[tokio::test]
+    async fn test_executor_app_id() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+        assert_eq!(executor.app_id(), Some("secrets"));
     }
 
     // =========================================================================
@@ -422,8 +222,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_pki_generate_root() {
-        let ctx = setup_test_context_with_secrets().await;
-        let handler = SecretsHandler;
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
 
         let request = ClientRpcRequest::SecretsPkiGenerateRoot {
             mount: "pki".to_string(),
@@ -431,7 +232,7 @@ mod tests {
             ttl_days: Some(365),
         };
 
-        let result = handler.handle(request, &ctx).await;
+        let result = executor.execute(request).await;
         assert!(result.is_ok());
 
         match result.unwrap() {
@@ -446,8 +247,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_pki_create_role_and_issue() {
-        let ctx = setup_test_context_with_secrets().await;
-        let handler = SecretsHandler;
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
 
         // Generate root CA first
         let gen_root = ClientRpcRequest::SecretsPkiGenerateRoot {
@@ -455,7 +257,7 @@ mod tests {
             common_name: "Test CA".to_string(),
             ttl_days: Some(365),
         };
-        let _ = handler.handle(gen_root, &ctx).await.unwrap();
+        let _ = executor.execute(gen_root).await.unwrap();
 
         // Create role
         let create_role = ClientRpcRequest::SecretsPkiCreateRole {
@@ -468,7 +270,7 @@ mod tests {
             allow_subdomains: false,
         };
 
-        let result = handler.handle(create_role, &ctx).await;
+        let result = executor.execute(create_role).await;
         assert!(result.is_ok());
 
         match result.unwrap() {
@@ -489,7 +291,7 @@ mod tests {
             ttl_days: Some(30),
         };
 
-        let result = handler.handle(issue, &ctx).await;
+        let result = executor.execute(issue).await;
         assert!(result.is_ok());
 
         match result.unwrap() {

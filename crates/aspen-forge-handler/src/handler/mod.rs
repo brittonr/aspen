@@ -1,65 +1,15 @@
-//! Forge (decentralized Git) request handler — native portion.
+//! Forge (decentralized Git) handler sub-modules.
 //!
 //! Repos, objects, refs, issues, and patches have been migrated to
-//! `aspen-forge-plugin` (WASM). This native handler retains only the
-//! operations that require `ForgeNode` context access:
+//! `aspen-forge-plugin` (WASM). This module retains only the handler
+//! functions that require `ForgeNode` context or federation infrastructure:
 //!
-//! - `FederationSubHandler` for cross-cluster sync and delegate keys (9 ops)
-//! - `GitBridgeSubHandler` for git-remote-aspen interop (6 ops)
+//! - Federation operations (9 ops)
+//! - Git Bridge operations (6 ops)
+//!
+//! The `ForgeServiceExecutor` in `executor.rs` wraps these as a `ServiceExecutor`.
 
-mod federation;
-mod git_bridge;
-mod handlers;
-
-use aspen_client_api::ClientRpcRequest;
-use aspen_client_api::ClientRpcResponse;
-use aspen_rpc_core::ClientProtocolContext;
-use aspen_rpc_core::RequestHandler;
-use federation::FederationSubHandler;
-use git_bridge::GitBridgeSubHandler;
-
-/// Handler for Forge operations.
-pub struct ForgeHandler;
-
-#[async_trait::async_trait]
-impl RequestHandler for ForgeHandler {
-    fn can_handle(&self, request: &ClientRpcRequest) -> bool {
-        let federation = FederationSubHandler;
-        let git_bridge = GitBridgeSubHandler;
-
-        federation.can_handle(request) || git_bridge.can_handle(request)
-    }
-
-    async fn handle(
-        &self,
-        request: ClientRpcRequest,
-        ctx: &ClientProtocolContext,
-    ) -> anyhow::Result<ClientRpcResponse> {
-        // Check if forge node is available
-        let forge_node = match &ctx.forge_node {
-            Some(node) => node,
-            None => {
-                return Ok(ClientRpcResponse::error("FORGE_UNAVAILABLE", "Forge feature not configured on this node"));
-            }
-        };
-
-        let federation = FederationSubHandler;
-        let git_bridge = GitBridgeSubHandler;
-
-        if federation.can_handle(&request) {
-            return federation.handle(request, ctx, forge_node).await;
-        }
-        if git_bridge.can_handle(&request) {
-            return git_bridge.handle(request, ctx, forge_node).await;
-        }
-
-        Err(anyhow::anyhow!("request not handled by ForgeHandler"))
-    }
-
-    fn name(&self) -> &'static str {
-        "ForgeHandler"
-    }
-}
+pub(crate) mod handlers;
 
 // =============================================================================
 // Tests
@@ -68,422 +18,56 @@ impl RequestHandler for ForgeHandler {
 #[cfg(test)]
 mod tests {
     use aspen_client_api::ClientRpcRequest;
+    use aspen_rpc_core::ServiceExecutor;
 
-    use super::*;
-
-    // =========================================================================
-    // Handler Dispatch Tests (can_handle)
-    // =========================================================================
-
-    // --- Repos/Objects/Refs/Issues/Patches (all migrated to WASM plugin) ---
-
+    /// Verify the executor handles the correct set of operations.
     #[test]
-    fn test_repos_migrated_to_plugin() {
-        let handler = ForgeHandler;
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeCreateRepo {
-            name: "x".into(),
-            description: None,
-            default_branch: None,
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeGetRepo { repo_id: "x".into() }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeListRepos {
-            limit: None,
-            offset: None,
-        }));
+    fn test_executor_handles_count() {
+        let handles = crate::ForgeServiceExecutor::HANDLES;
+        // 9 federation + 6 git bridge = 15
+        assert_eq!(handles.len(), 15);
     }
 
     #[test]
-    fn test_objects_migrated_to_plugin() {
-        let handler = ForgeHandler;
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeStoreBlob {
-            repo_id: "x".into(),
-            content: vec![],
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeGetBlob { hash: "x".into() }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeCreateTree {
-            repo_id: "x".into(),
-            entries_json: "[]".into(),
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeGetTree { hash: "x".into() }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeCommit {
-            repo_id: "x".into(),
-            tree: "x".into(),
-            parents: vec![],
-            message: "x".into(),
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeGetCommit { hash: "x".into() }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeLog {
-            repo_id: "x".into(),
-            ref_name: None,
-            limit: None,
-        }));
+    fn test_executor_handles_federation_ops() {
+        let handles = crate::ForgeServiceExecutor::HANDLES;
+        assert!(handles.contains(&"ForgeGetDelegateKey"));
+        assert!(handles.contains(&"GetFederationStatus"));
+        assert!(handles.contains(&"ListDiscoveredClusters"));
+        assert!(handles.contains(&"GetDiscoveredCluster"));
+        assert!(handles.contains(&"TrustCluster"));
+        assert!(handles.contains(&"UntrustCluster"));
+        assert!(handles.contains(&"FederateRepository"));
+        assert!(handles.contains(&"ListFederatedRepositories"));
+        assert!(handles.contains(&"ForgeFetchFederated"));
     }
 
     #[test]
-    fn test_refs_migrated_to_plugin() {
-        let handler = ForgeHandler;
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeGetRef {
-            repo_id: "x".into(),
-            ref_name: "x".into(),
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeSetRef {
-            repo_id: "x".into(),
-            ref_name: "x".into(),
-            hash: "x".into(),
-            signer: None,
-            signature: None,
-            timestamp_ms: None,
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeDeleteRef {
-            repo_id: "x".into(),
-            ref_name: "x".into(),
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeCasRef {
-            repo_id: "x".into(),
-            ref_name: "x".into(),
-            expected: None,
-            new_hash: "x".into(),
-            signer: None,
-            signature: None,
-            timestamp_ms: None,
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeListBranches { repo_id: "x".into() }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeListTags { repo_id: "x".into() }));
+    fn test_executor_handles_git_bridge_ops() {
+        let handles = crate::ForgeServiceExecutor::HANDLES;
+        assert!(handles.contains(&"GitBridgeListRefs"));
+        assert!(handles.contains(&"GitBridgeFetch"));
+        assert!(handles.contains(&"GitBridgePush"));
+        assert!(handles.contains(&"GitBridgePushStart"));
+        assert!(handles.contains(&"GitBridgePushChunk"));
+        assert!(handles.contains(&"GitBridgePushComplete"));
     }
 
     #[test]
-    fn test_issues_migrated_to_plugin() {
-        let handler = ForgeHandler;
-        // Issues are now handled by the WASM forge plugin, not the native handler
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeCreateIssue {
-            repo_id: "x".into(),
-            title: "x".into(),
-            body: "x".into(),
-            labels: vec![],
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeListIssues {
-            repo_id: "x".into(),
-            state: None,
-            limit: None,
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeGetIssue {
-            repo_id: "x".into(),
-            issue_id: "x".into(),
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeCommentIssue {
-            repo_id: "x".into(),
-            issue_id: "x".into(),
-            body: "x".into(),
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeCloseIssue {
-            repo_id: "x".into(),
-            issue_id: "x".into(),
-            reason: None,
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeReopenIssue {
-            repo_id: "x".into(),
-            issue_id: "x".into(),
-        }));
+    fn test_executor_does_not_handle_migrated_ops() {
+        let handles = crate::ForgeServiceExecutor::HANDLES;
+        // These are handled by WASM forge plugin
+        assert!(!handles.contains(&"ForgeCreateRepo"));
+        assert!(!handles.contains(&"ForgeGetRef"));
+        assert!(!handles.contains(&"ForgeCreateIssue"));
+        assert!(!handles.contains(&"ForgeCreatePatch"));
     }
 
     #[test]
-    fn test_patches_migrated_to_plugin() {
-        let handler = ForgeHandler;
-        // Patches are now handled by the WASM forge plugin, not the native handler
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeCreatePatch {
-            repo_id: "x".into(),
-            title: "x".into(),
-            description: "x".into(),
-            base: "x".into(),
-            head: "x".into(),
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeListPatches {
-            repo_id: "x".into(),
-            state: None,
-            limit: None,
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeGetPatch {
-            repo_id: "x".into(),
-            patch_id: "x".into(),
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeUpdatePatch {
-            repo_id: "x".into(),
-            patch_id: "x".into(),
-            head: "x".into(),
-            message: None,
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeApprovePatch {
-            repo_id: "x".into(),
-            patch_id: "x".into(),
-            commit: "x".into(),
-            message: None,
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeMergePatch {
-            repo_id: "x".into(),
-            patch_id: "x".into(),
-            merge_commit: "x".into(),
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::ForgeClosePatch {
-            repo_id: "x".into(),
-            patch_id: "x".into(),
-            reason: None,
-        }));
-    }
-
-    // --- Delegate Key ---
-
-    #[test]
-    fn test_can_handle_get_delegate_key() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetDelegateKey {
-            repo_id: "abcd1234".to_string(),
-        }));
-    }
-
-    // --- Federation Operations ---
-
-    #[test]
-    fn test_can_handle_get_federation_status() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::GetFederationStatus));
-    }
-
-    #[test]
-    fn test_can_handle_list_discovered_clusters() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ListDiscoveredClusters));
-    }
-
-    #[test]
-    fn test_can_handle_get_discovered_cluster() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::GetDiscoveredCluster {
-            cluster_key: "cluster_key".to_string(),
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_trust_cluster() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::TrustCluster {
-            cluster_key: "cluster_key".to_string(),
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_untrust_cluster() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::UntrustCluster {
-            cluster_key: "cluster_key".to_string(),
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_federate_repository() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::FederateRepository {
-            repo_id: "abcd1234".to_string(),
-            mode: "push".to_string(),
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_list_federated_repositories() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ListFederatedRepositories));
-    }
-
-    #[test]
-    fn test_can_handle_forge_fetch_federated() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeFetchFederated {
-            federated_id: "fed123".to_string(),
-            remote_cluster: "remote".to_string(),
-        }));
-    }
-
-    // --- Git Bridge Operations ---
-
-    #[test]
-    fn test_can_handle_git_bridge_list_refs() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::GitBridgeListRefs {
-            repo_id: "abcd1234".to_string(),
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_git_bridge_fetch() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::GitBridgeFetch {
-            repo_id: "abcd1234".to_string(),
-            want: vec!["sha1_want".to_string()],
-            have: vec!["sha1_have".to_string()],
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_git_bridge_push() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePush {
-            repo_id: "abcd1234".to_string(),
-            objects: vec![],
-            refs: vec![],
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_git_bridge_push_start() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePushStart {
-            repo_id: "abcd1234".to_string(),
-            total_objects: 100,
-            total_size_bytes: 1024,
-            refs: vec![],
-            metadata: None,
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_git_bridge_push_chunk() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePushChunk {
-            session_id: "session123".to_string(),
-            chunk_id: 1,
-            total_chunks: 5,
-            objects: vec![],
-            chunk_hash: [0; 32],
-        }));
-    }
-
-    #[test]
-    fn test_can_handle_git_bridge_push_complete() {
-        let handler = ForgeHandler;
-        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePushComplete {
-            session_id: "session123".to_string(),
-            content_hash: [0; 32],
-        }));
-    }
-
-    // --- Rejection Tests ---
-
-    #[test]
-    fn test_rejects_unrelated_requests() {
-        let handler = ForgeHandler;
-
-        // Core requests
-        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
-        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
-
-        // KV requests
-        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
-            key: "test".to_string(),
-        }));
-        assert!(!handler.can_handle(&ClientRpcRequest::WriteKey {
-            key: "test".to_string(),
-            value: vec![1, 2, 3],
-        }));
-
-        // Cluster requests
-        assert!(!handler.can_handle(&ClientRpcRequest::InitCluster));
-        assert!(!handler.can_handle(&ClientRpcRequest::GetClusterState));
-
-        // Coordination requests
-        assert!(!handler.can_handle(&ClientRpcRequest::LockAcquire {
-            key: "test".to_string(),
-            holder_id: "holder".to_string(),
-            ttl_ms: 30000,
-            timeout_ms: 0,
-        }));
-
-        // Secrets requests (forge handler should NOT handle these)
-        {
-            use std::collections::HashMap;
-            assert!(!handler.can_handle(&ClientRpcRequest::SecretsKvRead {
-                mount: "secret".to_string(),
-                path: "test/path".to_string(),
-                version: None,
-            }));
-            assert!(!handler.can_handle(&ClientRpcRequest::SecretsKvWrite {
-                mount: "secret".to_string(),
-                path: "test/path".to_string(),
-                data: HashMap::new(),
-                cas: None,
-            }));
-        }
-    }
-
-    #[test]
-    fn test_handler_name() {
-        let handler = ForgeHandler;
-        assert_eq!(handler.name(), "ForgeHandler");
-    }
-
-    // =========================================================================
-    // Request Variant Coverage Tests
-    // =========================================================================
-
-    /// Native handler only covers federation (9) + git bridge (6) = 15 ops.
-    /// Repos (3), objects (7), refs (6), issues (6), patches (7) all
-    /// migrated to aspen-forge-plugin (WASM).
-    #[test]
-    fn test_native_handler_variants_covered() {
-        let handler = ForgeHandler;
-
-        // Delegate Key (1) — part of federation sub-handler
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetDelegateKey { repo_id: "x".into() }));
-
-        // Federation (8)
-        assert!(handler.can_handle(&ClientRpcRequest::GetFederationStatus));
-        assert!(handler.can_handle(&ClientRpcRequest::ListDiscoveredClusters));
-        assert!(handler.can_handle(&ClientRpcRequest::GetDiscoveredCluster {
-            cluster_key: "x".into()
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::TrustCluster {
-            cluster_key: "x".into()
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::UntrustCluster {
-            cluster_key: "x".into()
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::FederateRepository {
-            repo_id: "x".into(),
-            mode: "x".into()
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::ListFederatedRepositories));
-        assert!(handler.can_handle(&ClientRpcRequest::ForgeFetchFederated {
-            federated_id: "x".into(),
-            remote_cluster: "x".into()
-        }));
-
-        // Git Bridge (6)
-        assert!(handler.can_handle(&ClientRpcRequest::GitBridgeListRefs { repo_id: "x".into() }));
-        assert!(handler.can_handle(&ClientRpcRequest::GitBridgeFetch {
-            repo_id: "x".into(),
-            want: vec![],
-            have: vec![]
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePush {
-            repo_id: "x".into(),
-            objects: vec![],
-            refs: vec![]
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePushStart {
-            repo_id: "x".into(),
-            total_objects: 1,
-            total_size_bytes: 1024,
-            refs: vec![],
-            metadata: None
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePushChunk {
-            session_id: "x".into(),
-            chunk_id: 1,
-            total_chunks: 1,
-            objects: vec![],
-            chunk_hash: [0; 32]
-        }));
-        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePushComplete {
-            session_id: "x".into(),
-            content_hash: [0; 32]
-        }));
+    fn test_executor_metadata() {
+        use crate::ForgeServiceExecutor;
+        assert_eq!(ForgeServiceExecutor::SERVICE_NAME, "forge");
+        assert_eq!(ForgeServiceExecutor::PRIORITY, 540);
+        assert_eq!(ForgeServiceExecutor::APP_ID, Some("forge"));
     }
 }

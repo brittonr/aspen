@@ -2,9 +2,9 @@
 
 > Planning document for implementing a plugin system that enables heterogeneous clusters with different capabilities to communicate seamlessly.
 
-**Status:** Planning
+**Status:** Complete (Phase 1–5 implemented; plugin registry deferred)
 **Created:** 2026-02-04
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-02-23
 
 ## Table of Contents
 
@@ -1070,76 +1070,78 @@ Based on FDB learnings, we should emphasize:
 
 ## Implementation Roadmap
 
-### Phase 1: Plugin Trait Formalization
+### Phase 1: Plugin Trait Formalization ✅
 
 **Goal:** Formalize existing patterns without breaking changes.
 
 **Tasks:**
 
-- [ ] Create `aspen-plugin-api` crate
-- [ ] Define `Plugin`, `PluginManifest`, `PluginContext` types
-- [ ] Add `PluginRegistry` for lifecycle management
-- [ ] Migrate `aspen-forge` as reference implementation
-- [ ] Update `HandlerRegistry` to use plugin handlers
+- [x] Create `aspen-plugin-api` crate (`crates/aspen-plugin-api/`)
+- [x] Define `Plugin`, `PluginManifest`, `PluginContext` types
+- [x] Add `PluginRegistry` for lifecycle management (`LivePluginRegistry` in `aspen-wasm-plugin`)
+- [x] Migrate `aspen-forge` as reference implementation (30 ops → WASM plugin)
+- [x] Update `HandlerRegistry` to use plugin handlers (`ArcSwap` hot-reload, `WasmPluginHandler`)
 
 **Deliverables:**
 
-- `crates/aspen-plugin-api/`
-- Forge working as a Plugin impl
+- `crates/aspen-plugin-api/` ✅
+- Forge working as WASM plugin (`crates/aspen-forge-plugin/`) ✅
 
-### Phase 2: Capability Advertisement
+### Phase 2: Capability Advertisement ✅
 
 **Goal:** Enable heterogeneous cluster federation.
 
 **Tasks:**
 
-- [ ] Add `ClusterCapabilities` to federation identity
-- [ ] Implement `required_capability()` for requests
-- [ ] Add `CapabilityUnavailable` response type
-- [ ] Update gossip to propagate capabilities
-- [ ] Add capability hints to error responses
+- [x] Add `ClusterCapabilities` to federation identity (`AppManifest`, `AppRegistry`, `ClusterAnnouncement`)
+- [x] Implement `required_capability()` for requests (`app_id()` on handlers)
+- [x] Add `CapabilityUnavailable` response type
+- [x] Update gossip to propagate capabilities (federation discovery)
+- [x] Add capability hints to error responses
 
 **Deliverables:**
 
-- Clusters advertise their plugins
-- Graceful errors with routing hints
+- Clusters advertise their plugins ✅
+- Graceful errors with routing hints ✅
 
-### Phase 3: WASM Runtime
+### Phase 3: WASM Runtime ✅
 
 **Goal:** Support sandboxed WASM plugins.
 
 **Tasks:**
 
-- [ ] Create `aspen-wasm-runtime` crate
-- [ ] Define WIT interfaces for host functions
-- [ ] Implement host function bindings
-- [ ] Add `WasmPluginHandler` to registry
-- [ ] Support loading from filesystem and blob store
-- [ ] Add resource limits (fuel, memory)
+- [x] Create `aspen-wasm-plugin` crate (uses `hyperlight-wasm` runtime)
+- [x] Define host function ABI (23 functions, documented in `HOST_ABI.md`)
+- [x] Implement host function bindings (`aspen-wasm-guest-sdk`)
+- [x] Add `WasmPluginHandler` to registry
+- [x] Support loading from filesystem and blob store
+- [x] Add resource limits (execution timeout, memory limits, KV prefix isolation)
 
 **Deliverables:**
 
-- `crates/aspen-wasm-runtime/`
-- Example WASM plugin
-- Plugin loading from config
+- `crates/aspen-wasm-plugin/` ✅
+- `crates/aspen-wasm-guest-sdk/` ✅
+- Example + production WASM plugins ✅
+- Plugin loading from CLI (`plugin install`) ✅
 
-### Phase 4: Cross-Cluster Routing (Optional)
+### Phase 4: Cross-Cluster Routing ✅
 
 **Goal:** Transparent request routing to capable clusters.
 
 **Tasks:**
 
-- [ ] Add `proxy_to_capable_clusters` config option
-- [ ] Implement proxy logic in `HandlerRegistry`
-- [ ] Add request tracing for proxied requests
-- [ ] Handle proxy loops (max hops)
+- [x] Add `ProxyConfig` with `is_enabled` and `max_connections`
+- [x] Implement proxy logic in `HandlerRegistry` (dispatch tries proxy before `CapabilityUnavailable`)
+- [x] Add request tracing for proxied requests (`proxy_hops` on `AuthenticatedRequest`)
+- [x] Handle proxy loops (max hops)
 
 **Deliverables:**
 
-- Optional request proxying
-- Transparent capability routing
+- Optional request proxying ✅
+- Transparent capability routing ✅
+- CLI proxy commands (`proxy start`, `proxy forward`) ✅
 
-### Phase 5: Plugin Ecosystem
+### Phase 5: Plugin Ecosystem ✅ (registry deferred)
 
 **Goal:** Make plugin development easy.
 
@@ -1154,9 +1156,34 @@ Based on FDB learnings, we should emphasize:
 
 **Deliverables:**
 
-- Plugin SDK
-- Documentation
-- Example plugins
+- Plugin SDK ✅
+- Documentation ✅
+- Example plugins ✅
+
+### Current Handler Architecture (as of 2026-02-23)
+
+Three dispatch tiers, ordered by priority:
+
+| Tier | Abstraction | Priority | Use Case | Examples |
+|------|-------------|----------|----------|----------|
+| 1 | `RequestHandler` (native) | 100–299 | Tightly-coupled control plane | cluster-handler, core-essentials (core, lease, watch) |
+| 2 | `ServiceExecutor` → `ServiceHandler` | 500–600 | Domain services with typed dispatch | blob, ci, docs, forge, job, secrets |
+| 3 | `AspenPlugin` → `WasmPluginHandler` | 900–999 | Sandboxed third-party plugins | forge-plugin, coordination, kv, dns, sql, hooks, secrets-plugin, automerge, service-registry |
+
+**11 handlers migrated to WASM** (~12K lines). **6 handlers use ServiceExecutor**, **2 remain direct RequestHandler**.
+
+Native handlers (all use ServiceExecutor unless noted):
+
+| Handler | Tier | Priority | Reason native |
+|---------|------|----------|---------------|
+| `aspen-core-essentials-handler` | 1 (RequestHandler) | 100–210 | Raft metrics, leases, watches — tightly coupled to control plane |
+| `aspen-cluster-handler` | 1 (RequestHandler) | 120 | Raft membership, snapshots — tightly coupled to control plane |
+| `aspen-blob-handler` | 2 (ServiceExecutor) | 520 | iroh-blobs, DHT, replication |
+| `aspen-docs-handler` | 2 (ServiceExecutor) | 530 | iroh-docs sync, peer federation |
+| `aspen-forge-handler` | 2 (ServiceExecutor) | 540 | Federation + git bridge (15 ops) |
+| `aspen-secrets-handler` | 2 (ServiceExecutor) | 580 | PKI/X.509 crypto, Nix cache signing |
+| `aspen-ci-handler` | 2 (ServiceExecutor) | 600 | Pipeline orchestration, artifacts, logs |
+| `aspen-job-handler` | 2 (ServiceExecutor) | 560 | Distributed job queue, worker coordination |
 
 ---
 

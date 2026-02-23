@@ -3,12 +3,12 @@
 use std::collections::HashMap;
 #[cfg(feature = "blob")]
 use std::str::FromStr;
+use std::sync::Arc;
 
 use aspen_client_api::CiArtifactInfo;
 use aspen_client_api::CiGetArtifactResponse;
 use aspen_client_api::CiListArtifactsResponse;
 use aspen_client_api::ClientRpcResponse;
-use aspen_rpc_core::ClientProtocolContext;
 use tracing::info;
 use tracing::warn;
 
@@ -36,8 +36,8 @@ pub(crate) struct ArtifactMetadata {
 ///
 /// Lists artifacts produced by a CI job. Artifacts are stored in the KV store
 /// with metadata and blob hashes for the actual content in the blob store.
-pub(crate) async fn handle_list_artifacts(
-    ctx: &ClientProtocolContext,
+pub async fn handle_list_artifacts(
+    kv_store: &dyn aspen_core::KeyValueStore,
     job_id: String,
     run_id: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
@@ -49,8 +49,7 @@ pub(crate) async fn handle_list_artifacts(
     // Artifact metadata is stored under: _ci:artifacts:{job_id}:{artifact_name}
     let prefix = format!("_ci:artifacts:{}:", job_id);
 
-    let scan_result = ctx
-        .kv_store
+    let scan_result = kv_store
         .scan(ScanRequest {
             prefix,
             limit_results: Some(100), // Tiger Style: bounded results
@@ -105,8 +104,10 @@ pub(crate) async fn handle_list_artifacts(
 /// Handle CiGetArtifact request.
 ///
 /// Returns artifact metadata and a blob ticket for downloading.
-pub(crate) async fn handle_get_artifact(
-    ctx: &ClientProtocolContext,
+#[cfg(feature = "blob")]
+pub async fn handle_get_artifact(
+    kv_store: &dyn aspen_core::KeyValueStore,
+    blob_store: Option<&Arc<aspen_blob::IrohBlobStore>>,
     blob_hash: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     info!(%blob_hash, "getting CI artifact");
@@ -115,8 +116,7 @@ pub(crate) async fn handle_get_artifact(
     // We scan for any artifact with this blob_hash since we don't know the job_id
     let prefix = "_ci:artifacts:".to_string();
 
-    let scan_result = ctx
-        .kv_store
+    let scan_result = kv_store
         .scan(aspen_core::ScanRequest {
             prefix,
             limit_results: Some(1000), // Tiger Style: bounded search
@@ -166,13 +166,13 @@ pub(crate) async fn handle_get_artifact(
 
     // Generate blob ticket for download
     #[cfg(feature = "blob")]
-    let blob_ticket = if let Some(blob_store) = &ctx.blob_store {
+    let blob_ticket = if let Some(store) = blob_store {
         use aspen_blob::prelude::*;
         // Parse blob hash and generate ticket
         match iroh_blobs::Hash::from_str(&blob_hash) {
             Ok(hash) => {
                 // Get blob ticket from the blob store
-                match blob_store.ticket(&hash).await {
+                match store.ticket(&hash).await {
                     Ok(ticket) => Some(ticket.to_string()),
                     Err(e) => {
                         warn!(blob_hash = %blob_hash, error = %e, "failed to generate blob ticket");
@@ -198,6 +198,78 @@ pub(crate) async fn handle_get_artifact(
         is_success: true,
         artifact: Some(artifact),
         blob_ticket,
+        error: None,
+    }))
+}
+
+/// Handle CiGetArtifact request (no-blob variant).
+///
+/// Returns artifact metadata without blob ticket generation.
+#[cfg(not(feature = "blob"))]
+pub async fn handle_get_artifact(
+    kv_store: &dyn aspen_core::KeyValueStore,
+    _blob_store: Option<&Arc<()>>,
+    blob_hash: String,
+) -> anyhow::Result<ClientRpcResponse> {
+    info!(%blob_hash, "getting CI artifact (no blob feature)");
+
+    // Look up artifact metadata by blob hash
+    let prefix = "_ci:artifacts:".to_string();
+
+    let scan_result = kv_store
+        .scan(aspen_core::ScanRequest {
+            prefix,
+            limit_results: Some(1000),
+            continuation_token: None,
+        })
+        .await;
+
+    let entries = match scan_result {
+        Ok(result) => result.entries,
+        Err(e) => {
+            warn!(blob_hash = %blob_hash, error = %e, "failed to scan for artifact");
+            return Ok(ClientRpcResponse::CiGetArtifactResult(CiGetArtifactResponse {
+                is_success: false,
+                artifact: None,
+                blob_ticket: None,
+                error: Some(format!("Failed to find artifact: {}", e)),
+            }));
+        }
+    };
+
+    // Find the artifact with matching blob_hash
+    let mut found_artifact = None;
+    for entry in entries {
+        if let Ok(metadata) = serde_json::from_str::<ArtifactMetadata>(&entry.value)
+            && metadata.blob_hash == blob_hash
+        {
+            found_artifact = Some(CiArtifactInfo {
+                blob_hash: metadata.blob_hash,
+                name: metadata.name,
+                size_bytes: metadata.size_bytes,
+                content_type: metadata.content_type,
+                created_at: metadata.created_at,
+                metadata: metadata.extra,
+            });
+            break;
+        }
+    }
+
+    let Some(artifact) = found_artifact else {
+        return Ok(ClientRpcResponse::CiGetArtifactResult(CiGetArtifactResponse {
+            is_success: false,
+            artifact: None,
+            blob_ticket: None,
+            error: Some(format!("Artifact not found: {}", blob_hash)),
+        }));
+    };
+
+    info!(blob_hash = %blob_hash, "artifact found (no blob ticket)");
+
+    Ok(ClientRpcResponse::CiGetArtifactResult(CiGetArtifactResponse {
+        is_success: true,
+        artifact: Some(artifact),
+        blob_ticket: None,
         error: None,
     }))
 }

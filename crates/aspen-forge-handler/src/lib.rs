@@ -31,7 +31,8 @@
 //!        └──► Patch Operations (7)
 //! ```
 
-mod handler;
+mod executor;
+pub(crate) mod handler;
 
 use std::sync::Arc;
 
@@ -39,7 +40,8 @@ use std::sync::Arc;
 pub use aspen_rpc_core::ClientProtocolContext;
 pub use aspen_rpc_core::HandlerFactory;
 pub use aspen_rpc_core::RequestHandler;
-pub use handler::ForgeHandler;
+pub use aspen_rpc_core::ServiceHandler;
+pub use executor::ForgeServiceExecutor;
 
 // =============================================================================
 // Handler Factory (Plugin Registration)
@@ -70,12 +72,17 @@ impl Default for ForgeHandlerFactory {
 
 impl HandlerFactory for ForgeHandlerFactory {
     fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        // Only create handler if forge node is configured
-        if ctx.forge_node.is_some() {
-            Some(Arc::new(ForgeHandler))
-        } else {
-            None
-        }
+        let forge_node = ctx.forge_node.as_ref()?.clone();
+        let executor = Arc::new(ForgeServiceExecutor::new(
+            forge_node,
+            #[cfg(feature = "global-discovery")]
+            ctx.content_discovery.clone(),
+            #[cfg(feature = "global-discovery")]
+            ctx.federation_discovery.clone(),
+            ctx.federation_identity.clone(),
+            ctx.federation_trust_manager.clone(),
+        ));
+        Some(Arc::new(ServiceHandler::new(executor)))
     }
 
     fn name(&self) -> &'static str {
