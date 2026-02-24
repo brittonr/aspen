@@ -1821,7 +1821,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-core",
- "aspen-testing",
  "async-trait",
  "parking_lot",
  "serde",

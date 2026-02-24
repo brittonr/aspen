@@ -82,7 +82,7 @@ members = [
     # aspen-ticket extracted to ~/git/aspen-ticket
     # aspen-sql extracted to ~/git/aspen-sql
     "crates/aspen-auth",
-    "crates/aspen-sharding",
+    # aspen-sharding extracted to ~/git/aspen-sharding
     # aspen-forge extracted to ~/git/aspen-forge
     # aspen-hooks-types extracted to ~/git/aspen-hooks
     # aspen-hooks extracted to ~/git/aspen-hooks
@@ -157,7 +157,7 @@ aspen-coordination = { path = "../aspen-coordination/crates/aspen-coordination" 
 aspen-blob = { path = "crates/aspen-blob" }
 aspen-sql = { path = "../aspen-sql/crates/aspen-sql" }
 aspen-auth = { path = "crates/aspen-auth" }
-aspen-sharding = { path = "crates/aspen-sharding" }
+aspen-sharding = { path = "../aspen-sharding/crates/aspen-sharding" }
 # Raft family extracted to ~/git/aspen-raft
 aspen-raft-types = { path = "../aspen-raft/crates/aspen-raft-types" }
 aspen-raft-network = { path = "../aspen-raft/crates/aspen-raft-network" }
