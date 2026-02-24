@@ -1069,14 +1069,21 @@
             )
             // {
               # aspen-tui extracted to ~/git/aspen-tui
+              aspen-cli = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
+              aspen-cli-forge = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
+              aspen-cli-plugins = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
+              aspen-cli-secrets = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
+              aspen-cli-full = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
+              aspen-cli-ci = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
+              aspen-cli-proxy = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
               # aspen-cli extracted to ~/git/aspen-cli - all variants commented out
               # aspen-cli = aspen-cli-crate;
               # aspen-cli-forge = aspen-cli-forge-crate;
               # aspen-cli-plugins = aspen-cli-plugins-crate;
               # aspen-cli-secrets = aspen-cli-secrets-crate;
               # aspen-cli-full = aspen-cli-full-crate;
-              aspen-cli-ci = aspen-cli-ci-crate;
-              aspen-cli-proxy = aspen-cli-proxy-crate;
+              # aspen-cli-ci = aspen-cli-ci-crate;  # Extracted
+              # aspen-cli-proxy = aspen-cli-proxy-crate;  # Extracted
               inherit aspen-node-proxy aspen-node-plugins;
               # aspen-ci-agent extracted to ~/git/aspen-ci
               inherit hyperlight-wasm-runtime;
