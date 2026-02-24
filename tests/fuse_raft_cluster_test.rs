@@ -15,6 +15,8 @@
 //! This validates end-to-end: POSIX syscalls flow through FUSE into the real
 //! Raft consensus layer with in-memory storage.
 
+#![cfg(feature = "fuse")]
+
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;

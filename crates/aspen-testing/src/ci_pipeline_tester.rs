@@ -669,7 +669,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pipeline_context() {
+    fn test_pipeline_context_creation() {
         let context = test_pipeline_context("test-repo");
         assert_eq!(context.ref_name, "refs/heads/main");
         assert_eq!(context.triggered_by, "test");

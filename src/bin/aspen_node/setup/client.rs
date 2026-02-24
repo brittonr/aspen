@@ -327,6 +327,7 @@ pub async fn setup_client_protocol(
         ci_trigger_service,
         #[cfg(feature = "nix-cache-gateway")]
         nix_cache_signer,
+        service_executors: Vec::new(),
         app_registry: aspen_core::shared_registry(),
         proxy_config: aspen_rpc_handlers::aspen_rpc_core::ProxyConfig::default(),
     };

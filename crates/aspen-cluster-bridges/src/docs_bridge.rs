@@ -244,7 +244,7 @@ mod tests {
         assert_eq!(payload.cluster_id, "cluster-b");
         assert_eq!(payload.entries_synced, 100);
         assert_eq!(payload.duration_ms, 5000);
-        assert!(payload.success);
+        assert!(payload.is_success);
         assert!(payload.error.is_none());
     }
 
