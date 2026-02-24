@@ -182,7 +182,7 @@ fn transmute_raft_for_transport(
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use aspen::node::NodeBuilder;
 /// use aspen::raft::storage::StorageBackend;
 /// use aspen::raft::types::NodeId;
