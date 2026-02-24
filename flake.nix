@@ -332,8 +332,8 @@
 
           # Strip 'layer' feature from aspen-core deps (aspen-layer is a stub in Nix).
           ${pkgs.gnused}/bin/sed -i 's|, features = \["layer"\]||g' \
-            $out/Cargo.toml \
-            $out/crates/aspen-cli/Cargo.toml
+            $out/Cargo.toml
+            # $out/crates/aspen-cli/Cargo.toml  # Extracted to ~/git/aspen-cli
             # $out/crates/aspen-raft/Cargo.toml  # Extracted to ~/git/aspen-raft
 
           # Also rewrite crate-level path deps that point to sibling repos.
