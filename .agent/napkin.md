@@ -1019,37 +1019,53 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 - aspen-cluster-bridges (2.3K, 5 workspace deps)
 - aspen-hooks-types (2K, 5 reverse deps)
 
-## Recent Changes (2026-02-23) — ServiceExecutor Migrations + Planning Doc Update
+## Recent Changes (2026-02-24) — Re-enable Flake Checks + VM Tests
 
-### Planning Doc Updated
+### Flake Checks Re-enabled (commit 79f123d4)
 
-- `docs/planning/plugin-system.md` status changed from "Planning" to "Complete"
-- All Phase 1–5 checklist items updated to reflect actual implementation
-- Added "Current Handler Architecture" section documenting three-tier dispatch
+**6 checks restored** (gated behind `hasSiblingRepos` — require `--impure`):
 
-### 4 Handlers Migrated to ServiceExecutor Pattern
+- **clippy**: Uses `fullCommonArgs` + patched hyperlight vendor. `--exclude aspen-nix-cache-gateway` (pre-existing h3-iroh version mismatch)
+- **doc**: Main workspace crates only (9 crates). Sibling repos have pre-existing broken intra-doc links
+- **deny**: Local advisory-db via `git init` + `--disable-fetch`. DB directory name `advisory-db-3157b0e258782691` is hash of default RustSec URL
+- **nextest-quick + nextest**: Full workspace test suite
+- **verus-inline-check**: Targets `aspen-raft` and `aspen-coordination` (verus feature lives in extracted crates)
 
-| Handler | Priority | Deps Captured | Tests |
-|---------|----------|---------------|-------|
-| `aspen-secrets-handler` | 580 | `secrets_service`, `kv_store` | 7 |
-| `aspen-forge-handler` | 540 | `forge_node`, `content_discovery`, `federation_discovery`, `federation_identity`, `federation_trust_manager` | 23 |
-| `aspen-blob-handler` | 520 | `blob_store`, `blob_replication_manager`, `content_discovery`, `kv_store` | 15 |
-| `aspen-ci-handler` | 600 | `ci_orchestrator`, `ci_trigger_service`, `forge_node`, `blob_store`, `kv_store` | 15 |
+### 6 WASM Plugin VM Tests Restored
 
-### Pattern Applied
+- `coordination-primitives-test` + `multi-node-coordination-test` → `coordinationPluginWasm`
+- `hooks-services-test` → `serviceRegistryPluginWasm`
+- `ratelimit-verify-test` → `coordinationPluginWasm`
+- `automerge-sql-test` → `automergePluginWasm`
+- `secrets-engine-test` → `secretsPluginWasm`
 
-- Old: `HandlerFactory::create()` → `Arc::new(XHandler)` + `RequestHandler` impl with `ctx` parameter
-- New: `HandlerFactory::create()` → extract deps from ctx → `Arc::new(XServiceExecutor::new(...))` → `ServiceHandler::new()`
-- Sub-handler functions changed from `fn handle(ctx: &ClientProtocolContext, ...)` to `fn handle(dep1: &Arc<...>, dep2: &Arc<...>, ...)`
-- Executor captures deps at construction, doesn't receive ctx during execution
+### Infrastructure Added
 
-### 2 Handlers Remain as Direct RequestHandler
+- **`patchVendorForHyperlight`**: Extracted reusable function from old inline `pluginsCargoVendorDir`. Patches hyperlight-wasm build.rs to accept `HYPERLIGHT_WASM_RUNTIME` env var
+- **`fullPluginsCargoVendorDir`**: Patched `fullCargoVendorDir` — needed because `cargo clippy --workspace` compiles hyperlight-wasm even without `--features plugins-rpc`
+- **`fullNodeCargoArtifacts`**: Now uses patched vendor dir + `HYPERLIGHT_WASM_RUNTIME`
+- **`fullPluginsCommonArgs`** + **`full-aspen-node-plugins`**: Node binary with WASM runtime for VM tests needing plugin execution
+- **`buildWasmPlugin`**: Nix derivation builder for cdylib WASM plugins from `aspen-plugins` sibling repo
+- **`wasmPluginsSrc`**: Assembles plugin source tree (aspen-plugins + 6 sibling dep repos)
+- **`nix/plugins-Cargo.lock`**: Pre-generated lockfile for WASM plugin builds
 
-- **cluster-handler** (priority 120): Tightly coupled to Raft control plane
-- **core-essentials-handler** (priority 100–210): 3 sub-handlers (core, lease, watch) heavily use ctx fields for Raft metrics, state machine access, watch registry
-- Both are in the "core handler" range (100–299) where direct ctx access is appropriate
+### aspen-plugins Workspace Fixed (upstream)
 
-### ServiceExecutor Totals (6 of 8 native handlers)
+- Added 7 missing crates to workspace members (coordination, automerge, secrets, service-registry, forge, plugin-signing, cargo-aspen-plugin)
+- Added `[workspace.dependencies]` section for shared deps
+- Generated Cargo.lock with all 13 crates
 
-- docs-handler, job-handler (migrated earlier)
-- blob-handler, ci-handler, forge-handler, secrets-handler (migrated this session)
+### Doc Fixes in Main Workspace
+
+- `aspen-core/kv/mod.rs`: `write` → `mod@write` (ambiguous with `write!` macro)
+- `aspen-cluster/config/worker.rs`: `Vec<String>` backtick escape (invalid HTML tag)
+- `aspen-cluster/router_builder.rs`: `iroh_proxy_utils` link → code span (unresolvable)
+- `Cargo.toml`: added `fuse` to `check-cfg` expected features (stale test file)
+
+### Gotchas
+
+- **hyperlight-wasm compiled without plugins-rpc**: `cargo clippy --workspace` processes ALL vendor crates' build.rs, even optional deps. Must use patched vendor dir for all full-source builds.
+- **`cargo deny --db-path` doesn't exist**: Use `db-path` in `deny.toml` + `--disable-fetch` flag. The expected directory name is `advisory-db-{hash}` where hash is derived from the default URL
+- **Sibling repos are NOT workspace members in fullSrc**: But `cargo doc --workspace` still documents path deps. Must explicitly list `-p` packages for doc check.
+- **`nix flake check --no-build` after GC**: Can fail with "path is not valid" for derivations that were GC'd. Rebuilds fine — just a transient eval issue.
+- **Pre-commit alejandra reformats on first commit**: Always `git add` after alejandra hook modifies `flake.nix`
