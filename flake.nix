@@ -949,15 +949,16 @@
 
           # aspen-tui extracted to ~/git/aspen-tui
 
+          # aspen-cli extracted to ~/git/aspen-cli - builds commented out
           # Build aspen-cli from its own crate
-          aspen-cli-crate = craneLib.buildPackage (
-            cliCommonArgs
-            // {
-              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
-              cargoExtraArgs = "--package aspen-cli --bin aspen-cli";
-              doCheck = false;
-            }
-          );
+          # aspen-cli-crate = craneLib.buildPackage (
+          #   cliCommonArgs
+          #   // {
+          #     inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
+          #     cargoExtraArgs = "--package aspen-cli --bin aspen-cli";
+          #     doCheck = false;
+          #   }
+          # );
 
           # Build aspen-cli with forge features (push, signed tags, export-key)
           aspen-cli-forge-crate = craneLib.buildPackage (
@@ -1068,11 +1069,12 @@
             )
             // {
               # aspen-tui extracted to ~/git/aspen-tui
-              aspen-cli = aspen-cli-crate;
-              aspen-cli-forge = aspen-cli-forge-crate;
-              aspen-cli-plugins = aspen-cli-plugins-crate;
-              aspen-cli-secrets = aspen-cli-secrets-crate;
-              aspen-cli-full = aspen-cli-full-crate;
+              # aspen-cli extracted to ~/git/aspen-cli - all variants commented out
+              # aspen-cli = aspen-cli-crate;
+              # aspen-cli-forge = aspen-cli-forge-crate;
+              # aspen-cli-plugins = aspen-cli-plugins-crate;
+              # aspen-cli-secrets = aspen-cli-secrets-crate;
+              # aspen-cli-full = aspen-cli-full-crate;
               aspen-cli-ci = aspen-cli-ci-crate;
               aspen-cli-proxy = aspen-cli-proxy-crate;
               inherit aspen-node-proxy aspen-node-plugins;
