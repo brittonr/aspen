@@ -1765,7 +1765,7 @@
                 export PATH="${
                   pkgs.lib.makeBinPath [
                     bins.aspen-node
-                    bins.aspen-cli
+                    # bins.aspen-cli  # Extracted to ~/git/aspen-cli
                     pkgs.bash
                     pkgs.coreutils
                     pkgs.curl
