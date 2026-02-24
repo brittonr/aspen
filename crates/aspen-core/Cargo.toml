@@ -7,31 +7,31 @@ description = "Core API types and traits for Aspen distributed systems"
 
 [dependencies]
 # Constants (extracted to separate crate for lighter dependencies)
-aspen-constants = { path = "../aspen-constants" }
+aspen-constants = { workspace = true }
 
 # Hybrid Logical Clock (extracted to separate crate for lighter dependencies)
-aspen-hlc = { path = "../aspen-hlc" }
+aspen-hlc = { workspace = true }
 
 # Cluster types (extracted to separate crate for lighter dependencies)
-aspen-cluster-types = { path = "../aspen-cluster-types" }
+aspen-cluster-types = { workspace = true }
 
 # KV types (extracted to separate crate for lighter dependencies)
-aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-kv-types = { workspace = true }
 
 # Core traits (extracted to separate crate for lighter dependencies)
-aspen-traits = { path = "../aspen-traits" }
+aspen-traits = { workspace = true }
 
 # Layer types (FoundationDB-compatible tuple encoding and subspace layer)
 aspen-layer = { path = "../../../aspen-layer/crates/aspen-layer", optional = true }
 
 # Time utilities (extracted from utils.rs)
-aspen-time = { path = "../aspen-time" }
+aspen-time = { workspace = true }
 
 # Disk space utilities (extracted from utils.rs)
-aspen-disk = { path = "../aspen-disk" }
+aspen-disk = { workspace = true }
 
 # Storage types (extracted from storage.rs)
-aspen-storage-types = { path = "../aspen-storage-types" }
+aspen-storage-types = { workspace = true }
 
 # thiserror used by inlined vault module
 # (aspen-vault and aspen-crypto-types inlined into this crate)

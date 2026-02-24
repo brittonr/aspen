@@ -10,7 +10,7 @@ description = "Content-addressed blob storage for Aspen using iroh-blobs"
 aspen-core = { path = "../aspen-core" }
 
 # Client API types (for replication RPC)
-aspen-client-api = { path = "../aspen-client-api" }
+aspen-client-api = { workspace = true }
 
 # Iroh P2P and blobs
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }

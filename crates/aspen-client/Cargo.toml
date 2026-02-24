@@ -10,7 +10,7 @@ description = "Pure client library for Aspen distributed systems - no raft/clust
 aspen-auth = { path = "../aspen-auth" }
 aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
-aspen-ticket = { path = "../aspen-ticket" }
+aspen-ticket = { workspace = true }
 aspen-transport = { path = "../aspen-transport" }
 
 # P2P networking for Iroh connections

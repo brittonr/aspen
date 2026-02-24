@@ -18,10 +18,10 @@ aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core", features = ["layer"] }
 aspen-auth = { path = "../aspen-auth" }
 aspen-cluster = { path = "../aspen-cluster" }
-aspen-hooks-types = { path = "../aspen-hooks-types" }
+aspen-hooks-types = { workspace = true }
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-forge = { path = "../../../aspen-forge/crates/aspen-forge", optional = true }
-aspen-plugin-api = { path = "../aspen-plugin-api", optional = true }
+aspen-plugin-api = { path = "../../../aspen-plugin-api/crates/aspen-plugin-api", optional = true }
 aspen-proxy = { workspace = true, optional = true }
 
 # Async runtime

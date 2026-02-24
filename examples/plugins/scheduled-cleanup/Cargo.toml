@@ -9,5 +9,5 @@ license = "AGPL-3.0-or-later"
 crate-type = ["cdylib"]
 
 [dependencies]
-aspen-wasm-guest-sdk = { path = "../../../crates/aspen-wasm-guest-sdk" }
+aspen-wasm-guest-sdk = { path = "../../../../aspen-wasm-guest-sdk/crates/aspen-wasm-guest-sdk" }
 serde_json = "1.0"

@@ -51,17 +51,18 @@ members = [
     ".",
     "scripts/tutorial-verify",
     "crates/aspen-client",
-    "crates/aspen-client-api",
-    "crates/aspen-constants",
-    "crates/aspen-cluster-types",
-    "crates/aspen-kv-types",
-    "crates/aspen-traits",
+    # aspen-client-api extracted to ~/git/aspen-client-api
+    # aspen-constants extracted to ~/git/aspen-constants
+    # aspen-cluster-types extracted to ~/git/aspen-cluster-types
+    # aspen-kv-types extracted to ~/git/aspen-kv-types
+    # aspen-traits extracted to ~/git/aspen-traits
     "crates/aspen-core",
-    "crates/aspen-hlc",
+    # aspen-hlc extracted to ~/git/aspen-hlc
+    # aspen-time extracted to ~/git/aspen-time
+    # aspen-disk extracted to ~/git/aspen-disk
+    # aspen-storage-types extracted to ~/git/aspen-storage-types
+    # aspen-ticket extracted to ~/git/aspen-ticket
     # aspen-layer extracted to ~/git/aspen-layer
-    "crates/aspen-time",
-    "crates/aspen-disk",
-    "crates/aspen-storage-types",
     # aspen-vault and aspen-crypto-types inlined into aspen-core
     # aspen-coordination extracted to ~/git/aspen-coordination
     "crates/aspen-blob",
@@ -77,45 +78,42 @@ members = [
     "crates/aspen-testing-fixtures",
     "crates/aspen-testing-madsim",
     "crates/aspen-testing-network",
-    "crates/aspen-ticket",
+    # aspen-ticket extracted to ~/git/aspen-ticket
     # aspen-sql extracted to ~/git/aspen-sql
     "crates/aspen-auth",
     "crates/aspen-sharding",
     # aspen-forge extracted to ~/git/aspen-forge
-    "crates/aspen-hooks-types",
+    # aspen-hooks-types extracted to ~/git/aspen-hooks
     # aspen-hooks extracted to ~/git/aspen-hooks
     # aspen-jobs + workers extracted to ~/git/aspen-jobs
     # aspen-tui extracted to ~/git/aspen-tui
     "crates/aspen-transport",
-    "crates/aspen-rpc-core",
-    "crates/aspen-rpc-handlers",
-    "crates/aspen-forge-handler",
-    "crates/aspen-secrets-handler",
-
-    "crates/aspen-blob-handler",
+    # aspen-rpc-core extracted to ~/git/aspen-rpc
+    # aspen-rpc-handlers extracted to ~/git/aspen-rpc
+    # aspen-forge-handler extracted to ~/git/aspen-rpc
+    # aspen-secrets-handler extracted to ~/git/aspen-rpc
+    # aspen-blob-handler extracted to ~/git/aspen-rpc
     "crates/aspen-cli",
     # aspen-secrets extracted to ~/git/aspen-secrets
     # aspen-automerge extracted to ~/git/aspen-automerge
     # CI subsystem extracted to ~/git/aspen-ci
-    "crates/aspen-ci-handler",
+    # aspen-ci-handler extracted to ~/git/aspen-rpc
     # aspen-query-handler → replaced by aspen-sql-plugin (WASM)
     # aspen-hooks-handler → replaced by aspen-hooks-plugin (WASM)
     # aspen-kv-handler → replaced by aspen-kv-plugin (WASM)
-    # aspen-job-handler → typed ServiceExecutor (native handler via ServiceHandler)
-    "crates/aspen-job-handler",
-    "crates/aspen-core-essentials-handler",
-    # aspen-docs-handler → typed ServiceExecutor (native handler via ServiceHandler)
-    "crates/aspen-docs-handler",
-    "crates/aspen-cluster-handler",
+    # aspen-job-handler extracted to ~/git/aspen-rpc
+    # aspen-core-essentials-handler extracted to ~/git/aspen-rpc
+    # aspen-docs-handler extracted to ~/git/aspen-rpc
+    # aspen-cluster-handler extracted to ~/git/aspen-rpc
     # aspen-federation extracted to ~/git/aspen-federation
     # aspen-coordination-protocol → ~/git/aspen-coordination
     # aspen-forge-protocol → ~/git/aspen-forge
     # aspen-jobs-protocol → ~/git/aspen-jobs
     "crates/aspen-proxy",
     # aspen-dht-discovery extracted to ~/git/aspen-dht-discovery
-    "crates/aspen-plugin-api",
-    "crates/aspen-wasm-plugin",
-    "crates/aspen-wasm-guest-sdk",
+    # aspen-plugin-api extracted to ~/git/aspen-plugin-api
+    # aspen-wasm-plugin extracted to ~/git/aspen-wasm-plugin
+    # aspen-wasm-guest-sdk extracted to ~/git/aspen-wasm-guest-sdk
 
     "examples/plugins/kv-counter",
     "examples/plugins/audit-logger",
@@ -175,18 +173,18 @@ tracing-futures = "0.2.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }  # Aligned with direct dependency
 validit = "0.2.2"
 aspen-client = { path = "crates/aspen-client" }
-aspen-client-api = { path = "crates/aspen-client-api" }
-aspen-constants = { path = "crates/aspen-constants" }
-aspen-cluster-types = { path = "crates/aspen-cluster-types" }
+aspen-client-api = { path = "../aspen-client-api/crates/aspen-client-api" }
+aspen-constants = { path = "../aspen-constants/crates/aspen-constants" }
+aspen-cluster-types = { path = "../aspen-cluster-types/crates/aspen-cluster-types" }
 aspen-core = { path = "crates/aspen-core" }
-aspen-hlc = { path = "crates/aspen-hlc" }
-aspen-kv-types = { path = "crates/aspen-kv-types" }
+aspen-hlc = { path = "../aspen-hlc/crates/aspen-hlc" }
+aspen-kv-types = { path = "../aspen-kv-types/crates/aspen-kv-types" }
 aspen-layer = { path = "../aspen-layer/crates/aspen-layer" }
-aspen-time = { path = "crates/aspen-time" }
-aspen-disk = { path = "crates/aspen-disk" }
-aspen-storage-types = { path = "crates/aspen-storage-types" }
+aspen-time = { path = "../aspen-time/crates/aspen-time" }
+aspen-disk = { path = "../aspen-disk/crates/aspen-disk" }
+aspen-storage-types = { path = "../aspen-storage-types/crates/aspen-storage-types" }
 # aspen-vault and aspen-crypto-types inlined into aspen-core
-aspen-traits = { path = "crates/aspen-traits" }
+aspen-traits = { path = "../aspen-traits/crates/aspen-traits" }
 aspen-coordination = { path = "../aspen-coordination/crates/aspen-coordination" }
 aspen-blob = { path = "crates/aspen-blob" }
 aspen-sql = { path = "../aspen-sql/crates/aspen-sql" }
@@ -204,13 +202,13 @@ aspen-testing-core = { path = "crates/aspen-testing-core" }
 aspen-testing-fixtures = { path = "crates/aspen-testing-fixtures" }
 aspen-testing-madsim = { path = "crates/aspen-testing-madsim" }
 aspen-testing-network = { path = "crates/aspen-testing-network" }
-aspen-ticket = { path = "crates/aspen-ticket" }
+aspen-ticket = { path = "../aspen-ticket/crates/aspen-ticket" }
 aspen-forge = { path = "../aspen-forge/crates/aspen-forge" }
-aspen-hooks-types = { path = "crates/aspen-hooks-types" }
+aspen-hooks-types = { path = "../aspen-hooks/crates/aspen-hooks-types" }
 aspen-hooks = { path = "../aspen-hooks/crates/aspen-hooks" }
 aspen-tui = { path = "../aspen-tui/crates/aspen-tui" }
 aspen-transport = { path = "crates/aspen-transport" }
-aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers", default-features = false }
+aspen-rpc-handlers = { path = "../aspen-rpc/crates/aspen-rpc-handlers", default-features = false }
 aspen-cli = { path = "crates/aspen-cli" }
 aspen-jobs = { path = "../aspen-jobs/crates/aspen-jobs" }
 aspen-jobs-worker-blob = { path = "../aspen-jobs/crates/aspen-jobs-worker-blob" }
@@ -258,8 +256,8 @@ aspen-coordination-protocol = { path = "../aspen-coordination/crates/aspen-coord
 aspen-forge-protocol = { path = "../aspen-forge/crates/aspen-forge-protocol" }
 aspen-jobs-protocol = { path = "../aspen-jobs/crates/aspen-jobs-protocol" }
 aspen-dht-discovery = { path = "../aspen-dht-discovery/crates/aspen-dht-discovery" }
-aspen-plugin-api = { path = "crates/aspen-plugin-api" }
-aspen-wasm-plugin = { path = "crates/aspen-wasm-plugin" }
+aspen-plugin-api = { path = "../aspen-plugin-api/crates/aspen-plugin-api" }
+aspen-wasm-plugin = { path = "../aspen-wasm-plugin/crates/aspen-wasm-plugin" }
 
 # h3-iroh for HTTP/3 over Iroh QUIC (Nix binary cache gateway)
 h3 = "0.0.8"
@@ -773,12 +771,20 @@ aspen-cache = { path = "../aspen-nix/crates/aspen-cache" }
 aspen-jobs = { path = "../aspen-jobs/crates/aspen-jobs" }
 aspen-auth = { path = "crates/aspen-auth" }
 aspen-forge = { path = "../aspen-forge/crates/aspen-forge" }
-aspen-ticket = { path = "crates/aspen-ticket" }
-aspen-client-api = { path = "crates/aspen-client-api" }
+aspen-ticket = { path = "../aspen-ticket/crates/aspen-ticket" }
+aspen-client-api = { path = "../aspen-client-api/crates/aspen-client-api" }
 aspen-client = { path = "crates/aspen-client" }
 aspen-testing = { path = "crates/aspen-testing" }
-aspen-wasm-guest-sdk = { path = "crates/aspen-wasm-guest-sdk" }
-aspen-plugin-api = { path = "crates/aspen-plugin-api" }
+aspen-constants = { path = "../aspen-constants/crates/aspen-constants" }
+aspen-cluster-types = { path = "../aspen-cluster-types/crates/aspen-cluster-types" }
+aspen-kv-types = { path = "../aspen-kv-types/crates/aspen-kv-types" }
+aspen-traits = { path = "../aspen-traits/crates/aspen-traits" }
+aspen-hlc = { path = "../aspen-hlc/crates/aspen-hlc" }
+aspen-time = { path = "../aspen-time/crates/aspen-time" }
+aspen-disk = { path = "../aspen-disk/crates/aspen-disk" }
+aspen-storage-types = { path = "../aspen-storage-types/crates/aspen-storage-types" }
+aspen-wasm-guest-sdk = { path = "../aspen-wasm-guest-sdk/crates/aspen-wasm-guest-sdk" }
+aspen-plugin-api = { path = "../aspen-plugin-api/crates/aspen-plugin-api" }
 aspen-coordination = { path = "../aspen-coordination/crates/aspen-coordination" }
 aspen-coordination-protocol = { path = "../aspen-coordination/crates/aspen-coordination-protocol" }
 aspen-docs = { path = "../aspen-docs/crates/aspen-docs" }
