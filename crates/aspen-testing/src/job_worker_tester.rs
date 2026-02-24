@@ -447,7 +447,7 @@ impl JobWorkerTester {
             }
 
             // Start workers
-            pool.start(config.workers_per_node).await.expect("failed to start workers");
+            pool.start(config.workers_per_node as u32).await.expect("failed to start workers");
 
             job_managers.push(manager);
             worker_pools.push(pool);

@@ -406,7 +406,7 @@ hooks = ["dep:aspen-hooks", "aspen-rpc-handlers/hooks", "aspen-cluster/hooks", "
 # SNIX storage integration for Nix binary cache
 # Nix binary cache HTTP/3 gateway for serving NAR archives
 # Jobs handler for distributed job queue operations
-jobs = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance", "aspen-rpc-handlers/jobs", "aspen-cluster/jobs"]
+jobs = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance", "aspen-rpc-handlers/jobs", "aspen-cluster/jobs", "aspen-testing?/jobs"]
 # Docs handler for iroh-docs CRDT document operations
 # Includes iroh-blobs since docs uses blob storage for content
 docs = ["dep:aspen-docs", "dep:iroh-docs", "dep:iroh-blobs", "blob", "aspen-rpc-handlers/docs", "aspen-cluster/docs"]
@@ -716,7 +716,7 @@ required-features = ["blob"]
 
 [[test]]
 name = "job_integration_test"
-required-features = ["jobs"]
+required-features = ["jobs", "docs", "hooks", "federation"]
 
 [[test]]
 name = "shell_command_worker_test"

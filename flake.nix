@@ -203,6 +203,102 @@
           ];
         };
 
+        # ── Full Source Assembly ──────────────────────────────────────
+        # For VM integration tests we need real sibling repo sources
+        # instead of stubs. builtins.path copies each repo to the Nix
+        # store, filtering out .git/ and target/ to keep it lean.
+        siblingFilter = path: _type:
+          let
+            baseName = builtins.baseNameOf path;
+          in
+            !(baseName == ".git" || baseName == "target" || baseName == ".direnv" || baseName == "result");
+
+        # Resolve sibling repo root. Requires --impure since sibling
+        # repos live outside the flake source tree. Set ASPEN_REPOS_DIR
+        # to override the default (parent of CWD, assuming CWD is the
+        # aspen checkout).
+        # In pure evaluation (nix flake check without --impure),
+        # builtins.getEnv always returns "".  We use this to gate
+        # everything that touches sibling repos outside the flake tree.
+        hasImpure = builtins.getEnv "PWD" != "";
+
+        reposDir = let
+          env = builtins.getEnv "ASPEN_REPOS_DIR";
+          cwd = builtins.getEnv "PWD";
+        in
+          if env != ""
+          then env
+          else builtins.dirOf cwd;
+
+        # Whether sibling repos are actually reachable.  True only in
+        # impure mode AND when the repos directory exists on disk.
+        hasSiblingRepos =
+          hasImpure
+          && builtins.pathExists (/. + "${reposDir}/aspen-cli");
+
+        siblingRepo = name:
+          builtins.path {
+            path = /. + "${reposDir}/${name}";
+            filter = siblingFilter;
+            name = "aspen-sibling-${name}";
+          };
+
+        siblingRepoNames = [
+          "aspen-automerge"
+          "aspen-ci"
+          "aspen-cli"
+          "aspen-client-api"
+          "aspen-cluster-types"
+          "aspen-constants"
+          "aspen-coordination"
+          "aspen-dht-discovery"
+          "aspen-disk"
+          "aspen-dns"
+          "aspen-docs"
+          "aspen-federation"
+          "aspen-forge"
+          "aspen-fuse"
+          "aspen-hlc"
+          "aspen-hooks"
+          "aspen-jobs"
+          "aspen-kv-types"
+          "aspen-layer"
+          "aspen-nix"
+          "aspen-pijul"
+          "aspen-plugin-api"
+          "aspen-plugins"
+          "aspen-proxy"
+          "aspen-raft"
+          "aspen-rpc"
+          "aspen-s3"
+          "aspen-secrets"
+          "aspen-sql"
+          "aspen-storage-types"
+          "aspen-testing-network"
+          "aspen-ticket"
+          "aspen-time"
+          "aspen-traits"
+          "aspen-tui"
+          "aspen-verus-metrics"
+          "aspen-wasm-guest-sdk"
+          "aspen-wasm-plugin"
+        ];
+
+        # Shell snippet that copies all sibling repos into $DEPS/
+        copySiblingRepos = lib.concatMapStringsSep "\n" (name:
+          "cp -r ${siblingRepo name} \"$DEPS/${name}\""
+        ) siblingRepoNames;
+
+        # Sed expressions to rewrite ../aspen-X/ → .nix-deps/aspen-X/ (workspace level)
+        # and ../../../aspen-X/ → ../../.nix-deps/aspen-X/ (crate level)
+        rewriteWorkspacePaths = lib.concatMapStringsSep " \\\n            " (name:
+          "-e 's|path = \"\\.\\./${name}/|path = \".nix-deps/${name}/|g'"
+        ) siblingRepoNames;
+
+        rewriteCratePaths = lib.concatMapStringsSep " \\\n            " (name:
+          "-e 's|path = \"\\.\\./\\.\\./\\.\\./\\.\\./openraft/|path = \"../../.nix-deps/aspen-raft/openraft/|g' -e 's|path = \"\\.\\./\\.\\./\\.\\./${name}/|path = \"../../.nix-deps/${name}/|g'"
+        ) siblingRepoNames;
+
         snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559"'';
         src = pkgs.runCommand "aspen-src-patched" {} ''
           cp -r ${rawSrc} $out
@@ -516,6 +612,215 @@
           // {
             cargoArtifacts = cliCargoArtifacts;
           };
+
+        # ── Full Source Builds (for VM integration tests) ───────────
+        # Assembles the real workspace + all sibling repos into one tree.
+        # Unlike the stub src, this produces working binaries because every
+        # dep has real source code. The layout:
+        #
+        #   $out/               ← main aspen workspace
+        #   $out/.nix-deps/     ← all sibling repos
+        #   $out/.nix-deps/aspen → ..   (symlink back to workspace root)
+        #
+        # Path rewrites:
+        #   Cargo.toml:  ../aspen-X/  → .nix-deps/aspen-X/
+        #   crates/*/Cargo.toml:  ../../../aspen-X/  → ../../.nix-deps/aspen-X/
+        fullSrc = pkgs.runCommand "aspen-full-src" {} ''
+          cp -r ${rawSrc} $out
+          chmod -R u+w $out
+
+          # Remove [patch.*] sections from cargo config for Nix builds
+          if [ -f $out/.cargo/config.toml ]; then
+            ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/.cargo/config.toml
+          fi
+
+          # Add git source lines to snix packages in Cargo.lock
+          for pkg in nix-compat nix-compat-derive snix-castore snix-cli snix-store snix-tracing; do
+            ${pkgs.gawk}/bin/awk -v pkg="$pkg" -v src='${snixGitSource}' '
+              /^name = "/ && $0 ~ "\"" pkg "\"" { found=1 }
+              found && /^version = "0.1.0"$/ {
+                print
+                if ((getline nextline) > 0) {
+                  if (nextline !~ /^source = /) {
+                    print src
+                  }
+                  print nextline
+                } else {
+                  print src
+                }
+                found=0
+                next
+              }
+              { print }
+            ' $out/Cargo.lock > $out/Cargo.lock.tmp && mv $out/Cargo.lock.tmp $out/Cargo.lock
+          done
+
+          # ── Real sibling repos ──────────────────────────────────────
+          DEPS="$out/.nix-deps"
+          mkdir -p "$DEPS"
+
+          ${copySiblingRepos}
+
+          chmod -R u+w "$DEPS"
+
+          # ── Add aspen-cli as a workspace member ─────────────────────
+          cp -r "$DEPS/aspen-cli/crates/aspen-cli" "$out/crates/aspen-cli"
+          chmod -R u+w "$out/crates/aspen-cli"
+          ${pkgs.gnused}/bin/sed -i \
+            '/^members = \[/a\    "crates/aspen-cli",' \
+            $out/Cargo.toml
+          # Rewrite aspen-cli's path deps
+          ${pkgs.gnused}/bin/sed -i \
+            -e 's|path = "\.\./\.\./\.\./aspen/|path = "../../|g' \
+            ${rewriteCratePaths} \
+            $out/crates/aspen-cli/Cargo.toml
+
+          # Use pre-generated unified Cargo.lock that includes all sibling
+          # repo deps. Regenerate with: cd $(nix build .#_debug-full-src --print-out-paths --impure)
+          # then: cargo generate-lockfile && cp Cargo.lock <repo>/nix/full-build-Cargo.lock
+          cp ${./nix/full-build-Cargo.lock} $out/Cargo.lock
+
+          # ── Rewrite workspace-level paths ───────────────────────────
+          ${pkgs.gnused}/bin/sed -i \
+            ${rewriteWorkspacePaths} \
+            $out/Cargo.toml
+
+          # Remove [patch."https://github.com/..."] (keep [patch.crates-io])
+          ${pkgs.gnused}/bin/sed -i '/^\[patch\."https/,$d' $out/Cargo.toml
+
+          # ── Rewrite crate-level paths ───────────────────────────────
+          find $out/crates -name Cargo.toml ! -path '*/aspen-cli/*' -exec ${pkgs.gnused}/bin/sed -i \
+            ${rewriteCratePaths} \
+            {} \;
+
+          # ── Inline ALL workspace = true references in sibling repos ───
+          # When the main workspace resolves a path dep from a sibling repo,
+          # cargo resolves `workspace = true` against the MAIN workspace (not
+          # the sibling's own). We must inline every `workspace = true` by
+          # reading values from each sibling's workspace root.
+          #
+          # This handles both package-level fields (edition, version, etc.)
+          # and dependency-level fields (dep = { workspace = true }).
+          ${pkgs.bash}/bin/bash ${./nix/inline-workspace-deps.sh} "$DEPS"
+
+          # ── Convert git deps to path deps ─────────────────────────────
+          # After workspace inlining, some crates have git deps pointing at
+          # the aspen GitHub repo. Convert these to path deps since the
+          # actual crate source is already in the unified workspace.
+          ${pkgs.python3}/bin/python3 ${./nix/git-to-path-deps.py} "$out"
+
+          # ── Fix version mismatches between sibling repos ─────────────
+          # Some sibling repos have outdated dep versions; bump to match
+          # the main workspace's versions.
+          find "$DEPS" -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
+            -e 's|bolero = { version = "0.11"|bolero = { version = "0.13"|g' \
+            -e 's|bolero-generator = { version = "0.11"|bolero-generator = { version = "0.13"|g' \
+            -e 's|bolero = "0.11"|bolero = "0.13"|g' \
+            -e 's|bolero-generator = "0.11"|bolero-generator = "0.13"|g' \
+            {} \;
+
+          # ── Rewrite sibling repos' back-references to the main workspace ─
+          # Sibling→sibling paths (../aspen-X/) already resolve correctly
+          # because they're all siblings under .nix-deps/. Only back-refs
+          # to the main aspen workspace need fixing:
+          #   workspace level: ../aspen/ → ../../       (up from .nix-deps/X/ to root)
+          #   crate level:     ../../../aspen/ → ../../../../   (up from .nix-deps/X/crates/Y/ to root)
+          find "$DEPS" -maxdepth 2 -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
+            -e 's|path = "\.\./aspen/|path = "../../|g' \
+            {} \;
+          find "$DEPS" -mindepth 3 -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
+            -e 's|path = "\.\./\.\./\.\./aspen/|path = "../../../../|g' \
+            {} \;
+        '';
+
+        fullBasicArgs =
+          basicArgs
+          // {
+            src = fullSrc;
+            cargoToml = ./Cargo.toml;
+            # No --offline: real sources match Cargo.lock accurately
+            cargoExtraArgs = "";
+          };
+
+        fullCargoVendorDir = craneLib.vendorCargoDeps {
+          src = fullSrc;
+          overrideVendorGitCheckout = ps: drv: let
+            isSnixRepo =
+              builtins.any (
+                p:
+                  builtins.isString (p.source or null)
+                  && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
+              )
+              ps;
+          in
+            if isSnixRepo
+            then drv.overrideAttrs (_old: {src = snix-src;})
+            else drv;
+        };
+
+        fullNodeCargoArtifacts = craneLib.buildDepsOnly (
+          fullBasicArgs
+          // {
+            cargoVendorDir = fullCargoVendorDir;
+            pnameSuffix = "-full-deps-node";
+            # Build deps for the union of all VM-test feature sets
+            # (excludes plugins-rpc which needs special hyperlight handling)
+            cargoExtraArgs = "--features ci,docs,hooks,shell-worker,automerge,secrets,proxy";
+          }
+        );
+
+        fullCommonArgs =
+          fullBasicArgs
+          // {
+            cargoArtifacts = fullNodeCargoArtifacts;
+            cargoVendorDir = fullCargoVendorDir;
+
+            nativeBuildInputs =
+              basicArgs.nativeBuildInputs
+              ++ (with pkgs; [
+                autoPatchelfHook
+              ]);
+
+            buildInputs =
+              basicArgs.buildInputs
+              ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
+                with pkgs; [
+                  darwin.apple_sdk.frameworks.Security
+                ]
+              ));
+          };
+
+        fullBin = {
+          name,
+          features ? [],
+        }:
+          craneLib.buildPackage (
+            fullCommonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+              cargoExtraArgs =
+                "--bin ${name}"
+                + lib.optionalString (features != []) " --features ${lib.concatStringsSep "," features}";
+              doCheck = false;
+            }
+          );
+
+        # ── Full CLI builds ────────────────────────────────────────
+        # Build aspen-cli from the unified fullSrc workspace. aspen-cli is
+        # added as a workspace member so all workspace = true deps resolve
+        # correctly against the main workspace.
+        fullCliBin = features:
+          craneLib.buildPackage (
+            fullCommonArgs
+            // {
+              pname = "aspen-cli";
+              version = "0.1.0";
+              cargoExtraArgs =
+                "-p aspen-cli --bin aspen-cli"
+                + lib.optionalString (features != []) " --features ${lib.concatStringsSep "," features}";
+              doCheck = false;
+            }
+          );
 
         # ── Hyperlight WASM Plugin Support ──────────────────────────────
         # The plugins-rpc feature requires hyperlight-wasm, whose build.rs
@@ -1087,6 +1392,24 @@
               inherit aspen-node-proxy aspen-node-plugins;
               # aspen-ci-agent extracted to ~/git/aspen-ci
               inherit hyperlight-wasm-runtime;
+
+            }
+            # Full-source builds for VM integration tests (real sibling deps).
+            # Only available with --impure since they need sibling repos.
+            // lib.optionalAttrs hasSiblingRepos {
+              full-aspen-node = fullBin {
+                name = "aspen-node";
+                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets"];
+              };
+              full-aspen-node-proxy = fullBin {
+                name = "aspen-node";
+                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "proxy"];
+              };
+              full-aspen-cli = fullCliBin [];
+              full-aspen-cli-forge = fullCliBin ["forge"];
+              full-aspen-cli-plugins = fullCliBin ["plugins-rpc" "ci" "automerge"];
+              full-aspen-cli-ci = fullCliBin ["ci"];
+              full-aspen-cli-proxy = fullCliBin ["proxy"];
             };
         in
           bins
@@ -1196,17 +1519,9 @@
                     || { echo "FAILED: Core Verus verification"; exit 1; }
                   echo "[PASS] Core specifications verified"
 
-                  echo "[2/4] Verifying Raft specifications..."
-                  ${verusRoot}/rust_verify \
-                    --crate-type=lib \
-                    --rlimit 30 \
-                    --time \
-                    "$RAFT_SPEC_DIR/lib.rs" \
-                    || { echo "FAILED: Raft Verus verification"; exit 1; }
-                  echo "[PASS] Raft specifications verified"
-
-                  # NOTE: Coordination verus specs extracted to ~/git/aspen-coordination
-                  # Verify via: cd ~/git/aspen-coordination && nix run .#verify-verus
+                  # NOTE: Raft verus specs extracted to ~/git/aspen-raft
+                  # Verify via: cd ~/git/aspen-raft && nix run .#verify-verus
+                  echo "[2/4] Raft specifications — SKIPPED (extracted to aspen-raft repo)"
 
                   echo "[3/4] Verifying Cluster specifications..."
                   ${verusRoot}/rust_verify \
@@ -1259,11 +1574,10 @@
                 touch $out
               '';
             }
-            // lib.optionalAttrs (system == "x86_64-linux" && false) {
-              # NOTE: VM integration tests disabled — they require building
-              # aspen-node/aspen-cli which depend on extracted sibling repos
-              # (aspen-coordination, aspen-forge, aspen-secrets, etc.) that
-              # are empty stubs in the Nix sandbox.
+            // lib.optionalAttrs (system == "x86_64-linux" && hasSiblingRepos) {
+              # NixOS VM integration tests — uses full-source builds with
+              # real sibling repo sources (not stubs). Requires --impure
+              # since sibling repos live outside the flake source tree.
               # Run individually: nix build .#checks.x86_64-linux.forge-cluster-test --impure
               # NixOS VM integration test for the Forge.
               # Spins up a cluster with real networking and exercises
@@ -1271,8 +1585,8 @@
               # Build: nix build .#checks.x86_64-linux.forge-cluster-test
               forge-cluster-test = import ./nix/tests/forge-cluster.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
-                aspenCliPackage = bins.aspen-cli-forge;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli-forge;
               };
 
               # Multi-node cluster test: 3-node Raft consensus, replication,
@@ -1280,8 +1594,8 @@
               # Build: nix build .#checks.x86_64-linux.multi-node-cluster-test
               multi-node-cluster-test = import ./nix/tests/multi-node-cluster.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
-                aspenCliPackage = bins.aspen-cli-forge;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli-forge;
               };
 
               # Multi-node KV test: write/read replication, CAS across nodes,
@@ -1290,8 +1604,8 @@
               # Build: nix build .#checks.x86_64-linux.multi-node-kv-test
               multi-node-kv-test = import ./nix/tests/multi-node-kv.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
-                aspenCliPackage = bins.aspen-cli;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
               };
 
               # multi-node-coordination-test: disabled — WASM plugins moved to aspen-plugins repo
@@ -1303,8 +1617,8 @@
               # Build: nix build .#checks.x86_64-linux.multi-node-blob-test
               multi-node-blob-test = import ./nix/tests/multi-node-blob.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
-                aspenCliPackage = bins.aspen-cli;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
               };
 
               # KV operations test: CRUD, CAS/CAD, scan/pagination, batch ops,
@@ -1312,8 +1626,8 @@
               # Build: nix build .#checks.x86_64-linux.kv-operations-test
               kv-operations-test = import ./nix/tests/kv-operations.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
-                aspenCliPackage = bins.aspen-cli;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
               };
 
               # Blob operations test: add, get, has, list, protect/unprotect,
@@ -1321,8 +1635,8 @@
               # Build: nix build .#checks.x86_64-linux.blob-operations-test
               blob-operations-test = import ./nix/tests/blob-operations.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
-                aspenCliPackage = bins.aspen-cli;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
               };
 
               # coordination-primitives-test: disabled — WASM plugins moved to aspen-plugins repo
@@ -1341,8 +1655,8 @@
               # Build: nix build .#checks.x86_64-linux.cluster-docs-peer-test
               cluster-docs-peer-test = import ./nix/tests/cluster-docs-peer.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
-                aspenCliPackage = bins.aspen-cli;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
               };
 
               # Job queue and index management test: job submit, status,
@@ -1350,8 +1664,8 @@
               # Build: nix build .#checks.x86_64-linux.job-index-test
               job-index-test = import ./nix/tests/job-index.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
-                aspenCliPackage = bins.aspen-cli;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
               };
 
               # automerge-sql-test: disabled — WASM plugins moved to aspen-plugins repo
@@ -1363,8 +1677,8 @@
               # Build: nix build .#checks.x86_64-linux.plugin-cli-test
               plugin-cli-test = import ./nix/tests/plugin-cli.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
-                aspenCliPackage = bins.aspen-cli-plugins;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli-plugins;
               };
 
               # secrets-engine-test: disabled — WASM plugins moved to aspen-plugins repo
@@ -1376,8 +1690,8 @@
               # Build: nix build .#checks.x86_64-linux.ci-cache-test
               ci-cache-test = import ./nix/tests/ci-cache.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.aspen-node;
-                aspenCliPackage = bins.aspen-cli-ci;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli-ci;
               };
 
               # Pijul version control test: repository management
@@ -1391,8 +1705,8 @@
               # Build: nix build .#checks.x86_64-linux.proxy-tunnel-test
               proxy-tunnel-test = import ./nix/tests/proxy-tunnel.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.aspen-node-proxy;
-                aspenCliPackage = bins.aspen-cli-proxy;
+                aspenNodePackage = bins.full-aspen-node-proxy;
+                aspenCliPackage = bins.full-aspen-cli-proxy;
               };
 
               # Multi-node proxy test: 3-node Raft cluster with proxy
@@ -1404,8 +1718,8 @@
               # Build: nix build .#checks.x86_64-linux.multi-node-proxy-test
               multi-node-proxy-test = import ./nix/tests/multi-node-proxy.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.aspen-node-proxy;
-                aspenCliPackage = bins.aspen-cli-proxy;
+                aspenNodePackage = bins.full-aspen-node-proxy;
+                aspenCliPackage = bins.full-aspen-cli-proxy;
               };
             };
 
@@ -2424,6 +2738,8 @@
             {
               default = bins.aspen-node;
               aspen-node = bins.aspen-node;
+              # Full-source builds for inspection/debugging
+              # _debug-full-src = fullSrc;
               # aspen-tui extracted to ~/git/aspen-tui
               aspen-cli = bins.aspen-cli;
               aspen-cli-forge = bins.aspen-cli-forge;

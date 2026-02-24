@@ -136,7 +136,7 @@ impl<KV: KeyValueStore + ?Sized> DirectoryLayer<KV> {
 
         let layer_key = self.metadata_key(path, DIR_FIELD_LAYER);
         match self.store.read(ReadRequest::new(layer_key)).await {
-            Ok(_) => Ok(true),
+            Ok(result) => Ok(result.kv.is_some()),
             Err(KeyValueStoreError::NotFound { .. }) => Ok(false),
             Err(e) => Err(DirectoryError::Storage { source: e }),
         }
@@ -202,7 +202,7 @@ impl<KV: KeyValueStore + ?Sized> DirectoryLayer<KV> {
 
         // Check if directory exists
         match self.store.read(ReadRequest::new(layer_key.clone())).await {
-            Ok(_) => {
+            Ok(result) if result.kv.is_some() => {
                 // Delete all metadata keys
                 self.store
                     .write(WriteRequest {
@@ -214,6 +214,7 @@ impl<KV: KeyValueStore + ?Sized> DirectoryLayer<KV> {
                     .context(StorageSnafu)?;
                 Ok(true)
             }
+            Ok(_) => Ok(false), // kv is None — key not found
             Err(KeyValueStoreError::NotFound { .. }) => Ok(false),
             Err(e) => Err(DirectoryError::Storage { source: e }),
         }

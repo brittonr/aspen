@@ -20,6 +20,8 @@ use crate::cluster::ClusterState;
 use crate::cluster::InitRequest;
 use crate::error::ControlPlaneError;
 use crate::error::KeyValueStoreError;
+use crate::kv::CompareOp;
+use crate::kv::CompareTarget;
 use crate::kv::DeleteRequest;
 use crate::kv::DeleteResult;
 use crate::kv::KeyValueWithRevision;
@@ -27,6 +29,7 @@ use crate::kv::ReadRequest;
 use crate::kv::ReadResult;
 use crate::kv::ScanRequest;
 use crate::kv::ScanResult;
+use crate::kv::TxnOp;
 use crate::kv::WriteCommand;
 use crate::kv::WriteRequest;
 use crate::kv::WriteResult;
@@ -153,8 +156,166 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     }
                 }
             }
+            WriteCommand::Batch { operations } => {
+                for op in operations {
+                    match op {
+                        crate::kv::BatchOperation::Set { key, value } => {
+                            data.insert(key.clone(), VersionedValue {
+                                value: value.clone(),
+                                revision,
+                            });
+                        }
+                        crate::kv::BatchOperation::Delete { key } => {
+                            data.remove(key);
+                        }
+                    }
+                }
+            }
+            WriteCommand::ConditionalBatch { conditions, operations } => {
+                // Check all conditions
+                let mut conditions_met = true;
+                for condition in conditions {
+                    match condition {
+                        crate::kv::BatchCondition::KeyExists { key } => {
+                            if !data.contains_key(key) {
+                                conditions_met = false;
+                                break;
+                            }
+                        }
+                        crate::kv::BatchCondition::KeyNotExists { key } => {
+                            if data.contains_key(key) {
+                                conditions_met = false;
+                                break;
+                            }
+                        }
+                        crate::kv::BatchCondition::ValueEquals { key, expected } => match data.get(key) {
+                            Some(v) if v.value == *expected => {}
+                            _ => {
+                                conditions_met = false;
+                                break;
+                            }
+                        },
+                    }
+                }
+
+                if conditions_met {
+                    for op in operations {
+                        match op {
+                            crate::kv::BatchOperation::Set { key, value } => {
+                                data.insert(key.clone(), VersionedValue {
+                                    value: value.clone(),
+                                    revision,
+                                });
+                            }
+                            crate::kv::BatchOperation::Delete { key } => {
+                                data.remove(key);
+                            }
+                        }
+                    }
+                }
+
+                return Ok(WriteResult {
+                    command: None,
+                    batch_applied: None,
+                    conditions_met: Some(conditions_met),
+                    failed_condition_index: None,
+                    lease_id: None,
+                    ttl_seconds: None,
+                    keys_deleted: None,
+                    succeeded: Some(conditions_met),
+                    txn_results: None,
+                    header_revision: Some(revision),
+                    occ_conflict: None,
+                    conflict_key: None,
+                    conflict_expected_version: None,
+                    conflict_actual_version: None,
+                });
+            }
+            WriteCommand::Transaction {
+                compare,
+                success,
+                failure,
+            } => {
+                // Evaluate all compare conditions
+                let mut all_met = true;
+                for cmp in compare {
+                    let actual = data.get(&cmp.key);
+                    let met = match cmp.target {
+                        CompareTarget::Version => {
+                            let actual_version = actual.map(|_| 1u64).unwrap_or(0);
+                            let expected: u64 = cmp.value.parse().unwrap_or(0);
+                            match cmp.op {
+                                CompareOp::Equal => actual_version == expected,
+                                CompareOp::NotEqual => actual_version != expected,
+                                CompareOp::Greater => actual_version > expected,
+                                CompareOp::Less => actual_version < expected,
+                            }
+                        }
+                        CompareTarget::Value => {
+                            let actual_value = actual.map(|v| v.value.as_str()).unwrap_or("");
+                            let expected = cmp.value.as_str();
+                            match cmp.op {
+                                CompareOp::Equal => actual_value == expected,
+                                CompareOp::NotEqual => actual_value != expected,
+                                CompareOp::Greater => actual_value > expected,
+                                CompareOp::Less => actual_value < expected,
+                            }
+                        }
+                        CompareTarget::CreateRevision | CompareTarget::ModRevision => {
+                            let actual_rev = actual.map(|v| v.revision).unwrap_or(0);
+                            let expected: u64 = cmp.value.parse().unwrap_or(0);
+                            match cmp.op {
+                                CompareOp::Equal => actual_rev == expected,
+                                CompareOp::NotEqual => actual_rev != expected,
+                                CompareOp::Greater => actual_rev > expected,
+                                CompareOp::Less => actual_rev < expected,
+                            }
+                        }
+                    };
+                    if !met {
+                        all_met = false;
+                        break;
+                    }
+                }
+
+                // Execute success or failure branch
+                let ops = if all_met { success } else { failure };
+                for op in ops {
+                    match op {
+                        TxnOp::Put { key, value } => {
+                            data.insert(key.clone(), VersionedValue {
+                                value: value.clone(),
+                                revision,
+                            });
+                        }
+                        TxnOp::Delete { key } => {
+                            data.remove(key);
+                        }
+                        TxnOp::Get { .. } | TxnOp::Range { .. } => {
+                            // Read ops in txn - ignored in test store
+                        }
+                    }
+                }
+
+                return Ok(WriteResult {
+                    command: None,
+                    batch_applied: None,
+                    conditions_met: Some(all_met),
+                    failed_condition_index: None,
+                    lease_id: None,
+                    ttl_seconds: None,
+                    keys_deleted: None,
+                    succeeded: Some(all_met),
+                    txn_results: None,
+                    header_revision: Some(revision),
+                    occ_conflict: None,
+                    conflict_key: None,
+                    conflict_expected_version: None,
+                    conflict_actual_version: None,
+                });
+            }
             _ => {
-                // Other commands (Batch, ConditionalBatch, Txn, etc.) - just succeed for now
+                // Other commands - just succeed for now
             }
         }
 

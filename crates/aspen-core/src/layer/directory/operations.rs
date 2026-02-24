@@ -32,7 +32,14 @@ impl<KV: KeyValueStore + ?Sized> DirectoryLayer<KV> {
 
         // Read layer type
         let layer = match self.store.read(ReadRequest::new(layer_key)).await {
-            Ok(result) => result.kv.map(|kv| kv.value).unwrap_or_default(),
+            Ok(result) => match result.kv {
+                Some(kv) => kv.value,
+                None => {
+                    return Err(DirectoryError::NotFound {
+                        path: path.iter().map(|s| s.to_string()).collect(),
+                    });
+                }
+            },
             Err(KeyValueStoreError::NotFound { .. }) => {
                 return Err(DirectoryError::NotFound {
                     path: path.iter().map(|s| s.to_string()).collect(),
