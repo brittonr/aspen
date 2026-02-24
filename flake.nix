@@ -1408,10 +1408,16 @@
             };
 
             # aspen-tui extracted to ~/git/aspen-tui
+            # aspen-cli extracted to ~/git/aspen-cli
 
-            aspen-cli = flake-utils.lib.mkApp {
-              drv = bins.aspen-cli;
-              exePath = "/bin/aspen-cli";
+            # aspen-cli app stubbed out (extracted to separate repo)
+            aspen-cli = {
+              type = "app";
+              program = "${pkgs.writeShellScript "aspen-cli-stub" ''
+                echo "aspen-cli has been extracted to ~/git/aspen-cli"
+                echo "Build it from that repository or use: nix run ~/git/aspen-cli"
+                exit 1
+              ''}";
             };
 
             # Verus formal verification (all specs: Core + Raft + Coordination + Cluster + Transport)
