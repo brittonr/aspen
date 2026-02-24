@@ -4,7 +4,7 @@ Aspen is a hybrid-consensus distributed systems framework in Rust, built on top 
 
 Built on Iroh (QUIC-based P2P networking with NAT traversal), a vendored OpenRaft for consensus, and a FoundationDB-inspired "unbundled database" philosophy where higher-level features (Git forge, CI/CD, secrets, DNS) are stateless layers over core KV + blob primitives.
 
-~519k lines of Rust across 91 workspace crates (+65k vendored OpenRaft).
+**~76K lines of Rust** in the core workspace (12 crates), with domain logic distributed across **38 sibling repositories**.
 
 ---
 
@@ -33,6 +33,7 @@ Built on Iroh (QUIC-based P2P networking with NAT traversal), a vendored OpenRaf
 - [Feature Flags](#feature-flags)
 - [Testing](#testing)
 - [Design Philosophy](#design-philosophy)
+- [Multi-Repository Architecture](#multi-repository-architecture)
 - [Crate Map](#crate-map)
 - [License](#license)
 
@@ -72,18 +73,27 @@ Everything above the "Core Primitives" line is a **stateless layer** — it stor
 # Optional: enter the Nix dev shell
 nix develop
 
+# Core workspace
 cargo build
+
+# Node binary (requires features)
+cargo build --bin aspen-node --features "jobs,docs,blob,hooks,federation"
+
+# With Nix (includes all sibling repos via --impure)
+nix build .#aspen-node --impure
 ```
 
 ## Run
 
 ```bash
-# Node binary (requires features)
-cargo run -p aspen --bin aspen-node --features "jobs,docs,blob,hooks" -- --node-id 1 --cookie dev
+# Node binary
+cargo run --bin aspen-node --features "jobs,docs,blob,hooks,federation" -- --node-id 1 --cookie dev
 
-# CLI and TUI
-cargo run -p aspen-cli -- --help
-cargo run -p aspen-tui -- --help
+# CLI (in sibling repo)
+cd ~/git/aspen-cli && cargo run -- --help
+
+# Git remote helper
+cargo run --bin git-remote-aspen --features "git-bridge" -- <url>
 ```
 
 ---
@@ -735,41 +745,63 @@ verifier.authorize(
 
 ## RPC Handler Architecture
 
-### Dispatch Pipeline
+### Three-Tier Dispatch
+
+Aspen uses a three-tier handler architecture, ordered by priority:
 
 ```
 Client → QUIC/Iroh → ClientProtocolHandler
   → deserialize ClientRpcRequest
   → HandlerRegistry::dispatch(request, ctx, proxy_hops)
-  → Route to specific handler
-  → serialize ClientRpcResponse
-  → return to client
+  → Try Tier 1 (native RequestHandler, priority 100–299)
+  → Try Tier 2 (ServiceExecutor → ServiceHandler, priority 500–600)
+  → Try Tier 3 (WASM AspenPlugin → WasmPluginHandler, priority 900–999)
+  → serialize ClientRpcResponse → return to client
 ```
+
+| Tier | Abstraction | Priority | Use Case | Registration |
+|------|-------------|----------|----------|--------------|
+| 1 | `RequestHandler` (native) | 100–299 | Tightly-coupled control plane | `submit_handler_factory!` (inventory crate) |
+| 2 | `ServiceExecutor` → `ServiceHandler` | 500–600 | Domain services with typed dispatch | `submit_handler_factory!` via factory |
+| 3 | `AspenPlugin` → `WasmPluginHandler` | 900–999 | Sandboxed third-party plugins | KV store manifest + blob store WASM |
+
+### Native Handlers (Tier 1 + 2)
+
+Hosted in the `aspen-rpc` sibling repo:
+
+| Handler | Tier | Priority | Domain |
+|---------|------|----------|--------|
+| `aspen-core-essentials-handler` | 1 | 100–210 | Raft metrics, leases, watches |
+| `aspen-cluster-handler` | 1 | 120 | Raft membership, snapshots |
+| `aspen-blob-handler` | 2 | 520 | iroh-blobs, DHT, replication |
+| `aspen-docs-handler` | 2 | 530 | iroh-docs sync, peer federation |
+| `aspen-forge-handler` | 2 | 540 | Federation + git bridge (15 ops) |
+| `aspen-job-handler` | 2 | 560 | Distributed job queue, worker coordination |
+| `aspen-secrets-handler` | 2 | 580 | PKI/X.509 crypto, Nix cache signing |
+| `aspen-ci-handler` | 2 | 600 | Pipeline orchestration, artifacts |
+
+### WASM Plugins (Tier 3)
+
+Hosted in the `aspen-plugins` sibling repo, loaded at runtime from blob store:
+
+| Plugin | Priority | Ops | KV Prefix |
+|--------|----------|-----|-----------|
+| `aspen-kv-plugin` | 110 | 9 KV ops | (root) |
+| `aspen-coordination-plugin` | 920 | 23 coord ops | `__coord:` |
+| `aspen-automerge-plugin` | 925 | 6 CRDT ops | `automerge:` |
+| `aspen-dns-plugin` | 945 | 10 DNS ops | `dns:` |
+| `aspen-sql-plugin` | 940 | 1 SQL op | — |
+| `aspen-forge-plugin` | 950 | 30 forge ops | `forge:` |
+| `aspen-hooks-plugin` | 570 | 3 hook ops | `__hooks:` |
+| `aspen-secrets-plugin` | 935 | 8 secrets ops | `__secrets:` |
+| `aspen-service-registry-plugin` | 930 | 7 registry ops | `__service:` |
 
 ### Handler Registry
 
 - `HandlerRegistry`: Maps request types to `RequestHandler` implementations
 - `HandlerFactory` + `inventory` crate: Self-registration at link time
-- `ArcSwap`: Lock-free handler hot-reload
-- `collect_handler_factories()`: Collects all registered factories
-
-### Handler Crates (One per Domain)
-
-| Crate | Handles |
-|-------|---------|
-| `aspen-kv-handler` | KV CRUD, batch, transactions |
-
-| `aspen-blob-handler` | Blob CRUD, replication |
-| `aspen-forge-handler` | All forge operations |
-| `aspen-cluster-handler` | Init, membership, metrics |
-| `aspen-core-essentials-handler` | Ping, health, node info |
-| `aspen-docs-handler` | CRDT document operations |
-| `aspen-job-handler` | Job submission, status |
-| `aspen-hooks-handler` | Hook management |
-| `aspen-secrets-handler` | PKI + Nix cache signing (native crypto only) |
-| `aspen-ci-handler` | CI pipeline operations |
-| `aspen-query-handler` | SQL queries |
-| `aspen-nix-handler` | Nix store operations |
+- `ArcSwap`: Lock-free handler hot-reload without node restart
+- `PluginRegistry::load_all`: Scans KV manifests, resolves dependency order, loads WASM
 
 ### Cross-Cluster Proxying
 
@@ -785,6 +817,7 @@ Context struct passed to all handlers with optional fields per feature:
 - `blob_store`, `docs_sync`, `forge_node` (feature-gated)
 - `job_manager`, `hook_service`, `secrets_service` (feature-gated)
 - `federation_identity`, `federation_trust_manager` (feature-gated)
+- `service_executors`, `plugin_registry` (for WASM dispatch)
 - `app_registry`, `proxy_config` (always present)
 
 ---
@@ -808,7 +841,6 @@ Most functionality is behind Cargo features. See `Cargo.toml` for all available 
 | Flag | What It Enables |
 |------|----------------|
 | `sql` | DataFusion SQL engine |
-| `dns` | Hickory DNS server |
 | `blob` | iroh-blobs storage |
 | `forge` | Decentralized Git |
 | `git-bridge` | GitHub/GitLab sync |
@@ -818,19 +850,17 @@ Most functionality is behind Cargo features. See `Cargo.toml` for all available 
 | `plugins-rpc` | Dynamic RPC handlers |
 | `secrets` | Secrets engine |
 | `automerge` | CRDT documents |
-| `ci` | Full CI/CD with Nix cache (snix) |
+| `ci` | Full CI/CD with Nix cache |
 | `ci-basic` | CI/CD without Nix cache |
 | `ci-vm` | CI/CD with VM executor |
 | `hooks` | Event-driven hooks |
 | `federation` | Cross-cluster comms |
 | `global-discovery` | DHT discovery |
-| `snix` | Nix binary cache |
 | `shell-worker` | Shell command execution |
-| `nix-executor` | Nix build executor |
 | `jobs` | Job queue system |
 | `docs` | CRDT documents |
+| `proxy` | TCP/HTTP proxy via iroh-proxy-utils |
 | `testing` | Test router utilities |
-| `simulation` | madsim testing |
 | `fuzzing` | Fuzz testing internals |
 | `bolero` | Property-based testing |
 
@@ -842,12 +872,12 @@ Most functionality is behind Cargo features. See `Cargo.toml` for all available 
 
 | Level | Framework | Count | What It Tests |
 |-------|-----------|-------|---------------|
-| Unit tests | `#[cfg(test)]` | Per-crate | Individual functions/types |
-| Integration tests | `tests/*.rs` | 100 files | Multi-component interactions |
-| Simulation tests | `madsim` | 16 tests | Deterministic distributed scenarios |
-| Chaos tests | Custom | 5 tests | Leader crash, partitions, slow networks |
+| Unit tests | `#[cfg(test)]` | 1,781 | Individual functions/types |
+| Integration tests | `tests/*.rs` | Per-crate | Multi-component interactions |
+| Simulation tests | `madsim` | 16 scenarios | Deterministic distributed scenarios |
+| Chaos tests | Custom | 5 scenarios | Leader crash, partitions, slow networks |
 | Property tests | `proptest` + `bolero` | 16 files | Invariant verification |
-| NixOS VM tests | `nixosTest` | 15 tests | Full E2E with real kernel networking |
+| NixOS VM tests | `nixosTest` | 18 tests | Full E2E with real kernel networking |
 | Benchmarks | `criterion` | 6 suites | KV, SQL, concurrency, batching |
 
 ### Simulation Testing (madsim)
@@ -928,127 +958,111 @@ Verification coverage is tracked via the `aspen-verus-metrics` crate with termin
 
 ---
 
+## Multi-Repository Architecture
+
+Aspen follows a progressive extraction model. The core workspace contains the
+consensus engine, cluster management, and transport layer. Domain logic lives
+in **38 sibling repositories** connected via `[patch]` overrides in the root
+`Cargo.toml` for unified type identity during development.
+
+```
+~/git/aspen/                  ← Core workspace (12 crates, ~76K LOC)
+~/git/aspen-raft/             ← Raft consensus + vendored OpenRaft
+~/git/aspen-rpc/              ← RPC infrastructure + 8 native handlers
+~/git/aspen-plugins/          ← 13 WASM plugin crates
+~/git/aspen-client-api/       ← Wire protocol types (275 request variants)
+~/git/aspen-cli/              ← Command-line interface
+~/git/aspen-forge/            ← Decentralized Git hosting
+~/git/aspen-coordination/     ← Distributed primitives (locks, queues, etc.)
+~/git/aspen-jobs/             ← Job queue + 5 worker types
+~/git/aspen-ci/               ← CI/CD pipelines + Nickel config
+~/git/aspen-secrets/          ← Secrets management (KV, Transit, PKI)
+~/git/aspen-hooks/            ← Event-driven hook system
+~/git/aspen-federation/       ← Cross-cluster communication
+~/git/aspen-docs/             ← CRDT document sync
+~/git/aspen-automerge/        ← Automerge integration
+~/git/aspen-nix/              ← Nix binary cache (SNIX + HTTP/3 gateway)
+~/git/aspen-dns/              ← DNS record management
+~/git/aspen-proxy/            ← TCP/HTTP proxy via iroh-proxy-utils
+~/git/aspen-sql/              ← DataFusion SQL engine
+~/git/aspen-tui/              ← Terminal UI
+...and 19 more (types, constants, storage, crypto, etc.)
+```
+
+### Cross-Workspace Dependencies
+
+Sibling repos use `path = "../aspen/crates/..."` for deps back to the core
+workspace. The core workspace uses `[patch."https://github.com/..."]` to
+override git dependencies with local paths, preventing type duplication:
+
+```toml
+# Root Cargo.toml
+[patch."https://github.com/brittonr/aspen.git"]
+aspen-core = { path = "./crates/aspen-core" }
+aspen-auth = { path = "./crates/aspen-auth" }
+# ... etc
+```
+
+### Building with Sibling Repos
+
+```bash
+# Core workspace only (fast, no sibling repos needed)
+cargo check --workspace
+
+# Full build with all features (requires sibling repos at ../aspen-*)
+cargo build --features full
+
+# Nix build (assembles all sources automatically, requires --impure)
+nix build .#aspen-node --impure
+```
+
+---
+
 ## Crate Map
 
-### Core (11 crates)
+### Core Workspace (12 crates in this repo)
 
-| Crate | Purpose |
-|-------|---------|
-| `aspen` | Main crate, wires everything together |
-| `aspen-core` | Traits, types, constants, verified functions |
-| `aspen-constants` | Centralized Tiger Style bounds with compile-time assertions |
-| `aspen-raft` | Raft consensus (OpenRaft wrapper) |
-| `aspen-raft-types` | Raft type definitions |
-| `aspen-raft-network` | Raft network layer |
-| `aspen-redb-storage` | Redb storage backend |
-| `aspen-cluster` | Cluster coordination, bootstrap |
-| `aspen-cluster-types` | Cluster type definitions |
-| `aspen-cluster-bridges` | Cross-crate bridges |
-| `aspen-transport` | ALPN protocol handlers |
+| Crate | LOC | Purpose |
+|-------|-----|---------|
+| `aspen` | — | Main crate: node binary, bootstrap, wiring |
+| `aspen-core` | 9.8K | Traits, types, KV interface, verified functions |
+| `aspen-cluster` | 16.7K | Cluster coordination, bootstrap, config, router |
+| `aspen-client` | 12.1K | Client library for all subsystems |
+| `aspen-blob` | 5.6K | Blob storage (iroh-blobs integration) |
+| `aspen-transport` | 3.7K | ALPN protocol handlers, Raft wire protocol |
+| `aspen-auth` | 3.8K | UCAN capability tokens, HMAC auth |
+| `aspen-sharding` | 3.7K | Jump consistent hash, shard routing |
+| `aspen-cluster-bridges` | 2.3K | Cross-crate event bridges |
+| `aspen-testing` | 5.1K | Test utilities + re-exports |
+| `aspen-testing-core` | 1.2K | Shared test primitives |
+| `aspen-testing-fixtures` | 0.8K | Pre-built test scenarios |
+| `aspen-testing-madsim` | 2.3K | Madsim simulation harness |
 
-### Storage & Crypto (9 crates)
+### Sibling Repos (key repos, 38 total)
 
-| Crate | Purpose |
-|-------|---------|
-| `aspen-kv-types` | KV type definitions |
-| `aspen-storage-types` | Storage abstractions |
-| `aspen-disk` | Disk storage utilities |
-| `aspen-hlc` | Hybrid Logical Clocks |
-| `aspen-time` | Time abstractions |
-| `aspen-auth` | UCAN capability tokens |
-| `aspen-crypto-types` | Crypto type definitions |
-| `aspen-vault` | System key validation |
-| `aspen-cache` | Caching layer |
-
-### Features (16+ crates)
-
-| Crate | Purpose |
-|-------|---------|
-| `aspen-forge` | Decentralized Git |
-| `aspen-forge-protocol` | Forge wire protocol |
-| `aspen-ci` | CI/CD pipelines |
-| `aspen-ci-core` | CI core types |
-| `aspen-secrets` | Secrets management |
-| `aspen-blob` | Blob storage |
-| `aspen-docs` | CRDT documents |
-| `aspen-automerge` | Automerge integration |
-| `aspen-dns` | DNS management |
-| `aspen-fuse` | FUSE filesystem |
-| `aspen-hooks` | Event-driven hooks |
-| `aspen-hooks-types` | Hook type definitions |
-| `aspen-jobs` | Distributed job queue |
-| `aspen-jobs-protocol` | Job wire protocol |
-| `aspen-coordination` | Distributed primitives |
-| `aspen-coordination-protocol` | Coordination wire protocol |
-| `aspen-sharding` | Horizontal scaling |
-| `aspen-federation` | Cross-cluster comms |
-| `aspen-dht-discovery` | DHT discovery |
-| `aspen-snix` | Nix binary cache |
-| `aspen-nickel` | Nickel config integration |
-
-### Client & RPC (7 crates)
-
-| Crate | Purpose |
-|-------|---------|
-| `aspen-client` | Client library |
-| `aspen-client-api` | Wire protocol types |
-| `aspen-cli` | Command-line interface |
-| `aspen-tui` | Terminal UI |
-| `aspen-rpc-core` | RPC infrastructure |
-| `aspen-rpc-handlers` | Handler registry |
-| `aspen-ticket` | Cluster ticket encoding |
-
-### Plugins (9 crates)
-
-| Crate | Purpose |
-|-------|---------|
-| `aspen-plugin-api` | Plugin manifest + types |
-| `aspen-wasm-plugin` | WASM plugin host |
-| `aspen-wasm-guest-sdk` | Guest-side SDK |
-| `aspen-forge-plugin` | Forge WASM plugin |
-| `aspen-hooks-plugin` | Hooks WASM plugin |
-| `aspen-secrets-plugin` | Secrets WASM plugin |
-| `aspen-service-registry-plugin` | Service registry plugin |
-| `aspen-automerge-plugin` | Automerge WASM plugin |
-| `aspen-jobs-guest` | Job guest SDK |
-
-### CI Executors (3 crates)
-
-| Crate | Purpose |
-|-------|---------|
-| `aspen-ci-executor-shell` | Shell-based CI execution |
-| `aspen-ci-executor-nix` | Nix sandbox execution |
-| `aspen-ci-executor-vm` | VM-isolated execution |
-
-### Job Workers (5 crates)
-
-| Crate | Purpose |
-|-------|---------|
-| `aspen-jobs-worker-blob` | Blob operations |
-| `aspen-jobs-worker-replication` | Data replication |
-| `aspen-jobs-worker-sql` | SQL query execution |
-| `aspen-jobs-worker-maintenance` | Cluster maintenance |
-| `aspen-jobs-worker-shell` | Shell command execution |
-
-### Testing (5 crates)
-
-| Crate | Purpose |
-|-------|---------|
-| `aspen-testing` | Main test utilities + re-exports |
-| `aspen-testing-core` | Shared test primitives |
-| `aspen-testing-fixtures` | Pre-built test scenarios |
-| `aspen-testing-madsim` | Madsim simulation harness |
-| `aspen-testing-network` | Simulated network + fault injection |
-
-### Other
-
-| Crate | Purpose |
-|-------|---------|
-| `aspen-verus-metrics` | Verus verification coverage tracking |
-| `aspen-layer` | FoundationDB-style layer primitives |
-| `aspen-traits` | Shared trait definitions |
-| `aspen-nix-cache-gateway` | HTTP/3 Nix cache proxy |
-| `aspen-sql` | SQL query engine |
+| Repo | Crates | Purpose |
+|------|--------|---------|
+| `aspen-raft` | 4 | Raft consensus (OpenRaft wrapper), storage, network, types |
+| `aspen-rpc` | 10 | RPC core + 8 native handler crates + handler registry |
+| `aspen-plugins` | 13 | WASM plugins + signing + cargo subcommand + guest SDK |
+| `aspen-client-api` | 1 | Wire protocol (275 request/response variants) |
+| `aspen-cli` | 1 | Command-line interface |
+| `aspen-forge` | 2 | Decentralized Git + forge protocol types |
+| `aspen-coordination` | 2 | Distributed primitives + coordination protocol types |
+| `aspen-jobs` | 8 | Job queue + 5 workers + protocol + guest SDK |
+| `aspen-ci` | 6 | CI/CD pipelines + Nickel + shell/nix/VM executors |
+| `aspen-secrets` | 1 | Secrets management (KV v2, Transit, PKI) |
+| `aspen-hooks` | 2 | Event hooks + hook type definitions |
+| `aspen-federation` | 1 | Cross-cluster discovery + sync |
+| `aspen-docs` | 1 | CRDT document sync |
+| `aspen-automerge` | 1 | Automerge integration |
+| `aspen-nix` | 4 | SNIX store, cache, HTTP/3 gateway, nix handler |
+| `aspen-proxy` | 1 | TCP/HTTP proxy via iroh QUIC |
+| `aspen-sql` | 1 | DataFusion SQL engine |
+| `aspen-constants` | 1 | Tiger Style bounds with compile-time assertions |
+| `aspen-layer` | 1 | FoundationDB-style tuple/subspace/directory layers |
+| `aspen-dht-discovery` | 1 | BitTorrent Mainline DHT |
+| `aspen-tui` | 1 | Terminal UI for cluster monitoring |
 
 ---
 
