@@ -74,10 +74,7 @@ members = [
     "crates/aspen-cluster",
     # aspen-cluster-bridges extracted to ~/git/aspen-cluster-bridges
     # aspen-docs extracted to ~/git/aspen-docs
-    "crates/aspen-testing",
-    "crates/aspen-testing-core",
-    "crates/aspen-testing-fixtures",
-    "crates/aspen-testing-madsim",
+    # aspen-testing family extracted to ~/git/aspen-testing
     # aspen-testing-network extracted to ~/git/aspen-testing-network
     # aspen-ticket extracted to ~/git/aspen-ticket
     # aspen-sql extracted to ~/git/aspen-sql
@@ -169,10 +166,10 @@ openraft-macros = { path = "../aspen-raft/openraft/macros", version = "0.10.0" }
 aspen-cluster = { path = "crates/aspen-cluster" }
 aspen-cluster-bridges = { path = "../aspen-cluster-bridges/crates/aspen-cluster-bridges" }
 aspen-docs = { path = "../aspen-docs/crates/aspen-docs" }
-aspen-testing = { path = "crates/aspen-testing" }
-aspen-testing-core = { path = "crates/aspen-testing-core" }
-aspen-testing-fixtures = { path = "crates/aspen-testing-fixtures" }
-aspen-testing-madsim = { path = "crates/aspen-testing-madsim" }
+aspen-testing = { path = "../aspen-testing/crates/aspen-testing" }
+aspen-testing-core = { path = "../aspen-testing/crates/aspen-testing-core" }
+aspen-testing-fixtures = { path = "../aspen-testing/crates/aspen-testing-fixtures" }
+aspen-testing-madsim = { path = "../aspen-testing/crates/aspen-testing-madsim" }
 aspen-testing-network = { path = "../aspen-testing-network/crates/aspen-testing-network" }
 aspen-ticket = { path = "../aspen-ticket/crates/aspen-ticket" }
 aspen-forge = { path = "../aspen-forge/crates/aspen-forge" }
@@ -746,7 +743,7 @@ aspen-forge = { path = "../aspen-forge/crates/aspen-forge" }
 aspen-ticket = { path = "../aspen-ticket/crates/aspen-ticket" }
 aspen-client-api = { path = "../aspen-client-api/crates/aspen-client-api" }
 aspen-client = { path = "crates/aspen-client" }
-aspen-testing = { path = "crates/aspen-testing" }
+aspen-testing = { path = "../aspen-testing/crates/aspen-testing" }
 aspen-constants = { path = "../aspen-constants/crates/aspen-constants" }
 aspen-cluster-types = { path = "../aspen-cluster-types/crates/aspen-cluster-types" }
 aspen-kv-types = { path = "../aspen-kv-types/crates/aspen-kv-types" }
