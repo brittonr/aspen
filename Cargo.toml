@@ -755,7 +755,6 @@ aspen-hlc = { path = "../aspen-hlc/crates/aspen-hlc" }
 aspen-time = { path = "../aspen-time/crates/aspen-time" }
 aspen-disk = { path = "../aspen-disk/crates/aspen-disk" }
 aspen-storage-types = { path = "../aspen-storage-types/crates/aspen-storage-types" }
-aspen-wasm-guest-sdk = { path = "../aspen-wasm-guest-sdk/crates/aspen-wasm-guest-sdk" }
 aspen-plugin-api = { path = "../aspen-plugin-api/crates/aspen-plugin-api" }
 aspen-coordination = { path = "../aspen-coordination/crates/aspen-coordination" }
 aspen-coordination-protocol = { path = "../aspen-coordination/crates/aspen-coordination-protocol" }
