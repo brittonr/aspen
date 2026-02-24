@@ -194,7 +194,7 @@
             ./.config
             ./src
             ./crates
-            ./openraft
+            # ./openraft  # Extracted to ~/git/aspen-raft
             ./vendor
             ./tests
             ./benches
