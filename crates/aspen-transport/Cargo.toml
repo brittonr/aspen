@@ -17,7 +17,7 @@ aspen-sharding = { workspace = true }
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 
 # Consensus layer
-openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
+openraft = { path = "../../../aspen-raft/openraft/openraft", features = ["serde", "type-alias"] }
 
 # Async runtime
 tokio = { version = "1.48.0", features = ["rt", "sync", "time", "macros"] }

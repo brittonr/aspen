@@ -66,10 +66,11 @@ members = [
     # aspen-vault and aspen-crypto-types inlined into aspen-core
     # aspen-coordination extracted to ~/git/aspen-coordination
     "crates/aspen-blob",
-    "crates/aspen-raft-types",
-    "crates/aspen-raft-network",
-    "crates/aspen-raft",
-    "crates/aspen-redb-storage",
+    # aspen-raft family extracted to ~/git/aspen-raft
+    # "crates/aspen-raft-types",
+    # "crates/aspen-raft-network",
+    # "crates/aspen-raft",
+    # "crates/aspen-redb-storage",
     "crates/aspen-cluster",
     "crates/aspen-cluster-bridges",
     # aspen-docs extracted to ~/git/aspen-docs
@@ -124,54 +125,25 @@ members = [
 
 ]
 
-# Required for vendored openraft workspace inheritance
-[workspace.package]
-version = "0.10.0"
-edition = "2024"
-authors = ["Databend Authors <opensource@datafuselabs.com>", "Anthony Dodd <Dodd.AnthonyJosiah@gmail.com>"]
-categories = ["algorithms", "asynchronous", "data-structures"]
-description = "Advanced Raft consensus"
-documentation = "https://docs.rs/openraft"
-homepage = "https://github.com/databendlabs/openraft"
-keywords = ["raft", "consensus"]
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/databendlabs/openraft"
-
-# Workspace dependencies for openraft (mirrors openraft/Cargo.toml)
-# NOTE: These versions are aligned with Aspen's direct dependencies where applicable.
-# When updating openraft, re-check these for compatibility.
+# Workspace dependencies shared across all crates
 [workspace.dependencies]
-anyerror = "0.1.10"
+# Base dependencies (no longer need openraft-specific versions)
 anyhow = "1.0.63"
-async-entry = "0.3.1"
 base64 = "0.22"  # Base64 encoding for binary data
 blake3 = "1.5"  # Hash function for content addressing
-byte-unit = "5.1.4"
-bytes = "1.7"  # Aligned with direct dependency
+bytes = "1.7"
 chrono = "0.4"
-clap = { version = "4.5.4", features = ["derive", "env"] }  # Aligned with direct dependency
+clap = { version = "4.5.4", features = ["derive", "env"] }
 derive_more = { version = "1.0", features = ["std", "from", "try_into", "display"] }
 futures = "0.3"
-lazy_static = "1.4.0"
-maplit = "1.0.2"
-openraft-macros = { path = "openraft/macros", version = "0.10.0" }
-pretty_assertions = "1.0.0"
-proc-macro2 = "1.0"
-quote = "1.0"
 rand = "0.9"
-semver = "1.0.14"
-serde = { version = "1.0", features = ["derive", "rc"] }  # Aligned with direct dependency
-serde_json = "1.0"  # Aligned with direct dependency
-syn = "2.0"
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = "1.0"
 tempfile = "3.4.0"
-test-harness = "0.3.0"
-thiserror = "2.0"  # Aligned with direct dependency (major version bump)
-tokio = { version = "1.48.0", default-features = false, features = ["io-util", "macros", "rt", "rt-multi-thread", "sync", "time"] }  # Aligned with direct dependency
+thiserror = "2.0"
+tokio = { version = "1.48.0", default-features = false, features = ["io-util", "macros", "rt", "rt-multi-thread", "sync", "time"] }
 tracing = "0.1.40"
-tracing-appender = "0.2.0"
-tracing-futures = "0.2.4"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }  # Aligned with direct dependency
-validit = "0.2.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 aspen-client = { path = "crates/aspen-client" }
 aspen-client-api = { path = "../aspen-client-api/crates/aspen-client-api" }
 aspen-constants = { path = "../aspen-constants/crates/aspen-constants" }
@@ -190,10 +162,14 @@ aspen-blob = { path = "crates/aspen-blob" }
 aspen-sql = { path = "../aspen-sql/crates/aspen-sql" }
 aspen-auth = { path = "crates/aspen-auth" }
 aspen-sharding = { path = "crates/aspen-sharding" }
-aspen-raft-types = { path = "crates/aspen-raft-types" }
-aspen-raft-network = { path = "crates/aspen-raft-network" }
-aspen-raft = { path = "crates/aspen-raft" }
-aspen-redb-storage = { path = "crates/aspen-redb-storage" }
+# Raft family extracted to ~/git/aspen-raft
+aspen-raft-types = { path = "../aspen-raft/crates/aspen-raft-types" }
+aspen-raft-network = { path = "../aspen-raft/crates/aspen-raft-network" }
+aspen-raft = { path = "../aspen-raft/crates/aspen-raft" }
+aspen-redb-storage = { path = "../aspen-raft/crates/aspen-redb-storage" }
+# OpenRaft (vendored with aspen-raft)
+openraft = { path = "../aspen-raft/openraft/openraft", features = ["serde", "type-alias"] }
+openraft-macros = { path = "../aspen-raft/openraft/macros", version = "0.10.0" }
 aspen-cluster = { path = "crates/aspen-cluster" }
 aspen-cluster-bridges = { path = "crates/aspen-cluster-bridges" }
 aspen-docs = { path = "../aspen-docs/crates/aspen-docs" }
@@ -321,7 +297,7 @@ hex = "0.4"
 url = "2"
 bincode = "1.3"
 postcard = { version = "1.0", features = ["alloc"] }
-openraft = { path = "openraft/openraft", features = ["serde", "type-alias"] }
+openraft = { workspace = true }
 redb = "2.0.0"
 snafu = "0.8.9"
 irpc = { version = "0.11.0", features = ["derive"] }
@@ -796,3 +772,8 @@ aspen-jobs-protocol = { path = "../aspen-jobs/crates/aspen-jobs-protocol" }
 aspen-layer = { path = "../aspen-layer/crates/aspen-layer" }
 aspen-sql = { path = "../aspen-sql/crates/aspen-sql" }
 aspen-dht-discovery = { path = "../aspen-dht-discovery/crates/aspen-dht-discovery" }
+# Raft family (extracted to ~/git/aspen-raft)
+aspen-raft = { path = "../aspen-raft/crates/aspen-raft" }
+aspen-raft-types = { path = "../aspen-raft/crates/aspen-raft-types" }
+aspen-raft-network = { path = "../aspen-raft/crates/aspen-raft-network" }
+aspen-redb-storage = { path = "../aspen-raft/crates/aspen-redb-storage" }

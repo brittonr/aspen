@@ -54,7 +54,7 @@ madsim = { version = "0.2.34", features = ["macros"], optional = true }
 mad-turmoil = { git = "https://github.com/s2-streamstore/mad-turmoil", rev = "ef75169ec299c4160af3052b2194b3ee5b048b0a", optional = true }
 
 # Raft consensus (optional - required for router module)
-openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"], optional = true }
+openraft = { path = "../../../aspen-raft/openraft/openraft", features = ["serde", "type-alias"], optional = true }
 
 # Error handling
 anyhow = "1.0"
