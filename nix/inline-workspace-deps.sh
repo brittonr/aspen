@@ -88,7 +88,7 @@ function fix_path(val,    result) {
       # Table value: fix paths, remove trailing }
       ws_val = fix_path(ws_val)
       sub(/} *$/, "", ws_val)
-      
+
       # Handle feature merging: if both ws_val and extra have features,
       # remove features from ws_val (crate-level features override)
       if (extra ~ /features *=/ && ws_val ~ /features *=/) {
@@ -98,7 +98,7 @@ function fix_path(val,    result) {
       if (extra ~ /default-features *=/ && ws_val ~ /default-features *=/) {
         sub(/, *default-features *= *[a-z]+/, "", ws_val)
       }
-      
+
       print key " = " ws_val ", " extra
     }
     next
