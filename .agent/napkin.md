@@ -4,6 +4,9 @@
 
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-02-24 | self | KV handler migrated to WASM-only, but plugin install sends WriteKey to store manifests → chicken-and-egg | KV is foundational infrastructure — must always have a native handler. Added KvHandler to aspen-core-essentials-handler in aspen-rpc repo. |
+| 2026-02-24 | self | `buildWasmPlugin` installPhase used `aspen-plugins/target/...` but CWD was already `aspen-plugins/` from buildPhase `cd` | Nix stdenv CWD persists across phases. Use relative `target/...` not `aspen-plugins/target/...` in installPhase. |
+| 2026-02-24 | self | CAS (compare-and-swap) create-if-absent returns `is_success: false` with native KV handler | `WriteResult.succeeded` field semantics differ from WASM kv_execute host function. Need to check Raft state machine CAS implementation for `expected: None` case. |
 | 2026-02-18 | self | Told user Phase 2 (Capability Advertisement) wasn't done, but it was fully implemented | Check actual code before assessing roadmap status — grep for types/functions mentioned in the plan |
 | 2026-02-18 | self | delegate_task worker reported CLI fix success but changes weren't on disk | Do surgical edits directly — delegate_task doesn't persist file writes reliably |
 | 2026-02-19 | self | Delegated 3 fix tasks to workers — all reported success but zero changes persisted | delegate_task STILL doesn't persist. Use scouts to gather info, then edit directly. Third time hitting this. |
