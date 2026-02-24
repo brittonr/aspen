@@ -78,7 +78,7 @@ members = [
     "crates/aspen-testing-core",
     "crates/aspen-testing-fixtures",
     "crates/aspen-testing-madsim",
-    "crates/aspen-testing-network",
+    # aspen-testing-network extracted to ~/git/aspen-testing-network
     # aspen-ticket extracted to ~/git/aspen-ticket
     # aspen-sql extracted to ~/git/aspen-sql
     "crates/aspen-auth",
@@ -94,7 +94,7 @@ members = [
     # aspen-forge-handler extracted to ~/git/aspen-rpc
     # aspen-secrets-handler extracted to ~/git/aspen-rpc
     # aspen-blob-handler extracted to ~/git/aspen-rpc
-    "crates/aspen-cli",
+    # aspen-cli extracted to ~/git/aspen-cli
     # aspen-secrets extracted to ~/git/aspen-secrets
     # aspen-automerge extracted to ~/git/aspen-automerge
     # CI subsystem extracted to ~/git/aspen-ci
@@ -110,18 +110,14 @@ members = [
     # aspen-coordination-protocol → ~/git/aspen-coordination
     # aspen-forge-protocol → ~/git/aspen-forge
     # aspen-jobs-protocol → ~/git/aspen-jobs
-    "crates/aspen-proxy",
+    # aspen-proxy extracted to ~/git/aspen-proxy
     # aspen-dht-discovery extracted to ~/git/aspen-dht-discovery
     # aspen-plugin-api extracted to ~/git/aspen-plugin-api
     # aspen-wasm-plugin extracted to ~/git/aspen-wasm-plugin
     # aspen-wasm-guest-sdk extracted to ~/git/aspen-wasm-guest-sdk
 
-    "examples/plugins/kv-counter",
-    "examples/plugins/audit-logger",
-    "examples/plugins/scheduled-cleanup",
-    "crates/aspen-kv-plugin",
-    "crates/aspen-sql-plugin",
-    "crates/aspen-hooks-plugin",
+    # Example plugins (kv-counter, audit-logger, scheduled-cleanup) extracted to ~/git/aspen-plugins
+    # WASM plugins (kv-plugin, sql-plugin, hooks-plugin) extracted to ~/git/aspen-plugins
 
 ]
 
@@ -177,7 +173,7 @@ aspen-testing = { path = "crates/aspen-testing" }
 aspen-testing-core = { path = "crates/aspen-testing-core" }
 aspen-testing-fixtures = { path = "crates/aspen-testing-fixtures" }
 aspen-testing-madsim = { path = "crates/aspen-testing-madsim" }
-aspen-testing-network = { path = "crates/aspen-testing-network" }
+aspen-testing-network = { path = "../aspen-testing-network/crates/aspen-testing-network" }
 aspen-ticket = { path = "../aspen-ticket/crates/aspen-ticket" }
 aspen-forge = { path = "../aspen-forge/crates/aspen-forge" }
 aspen-hooks-types = { path = "../aspen-hooks/crates/aspen-hooks-types" }
@@ -185,7 +181,7 @@ aspen-hooks = { path = "../aspen-hooks/crates/aspen-hooks" }
 aspen-tui = { path = "../aspen-tui/crates/aspen-tui" }
 aspen-transport = { path = "crates/aspen-transport" }
 aspen-rpc-handlers = { path = "../aspen-rpc/crates/aspen-rpc-handlers", default-features = false }
-aspen-cli = { path = "crates/aspen-cli" }
+aspen-cli = { path = "../aspen-cli/crates/aspen-cli" }
 aspen-jobs = { path = "../aspen-jobs/crates/aspen-jobs" }
 aspen-jobs-worker-blob = { path = "../aspen-jobs/crates/aspen-jobs-worker-blob" }
 aspen-jobs-worker-replication = { path = "../aspen-jobs/crates/aspen-jobs-worker-replication" }
@@ -227,7 +223,7 @@ async-stream = "0.3"  # Async stream utilities for SNIX
 aspen-snix = { path = "../aspen-nix/crates/aspen-snix" }
 aspen-nix-cache-gateway = { path = "../aspen-nix/crates/aspen-nix-cache-gateway" }
 aspen-federation = { path = "../aspen-federation/crates/aspen-federation" }
-aspen-proxy = { path = "crates/aspen-proxy" }
+aspen-proxy = { path = "../aspen-proxy/crates/aspen-proxy" }
 aspen-coordination-protocol = { path = "../aspen-coordination/crates/aspen-coordination-protocol" }
 aspen-forge-protocol = { path = "../aspen-forge/crates/aspen-forge-protocol" }
 aspen-jobs-protocol = { path = "../aspen-jobs/crates/aspen-jobs-protocol" }
