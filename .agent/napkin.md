@@ -1073,3 +1073,28 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 - **Sibling repos are NOT workspace members in fullSrc**: But `cargo doc --workspace` still documents path deps. Must explicitly list `-p` packages for doc check.
 - **`nix flake check --no-build` after GC**: Can fail with "path is not valid" for derivations that were GC'd. Rebuilds fine — just a transient eval issue.
 - **Pre-commit alejandra reformats on first commit**: Always `git add` after alejandra hook modifies `flake.nix`
+
+## Plugin Registry Implementation (2026-02-24)
+
+### What Was Built
+
+- **aspen-plugin-api**: New `PluginDependency` type, new manifest fields (description, author, tags, min_api_version, dependencies), `resolve` module with Kahn's topological sort, `semver` version comparison
+- **aspen-wasm-plugin**: `LivePluginRegistry::load_all` now parses all manifests first, resolves dependency order via `resolve_load_order()`, loads in topological order. Graceful degradation on resolution errors.
+- **aspen-cli**: 3 new commands (`plugin search`, `plugin deps`, `plugin check`), `--force` on install/remove, dependency validation on install, reverse-dep check on remove, enhanced list/info output with new fields
+- **aspen-plugins**: All 11 plugin.json manifests updated with description, author, tags, min_api_version, dependencies
+- **aspen-wasm-guest-sdk**: Updated doc example to include `description` field
+- **cargo-aspen-plugin**: All 4 templates (basic, kv, timer, hook) updated with description in PluginInfo + full metadata in plugin.json templates
+
+### Architecture Decisions
+
+- **In-cluster KV registry**: No separate index — dependency graph computed from manifest scan (MAX_PLUGINS=64 makes scan trivial)
+- **Min-version floor only**: No semver ranges — simple `>=` check covers breaking change protection without resolver complexity
+- **Dependencies in manifest only**: Guest code doesn't need to know about dep graph — deployment concern
+- **Backward compatible**: All new fields use `#[serde(default)]`, existing manifests deserialize unchanged
+- **18 unit tests** for resolution: no deps, linear, diamond, cycle, missing dep, version mismatch, optional, disabled, reverse deps, API version
+
+### Gotchas
+
+- **Plugin CLI is feature-gated**: `cargo test --features plugins-rpc` needed to run plugin tests
+- **PluginInfo description field was already added** by aspen-plugin-api worker but not shown in guest SDK example — needed manual update
+- **No current plugins have inter-dependencies**: Topological sort of 0-dep graph preserves scan order, so no behavioral change for existing deployments

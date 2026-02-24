@@ -2,7 +2,7 @@
 
 > Planning document for implementing a plugin system that enables heterogeneous clusters with different capabilities to communicate seamlessly.
 
-**Status:** Complete (Phase 1–5 implemented; plugin registry deferred)
+**Status:** Complete (Phase 1–5 implemented, including plugin registry)
 **Created:** 2026-02-04
 **Last Updated:** 2026-02-23
 
@@ -1141,7 +1141,7 @@ Based on FDB learnings, we should emphasize:
 - Transparent capability routing ✅
 - CLI proxy commands (`proxy start`, `proxy forward`) ✅
 
-### Phase 5: Plugin Ecosystem ✅ (registry deferred)
+### Phase 5: Plugin Ecosystem ✅
 
 **Goal:** Make plugin development easy.
 
@@ -1149,7 +1149,7 @@ Based on FDB learnings, we should emphasize:
 
 - [x] Create `cargo-aspen-plugin` scaffolding tool (`crates/cargo-aspen-plugin/`)
 - [x] Write plugin development guide (`docs/PLUGIN_DEVELOPMENT.md`)
-- [ ] Create plugin registry (optional central index — deferred)
+- [x] Create plugin registry (in-cluster dependency resolution + discovery)
 - [x] Add plugin signing/verification (`crates/aspen-plugin-signing/`)
 - [x] Add example plugins: kv-counter, audit-logger, scheduled-cleanup
 - [x] Add `PluginSignatureInfo` to `PluginManifest`
