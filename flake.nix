@@ -207,11 +207,10 @@
         # For VM integration tests we need real sibling repo sources
         # instead of stubs. builtins.path copies each repo to the Nix
         # store, filtering out .git/ and target/ to keep it lean.
-        siblingFilter = path: _type:
-          let
-            baseName = builtins.baseNameOf path;
-          in
-            !(baseName == ".git" || baseName == "target" || baseName == ".direnv" || baseName == "result");
+        siblingFilter = path: _type: let
+          baseName = builtins.baseNameOf path;
+        in
+          !(baseName == ".git" || baseName == "target" || baseName == ".direnv" || baseName == "result");
 
         # Resolve sibling repo root. Requires --impure since sibling
         # repos live outside the flake source tree. Set ASPEN_REPOS_DIR
@@ -285,19 +284,25 @@
         ];
 
         # Shell snippet that copies all sibling repos into $DEPS/
-        copySiblingRepos = lib.concatMapStringsSep "\n" (name:
-          "cp -r ${siblingRepo name} \"$DEPS/${name}\""
-        ) siblingRepoNames;
+        copySiblingRepos =
+          lib.concatMapStringsSep "\n" (
+            name: "cp -r ${siblingRepo name} \"$DEPS/${name}\""
+          )
+          siblingRepoNames;
 
         # Sed expressions to rewrite ../aspen-X/ → .nix-deps/aspen-X/ (workspace level)
         # and ../../../aspen-X/ → ../../.nix-deps/aspen-X/ (crate level)
-        rewriteWorkspacePaths = lib.concatMapStringsSep " \\\n            " (name:
-          "-e 's|path = \"\\.\\./${name}/|path = \".nix-deps/${name}/|g'"
-        ) siblingRepoNames;
+        rewriteWorkspacePaths =
+          lib.concatMapStringsSep " \\\n            " (
+            name: "-e 's|path = \"\\.\\./${name}/|path = \".nix-deps/${name}/|g'"
+          )
+          siblingRepoNames;
 
-        rewriteCratePaths = lib.concatMapStringsSep " \\\n            " (name:
-          "-e 's|path = \"\\.\\./\\.\\./\\.\\./\\.\\./openraft/|path = \"../../.nix-deps/aspen-raft/openraft/|g' -e 's|path = \"\\.\\./\\.\\./\\.\\./${name}/|path = \"../../.nix-deps/${name}/|g'"
-        ) siblingRepoNames;
+        rewriteCratePaths =
+          lib.concatMapStringsSep " \\\n            " (
+            name: "-e 's|path = \"\\.\\./\\.\\./\\.\\./\\.\\./openraft/|path = \"../../.nix-deps/aspen-raft/openraft/|g' -e 's|path = \"\\.\\./\\.\\./\\.\\./${name}/|path = \"../../.nix-deps/${name}/|g'"
+          )
+          siblingRepoNames;
 
         snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559"'';
         src = pkgs.runCommand "aspen-src-patched" {} ''
@@ -761,10 +766,12 @@
         fullNodeCargoArtifacts = craneLib.buildDepsOnly (
           fullBasicArgs
           // {
-            cargoVendorDir = fullCargoVendorDir;
+            # Use patched vendor dir: hyperlight-wasm build.rs needs pre-built
+            # binary even for non-plugins builds (cargo processes all vendor crates)
+            cargoVendorDir = fullPluginsCargoVendorDir;
+            HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
             pnameSuffix = "-full-deps-node";
             # Build deps for the union of all VM-test feature sets
-            # (excludes plugins-rpc which needs special hyperlight handling)
             cargoExtraArgs = "--features ci,docs,hooks,shell-worker,automerge,secrets,proxy";
           }
         );
@@ -773,7 +780,8 @@
           fullBasicArgs
           // {
             cargoArtifacts = fullNodeCargoArtifacts;
-            cargoVendorDir = fullCargoVendorDir;
+            cargoVendorDir = fullPluginsCargoVendorDir;
+            HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
 
             nativeBuildInputs =
               basicArgs.nativeBuildInputs
@@ -836,111 +844,113 @@
           rustToolChain = rustToolChain;
         };
 
-        # Patched cargoVendorDir: modify hyperlight-wasm's build.rs to
-        # accept HYPERLIGHT_WASM_RUNTIME env var (skips nested cargo build)
-        pluginsCargoVendorDir = pkgs.runCommand "patched-vendor-for-plugins" {} ''
-                    # Deep-copy vendor dir, resolving symlinks so we can modify files
-                    cp -rL --no-preserve=mode ${cargoVendorDir} $out
+        # Reusable function: patch a vendor dir's hyperlight-wasm build.rs
+        # to use a pre-built wasm_runtime binary instead of nested cargo build.
+        patchVendorForHyperlight = baseVendorDir:
+          pkgs.runCommand "patched-vendor-for-plugins" {} ''
+                      cp -rL --no-preserve=mode ${baseVendorDir} $out
+                      ${pkgs.gnused}/bin/sed -i "s|${baseVendorDir}|$out|g" $out/config.toml
 
-                    # Update config.toml to point to our local copies instead of
-                    # the original Nix store paths (which have unpatched files)
-                    ${pkgs.gnused}/bin/sed -i "s|${cargoVendorDir}|$out|g" $out/config.toml
+                      HLW_DIR=$(find $out -maxdepth 3 -type d -name "hyperlight-wasm-0.12.0" | head -1)
+                      if [ -z "$HLW_DIR" ]; then
+                        echo "ERROR: hyperlight-wasm-0.12.0 not found in vendor dir"
+                        exit 1
+                      fi
 
-                    # Find the hyperlight-wasm crate in the vendor registry
-                    HLW_DIR=$(find $out -maxdepth 3 -type d -name "hyperlight-wasm-0.12.0" | head -1)
-                    if [ -z "$HLW_DIR" ]; then
-                      echo "ERROR: hyperlight-wasm-0.12.0 not found in vendor dir"
-                      echo "Contents:"
-                      find $out -maxdepth 3 -type d | head -20
-                      exit 1
-                    fi
-                    echo "Found hyperlight-wasm at: $HLW_DIR"
+                      cat > "$HLW_DIR/build.rs" << 'BUILDRS'
+            use std::path::{Path, PathBuf};
+            use std::{env, fs};
+            use anyhow::Result;
+            use built::write_built_file;
 
-                    # Replace the entire main() function with one that uses a pre-built
-                    # wasm_runtime binary (avoiding the nested cargo build entirely, which
-                    # also avoids the cargo-hyperlight dependency issue)
-                    cat > "$HLW_DIR/build.rs" << 'BUILDRS'
-          use std::path::{Path, PathBuf};
-          use std::{env, fs};
-          use anyhow::Result;
-          use built::write_built_file;
+            fn main() -> Result<()> {
+                let wasm_runtime_resource = PathBuf::from(
+                    env::var("HYPERLIGHT_WASM_RUNTIME")
+                        .expect("HYPERLIGHT_WASM_RUNTIME must be set for Nix builds")
+                );
+                println!("cargo:warning=Using pre-built wasm_runtime from {}", wasm_runtime_resource.display());
+                let out_dir = env::var_os("OUT_DIR").unwrap();
+                let dest_path = Path::new(&out_dir).join("wasm_runtime_resource.rs");
+                let contents = format!(
+                    "pub (super) static WASM_RUNTIME: [u8; include_bytes!({name:?}).len()] = *include_bytes!({name:?});",
+                    name = wasm_runtime_resource.as_os_str()
+                );
+                fs::write(dest_path, contents).unwrap();
+                let wasm_runtime_bytes = fs::read(&wasm_runtime_resource).unwrap();
+                let elf = goblin::elf::Elf::parse(&wasm_runtime_bytes).unwrap();
+                let section_name = ".note_hyperlight_metadata";
+                let wasmtime_version_number = if let Some(header) = elf.section_headers.iter().find(|hdr| {
+                    elf.shdr_strtab.get_at(hdr.sh_name).map_or(false, |name| name == section_name)
+                }) {
+                    let start = header.sh_offset as usize;
+                    let size = header.sh_size as usize;
+                    let metadata_bytes = &wasm_runtime_bytes[start..start + size];
+                    if let Some(null_pos) = metadata_bytes.iter().position(|&b| b == 0) {
+                        std::str::from_utf8(&metadata_bytes[..null_pos]).unwrap()
+                    } else {
+                        std::str::from_utf8(metadata_bytes).unwrap()
+                    }
+                } else {
+                    panic!(".note_hyperlight_metadata section not found in wasm_runtime binary");
+                };
+                write_built_file()?;
+                let built_path = Path::new(&out_dir).join("built.rs");
+                let mut file = std::fs::OpenOptions::new().create(false).append(true).open(built_path).unwrap();
+                use std::io::Write;
+                let metadata = fs::metadata(&wasm_runtime_resource).unwrap();
+                let created = metadata.modified().unwrap();
+                let created_datetime: chrono::DateTime<chrono::Local> = created.into();
+                writeln!(file, "static WASM_RUNTIME_CREATED: &str = \"{}\";", created_datetime).unwrap();
+                writeln!(file, "static WASM_RUNTIME_SIZE: &str = \"{}\";", metadata.len()).unwrap();
+                writeln!(file, "static WASM_RUNTIME_WASMTIME_VERSION: &str = \"{}\";", wasmtime_version_number).unwrap();
+                let hash = blake3::hash(&wasm_runtime_bytes);
+                writeln!(file, "static WASM_RUNTIME_BLAKE3_HASH: &str = \"{}\";", hash).unwrap();
+                println!("cargo:rerun-if-changed=build.rs");
+                cfg_aliases::cfg_aliases! {
+                    gdb: { all(feature = "gdb", debug_assertions) },
+                }
+                Ok(())
+            }
+            BUILDRS
 
-          fn main() -> Result<()> {
-              let wasm_runtime_resource = PathBuf::from(
-                  env::var("HYPERLIGHT_WASM_RUNTIME")
-                      .expect("HYPERLIGHT_WASM_RUNTIME must be set for Nix builds")
-              );
+                      grep -q "HYPERLIGHT_WASM_RUNTIME" "$HLW_DIR/build.rs"
+                      grep -q "$out" "$out/config.toml"
+                      echo "Patch applied successfully"
+          '';
 
-              println!("cargo:warning=Using pre-built wasm_runtime from {}", wasm_runtime_resource.display());
+        # Stub builds: patched vendor for plugins-rpc feature
+        pluginsCargoVendorDir = patchVendorForHyperlight cargoVendorDir;
 
-              let out_dir = env::var_os("OUT_DIR").unwrap();
-              let dest_path = Path::new(&out_dir).join("wasm_runtime_resource.rs");
-              let contents = format!(
-                  "pub (super) static WASM_RUNTIME: [u8; include_bytes!({name:?}).len()] = *include_bytes!({name:?});",
-                  name = wasm_runtime_resource.as_os_str()
-              );
-              fs::write(dest_path, contents).unwrap();
+        # Full-source builds: patched vendor for plugins-rpc feature
+        fullPluginsCargoVendorDir = patchVendorForHyperlight fullCargoVendorDir;
 
-              let wasm_runtime_bytes = fs::read(&wasm_runtime_resource).unwrap();
-              let elf = goblin::elf::Elf::parse(&wasm_runtime_bytes).unwrap();
-
-              let section_name = ".note_hyperlight_metadata";
-              let wasmtime_version_number = if let Some(header) = elf.section_headers.iter().find(|hdr| {
-                  elf.shdr_strtab.get_at(hdr.sh_name).map_or(false, |name| name == section_name)
-              }) {
-                  let start = header.sh_offset as usize;
-                  let size = header.sh_size as usize;
-                  let metadata_bytes = &wasm_runtime_bytes[start..start + size];
-                  if let Some(null_pos) = metadata_bytes.iter().position(|&b| b == 0) {
-                      std::str::from_utf8(&metadata_bytes[..null_pos]).unwrap()
-                  } else {
-                      std::str::from_utf8(metadata_bytes).unwrap()
-                  }
-              } else {
-                  panic!(".note_hyperlight_metadata section not found in wasm_runtime binary");
-              };
-
-              write_built_file()?;
-
-              let built_path = Path::new(&out_dir).join("built.rs");
-              let mut file = std::fs::OpenOptions::new().create(false).append(true).open(built_path).unwrap();
-              use std::io::Write;
-
-              let metadata = fs::metadata(&wasm_runtime_resource).unwrap();
-              let created = metadata.modified().unwrap();
-              let created_datetime: chrono::DateTime<chrono::Local> = created.into();
-              writeln!(file, "static WASM_RUNTIME_CREATED: &str = \"{}\";", created_datetime).unwrap();
-              writeln!(file, "static WASM_RUNTIME_SIZE: &str = \"{}\";", metadata.len()).unwrap();
-              writeln!(file, "static WASM_RUNTIME_WASMTIME_VERSION: &str = \"{}\";", wasmtime_version_number).unwrap();
-
-              let hash = blake3::hash(&wasm_runtime_bytes);
-              writeln!(file, "static WASM_RUNTIME_BLAKE3_HASH: &str = \"{}\";", hash).unwrap();
-
-              println!("cargo:rerun-if-changed=build.rs");
-
-              cfg_aliases::cfg_aliases! {
-                  gdb: { all(feature = "gdb", debug_assertions) },
-              }
-
-              Ok(())
+        fullPluginsCargoArtifacts = craneLib.buildDepsOnly (
+          fullBasicArgs
+          // {
+            pnameSuffix = "-full-deps-node-plugins";
+            cargoVendorDir = fullPluginsCargoVendorDir;
+            HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+            cargoExtraArgs = "--features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,proxy";
           }
-          BUILDRS
+        );
 
-                    # Verify the patch applied
-                    grep -q "HYPERLIGHT_WASM_RUNTIME" "$HLW_DIR/build.rs" || {
-                      echo "ERROR: build.rs patch failed"
-                      cat "$HLW_DIR/build.rs" | head -20
-                      exit 1
-                    }
+        fullPluginsCommonArgs =
+          fullBasicArgs
+          // {
+            cargoArtifacts = fullPluginsCargoArtifacts;
+            cargoVendorDir = fullPluginsCargoVendorDir;
+            HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+            nativeBuildInputs =
+              basicArgs.nativeBuildInputs
+              ++ (with pkgs; [autoPatchelfHook]);
+            buildInputs =
+              basicArgs.buildInputs
+              ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
+                with pkgs; [darwin.apple_sdk.frameworks.Security]
+              ));
+          };
 
-                    # Verify config.toml points to our local copy
-                    grep -q "$out" "$out/config.toml" || {
-                      echo "ERROR: config.toml not updated"
-                      exit 1
-                    }
-
-                    echo "Patch applied successfully"
-        '';
+        # (Old inline pluginsCargoVendorDir replaced by patchVendorForHyperlight above)
 
         # Cargo artifacts for plugin builds (uses patched vendor dir)
         # Must NOT inherit from cargoArtifacts — the patched build.rs
@@ -976,8 +986,86 @@
               ));
           };
 
-        # WASM plugins moved to ~/git/aspen-plugins repo
-        # TODO: Add aspen-plugins flake input to restore VM test plugin builds
+        # ── WASM Plugin Builds (from aspen-plugins sibling repo) ──────
+        # Builds cdylib WASM plugins for VM integration tests.
+        # Only evaluated when sibling repos are available (--impure).
+        # Dependency chain: plugins → aspen-wasm-guest-sdk → aspen-client-api
+        #   → aspen-plugin-api → protocol crates (no back-ref to main workspace)
+        wasmPluginSiblingRepos = [
+          "aspen-plugins"
+          "aspen-wasm-guest-sdk"
+          "aspen-client-api"
+          "aspen-plugin-api"
+          "aspen-coordination"
+          "aspen-forge"
+          "aspen-jobs"
+        ];
+
+        wasmPluginsSrc = pkgs.runCommand "wasm-plugins-src" {} ''
+          mkdir -p $out
+          ${lib.concatMapStringsSep "\n" (
+              name: "cp -r ${siblingRepo name} $out/${name}"
+            )
+            wasmPluginSiblingRepos}
+          chmod -R u+w $out
+          # Use pre-generated Cargo.lock with all plugin crates
+          cp ${./nix/plugins-Cargo.lock} $out/aspen-plugins/Cargo.lock
+        '';
+
+        wasmPluginsCargoVendorDir = craneLib.vendorCargoDeps {
+          src = wasmPluginsSrc + "/aspen-plugins";
+        };
+
+        buildWasmPlugin = {
+          name, # e.g. "coordination"
+          crateName, # e.g. "aspen-coordination-plugin"
+        }:
+          pkgs.stdenv.mkDerivation {
+            pname = "aspen-${name}-plugin-wasm";
+            version = "0.1.0";
+            src = wasmPluginsSrc;
+            nativeBuildInputs = [rustToolChain pkgs.lld];
+            CARGO_HOME = "$TMPDIR/cargo-home";
+            buildPhase = ''
+              mkdir -p $CARGO_HOME
+              mkdir -p aspen-plugins/.cargo
+              cp ${wasmPluginsCargoVendorDir}/config.toml aspen-plugins/.cargo/config.toml
+              cd aspen-plugins
+              cargo build \
+                --release \
+                --target wasm32-unknown-unknown \
+                --offline \
+                -p ${crateName}
+            '';
+            installPhase = ''
+              mkdir -p $out
+              WASM_NAME=$(echo "${crateName}" | tr '-' '_')
+              cp aspen-plugins/target/wasm32-unknown-unknown/release/$WASM_NAME.wasm \
+                 $out/${name}-plugin.wasm
+              cp aspen-plugins/crates/${crateName}/plugin.json \
+                 $out/plugin.json
+            '';
+          };
+
+        coordinationPluginWasm = buildWasmPlugin {
+          name = "coordination";
+          crateName = "aspen-coordination-plugin";
+        };
+
+        automergePluginWasm = buildWasmPlugin {
+          name = "automerge";
+          crateName = "aspen-automerge-plugin";
+        };
+
+        secretsPluginWasm = buildWasmPlugin {
+          name = "secrets";
+          crateName = "aspen-secrets-plugin";
+        };
+
+        serviceRegistryPluginWasm = buildWasmPlugin {
+          name = "service-registry";
+          crateName = "aspen-service-registry-plugin";
+        };
 
         # Build the main package
         aspen = craneLib.buildPackage (
@@ -1392,7 +1480,6 @@
               inherit aspen-node-proxy aspen-node-plugins;
               # aspen-ci-agent extracted to ~/git/aspen-ci
               inherit hyperlight-wasm-runtime;
-
             }
             # Full-source builds for VM integration tests (real sibling deps).
             # Only available with --impure since they need sibling repos.
@@ -1405,6 +1492,15 @@
                 name = "aspen-node";
                 features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "proxy"];
               };
+              # Node with WASM plugin runtime (hyperlight). Uses patched vendor dir.
+              full-aspen-node-plugins = craneLib.buildPackage (
+                fullPluginsCommonArgs
+                // {
+                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc";
+                  doCheck = false;
+                }
+              );
               full-aspen-cli = fullCliBin [];
               full-aspen-cli-forge = fullCliBin ["forge"];
               full-aspen-cli-plugins = fullCliBin ["plugins-rpc" "ci" "automerge"];
@@ -1574,6 +1670,112 @@
                 touch $out
               '';
             }
+            # ── Real checks (override stubs when sibling repos available) ──
+            // lib.optionalAttrs hasSiblingRepos {
+              clippy = craneLib.cargoClippy (
+                fullCommonArgs
+                // {
+                  # Exclude aspen-nix-cache-gateway: pre-existing h3-iroh 0.96 vs iroh 0.95.1 mismatch
+                  cargoClippyExtraArgs = "--workspace --exclude aspen-nix-cache-gateway -- -D warnings";
+                }
+              );
+
+              doc = let
+                # Only document main workspace crates (sibling repos have pre-existing doc issues)
+                mainCrates = [
+                  "aspen"
+                  "aspen-auth"
+                  "aspen-blob"
+                  "aspen-client"
+                  "aspen-cluster"
+                  "aspen-cluster-bridges"
+                  "aspen-core"
+                  "aspen-sharding"
+                  "aspen-transport"
+                ];
+                pkgArgs = lib.concatMapStringsSep " " (c: "-p ${c}") mainCrates;
+              in
+                craneLib.cargoDoc (
+                  fullCommonArgs
+                  // {
+                    cargoDocExtraArgs = "${pkgArgs} --no-deps";
+                    RUSTDOCFLAGS = "-D warnings";
+                  }
+                );
+
+              deny = let
+                # Patch advisory-db: strip CVSS 4.0 lines which cargo-deny can't parse
+                patchedAdvisoryDb = pkgs.runCommand "advisory-db-patched" {} ''
+                  cp -r ${advisory-db} $out
+                  chmod -R u+w $out
+                  find $out -name '*.md' -exec \
+                    ${pkgs.gnused}/bin/sed -i '/^cvss = "CVSS:4\./d' {} +
+                '';
+              in
+                craneLib.mkCargoDerivation {
+                  src = fullSrc;
+                  cargoArtifacts = null;
+                  cargoVendorDir = fullPluginsCargoVendorDir;
+                  pname = "aspen-deny";
+                  nativeBuildInputs = [pkgs.cargo-deny rustToolChain];
+                  HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+                  buildPhaseCargoCommand = ''
+                    # Pre-populate advisory-db in the exact location cargo-deny expects.
+                    # Directory name is hash of default URL: https://github.com/RustSec/advisory-db
+                    DB_DIR="$CARGO_HOME/advisory-dbs"
+                    mkdir -p "$DB_DIR"
+                    # cargo-deny expects a git repo. Init one from the advisory-db source.
+                    cp -r ${patchedAdvisoryDb} "$DB_DIR/advisory-db-3157b0e258782691"
+                    chmod -R u+w "$DB_DIR/advisory-db-3157b0e258782691"
+                    (cd "$DB_DIR/advisory-db-3157b0e258782691" && \
+                      ${pkgs.git}/bin/git init -q && \
+                      ${pkgs.git}/bin/git add -A && \
+                      ${pkgs.git}/bin/git -c user.email=nix@build -c user.name=nix commit -q -m "init")
+                    # Point deny.toml at local db-path
+                    ${pkgs.gnused}/bin/sed -i \
+                      '/^\[advisories\]/a db-path = "'"$DB_DIR"'"' \
+                      deny.toml
+                    cargo deny check --disable-fetch
+                  '';
+                  installPhase = "touch $out";
+                };
+
+              nextest-quick = craneLib.cargoNextest (
+                fullCommonArgs
+                // {
+                  cargoNextestExtraArgs = "-P quick";
+                  nativeBuildInputs =
+                    fullCommonArgs.nativeBuildInputs
+                    ++ [pkgs.cargo-nextest];
+                }
+              );
+
+              nextest = craneLib.cargoNextest (
+                fullCommonArgs
+                // {
+                  nativeBuildInputs =
+                    fullCommonArgs.nativeBuildInputs
+                    ++ [pkgs.cargo-nextest];
+                }
+              );
+
+              verus-inline-check = craneLib.mkCargoDerivation (
+                fullCommonArgs
+                // {
+                  pname = "aspen-verus-inline-check";
+                  # verus feature lives in extracted crates (aspen-raft, aspen-coordination)
+                  # which are available as deps in fullSrc via .nix-deps/
+                  buildPhaseCargoCommand = ''
+                    echo "[1/2] Checking aspen-raft with verus feature..."
+                    cargo check -p aspen-raft --features verus
+                    echo "[2/2] Checking aspen-coordination with verus feature..."
+                    cargo check -p aspen-coordination --features verus
+                    echo "All verus inline checks passed"
+                  '';
+                  installPhase = "touch $out";
+                }
+              );
+            }
             // lib.optionalAttrs (system == "x86_64-linux" && hasSiblingRepos) {
               # NixOS VM integration tests — uses full-source builds with
               # real sibling repo sources (not stubs). Requires --impure
@@ -1608,8 +1810,16 @@
                 aspenCliPackage = bins.full-aspen-cli;
               };
 
-              # multi-node-coordination-test: disabled — WASM plugins moved to aspen-plugins repo
-              # TODO: restore via aspen-plugins flake input
+              # Multi-node coordination test: distributed lock exclusion,
+              # counter linearizability, semaphore capacity, RW lock guarantees,
+              # queue cross-node ops, failover survival.
+              # Build: nix build .#checks.x86_64-linux.multi-node-coordination-test --impure
+              multi-node-coordination-test = import ./nix/tests/multi-node-coordination.nix {
+                inherit pkgs coordinationPluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+              };
 
               # Multi-node blob test: cross-node blob retrieval, blobs from
               # different nodes, replication status, large blob replication,
@@ -1639,14 +1849,35 @@
                 aspenCliPackage = bins.full-aspen-cli;
               };
 
-              # coordination-primitives-test: disabled — WASM plugins moved to aspen-plugins repo
-              # TODO: restore via aspen-plugins flake input
+              # Coordination primitives test: locks, RW locks, counters,
+              # sequences, semaphores, barriers, queues, leases.
+              # Build: nix build .#checks.x86_64-linux.coordination-primitives-test --impure
+              coordination-primitives-test = import ./nix/tests/coordination-primitives.nix {
+                inherit pkgs coordinationPluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+              };
 
-              # hooks-services-test: disabled — WASM plugins moved to aspen-plugins repo
-              # TODO: restore via aspen-plugins flake input
+              # Hooks + service registry test: hook list/metrics/trigger,
+              # service register/discover/heartbeat/deregister.
+              # Build: nix build .#checks.x86_64-linux.hooks-services-test --impure
+              hooks-services-test = import ./nix/tests/hooks-services.nix {
+                inherit pkgs serviceRegistryPluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+              };
 
-              # ratelimit-verify-test: disabled — WASM plugins moved to aspen-plugins repo
-              # TODO: restore via aspen-plugins flake input
+              # Rate limiter + verify test: token bucket rate limiting,
+              # KV/blob storage verification.
+              # Build: nix build .#checks.x86_64-linux.ratelimit-verify-test --impure
+              ratelimit-verify-test = import ./nix/tests/ratelimit-verify.nix {
+                inherit pkgs coordinationPluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+              };
 
               # Cluster management, docs namespace, peer, and verify test:
               # cluster (status, health, metrics, ticket, prometheus);
@@ -1668,8 +1899,15 @@
                 aspenCliPackage = bins.full-aspen-cli;
               };
 
-              # automerge-sql-test: disabled — WASM plugins moved to aspen-plugins repo
-              # TODO: restore via aspen-plugins flake input
+              # Automerge CRDT + SQL query test: create/get/list/delete
+              # CRDT documents, execute SQL queries against KV store.
+              # Build: nix build .#checks.x86_64-linux.automerge-sql-test --impure
+              automerge-sql-test = import ./nix/tests/automerge-sql.nix {
+                inherit pkgs automergePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+              };
 
               # Plugin CLI test: install, list, info, enable, disable, remove,
               # reload, manifest-based install, flag overrides, resource limits,
@@ -1681,8 +1919,15 @@
                 aspenCliPackage = bins.full-aspen-cli-plugins;
               };
 
-              # secrets-engine-test: disabled — WASM plugins moved to aspen-plugins repo
-              # TODO: restore via aspen-plugins flake input
+              # Secrets engine test: KV v2 (put/get/versions/delete/undelete/destroy),
+              # Transit (create-key/encrypt/decrypt/sign/verify/rotate).
+              # Build: nix build .#checks.x86_64-linux.secrets-engine-test --impure
+              secrets-engine-test = import ./nix/tests/secrets-engine.nix {
+                inherit pkgs secretsPluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+              };
 
               # CI pipeline and Nix binary cache test: CI lifecycle
               # (run, status, list, cancel, watch, unwatch, output) and

@@ -15,7 +15,7 @@ use serde::Serialize;
 /// # Tiger Style
 ///
 /// - Fixed limits: Max workers, concurrent jobs bounded
-/// - Explicit types: Tags and job types as Vec<String>
+/// - Explicit types: Tags and job types as `Vec<String>`
 /// - Sensible defaults: CPU cores for worker count
 ///
 /// # Example

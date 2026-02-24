@@ -10,7 +10,7 @@
 //! - [`scan`]: Scan operation types for prefix-based key enumeration
 //! - [`transaction`]: Transaction types for atomic multi-key operations with conditions
 //! - [`validation`]: Validation functions for write commands
-//! - [`write`]: Write operation types for modifying key-value state
+//! - [`mod@write`]: Write operation types for modifying key-value state
 
 // Re-export submodules from aspen-kv-types
 // Re-export all public types at the module root for convenience

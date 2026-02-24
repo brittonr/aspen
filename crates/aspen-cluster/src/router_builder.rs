@@ -102,7 +102,7 @@ impl RouterBuilder {
     /// Register the HTTP proxy protocol handler (optional).
     ///
     /// Enables TCP/HTTP proxying over iroh QUIC connections.
-    /// Uses [`iroh_proxy_utils`] for the proxy implementation.
+    /// Uses `iroh_proxy_utils` for the proxy implementation.
     ///
     /// ALPN: `iroh-http-proxy/1`
     pub fn http_proxy<P: iroh::protocol::ProtocolHandler>(mut self, handler: P) -> Self {
