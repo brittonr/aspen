@@ -15470,7 +15470,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "aspen-wasm-guest-sdk"
-version = "0.1.0"

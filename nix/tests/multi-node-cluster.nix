@@ -20,6 +20,9 @@
   pkgs,
   aspenNodePackage,
   aspenCliPackage,
+  aspenCliPlugins,
+  kvPluginWasm,
+  forgePluginWasm,
 }: let
   # Deterministic Iroh secret keys (64 hex chars = 32 bytes each).
   # Each node gets a unique key so they have distinct iroh endpoint IDs.
@@ -30,12 +33,30 @@
   # Shared cluster cookie — all nodes must agree.
   cookie = "multi-node-vm-test";
 
+  # WASM plugin helpers (KV + Forge handlers are WASM-only)
+  pluginHelpers = import ./lib/wasm-plugins.nix {
+    inherit pkgs aspenCliPlugins;
+    plugins = [
+      {
+        name = "kv";
+        wasm = kvPluginWasm;
+      }
+      {
+        name = "forge";
+        wasm = forgePluginWasm;
+      }
+    ];
+  };
+
   # Common node configuration (DRY).
   mkNodeConfig = {
     nodeId,
     secretKey,
   }: {
-    imports = [../../nix/modules/aspen-node.nix];
+    imports = [
+      ../../nix/modules/aspen-node.nix
+      pluginHelpers.nixosConfig
+    ];
 
     services.aspen.node = {
       enable = true;
@@ -54,12 +75,13 @@
 
     networking.firewall.enable = false;
 
-    virtualisation.memorySize = 2048;
+    virtualisation.memorySize = 4096;
     virtualisation.cores = 2;
   };
 in
   pkgs.testers.nixosTest {
     name = "multi-node-cluster";
+    skipLint = true;
 
     nodes = {
       node1 = mkNodeConfig {
@@ -220,6 +242,9 @@ in
           voters = [n for n in nodes_list if n.get("is_voter", False)]
           assert len(voters) == 3, \
               f"expected 3 voters, got {len(voters)}: {nodes_list}"
+
+      # ── install WASM plugins (KV + Forge handlers are WASM-only) ───
+      ${pluginHelpers.installPluginsScript}
 
       # ── raft consensus verification ──────────────────────────────────
 

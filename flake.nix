@@ -1040,9 +1040,10 @@
             installPhase = ''
               mkdir -p $out
               WASM_NAME=$(echo "${crateName}" | tr '-' '_')
-              cp aspen-plugins/target/wasm32-unknown-unknown/release/$WASM_NAME.wasm \
+              # CWD is aspen-plugins/ from buildPhase cd, so target/ is relative
+              cp target/wasm32-unknown-unknown/release/$WASM_NAME.wasm \
                  $out/${name}-plugin.wasm
-              cp aspen-plugins/crates/${crateName}/plugin.json \
+              cp crates/${crateName}/plugin.json \
                  $out/plugin.json
             '';
           };
@@ -1065,6 +1066,26 @@
         serviceRegistryPluginWasm = buildWasmPlugin {
           name = "service-registry";
           crateName = "aspen-service-registry-plugin";
+        };
+
+        kvPluginWasm = buildWasmPlugin {
+          name = "kv";
+          crateName = "aspen-kv-plugin";
+        };
+
+        forgePluginWasm = buildWasmPlugin {
+          name = "forge";
+          crateName = "aspen-forge-plugin";
+        };
+
+        hooksPluginWasm = buildWasmPlugin {
+          name = "hooks";
+          crateName = "aspen-hooks-plugin";
+        };
+
+        sqlPluginWasm = buildWasmPlugin {
+          name = "sql";
+          crateName = "aspen-sql-plugin";
         };
 
         # Build the main package
@@ -1786,18 +1807,20 @@
               # every forge CLI command end-to-end.
               # Build: nix build .#checks.x86_64-linux.forge-cluster-test
               forge-cluster-test = import ./nix/tests/forge-cluster.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.full-aspen-node;
+                inherit pkgs kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-forge;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
               };
 
               # Multi-node cluster test: 3-node Raft consensus, replication,
               # leader failover, cross-node operations, and node rejoin.
               # Build: nix build .#checks.x86_64-linux.multi-node-cluster-test
               multi-node-cluster-test = import ./nix/tests/multi-node-cluster.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.full-aspen-node;
+                inherit pkgs kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-forge;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
               };
 
               # Multi-node KV test: write/read replication, CAS across nodes,

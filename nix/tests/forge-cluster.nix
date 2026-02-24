@@ -24,19 +24,41 @@
   aspenNodePackage,
   # The CLI must be built with --features forge to enable push and tag create.
   aspenCliPackage,
+  aspenCliPlugins,
+  kvPluginWasm,
+  forgePluginWasm,
 }: let
   # Deterministic Iroh secret key (64 hex chars = 32 bytes).
   secretKey = "0000000000000001000000000000000100000000000000010000000000000001";
 
   # Shared cluster cookie.
   cookie = "forge-vm-test";
+
+  # WASM plugin helpers (KV + Forge handlers are WASM-only)
+  pluginHelpers = import ./lib/wasm-plugins.nix {
+    inherit pkgs aspenCliPlugins;
+    plugins = [
+      {
+        name = "kv";
+        wasm = kvPluginWasm;
+      }
+      {
+        name = "forge";
+        wasm = forgePluginWasm;
+      }
+    ];
+  };
 in
   pkgs.testers.nixosTest {
     name = "forge-cluster";
+    skipLint = true;
 
     nodes = {
       node1 = {
-        imports = [../../nix/modules/aspen-node.nix];
+        imports = [
+          ../../nix/modules/aspen-node.nix
+          pluginHelpers.nixosConfig
+        ];
 
         services.aspen.node = {
           enable = true;
@@ -58,7 +80,7 @@ in
         networking.firewall.enable = false;
 
         # Sufficient resources for a single-node cluster
-        virtualisation.memorySize = 2048;
+        virtualisation.memorySize = 4096;
         virtualisation.cores = 2;
       };
     };
@@ -122,6 +144,9 @@ in
       # Initialize the single-node cluster
       cli_text("cluster init")
       time.sleep(2)
+
+      # ── install WASM plugins (KV + Forge handlers are WASM-only) ───
+      ${pluginHelpers.installPluginsScript}
 
       # Verify cluster is up
       status = cli("cluster status")
