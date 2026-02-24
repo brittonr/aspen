@@ -121,8 +121,33 @@ mod tests {
     use aspen_client_api::LeaseRevokeResultResponse;
     use aspen_client_api::LeaseTimeToLiveResultResponse;
     use aspen_client_api::LockResultResponse;
+    // Queue response types
+    use aspen_client_api::QueueAckResultResponse;
+    use aspen_client_api::QueueCreateResultResponse;
+    use aspen_client_api::QueueDLQItemResponse;
+    use aspen_client_api::QueueDeleteResultResponse;
+    use aspen_client_api::QueueDequeueResultResponse;
+    use aspen_client_api::QueueDequeuedItemResponse;
+    use aspen_client_api::QueueEnqueueBatchResultResponse;
+    use aspen_client_api::QueueEnqueueResultResponse;
+    use aspen_client_api::QueueExtendVisibilityResultResponse;
+    use aspen_client_api::QueueGetDLQResultResponse;
+    use aspen_client_api::QueueItemResponse;
+    use aspen_client_api::QueueNackResultResponse;
+    use aspen_client_api::QueuePeekResultResponse;
+    use aspen_client_api::QueueRedriveDLQResultResponse;
+    use aspen_client_api::QueueStatusResultResponse;
+    // RWLock response types
+    use aspen_client_api::RWLockResultResponse;
     use aspen_client_api::RateLimiterResultResponse;
+    // Semaphore response types
+    use aspen_client_api::SemaphoreResultResponse;
     use aspen_client_api::SequenceResultResponse;
+    // Service registry response types
+    use aspen_client_api::ServiceDiscoverResultResponse;
+    use aspen_client_api::ServiceGetInstanceResultResponse;
+    use aspen_client_api::ServiceInstanceResponse;
+    use aspen_client_api::ServiceListResultResponse;
     use aspen_client_api::WriteResultResponse;
 
     use super::*;
@@ -543,5 +568,734 @@ mod tests {
         // Should have sent at least 2-3 keepalives (one immediately, plus 2-3 more)
         let count = mock.keepalive_count.load(Ordering::SeqCst);
         assert!(count >= 2, "expected at least 2 keepalives, got {}", count);
+    }
+
+    // ================================
+    // QueueClient tests
+    // ================================
+
+    #[tokio::test]
+    async fn test_queue_create_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueCreateResult(QueueCreateResultResponse {
+                is_success: true,
+                was_created: true,
+                error: None,
+            })]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let was_created = queue.create(QueueCreateConfig::default()).await.unwrap();
+        assert!(was_created);
+    }
+
+    #[tokio::test]
+    async fn test_queue_create_failure() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueCreateResult(QueueCreateResultResponse {
+                is_success: false,
+                was_created: false,
+                error: Some("queue already exists".to_string()),
+            })]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let result = queue.create(QueueCreateConfig::default()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("queue already exists"));
+    }
+
+    #[tokio::test]
+    async fn test_queue_enqueue_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueEnqueueResult(QueueEnqueueResultResponse {
+                is_success: true,
+                item_id: Some(42),
+                error: None,
+            })]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let item_id = queue.enqueue(b"hello".to_vec()).await.unwrap();
+        assert_eq!(item_id, 42);
+    }
+
+    #[tokio::test]
+    async fn test_queue_enqueue_batch_success() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueEnqueueBatchResult(
+            QueueEnqueueBatchResultResponse {
+                is_success: true,
+                item_ids: vec![1, 2, 3],
+                error: None,
+            },
+        )]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let items = vec![
+            QueueEnqueueBatchItem {
+                payload: b"item1".to_vec(),
+                ttl: None,
+                message_group_id: None,
+                deduplication_id: None,
+            },
+            QueueEnqueueBatchItem {
+                payload: b"item2".to_vec(),
+                ttl: None,
+                message_group_id: None,
+                deduplication_id: None,
+            },
+        ];
+        let item_ids = queue.enqueue_batch(items).await.unwrap();
+        assert_eq!(item_ids, vec![1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn test_queue_dequeue_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
+                is_success: true,
+                items: vec![QueueDequeuedItemResponse {
+                    item_id: 100,
+                    payload: b"payload".to_vec(),
+                    receipt_handle: "receipt-123".to_string(),
+                    delivery_attempts: 1,
+                    enqueued_at_ms: 1000,
+                    visibility_deadline_ms: 2000,
+                }],
+                error: None,
+            })]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let items = queue.dequeue("consumer-1", 10, Duration::from_secs(30)).await.unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].item_id, 100);
+        assert_eq!(items[0].receipt_handle, "receipt-123");
+    }
+
+    #[tokio::test]
+    async fn test_queue_dequeue_empty() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
+                is_success: true,
+                items: vec![],
+                error: None,
+            })]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let items = queue.dequeue("consumer-1", 10, Duration::from_secs(30)).await.unwrap();
+        assert!(items.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_queue_peek_success() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueuePeekResult(QueuePeekResultResponse {
+            is_success: true,
+            items: vec![QueueItemResponse {
+                item_id: 50,
+                payload: b"peeked".to_vec(),
+                enqueued_at_ms: 1000,
+                expires_at_ms: 2000,
+                delivery_attempts: 0,
+            }],
+            error: None,
+        })]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let items = queue.peek(10).await.unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].item_id, 50);
+        assert_eq!(items[0].delivery_attempts, 0);
+    }
+
+    #[tokio::test]
+    async fn test_queue_ack_success() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueAckResult(QueueAckResultResponse {
+            is_success: true,
+            error: None,
+        })]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let result = queue.ack("receipt-123").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_queue_nack_success() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueNackResult(QueueNackResultResponse {
+            is_success: true,
+            error: None,
+        })]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let result = queue.nack("receipt-123").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_queue_nack_to_dlq() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueNackResult(QueueNackResultResponse {
+            is_success: true,
+            error: None,
+        })]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let result = queue.nack_to_dlq("receipt-123", Some("processing failed".to_string())).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_queue_status_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueStatusResult(QueueStatusResultResponse {
+                is_success: true,
+                does_exist: true,
+                visible_count: Some(10),
+                pending_count: Some(5),
+                dlq_count: Some(2),
+                total_enqueued: Some(100),
+                total_acked: Some(80),
+                error: None,
+            })]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let status = queue.status().await.unwrap();
+        assert!(status.does_exist);
+        assert_eq!(status.visible_count, 10);
+        assert_eq!(status.pending_count, 5);
+        assert_eq!(status.dlq_count, 2);
+        assert_eq!(status.total_enqueued, 100);
+        assert_eq!(status.total_acked, 80);
+    }
+
+    #[tokio::test]
+    async fn test_queue_delete_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueDeleteResult(QueueDeleteResultResponse {
+                is_success: true,
+                items_deleted: Some(42),
+                error: None,
+            })]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let deleted = queue.delete().await.unwrap();
+        assert_eq!(deleted, 42);
+    }
+
+    #[tokio::test]
+    async fn test_queue_get_dlq() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueGetDLQResult(QueueGetDLQResultResponse {
+                is_success: true,
+                items: vec![QueueDLQItemResponse {
+                    item_id: 99,
+                    payload: b"failed".to_vec(),
+                    enqueued_at_ms: 1000,
+                    delivery_attempts: 5,
+                    reason: "max retries exceeded".to_string(),
+                    moved_at_ms: 2000,
+                    last_error: Some("processing error".to_string()),
+                }],
+                error: None,
+            })]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let items = queue.get_dlq(10).await.unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].item_id, 99);
+        assert_eq!(items[0].delivery_attempts, 5);
+        assert_eq!(items[0].reason, "max retries exceeded");
+    }
+
+    #[tokio::test]
+    async fn test_queue_redrive_dlq() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueRedriveDLQResult(
+            QueueRedriveDLQResultResponse {
+                is_success: true,
+                error: None,
+            },
+        )]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let result = queue.redrive_dlq(99).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_queue_extend_visibility() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueExtendVisibilityResult(
+            QueueExtendVisibilityResultResponse {
+                is_success: true,
+                new_deadline_ms: Some(5000),
+                error: None,
+            },
+        )]));
+
+        let queue = QueueClient::new(client, "test-queue");
+        let new_deadline = queue.extend_visibility("receipt-123", Duration::from_secs(10)).await.unwrap();
+        assert_eq!(new_deadline, 5000);
+    }
+
+    // ================================
+    // SemaphoreClient tests
+    // ================================
+
+    #[tokio::test]
+    async fn test_semaphore_acquire_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::SemaphoreAcquireResult(SemaphoreResultResponse {
+                is_success: true,
+                permits_acquired: Some(2),
+                available: Some(3),
+                capacity_permits: None,
+                retry_after_ms: None,
+                error: None,
+            })]));
+
+        let semaphore = SemaphoreClient::new(client);
+        let result = semaphore.acquire("test-sem", "holder-1", 2, 5, Duration::from_secs(60), None).await.unwrap();
+        assert_eq!(result.permits_acquired, 2);
+        assert_eq!(result.available, 3);
+    }
+
+    #[tokio::test]
+    async fn test_semaphore_acquire_failure() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::SemaphoreAcquireResult(SemaphoreResultResponse {
+                is_success: false,
+                permits_acquired: None,
+                available: None,
+                capacity_permits: None,
+                retry_after_ms: None,
+                error: Some("timeout waiting for permits".to_string()),
+            })]));
+
+        let semaphore = SemaphoreClient::new(client);
+        let result = semaphore
+            .acquire("test-sem", "holder-1", 2, 5, Duration::from_secs(60), Some(Duration::from_secs(1)))
+            .await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("timeout waiting for permits"));
+    }
+
+    #[tokio::test]
+    async fn test_semaphore_try_acquire_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
+                is_success: true,
+                permits_acquired: Some(1),
+                available: Some(4),
+                capacity_permits: None,
+                retry_after_ms: None,
+                error: None,
+            })]));
+
+        let semaphore = SemaphoreClient::new(client);
+        let result = semaphore.try_acquire("test-sem", "holder-1", 1, 5, Duration::from_secs(60)).await.unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().permits_acquired, 1);
+    }
+
+    #[tokio::test]
+    async fn test_semaphore_try_acquire_not_available() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
+                is_success: false,
+                permits_acquired: None,
+                available: Some(0),
+                capacity_permits: None,
+                retry_after_ms: None,
+                error: None,
+            })]));
+
+        let semaphore = SemaphoreClient::new(client);
+        let result = semaphore.try_acquire("test-sem", "holder-1", 3, 5, Duration::from_secs(60)).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_semaphore_release_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::SemaphoreReleaseResult(SemaphoreResultResponse {
+                is_success: true,
+                permits_acquired: None,
+                available: Some(5),
+                capacity_permits: None,
+                retry_after_ms: None,
+                error: None,
+            })]));
+
+        let semaphore = SemaphoreClient::new(client);
+        let available = semaphore.release("test-sem", "holder-1", 2).await.unwrap();
+        assert_eq!(available, 5);
+    }
+
+    #[tokio::test]
+    async fn test_semaphore_status_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::SemaphoreStatusResult(SemaphoreResultResponse {
+                is_success: true,
+                permits_acquired: None,
+                available: Some(3),
+                capacity_permits: Some(5),
+                retry_after_ms: None,
+                error: None,
+            })]));
+
+        let semaphore = SemaphoreClient::new(client);
+        let status = semaphore.status("test-sem").await.unwrap();
+        assert_eq!(status.available, 3);
+        assert_eq!(status.capacity_permits, 5);
+    }
+
+    // ================================
+    // RWLockClient tests
+    // ================================
+
+    #[tokio::test]
+    async fn test_rwlock_acquire_read_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
+                is_success: true,
+                mode: Some("read".to_string()),
+                fencing_token: Some(1),
+                deadline_ms: Some(9999),
+                reader_count: Some(1),
+                writer_holder: None,
+                error: None,
+            })]));
+
+        let rwlock = RWLockClient::new(client);
+        let result = rwlock.acquire_read("test-lock", "reader-1", Duration::from_secs(30), None).await.unwrap();
+        assert_eq!(result.fencing_token, 1);
+        assert_eq!(result.deadline_ms, 9999);
+        assert_eq!(result.reader_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_rwlock_acquire_read_failure() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
+                is_success: false,
+                mode: None,
+                fencing_token: None,
+                deadline_ms: None,
+                reader_count: None,
+                writer_holder: None,
+                error: Some("timeout acquiring read lock".to_string()),
+            })]));
+
+        let rwlock = RWLockClient::new(client);
+        let result = rwlock
+            .acquire_read("test-lock", "reader-1", Duration::from_secs(30), Some(Duration::from_secs(1)))
+            .await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("timeout acquiring read lock"));
+    }
+
+    #[tokio::test]
+    async fn test_rwlock_try_acquire_read_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+                is_success: true,
+                mode: Some("read".to_string()),
+                fencing_token: Some(2),
+                deadline_ms: Some(8888),
+                reader_count: Some(2),
+                writer_holder: None,
+                error: None,
+            })]));
+
+        let rwlock = RWLockClient::new(client);
+        let result = rwlock.try_acquire_read("test-lock", "reader-2", Duration::from_secs(30)).await.unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().reader_count, 2);
+    }
+
+    #[tokio::test]
+    async fn test_rwlock_try_acquire_read_not_available() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+                is_success: false,
+                mode: None,
+                fencing_token: None,
+                deadline_ms: None,
+                reader_count: None,
+                writer_holder: None,
+                error: Some("lock not available".to_string()),
+            })]));
+
+        let rwlock = RWLockClient::new(client);
+        let result = rwlock.try_acquire_read("test-lock", "reader-1", Duration::from_secs(30)).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_rwlock_acquire_write_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockAcquireWriteResult(RWLockResultResponse {
+                is_success: true,
+                mode: Some("write".to_string()),
+                fencing_token: Some(10),
+                deadline_ms: Some(7777),
+                reader_count: None,
+                writer_holder: Some("writer-1".to_string()),
+                error: None,
+            })]));
+
+        let rwlock = RWLockClient::new(client);
+        let result = rwlock.acquire_write("test-lock", "writer-1", Duration::from_secs(30), None).await.unwrap();
+        assert_eq!(result.fencing_token, 10);
+        assert_eq!(result.deadline_ms, 7777);
+    }
+
+    #[tokio::test]
+    async fn test_rwlock_try_acquire_write_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
+                is_success: true,
+                mode: Some("write".to_string()),
+                fencing_token: Some(11),
+                deadline_ms: Some(6666),
+                reader_count: None,
+                writer_holder: Some("writer-2".to_string()),
+                error: None,
+            })]));
+
+        let rwlock = RWLockClient::new(client);
+        let result = rwlock.try_acquire_write("test-lock", "writer-2", Duration::from_secs(30)).await.unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().fencing_token, 11);
+    }
+
+    #[tokio::test]
+    async fn test_rwlock_try_acquire_write_not_available() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
+                is_success: false,
+                mode: None,
+                fencing_token: None,
+                deadline_ms: None,
+                reader_count: None,
+                writer_holder: None,
+                error: Some("lock not available".to_string()),
+            })]));
+
+        let rwlock = RWLockClient::new(client);
+        let result = rwlock.try_acquire_write("test-lock", "writer-1", Duration::from_secs(30)).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_rwlock_release_read_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse {
+                is_success: true,
+                mode: None,
+                fencing_token: None,
+                deadline_ms: None,
+                reader_count: None,
+                writer_holder: None,
+                error: None,
+            })]));
+
+        let rwlock = RWLockClient::new(client);
+        let result = rwlock.release_read("test-lock", "reader-1").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_rwlock_release_write_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse {
+                is_success: true,
+                mode: None,
+                fencing_token: None,
+                deadline_ms: None,
+                reader_count: None,
+                writer_holder: None,
+                error: None,
+            })]));
+
+        let rwlock = RWLockClient::new(client);
+        let result = rwlock.release_write("test-lock", "writer-1", 10).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_rwlock_downgrade_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockDowngradeResult(RWLockResultResponse {
+                is_success: true,
+                mode: Some("read".to_string()),
+                fencing_token: Some(10),
+                deadline_ms: Some(5555),
+                reader_count: Some(1),
+                writer_holder: None,
+                error: None,
+            })]));
+
+        let rwlock = RWLockClient::new(client);
+        let result = rwlock.downgrade("test-lock", "writer-1", 10, Duration::from_secs(30)).await.unwrap();
+        assert_eq!(result.fencing_token, 10);
+        assert_eq!(result.reader_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_rwlock_status_success() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockStatusResult(RWLockResultResponse {
+            is_success: true,
+            mode: Some("read".to_string()),
+            fencing_token: Some(5),
+            deadline_ms: None,
+            reader_count: Some(3),
+            writer_holder: None,
+            error: None,
+        })]));
+
+        let rwlock = RWLockClient::new(client);
+        let status = rwlock.status("test-lock").await.unwrap();
+        assert_eq!(status.mode, "read");
+        assert_eq!(status.fencing_token, 5);
+        assert_eq!(status.reader_count, 3);
+        assert!(status.writer_holder.is_none());
+    }
+
+    // ================================
+    // ServiceClient tests
+    // ================================
+
+    #[tokio::test]
+    async fn test_service_discover_success() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::ServiceDiscoverResult(
+            ServiceDiscoverResultResponse {
+                is_success: true,
+                instances: vec![
+                    ServiceInstanceResponse {
+                        instance_id: "inst-1".to_string(),
+                        service_name: "test-svc".to_string(),
+                        address: "10.0.0.1:8080".to_string(),
+                        health_status: "healthy".to_string(),
+                        version: "1.0.0".to_string(),
+                        tags: vec![],
+                        weight: 100,
+                        custom_metadata: "{}".to_string(),
+                        registered_at_ms: 1000,
+                        last_heartbeat_ms: 2000,
+                        deadline_ms: 3000,
+                        lease_id: None,
+                        fencing_token: 1,
+                    },
+                    ServiceInstanceResponse {
+                        instance_id: "inst-2".to_string(),
+                        service_name: "test-svc".to_string(),
+                        address: "10.0.0.2:8080".to_string(),
+                        health_status: "healthy".to_string(),
+                        version: "1.0.0".to_string(),
+                        tags: vec![],
+                        weight: 100,
+                        custom_metadata: "{}".to_string(),
+                        registered_at_ms: 1500,
+                        last_heartbeat_ms: 2500,
+                        deadline_ms: 3500,
+                        lease_id: None,
+                        fencing_token: 2,
+                    },
+                ],
+                count: 2,
+                error: None,
+            },
+        )]));
+
+        let service = ServiceClient::new(client);
+        let instances = service.discover("test-svc", None).await.unwrap();
+        assert_eq!(instances.len(), 2);
+        assert_eq!(instances[0].instance_id, "inst-1");
+        assert_eq!(instances[1].instance_id, "inst-2");
+    }
+
+    #[tokio::test]
+    async fn test_service_discover_empty() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::ServiceDiscoverResult(
+            ServiceDiscoverResultResponse {
+                is_success: true,
+                instances: vec![],
+                count: 0,
+                error: None,
+            },
+        )]));
+
+        let service = ServiceClient::new(client);
+        let instances = service.discover("test-svc", None).await.unwrap();
+        assert!(instances.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_service_list_success() {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::ServiceListResult(ServiceListResultResponse {
+                is_success: true,
+                services: vec![
+                    "api-service".to_string(),
+                    "db-service".to_string(),
+                    "cache-service".to_string(),
+                ],
+                count: 3,
+                error: None,
+            })]));
+
+        let service = ServiceClient::new(client);
+        let services = service.list_services("", None).await.unwrap();
+        assert_eq!(services.len(), 3);
+        assert_eq!(services[0], "api-service");
+        assert_eq!(services[1], "db-service");
+        assert_eq!(services[2], "cache-service");
+    }
+
+    #[tokio::test]
+    async fn test_service_get_instance_found() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::ServiceGetInstanceResult(
+            ServiceGetInstanceResultResponse {
+                is_success: true,
+                was_found: true,
+                instance: Some(ServiceInstanceResponse {
+                    instance_id: "inst-1".to_string(),
+                    service_name: "test-svc".to_string(),
+                    address: "10.0.0.1:8080".to_string(),
+                    health_status: "healthy".to_string(),
+                    version: "1.0.0".to_string(),
+                    tags: vec![],
+                    weight: 100,
+                    custom_metadata: "{}".to_string(),
+                    registered_at_ms: 1000,
+                    last_heartbeat_ms: 2000,
+                    deadline_ms: 3000,
+                    lease_id: Some(999),
+                    fencing_token: 1,
+                }),
+                error: None,
+            },
+        )]));
+
+        let service = ServiceClient::new(client);
+        let instance = service.get_instance("test-svc", "inst-1").await.unwrap();
+        assert!(instance.is_some());
+        let inst = instance.unwrap();
+        assert_eq!(inst.instance_id, "inst-1");
+        assert_eq!(inst.service_name, "test-svc");
+        assert_eq!(inst.address, "10.0.0.1:8080");
+        assert_eq!(inst.lease_id, Some(999));
+    }
+
+    #[tokio::test]
+    async fn test_service_get_instance_not_found() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::ServiceGetInstanceResult(
+            ServiceGetInstanceResultResponse {
+                is_success: true,
+                was_found: false,
+                instance: None,
+                error: None,
+            },
+        )]));
+
+        let service = ServiceClient::new(client);
+        let instance = service.get_instance("test-svc", "inst-999").await.unwrap();
+        assert!(instance.is_none());
     }
 }

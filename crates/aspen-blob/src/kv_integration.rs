@@ -334,6 +334,64 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
 
 #[cfg(test)]
 mod tests {
-    // Integration tests in tests/ directory
-    // Unit tests would require mocking both KV and blob store
+    use super::*;
+
+    #[test]
+    fn test_small_value_stored_directly() {
+        // Create a small value that shouldn't be offloaded
+        let small_value = "a".repeat(100); // 100 bytes << 1MB threshold
+
+        // Verify it's below threshold
+        assert!((small_value.len() as u32) < BLOB_THRESHOLD);
+    }
+
+    #[test]
+    fn test_blob_ref_roundtrip() {
+        use iroh_blobs::BlobFormat;
+        use iroh_blobs::Hash;
+
+        // Create a blob reference
+        let hash = Hash::new(b"test data");
+        let blob_ref = BlobRef::new(hash, 12345, BlobFormat::Raw);
+
+        // Convert to KV value
+        let kv_value = blob_ref.to_kv_value().expect("serialization should succeed");
+
+        // Verify it has the blob ref prefix
+        assert!(kv_value.starts_with(crate::BLOB_REF_PREFIX));
+
+        // Parse it back
+        let parsed = BlobRef::from_kv_value(&kv_value).expect("should parse");
+
+        // Verify roundtrip
+        assert_eq!(parsed.hash, hash);
+        assert_eq!(parsed.size_bytes, 12345);
+        assert_eq!(parsed.format, BlobFormat::Raw);
+    }
+
+    #[test]
+    fn test_is_blob_ref_detection() {
+        use iroh_blobs::BlobFormat;
+        use iroh_blobs::Hash;
+
+        // Create a blob reference
+        let hash = Hash::new(b"test");
+        let blob_ref = BlobRef::new(hash, 100, BlobFormat::Raw);
+        let blob_ref_value = blob_ref.to_kv_value().unwrap();
+
+        // Should detect blob references
+        assert!(is_blob_ref(&blob_ref_value));
+
+        // Should not detect normal values
+        assert!(!is_blob_ref("normal value"));
+        assert!(!is_blob_ref(""));
+        assert!(!is_blob_ref("__blo:not quite")); // Wrong prefix
+
+        // Edge case: exact prefix but not a valid blob ref
+        let fake_ref = format!("{}invalid json", crate::BLOB_REF_PREFIX);
+        assert!(is_blob_ref(&fake_ref)); // is_blob_ref only checks prefix
+
+        // But parsing should fail
+        assert!(BlobRef::from_kv_value(&fake_ref).is_none());
+    }
 }

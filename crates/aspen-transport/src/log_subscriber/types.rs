@@ -173,3 +173,162 @@ pub struct LogEntryPayload {
     /// The operation that was committed.
     pub operation: KvOperation,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_subscribe_request_from_index() {
+        let req = SubscribeRequest::from_index(42);
+        assert_eq!(req.start_index, 42);
+        assert!(req.key_prefix.is_empty());
+        assert_eq!(req.protocol_version, LOG_SUBSCRIBE_PROTOCOL_VERSION);
+    }
+
+    #[test]
+    fn test_subscribe_request_latest_only() {
+        let req = SubscribeRequest::latest_only();
+        assert_eq!(req.start_index, u64::MAX);
+        assert!(req.key_prefix.is_empty());
+    }
+
+    #[test]
+    fn test_subscribe_request_with_prefix() {
+        let req = SubscribeRequest::with_prefix(10, b"user:".to_vec());
+        assert_eq!(req.start_index, 10);
+        assert_eq!(req.key_prefix, b"user:");
+    }
+
+    #[test]
+    fn test_subscribe_request_serde_roundtrip() {
+        let req = SubscribeRequest::with_prefix(100, b"kv:".to_vec());
+        let bytes = postcard::to_allocvec(&req).unwrap();
+        let decoded: SubscribeRequest = postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(decoded.start_index, 100);
+        assert_eq!(decoded.key_prefix, b"kv:");
+    }
+
+    #[test]
+    fn test_subscribe_response_accepted_serde() {
+        let resp = SubscribeResponse::Accepted {
+            current_index: 999,
+            node_id: 7,
+        };
+        let bytes = postcard::to_allocvec(&resp).unwrap();
+        let decoded: SubscribeResponse = postcard::from_bytes(&bytes).unwrap();
+        match decoded {
+            SubscribeResponse::Accepted { current_index, node_id } => {
+                assert_eq!(current_index, 999);
+                assert_eq!(node_id, 7);
+            }
+            _ => panic!("expected Accepted"),
+        }
+    }
+
+    #[test]
+    fn test_subscribe_response_rejected_serde() {
+        let resp = SubscribeResponse::Rejected {
+            reason: SubscribeRejectReason::TooManySubscribers,
+        };
+        let bytes = postcard::to_allocvec(&resp).unwrap();
+        let decoded: SubscribeResponse = postcard::from_bytes(&bytes).unwrap();
+        match decoded {
+            SubscribeResponse::Rejected { reason } => {
+                assert_eq!(reason, SubscribeRejectReason::TooManySubscribers);
+            }
+            _ => panic!("expected Rejected"),
+        }
+    }
+
+    #[test]
+    fn test_subscribe_reject_reason_display() {
+        assert_eq!(SubscribeRejectReason::TooManySubscribers.to_string(), "too many subscribers");
+        assert_eq!(SubscribeRejectReason::IndexNotAvailable.to_string(), "requested index not available");
+        assert_eq!(SubscribeRejectReason::UnsupportedVersion.to_string(), "protocol version not supported");
+        assert_eq!(SubscribeRejectReason::NotReady.to_string(), "server not ready");
+        assert_eq!(SubscribeRejectReason::InternalError.to_string(), "internal error");
+    }
+
+    #[test]
+    fn test_end_of_stream_reason_display() {
+        assert_eq!(EndOfStreamReason::ServerShutdown.to_string(), "server shutdown");
+        assert_eq!(EndOfStreamReason::ClientDisconnect.to_string(), "client disconnect");
+        assert_eq!(EndOfStreamReason::Lagged.to_string(), "subscriber lagged");
+        assert_eq!(EndOfStreamReason::InternalError.to_string(), "internal error");
+    }
+
+    #[test]
+    fn test_log_entry_message_keepalive_serde() {
+        let ts = SerializableTimestamp::from_millis(0);
+        let msg = LogEntryMessage::Keepalive {
+            committed_index: 42,
+            hlc_timestamp: ts,
+        };
+        let bytes = postcard::to_allocvec(&msg).unwrap();
+        let decoded: LogEntryMessage = postcard::from_bytes(&bytes).unwrap();
+        match decoded {
+            LogEntryMessage::Keepalive { committed_index, .. } => {
+                assert_eq!(committed_index, 42);
+            }
+            _ => panic!("expected Keepalive"),
+        }
+    }
+
+    #[test]
+    fn test_log_entry_message_end_of_stream_serde() {
+        let msg = LogEntryMessage::EndOfStream {
+            reason: EndOfStreamReason::Lagged,
+        };
+        let bytes = postcard::to_allocvec(&msg).unwrap();
+        let decoded: LogEntryMessage = postcard::from_bytes(&bytes).unwrap();
+        match decoded {
+            LogEntryMessage::EndOfStream { reason } => {
+                assert_eq!(reason, EndOfStreamReason::Lagged);
+            }
+            _ => panic!("expected EndOfStream"),
+        }
+    }
+
+    #[test]
+    fn test_subscribe_reject_reason_equality() {
+        assert_eq!(SubscribeRejectReason::TooManySubscribers, SubscribeRejectReason::TooManySubscribers);
+        assert_ne!(SubscribeRejectReason::TooManySubscribers, SubscribeRejectReason::NotReady);
+    }
+
+    #[test]
+    fn test_end_of_stream_reason_equality() {
+        assert_eq!(EndOfStreamReason::Lagged, EndOfStreamReason::Lagged);
+        assert_ne!(EndOfStreamReason::Lagged, EndOfStreamReason::ServerShutdown);
+    }
+
+    #[test]
+    fn test_subscribe_request_clone() {
+        let req = SubscribeRequest::with_prefix(5, b"test:".to_vec());
+        let cloned = req.clone();
+        assert_eq!(cloned.start_index, 5);
+        assert_eq!(cloned.key_prefix, b"test:");
+    }
+
+    #[test]
+    fn test_subscribe_reject_reason_copy() {
+        let reason = SubscribeRejectReason::NotReady;
+        let copied = reason;
+        assert_eq!(reason, copied);
+    }
+
+    #[test]
+    fn test_end_of_stream_reason_copy() {
+        let reason = EndOfStreamReason::ServerShutdown;
+        let copied = reason;
+        assert_eq!(reason, copied);
+    }
+
+    #[test]
+    fn test_subscribe_request_debug() {
+        let req = SubscribeRequest::from_index(0);
+        let debug = format!("{:?}", req);
+        assert!(debug.contains("SubscribeRequest"));
+        assert!(debug.contains("start_index"));
+    }
+}

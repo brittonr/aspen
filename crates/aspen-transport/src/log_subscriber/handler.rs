@@ -168,6 +168,124 @@ impl LogSubscriberProtocolHandler {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
+
+    use super::*;
+
+    #[test]
+    fn test_new_returns_handler_sender_and_committed_index() {
+        let (handler, _sender, committed_index) = LogSubscriberProtocolHandler::new("test-cookie", 42);
+        assert_eq!(committed_index.load(Ordering::SeqCst), 0);
+        // handler was created successfully
+        let _ = format!("{:?}", handler);
+    }
+
+    #[test]
+    fn test_new_sender_is_subscribable() {
+        let (_handler, sender, _idx) = LogSubscriberProtocolHandler::new("cookie", 1);
+        // Sender should support subscriptions
+        let _rx = sender.subscribe();
+    }
+
+    #[test]
+    fn test_committed_index_starts_at_zero() {
+        let (_handler, _sender, committed_index) = LogSubscriberProtocolHandler::new("cookie", 1);
+        assert_eq!(committed_index.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn test_committed_index_handle_returns_shared_clone() {
+        let (handler, _sender, committed_index) = LogSubscriberProtocolHandler::new("cookie", 99);
+
+        // Store via the original handle
+        committed_index.store(42, Ordering::SeqCst);
+
+        // Read via committed_index_handle — should see the same value
+        let handle = handler.committed_index_handle();
+        assert_eq!(handle.load(Ordering::SeqCst), 42);
+
+        // Write via handle, read via original
+        handle.store(100, Ordering::SeqCst);
+        assert_eq!(committed_index.load(Ordering::SeqCst), 100);
+    }
+
+    #[test]
+    fn test_with_sender_creates_handler() {
+        let (log_sender, _) = broadcast::channel(16);
+        let committed_index = Arc::new(AtomicU64::new(55));
+
+        let handler = LogSubscriberProtocolHandler::with_sender("cookie", 7, log_sender, committed_index.clone());
+
+        let handle = handler.committed_index_handle();
+        assert_eq!(handle.load(Ordering::SeqCst), 55);
+    }
+
+    #[test]
+    fn test_with_historical_reader_creates_handler() {
+        #[derive(Debug)]
+        struct MockReader;
+
+        #[async_trait::async_trait]
+        impl HistoricalLogReader for MockReader {
+            async fn read_entries(&self, _start: u64, _end: u64) -> Result<Vec<LogEntryPayload>, std::io::Error> {
+                Ok(vec![])
+            }
+            async fn earliest_available_index(&self) -> Result<Option<u64>, std::io::Error> {
+                Ok(None)
+            }
+        }
+
+        let (log_sender, _) = broadcast::channel(16);
+        let committed_index = Arc::new(AtomicU64::new(0));
+
+        let handler = LogSubscriberProtocolHandler::with_historical_reader(
+            "cookie",
+            10,
+            log_sender,
+            committed_index,
+            Arc::new(MockReader),
+        );
+        let _ = format!("{:?}", handler);
+    }
+
+    #[test]
+    fn test_with_watch_registry() {
+        let (handler, _sender, _idx) = LogSubscriberProtocolHandler::new("cookie", 5);
+        let registry = Arc::new(aspen_core::InMemoryWatchRegistry::new());
+        // with_watch_registry consumes self and returns Self — just verify it doesn't panic
+        let handler = handler.with_watch_registry(registry);
+        let _ = format!("{:?}", handler);
+    }
+
+    #[test]
+    fn test_debug_includes_node_id() {
+        let (handler, _sender, _idx) = LogSubscriberProtocolHandler::new("cookie", 12345);
+        let debug_str = format!("{:?}", handler);
+        assert!(debug_str.contains("12345"), "Debug output should contain node_id: {}", debug_str);
+    }
+
+    #[test]
+    fn test_debug_includes_committed_index() {
+        let (handler, _sender, committed_index) = LogSubscriberProtocolHandler::new("cookie", 1);
+        committed_index.store(999, Ordering::SeqCst);
+        let debug_str = format!("{:?}", handler);
+        assert!(debug_str.contains("999"), "Debug output should contain committed_index value: {}", debug_str);
+    }
+
+    #[test]
+    fn test_multiple_sender_subscribers() {
+        let (_handler, sender, _idx) = LogSubscriberProtocolHandler::new("cookie", 1);
+        let _rx1 = sender.subscribe();
+        let _rx2 = sender.subscribe();
+        let _rx3 = sender.subscribe();
+        // All subscriptions should coexist
+    }
+}
+
 impl ProtocolHandler for LogSubscriberProtocolHandler {
     async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
         let remote_node_id = connection.remote_id();

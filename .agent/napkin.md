@@ -1098,3 +1098,33 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 - **Plugin CLI is feature-gated**: `cargo test --features plugins-rpc` needed to run plugin tests
 - **PluginInfo description field was already added** by aspen-plugin-api worker but not shown in guest SDK example — needed manual update
 - **No current plugins have inter-dependencies**: Topological sort of 0-dep graph preserves scan order, so no behavioral change for existing deployments
+
+### Unit Test Coverage Push (2026-02-24)
+
+**87 new tests added across 3 crates. 1694 → 1781 total tests, all passing.**
+
+| Crate | Before | After | Δ Tests | Δ Coverage |
+|-------|--------|-------|---------|------------|
+| aspen-client | 33.0% | 57.1% | +37 | +24.1pp |
+| aspen-blob | 42.8% | 52.7% | +24 | +9.9pp |
+| aspen-transport | 53.5% | 64.5% | +26 | +11.0pp |
+| **Workspace** | **44.2%** | **~48%** | **+87** | **+~4pp** |
+
+**aspen-client (37 tests):**
+
+- QueueClient: 15 tests (create, enqueue, dequeue, peek, ack, nack, DLQ, redrive, extend, status, delete, batch)
+- SemaphoreClient: 6 tests (acquire, try_acquire, release, status, failure)
+- RWLockClient: 11 tests (read/write acquire, try_acquire, release, downgrade, status)
+- ServiceClient: 5 tests (discover, list, get_instance found/not-found)
+
+**aspen-blob (24 tests):**
+
+- InMemoryBlobStore: 21 tests (add/get/has/status/reader/list/limit/too_large/ticket/wait/clone/protect/add_path)
+- BlobAwareKeyValueStore helpers: 3 tests (threshold, blob_ref roundtrip, is_blob_ref)
+
+**aspen-transport (26 tests):**
+
+- LogSubscriberProtocolHandler: 10 tests (constructors, committed_index, sender, debug, watch_registry)
+- Log subscriber types: 16 tests (serde roundtrip, Display, Clone/Copy, equality)
+- raft.rs: skipped (needs Raft<AppTypeConfig> — tested via VM integration)
+- wire.rs: skipped (needs QUIC streams — tested via VM integration)

@@ -40,3 +40,15 @@
 {"text":"lets continue","timestamp":1771949542027}
 {"text":"what next","timestamp":1771950568308}
 {"text":"lets do 1 then 3","timestamp":1771950783788}
+{"text":"lets do it","timestamp":1771952927504}
+{"text":"lets work on the two existing failing vm tests","timestamp":1771953870441}
+{"text":"rebase and push","timestamp":1771955728453}
+{"text":"what next","timestamp":1771955871146}
+{"text":"lets do 3","timestamp":1771955963619}
+{"text":"what next","timestamp":1771958962547}
+{"text":"lets do B","timestamp":1771962065198}
+{"text":"what next","timestamp":1771963304987}
+{"text":"│ 🧪 VM test CI       │ Wire the 18 NixOS VM tests into flake.nix checks (currently    │ VM tests exist but aren't in the CI │\n │                     │ only nextest/clippy/etc. show in nix flake check)              │ gate — regressions could slip       │\n │                     │                                                                │ through                             │\n ├─────────────────────┼────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤\n │ 📊 Test coverage    │ Run nextest and assess unit test coverage for the 46 remaining │ The napkin notes verus-sync-check   │\n │                     │ crates                                                         │ has 34.8% coverage and 71 spec      │\n │                     │                                                                │ drifts","timestamp":1771963424760}
+{"text":"lets continue","timestamp":1771964305997}
+{"text":"yes","timestamp":1771966758049}
+{"text":"hows it going","timestamp":1771969276592}
