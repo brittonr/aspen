@@ -65,7 +65,7 @@ members = [
     # aspen-layer extracted to ~/git/aspen-layer
     # aspen-vault and aspen-crypto-types inlined into aspen-core
     # aspen-coordination extracted to ~/git/aspen-coordination
-    "crates/aspen-blob",
+    # aspen-blob extracted to ~/git/aspen-blob
     # aspen-raft family extracted to ~/git/aspen-raft
     # "crates/aspen-raft-types",
     # "crates/aspen-raft-network",
@@ -151,7 +151,7 @@ aspen-storage-types = { path = "../aspen-storage-types/crates/aspen-storage-type
 # aspen-vault and aspen-crypto-types inlined into aspen-core
 aspen-traits = { path = "../aspen-traits/crates/aspen-traits" }
 aspen-coordination = { path = "../aspen-coordination/crates/aspen-coordination" }
-aspen-blob = { path = "crates/aspen-blob" }
+aspen-blob = { path = "../aspen-blob/crates/aspen-blob" }
 aspen-sql = { path = "../aspen-sql/crates/aspen-sql" }
 aspen-auth = { path = "crates/aspen-auth" }
 aspen-sharding = { path = "../aspen-sharding/crates/aspen-sharding" }
@@ -735,7 +735,7 @@ cargo-hyperlight = { path = "vendor/cargo-hyperlight" }
 # Override git deps from extracted repos to use local workspace crates
 [patch."https://github.com/brittonr/aspen.git"]
 aspen-core = { path = "crates/aspen-core" }
-aspen-blob = { path = "crates/aspen-blob" }
+aspen-blob = { path = "../aspen-blob/crates/aspen-blob" }
 aspen-cache = { path = "../aspen-nix/crates/aspen-cache" }
 aspen-jobs = { path = "../aspen-jobs/crates/aspen-jobs" }
 aspen-auth = { path = "crates/aspen-auth" }

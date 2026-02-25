@@ -38,7 +38,7 @@ serde_json = "1.0"
 hex = "0.4"
 
 # Optional dependencies for blob-store feature
-aspen-blob = { path = "../aspen-blob", optional = true }
+aspen-blob = { workspace = true, optional = true }
 async-trait = { version = "0.1", optional = true }
 bytes = { version = "1.7", optional = true }
 iroh-blobs = { version = "0.97", optional = true }
