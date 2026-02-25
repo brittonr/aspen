@@ -128,6 +128,16 @@
 - 18 NixOS VM integration tests (10 non-plugin + 8 WASM plugin tests)
 - Coverage: ~48% workspace average (aspen-client 57%, aspen-blob 53%, aspen-transport 65%)
 
+**CI Worker Cache Integration:**
+
+- `RpcCacheIndex` in aspen-client implements `CacheIndex` trait via RPC (CacheQuery/CacheStats)
+- Feature-gated: `aspen-client/cache-index` (pulls aspen-cache + async-trait)
+- `ci-basic` feature activates `aspen-client/cache-index` automatically
+- Worker fetches cache public key via `SecretsNixCacheGetPublicKey` RPC at startup
+- Gateway selection: Ping probe → first responder (fallback: first bootstrap peer)
+- Cache substituter auto-enabled when public key available, gracefully disabled otherwise
+- Env vars: `ASPEN_CACHE_NAME` (default: "aspen-cache"), `ASPEN_TRANSIT_MOUNT` (default: "transit")
+
 **Cross-Repo Dependency Patterns:**
 
 - aspen-rpc → aspen-ci, aspen-nix, aspen-coordination, aspen-forge, aspen-secrets, aspen-docs, aspen-jobs, aspen-hooks (ServiceExecutor impls)
