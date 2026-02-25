@@ -193,13 +193,13 @@
             ./rust-toolchain.toml
             ./.config
             ./src
-            ./crates
+            # ./crates  # All library crates extracted to sibling repos
             # ./openraft  # Extracted to ~/git/aspen-raft
             ./vendor
             ./tests
             ./benches
             ./examples
-            ./scripts/tutorial-verify
+            # ./scripts/tutorial-verify  # Extracted to ~/git/aspen-tutorial-verify
           ];
         };
 
@@ -243,13 +243,18 @@
           };
 
         siblingRepoNames = [
+          "aspen-auth"
           "aspen-automerge"
+          "aspen-blob"
           "aspen-ci"
           "aspen-cli"
+          "aspen-client"
           "aspen-client-api"
+          "aspen-cluster"
           "aspen-cluster-bridges"
           "aspen-cluster-types"
           "aspen-constants"
+          "aspen-core"
           "aspen-coordination"
           "aspen-dht-discovery"
           "aspen-disk"
@@ -363,6 +368,13 @@
 
           STUBS="$out/.nix-stubs"
 
+          # Core crates (extracted round 5)
+          stub_crate "$STUBS/aspen-core" "aspen-core" layer sql global-discovery
+          stub_crate "$STUBS/aspen-client" "aspen-client" forge blob-store
+          stub_crate "$STUBS/aspen-cluster" "aspen-cluster" blob docs federation jobs hooks nickel secrets global-discovery bolero
+          stub_crate "$STUBS/aspen-auth" "aspen-auth"
+          stub_crate "$STUBS/aspen-blob" "aspen-blob"
+
           # Round 1 extractions (ci, nix, tui, automerge)
           stub_crate "$STUBS/aspen-tui" "aspen-tui"
           stub_crate "$STUBS/aspen-automerge" "aspen-automerge"
@@ -399,6 +411,11 @@
 
           # Rewrite workspace-level path deps from sibling repos to .nix-stubs/
           ${pkgs.gnused}/bin/sed -i \
+            -e 's|path = "\.\./aspen-core/crates/aspen-core"|path = ".nix-stubs/aspen-core"|g' \
+            -e 's|path = "\.\./aspen-client/crates/aspen-client"|path = ".nix-stubs/aspen-client"|g' \
+            -e 's|path = "\.\./aspen-cluster/crates/aspen-cluster"|path = ".nix-stubs/aspen-cluster"|g' \
+            -e 's|path = "\.\./aspen-auth/crates/aspen-auth"|path = ".nix-stubs/aspen-auth"|g' \
+            -e 's|path = "\.\./aspen-blob/crates/aspen-blob"|path = ".nix-stubs/aspen-blob"|g' \
             -e 's|path = "\.\./aspen-tui/crates/aspen-tui"|path = ".nix-stubs/aspen-tui"|g' \
             -e 's|path = "\.\./aspen-automerge/crates/aspen-automerge"|path = ".nix-stubs/aspen-automerge"|g' \
             -e 's|path = "\.\./aspen-ci/crates/aspen-nickel"|path = ".nix-stubs/aspen-nickel"|g' \
@@ -443,6 +460,8 @@
 
           # Also rewrite crate-level path deps that point to sibling repos.
           # From crates/X/, "../../../repo/crates/Y" → "../../.nix-stubs/Y"
+          # (Skip if crates/ doesn't exist — all library crates extracted)
+          if [ -d "$out/crates" ]; then
           find $out/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
             -e 's|path = "\.\./\.\./\.\./aspen-ci/crates/aspen-ci"|path = "../../.nix-stubs/aspen-ci"|g' \
             -e 's|path = "\.\./\.\./\.\./aspen-ci/crates/aspen-nickel"|path = "../../.nix-stubs/aspen-nickel"|g' \
@@ -468,6 +487,7 @@
             -e 's|path = "\.\./\.\./\.\./aspen-jobs/crates/aspen-jobs-worker-shell"|path = "../../.nix-stubs/aspen-jobs-worker-shell"|g' \
             -e 's|path = "\.\./\.\./\.\./aspen-jobs/crates/aspen-jobs-worker-sql"|path = "../../.nix-stubs/aspen-jobs-worker-sql"|g' \
             {} \;
+          fi
 
         '';
 

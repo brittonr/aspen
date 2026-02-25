@@ -49,7 +49,7 @@ required-features = ["plugins-vm"]
 [workspace]
 members = [
     ".",
-    "scripts/tutorial-verify",
+    # tutorial-verify extracted to ~/git/aspen-tutorial-verify
     # aspen-client extracted to ~/git/aspen-client
     # aspen-client-api extracted to ~/git/aspen-client-api
     # aspen-constants extracted to ~/git/aspen-constants
