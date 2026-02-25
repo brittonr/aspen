@@ -90,3 +90,6 @@
 {"text":"### Remaining work (not yet fixed):\n\n - Follower reads still fail — they correctly return\n NOT_LEADER now (no longer silent), but the client retries\n on the same single-peer ticket. Multi-peer tickets or\n gossip-based leader discovery needed for automatic\n failover.\n - Writes to followers still show raw Raft error — the write\n path error comes from a different codepath (Raft\n ForwardToLeader) that goes through a separate handler. The\n sanitize_kv_error returns NOT_LEADER but the response type\n is WriteResultResponse.error, not the top-level Error.","timestamp":1772047965172}
 {"text":"what next","timestamp":1772049205764}
 {"text":"lets do 1","timestamp":1772049660679}
+{"text":"what next","timestamp":1772050289699}
+{"text":"lets do 1","timestamp":1772050316443}
+{"text":"we good m8>","timestamp":1772051144768}

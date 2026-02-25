@@ -7,7 +7,7 @@ description = "Pure client library for Aspen distributed systems - no raft/clust
 
 [dependencies]
 # Core Aspen dependencies
-aspen-auth = { path = "../aspen-auth" }
+aspen-auth = { workspace = true }
 aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-ticket = { workspace = true }

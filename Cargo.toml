@@ -78,7 +78,7 @@ members = [
     # aspen-testing-network extracted to ~/git/aspen-testing-network
     # aspen-ticket extracted to ~/git/aspen-ticket
     # aspen-sql extracted to ~/git/aspen-sql
-    "crates/aspen-auth",
+    # aspen-auth extracted to ~/git/aspen-auth
     # aspen-sharding extracted to ~/git/aspen-sharding
     # aspen-forge extracted to ~/git/aspen-forge
     # aspen-hooks-types extracted to ~/git/aspen-hooks
@@ -153,7 +153,7 @@ aspen-traits = { path = "../aspen-traits/crates/aspen-traits" }
 aspen-coordination = { path = "../aspen-coordination/crates/aspen-coordination" }
 aspen-blob = { path = "../aspen-blob/crates/aspen-blob" }
 aspen-sql = { path = "../aspen-sql/crates/aspen-sql" }
-aspen-auth = { path = "crates/aspen-auth" }
+aspen-auth = { path = "../aspen-auth/crates/aspen-auth" }
 aspen-sharding = { path = "../aspen-sharding/crates/aspen-sharding" }
 # Raft family extracted to ~/git/aspen-raft
 aspen-raft-types = { path = "../aspen-raft/crates/aspen-raft-types" }
@@ -738,7 +738,7 @@ aspen-core = { path = "crates/aspen-core" }
 aspen-blob = { path = "../aspen-blob/crates/aspen-blob" }
 aspen-cache = { path = "../aspen-nix/crates/aspen-cache" }
 aspen-jobs = { path = "../aspen-jobs/crates/aspen-jobs" }
-aspen-auth = { path = "crates/aspen-auth" }
+aspen-auth = { path = "../aspen-auth/crates/aspen-auth" }
 aspen-forge = { path = "../aspen-forge/crates/aspen-forge" }
 aspen-ticket = { path = "../aspen-ticket/crates/aspen-ticket" }
 aspen-client-api = { path = "../aspen-client-api/crates/aspen-client-api" }

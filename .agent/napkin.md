@@ -1388,3 +1388,18 @@ Client sends WriteKey to follower:
 - **43 sibling repos** total (was 42)
 - `cargo check --workspace` passes clean
 - All tests pass
+
+### Extracted: aspen-auth (3,019 LOC + 1,473 Verus specs)
+
+- New repo: ~/git/aspen-auth/
+- 20 files: TokenBuilder, TokenVerifier, CapabilityToken, HMAC auth, revocation store, verified auth + Verus specs
+- **13 sibling repos updated** (10 consumers across automerge, ci, cli, client-api, jobs, proxy, raft, rpc, secrets, transport)
+- aspen-client switched from direct path dep to `{ workspace = true }`
+
+### Post-Extraction State
+
+- **3 crates** in main workspace (aspen, aspen-client, aspen-cluster, aspen-core + tutorial-verify)
+- **~44K lines** remaining (was ~50K)
+- **44 sibling repos** total (was 43)
+- `cargo check --workspace` passes clean
+- All tests pass (29 test suites, 0 failures)
