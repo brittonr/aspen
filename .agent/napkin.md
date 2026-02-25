@@ -108,6 +108,15 @@
 - Client detects `e.code == "NOT_LEADER"` → rotates to next bootstrap peer → retries
 - Multi-peer tickets required for automatic failover (up to MAX_BOOTSTRAP_PEERS=16)
 
+**Git Bridge (git-remote-aspen):**
+
+- Incremental push: three-phase protocol (enumerate SHA-1s → probe server → send missing only)
+- `GitBridgeProbeObjects` RPC: read-only (no Raft write), checks `has_sha1()` per hash, bounded 100K max
+- Probe graceful degradation: if server doesn't support it, falls back to full push
+- Fast path: when all objects already exist on server, uses `GitBridgePush` with empty objects + ref update only
+- Adding new RPC variants: add to BOTH `ClientRpcRequest` AND `ClientRpcResponse` enums, update variant_name(), domain(), to_operation(), executor dispatch, HANDLES list, and tests (handles_count + git_bridge_ops)
+- Four repos touched for new RPC: aspen-forge-protocol (response type), aspen-client-api (req/resp variants + auth ops), aspen-rpc (handler + executor + client rate-limit), aspen (git-remote-aspen client)
+
 **Pre-Existing Issues (not blockers):**
 
 - aspen-nix-cache-gateway: h3-iroh 0.96 vs iroh 0.95.1 mismatch (excluded from default builds via default-members)
