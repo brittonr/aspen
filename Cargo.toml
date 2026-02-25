@@ -50,7 +50,7 @@ required-features = ["plugins-vm"]
 members = [
     ".",
     "scripts/tutorial-verify",
-    "crates/aspen-client",
+    # aspen-client extracted to ~/git/aspen-client
     # aspen-client-api extracted to ~/git/aspen-client-api
     # aspen-constants extracted to ~/git/aspen-constants
     # aspen-cluster-types extracted to ~/git/aspen-cluster-types
@@ -137,7 +137,7 @@ thiserror = "2.0"
 tokio = { version = "1.48.0", default-features = false, features = ["io-util", "macros", "rt", "rt-multi-thread", "sync", "time"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-aspen-client = { path = "crates/aspen-client" }
+aspen-client = { path = "../aspen-client/crates/aspen-client" }
 aspen-client-api = { path = "../aspen-client-api/crates/aspen-client-api" }
 aspen-constants = { path = "../aspen-constants/crates/aspen-constants" }
 aspen-cluster-types = { path = "../aspen-cluster-types/crates/aspen-cluster-types" }
@@ -742,7 +742,7 @@ aspen-auth = { path = "../aspen-auth/crates/aspen-auth" }
 aspen-forge = { path = "../aspen-forge/crates/aspen-forge" }
 aspen-ticket = { path = "../aspen-ticket/crates/aspen-ticket" }
 aspen-client-api = { path = "../aspen-client-api/crates/aspen-client-api" }
-aspen-client = { path = "crates/aspen-client" }
+aspen-client = { path = "../aspen-client/crates/aspen-client" }
 aspen-testing = { path = "../aspen-testing/crates/aspen-testing" }
 aspen-constants = { path = "../aspen-constants/crates/aspen-constants" }
 aspen-cluster-types = { path = "../aspen-cluster-types/crates/aspen-cluster-types" }
