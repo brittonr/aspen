@@ -1371,3 +1371,20 @@ Client sends WriteKey to follower:
   ├─ Rotates to next bootstrap peer from multi-peer ticket
   └─ Retries on leader → success
 ```
+
+## Recent Changes (2026-02-25) — aspen-blob Extraction
+
+### Extracted: aspen-blob (5,618 LOC)
+
+- New repo: ~/git/aspen-blob/
+- 26 files: BlobStore trait, IrohBlobStore, InMemoryBlobStore, BlobAwareKeyValueStore, BlobReplicationManager, BackgroundBlobDownloader, BlobEventBroadcaster + Verus specs
+- **23 sibling repos updated** (highest external dep count of any extraction so far)
+- aspen-client switched from direct path dep to `{ workspace = true }`
+
+### Post-Extraction State
+
+- **4 crates** in main workspace (aspen, aspen-auth, aspen-client, aspen-cluster, aspen-core + tutorial-verify)
+- **~50K lines** remaining (was ~56K)
+- **43 sibling repos** total (was 42)
+- `cargo check --workspace` passes clean
+- All tests pass

@@ -4,7 +4,7 @@ Aspen is a hybrid-consensus distributed systems framework in Rust, built on top 
 
 Built on Iroh (QUIC-based P2P networking with NAT traversal), a vendored OpenRaft for consensus, and a FoundationDB-inspired "unbundled database" philosophy where higher-level features (Git forge, CI/CD, secrets, DNS) are stateless layers over core KV + blob primitives.
 
-**~56K lines of Rust** in the core workspace (5 crates), with domain logic distributed across **42 sibling repositories**.
+**~50K lines of Rust** in the core workspace (4 crates), with domain logic distributed across **43 sibling repositories**.
 
 ---
 
