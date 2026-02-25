@@ -85,7 +85,7 @@ members = [
     # aspen-hooks extracted to ~/git/aspen-hooks
     # aspen-jobs + workers extracted to ~/git/aspen-jobs
     # aspen-tui extracted to ~/git/aspen-tui
-    "crates/aspen-transport",
+    # aspen-transport extracted to ~/git/aspen-transport
     # aspen-rpc-core extracted to ~/git/aspen-rpc
     # aspen-rpc-handlers extracted to ~/git/aspen-rpc
     # aspen-forge-handler extracted to ~/git/aspen-rpc
@@ -176,7 +176,7 @@ aspen-forge = { path = "../aspen-forge/crates/aspen-forge" }
 aspen-hooks-types = { path = "../aspen-hooks/crates/aspen-hooks-types" }
 aspen-hooks = { path = "../aspen-hooks/crates/aspen-hooks" }
 aspen-tui = { path = "../aspen-tui/crates/aspen-tui" }
-aspen-transport = { path = "crates/aspen-transport" }
+aspen-transport = { path = "../aspen-transport/crates/aspen-transport" }
 aspen-rpc-handlers = { path = "../aspen-rpc/crates/aspen-rpc-handlers", default-features = false }
 aspen-cli = { path = "../aspen-cli/crates/aspen-cli" }
 aspen-jobs = { path = "../aspen-jobs/crates/aspen-jobs" }
@@ -769,3 +769,4 @@ aspen-raft = { path = "../aspen-raft/crates/aspen-raft" }
 aspen-raft-types = { path = "../aspen-raft/crates/aspen-raft-types" }
 aspen-raft-network = { path = "../aspen-raft/crates/aspen-raft-network" }
 aspen-redb-storage = { path = "../aspen-raft/crates/aspen-redb-storage" }
+aspen-transport = { path = "../aspen-transport/crates/aspen-transport" }

@@ -11,7 +11,7 @@ aspen-auth = { path = "../aspen-auth" }
 aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-ticket = { workspace = true }
-aspen-transport = { path = "../aspen-transport" }
+aspen-transport = { workspace = true }
 
 # P2P networking for Iroh connections
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
