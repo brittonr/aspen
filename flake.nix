@@ -693,6 +693,7 @@
           chmod -R u+w "$DEPS"
 
           # ── Add aspen-cli as a workspace member ─────────────────────
+          mkdir -p "$out/crates"
           cp -r "$DEPS/aspen-cli/crates/aspen-cli" "$out/crates/aspen-cli"
           chmod -R u+w "$out/crates/aspen-cli"
           ${pkgs.gnused}/bin/sed -i \

@@ -382,7 +382,7 @@ shell-worker = ["dep:aspen-jobs-worker-shell", "jobs", "blob"]
 ci-vm-executor = ["aspen-ci/plugins-vm"]
 # TUI is now a separate crate: aspen-tui (see crates/aspen-tui)
 # Fuzzing feature exposes internals for fuzz testing
-fuzzing = []
+fuzzing = ["testing"]
 # Bolero property-based testing (for dev/CI, uses bolero dev-dependency)
 bolero = []
 # Global content discovery via BitTorrent Mainline DHT
