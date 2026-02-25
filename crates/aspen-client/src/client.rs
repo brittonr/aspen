@@ -187,6 +187,7 @@ impl AspenClient {
     pub async fn send(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         let mut last_error = None;
         let retry_delay = Duration::from_millis(RETRY_DELAY_MS);
+        let mut peer_index = 0usize;
 
         for attempt in 0..MAX_RETRIES {
             if attempt > 0 {
@@ -194,10 +195,22 @@ impl AspenClient {
                 tokio::time::sleep(retry_delay).await;
             }
 
-            match self.send_once(request.clone()).await {
-                Ok(response) => return Ok(response),
+            match self.send_to_peer(peer_index, request.clone()).await {
+                Ok(response) => {
+                    // Check for NOT_LEADER application-level error — rotate to next peer and retry
+                    if let ClientRpcResponse::Error(ref e) = response
+                        && e.code == "NOT_LEADER"
+                    {
+                        warn!(attempt, code = %e.code, "server is not leader, rotating to next peer");
+                        peer_index = (peer_index + 1) % self.ticket.bootstrap.len().max(1);
+                        last_error = Some(anyhow::anyhow!("NOT_LEADER: {}", e.message));
+                        continue;
+                    }
+                    return Ok(response);
+                }
                 Err(e) => {
                     warn!(attempt, error = %e, "RPC request failed");
+                    peer_index = (peer_index + 1) % self.ticket.bootstrap.len().max(1);
                     last_error = Some(e);
                 }
             }
@@ -206,14 +219,15 @@ impl AspenClient {
         Err(last_error.unwrap_or_else(|| anyhow::anyhow!("RPC failed after {} retries", MAX_RETRIES)))
     }
 
-    /// Send a single RPC request without retry.
-    async fn send_once(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
-        // Get a bootstrap peer to connect to
-        let peer = self.ticket.bootstrap.first().ok_or_else(|| anyhow::anyhow!("no bootstrap peers in ticket"))?;
-
-        // Build endpoint address with direct socket addresses for connection
+    /// Send a single RPC request to a specific bootstrap peer.
+    async fn send_to_peer(&self, peer_index: usize, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        let peer = self
+            .ticket
+            .bootstrap
+            .get(peer_index)
+            .or_else(|| self.ticket.bootstrap.first())
+            .ok_or_else(|| anyhow::anyhow!("no bootstrap peers in ticket"))?;
         let target_addr = peer.to_endpoint_addr();
-
         self.send_to_addr(&target_addr, request).await
     }
 

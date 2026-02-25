@@ -3,6 +3,8 @@
 ## Corrections
 
 | Date | Source | What Went Wrong | What To Do Instead |
+| 2026-02-25 | self | KV reads on followers returned `was_found: false` (silent "key not found") instead of NOT_LEADER error | **FIXED.** Three-layer bug: (1) KV handler buried NOT_LEADER in `ReadResultResponse.error` field instead of returning `ClientRpcResponse::error("NOT_LEADER", ...)`. (2) CLI ignored error field on ReadResult. (3) Client `send()` only retried transport errors, not application-level NOT_LEADER. Fixed all 3: handler returns top-level Error for NOT_LEADER on all 10 KV ops (read, write, delete, scan, cas, cad, batch-read, batch-write, conditional-batch-write, write-with-lease), client rotates bootstrap peers on NOT_LEADER, CLI already handles Error variant. |
+| 2026-02-25 | self | Writes to followers showed raw "has to forward request to" raft error instead of clean NOT_LEADER | Write path already had `sanitize_kv_error()` returning "NOT_LEADER" string, but it was buried in `WriteResultResponse.error` — same pattern as reads. Now uses top-level `ClientRpcResponse::error("NOT_LEADER", ...)`. |
 | 2026-02-25 | self | First attempt added `consistency` field to `ScanRequest` struct, breaking ~40 callers across ~15 repos | Adding a field to a widely-used struct is too invasive. Instead, add a default trait method (`scan_local`) to `KeyValueStore` — purely additive, zero existing callers change. Override only in `RaftNode`. |
 
 | 2026-02-25 | self | Host kv_get returned `\x02` (error) for non-existent keys instead of `\x01` (not-found) | KV store `.read()` returns `Err(NotFound)`, not `Ok(None)`. Must match `NotFound` specifically in host functions and return not-found tag. |
@@ -1326,4 +1328,46 @@ Host (dispatch):
   ├─ serialize → spawn_blocking → call_guest → deserialize
   ├─ metrics.record(elapsed, success)
   └─ active_requests-- (guard drop)
+```
+
+## Recent Changes (2026-02-25) — NOT_LEADER Failover Fixes
+
+### Issue 1: Multi-Peer Tickets for Automatic Failover
+
+**Problem**: `GetClusterTicket` generated a ticket with only THIS node as bootstrap peer. When a client connected to a follower, it got `NOT_LEADER` but had no other peer to rotate to — `(0 + 1) % 1 = 0` loops back to the same follower forever.
+
+**Fix**: `handle_get_cluster_ticket` in `aspen-cluster-handler/src/handler/tickets.rs` now includes all known cluster nodes from `ctx.controller.current_state()`, matching the existing `handle_get_cluster_ticket_combined` behavior. Both CLI clients (library `AspenClient` and CLI `AspenClient`) already had NOT_LEADER → peer rotation logic — they just needed multi-peer tickets.
+
+**Before**: Ticket contained 1 bootstrap peer (this node only)
+**After**: Ticket contains N bootstrap peers (this node + all cluster state nodes, up to MAX_BOOTSTRAP_PEERS=16)
+
+### Issue 2: Lease Handler Raw Raft Error Leakage
+
+**Problem**: Four lease write operations (`handle_lease_grant`, `handle_lease_revoke`, `handle_lease_keepalive`, `handle_write_key_with_lease`) used `error: Some(e.to_string())` in their error arms. When Raft returned `ForwardToLeader`, this raw error string leaked into domain response fields (e.g., `WriteResultResponse.error`, `LeaseGrantResultResponse.error`) instead of the top-level `ClientRpcResponse::Error`. Clients checking `response.code == "NOT_LEADER"` never saw it — the error was buried inside the domain response.
+
+**Fix**:
+
+1. Extracted `is_not_leader_error()` and `sanitize_kv_error()` from `kv.rs` to new shared module `error_utils.rs` in `aspen-core-essentials-handler`
+2. Added `Err(ref e) if is_not_leader_error(e) => ClientRpcResponse::error("NOT_LEADER", ...)` guard clause to all four lease write handlers
+3. Changed remaining `e.to_string()` to `sanitize_kv_error(&e)` for non-leader errors
+
+**Files changed** (all in aspen-rpc):
+
+- `aspen-cluster-handler/src/handler/tickets.rs` — multi-peer ticket generation
+- `aspen-core-essentials-handler/src/error_utils.rs` — NEW shared module
+- `aspen-core-essentials-handler/src/lib.rs` — module declaration
+- `aspen-core-essentials-handler/src/kv.rs` — use shared helpers
+- `aspen-core-essentials-handler/src/lease.rs` — NOT_LEADER guards + sanitization
+
+### NOT_LEADER Error Flow (post-fix)
+
+```text
+Client sends WriteKey to follower:
+  ├─ Raft returns ForwardToLeader
+  ├─ map_raft_write_error() → KeyValueStoreError::NotLeader { leader: Some(N), ... }
+  ├─ is_not_leader_error() → true
+  ├─ Handler returns ClientRpcResponse::Error { code: "NOT_LEADER", message: "NOT_LEADER" }
+  ├─ CLI client.send() detects e.code == "NOT_LEADER"
+  ├─ Rotates to next bootstrap peer from multi-peer ticket
+  └─ Retries on leader → success
 ```
