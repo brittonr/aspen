@@ -1403,3 +1403,41 @@ Client sends WriteKey to follower:
 - **44 sibling repos** total (was 43)
 - `cargo check --workspace` passes clean
 - All tests pass (29 test suites, 0 failures)
+
+## Recent Changes (2026-02-25) — Final Core Extractions (client, cluster, core)
+
+### Extracted: aspen-client (12,667 LOC)
+
+- New repo: ~/git/aspen-client/
+- 49 files: AspenClient, RPC types, coordination clients (lock, counter, semaphore, rwlock, queue, barrier, lease, sequence, rate_limiter, batch), blob client, job client, observability, watch, subscription, transaction, overlay, cache, ticket parsing
+- **8 external repos updated**: aspen-cli, aspen-docs (2), aspen-hooks, aspen-rpc (3), aspen-fuse, aspen-tui
+
+### Extracted: aspen-cluster (18,643 LOC)
+
+- New repo: ~/git/aspen-cluster/
+- 68 files: Cluster coordination, bootstrap, peer discovery, router builder, Raft node lifecycle, membership management, config, gossip, sharding, leader election, iroh endpoint management, verus specs
+- **6 external repos updated (9 files)**: aspen-cli, aspen-forge (2), aspen-rpc (6), aspen-testing
+- Workspace Cargo.toml includes full [patch] section for all 37+ git dep overrides
+
+### Extracted: aspen-core (12,819 LOC)
+
+- New repo: ~/git/aspen-core/
+- 46 files: Core API types, traits, KV store interface, event bus, config, context (protocol, discovery, docs, peer, watch), crypto/vault (inlined), HCA, FoundationDB-compatible layer/directory, prelude, service executor, verus specs
+- **~39 files across ~20 external repos updated** — highest fan-out extraction
+- Used `sed` for mass mechanical path replacement (subcrate + workspace-level + git→path conversions)
+
+### Post-Extraction State
+
+- **2 packages** in main workspace: `aspen` (node binary, 8,552 LOC) + `tutorial-verify` (202 LOC)
+- **~8.8K lines** remaining (was ~44K before, was ~220K+ at project start)
+- **47 sibling repos** total
+- `cargo check --workspace` passes clean
+- All tests pass
+- `crates/` directory is now empty — all library crates extracted
+- Main repo retains: `src/` (node binary), `scripts/tutorial-verify/`, vendor/cargo-hyperlight, openraft (vendored with aspen-raft but retaining build-time patch), nix/, tests/, benches/, examples/, fuzz/, docs/
+
+### Gotchas
+
+- **Mass sed works for mechanical path updates**: `sed -i 's|../aspen/crates/aspen-core|../aspen-core/crates/aspen-core|g'` on all subcrate Cargo.toml files saved significant time vs. individual edits
+- **Workspace-level git deps need separate handling**: `git = "https://github.com/brittonr/aspen.git"` entries in workspace Cargo.toml must be converted to `path = "../aspen-core/crates/aspen-core"` — different sed pattern than subcrate path updates
+- **[patch] section critical for extracted workspace repos**: aspen-cluster needed a full 37-entry [patch] section because its optional deps (aspen-nickel etc.) pull in transitive git deps from the aspen.git URL
