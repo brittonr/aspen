@@ -70,7 +70,9 @@
     # ── WASM plugin installation ─────────────────────────────────────
     def plugin_cli(cmd, check=True):
         """Run aspen-plugin-cli with cluster ticket, return parsed JSON."""
-        ticket = get_ticket()
+        import inspect
+        _gt_sig = inspect.signature(get_ticket)
+        ticket = get_ticket(node1) if _gt_sig.parameters else get_ticket()
         run = (
             f"aspen-plugin-cli --ticket '{ticket}' --json {cmd} "
             f">/tmp/_plugin_cli_out.json 2>/tmp/_plugin_cli_err.txt"
@@ -87,15 +89,16 @@
             return raw.strip()
 
     with subtest("install WASM plugins"):
-        ${lib.concatMapStringsSep "\n        " (name: ''
-      out = plugin_cli(
-          "plugin install /etc/aspen-plugins/${name}-plugin.wasm "
-          "--manifest /etc/aspen-plugins/${name}-plugin.json"
-      )
-      node1.log(f"installed ${name} plugin: {out}")
-      assert isinstance(out, dict) and out.get("status") == "installed", \
-          f"${name} plugin install failed: {out}"'')
-    pluginNames}
+        _plugin_specs = [
+            ${lib.concatMapStringsSep "\n            " (name: ''("${name}", "/etc/aspen-plugins/${name}-plugin.wasm", "/etc/aspen-plugins/${name}-plugin.json"),'') pluginNames}
+        ]
+        for _pname, _pwasm, _pmanifest in _plugin_specs:
+            out = plugin_cli(
+                f"plugin install {_pwasm} --manifest {_pmanifest}"
+            )
+            node1.log(f"installed {_pname} plugin: {out}")
+            assert isinstance(out, dict) and out.get("status") == "installed", \
+                f"{_pname} plugin install failed: {out}"
 
     with subtest("reload plugin runtime"):
         out = plugin_cli("plugin reload", check=False)

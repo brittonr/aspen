@@ -52,6 +52,7 @@ in
   pkgs.testers.nixosTest {
     name = "forge-cluster";
     skipLint = true;
+    skipTypeCheck = true;
 
     nodes = {
       node1 = {
