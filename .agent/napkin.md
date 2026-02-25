@@ -27,13 +27,15 @@
 
 ## Patterns That Work
 
-**Multi-Repo Architecture (1 main package, 47 sibling repos):**
+**Multi-Repo Architecture (1 main package, 48 sibling repos):**
 
 - Main repo has `[patch."https://github.com/brittonr/aspen.git"]` section mapping git deps to local `path = "../aspen-{name}/crates/..."` to prevent type duplication
 - Sibling repos use `git = "https://github.com/..."` in workspace deps; main repo patches override with local paths
 - Cross-workspace subcrate paths are 3 levels deep: `../../../aspen-{repo}/crates/{crate}`
 - **Without [patch]**: types from git aspen-core ≠ types from workspace aspen-core → trait implementation failures (E0277)
 - **workspace = true in extracted crates pulls entire git repo** → type duplication; use explicit `path = "..."` deps instead
+- **Nix fullSrc layout mirrors real filesystem**: `$out/aspen/` + `$out/aspen-*/` as peers → NO path rewriting. Use `postUnpack = 'sourceRoot="$sourceRoot/aspen"'` for crane to enter the subdirectory. Siblings at `../aspen-*/` resolve naturally.
+- **Cannot nest sibling repos inside main workspace dir**: Cargo resolves `workspace = true` against the outermost `[workspace]` root, not the inner one. `exclude` doesn't help. Keep siblings as peers (same parent dir), never children.
 
 **WASM Plugin System (hyperlight-wasm):**
 

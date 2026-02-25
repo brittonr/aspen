@@ -292,24 +292,11 @@
           "aspen-wasm-plugin"
         ];
 
-        # Shell snippet that copies all sibling repos into $DEPS/
+        # Shell snippet that copies all sibling repos as peers of aspen/
+        # This mirrors the real filesystem layout so Cargo paths work unchanged.
         copySiblingRepos =
           lib.concatMapStringsSep "\n" (
-            name: "cp -r ${siblingRepo name} \"$DEPS/${name}\""
-          )
-          siblingRepoNames;
-
-        # Sed expressions to rewrite ../aspen-X/ → .nix-deps/aspen-X/ (workspace level)
-        # and ../../../aspen-X/ → ../../.nix-deps/aspen-X/ (crate level)
-        rewriteWorkspacePaths =
-          lib.concatMapStringsSep " \\\n            " (
-            name: "-e 's|path = \"\\.\\./${name}/|path = \".nix-deps/${name}/|g'"
-          )
-          siblingRepoNames;
-
-        rewriteCratePaths =
-          lib.concatMapStringsSep " \\\n            " (
-            name: "-e 's|path = \"\\.\\./\\.\\./\\.\\./\\.\\./openraft/|path = \"../../.nix-deps/aspen-raft/openraft/|g' -e 's|path = \"\\.\\./\\.\\./\\.\\./${name}/|path = \"../../.nix-deps/${name}/|g'"
+            name: "cp -r ${siblingRepo name} \"$out/${name}\""
           )
           siblingRepoNames;
 
@@ -643,24 +630,27 @@
           };
 
         # ── Full Source Builds (for VM integration tests) ───────────
-        # Assembles the real workspace + all sibling repos into one tree.
-        # Unlike the stub src, this produces working binaries because every
-        # dep has real source code. The layout:
+        # Assembles the real workspace + all sibling repos into one tree
+        # that mirrors the actual filesystem layout. No path rewriting needed!
         #
-        #   $out/               ← main aspen workspace
-        #   $out/.nix-deps/     ← all sibling repos
-        #   $out/.nix-deps/aspen → ..   (symlink back to workspace root)
+        # Layout (same relative structure as ~/git/):
+        #   $out/aspen/         ← main workspace
+        #   $out/aspen-core/    ← sibling repo (peer of aspen/)
+        #   $out/aspen-auth/    ← sibling repo
+        #   ...
         #
-        # Path rewrites:
-        #   Cargo.toml:  ../aspen-X/  → .nix-deps/aspen-X/
-        #   crates/*/Cargo.toml:  ../../../aspen-X/  → ../../.nix-deps/aspen-X/
+        # From $out/aspen/Cargo.toml, ../aspen-core/ resolves naturally.
+        # From $out/aspen-X/crates/Y/Cargo.toml, ../../../aspen-Z/ resolves naturally.
         fullSrc = pkgs.runCommand "aspen-full-src" {} ''
-          cp -r ${rawSrc} $out
-          chmod -R u+w $out
+          mkdir -p $out/aspen
+
+          # Copy main workspace into aspen/ subdirectory
+          cp -r ${rawSrc}/. $out/aspen/
+          chmod -R u+w $out/aspen
 
           # Remove [patch.*] sections from cargo config for Nix builds
-          if [ -f $out/.cargo/config.toml ]; then
-            ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/.cargo/config.toml
+          if [ -f $out/aspen/.cargo/config.toml ]; then
+            ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/aspen/.cargo/config.toml
           fi
 
           # Add git source lines to snix packages in Cargo.lock
@@ -681,85 +671,44 @@
                 next
               }
               { print }
-            ' $out/Cargo.lock > $out/Cargo.lock.tmp && mv $out/Cargo.lock.tmp $out/Cargo.lock
+            ' $out/aspen/Cargo.lock > $out/aspen/Cargo.lock.tmp && mv $out/aspen/Cargo.lock.tmp $out/aspen/Cargo.lock
           done
 
-          # ── Real sibling repos ──────────────────────────────────────
-          DEPS="$out/.nix-deps"
-          mkdir -p "$DEPS"
-
+          # ── Sibling repos as peers (mirrors real filesystem) ────────
           ${copySiblingRepos}
-
-          chmod -R u+w "$DEPS"
+          chmod -R u+w $out
 
           # ── Add aspen-cli as a workspace member ─────────────────────
-          mkdir -p "$out/crates"
-          cp -r "$DEPS/aspen-cli/crates/aspen-cli" "$out/crates/aspen-cli"
-          chmod -R u+w "$out/crates/aspen-cli"
+          mkdir -p "$out/aspen/crates"
+          cp -r "$out/aspen-cli/crates/aspen-cli" "$out/aspen/crates/aspen-cli"
+          chmod -R u+w "$out/aspen/crates/aspen-cli"
           ${pkgs.gnused}/bin/sed -i \
             '/^members = \[/a\    "crates/aspen-cli",' \
-            $out/Cargo.toml
-          # Rewrite aspen-cli's path deps
-          ${pkgs.gnused}/bin/sed -i \
-            -e 's|path = "\.\./\.\./\.\./aspen/|path = "../../|g' \
-            ${rewriteCratePaths} \
-            $out/crates/aspen-cli/Cargo.toml
+            $out/aspen/Cargo.toml
 
-          # Use pre-generated unified Cargo.lock that includes all sibling
-          # repo deps. Regenerate with: cd $(nix build .#_debug-full-src --print-out-paths --impure)
-          # then: cargo generate-lockfile && cp Cargo.lock <repo>/nix/full-build-Cargo.lock
-          cp ${./nix/full-build-Cargo.lock} $out/Cargo.lock
-
-          # ── Rewrite workspace-level paths ───────────────────────────
-          ${pkgs.gnused}/bin/sed -i \
-            ${rewriteWorkspacePaths} \
-            $out/Cargo.toml
+          # Use pre-generated unified Cargo.lock
+          # Regenerate: cd $(nix build .#_debug-full-src --print-out-paths --impure)
+          #   then: cd aspen && cargo generate-lockfile && cp Cargo.lock <repo>/nix/full-build-Cargo.lock
+          cp ${./nix/full-build-Cargo.lock} $out/aspen/Cargo.lock
 
           # Remove [patch."https://github.com/..."] (keep [patch.crates-io])
-          ${pkgs.gnused}/bin/sed -i '/^\[patch\."https/,$d' $out/Cargo.toml
+          # In the unified tree, all deps are resolved via local paths.
+          ${pkgs.gnused}/bin/sed -i '/^\[patch\."https/,$d' $out/aspen/Cargo.toml
 
-          # ── Rewrite crate-level paths ───────────────────────────────
-          find $out/crates -name Cargo.toml ! -path '*/aspen-cli/*' -exec ${pkgs.gnused}/bin/sed -i \
-            ${rewriteCratePaths} \
-            {} \;
-
-          # ── Inline ALL workspace = true references in sibling repos ───
-          # When the main workspace resolves a path dep from a sibling repo,
-          # cargo resolves `workspace = true` against the MAIN workspace (not
-          # the sibling's own). We must inline every `workspace = true` by
-          # reading values from each sibling's workspace root.
-          #
-          # This handles both package-level fields (edition, version, etc.)
-          # and dependency-level fields (dep = { workspace = true }).
-          ${pkgs.bash}/bin/bash ${./nix/inline-workspace-deps.sh} "$DEPS"
+          # No path rewriting needed! ../aspen-X/ resolves naturally because
+          # siblings are peers of aspen/ in the same directory.
 
           # ── Convert git deps to path deps ─────────────────────────────
-          # After workspace inlining, some crates have git deps pointing at
-          # the aspen GitHub repo. Convert these to path deps since the
-          # actual crate source is already in the unified workspace.
+          # Some sibling repos reference each other via git URLs. Convert
+          # to path deps since all crate sources are present in the tree.
           ${pkgs.python3}/bin/python3 ${./nix/git-to-path-deps.py} "$out"
 
           # ── Fix version mismatches between sibling repos ─────────────
-          # Some sibling repos have outdated dep versions; bump to match
-          # the main workspace's versions.
-          find "$DEPS" -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
+          find "$out" -name Cargo.toml -not -path '*/target/*' -exec ${pkgs.gnused}/bin/sed -i \
             -e 's|bolero = { version = "0.11"|bolero = { version = "0.13"|g' \
             -e 's|bolero-generator = { version = "0.11"|bolero-generator = { version = "0.13"|g' \
             -e 's|bolero = "0.11"|bolero = "0.13"|g' \
             -e 's|bolero-generator = "0.11"|bolero-generator = "0.13"|g' \
-            {} \;
-
-          # ── Rewrite sibling repos' back-references to the main workspace ─
-          # Sibling→sibling paths (../aspen-X/) already resolve correctly
-          # because they're all siblings under .nix-deps/. Only back-refs
-          # to the main aspen workspace need fixing:
-          #   workspace level: ../aspen/ → ../../       (up from .nix-deps/X/ to root)
-          #   crate level:     ../../../aspen/ → ../../../../   (up from .nix-deps/X/crates/Y/ to root)
-          find "$DEPS" -maxdepth 2 -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
-            -e 's|path = "\.\./aspen/|path = "../../|g' \
-            {} \;
-          find "$DEPS" -mindepth 3 -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
-            -e 's|path = "\.\./\.\./\.\./aspen/|path = "../../../../|g' \
             {} \;
         '';
 
@@ -767,13 +716,16 @@
           basicArgs
           // {
             src = fullSrc;
+            # Enter the aspen/ subdirectory after unpacking so Cargo finds
+            # the workspace root. Sibling repos at ../aspen-*/ resolve naturally.
+            postUnpack = ''sourceRoot="$sourceRoot/aspen"'';
             cargoToml = ./Cargo.toml;
             # No --offline: real sources match Cargo.lock accurately
             cargoExtraArgs = "";
           };
 
         fullCargoVendorDir = craneLib.vendorCargoDeps {
-          src = fullSrc;
+          src = fullSrc + "/aspen";
           overrideVendorGitCheckout = ps: drv: let
             isSnixRepo =
               builtins.any (
@@ -1734,6 +1686,7 @@
               in
                 craneLib.mkCargoDerivation {
                   src = fullSrc;
+                  postUnpack = ''sourceRoot="$sourceRoot/aspen"'';
                   cargoArtifacts = null;
                   cargoVendorDir = fullPluginsCargoVendorDir;
                   pname = "aspen-deny";
@@ -1784,7 +1737,7 @@
                 // {
                   pname = "aspen-verus-inline-check";
                   # verus feature lives in extracted crates (aspen-raft, aspen-coordination)
-                  # which are available as deps in fullSrc via .nix-deps/
+                  # which are available as deps in fullSrc via ../aspen-raft/ etc.
                   buildPhaseCargoCommand = ''
                     echo "[1/2] Checking aspen-raft with verus feature..."
                     cargo check -p aspen-raft --features verus
