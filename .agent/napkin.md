@@ -3,6 +3,8 @@
 ## Corrections
 
 | Date | Source | What Went Wrong | What To Do Instead |
+
+| 2026-02-25 | self | WASM plugin VM tests all fail: AOT precompilation used wasmtime 36.0.6 but hyperlight-wasm guest runtime embeds 36.0.3 | **FIXED (infra).** Three issues stacked: (1) wasmtime version mismatch → pin `= "36.0.3"` to match `hyperlight_wasm::get_wasmtime_version()`; (2) Engine::default() targets linux but guest is `x86_64-hyperlight-none` bare-metal → use `config.target("x86_64-unknown-none")`; (3) guest runtime enables `component_model` but host precompile didn't → `config.wasm_component_model(true)`. After all three fixes, module loads and `hyperlight_main` runs. Remaining: `kv_get` ABI mismatch (`(i32,i32)` vs `(i32)->i64`) — pre-existing guest SDK / host function signature divergence. |
 |------|--------|----------------|-------------------|
 | 2026-02-24 | self | KV handler migrated to WASM-only, but plugin install sends WriteKey to store manifests → chicken-and-egg | KV is foundational infrastructure — must always have a native handler. Added KvHandler to aspen-core-essentials-handler in aspen-rpc repo. |
 | 2026-02-24 | self | `buildWasmPlugin` installPhase used `aspen-plugins/target/...` but CWD was already `aspen-plugins/` from buildPhase `cd` | Nix stdenv CWD persists across phases. Use relative `target/...` not `aspen-plugins/target/...` in installPhase. |
