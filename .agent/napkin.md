@@ -1182,13 +1182,22 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 - `cargo check --workspace` passes clean
 - All tests pass (0 failures)
 
+### Extracted: aspen-transport (4,318 LOC) — 2026-02-24
+
+- New repo: ~/git/aspen-transport/
+- 15 .rs source files + 3 verus spec files
+- 1 workspace reverse dep (aspen-cluster), 5 external repos updated
+- External repos updated: aspen-cluster-bridges, aspen-hooks, aspen-rpc, aspen-raft, aspen-nix
+- aspen-client switched from `path = "../aspen-transport"` to `{ workspace = true }`
+- **5 crates** remain in main workspace (was 6), **42 sibling repos** (was 41)
+- **~56K lines** remaining (was ~60K)
+
 ### Remaining Extraction Candidates (from analysis)
 
 | Crate | LOC | WS Rev Deps | External Refs | Effort |
 |-------|-----|-------------|---------------|--------|
-| aspen-transport | 3.7K | 1 (cluster) | 4 | Medium |
 | aspen-blob | 5.6K | 0 runtime* | 10 | Hard |
-| aspen-auth | 3.8K | 2 (cluster, transport) | 9 | Hard |
+| aspen-auth | 3.8K | 2 (cluster, client) | 9 | Hard |
 | aspen-client | 12.1K | 0 (LEAF) | 13 | Hard (external cost) |
 | aspen-cluster | 16.7K | 0 runtime | 6 | Medium-Hard |
-| aspen-core | 9.8K | 5 (everything) | 19 | Very Hard |
+| aspen-core | 9.8K | 4 (everything) | 19 | Very Hard |
