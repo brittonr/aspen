@@ -393,7 +393,7 @@ secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/sec
 automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
 # CI/CD pipeline system - basic shell/VM pipelines with Nickel configuration
 # Does NOT include Nix binary cache integration (snix, nix-cache-proxy)
-ci-basic = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "jobs", "blob", "forge"]
+ci-basic = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "aspen-client/cache-index", "jobs", "blob", "forge"]
 # CI/CD with VM executor instead of shell executor
 ci-vm = ["dep:aspen-ci", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/plugins-vm", "jobs", "blob", "forge"]
 # Full CI/CD with Nix binary cache integration (snix + HTTP/3 cache proxy)

@@ -915,6 +915,7 @@ dependencies = [
  "anyhow",
  "aspen-auth",
  "aspen-blob",
+ "aspen-cache",
  "aspen-client-api",
  "aspen-core",
  "aspen-ticket",

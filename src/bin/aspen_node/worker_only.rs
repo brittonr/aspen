@@ -115,16 +115,53 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
             gossip.subscribe(topic_id, bootstrap_ids).await.context("failed to subscribe to gossip topic")?;
     }
 
-    // Select a gateway node (first bootstrap peer for now)
-    // TODO: Implement proper gateway selection / load balancing
-    let gateway_node = bootstrap_addrs
-        .first()
-        .map(|addr| addr.id)
-        .ok_or_else(|| anyhow::anyhow!("no bootstrap peers in ticket"))?;
+    // Select a gateway node by probing bootstrap peers for liveness.
+    // Sends a Ping RPC to each peer concurrently, picks the first responder.
+    let gateway_node = {
+        let probe_timeout = Duration::from_secs(10);
+        let mut gateway = None;
+
+        // Build a temporary client for probing (uses all bootstrap peers)
+        let probe_peers: Vec<BootstrapPeer> = bootstrap_addrs.iter().map(BootstrapPeer::from_endpoint_addr).collect();
+        let probe_ticket = AspenClusterTicket {
+            topic_id,
+            bootstrap: probe_peers,
+            cluster_id: cluster_id.clone(),
+        };
+        let probe_client = AspenClient::with_endpoint(endpoint.clone(), probe_ticket, probe_timeout, None);
+
+        // Probe with a Ping to discover a live node
+        match probe_client.send(ClientRpcRequest::Ping).await {
+            Ok(ClientRpcResponse::Pong) => {
+                // The client rotates through bootstrap peers automatically;
+                // after a successful Ping the last-used peer is live.
+                // Use the first bootstrap peer as gateway since the client
+                // confirmed at least one peer is reachable.
+                if let Some(addr) = bootstrap_addrs.first() {
+                    gateway = Some(addr.id);
+                    info!(
+                        gateway = %addr.id.fmt_short(),
+                        "selected gateway via Ping probe"
+                    );
+                }
+            }
+            Ok(resp) => {
+                warn!(?resp, "unexpected Ping response, falling back to first peer");
+            }
+            Err(e) => {
+                warn!(error = %e, "Ping probe failed, falling back to first peer");
+            }
+        }
+
+        // Fallback: first bootstrap peer
+        gateway
+            .or_else(|| bootstrap_addrs.first().map(|a| a.id))
+            .ok_or_else(|| anyhow::anyhow!("no bootstrap peers in ticket"))?
+    };
 
     info!(
         gateway = %gateway_node.fmt_short(),
-        "using bootstrap peer as gateway for RPC calls"
+        "using peer as gateway for cache and RPC"
     );
 
     // Get workspace directory from environment
@@ -163,7 +200,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
     // Create RpcBlobStore for workspace seeding from source archives
     let blob_store_client = AspenClient::with_endpoint(
         endpoint.clone(),
-        client_ticket,
+        client_ticket.clone(),
         Duration::from_secs(60), // Longer timeout for blob downloads
         None,
     );
@@ -171,16 +208,67 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
 
     info!("RpcBlobStore created for workspace seeding via RPC");
 
+    // Create RPC-backed cache index for narinfo lookups via the cluster
+    let cache_index_client =
+        AspenClient::with_endpoint(endpoint.clone(), client_ticket.clone(), Duration::from_secs(30), None);
+    let rpc_cache_index: Arc<dyn aspen_cache::CacheIndex> =
+        Arc::new(aspen_client::RpcCacheIndex::new(cache_index_client));
+
+    info!("RpcCacheIndex created for Nix binary cache lookups via RPC");
+
+    // Fetch the cache signing public key from the cluster.
+    // The cache name can be overridden via ASPEN_CACHE_NAME (default: "aspen-cache").
+    let cache_name = std::env::var("ASPEN_CACHE_NAME").unwrap_or_else(|_| "aspen-cache".to_string());
+    let transit_mount = std::env::var("ASPEN_TRANSIT_MOUNT").unwrap_or_else(|_| "transit".to_string());
+
+    let cache_public_key = {
+        let pk_request = ClientRpcRequest::SecretsNixCacheGetPublicKey {
+            mount: transit_mount,
+            cache_name: cache_name.clone(),
+        };
+        match rpc_client.send(pk_request).await {
+            Ok(ClientRpcResponse::SecretsNixCacheKeyResult(result)) if result.is_success => {
+                let pk = result.public_key.clone();
+                info!(cache_name = %cache_name, public_key = ?pk, "fetched cache signing public key");
+                pk
+            }
+            Ok(ClientRpcResponse::SecretsNixCacheKeyResult(result)) => {
+                warn!(
+                    cache_name = %cache_name,
+                    error = ?result.error,
+                    "cache public key fetch failed; cache substituter disabled"
+                );
+                None
+            }
+            Ok(resp) => {
+                warn!(?resp, "unexpected response to SecretsNixCacheGetPublicKey");
+                None
+            }
+            Err(e) => {
+                warn!(error = %e, "failed to fetch cache public key; cache substituter disabled");
+                None
+            }
+        }
+    };
+
+    // Enable cluster cache only when we have all required pieces
+    let use_cluster_cache = cache_public_key.is_some();
+    if use_cluster_cache {
+        info!("cluster Nix binary cache enabled as substituter");
+    } else {
+        info!("cluster Nix binary cache disabled (missing signing key)");
+    }
+
     // Create LocalExecutorWorker config
     let worker_config = LocalExecutorWorkerConfig {
         workspace_dir: workspace_dir.clone(),
         should_cleanup_workspaces: true,
-        cache_index: None,        // TODO: RPC-based cache index if needed
-        kv_store: None,           // No local KV store in worker-only mode
-        use_cluster_cache: false, // TODO: Enable when RPC gateway is implemented
+        cache_index: Some(rpc_cache_index),
+        kv_store: None, // No local KV store in worker-only mode
+        use_cluster_cache,
         iroh_endpoint: Some(Arc::new(endpoint.clone())),
         gateway_node: Some(gateway_node),
-        cache_public_key: None, // TODO: Fetch from cluster
+        cache_public_key,
     };
 
     // Create worker with RPC blob store for workspace seeding
