@@ -4,7 +4,7 @@ Aspen is a hybrid-consensus distributed systems framework in Rust, built on top 
 
 Built on Iroh (QUIC-based P2P networking with NAT traversal), a vendored OpenRaft for consensus, and a FoundationDB-inspired "unbundled database" philosophy where higher-level features (Git forge, CI/CD, secrets, DNS) are stateless layers over core KV + blob primitives.
 
-**~44K lines of Rust** in the core workspace (3 crates), with domain logic distributed across **44 sibling repositories**.
+**~8.5K lines of Rust** in the core workspace (node binary + integration tests), with all library code distributed across **48 sibling repositories**.
 
 ---
 
@@ -69,14 +69,16 @@ Everything above the "Core Primitives" line is a **stateless layer** — it stor
 
 ## Build
 
+All library crates are in sibling repositories. The core workspace contains only the node binary.
+
 ```bash
 # Optional: enter the Nix dev shell
 nix develop
 
-# Core workspace
+# Core workspace (node binary only)
 cargo build
 
-# Node binary (requires features)
+# Node binary (requires features and sibling repos)
 cargo build --bin aspen-node --features "jobs,docs,blob,hooks,federation"
 
 # With Nix (includes all sibling repos via --impure)
@@ -960,13 +962,19 @@ Verification coverage is tracked via the `aspen-verus-metrics` crate with termin
 
 ## Multi-Repository Architecture
 
-Aspen follows a progressive extraction model. The core workspace contains the
-consensus engine, cluster management, and transport layer. Domain logic lives
-in **38 sibling repositories** connected via `[patch]` overrides in the root
-`Cargo.toml` for unified type identity during development.
+Aspen follows a progressive extraction model. The core workspace contains only
+the node binary and integration tests. All library code lives in **48 sibling
+repositories** connected via `[patch]` overrides in the root `Cargo.toml` for
+unified type identity during development.
 
 ```
-~/git/aspen/                  ← Core workspace (6 crates, ~60K LOC)
+~/git/aspen/                  ← Core workspace (node binary + integration tests)
+~/git/aspen-core/             ← Core traits, types, KV interface, verified functions
+~/git/aspen-auth/             ← UCAN capability tokens, HMAC auth
+~/git/aspen-blob/             ← Blob storage (iroh-blobs integration)
+~/git/aspen-client/           ← Client library for all subsystems
+~/git/aspen-cluster/          ← Cluster coordination, bootstrap, config, router
+~/git/aspen-transport/        ← ALPN protocol handlers, Raft wire protocol
 ~/git/aspen-raft/             ← Raft consensus + vendored OpenRaft
 ~/git/aspen-rpc/              ← RPC infrastructure + 8 native handlers
 ~/git/aspen-plugins/          ← 13 WASM plugin crates
@@ -988,7 +996,8 @@ in **38 sibling repositories** connected via `[patch]` overrides in the root
 ~/git/aspen-proxy/            ← TCP/HTTP proxy via iroh-proxy-utils
 ~/git/aspen-sql/              ← DataFusion SQL engine
 ~/git/aspen-tui/              ← Terminal UI
-...and 19 more (types, constants, dns, storage, crypto, etc.)
+~/git/aspen-tutorial-verify/  ← Tutorial verification utilities
+...and 21 more (types, constants, dns, storage, crypto, etc.)
 ```
 
 ### Cross-Workspace Dependencies
@@ -1022,22 +1031,22 @@ nix build .#aspen-node --impure
 
 ## Crate Map
 
-### Core Workspace (6 crates in this repo)
+### Core Workspace (this repo)
 
 | Crate | LOC | Purpose |
 |-------|-----|---------|
-| `aspen` | ~8K | Main crate: node binary, bootstrap, wiring |
-| `aspen-core` | 9.8K | Traits, types, KV interface, verified functions |
-| `aspen-cluster` | 16.7K | Cluster coordination, bootstrap, config, router |
-| `aspen-client` | 12.1K | Client library for all subsystems |
-| `aspen-blob` | 5.6K | Blob storage (iroh-blobs integration) |
-| `aspen-transport` | 3.7K | ALPN protocol handlers, Raft wire protocol |
-| `aspen-auth` | 3.8K | UCAN capability tokens, HMAC auth |
+| `aspen` | ~8.5K | Node binary, integration tests |
 
-### Sibling Repos (key repos, 41 total)
+### Sibling Repos (key repos, 48 total)
 
 | Repo | Crates | Purpose |
 |------|--------|---------|
+| `aspen-core` | 1 | Core traits, types, KV interface, verified functions |
+| `aspen-auth` | 1 | UCAN capability tokens, HMAC auth |
+| `aspen-blob` | 1 | Blob storage (iroh-blobs integration) |
+| `aspen-client` | 1 | Client library for all subsystems |
+| `aspen-cluster` | 1 | Cluster coordination, bootstrap, config, router |
+| `aspen-transport` | 1 | ALPN protocol handlers, Raft wire protocol |
 | `aspen-raft` | 4 | Raft consensus (OpenRaft wrapper), storage, network, types |
 | `aspen-rpc` | 10 | RPC core + 8 native handler crates + handler registry |
 | `aspen-plugins` | 13 | WASM plugins + signing + cargo subcommand + guest SDK |
@@ -1062,6 +1071,7 @@ nix build .#aspen-node --impure
 | `aspen-layer` | 1 | FoundationDB-style tuple/subspace/directory layers |
 | `aspen-dht-discovery` | 1 | BitTorrent Mainline DHT |
 | `aspen-tui` | 1 | Terminal UI for cluster monitoring |
+| `aspen-tutorial-verify` | 1 | Tutorial verification utilities |
 
 ---
 
