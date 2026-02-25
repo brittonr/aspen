@@ -191,6 +191,20 @@ in
       # ── install WASM plugins (coordination handler is WASM-only) ───
       ${pluginHelpers.installPluginsScript}
 
+      # Pre-stage WASM blobs on follower nodes. Plugin loading requires
+      # linearizable KV reads (leader-only), so we can't reload on
+      # followers. Instead we ensure the blob is in each node's local
+      # blob store; after failover the new leader will reload plugins.
+      with subtest("stage plugin blobs on all nodes"):
+          for _other in [node2, node3]:
+              _other_ticket = get_ticket(_other)
+              _other.succeed(
+                  f"aspen-cli --ticket '{_other_ticket}' "
+                  f"blob add /etc/aspen-plugins/coordination-plugin.wasm "
+                  f">/dev/null 2>/dev/null"
+              )
+              _other.log("plugin blob staged")
+
       # Use leader ticket for all operations
       metrics = cli(node1, "cluster metrics")
       leader_id = metrics.get("current_leader")
@@ -656,9 +670,33 @@ in
           new_ticket = get_ticket(new_leader_node)
           node1.log(f"New leader: node{new_leader}")
 
+      with subtest("reload plugins on new leader"):
+          # The new leader can now do linearizable KV reads, so plugin
+          # reload will find manifests and load WASM from local blob store.
+          new_leader_node.wait_until_succeeds(
+              f"aspen-plugin-cli --ticket '{new_ticket}' --json plugin reload "
+              f">/tmp/_plugin_cli_out.json 2>/dev/null",
+              timeout=60,
+          )
+          raw = new_leader_node.succeed("cat /tmp/_plugin_cli_out.json")
+          reload_result = json.loads(raw)
+          assert reload_result.get("is_success"), \
+              f"plugin reload failed on new leader: {reload_result}"
+          assert reload_result.get("plugin_count", 0) > 0, \
+              f"no plugins loaded after reload: {reload_result}"
+          new_leader_node.log(f"Plugins reloaded on new leader: {reload_result}")
+
       with subtest("counter state survives failover"):
-          out = cli(new_leader_node, "counter get failover-counter",
-                    ticket=new_ticket)
+          # After failover the new leader needs time to commit a no-op
+          # entry before it can serve linearizable reads. Retry until
+          # the coordination plugin responds successfully.
+          new_leader_node.wait_until_succeeds(
+              f"aspen-cli --ticket '{new_ticket}' --json counter get failover-counter "
+              f">/tmp/_cli_out.json 2>/dev/null",
+              timeout=30,
+          )
+          raw = new_leader_node.succeed("cat /tmp/_cli_out.json")
+          out = json.loads(raw)
           assert out.get("value") == 42, \
               f"counter should be 42 after failover, got {out.get('value')}"
           new_leader_node.log("Counter state survived failover")
@@ -674,17 +712,27 @@ in
           new_leader_node.log("Lock state survived failover")
 
       with subtest("counter operations work after failover"):
-          out = cli(new_leader_node, "counter incr failover-counter",
-                    ticket=new_ticket)
+          new_leader_node.wait_until_succeeds(
+              f"aspen-cli --ticket '{new_ticket}' --json counter incr failover-counter "
+              f">/tmp/_cli_out.json 2>/dev/null",
+              timeout=30,
+          )
+          raw = new_leader_node.succeed("cat /tmp/_cli_out.json")
+          out = json.loads(raw)
           assert out.get("value") == 43, \
               f"counter incr after failover failed: {out}"
           new_leader_node.log("Counter operations work after failover")
 
       with subtest("new locks work after failover"):
-          out = cli(new_leader_node,
-                    "lock acquire post-failover-lock --holder new-worker "
-                    "--ttl 10000 --timeout 5000",
-                    ticket=new_ticket)
+          new_leader_node.wait_until_succeeds(
+              f"aspen-cli --ticket '{new_ticket}' --json "
+              f"lock acquire post-failover-lock --holder new-worker "
+              f"--ttl 10000 --timeout 5000 "
+              f">/tmp/_cli_out.json 2>/dev/null",
+              timeout=30,
+          )
+          raw = new_leader_node.succeed("cat /tmp/_cli_out.json")
+          out = json.loads(raw)
           assert out.get("is_success") is True, \
               f"new lock after failover failed: {out}"
           post_token = out.get("fencing_token")

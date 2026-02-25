@@ -19,6 +19,7 @@
   aspenCliPackage,
   aspenCliPlugins,
   serviceRegistryPluginWasm,
+  hooksPluginWasm,
 }: let
   # Deterministic Iroh secret key (64 hex chars = 32 bytes).
   secretKey = "0000000000000001000000000000000100000000000000010000000000000001";
@@ -33,6 +34,10 @@
       {
         name = "service-registry";
         wasm = serviceRegistryPluginWasm;
+      }
+      {
+        name = "hooks";
+        wasm = hooksPluginWasm;
       }
     ];
   };

@@ -1530,6 +1530,7 @@
               full-aspen-cli-forge = fullCliBin ["forge"];
               full-aspen-cli-plugins = fullCliBin ["plugins-rpc" "ci" "automerge"];
               full-aspen-cli-ci = fullCliBin ["ci"];
+              full-aspen-cli-secrets = fullCliBin ["secrets" "ci"];
               full-aspen-cli-proxy = fullCliBin ["proxy"];
             };
         in
@@ -1881,7 +1882,7 @@
               # service register/discover/heartbeat/deregister.
               # Build: nix build .#checks.x86_64-linux.hooks-services-test --impure
               hooks-services-test = import ./nix/tests/hooks-services.nix {
-                inherit pkgs serviceRegistryPluginWasm;
+                inherit pkgs serviceRegistryPluginWasm hooksPluginWasm;
                 aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
@@ -1943,7 +1944,7 @@
               secrets-engine-test = import ./nix/tests/secrets-engine.nix {
                 inherit pkgs secretsPluginWasm;
                 aspenNodePackage = bins.full-aspen-node-plugins;
-                aspenCliPackage = bins.full-aspen-cli;
+                aspenCliPackage = bins.full-aspen-cli-secrets;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
               };
 

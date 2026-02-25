@@ -246,6 +246,27 @@ in
       # ── install WASM plugins (KV + Forge handlers are WASM-only) ───
       ${pluginHelpers.installPluginsScript}
 
+      # Load plugins on ALL nodes. installPluginsScript installs + reloads
+      # on node1 only. Node2/node3 failed their initial load_wasm_plugins
+      # at boot (cluster wasn't initialized yet), leaving plugin_registry
+      # as None. Reload can't work without an initialized registry.
+      # Fix: restart node2/node3 ONE AT A TIME (to maintain quorum) so
+      # their startup load_wasm_plugins runs with initialized cluster.
+      # Pre-stage WASM blobs on follower nodes. Plugin loading requires
+      # linearizable KV reads (leader-only), so we can't reload on
+      # followers. Instead we ensure blobs are in each node's local
+      # blob store; after failover the new leader will reload plugins.
+      with subtest("stage plugin blobs on all nodes"):
+          for _other in [node2, node3]:
+              _other_ticket = get_ticket(_other)
+              for _pname in ["kv", "forge"]:
+                  _other.succeed(
+                      f"aspen-cli --ticket '{_other_ticket}' "
+                      f"blob add /etc/aspen-plugins/{_pname}-plugin.wasm "
+                      f">/dev/null 2>/dev/null"
+                  )
+              _other.log("plugin blobs staged")
+
       # ── raft consensus verification ──────────────────────────────────
 
       with subtest("all nodes agree on leader"):
@@ -449,18 +470,40 @@ in
               f"leader unchanged: old={old_leader}, new={new_leader}"
           node1.log(f"New leader after failover: node {new_leader}")
 
-      with subtest("cluster operations work after failover"):
-          # Route writes through the NEW leader, not just any survivor
+      with subtest("reload plugins on new leader"):
           new_leader_node = {1: node1, 2: node2, 3: node3}[new_leader]
           new_leader_ticket = get_ticket(new_leader_node)
-
-          # Create a new repo after failover — via the new leader
-          out = cli(
-              new_leader_node,
-              "git init failover-test "
-              "--description 'Created after failover'",
-              ticket=new_leader_ticket,
+          # New leader can now do linearizable KV reads, so plugin
+          # reload will find manifests and load WASM from local blob store.
+          new_leader_node.wait_until_succeeds(
+              f"aspen-plugin-cli --ticket '{new_leader_ticket}' --json plugin reload "
+              f">/tmp/_plugin_cli_out.json 2>/dev/null",
+              timeout=60,
           )
+          raw = new_leader_node.succeed("cat /tmp/_plugin_cli_out.json")
+          reload_result = json.loads(raw)
+          assert reload_result.get("is_success"), \
+              f"plugin reload failed on new leader: {reload_result}"
+          assert reload_result.get("plugin_count", 0) > 0, \
+              f"no plugins loaded after reload: {reload_result}"
+          new_leader_node.log(f"Plugins reloaded on new leader: {reload_result}")
+
+      with subtest("cluster operations work after failover"):
+          # Route writes through the NEW leader, not just any survivor
+          new_leader_ticket = get_ticket(new_leader_node)
+
+          # Create a new repo after failover — via the new leader.
+          # After failover the new leader needs time to commit a no-op
+          # entry before it can serve writes. Retry until ready.
+          new_leader_node.wait_until_succeeds(
+              f"aspen-cli --ticket '{new_leader_ticket}' --json "
+              f"git init failover-test "
+              f"--description 'Created after failover' "
+              f">/tmp/_cli_out.json 2>/dev/null",
+              timeout=30,
+          )
+          raw = new_leader_node.succeed("cat /tmp/_cli_out.json")
+          out = json.loads(raw)
           failover_repo_id = out.get("id") or out.get("repo_id", "")
           assert failover_repo_id, \
               f"repo init after failover failed: {out}"

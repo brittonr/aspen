@@ -245,11 +245,17 @@ in
       ciphertext = None
       signature = None
 
-      with subtest("transit create key"):
+      with subtest("transit create encryption key"):
           out = cli("secrets transit create-key my-enc-key")
-          node1.log(f"transit create key: {out}")
+          node1.log(f"transit create enc key: {out}")
           assert isinstance(out, dict), f"expected dict: {out}"
           assert out.get("is_success") is True, f"create key failed: {out}"
+
+      with subtest("transit create signing key"):
+          out = cli("secrets transit create-key my-sign-key --key-type ed25519")
+          node1.log(f"transit create sign key: {out}")
+          assert isinstance(out, dict), f"expected dict: {out}"
+          assert out.get("is_success") is True, f"create signing key failed: {out}"
 
       with subtest("transit list keys"):
           out = cli("secrets transit list-keys")
@@ -257,6 +263,7 @@ in
           assert isinstance(out, dict), f"expected dict: {out}"
           keys = out.get("keys", [])
           assert "my-enc-key" in keys, f"expected my-enc-key in list: {keys}"
+          assert "my-sign-key" in keys, f"expected my-sign-key in list: {keys}"
 
       with subtest("transit encrypt"):
           out = cli(
@@ -284,7 +291,7 @@ in
 
       with subtest("transit sign"):
           out = cli(
-              "secrets transit sign my-enc-key 'data to sign'"
+              "secrets transit sign my-sign-key 'data to sign'"
           )
           node1.log(f"transit sign: {out}")
           assert isinstance(out, dict), f"expected dict: {out}"
@@ -296,7 +303,7 @@ in
       with subtest("transit verify"):
           assert signature is not None, "no signature from sign step"
           out = cli(
-              f"secrets transit verify my-enc-key "
+              f"secrets transit verify my-sign-key "
               f"'data to sign' '{signature}'"
           )
           node1.log(f"transit verify: {out}")
@@ -311,7 +318,10 @@ in
           node1.log(f"transit rotate: {out}")
           assert isinstance(out, dict), f"expected dict: {out}"
           assert out.get("is_success") is True, f"rotate failed: {out}"
-          assert out.get("version") == 2, \
+          # Response has message (e.g. "Key rotated to version 2") not a
+          # top-level version field.
+          msg = out.get("message", "")
+          assert "version 2" in msg or out.get("version") == 2, \
               f"expected version 2 after rotation: {out}"
 
       with subtest("transit datakey"):
