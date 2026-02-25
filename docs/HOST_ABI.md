@@ -149,6 +149,13 @@ See [Namespace Isolation](#namespace-isolation) below.
 |----------|-----------|---------|-------------|
 | `sql_query` | `request_json: String` | `String` | Execute a read-only SQL query against the node's state machine. Input is JSON `{"query": "...", "params_json": "...", "consistency": "linearizable"/"stale", "limit": N, "timeout_ms": N}`. Tagged result: `\0` + JSON `{"columns": [...], "rows": [[...]], "row_count": N, "is_truncated": bool, "execution_time_ms": N}` = ok, `\x01msg` = err. Requires `sql_query` permission. Only available when the host node has SQL support enabled. |
 
+### API Version & Capabilities
+
+| Function | Parameters | Returns | Description |
+|----------|-----------|---------|-------------|
+| `query_host_api_version` | _(none)_ | `String` | Returns the host's `PLUGIN_API_VERSION` semver string (e.g., `"0.2.0"`). Plugins can call this at init time to adapt behavior or warn about mismatches. No permissions required. |
+| `host_capabilities` | _(none)_ | `String` | Returns a JSON array of all registered host function names (e.g., `["kv_get","kv_put",...]`). Allows plugins to probe for optional capabilities (`sql_query`, `hook_list`, `service_execute`) before calling them. No permissions required. |
+
 Hook patterns use NATS-style wildcards over dot-delimited topics:
 
 - `hooks.kv.*` — matches `hooks.kv.write_committed`, `hooks.kv.delete_committed`, etc.
@@ -214,3 +221,14 @@ Plugins must export these functions:
 | v3 | 2026-02-18 | Standardized kv_get/blob_get to `[0x00]/[0x01]/[0x02]` tagged encoding (found/not-found/error). Standardized kv_scan to `[0x00]/[0x01]` tagged encoding (ok/error). Guest SDK `decode_tagged_option_result()` handles backwards compat. |
 | v4 | 2026-02-18 | Added `hook_subscribe`/`hook_unsubscribe` host functions and `plugin_on_hook_event` guest export. Added `hooks` permission to `PluginPermissions`. 22 host functions total. |
 | v5 | 2026-02-22 | Added `sql_query` host function (feature-gated behind `sql`). Added `sql_query` permission to `PluginPermissions`. 23 host functions total (22 + 1 conditional). |
+| v6 | 2026-02-25 | Added `query_host_api_version` and `host_capabilities` host functions. Added `PluginMetrics`/`PluginMetricsSnapshot` types for per-plugin observability. Added graceful in-flight request draining on shutdown (bounded 30s timeout). 25 host functions total (24 + 1 conditional). |
+
+## Version Bump Policy
+
+- **Patch** (0.2.x → 0.2.y): Bug fixes, documentation changes, new optional host functions that return sensible defaults if not called. Old plugins continue to work unchanged.
+- **Minor** (0.2.x → 0.3.0): New required guest exports, new host functions that existing plugins should adopt, changes to default behavior. Old plugins still load but may miss new features.
+- **Major** (0.x → 1.0): Breaking changes to host function signatures, tag byte encoding changes, or removal of deprecated host functions. Old plugins will NOT load — `min_api_version` check will reject them.
+
+Plugins declare `min_api_version` in their manifest. The host checks `PLUGIN_API_VERSION >= min_api_version` at load time. Plugins that need the newer API should set `min_api_version` accordingly. Plugins that want to be maximally compatible should leave `min_api_version` unset or set it to the oldest version they support.
+
+At runtime, plugins can call `query_host_api_version()` to get the exact host version and `host_capabilities()` to probe for optional features before calling them.
