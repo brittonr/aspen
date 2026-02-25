@@ -1229,6 +1229,32 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 - **installPluginsScript get_ticket() mismatch**: single-node tests define `get_ticket()`, multi-node define `get_ticket(node)` → use `inspect.signature` to detect
 - **Gotcha: Nix `${expr}` in multiline strings doesn't adjust indentation** — only the first line of the interpolated string gets the surrounding indentation, subsequent lines are at column 0. Use Python-level loops instead of Nix-level concatenation for multi-line generated code.
 
+### WASM Plugin VM Test Fixes (2026-02-25) — All 4 Failing Tests Fixed
+
+**4/4 previously-failing WASM plugin VM tests now pass:**
+
+- hooks-services-test ✅, secrets-engine-test ✅, multi-node-coordination-test ✅, multi-node-cluster-test ✅
+
+**Root causes & fixes:**
+
+1. **hooks-services-test**: `hooksPluginWasm` not installed — WASM plugin replaced native handler but wasn't in test plugin list
+2. **secrets-engine-test**: CLI missing `secrets` feature (`#[cfg(feature = "secrets")]` subcommand). Also needed `ci` feature for postcard discriminant alignment (4 `CacheMigration*` variants are `#[cfg(feature = "ci")]` before Secrets variants in `ClientRpcResponse`). Transit sign test used encryption key instead of ed25519 signing key; rotate-key assertion checked wrong response field.
+3. **multi-node-coordination-test + multi-node-cluster-test**: After leader failover, new leader had no WASM plugin handlers.
+   - **Why**: Plugin loading requires linearizable KV scan (ReadIndex) → **only works on Raft leader**. Followers always fail: "not leader; current leader: Some(N)"
+   - **Why reload didn't help on followers**: `reload_wasm_plugins()` → `load_all()` → `kv_store.scan()` → `scan_ensure_linearizable()` → `get_read_linearizer(ReadPolicy::ReadIndex)` → fails on follower
+   - **Fix**: Pre-stage WASM blobs on all follower nodes via `blob add` (content-addressed, same hash as manifest). After failover, trigger `plugin reload` on the **new leader** (which can now serve linearizable reads). Plugin registry exists on all nodes (set before `load_all()` fails during startup).
+
+**Key gotchas discovered:**
+
+| Issue | What Happened | Fix |
+|-------|--------------|-----|
+| Plugin reload on follower silently returns 0 plugins | `wait_until_succeeds` checks exit code only; CLI exits 0 even with `is_success: true, plugin_count: 0` | Check `plugin_count > 0` in assertion after reload |
+| KV scan linearizable read on followers | `scan_ensure_linearizable()` uses ReadIndex which requires leadership | Only reload plugins on the leader node |
+| Stale cluster-ticket.txt after systemctl restart | `wait_for_file` returns immediately (old file still exists), `get_ticket()` reads stale ticket with wrong ports | Delete ticket file before restart: `rm -f /var/lib/aspen/cluster-ticket.txt` |
+| Simultaneous restart of 2/3 nodes breaks quorum | Raft loses quorum → election timeout → cluster instability for 30+ seconds | Restart nodes one at a time with health check between each |
+| `plugin_registry` initialized even on load failure | `load_wasm_plugins()` sets `self.plugin_registry = Some(...)` BEFORE calling `load_all()` | Reload works after failover because registry object exists (just empty) |
+| `full-aspen-cli-secrets` needed both `secrets` AND `ci` features | `#[cfg(feature = "ci")]` gates 4 CacheMigration variants before Secrets variants in ClientRpcResponse, shifting postcard discriminants | Always match node's feature flags for aspen-client-api enum layout |
+
 ### Remaining Extraction Candidates (from analysis)
 
 | Crate | LOC | WS Rev Deps | External Refs | Effort |
