@@ -1192,6 +1192,29 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 - **5 crates** remain in main workspace (was 6), **42 sibling repos** (was 41)
 - **~56K lines** remaining (was ~60K)
 
+### NixOS VM Test Validation (2026-02-24)
+
+**10/10 non-plugin VM tests pass** after extraction rounds:
+
+- kv-operations ✅, blob-operations ✅, multi-node-kv ✅, multi-node-blob ✅
+- cluster-docs-peer ✅, job-index ✅, plugin-cli ✅, ci-cache ✅
+- proxy-tunnel ✅, multi-node-proxy ✅
+
+**8 WASM plugin VM tests: pre-existing failures** (NOT caused by extractions):
+
+- coordination-primitives, multi-node-coordination, ratelimit-verify,
+  automerge-sql, secrets-engine, hooks-services, forge-cluster, multi-node-cluster
+- Root cause: `full-aspen-node` built with `--features ci,docs,hooks,...` but WITHOUT `plugins-rpc`. Node stores plugin manifests in KV but can't execute WASM. Tests need `full-aspen-node-plugins` package.
+
+**Fixes applied during validation:**
+
+- **4 missing sibling repos in siblingRepoNames**: aspen-transport, aspen-testing, aspen-sharding, aspen-cluster-bridges
+- **6 stale aspen-testing paths** in sibling repos (pointed to old `../aspen/crates/aspen-testing`)
+- **Stale full-build-Cargo.lock**: missing wasmtime deps from aspen-wasm-plugin sibling repo
+- **installPluginsScript indentation bug**: `concatMapStringsSep "\n        "` generates multi-line blocks with broken Python indentation → replaced with Python-level for loop
+- **installPluginsScript get_ticket() mismatch**: single-node tests define `get_ticket()`, multi-node define `get_ticket(node)` → use `inspect.signature` to detect
+- **Gotcha: Nix `${expr}` in multiline strings doesn't adjust indentation** — only the first line of the interpolated string gets the surrounding indentation, subsequent lines are at column 0. Use Python-level loops instead of Nix-level concatenation for multi-line generated code.
+
 ### Remaining Extraction Candidates (from analysis)
 
 | Crate | LOC | WS Rev Deps | External Refs | Effort |
