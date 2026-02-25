@@ -1128,3 +1128,67 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 - Log subscriber types: 16 tests (serde roundtrip, Display, Clone/Copy, equality)
 - raft.rs: skipped (needs Raft<AppTypeConfig> — tested via VM integration)
 - wire.rs: skipped (needs QUIC streams — tested via VM integration)
+
+## Crate Extractions Round 5 + Docs Refresh (2026-02-24)
+
+### README Rewrite
+
+- Fixed line/crate counts: 60K LOC / 6 crates (was "519K / 91 crates" — massively stale)
+- Rewrote RPC Handler Architecture: 3-tier dispatch (native RequestHandler → ServiceExecutor → WASM)
+- Added Multi-Repository Architecture section documenting 41 sibling repos with cross-workspace dependency pattern
+- Rewrote Crate Map: core workspace vs sibling repos (was flat list of 70+ crates as if all local)
+- Fixed Build/Run: CLI extracted to separate repo, node requires federation feature
+- Fixed Feature Flags: removed extracted features (dns, snix, nix-executor), added proxy
+- Fixed Testing: 1,781 unit tests, 18 NixOS VM tests (was "15")
+
+### Orphaned Handler Cleanup
+
+- Deleted `crates/aspen-blob-handler/`, `crates/aspen-ci-handler/`, `crates/aspen-forge-handler/`, `crates/aspen-secrets-handler/`
+- These had `src/executor.rs` stubs but NO Cargo.toml — leftovers from RPC extraction
+- 585 lines of dead code removed
+
+### Doctest Fix
+
+- `src/node/mod.rs` NodeBuilder doctest: `start()` is behind `#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]` — marked `ignore` instead of `no_run`
+
+### Extracted: aspen-cluster-bridges (2,320 LOC)
+
+- New repo: ~/git/aspen-cluster-bridges/
+- Zero external repo references — only aspen-cluster depends on it (optional)
+- Simplest extraction: 2 files changed in main repo
+
+### Extracted: aspen-sharding (3,650 LOC)
+
+- New repo: ~/git/aspen-sharding/
+- 3 external repos updated: aspen-federation, aspen-raft, aspen-rpc
+- Clean dependency profile: only aspen-core as runtime dep
+- **Gotcha**: aspen-federation had `git` dep (not path) for sharding — changed to path
+
+### Extracted: Testing Group (9,454 LOC)
+
+- New repo: ~/git/aspen-testing/ with 4 crates:
+  - aspen-testing (5,142 LOC)
+  - aspen-testing-core (1,155 LOC)
+  - aspen-testing-fixtures (837 LOC)
+  - aspen-testing-madsim (2,320 LOC)
+- 13+ external repos updated (all dev-dependencies, mechanical path changes)
+- aspen-testing-network was already at ~/git/aspen-testing-network/ — left in place
+
+### Post-Extraction State
+
+- **6 crates** in main workspace (was 12 before this session, was 83 at project start)
+- **~60K lines** remaining (was ~76K before, was ~220K+ at start)
+- **41 sibling repos** total
+- `cargo check --workspace` passes clean
+- All tests pass (0 failures)
+
+### Remaining Extraction Candidates (from analysis)
+
+| Crate | LOC | WS Rev Deps | External Refs | Effort |
+|-------|-----|-------------|---------------|--------|
+| aspen-transport | 3.7K | 1 (cluster) | 4 | Medium |
+| aspen-blob | 5.6K | 0 runtime* | 10 | Hard |
+| aspen-auth | 3.8K | 2 (cluster, transport) | 9 | Hard |
+| aspen-client | 12.1K | 0 (LEAF) | 13 | Hard (external cost) |
+| aspen-cluster | 16.7K | 0 runtime | 6 | Medium-Hard |
+| aspen-core | 9.8K | 5 (everything) | 19 | Very Hard |

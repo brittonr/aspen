@@ -4,7 +4,7 @@ Aspen is a hybrid-consensus distributed systems framework in Rust, built on top 
 
 Built on Iroh (QUIC-based P2P networking with NAT traversal), a vendored OpenRaft for consensus, and a FoundationDB-inspired "unbundled database" philosophy where higher-level features (Git forge, CI/CD, secrets, DNS) are stateless layers over core KV + blob primitives.
 
-**~76K lines of Rust** in the core workspace (12 crates), with domain logic distributed across **38 sibling repositories**.
+**~60K lines of Rust** in the core workspace (6 crates), with domain logic distributed across **41 sibling repositories**.
 
 ---
 
@@ -966,12 +966,13 @@ in **38 sibling repositories** connected via `[patch]` overrides in the root
 `Cargo.toml` for unified type identity during development.
 
 ```
-~/git/aspen/                  ← Core workspace (12 crates, ~76K LOC)
+~/git/aspen/                  ← Core workspace (6 crates, ~60K LOC)
 ~/git/aspen-raft/             ← Raft consensus + vendored OpenRaft
 ~/git/aspen-rpc/              ← RPC infrastructure + 8 native handlers
 ~/git/aspen-plugins/          ← 13 WASM plugin crates
 ~/git/aspen-client-api/       ← Wire protocol types (275 request variants)
 ~/git/aspen-cli/              ← Command-line interface
+~/git/aspen-testing/          ← Test utilities + madsim simulation harness
 ~/git/aspen-forge/            ← Decentralized Git hosting
 ~/git/aspen-coordination/     ← Distributed primitives (locks, queues, etc.)
 ~/git/aspen-jobs/             ← Job queue + 5 worker types
@@ -982,11 +983,12 @@ in **38 sibling repositories** connected via `[patch]` overrides in the root
 ~/git/aspen-docs/             ← CRDT document sync
 ~/git/aspen-automerge/        ← Automerge integration
 ~/git/aspen-nix/              ← Nix binary cache (SNIX + HTTP/3 gateway)
-~/git/aspen-dns/              ← DNS record management
+~/git/aspen-sharding/         ← Jump consistent hash + shard routing
+~/git/aspen-cluster-bridges/  ← Cross-crate event bridges
 ~/git/aspen-proxy/            ← TCP/HTTP proxy via iroh-proxy-utils
 ~/git/aspen-sql/              ← DataFusion SQL engine
 ~/git/aspen-tui/              ← Terminal UI
-...and 19 more (types, constants, storage, crypto, etc.)
+...and 19 more (types, constants, dns, storage, crypto, etc.)
 ```
 
 ### Cross-Workspace Dependencies
@@ -1020,25 +1022,19 @@ nix build .#aspen-node --impure
 
 ## Crate Map
 
-### Core Workspace (12 crates in this repo)
+### Core Workspace (6 crates in this repo)
 
 | Crate | LOC | Purpose |
 |-------|-----|---------|
-| `aspen` | — | Main crate: node binary, bootstrap, wiring |
+| `aspen` | ~8K | Main crate: node binary, bootstrap, wiring |
 | `aspen-core` | 9.8K | Traits, types, KV interface, verified functions |
 | `aspen-cluster` | 16.7K | Cluster coordination, bootstrap, config, router |
 | `aspen-client` | 12.1K | Client library for all subsystems |
 | `aspen-blob` | 5.6K | Blob storage (iroh-blobs integration) |
 | `aspen-transport` | 3.7K | ALPN protocol handlers, Raft wire protocol |
 | `aspen-auth` | 3.8K | UCAN capability tokens, HMAC auth |
-| `aspen-sharding` | 3.7K | Jump consistent hash, shard routing |
-| `aspen-cluster-bridges` | 2.3K | Cross-crate event bridges |
-| `aspen-testing` | 5.1K | Test utilities + re-exports |
-| `aspen-testing-core` | 1.2K | Shared test primitives |
-| `aspen-testing-fixtures` | 0.8K | Pre-built test scenarios |
-| `aspen-testing-madsim` | 2.3K | Madsim simulation harness |
 
-### Sibling Repos (key repos, 38 total)
+### Sibling Repos (key repos, 41 total)
 
 | Repo | Crates | Purpose |
 |------|--------|---------|
@@ -1047,6 +1043,7 @@ nix build .#aspen-node --impure
 | `aspen-plugins` | 13 | WASM plugins + signing + cargo subcommand + guest SDK |
 | `aspen-client-api` | 1 | Wire protocol (275 request/response variants) |
 | `aspen-cli` | 1 | Command-line interface |
+| `aspen-testing` | 4 | Test utilities, fixtures, madsim simulation harness |
 | `aspen-forge` | 2 | Decentralized Git + forge protocol types |
 | `aspen-coordination` | 2 | Distributed primitives + coordination protocol types |
 | `aspen-jobs` | 8 | Job queue + 5 workers + protocol + guest SDK |
@@ -1057,6 +1054,8 @@ nix build .#aspen-node --impure
 | `aspen-docs` | 1 | CRDT document sync |
 | `aspen-automerge` | 1 | Automerge integration |
 | `aspen-nix` | 4 | SNIX store, cache, HTTP/3 gateway, nix handler |
+| `aspen-sharding` | 1 | Jump consistent hash, shard routing |
+| `aspen-cluster-bridges` | 1 | Cross-crate event bridges |
 | `aspen-proxy` | 1 | TCP/HTTP proxy via iroh QUIC |
 | `aspen-sql` | 1 | DataFusion SQL engine |
 | `aspen-constants` | 1 | Tiger Style bounds with compile-time assertions |
