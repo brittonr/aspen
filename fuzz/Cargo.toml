@@ -46,10 +46,6 @@ name = "fuzz_raft_rpc"
 path = "fuzz_targets/fuzz_raft_rpc.rs"
 
 [[test]]
-name = "fuzz_http_api"
-path = "fuzz_targets/fuzz_http_api.rs"
-
-[[test]]
 name = "fuzz_snapshot_json"
 path = "fuzz_targets/fuzz_snapshot_json.rs"
 

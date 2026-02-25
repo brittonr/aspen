@@ -17,13 +17,10 @@
 use aspen::fuzz_helpers::AspenClusterTicket;
 use aspen::fuzz_helpers::RaftRpcProtocol;
 use aspen::fuzz_helpers::RaftRpcResponse;
-use aspen::fuzz_helpers::TuiRpcRequest;
-use aspen::fuzz_helpers::TuiRpcResponse;
 use bolero::check;
 
 /// Tiger Style: Maximum message sizes
 const MAX_RPC_SIZE: usize = 10 * 1024 * 1024; // 10 MB
-const MAX_TUI_SIZE: usize = 1024 * 1024; // 1 MB
 
 #[test]
 fn fuzz_roundtrip() {
@@ -57,32 +54,6 @@ fn fuzz_roundtrip() {
                 let serialized2 = postcard::to_stdvec(&msg2).expect("re-serialization should succeed");
 
                 assert_eq!(serialized, serialized2, "round-trip must be idempotent for RaftRpcResponse");
-            }
-        }
-
-        // Round-trip test for TuiRpcRequest (smaller size limit)
-        if data.len() <= MAX_TUI_SIZE {
-            if let Ok(msg) = postcard::from_bytes::<TuiRpcRequest>(data) {
-                if let Ok(serialized) = postcard::to_stdvec(&msg) {
-                    let msg2 = postcard::from_bytes::<TuiRpcRequest>(&serialized)
-                        .expect("re-deserialization should succeed for valid message");
-
-                    let serialized2 = postcard::to_stdvec(&msg2).expect("re-serialization should succeed");
-
-                    assert_eq!(serialized, serialized2, "round-trip must be idempotent for TuiRpcRequest");
-                }
-            }
-
-            // Round-trip test for TuiRpcResponse
-            if let Ok(msg) = postcard::from_bytes::<TuiRpcResponse>(data) {
-                if let Ok(serialized) = postcard::to_stdvec(&msg) {
-                    let msg2 = postcard::from_bytes::<TuiRpcResponse>(&serialized)
-                        .expect("re-deserialization should succeed for valid message");
-
-                    let serialized2 = postcard::to_stdvec(&msg2).expect("re-serialization should succeed");
-
-                    assert_eq!(serialized, serialized2, "round-trip must be idempotent for TuiRpcResponse");
-                }
             }
         }
 

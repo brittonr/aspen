@@ -222,13 +222,14 @@ fn fuzz_differential() {
                             let ref_value = reference.get(key).cloned();
 
                             // Read from real store
-                            let request = ReadRequest { key: key.clone() };
+                            let request = ReadRequest::new(key.clone());
                             let store_result = store.read(request).await;
 
                             // Compare results
                             match (ref_value, store_result) {
                                 (Some(expected), Ok(result)) => {
-                                    assert_eq!(expected, result.value, "Read value mismatch for key '{}'", key);
+                                    let value = result.kv.expect("ReadResult.kv should be Some for existing key").value;
+                                    assert_eq!(expected, value, "Read value mismatch for key '{}'", key);
                                 }
                                 (None, Err(KeyValueStoreError::NotFound { .. })) => {
                                     // Both agree key doesn't exist - good
@@ -297,9 +298,10 @@ fn fuzz_differential() {
 
             // Final verification: check all keys in reference exist in store
             for (key, expected_value) in &reference {
-                let request = ReadRequest { key: key.clone() };
+                let request = ReadRequest::new(key.clone());
                 let result = store.read(request).await.expect("Key from reference should exist in store");
-                assert_eq!(expected_value, &result.value, "Final state mismatch for key '{}'", key);
+                let value = &result.kv.expect("ReadResult.kv should be Some for existing key").value;
+                assert_eq!(expected_value, value, "Final state mismatch for key '{}'", key);
             }
         });
     });
