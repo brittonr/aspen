@@ -178,6 +178,7 @@ dependencies = [
 name = "aspen-plugin-api"
 version = "0.1.0"
 dependencies = [
+ "semver",
  "serde",
  "serde_json",
 ]

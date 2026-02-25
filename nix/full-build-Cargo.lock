@@ -2247,6 +2247,7 @@ dependencies = [
  "aspen-testing",
  "aspen-traits",
  "async-trait",
+ "base64 0.22.1",
  "ed25519-dalek 2.2.0",
  "getrandom 0.2.17",
  "hex",
