@@ -1267,3 +1267,63 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 | aspen-client | 12.1K | 0 (LEAF) | 13 | Hard (external cost) |
 | aspen-cluster | 16.7K | 0 runtime | 6 | Medium-Hard |
 | aspen-core | 9.8K | 4 (everything) | 19 | Very Hard |
+
+## Recent Changes (2026-02-25) — Plugin System Open Questions (3 of 3 resolved)
+
+### 1. Hot-Reload: Graceful In-Flight Request Draining
+
+- `WasmPluginHandler.call_shutdown()` now waits for `metrics.active_requests` to reach 0
+- Bounded by `SHUTDOWN_DRAIN_TIMEOUT_SECS` (30s) with `SHUTDOWN_DRAIN_POLL_MS` (50ms) polling
+- If timeout exceeded: logs warning, proceeds with forced shutdown
+- `ActiveRequestGuard` RAII struct in `handle()` — increments on entry, decrements on drop (including panic/error paths)
+- State check in `handle()` rejects new requests when state=Stopping, so active_requests only decreases during drain
+- **Files**: `aspen-wasm-plugin/crates/aspen-wasm-plugin/src/handler.rs`
+
+### 2. Per-Plugin Metrics
+
+- New `PluginMetrics` type in `aspen-plugin-api` — all fields are `AtomicU64` for lock-free access
+- Tracks: request_count, success_count, error_count, total_duration_ns, max_duration_ns, last_request_epoch_ms, active_requests
+- `record(duration_ns, success)` called after each request completes in `WasmPluginHandler::handle()`
+- Max duration uses CAS loop for correct concurrent updates
+- `PluginMetricsSnapshot` is `Serialize/Deserialize` for JSON API responses, includes derived `avg_duration_ns`
+- Exposed via: `WasmPluginHandler::metrics_snapshot()` → `LivePluginRegistry::metrics_all()/metrics_one()` → `HandlerRegistry::plugin_metrics()`
+- 8 new unit tests in aspen-plugin-api
+- **Files**: `aspen-plugin-api/src/lib.rs`, `aspen-wasm-plugin/src/handler.rs`, `aspen-wasm-plugin/src/registry.rs`, `aspen-wasm-plugin/src/lib.rs`, `aspen-rpc/crates/aspen-rpc-handlers/src/registry.rs`
+
+### 3. API Versioning Strategy
+
+- `PLUGIN_API_VERSION` bumped 0.2.0 → 0.3.0 (minor: new host functions plugins should adopt)
+- New host function `query_host_api_version` — returns `PLUGIN_API_VERSION` string, no permissions needed
+- New host function `host_capabilities` — returns JSON array of registered host function names
+- Capabilities list built dynamically based on feature gates (sql_query, hook_list/metrics/trigger, service_execute)
+- Guest SDK safe wrappers: `get_host_api_version()`, `get_host_capabilities()`, `has_capability(name)`
+- HOST_ABI.md updated: v6 changelog entry, new "Version Bump Policy" section (patch/minor/major guidelines)
+- **Pattern**: Plugins can probe for optional capabilities at init time instead of failing at call time
+- **Files**: `aspen-plugin-api/src/lib.rs` (constant), `aspen-wasm-plugin/src/host.rs` (registration), `aspen-wasm-guest-sdk/src/host.rs` (wrappers), `aspen/docs/HOST_ABI.md` (docs)
+
+### Architecture After Changes
+
+```text
+Guest Plugin (init):
+  let api = host::get_host_api_version();    // "0.3.0"
+  let caps = host::get_host_capabilities();  // ["kv_get", "kv_put", ..., "sql_query", ...]
+  if host::has_capability("sql_query") {
+      // enable SQL features
+  }
+
+Host (shutdown):
+  call_shutdown()
+  ├─ set state = Stopping (new requests rejected)
+  ├─ wait for active_requests == 0 (bounded 30s)
+  ├─ cancel timers + unsubscribe hooks
+  └─ call guest plugin_shutdown export
+
+Host (dispatch):
+  handle()
+  ├─ check state (Ready|Degraded only)
+  ├─ active_requests++ (via ActiveRequestGuard RAII)
+  ├─ start = Instant::now()
+  ├─ serialize → spawn_blocking → call_guest → deserialize
+  ├─ metrics.record(elapsed, success)
+  └─ active_requests-- (guard drop)
+```
