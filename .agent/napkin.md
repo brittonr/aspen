@@ -3,6 +3,7 @@
 ## Corrections
 
 | Date | Source | What Went Wrong | What To Do Instead |
+| 2026-02-25 | self | First attempt added `consistency` field to `ScanRequest` struct, breaking ~40 callers across ~15 repos | Adding a field to a widely-used struct is too invasive. Instead, add a default trait method (`scan_local`) to `KeyValueStore` — purely additive, zero existing callers change. Override only in `RaftNode`. |
 
 | 2026-02-25 | self | Host kv_get returned `\x02` (error) for non-existent keys instead of `\x01` (not-found) | KV store `.read()` returns `Err(NotFound)`, not `Ok(None)`. Must match `NotFound` specifically in host functions and return not-found tag. |
 | 2026-02-25 | self | ALL host function tag bytes used `\x00` for success — CString can't contain NUL bytes | Hyperlight marshals return Strings through CString (NUL-terminated). Shifted all tag bytes +1: success=`\x01`, not-found=`\x02`, error=`\x03`. Both host (aspen-wasm-plugin) and guest SDK (aspen-wasm-guest-sdk) must match. |
@@ -1214,11 +1215,12 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 - cluster-docs-peer ✅, job-index ✅, plugin-cli ✅, ci-cache ✅
 - proxy-tunnel ✅, multi-node-proxy ✅
 
-**8 WASM plugin VM tests: pre-existing failures** (NOT caused by extractions):
+**8 WASM plugin VM tests: ALL FIXED** (validated 2026-02-25):
 
-- coordination-primitives, multi-node-coordination, ratelimit-verify,
-  automerge-sql, secrets-engine, hooks-services, forge-cluster, multi-node-cluster
-- Root cause: `full-aspen-node` built with `--features ci,docs,hooks,...` but WITHOUT `plugins-rpc`. Node stores plugin manifests in KV but can't execute WASM. Tests need `full-aspen-node-plugins` package.
+- coordination-primitives ✅, multi-node-coordination ✅, ratelimit-verify ✅,
+  automerge-sql ✅, secrets-engine ✅, hooks-services ✅, forge-cluster ✅, multi-node-cluster ✅
+- Original root cause was `full-aspen-node` without `plugins-rpc`. Fixed by `full-aspen-node-plugins` + pre-staging WASM blobs + plugin reload on leader.
+- **All 18/18 NixOS VM integration tests pass** (10 non-plugin + 8 WASM plugin).
 
 **Fixes applied during validation:**
 
@@ -1229,11 +1231,12 @@ aspen-secrets-handler (1351 lines) — PKI/X.509 crypto only
 - **installPluginsScript get_ticket() mismatch**: single-node tests define `get_ticket()`, multi-node define `get_ticket(node)` → use `inspect.signature` to detect
 - **Gotcha: Nix `${expr}` in multiline strings doesn't adjust indentation** — only the first line of the interpolated string gets the surrounding indentation, subsequent lines are at column 0. Use Python-level loops instead of Nix-level concatenation for multi-line generated code.
 
-### WASM Plugin VM Test Fixes (2026-02-25) — All 4 Failing Tests Fixed
+### WASM Plugin VM Test Fixes (2026-02-25) — All 8 Failing Tests Fixed
 
-**4/4 previously-failing WASM plugin VM tests now pass:**
+**8/8 previously-failing WASM plugin VM tests now pass:**
 
 - hooks-services-test ✅, secrets-engine-test ✅, multi-node-coordination-test ✅, multi-node-cluster-test ✅
+- coordination-primitives-test ✅, ratelimit-verify-test ✅, automerge-sql-test ✅, forge-cluster-test ✅
 
 **Root causes & fixes:**
 
