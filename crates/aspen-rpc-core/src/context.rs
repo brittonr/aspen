@@ -123,9 +123,7 @@ pub struct ClientProtocolContext {
     /// Requires both `ci` and `nickel` features since TriggerService depends on Nickel config.
     #[cfg(all(feature = "ci", feature = "nickel"))]
     pub ci_trigger_service: Option<Arc<aspen_ci::TriggerService>>,
-    /// Nix cache signer for narinfo signing (optional).
-    #[cfg(feature = "nix-cache-gateway")]
-    pub nix_cache_signer: Option<Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>>,
+    // nix-cache-gateway removed: h3-iroh requires iroh 0.96+ (we use 0.95.1)
     /// Service executors for WASM plugin host function dispatch.
     ///
     /// Each executor handles a domain (docs, jobs, etc.) and is called
@@ -473,8 +471,7 @@ pub mod test_support {
                 ci_orchestrator: None,
                 #[cfg(all(feature = "ci", feature = "nickel"))]
                 ci_trigger_service: None,
-                #[cfg(feature = "nix-cache-gateway")]
-                nix_cache_signer: None,
+
                 service_executors: Vec::new(),
                 app_registry: aspen_core::shared_registry(),
                 proxy_config: ProxyConfig::default(),
