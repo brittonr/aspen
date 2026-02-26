@@ -1,0 +1,37 @@
+[package]
+name = "aspen-testing-network"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Network testing utilities including fault injection and VM management for Aspen"
+authors = ["Aspen Contributors"]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "sync", "time", "process", "io-util"] }
+async-trait = "0.1"
+
+# Error handling
+snafu = "0.8.9"
+anyhow = "1.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# HTTP client for health checks
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+
+# Utilities
+tracing = "0.1"
+
+[features]
+default = []
+# VM testing requires reqwest for health checks
+vm = ["dep:reqwest"]
+# TAP device testing requires specific system capabilities
+tap = []
+
+[dev-dependencies]
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }
+tempfile = "3.4.0"

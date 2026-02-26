@@ -1,0 +1,40 @@
+[package]
+name = "aspen-cluster-handler"
+version = "0.1.0"
+edition = "2024"
+description = "Cluster management RPC handler for Aspen distributed cluster"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+# RPC core abstractions (RequestHandler trait, ClientProtocolContext)
+aspen-rpc-core = { path = "../aspen-rpc-core" }
+
+# Local crates
+aspen-client-api = { workspace = true }
+aspen-client = { path = "../aspen-client" }
+aspen-core = { path = "../aspen-core" }
+aspen-ticket = { workspace = true }
+aspen-docs = { path = "../../../aspen-docs/crates/aspen-docs", optional = true }
+
+# Core dependencies
+async-trait = "0.1"
+anyhow = "1.0"
+serde_json = "1.0"
+tracing = "0.1"
+
+# Iroh dependencies
+iroh = { version = "0.95.1" }
+iroh-gossip = "0.95"
+
+# Hash
+blake3 = { workspace = true }
+
+[features]
+default = []
+docs = ["dep:aspen-docs"]
+jobs = ["aspen-rpc-core/jobs"]
+
+[dev-dependencies]
+aspen-testing = { workspace = true }
+aspen-rpc-core = { path = "../aspen-rpc-core", features = ["testing"] }
+tokio = { version = "1.0", features = ["full", "test-util"] }

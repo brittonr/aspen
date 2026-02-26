@@ -1,0 +1,335 @@
+//! Log subscriber protocol handler.
+
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+
+use aspen_auth::hmac_auth::AuthContext;
+use iroh::endpoint::Connection;
+use iroh::protocol::AcceptError;
+use iroh::protocol::ProtocolHandler;
+use tokio::sync::Semaphore;
+use tokio::sync::broadcast;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
+
+use super::connection::handle_log_subscriber_connection;
+use super::constants::LOG_BROADCAST_BUFFER_SIZE;
+use super::constants::MAX_LOG_SUBSCRIBERS;
+use super::types::HistoricalLogReader;
+use super::types::LogEntryPayload;
+
+/// Protocol handler for log subscription over Iroh.
+///
+/// Provides a read-only interface for clients to stream committed Raft log entries.
+/// Uses the same HMAC-SHA256 authentication as the authenticated Raft handler.
+///
+/// # Tiger Style
+///
+/// - Bounded subscriber count
+/// - Keepalive for idle connections
+/// - Explicit subscription limits
+pub struct LogSubscriberProtocolHandler {
+    auth_context: AuthContext,
+    connection_semaphore: Arc<Semaphore>,
+    /// Broadcast channel for log entries.
+    log_sender: broadcast::Sender<LogEntryPayload>,
+    /// Node ID for response messages.
+    node_id: u64,
+    /// Subscriber ID counter.
+    next_subscriber_id: AtomicU64,
+    /// Current committed log index (updated externally).
+    committed_index: Arc<AtomicU64>,
+    /// Optional historical log reader for replay from start_index.
+    historical_reader: Option<Arc<dyn HistoricalLogReader>>,
+    /// Hybrid Logical Clock for deterministic timestamp ordering.
+    hlc: aspen_core::hlc::HLC,
+    /// Optional watch registry for tracking active subscriptions.
+    watch_registry: Option<Arc<dyn aspen_core::WatchRegistry>>,
+}
+
+impl std::fmt::Debug for LogSubscriberProtocolHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LogSubscriberProtocolHandler")
+            .field("node_id", &self.node_id)
+            .field("committed_index", &self.committed_index)
+            .finish_non_exhaustive()
+    }
+}
+
+impl LogSubscriberProtocolHandler {
+    /// Create a new log subscriber protocol handler.
+    ///
+    /// # Arguments
+    /// * `cluster_cookie` - Shared secret for authentication
+    /// * `node_id` - This node's ID
+    ///
+    /// # Returns
+    /// A tuple of (handler, log_sender, committed_index_handle).
+    /// - `log_sender`: Use to broadcast log entries to subscribers
+    /// - `committed_index_handle`: Update this atomic to reflect current Raft committed index
+    ///
+    /// # Note
+    /// Historical replay is disabled by default. Use `with_historical_reader()` to enable it.
+    pub fn new(cluster_cookie: &str, node_id: u64) -> (Self, broadcast::Sender<LogEntryPayload>, Arc<AtomicU64>) {
+        let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
+        let committed_index = Arc::new(AtomicU64::new(0));
+        let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
+        let handler = Self {
+            auth_context: AuthContext::new(cluster_cookie),
+            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
+            log_sender: log_sender.clone(),
+            node_id,
+            next_subscriber_id: AtomicU64::new(1),
+            committed_index: committed_index.clone(),
+            historical_reader: None,
+            hlc,
+            watch_registry: None,
+        };
+        (handler, log_sender, committed_index)
+    }
+
+    /// Create a handler with an existing broadcast sender and committed index tracker.
+    ///
+    /// Use this when you need multiple handlers to share the same broadcast channel
+    /// and committed index state.
+    pub fn with_sender(
+        cluster_cookie: &str,
+        node_id: u64,
+        log_sender: broadcast::Sender<LogEntryPayload>,
+        committed_index: Arc<AtomicU64>,
+    ) -> Self {
+        let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
+        Self {
+            auth_context: AuthContext::new(cluster_cookie),
+            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
+            log_sender,
+            node_id,
+            next_subscriber_id: AtomicU64::new(1),
+            committed_index,
+            historical_reader: None,
+            hlc,
+            watch_registry: None,
+        }
+    }
+
+    /// Create a handler with historical log replay support.
+    ///
+    /// When a subscriber connects with a `start_index`, historical entries
+    /// from `start_index` to the current committed index will be replayed
+    /// before streaming new entries.
+    ///
+    /// # Arguments
+    /// * `cluster_cookie` - Shared secret for authentication
+    /// * `node_id` - This node's ID
+    /// * `log_sender` - Broadcast channel for new entries
+    /// * `committed_index` - Atomic counter for current committed index
+    /// * `historical_reader` - Reader for fetching historical log entries
+    pub fn with_historical_reader(
+        cluster_cookie: &str,
+        node_id: u64,
+        log_sender: broadcast::Sender<LogEntryPayload>,
+        committed_index: Arc<AtomicU64>,
+        historical_reader: Arc<dyn HistoricalLogReader>,
+    ) -> Self {
+        let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
+        Self {
+            auth_context: AuthContext::new(cluster_cookie),
+            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
+            log_sender,
+            node_id,
+            next_subscriber_id: AtomicU64::new(1),
+            committed_index,
+            historical_reader: Some(historical_reader),
+            hlc,
+            watch_registry: None,
+        }
+    }
+
+    /// Set the watch registry for tracking active subscriptions.
+    ///
+    /// When set, active subscriptions are registered with the watch registry,
+    /// enabling `WatchStatus` queries through the RPC interface.
+    ///
+    /// # Arguments
+    /// * `registry` - The watch registry to use for tracking
+    pub fn with_watch_registry(mut self, registry: Arc<dyn aspen_core::WatchRegistry>) -> Self {
+        self.watch_registry = Some(registry);
+        self
+    }
+
+    /// Get a handle to the committed index for external updates.
+    ///
+    /// Call `committed_index_handle.store(new_index, Ordering::Release)` when
+    /// the Raft committed index changes.
+    pub fn committed_index_handle(&self) -> Arc<AtomicU64> {
+        self.committed_index.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
+
+    use super::*;
+
+    #[test]
+    fn test_new_returns_handler_sender_and_committed_index() {
+        let (handler, _sender, committed_index) = LogSubscriberProtocolHandler::new("test-cookie", 42);
+        assert_eq!(committed_index.load(Ordering::SeqCst), 0);
+        // handler was created successfully
+        let _ = format!("{:?}", handler);
+    }
+
+    #[test]
+    fn test_new_sender_is_subscribable() {
+        let (_handler, sender, _idx) = LogSubscriberProtocolHandler::new("cookie", 1);
+        // Sender should support subscriptions
+        let _rx = sender.subscribe();
+    }
+
+    #[test]
+    fn test_committed_index_starts_at_zero() {
+        let (_handler, _sender, committed_index) = LogSubscriberProtocolHandler::new("cookie", 1);
+        assert_eq!(committed_index.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn test_committed_index_handle_returns_shared_clone() {
+        let (handler, _sender, committed_index) = LogSubscriberProtocolHandler::new("cookie", 99);
+
+        // Store via the original handle
+        committed_index.store(42, Ordering::SeqCst);
+
+        // Read via committed_index_handle — should see the same value
+        let handle = handler.committed_index_handle();
+        assert_eq!(handle.load(Ordering::SeqCst), 42);
+
+        // Write via handle, read via original
+        handle.store(100, Ordering::SeqCst);
+        assert_eq!(committed_index.load(Ordering::SeqCst), 100);
+    }
+
+    #[test]
+    fn test_with_sender_creates_handler() {
+        let (log_sender, _) = broadcast::channel(16);
+        let committed_index = Arc::new(AtomicU64::new(55));
+
+        let handler = LogSubscriberProtocolHandler::with_sender("cookie", 7, log_sender, committed_index.clone());
+
+        let handle = handler.committed_index_handle();
+        assert_eq!(handle.load(Ordering::SeqCst), 55);
+    }
+
+    #[test]
+    fn test_with_historical_reader_creates_handler() {
+        #[derive(Debug)]
+        struct MockReader;
+
+        #[async_trait::async_trait]
+        impl HistoricalLogReader for MockReader {
+            async fn read_entries(&self, _start: u64, _end: u64) -> Result<Vec<LogEntryPayload>, std::io::Error> {
+                Ok(vec![])
+            }
+            async fn earliest_available_index(&self) -> Result<Option<u64>, std::io::Error> {
+                Ok(None)
+            }
+        }
+
+        let (log_sender, _) = broadcast::channel(16);
+        let committed_index = Arc::new(AtomicU64::new(0));
+
+        let handler = LogSubscriberProtocolHandler::with_historical_reader(
+            "cookie",
+            10,
+            log_sender,
+            committed_index,
+            Arc::new(MockReader),
+        );
+        let _ = format!("{:?}", handler);
+    }
+
+    #[test]
+    fn test_with_watch_registry() {
+        let (handler, _sender, _idx) = LogSubscriberProtocolHandler::new("cookie", 5);
+        let registry = Arc::new(aspen_core::InMemoryWatchRegistry::new());
+        // with_watch_registry consumes self and returns Self — just verify it doesn't panic
+        let handler = handler.with_watch_registry(registry);
+        let _ = format!("{:?}", handler);
+    }
+
+    #[test]
+    fn test_debug_includes_node_id() {
+        let (handler, _sender, _idx) = LogSubscriberProtocolHandler::new("cookie", 12345);
+        let debug_str = format!("{:?}", handler);
+        assert!(debug_str.contains("12345"), "Debug output should contain node_id: {}", debug_str);
+    }
+
+    #[test]
+    fn test_debug_includes_committed_index() {
+        let (handler, _sender, committed_index) = LogSubscriberProtocolHandler::new("cookie", 1);
+        committed_index.store(999, Ordering::SeqCst);
+        let debug_str = format!("{:?}", handler);
+        assert!(debug_str.contains("999"), "Debug output should contain committed_index value: {}", debug_str);
+    }
+
+    #[test]
+    fn test_multiple_sender_subscribers() {
+        let (_handler, sender, _idx) = LogSubscriberProtocolHandler::new("cookie", 1);
+        let _rx1 = sender.subscribe();
+        let _rx2 = sender.subscribe();
+        let _rx3 = sender.subscribe();
+        // All subscriptions should coexist
+    }
+}
+
+impl ProtocolHandler for LogSubscriberProtocolHandler {
+    async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+        let remote_node_id = connection.remote_id();
+
+        // Try to acquire a connection permit
+        let permit = match self.connection_semaphore.clone().try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                warn!(
+                    "Log subscriber limit reached ({}), rejecting connection from {}",
+                    MAX_LOG_SUBSCRIBERS, remote_node_id
+                );
+                return Err(AcceptError::from_err(std::io::Error::other("subscriber limit reached")));
+            }
+        };
+
+        let subscriber_id = self.next_subscriber_id.fetch_add(1, Ordering::Relaxed);
+        debug!(
+            remote_node = %remote_node_id,
+            subscriber_id = subscriber_id,
+            "accepted log subscriber connection"
+        );
+
+        // Handle the subscriber connection
+        let result = handle_log_subscriber_connection(
+            connection,
+            self.auth_context.clone(),
+            self.log_sender.subscribe(),
+            self.node_id,
+            subscriber_id,
+            self.committed_index.clone(),
+            self.historical_reader.clone(),
+            &self.hlc,
+            self.watch_registry.clone(),
+        )
+        .await;
+
+        drop(permit);
+
+        result.map_err(|err| AcceptError::from_err(std::io::Error::other(err.to_string())))
+    }
+
+    async fn shutdown(&self) {
+        info!("Log subscriber protocol handler shutting down");
+        self.connection_semaphore.close();
+    }
+}

@@ -1,0 +1,50 @@
+[package]
+name = "aspen-coordination"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Distributed coordination primitives for Aspen (locks, elections, queues, etc.)"
+
+[features]
+default = []
+# Enable Verus formal verification ghost code
+verus = []
+# Enable property-based testing with Bolero
+bolero = ["dep:bolero"]
+
+[dependencies]
+# Core types and traits
+aspen-core = { path = "../aspen-core" }
+
+# Extracted crates for lighter dependencies
+aspen-constants = { path = "../aspen-constants" }
+aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-traits = { path = "../aspen-traits" }
+aspen-time = { path = "../aspen-time" }
+
+# Async traits
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+snafu = "0.8.9"
+
+# Async runtime
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
+
+# Logging
+tracing = "0.1"
+
+# Random for backoff jitter
+rand = "0.9"
+
+# Property-based testing (optional)
+bolero = { version = "0.11", optional = true }
+
+[dev-dependencies]
+aspen-testing = { path = "../aspen-testing" }

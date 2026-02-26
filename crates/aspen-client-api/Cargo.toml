@@ -1,0 +1,30 @@
+[package]
+name = "aspen-client-api"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Protocol definitions for Aspen client RPC communication"
+
+[dependencies]
+# Authentication types (optional for WASM guest targets)
+aspen-auth = { path = "../aspen-auth", optional = true }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+postcard = { version = "1.0", features = ["alloc"] }
+
+# Protocol types
+aspen-coordination-protocol = { path = "../aspen-coordination-protocol" }
+aspen-forge-protocol = { path = "../aspen-forge-protocol" }
+aspen-jobs-protocol = { path = "../aspen-jobs-protocol" }
+
+# Error handling
+thiserror = "2.0"
+
+[features]
+default = ["auth"]
+auth = ["dep:aspen-auth"]
+ci = []
+secrets = []
+automerge = []

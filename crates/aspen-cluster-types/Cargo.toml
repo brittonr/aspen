@@ -1,0 +1,19 @@
+[package]
+name = "aspen-cluster-types"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Cluster management types for Aspen distributed systems"
+
+[dependencies]
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+
+# Error handling
+thiserror = "2.0"
+
+# P2P networking (for NodeAddress wrapper)
+iroh = { version = "0.95.1", default-features = false }
+
+[dev-dependencies]
+serde_json = "1.0"

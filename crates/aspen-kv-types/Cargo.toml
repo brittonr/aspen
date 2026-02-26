@@ -1,0 +1,19 @@
+[package]
+name = "aspen-kv-types"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Key-value operation types for Aspen distributed systems"
+
+[dependencies]
+# Constants (for validation limits)
+aspen-constants = { path = "../aspen-constants" }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+
+# Error handling
+thiserror = "2.0"
+
+[dev-dependencies]
+serde_json = "1.0"

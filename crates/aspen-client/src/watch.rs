@@ -1,0 +1,795 @@
+//! Streaming watch client for real-time key change notifications.
+//!
+//! Provides a high-level API for subscribing to key changes via the log
+//! subscription protocol (LOG_SUBSCRIBER_ALPN).
+//!
+//! ## Protocol Flow
+//!
+//! 1. Connect to node via `LOG_SUBSCRIBER_ALPN` ("aspen-logs")
+//! 2. Complete cookie-based authentication (same as Raft auth)
+//! 3. Send `SubscribeRequest` with optional key prefix filter
+//! 4. Receive streaming `LogEntryMessage` events
+//!
+//! ## Usage
+//!
+//! ```ignore
+//! use aspen::client::watch::{WatchSession, WatchEvent};
+//!
+//! // Connect to a node
+//! let session = WatchSession::connect(
+//!     endpoint,
+//!     node_addr,
+//!     "cluster-cookie",
+//! ).await?;
+//!
+//! // Subscribe to key prefix with historical replay
+//! let mut subscription = session.subscribe("user:", 0).await?;
+//!
+//! // Receive events
+//! while let Some(event) = subscription.next().await {
+//!     match event {
+//!         WatchEvent::Set { key, value, index } => {
+//!             println!("Key {} set to {:?} at index {}", key, value, index);
+//!         }
+//!         WatchEvent::Delete { key, index } => {
+//!             println!("Key {} deleted at index {}", key, index);
+//!         }
+//!         WatchEvent::Keepalive { committed_index } => {
+//!             println!("Keepalive: committed index {}", committed_index);
+//!         }
+//!     }
+//! }
+//! ```
+
+use std::time::Duration;
+
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
+use aspen_auth::hmac_auth::AuthChallenge;
+use aspen_auth::hmac_auth::AuthContext;
+use aspen_auth::hmac_auth::AuthResult;
+use aspen_transport::log_subscriber::KvOperation;
+use aspen_transport::log_subscriber::LOG_SUBSCRIBER_ALPN;
+use aspen_transport::log_subscriber::LogEntryMessage;
+use aspen_transport::log_subscriber::LogEntryPayload;
+use aspen_transport::log_subscriber::MAX_AUTH_MESSAGE_SIZE;
+use aspen_transport::log_subscriber::MAX_LOG_ENTRY_MESSAGE_SIZE;
+use aspen_transport::log_subscriber::SUBSCRIBE_HANDSHAKE_TIMEOUT;
+use aspen_transport::log_subscriber::SubscribeRequest;
+use aspen_transport::log_subscriber::SubscribeResponse;
+use aspen_transport::log_subscriber::wire::read_message;
+use iroh::Endpoint;
+use iroh::EndpointAddr;
+use iroh::endpoint::Connection;
+use tokio::sync::mpsc;
+use tokio::time::timeout;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
+
+/// Event emitted by a watch subscription.
+#[derive(Debug, Clone)]
+pub enum WatchEvent {
+    /// A key was set.
+    Set {
+        /// Key that was modified.
+        key: Vec<u8>,
+        /// New value.
+        value: Vec<u8>,
+        /// Log index of this change.
+        index: u64,
+        /// Raft term when change was committed.
+        term: u64,
+        /// Timestamp when committed (ms since epoch).
+        committed_at_ms: u64,
+    },
+    /// A key was set with TTL.
+    SetWithTTL {
+        /// Key that was modified.
+        key: Vec<u8>,
+        /// New value.
+        value: Vec<u8>,
+        /// Expiration time (ms since epoch).
+        expires_at_ms: u64,
+        /// Log index of this change.
+        index: u64,
+        /// Raft term when change was committed.
+        term: u64,
+        /// Timestamp when committed (ms since epoch).
+        committed_at_ms: u64,
+    },
+    /// A key was deleted.
+    Delete {
+        /// Key that was deleted.
+        key: Vec<u8>,
+        /// Log index of this change.
+        index: u64,
+        /// Raft term when change was committed.
+        term: u64,
+        /// Timestamp when committed (ms since epoch).
+        committed_at_ms: u64,
+    },
+    /// Multiple keys were set atomically.
+    SetMulti {
+        /// Keys and values that were set.
+        pairs: Vec<(Vec<u8>, Vec<u8>)>,
+        /// Log index of this change.
+        index: u64,
+        /// Raft term when change was committed.
+        term: u64,
+        /// Timestamp when committed (ms since epoch).
+        committed_at_ms: u64,
+    },
+    /// Multiple keys were deleted atomically.
+    DeleteMulti {
+        /// Keys that were deleted.
+        keys: Vec<Vec<u8>>,
+        /// Log index of this change.
+        index: u64,
+        /// Raft term when change was committed.
+        term: u64,
+        /// Timestamp when committed (ms since epoch).
+        committed_at_ms: u64,
+    },
+    /// Compare-and-swap succeeded.
+    CompareAndSwap {
+        /// Key that was modified.
+        key: Vec<u8>,
+        /// New value.
+        new_value: Vec<u8>,
+        /// Log index of this change.
+        index: u64,
+        /// Raft term when change was committed.
+        term: u64,
+        /// Timestamp when committed (ms since epoch).
+        committed_at_ms: u64,
+    },
+    /// Keepalive message from server.
+    Keepalive {
+        /// Current committed index.
+        committed_index: u64,
+        /// Server timestamp (ms since epoch).
+        timestamp_ms: u64,
+    },
+    /// Cluster membership changed.
+    MembershipChange {
+        /// Description of the change.
+        description: String,
+        /// Log index of this change.
+        index: u64,
+    },
+    /// Stream is ending.
+    EndOfStream {
+        /// Reason for termination.
+        reason: String,
+    },
+}
+
+impl WatchEvent {
+    /// Convert a LogEntryPayload into a vector of WatchEvents.
+    ///
+    /// Dispatches each `KvOperation` variant to the appropriate converter
+    /// function. Simple single-key operations are converted inline; batch,
+    /// multi-key, and transaction operations delegate to private helpers.
+    pub fn from_payload(payload: LogEntryPayload) -> Vec<WatchEvent> {
+        let LogEntryPayload {
+            index,
+            term,
+            hlc_timestamp,
+            operation,
+        } = payload;
+        let committed_at_ms = hlc_timestamp.to_unix_ms();
+
+        match operation {
+            KvOperation::Set { key, value } | KvOperation::SetWithLease { key, value, .. } => {
+                convert_kv_set(key, value, index, term, committed_at_ms)
+            }
+            KvOperation::SetWithTTL {
+                key,
+                value,
+                expires_at_ms,
+            } => convert_kv_set_with_ttl(key, value, expires_at_ms, index, term, committed_at_ms),
+            KvOperation::Delete { key } | KvOperation::CompareAndDelete { key, .. } => {
+                convert_kv_delete(key, index, term, committed_at_ms)
+            }
+            KvOperation::DeleteMulti { keys } => convert_kv_delete_multi(keys, index, term, committed_at_ms),
+            KvOperation::CompareAndSwap { key, new_value, .. } => {
+                convert_kv_cas(key, new_value, index, term, committed_at_ms)
+            }
+            KvOperation::SetMulti { pairs }
+            | KvOperation::SetMultiWithTTL { pairs, .. }
+            | KvOperation::SetMultiWithLease { pairs, .. } => convert_multi_set(pairs, index, term, committed_at_ms),
+            KvOperation::Batch { operations } | KvOperation::ConditionalBatch { operations, .. } => {
+                convert_batch_operations(operations, index, term, committed_at_ms)
+            }
+            KvOperation::OptimisticTransaction { write_set, .. } => {
+                convert_batch_operations(write_set, index, term, committed_at_ms)
+            }
+            KvOperation::Transaction { success, failure, .. } => {
+                convert_transaction(success, failure, index, term, committed_at_ms)
+            }
+            KvOperation::Noop
+            | KvOperation::LeaseGrant { .. }
+            | KvOperation::LeaseRevoke { .. }
+            | KvOperation::LeaseKeepalive { .. } => vec![],
+            KvOperation::MembershipChange { description } => {
+                vec![WatchEvent::MembershipChange { description, index }]
+            }
+        }
+    }
+}
+
+/// Convert a single key Set or SetWithLease operation into a Set watch event.
+fn convert_kv_set(key: Vec<u8>, value: Vec<u8>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+    vec![WatchEvent::Set {
+        key,
+        value,
+        index,
+        term,
+        committed_at_ms,
+    }]
+}
+
+/// Convert a SetWithTTL operation into a SetWithTTL watch event.
+fn convert_kv_set_with_ttl(
+    key: Vec<u8>,
+    value: Vec<u8>,
+    expires_at_ms: u64,
+    index: u64,
+    term: u64,
+    committed_at_ms: u64,
+) -> Vec<WatchEvent> {
+    vec![WatchEvent::SetWithTTL {
+        key,
+        value,
+        expires_at_ms,
+        index,
+        term,
+        committed_at_ms,
+    }]
+}
+
+/// Convert a Delete or CompareAndDelete operation into a Delete watch event.
+fn convert_kv_delete(key: Vec<u8>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+    vec![WatchEvent::Delete {
+        key,
+        index,
+        term,
+        committed_at_ms,
+    }]
+}
+
+/// Convert a DeleteMulti operation into a DeleteMulti watch event.
+fn convert_kv_delete_multi(keys: Vec<Vec<u8>>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+    vec![WatchEvent::DeleteMulti {
+        keys,
+        index,
+        term,
+        committed_at_ms,
+    }]
+}
+
+/// Convert a CompareAndSwap operation into a CompareAndSwap watch event.
+fn convert_kv_cas(key: Vec<u8>, new_value: Vec<u8>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+    vec![WatchEvent::CompareAndSwap {
+        key,
+        new_value,
+        index,
+        term,
+        committed_at_ms,
+    }]
+}
+
+/// Convert a multi-set operation (SetMulti, SetMultiWithTTL, SetMultiWithLease)
+/// into a single SetMulti watch event.
+fn convert_multi_set(pairs: Vec<(Vec<u8>, Vec<u8>)>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+    vec![WatchEvent::SetMulti {
+        pairs,
+        index,
+        term,
+        committed_at_ms,
+    }]
+}
+
+/// Convert a list of (is_set, key, value) tuples into individual Set/Delete
+/// watch events. Used by Batch, ConditionalBatch, and OptimisticTransaction.
+fn convert_batch_operations(
+    operations: Vec<(bool, Vec<u8>, Vec<u8>)>,
+    index: u64,
+    term: u64,
+    committed_at_ms: u64,
+) -> Vec<WatchEvent> {
+    operations
+        .into_iter()
+        .map(|(is_set, key, value)| {
+            if is_set {
+                WatchEvent::Set {
+                    key,
+                    value,
+                    index,
+                    term,
+                    committed_at_ms,
+                }
+            } else {
+                WatchEvent::Delete {
+                    key,
+                    index,
+                    term,
+                    committed_at_ms,
+                }
+            }
+        })
+        .collect()
+}
+
+/// Convert a Transaction's success and failure branches into watch events.
+/// Includes both branches since we don't know which executed at watch time.
+/// Op types: 0=Put, 1=Delete, other=Get/Range (ignored).
+fn convert_transaction(
+    success: Vec<(u8, Vec<u8>, Vec<u8>)>,
+    failure: Vec<(u8, Vec<u8>, Vec<u8>)>,
+    index: u64,
+    term: u64,
+    committed_at_ms: u64,
+) -> Vec<WatchEvent> {
+    let mut events = Vec::new();
+    for (op_type, key, value) in success.into_iter().chain(failure.into_iter()) {
+        match op_type {
+            0 => {
+                events.push(WatchEvent::Set {
+                    key,
+                    value,
+                    index,
+                    term,
+                    committed_at_ms,
+                });
+            }
+            1 => {
+                events.push(WatchEvent::Delete {
+                    key,
+                    index,
+                    term,
+                    committed_at_ms,
+                });
+            }
+            _ => {
+                // Get/Range - no watch event needed
+            }
+        }
+    }
+    events
+}
+
+/// A connected watch session to an Aspen node.
+///
+/// Maintains an authenticated connection to the node's log subscriber
+/// protocol and can create multiple subscriptions.
+pub struct WatchSession {
+    /// The underlying QUIC connection.
+    connection: Connection,
+    /// Current committed index on the server.
+    current_index: u64,
+    /// Node ID of the connected server.
+    node_id: u64,
+}
+
+impl WatchSession {
+    /// Connect to a node's log subscriber endpoint.
+    ///
+    /// # Arguments
+    /// * `endpoint` - Iroh endpoint to use for the connection
+    /// * `node_addr` - Address of the target node
+    /// * `cluster_cookie` - Shared secret for authentication
+    ///
+    /// # Returns
+    /// A connected and authenticated watch session.
+    pub async fn connect(endpoint: &Endpoint, target_addr: EndpointAddr, cluster_cookie: &str) -> Result<Self> {
+        let connection = endpoint
+            .connect(target_addr, LOG_SUBSCRIBER_ALPN)
+            .await
+            .context("failed to connect to log subscriber endpoint")?;
+
+        debug!(
+            remote = %connection.remote_id(),
+            "connected to log subscriber endpoint"
+        );
+
+        // Perform authentication handshake
+        let node_id = Self::authenticate(&connection, cluster_cookie, endpoint).await?;
+
+        info!(node_id = node_id, "authenticated to log subscriber");
+
+        Ok(Self {
+            connection,
+            current_index: 0,
+            node_id,
+        })
+    }
+
+    /// Perform the authentication handshake.
+    ///
+    /// Opens a bidirectional stream (matched by the server's first `accept_bi`).
+    /// The server sends a length-prefixed challenge, we reply with our HMAC
+    /// response (+ finish send side), then read the length-prefixed auth result.
+    async fn authenticate(connection: &Connection, cluster_cookie: &str, endpoint: &Endpoint) -> Result<u64> {
+        let (mut send, mut recv) = connection.open_bi().await.context("failed to open auth stream")?;
+
+        // Receive length-prefixed auth challenge
+        let challenge: AuthChallenge = timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
+            read_message(&mut recv, MAX_AUTH_MESSAGE_SIZE).await.context("failed to read auth challenge")
+        })
+        .await
+        .context("auth challenge timeout")??;
+
+        debug!(nonce = %hex::encode(challenge.nonce), "received auth challenge");
+
+        // Compute response and send (server reads via read_to_end after we finish)
+        let auth_context = AuthContext::new(cluster_cookie);
+        let client_endpoint_id: [u8; 32] = *endpoint.id().as_bytes();
+        let response = auth_context.compute_response(&challenge, &client_endpoint_id);
+
+        let response_bytes = postcard::to_stdvec(&response).context("failed to serialize auth response")?;
+        send.write_all(&response_bytes).await.context("failed to send auth response")?;
+        send.finish().context("failed to finish auth response stream")?;
+
+        // Receive length-prefixed auth result (server finishes after writing)
+        let result: AuthResult = timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
+            read_message(&mut recv, MAX_AUTH_MESSAGE_SIZE).await.context("failed to read auth result")
+        })
+        .await
+        .context("auth result timeout")??;
+
+        if !result.is_ok() {
+            bail!("authentication failed: {:?}", result);
+        }
+
+        // The actual node_id comes from the subscribe response
+        Ok(0)
+    }
+
+    /// Subscribe to key changes with an optional prefix filter.
+    ///
+    /// # Arguments
+    /// * `prefix` - Key prefix to watch (empty string for all keys)
+    /// * `start_index` - Starting log index (0 = from beginning, u64::MAX = latest only)
+    ///
+    /// # Returns
+    /// A subscription that can be used to receive watch events.
+    pub async fn subscribe(&self, prefix: impl Into<Vec<u8>>, start_index: u64) -> Result<WatchSubscription> {
+        let prefix = prefix.into();
+
+        // Open stream for subscription (matched by the server's second `accept_bi`)
+        let (mut send, mut recv) = self.connection.open_bi().await.context("failed to open subscription stream")?;
+
+        // Send subscribe request (server reads via read_to_end after we finish)
+        let request = SubscribeRequest::with_prefix(start_index, prefix.clone());
+        let request_bytes = postcard::to_stdvec(&request).context("failed to serialize subscribe request")?;
+        send.write_all(&request_bytes).await.context("failed to send subscribe request")?;
+        send.finish().context("failed to finish subscribe request stream")?;
+
+        // Receive length-prefixed subscribe response
+        let response: SubscribeResponse = timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
+            read_message(&mut recv, MAX_AUTH_MESSAGE_SIZE).await.context("failed to read subscribe response")
+        })
+        .await
+        .context("subscribe response timeout")??;
+
+        match response {
+            SubscribeResponse::Accepted { current_index, node_id } => {
+                debug!(
+                    node_id = node_id,
+                    current_index = current_index,
+                    prefix = %String::from_utf8_lossy(&prefix),
+                    "subscription accepted"
+                );
+
+                // Create channel for events
+                let (event_tx, event_rx) = mpsc::channel(1000);
+
+                // Spawn background task to read events
+                let recv_handle = tokio::spawn(async move {
+                    Self::event_reader(recv, event_tx).await;
+                });
+
+                Ok(WatchSubscription {
+                    event_rx,
+                    current_index,
+                    prefix,
+                    _recv_handle: recv_handle,
+                })
+            }
+            SubscribeResponse::Rejected { reason } => {
+                bail!("subscription rejected: {}", reason);
+            }
+        }
+    }
+
+    /// Background task that reads length-prefixed events from the stream.
+    async fn event_reader(mut recv: iroh::endpoint::RecvStream, event_tx: mpsc::Sender<WatchEvent>) {
+        loop {
+            // Read next length-prefixed message
+            let message: LogEntryMessage = match read_message(&mut recv, MAX_LOG_ENTRY_MESSAGE_SIZE).await {
+                Ok(m) => m,
+                Err(e) => {
+                    // read_exact returns an error when the stream is finished/closed
+                    let msg = e.to_string();
+                    if msg.contains("closed") || msg.contains("finished") || msg.contains("reset") {
+                        debug!("log subscriber stream closed gracefully");
+                        let _ = event_tx
+                            .send(WatchEvent::EndOfStream {
+                                reason: "stream closed".to_string(),
+                            })
+                            .await;
+                    } else {
+                        error!(error = %e, "error reading from log subscriber stream");
+                        let _ = event_tx
+                            .send(WatchEvent::EndOfStream {
+                                reason: format!("read error: {}", e),
+                            })
+                            .await;
+                    }
+                    break;
+                }
+            };
+
+            // Convert to events
+            match message {
+                LogEntryMessage::Entry(payload) => {
+                    let events = WatchEvent::from_payload(payload);
+                    for event in events {
+                        if event_tx.send(event).await.is_err() {
+                            debug!("event receiver dropped, stopping reader");
+                            return;
+                        }
+                    }
+                }
+                LogEntryMessage::Keepalive {
+                    committed_index,
+                    hlc_timestamp,
+                } => {
+                    if event_tx
+                        .send(WatchEvent::Keepalive {
+                            committed_index,
+                            timestamp_ms: hlc_timestamp.to_unix_ms(),
+                        })
+                        .await
+                        .is_err()
+                    {
+                        debug!("event receiver dropped, stopping reader");
+                        return;
+                    }
+                }
+                LogEntryMessage::EndOfStream { reason } => {
+                    let _ = event_tx
+                        .send(WatchEvent::EndOfStream {
+                            reason: reason.to_string(),
+                        })
+                        .await;
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Get the current committed index.
+    pub fn current_index(&self) -> u64 {
+        self.current_index
+    }
+
+    /// Get the connected node ID.
+    pub fn node_id(&self) -> u64 {
+        self.node_id
+    }
+
+    /// Close the session.
+    pub fn close(self) {
+        self.connection.close(0u32.into(), b"session closed");
+    }
+}
+
+/// An active subscription to key changes.
+///
+/// Receives events for keys matching the subscription prefix.
+pub struct WatchSubscription {
+    /// Channel for receiving events.
+    event_rx: mpsc::Receiver<WatchEvent>,
+    /// Current committed index at subscription time.
+    current_index: u64,
+    /// Key prefix being watched.
+    prefix: Vec<u8>,
+    /// Handle to the background reader task.
+    _recv_handle: tokio::task::JoinHandle<()>,
+}
+
+impl WatchSubscription {
+    /// Receive the next event.
+    ///
+    /// Returns `None` when the subscription ends (connection closed or error).
+    pub async fn next(&mut self) -> Option<WatchEvent> {
+        self.event_rx.recv().await
+    }
+
+    /// Receive the next event with a timeout.
+    ///
+    /// Returns `None` if no event is received within the timeout.
+    pub async fn next_timeout(&mut self, duration: Duration) -> Option<WatchEvent> {
+        timeout(duration, self.event_rx.recv()).await.ok().flatten()
+    }
+
+    /// Try to receive an event without blocking.
+    ///
+    /// Returns `None` if no event is immediately available.
+    pub fn try_next(&mut self) -> Option<WatchEvent> {
+        self.event_rx.try_recv().ok()
+    }
+
+    /// Get the current committed index at subscription time.
+    pub fn current_index(&self) -> u64 {
+        self.current_index
+    }
+
+    /// Get the key prefix being watched.
+    pub fn prefix(&self) -> &[u8] {
+        &self.prefix
+    }
+
+    /// Check if more events are available without blocking.
+    pub fn is_empty(&self) -> bool {
+        self.event_rx.is_empty()
+    }
+
+    /// Get the number of pending events in the buffer.
+    pub fn pending_count(&self) -> usize {
+        self.event_rx.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use aspen_core::hlc::SerializableTimestamp;
+    use aspen_core::hlc::create_hlc;
+    use aspen_core::hlc::new_timestamp;
+
+    use super::*;
+
+    #[test]
+    fn test_watch_event_from_set_operation() {
+        // Use a fixed timestamp so the assertion is deterministic
+        let fixed_ts = SerializableTimestamp::from_millis(1700000000000);
+        let payload = LogEntryPayload {
+            index: 100,
+            term: 5,
+            hlc_timestamp: fixed_ts,
+            operation: KvOperation::Set {
+                key: b"test_key".to_vec(),
+                value: b"test_value".to_vec(),
+            },
+        };
+
+        let events = WatchEvent::from_payload(payload);
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            WatchEvent::Set {
+                key,
+                value,
+                index,
+                term,
+                committed_at_ms,
+            } => {
+                assert_eq!(key, b"test_key");
+                assert_eq!(value, b"test_value");
+                assert_eq!(*index, 100);
+                assert_eq!(*term, 5);
+                assert_eq!(*committed_at_ms, 1700000000000);
+            }
+            _ => panic!("expected Set event"),
+        }
+    }
+
+    #[test]
+    fn test_watch_event_from_delete_operation() {
+        // Use a fixed timestamp so the assertion is deterministic
+        let fixed_ts = SerializableTimestamp::from_millis(1700000100000);
+        let payload = LogEntryPayload {
+            index: 101,
+            term: 5,
+            hlc_timestamp: fixed_ts,
+            operation: KvOperation::Delete {
+                key: b"deleted_key".to_vec(),
+            },
+        };
+
+        let events = WatchEvent::from_payload(payload);
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            WatchEvent::Delete {
+                key,
+                index,
+                term,
+                committed_at_ms,
+            } => {
+                assert_eq!(key, b"deleted_key");
+                assert_eq!(*index, 101);
+                assert_eq!(*term, 5);
+                assert_eq!(*committed_at_ms, 1700000100000);
+            }
+            _ => panic!("expected Delete event"),
+        }
+    }
+
+    #[test]
+    fn test_watch_event_from_batch_operation() {
+        let hlc = create_hlc("test-node");
+        let payload = LogEntryPayload {
+            index: 102,
+            term: 5,
+            hlc_timestamp: SerializableTimestamp::new(new_timestamp(&hlc)),
+            operation: KvOperation::Batch {
+                operations: vec![
+                    (true, b"set_key".to_vec(), b"set_value".to_vec()),
+                    (false, b"del_key".to_vec(), vec![]),
+                ],
+            },
+        };
+
+        let events = WatchEvent::from_payload(payload);
+        assert_eq!(events.len(), 2);
+
+        match &events[0] {
+            WatchEvent::Set { key, value, .. } => {
+                assert_eq!(key, b"set_key");
+                assert_eq!(value, b"set_value");
+            }
+            _ => panic!("expected Set event"),
+        }
+
+        match &events[1] {
+            WatchEvent::Delete { key, .. } => {
+                assert_eq!(key, b"del_key");
+            }
+            _ => panic!("expected Delete event"),
+        }
+    }
+
+    #[test]
+    fn test_watch_event_from_noop_is_empty() {
+        let hlc = create_hlc("test-node");
+        let payload = LogEntryPayload {
+            index: 103,
+            term: 5,
+            hlc_timestamp: SerializableTimestamp::new(new_timestamp(&hlc)),
+            operation: KvOperation::Noop,
+        };
+
+        let events = WatchEvent::from_payload(payload);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_watch_event_from_membership_change() {
+        let hlc = create_hlc("test-node");
+        let payload = LogEntryPayload {
+            index: 104,
+            term: 5,
+            hlc_timestamp: SerializableTimestamp::new(new_timestamp(&hlc)),
+            operation: KvOperation::MembershipChange {
+                description: "added node 3".to_string(),
+            },
+        };
+
+        let events = WatchEvent::from_payload(payload);
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            WatchEvent::MembershipChange { description, index } => {
+                assert_eq!(description, "added node 3");
+                assert_eq!(*index, 104);
+            }
+            _ => panic!("expected MembershipChange event"),
+        }
+    }
+}

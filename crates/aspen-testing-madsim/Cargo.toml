@@ -1,0 +1,53 @@
+[package]
+name = "aspen-testing-madsim"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Madsim-based deterministic simulation testing for Aspen"
+authors = ["Aspen Contributors"]
+
+[dependencies]
+# Core Aspen dependencies
+aspen-core = { version = "0.1.0", path = "../aspen-core" }
+aspen-testing-core = { version = "0.1.0", path = "../aspen-testing-core" }
+aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
+aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types" }
+aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
+aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
+aspen-raft = { version = "0.1.0", path = "../aspen-raft", features = ["testing"] }
+
+# Simulation testing
+madsim = { version = "0.2.34", features = ["macros"] }
+mad-turmoil = { git = "https://github.com/s2-streamstore/mad-turmoil", rev = "ef75169ec299c4160af3052b2194b3ee5b048b0a" }
+
+# Raft consensus
+openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
+
+# Iroh networking (for test member info)
+iroh = "0.95.1"
+iroh-base = "0.95.1"
+
+# Async runtime
+tokio = { version = "1.48.0", features = ["sync", "time"] }
+async-trait = "0.1"
+
+# Error handling
+anyhow = "1.0"
+snafu = "0.8.9"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Utilities
+rand = "0.9"
+tracing = "0.1"
+parking_lot = "0.12"
+
+[dev-dependencies]
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }
+proptest = "1.0"
+
+[features]
+default = []
+sql = ["aspen-core/sql", "aspen-raft/sql"]

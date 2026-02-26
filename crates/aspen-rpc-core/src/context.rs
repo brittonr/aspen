@@ -1,0 +1,497 @@
+//! Client protocol context.
+//!
+//! Contains the shared context and dependencies needed by RPC handlers.
+//! This is the central dependency container that handlers receive to access
+//! cluster services.
+
+use std::sync::Arc;
+use std::time::Instant;
+
+use aspen_auth::TokenVerifier;
+use aspen_core::ClusterController;
+#[cfg(feature = "global-discovery")]
+use aspen_core::ContentDiscovery;
+use aspen_core::DocsSyncProvider;
+use aspen_core::EndpointProvider;
+use aspen_core::KeyValueStore;
+use aspen_core::NetworkFactory;
+use aspen_core::PeerManager;
+use aspen_core::SharedAppRegistry;
+use aspen_core::WatchRegistry;
+use aspen_raft::StateMachineVariant;
+use aspen_sharding::ShardTopology;
+
+use crate::proxy::ProxyConfig;
+
+/// Context for Client protocol handler with all dependencies.
+///
+/// This struct contains all the services and configuration needed by RPC handlers.
+/// It is constructed during server initialization and passed to each handler.
+///
+/// # Feature-Gated Fields
+///
+/// Many fields are optional and gated behind feature flags:
+/// - `sql`: SQL query executor
+/// - `blob`: Blob store and replication manager
+/// - `forge`: Forge node and federation services
+/// - `ci`: CI orchestrator and trigger service
+/// - `secrets`: Secrets service
+/// - `global-discovery`: Content discovery service
+///
+/// # Tiger Style
+///
+/// - Context is immutable after construction (Clone-friendly)
+/// - All fields use Arc for shared ownership
+/// - Optional fields use Option<Arc<T>> pattern
+#[derive(Clone)]
+pub struct ClientProtocolContext {
+    /// Node identifier.
+    pub node_id: u64,
+    /// Cluster controller for Raft operations.
+    pub controller: Arc<dyn ClusterController>,
+    /// Key-value store interface.
+    pub kv_store: Arc<dyn KeyValueStore>,
+    /// SQL query executor for read-only SQL queries.
+    #[cfg(feature = "sql")]
+    pub sql_executor: Arc<dyn aspen_sql::SqlQueryExecutor>,
+    /// State machine for direct reads (lease queries, etc.).
+    pub state_machine: Option<StateMachineVariant>,
+    /// Endpoint provider for peer info.
+    pub endpoint_manager: Arc<dyn EndpointProvider>,
+    /// Blob store for content-addressed storage (optional).
+    #[cfg(feature = "blob")]
+    pub blob_store: Option<Arc<aspen_blob::IrohBlobStore>>,
+    /// Blob replication manager for coordinating blob replication across nodes (optional).
+    #[cfg(feature = "blob")]
+    pub blob_replication_manager: Option<aspen_blob::BlobReplicationManager>,
+    /// Peer manager for cluster-to-cluster sync (optional).
+    pub peer_manager: Option<Arc<dyn PeerManager>>,
+    /// Docs sync resources for iroh-docs operations (optional).
+    pub docs_sync: Option<Arc<dyn DocsSyncProvider>>,
+    /// Cluster cookie for ticket generation.
+    pub cluster_cookie: String,
+    /// Node start time for uptime calculation.
+    pub start_time: Instant,
+    /// Network factory for dynamic peer addition (optional).
+    pub network_factory: Option<Arc<dyn NetworkFactory>>,
+    /// Token verifier for capability-based authorization.
+    pub token_verifier: Option<Arc<TokenVerifier>>,
+    /// Whether to require authentication for all authorized requests.
+    pub require_auth: bool,
+    /// Shard topology for GetTopology RPC (optional).
+    pub topology: Option<Arc<tokio::sync::RwLock<ShardTopology>>>,
+    /// Content discovery service for DHT announcements and provider lookup (optional).
+    #[cfg(feature = "global-discovery")]
+    pub content_discovery: Option<Arc<dyn ContentDiscovery>>,
+    /// Forge node for decentralized Git operations (optional).
+    #[cfg(feature = "forge")]
+    pub forge_node: Option<Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>>,
+    /// Job manager for distributed job queue operations (optional).
+    #[cfg(feature = "jobs")]
+    pub job_manager: Option<Arc<aspen_jobs::JobManager<dyn KeyValueStore>>>,
+    /// Worker service for querying worker status (optional).
+    #[cfg(feature = "worker")]
+    pub worker_service: Option<Arc<aspen_cluster::worker_service::WorkerService>>,
+    /// Distributed worker coordinator for external worker registration (optional).
+    #[cfg(feature = "jobs")]
+    pub worker_coordinator: Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
+    /// Watch registry for tracking active watch subscriptions (optional).
+    pub watch_registry: Option<Arc<dyn WatchRegistry>>,
+    /// Hook service for event-driven automation (optional).
+    #[cfg(feature = "hooks")]
+    pub hook_service: Option<Arc<aspen_hooks::HookService>>,
+    /// Hooks configuration for handler metadata.
+    pub hooks_config: aspen_hooks_types::HooksConfig,
+    /// Secrets service for Vault-compatible secrets management (optional).
+    ///
+    /// Type-erased to avoid circular dependency with aspen-rpc-handlers.
+    /// Use `secrets_service.as_ref().and_then(|s| s.downcast_ref::<T>())` to access.
+    pub secrets_service: Option<Arc<dyn std::any::Any + Send + Sync>>,
+    /// Federation cluster identity (optional).
+    #[cfg(feature = "forge")]
+    pub federation_identity: Option<Arc<aspen_cluster::federation::SignedClusterIdentity>>,
+    /// Federation trust manager (optional).
+    #[cfg(feature = "forge")]
+    pub federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
+    /// Federation discovery service (optional).
+    #[cfg(all(feature = "forge", feature = "global-discovery"))]
+    pub federation_discovery: Option<Arc<aspen_cluster::federation::FederationDiscoveryService>>,
+    /// CI pipeline orchestrator for triggering and monitoring pipelines (optional).
+    #[cfg(feature = "ci")]
+    pub ci_orchestrator: Option<Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+    /// CI trigger service for watching repositories (optional).
+    /// Requires both `ci` and `nickel` features since TriggerService depends on Nickel config.
+    #[cfg(all(feature = "ci", feature = "nickel"))]
+    pub ci_trigger_service: Option<Arc<aspen_ci::TriggerService>>,
+    /// Nix cache signer for narinfo signing (optional).
+    #[cfg(feature = "nix-cache-gateway")]
+    pub nix_cache_signer: Option<Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>>,
+    /// Service executors for WASM plugin host function dispatch.
+    ///
+    /// Each executor handles a domain (docs, jobs, etc.) and is called
+    /// by the `service_execute` host function. Created during node setup
+    /// by the handler crates that own the concrete service types.
+    pub service_executors: Vec<Arc<dyn aspen_core::ServiceExecutor>>,
+    /// Application registry for capability-aware dispatch and federation advertisement.
+    ///
+    /// Populated automatically during handler registration. Used to:
+    /// 1. Return `CapabilityUnavailable` responses with the required app name
+    /// 2. Advertise capabilities to federated clusters via gossip
+    pub app_registry: SharedAppRegistry,
+    /// Configuration for cross-cluster request proxying.
+    ///
+    /// Controls whether requests for unavailable apps are forwarded to discovered clusters.
+    pub proxy_config: ProxyConfig,
+}
+
+impl std::fmt::Debug for ClientProtocolContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientProtocolContext")
+            .field("node_id", &self.node_id)
+            .field("cluster_cookie", &self.cluster_cookie)
+            .finish_non_exhaustive()
+    }
+}
+
+impl ClientProtocolContext {
+    /// Log security warnings about authentication configuration.
+    ///
+    /// Call this during server initialization to alert operators about
+    /// potentially insecure configurations.
+    pub fn log_auth_warnings(&self) {
+        if !self.require_auth {
+            tracing::warn!(
+                target: "aspen_rpc::security",
+                node_id = self.node_id,
+                "SECURITY WARNING: require_auth=false - unauthenticated RPC requests are allowed. \
+                 Set require_auth=true for production deployments."
+            );
+        }
+
+        if self.token_verifier.is_none() {
+            tracing::warn!(
+                target: "aspen_rpc::security",
+                node_id = self.node_id,
+                "SECURITY WARNING: token_verifier not configured - capability-based authorization disabled. \
+                 Configure token_verifier for production deployments."
+            );
+        }
+
+        if self.require_auth && self.token_verifier.is_some() {
+            tracing::info!(
+                target: "aspen_rpc::security",
+                node_id = self.node_id,
+                "Authentication configured: require_auth=true, token_verifier=enabled"
+            );
+        }
+    }
+}
+
+// =============================================================================
+// Test Support
+// =============================================================================
+
+#[cfg(feature = "testing")]
+pub mod test_support {
+    //! Test utilities for creating mock `ClientProtocolContext` instances.
+    //!
+    //! Provides a builder pattern for constructing test contexts with configurable
+    //! mock dependencies. Uses `DeterministicKeyValueStore` and `DeterministicClusterController`
+    //! from `aspen_core` for in-memory testing.
+    //!
+    //! # MockEndpointProvider
+    //!
+    //! The `MockEndpointProvider` creates a real Iroh endpoint for compatibility
+    //! with handler code that needs to access endpoint information, without requiring
+    //! actual network connections.
+    //!
+    //! ```ignore
+    //! use aspen_rpc_core::test_support::MockEndpointProvider;
+    //!
+    //! let provider = MockEndpointProvider::with_seed(12345).await;
+    //! let peer_id = provider.peer_id().await;
+    //! ```
+
+    use aspen_testing::DeterministicClusterController;
+    use aspen_testing::DeterministicKeyValueStore;
+
+    use super::*;
+
+    // =============================================================================
+    // MockEndpointProvider
+    // =============================================================================
+
+    /// Mock implementation of `EndpointProvider` for testing.
+    ///
+    /// Provides deterministic responses without real Iroh networking.
+    /// Creates a real Iroh endpoint for compatibility with handler code that
+    /// needs to access the endpoint.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use aspen_rpc_core::test_support::MockEndpointProvider;
+    ///
+    /// #[tokio::test]
+    /// async fn test_handler() {
+    ///     let provider = MockEndpointProvider::new().await;
+    ///     let peer_id = provider.peer_id().await;
+    /// }
+    /// ```
+    pub struct MockEndpointProvider {
+        /// Iroh endpoint for mock network operations.
+        endpoint: iroh::Endpoint,
+        /// Node address for peer discovery.
+        node_addr: iroh::EndpointAddr,
+        /// Public key bytes.
+        public_key: Vec<u8>,
+        /// Peer ID string.
+        peer_id: String,
+    }
+
+    impl MockEndpointProvider {
+        /// Create a new mock endpoint provider with a random secret key.
+        ///
+        /// This creates an isolated Iroh endpoint that won't connect to any real network.
+        pub async fn new() -> Self {
+            Self::with_seed(0).await
+        }
+
+        /// Create a mock endpoint provider with a deterministic seed.
+        ///
+        /// Using the same seed will produce the same node identity, useful for
+        /// reproducible tests.
+        pub async fn with_seed(seed: u64) -> Self {
+            // Generate deterministic secret key from seed
+            let mut key_bytes = [0u8; 32];
+            key_bytes[0..8].copy_from_slice(&seed.to_le_bytes());
+            let secret_key = iroh::SecretKey::from_bytes(&key_bytes);
+
+            // Build endpoint without discovery (isolated)
+            let endpoint = iroh::Endpoint::builder()
+                .secret_key(secret_key.clone())
+                .bind_addr_v4("127.0.0.1:0".parse().unwrap())
+                .bind()
+                .await
+                .expect("failed to create mock endpoint");
+
+            let node_addr = endpoint.addr();
+            let public_key = secret_key.public().as_bytes().to_vec();
+            let peer_id = node_addr.id.fmt_short().to_string();
+
+            Self {
+                endpoint,
+                node_addr,
+                public_key,
+                peer_id,
+            }
+        }
+
+        /// Create a mock endpoint provider for a specific node ID.
+        ///
+        /// The seed is derived from the node ID for deterministic identity.
+        pub async fn for_node(node_id: u64) -> Self {
+            Self::with_seed(node_id * 1000).await
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl EndpointProvider for MockEndpointProvider {
+        async fn public_key(&self) -> Vec<u8> {
+            self.public_key.clone()
+        }
+
+        async fn peer_id(&self) -> String {
+            self.peer_id.clone()
+        }
+
+        async fn addresses(&self) -> Vec<String> {
+            vec!["127.0.0.1:0".to_string()]
+        }
+
+        fn node_addr(&self) -> &iroh::EndpointAddr {
+            &self.node_addr
+        }
+
+        fn endpoint(&self) -> &iroh::Endpoint {
+            &self.endpoint
+        }
+    }
+
+    /// Builder for creating test `ClientProtocolContext` instances.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use aspen_rpc_core::test_support::TestContextBuilder;
+    ///
+    /// let ctx = TestContextBuilder::new()
+    ///     .with_node_id(1)
+    ///     .with_cookie("test-cookie")
+    ///     .build();
+    /// ```
+    pub struct TestContextBuilder {
+        node_id: u64,
+        controller: Option<Arc<dyn ClusterController>>,
+        kv_store: Option<Arc<dyn KeyValueStore>>,
+        endpoint_manager: Option<Arc<dyn EndpointProvider>>,
+        cluster_cookie: String,
+        watch_registry: Option<Arc<dyn WatchRegistry>>,
+        hooks_config: Option<aspen_hooks_types::HooksConfig>,
+        #[cfg(feature = "sql")]
+        sql_executor: Option<Arc<dyn aspen_sql::SqlQueryExecutor>>,
+    }
+
+    impl Default for TestContextBuilder {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl TestContextBuilder {
+        /// Create a new test context builder with default values.
+        pub fn new() -> Self {
+            Self {
+                node_id: 1,
+                controller: None,
+                kv_store: None,
+                endpoint_manager: None,
+                cluster_cookie: "test-cookie".to_string(),
+                watch_registry: None,
+                hooks_config: None,
+                #[cfg(feature = "sql")]
+                sql_executor: None,
+            }
+        }
+
+        /// Set the node ID.
+        pub fn with_node_id(mut self, node_id: u64) -> Self {
+            self.node_id = node_id;
+            self
+        }
+
+        /// Set a custom cluster controller.
+        pub fn with_controller(mut self, controller: Arc<dyn ClusterController>) -> Self {
+            self.controller = Some(controller);
+            self
+        }
+
+        /// Set a custom key-value store.
+        pub fn with_kv_store(mut self, kv_store: Arc<dyn KeyValueStore>) -> Self {
+            self.kv_store = Some(kv_store);
+            self
+        }
+
+        /// Set a custom endpoint provider.
+        pub fn with_endpoint_manager(mut self, endpoint_manager: Arc<dyn EndpointProvider>) -> Self {
+            self.endpoint_manager = Some(endpoint_manager);
+            self
+        }
+
+        /// Set the cluster cookie.
+        pub fn with_cookie(mut self, cookie: impl Into<String>) -> Self {
+            self.cluster_cookie = cookie.into();
+            self
+        }
+
+        /// Set a custom watch registry.
+        pub fn with_watch_registry(mut self, watch_registry: Arc<dyn WatchRegistry>) -> Self {
+            self.watch_registry = Some(watch_registry);
+            self
+        }
+
+        /// Set hooks configuration.
+        pub fn with_hooks_config(mut self, hooks_config: aspen_hooks_types::HooksConfig) -> Self {
+            self.hooks_config = Some(hooks_config);
+            self
+        }
+
+        /// Set a custom SQL executor.
+        #[cfg(feature = "sql")]
+        pub fn with_sql_executor(mut self, sql_executor: Arc<dyn aspen_sql::SqlQueryExecutor>) -> Self {
+            self.sql_executor = Some(sql_executor);
+            self
+        }
+
+        /// Build the test context.
+        ///
+        /// Uses deterministic in-memory implementations for any dependencies
+        /// that were not explicitly configured.
+        ///
+        /// # Panics
+        ///
+        /// Panics if `endpoint_manager` is not set.
+        pub fn build(self) -> ClientProtocolContext {
+            let controller = self.controller.unwrap_or_else(|| DeterministicClusterController::new());
+            let kv_store = self.kv_store.unwrap_or_else(|| DeterministicKeyValueStore::new());
+            let endpoint_manager = self
+                .endpoint_manager
+                .expect("endpoint_manager is required. Use with_endpoint_manager() or build_with_mock_endpoint()");
+
+            ClientProtocolContext {
+                node_id: self.node_id,
+                controller,
+                kv_store,
+                #[cfg(feature = "sql")]
+                sql_executor: self.sql_executor.expect("sql_executor required when sql feature enabled"),
+                state_machine: None,
+                endpoint_manager,
+                #[cfg(feature = "blob")]
+                blob_store: None,
+                #[cfg(feature = "blob")]
+                blob_replication_manager: None,
+                peer_manager: None,
+                docs_sync: None,
+                cluster_cookie: self.cluster_cookie,
+                start_time: Instant::now(),
+                network_factory: None,
+                token_verifier: None,
+                require_auth: false,
+                topology: None,
+                #[cfg(feature = "global-discovery")]
+                content_discovery: None,
+                #[cfg(feature = "forge")]
+                forge_node: None,
+                #[cfg(feature = "jobs")]
+                job_manager: None,
+                #[cfg(feature = "worker")]
+                worker_service: None,
+                #[cfg(feature = "jobs")]
+                worker_coordinator: None,
+                watch_registry: self.watch_registry,
+                #[cfg(feature = "hooks")]
+                hook_service: None,
+                hooks_config: self.hooks_config.unwrap_or_default(),
+                secrets_service: None,
+                #[cfg(feature = "forge")]
+                federation_identity: None,
+                #[cfg(feature = "forge")]
+                federation_trust_manager: None,
+                #[cfg(all(feature = "forge", feature = "global-discovery"))]
+                federation_discovery: None,
+                #[cfg(feature = "ci")]
+                ci_orchestrator: None,
+                #[cfg(all(feature = "ci", feature = "nickel"))]
+                ci_trigger_service: None,
+                #[cfg(feature = "nix-cache-gateway")]
+                nix_cache_signer: None,
+                service_executors: Vec::new(),
+                app_registry: aspen_core::shared_registry(),
+                proxy_config: ProxyConfig::default(),
+            }
+        }
+    }
+
+    /// Create a minimal test context with mock endpoint provider.
+    pub fn minimal_test_context(mock_endpoint: Arc<dyn EndpointProvider>) -> ClientProtocolContext {
+        TestContextBuilder::new().with_endpoint_manager(mock_endpoint).build()
+    }
+
+    /// Create a test context with a shared key-value store.
+    pub fn test_context_with_kv(
+        kv_store: Arc<dyn KeyValueStore>,
+        mock_endpoint: Arc<dyn EndpointProvider>,
+    ) -> ClientProtocolContext {
+        TestContextBuilder::new().with_kv_store(kv_store).with_endpoint_manager(mock_endpoint).build()
+    }
+}

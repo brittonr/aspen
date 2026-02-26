@@ -1,0 +1,47 @@
+[package]
+name = "aspen-dht-discovery"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Global content discovery via BitTorrent Mainline DHT for Aspen"
+authors = ["Aspen Contributors"]
+
+[dependencies]
+# Networking and P2P
+iroh = "0.95.1"
+iroh-base = "0.95.1"
+iroh-blobs = "0.97"
+
+# Async runtime
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
+tokio-util = { version = "0.7" }
+n0-future = "0.3.2"
+
+# Error handling
+anyhow = "1.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+postcard = { version = "1.0", features = ["alloc"] }
+schemars = "0.8"
+
+# Utilities
+parking_lot = "0.12"
+hex = "0.4"
+sha2 = "0.10"
+tracing = "0.1"
+url = "2"
+rand = "0.9"
+
+# Global content discovery (optional)
+mainline = { version = "6.0", optional = true, default-features = false, features = ["async"] }
+
+[dev-dependencies]
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
+
+[features]
+default = []
+global-discovery = ["dep:mainline"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(feature, values(\"global-discovery\"))"] }

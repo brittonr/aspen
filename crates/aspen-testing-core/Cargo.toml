@@ -1,0 +1,25 @@
+[package]
+name = "aspen-testing-core"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Lightweight in-memory implementations for Aspen testing"
+authors = ["Aspen Contributors"]
+
+[dependencies]
+# Core Aspen type crates (minimal dependencies)
+aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types" }
+aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
+aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
+aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
+
+# Async runtime
+async-trait = "0.1"
+tokio = { version = "1.48.0", features = ["sync"] }
+
+# Utilities
+base64 = "0.22"
+
+[dev-dependencies]
+aspen-core = { version = "0.1.0", path = "../aspen-core" }
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }

@@ -49,135 +49,156 @@ required-features = ["plugins-vm"]
 [workspace]
 members = [
     ".",
-    # tutorial-verify extracted to ~/git/aspen-tutorial-verify
-    # aspen-client extracted to ~/git/aspen-client
-    # aspen-client-api extracted to ~/git/aspen-client-api
-    # aspen-constants extracted to ~/git/aspen-constants
-    # aspen-cluster-types extracted to ~/git/aspen-cluster-types
-    # aspen-kv-types extracted to ~/git/aspen-kv-types
-    # aspen-traits extracted to ~/git/aspen-traits
-    # aspen-core extracted to ~/git/aspen-core
-    # aspen-hlc extracted to ~/git/aspen-hlc
-    # aspen-time extracted to ~/git/aspen-time
-    # aspen-disk extracted to ~/git/aspen-disk
-    # aspen-storage-types extracted to ~/git/aspen-storage-types
-    # aspen-ticket extracted to ~/git/aspen-ticket
-    # aspen-layer extracted to ~/git/aspen-layer
-    # aspen-vault and aspen-crypto-types inlined into aspen-core
-    # aspen-coordination extracted to ~/git/aspen-coordination
-    # aspen-blob extracted to ~/git/aspen-blob
-    # aspen-raft family extracted to ~/git/aspen-raft
-    # "crates/aspen-raft-types",
-    # "crates/aspen-raft-network",
-    # "crates/aspen-raft",
-    # "crates/aspen-redb-storage",
-    # aspen-cluster extracted to ~/git/aspen-cluster
-    # aspen-cluster-bridges extracted to ~/git/aspen-cluster-bridges
-    # aspen-docs extracted to ~/git/aspen-docs
-    # aspen-testing family extracted to ~/git/aspen-testing
-    # aspen-testing-network extracted to ~/git/aspen-testing-network
-    # aspen-ticket extracted to ~/git/aspen-ticket
-    # aspen-sql extracted to ~/git/aspen-sql
-    # aspen-auth extracted to ~/git/aspen-auth
-    # aspen-sharding extracted to ~/git/aspen-sharding
-    # aspen-forge extracted to ~/git/aspen-forge
-    # aspen-hooks-types extracted to ~/git/aspen-hooks
-    # aspen-hooks extracted to ~/git/aspen-hooks
-    # aspen-jobs + workers extracted to ~/git/aspen-jobs
-    # aspen-tui extracted to ~/git/aspen-tui
-    # aspen-transport extracted to ~/git/aspen-transport
-    # aspen-rpc-core extracted to ~/git/aspen-rpc
-    # aspen-rpc-handlers extracted to ~/git/aspen-rpc
-    # aspen-forge-handler extracted to ~/git/aspen-rpc
-    # aspen-secrets-handler extracted to ~/git/aspen-rpc
-    # aspen-blob-handler extracted to ~/git/aspen-rpc
-    # aspen-cli extracted to ~/git/aspen-cli
-    # aspen-secrets extracted to ~/git/aspen-secrets
-    # aspen-automerge extracted to ~/git/aspen-automerge
-    # CI subsystem extracted to ~/git/aspen-ci
-    # aspen-ci-handler extracted to ~/git/aspen-rpc
-    # aspen-query-handler → replaced by aspen-sql-plugin (WASM)
-    # aspen-hooks-handler → replaced by aspen-hooks-plugin (WASM)
-    # aspen-kv-handler → replaced by aspen-kv-plugin (WASM)
-    # aspen-job-handler extracted to ~/git/aspen-rpc
-    # aspen-core-essentials-handler extracted to ~/git/aspen-rpc
-    # aspen-docs-handler extracted to ~/git/aspen-rpc
-    # aspen-cluster-handler extracted to ~/git/aspen-rpc
-    # aspen-federation extracted to ~/git/aspen-federation
-    # aspen-coordination-protocol → ~/git/aspen-coordination
-    # aspen-forge-protocol → ~/git/aspen-forge
-    # aspen-jobs-protocol → ~/git/aspen-jobs
-    # aspen-proxy extracted to ~/git/aspen-proxy
-    # aspen-dht-discovery extracted to ~/git/aspen-dht-discovery
-    # aspen-plugin-api extracted to ~/git/aspen-plugin-api
-    # aspen-wasm-plugin extracted to ~/git/aspen-wasm-plugin
-    # aspen-wasm-guest-sdk extracted to ~/git/aspen-wasm-guest-sdk
 
-    # Example plugins (kv-counter, audit-logger, scheduled-cleanup) extracted to ~/git/aspen-plugins
-    # WASM plugins (kv-plugin, sql-plugin, hooks-plugin) extracted to ~/git/aspen-plugins
+    # Tier 0: Types + primitives
+    "crates/aspen-constants",
+    "crates/aspen-kv-types",
+    "crates/aspen-hlc",
+    "crates/aspen-time",
+    "crates/aspen-traits",
+    "crates/aspen-storage-types",
+    "crates/aspen-cluster-types",
+    "crates/aspen-ticket",
+    "crates/aspen-hooks-types",
+    "crates/aspen-forge-protocol",
+    "crates/aspen-jobs-protocol",
+    "crates/aspen-coordination-protocol",
+    "crates/aspen-dht-discovery",
 
+    # Tier 1: Core engine
+    "crates/aspen-disk",
+    "crates/aspen-core",
+    "crates/aspen-layer",
+
+    # Tier 2: Consensus (+ vendored openraft/)
+    "crates/aspen-raft-types",
+    "crates/aspen-raft",
+    "crates/aspen-raft-network",
+    "crates/aspen-redb-storage",
+
+    # Tier 3: Networking + cluster
+    "crates/aspen-transport",
+    "crates/aspen-cluster",
+    "crates/aspen-coordination",
+    "crates/aspen-auth",
+    "crates/aspen-sharding",
+    "crates/aspen-proxy",
+    "crates/aspen-rpc-core",
+
+    # Tier 4: RPC integration (always-on handlers)
+    "crates/aspen-rpc-handlers",
+    "crates/aspen-core-essentials-handler",
+    "crates/aspen-cluster-handler",
+
+    # Tier 5: Client API
+    "crates/aspen-client-api",
+    "crates/aspen-client",
+
+    # Testing infrastructure
+    "crates/aspen-testing-core",
+    "crates/aspen-testing",
+    "crates/aspen-testing-fixtures",
+    "crates/aspen-testing-madsim",
+    "crates/aspen-testing-network",
+
+    # Vendored openraft
+    "openraft/openraft",
+    "openraft/macros",
 ]
+
+# Required for vendored openraft workspace inheritance
+[workspace.package]
+version = "0.10.0"
+edition = "2024"
+authors = ["Databend Authors <opensource@datafuselabs.com>", "Anthony Dodd <Dodd.AnthonyJosiah@gmail.com>"]
+categories = ["algorithms", "asynchronous", "data-structures"]
+description = "Advanced Raft consensus"
+documentation = "https://docs.rs/openraft"
+homepage = "https://github.com/databendlabs/openraft"
+keywords = ["raft", "consensus"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/databendlabs/openraft"
 
 # Workspace dependencies shared across all crates
 [workspace.dependencies]
-# Base dependencies (no longer need openraft-specific versions)
+# Base dependencies
 anyhow = "1.0.63"
+anyerror = "0.1.10"
+async-entry = "0.3.1"
 base64 = "0.22"  # Base64 encoding for binary data
 blake3 = "1.5"  # Hash function for content addressing
+byte-unit = "5.1.4"
 bytes = "1.7"
 chrono = "0.4"
 clap = { version = "4.5.4", features = ["derive", "env"] }
 derive_more = { version = "1.0", features = ["std", "from", "try_into", "display"] }
 futures = "0.3"
+lazy_static = "1.4.0"
+maplit = "1.0.2"
+pretty_assertions = "1.0.0"
+proc-macro2 = "1.0"
+quote = "1.0"
 rand = "0.9"
+semver = "1.0.14"
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0"
+syn = "2.0"
 tempfile = "3.4.0"
+test-harness = "0.3.0"
 thiserror = "2.0"
 tokio = { version = "1.48.0", default-features = false, features = ["io-util", "macros", "rt", "rt-multi-thread", "sync", "time"] }
 tracing = "0.1.40"
+tracing-appender = "0.2.0"
+tracing-futures = "0.2.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-aspen-client = { path = "../aspen-client/crates/aspen-client" }
-aspen-client-api = { path = "../aspen-client-api/crates/aspen-client-api" }
-aspen-constants = { path = "../aspen-constants/crates/aspen-constants" }
-aspen-cluster-types = { path = "../aspen-cluster-types/crates/aspen-cluster-types" }
-aspen-core = { path = "../aspen-core/crates/aspen-core" }
-aspen-hlc = { path = "../aspen-hlc/crates/aspen-hlc" }
-aspen-kv-types = { path = "../aspen-kv-types/crates/aspen-kv-types" }
-aspen-layer = { path = "../aspen-layer/crates/aspen-layer" }
-aspen-time = { path = "../aspen-time/crates/aspen-time" }
-aspen-disk = { path = "../aspen-disk/crates/aspen-disk" }
-aspen-storage-types = { path = "../aspen-storage-types/crates/aspen-storage-types" }
-# aspen-vault and aspen-crypto-types inlined into aspen-core
-aspen-traits = { path = "../aspen-traits/crates/aspen-traits" }
-aspen-coordination = { path = "../aspen-coordination/crates/aspen-coordination" }
+validit = "0.2.2"
+# === Core crates (in workspace) ===
+aspen-client = { path = "crates/aspen-client" }
+aspen-client-api = { path = "crates/aspen-client-api" }
+aspen-constants = { path = "crates/aspen-constants" }
+aspen-cluster-types = { path = "crates/aspen-cluster-types" }
+aspen-core = { path = "crates/aspen-core" }
+aspen-hlc = { path = "crates/aspen-hlc" }
+aspen-kv-types = { path = "crates/aspen-kv-types" }
+aspen-layer = { path = "crates/aspen-layer" }
+aspen-time = { path = "crates/aspen-time" }
+aspen-disk = { path = "crates/aspen-disk" }
+aspen-storage-types = { path = "crates/aspen-storage-types" }
+aspen-traits = { path = "crates/aspen-traits" }
+aspen-coordination = { path = "crates/aspen-coordination" }
+aspen-coordination-protocol = { path = "crates/aspen-coordination-protocol" }
+aspen-auth = { path = "crates/aspen-auth" }
+aspen-sharding = { path = "crates/aspen-sharding" }
+aspen-raft-types = { path = "crates/aspen-raft-types" }
+aspen-raft-network = { path = "crates/aspen-raft-network" }
+aspen-raft = { path = "crates/aspen-raft" }
+aspen-redb-storage = { path = "crates/aspen-redb-storage" }
+openraft = { path = "openraft/openraft", features = ["serde", "type-alias"] }
+openraft-macros = { path = "openraft/macros", version = "0.10.0" }
+aspen-cluster = { path = "crates/aspen-cluster" }
+aspen-transport = { path = "crates/aspen-transport" }
+aspen-proxy = { path = "crates/aspen-proxy" }
+aspen-dht-discovery = { path = "crates/aspen-dht-discovery" }
+aspen-rpc-core = { path = "crates/aspen-rpc-core" }
+aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers", default-features = false }
+aspen-ticket = { path = "crates/aspen-ticket" }
+aspen-hooks-types = { path = "crates/aspen-hooks-types" }
+aspen-forge-protocol = { path = "crates/aspen-forge-protocol" }
+aspen-jobs-protocol = { path = "crates/aspen-jobs-protocol" }
+aspen-testing = { path = "crates/aspen-testing" }
+aspen-testing-core = { path = "crates/aspen-testing-core" }
+aspen-testing-fixtures = { path = "crates/aspen-testing-fixtures" }
+aspen-testing-madsim = { path = "crates/aspen-testing-madsim" }
+aspen-testing-network = { path = "crates/aspen-testing-network" }
+
+# === Extension crates (external repos) ===
 aspen-blob = { path = "../aspen-blob/crates/aspen-blob" }
 aspen-sql = { path = "../aspen-sql/crates/aspen-sql" }
-aspen-auth = { path = "../aspen-auth/crates/aspen-auth" }
-aspen-sharding = { path = "../aspen-sharding/crates/aspen-sharding" }
-# Raft family extracted to ~/git/aspen-raft
-aspen-raft-types = { path = "../aspen-raft/crates/aspen-raft-types" }
-aspen-raft-network = { path = "../aspen-raft/crates/aspen-raft-network" }
-aspen-raft = { path = "../aspen-raft/crates/aspen-raft" }
-aspen-redb-storage = { path = "../aspen-raft/crates/aspen-redb-storage" }
-# OpenRaft (vendored with aspen-raft)
-openraft = { path = "../aspen-raft/openraft/openraft", features = ["serde", "type-alias"] }
-openraft-macros = { path = "../aspen-raft/openraft/macros", version = "0.10.0" }
-aspen-cluster = { path = "../aspen-cluster/crates/aspen-cluster" }
-aspen-cluster-bridges = { path = "../aspen-cluster-bridges/crates/aspen-cluster-bridges" }
-aspen-docs = { path = "../aspen-docs/crates/aspen-docs" }
-aspen-testing = { path = "../aspen-testing/crates/aspen-testing" }
-aspen-testing-core = { path = "../aspen-testing/crates/aspen-testing-core" }
-aspen-testing-fixtures = { path = "../aspen-testing/crates/aspen-testing-fixtures" }
-aspen-testing-madsim = { path = "../aspen-testing/crates/aspen-testing-madsim" }
-aspen-testing-network = { path = "../aspen-testing-network/crates/aspen-testing-network" }
-aspen-ticket = { path = "../aspen-ticket/crates/aspen-ticket" }
 aspen-forge = { path = "../aspen-forge/crates/aspen-forge" }
-aspen-hooks-types = { path = "../aspen-hooks/crates/aspen-hooks-types" }
 aspen-hooks = { path = "../aspen-hooks/crates/aspen-hooks" }
+aspen-docs = { path = "../aspen-docs/crates/aspen-docs" }
+aspen-cluster-bridges = { path = "../aspen-cluster-bridges/crates/aspen-cluster-bridges" }
 aspen-tui = { path = "../aspen-tui/crates/aspen-tui" }
-aspen-transport = { path = "../aspen-transport/crates/aspen-transport" }
-aspen-rpc-handlers = { path = "../aspen-rpc/crates/aspen-rpc-handlers", default-features = false }
 aspen-cli = { path = "../aspen-cli/crates/aspen-cli" }
 aspen-jobs = { path = "../aspen-jobs/crates/aspen-jobs" }
 aspen-jobs-worker-blob = { path = "../aspen-jobs/crates/aspen-jobs-worker-blob" }
@@ -187,7 +208,6 @@ aspen-jobs-worker-maintenance = { path = "../aspen-jobs/crates/aspen-jobs-worker
 aspen-jobs-worker-shell = { path = "../aspen-jobs/crates/aspen-jobs-worker-shell" }
 aspen-secrets = { path = "../aspen-secrets/crates/aspen-secrets" }
 aspen-automerge = { path = "../aspen-automerge/crates/aspen-automerge" }
-# CI subsystem (extracted to ~/git/aspen-ci)
 aspen-nickel = { path = "../aspen-ci/crates/aspen-nickel" }
 aspen-ci = { path = "../aspen-ci/crates/aspen-ci" }
 aspen-ci-core = { path = "../aspen-ci/crates/aspen-ci-core" }
@@ -220,11 +240,6 @@ async-stream = "0.3"  # Async stream utilities for SNIX
 aspen-snix = { path = "../aspen-nix/crates/aspen-snix" }
 aspen-nix-cache-gateway = { path = "../aspen-nix/crates/aspen-nix-cache-gateway" }
 aspen-federation = { path = "../aspen-federation/crates/aspen-federation" }
-aspen-proxy = { path = "../aspen-proxy/crates/aspen-proxy" }
-aspen-coordination-protocol = { path = "../aspen-coordination/crates/aspen-coordination-protocol" }
-aspen-forge-protocol = { path = "../aspen-forge/crates/aspen-forge-protocol" }
-aspen-jobs-protocol = { path = "../aspen-jobs/crates/aspen-jobs-protocol" }
-aspen-dht-discovery = { path = "../aspen-dht-discovery/crates/aspen-dht-discovery" }
 aspen-plugin-api = { path = "../aspen-plugin-api/crates/aspen-plugin-api" }
 aspen-wasm-plugin = { path = "../aspen-wasm-plugin/crates/aspen-wasm-plugin" }
 
@@ -347,71 +362,34 @@ cloud-hypervisor-client = "0.3"
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
 default = []
 
-# Full production: all features enabled
 full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy"]
-
-# Forge preset: Git hosting with blob storage, content discovery, and docs
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
-
-# CI preset: Full CI/CD pipelines with forge, shell execution, and global discovery
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
-# CI preset: Basic CI without snix (lighter build)
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 testing = ["dep:aspen-testing", "aspen-testing/router"]
-# Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
 forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge"]
-# Git bridge: bidirectional sync with standard Git repositories (GitHub, GitLab, Gitea, etc.)
 git-bridge = ["forge", "aspen-forge/git-bridge", "aspen-rpc-handlers/git-bridge", "dep:flate2"]
-# DataFusion SQL query engine for Redb storage backend
 sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-handlers/sql", "aspen-raft/sql", "aspen-testing?/sql"]
-# Blob storage support for iroh-blobs operations
 blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-handlers/blob", "aspen-cluster/blob", "aspen-client/blob-store"]
-# Plugin umbrella: all hyperlight-based execution backends
 plugins = ["plugins-vm", "plugins-wasm", "plugins-rpc"]
-# Hyperlight VM sandbox for native binaries
 plugins-vm = ["aspen-jobs/plugins-vm"]
-# WASM Component Model job execution via hyperlight-wasm
 plugins-wasm = ["aspen-jobs/plugins-wasm"]
-# WASM handler plugins for dynamic RPC handler loading
 plugins-rpc = ["aspen-rpc-handlers/plugins-rpc", "blob"]
-# Shell command worker for executing system commands as jobs (requires auth)
 shell-worker = ["dep:aspen-jobs-worker-shell", "jobs", "blob"]
-# Nix build executor for CI Nix flake builds
-# nix-executor: moved to aspen-nix repo
-# Cloud Hypervisor VM executor for CI VM-isolated jobs
 ci-vm-executor = ["aspen-ci/plugins-vm"]
-# TUI is now a separate crate: aspen-tui (see crates/aspen-tui)
-# Fuzzing feature exposes internals for fuzz testing
 fuzzing = ["testing"]
-# Bolero property-based testing (for dev/CI, uses bolero dev-dependency)
 bolero = []
-# Global content discovery via BitTorrent Mainline DHT
 global-discovery = ["dep:mainline", "aspen-core/global-discovery", "aspen-rpc-handlers/global-discovery"]
-# SOPS-backed secrets management with age encryption
 secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/secrets"]
-# Automerge CRDT document layer for collaborative editing
 automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
-# CI/CD pipeline system - basic shell/VM pipelines with Nickel configuration
-# Does NOT include Nix binary cache integration (snix, nix-cache-proxy)
 ci-basic = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "aspen-client/cache-index", "jobs", "blob", "forge"]
-# CI/CD with VM executor instead of shell executor
 ci-vm = ["dep:aspen-ci", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/plugins-vm", "jobs", "blob", "forge"]
-# Full CI/CD with Nix binary cache integration (snix + HTTP/3 cache proxy)
 ci = ["ci-basic", "aspen-testing?/ci"]
-# Hooks handler for event-driven automation RPC (requires jobs for hook execution)
 hooks = ["dep:aspen-hooks", "aspen-rpc-handlers/hooks", "aspen-cluster/hooks", "jobs"]
-# SNIX storage integration for Nix binary cache
-# Nix binary cache HTTP/3 gateway for serving NAR archives
-# Jobs handler for distributed job queue operations
 jobs = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance", "aspen-rpc-handlers/jobs", "aspen-cluster/jobs", "aspen-testing?/jobs"]
-# Docs handler for iroh-docs CRDT document operations
-# Includes iroh-blobs since docs uses blob storage for content
 docs = ["dep:aspen-docs", "dep:iroh-docs", "dep:iroh-blobs", "blob", "aspen-rpc-handlers/docs", "aspen-cluster/docs"]
-# HTTP proxy: TCP/HTTP tunneling over iroh QUIC
-proxy = ["dep:aspen-proxy"]
-# Federation support for cross-cluster communication
+proxy = ["dep:aspen-proxy", "aspen-cluster/proxy"]
 federation = ["aspen-cluster/federation"]
-# Deterministic simulation testing with madsim (for testing only)
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
@@ -732,42 +710,45 @@ required-features = ["jobs", "docs", "hooks", "federation"]
 [patch.crates-io]
 cargo-hyperlight = { path = "vendor/cargo-hyperlight" }
 
-# Override git deps from extracted repos to use local workspace crates
+# Override git deps from extension repos that reference the aspen git repo
 [patch."https://github.com/brittonr/aspen.git"]
-aspen-core = { path = "../aspen-core/crates/aspen-core" }
+aspen-core = { path = "crates/aspen-core" }
+aspen-auth = { path = "crates/aspen-auth" }
+aspen-ticket = { path = "crates/aspen-ticket" }
+aspen-client-api = { path = "crates/aspen-client-api" }
+aspen-client = { path = "crates/aspen-client" }
+aspen-testing = { path = "crates/aspen-testing" }
+aspen-constants = { path = "crates/aspen-constants" }
+aspen-cluster-types = { path = "crates/aspen-cluster-types" }
+aspen-kv-types = { path = "crates/aspen-kv-types" }
+aspen-traits = { path = "crates/aspen-traits" }
+aspen-hlc = { path = "crates/aspen-hlc" }
+aspen-time = { path = "crates/aspen-time" }
+aspen-disk = { path = "crates/aspen-disk" }
+aspen-storage-types = { path = "crates/aspen-storage-types" }
+aspen-coordination = { path = "crates/aspen-coordination" }
+aspen-coordination-protocol = { path = "crates/aspen-coordination-protocol" }
+aspen-forge-protocol = { path = "crates/aspen-forge-protocol" }
+aspen-jobs-protocol = { path = "crates/aspen-jobs-protocol" }
+aspen-layer = { path = "crates/aspen-layer" }
+aspen-dht-discovery = { path = "crates/aspen-dht-discovery" }
+aspen-raft = { path = "crates/aspen-raft" }
+aspen-raft-types = { path = "crates/aspen-raft-types" }
+aspen-raft-network = { path = "crates/aspen-raft-network" }
+aspen-redb-storage = { path = "crates/aspen-redb-storage" }
+aspen-transport = { path = "crates/aspen-transport" }
+aspen-cluster = { path = "crates/aspen-cluster" }
+aspen-proxy = { path = "crates/aspen-proxy" }
+aspen-hooks-types = { path = "crates/aspen-hooks-types" }
+# Extension crates (external repos)
 aspen-blob = { path = "../aspen-blob/crates/aspen-blob" }
 aspen-cache = { path = "../aspen-nix/crates/aspen-cache" }
 aspen-jobs = { path = "../aspen-jobs/crates/aspen-jobs" }
-aspen-auth = { path = "../aspen-auth/crates/aspen-auth" }
 aspen-forge = { path = "../aspen-forge/crates/aspen-forge" }
-aspen-ticket = { path = "../aspen-ticket/crates/aspen-ticket" }
-aspen-client-api = { path = "../aspen-client-api/crates/aspen-client-api" }
-aspen-client = { path = "../aspen-client/crates/aspen-client" }
-aspen-testing = { path = "../aspen-testing/crates/aspen-testing" }
-aspen-constants = { path = "../aspen-constants/crates/aspen-constants" }
-aspen-cluster-types = { path = "../aspen-cluster-types/crates/aspen-cluster-types" }
-aspen-kv-types = { path = "../aspen-kv-types/crates/aspen-kv-types" }
-aspen-traits = { path = "../aspen-traits/crates/aspen-traits" }
-aspen-hlc = { path = "../aspen-hlc/crates/aspen-hlc" }
-aspen-time = { path = "../aspen-time/crates/aspen-time" }
-aspen-disk = { path = "../aspen-disk/crates/aspen-disk" }
-aspen-storage-types = { path = "../aspen-storage-types/crates/aspen-storage-types" }
-aspen-plugin-api = { path = "../aspen-plugin-api/crates/aspen-plugin-api" }
-aspen-coordination = { path = "../aspen-coordination/crates/aspen-coordination" }
-aspen-coordination-protocol = { path = "../aspen-coordination/crates/aspen-coordination-protocol" }
 aspen-docs = { path = "../aspen-docs/crates/aspen-docs" }
 aspen-secrets = { path = "../aspen-secrets/crates/aspen-secrets" }
 aspen-hooks = { path = "../aspen-hooks/crates/aspen-hooks" }
 aspen-federation = { path = "../aspen-federation/crates/aspen-federation" }
-aspen-forge-protocol = { path = "../aspen-forge/crates/aspen-forge-protocol" }
-aspen-jobs-protocol = { path = "../aspen-jobs/crates/aspen-jobs-protocol" }
-aspen-layer = { path = "../aspen-layer/crates/aspen-layer" }
 aspen-sql = { path = "../aspen-sql/crates/aspen-sql" }
-aspen-dht-discovery = { path = "../aspen-dht-discovery/crates/aspen-dht-discovery" }
-# Raft family (extracted to ~/git/aspen-raft)
-aspen-raft = { path = "../aspen-raft/crates/aspen-raft" }
-aspen-raft-types = { path = "../aspen-raft/crates/aspen-raft-types" }
-aspen-raft-network = { path = "../aspen-raft/crates/aspen-raft-network" }
-aspen-redb-storage = { path = "../aspen-raft/crates/aspen-redb-storage" }
-aspen-transport = { path = "../aspen-transport/crates/aspen-transport" }
-aspen-cluster = { path = "../aspen-cluster/crates/aspen-cluster" }
+aspen-plugin-api = { path = "../aspen-plugin-api/crates/aspen-plugin-api" }
+aspen-sharding = { path = "crates/aspen-sharding" }

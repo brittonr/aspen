@@ -622,8 +622,8 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "blake3",
- "bolero",
- "bolero-generator",
+ "bolero 0.13.4",
+ "bolero-generator 0.13.5",
  "bytes",
  "cargo-nextest",
  "chrono",
@@ -689,6 +689,7 @@ dependencies = [
  "serde",
  "sha2 0.10.9",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
 ]
 
@@ -976,6 +977,7 @@ dependencies = [
  "aspen-raft-types",
  "aspen-secrets",
  "aspen-sharding",
+ "aspen-testing",
  "aspen-ticket",
  "aspen-transport",
  "async-trait",
@@ -993,11 +995,13 @@ dependencies = [
  "iroh-gossip",
  "iroh-tickets 0.2.0",
  "irpc",
+ "mainline",
  "n0-future",
  "num_cpus",
  "openraft",
  "parking_lot",
  "postcard",
+ "proptest",
  "rand 0.9.2",
  "redb 2.6.3",
  "schemars 0.8.22",
@@ -1005,6 +1009,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "snafu 0.8.9",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -1042,12 +1047,14 @@ dependencies = [
  "aspen-core",
  "aspen-docs",
  "aspen-rpc-core",
+ "aspen-testing",
  "aspen-ticket",
  "async-trait",
  "blake3",
  "iroh 0.95.1",
  "iroh-gossip",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 
@@ -1057,6 +1064,7 @@ version = "0.1.0"
 dependencies = [
  "iroh 0.95.1",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 
@@ -1072,9 +1080,11 @@ dependencies = [
  "aspen-constants",
  "aspen-core",
  "aspen-kv-types",
+ "aspen-testing",
  "aspen-time",
  "aspen-traits",
  "async-trait",
+ "bolero 0.11.1",
  "rand 0.9.2",
  "serde",
  "serde_json",
@@ -1115,6 +1125,8 @@ dependencies = [
  "iroh-base 0.95.1",
  "iroh-blobs",
  "n0-future",
+ "postcard",
+ "proptest",
  "rand 0.9.2",
  "serde",
  "serde_json",
@@ -1134,7 +1146,9 @@ dependencies = [
  "aspen-coordination",
  "aspen-core",
  "aspen-rpc-core",
+ "aspen-testing",
  "async-trait",
+ "tokio",
 ]
 
 [[package]]
@@ -1146,6 +1160,7 @@ dependencies = [
  "iroh 0.95.1",
  "iroh-base 0.95.1",
  "iroh-blobs",
+ "mainline",
  "n0-future",
  "parking_lot",
  "postcard",
@@ -1227,6 +1242,7 @@ dependencies = [
  "iroh 0.95.1",
  "iroh-base 0.95.1",
  "iroh-gossip",
+ "mainline",
  "n0-future",
  "parking_lot",
  "postcard",
@@ -1334,8 +1350,11 @@ dependencies = [
 name = "aspen-hlc"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "blake3",
+ "postcard",
  "serde",
+ "serde_json",
  "uhlc",
 ]
 
@@ -1374,10 +1393,11 @@ name = "aspen-hooks-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aspen-core",
+ "aspen-hlc",
  "iroh 0.95.1",
  "iroh-tickets 0.2.0",
  "postcard",
+ "proptest",
  "schemars 0.8.22",
  "serde",
  "serde_json",
@@ -1492,6 +1512,7 @@ version = "0.1.0"
 dependencies = [
  "aspen-constants",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 
@@ -1499,7 +1520,9 @@ dependencies = [
 name = "aspen-layer"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "serde",
+ "serde_json",
  "snafu 0.8.9",
 ]
 
@@ -1554,9 +1577,14 @@ dependencies = [
  "aspen-core",
  "aspen-rpc-core",
  "async-trait",
+ "base64 0.22.1",
+ "hex",
  "iroh-blobs",
+ "prost 0.13.5",
  "serde",
  "serde_json",
+ "snix-castore",
+ "snix-store",
  "tracing",
 ]
 
@@ -1575,9 +1603,11 @@ version = "0.1.0"
 dependencies = [
  "aspen-auth",
  "aspen-core",
+ "http 1.4.0",
  "iroh 0.95.1",
  "iroh-proxy-utils",
  "n0-future",
+ "rand 0.9.2",
  "snafu 0.8.9",
  "thiserror 2.0.18",
  "tokio",
@@ -1593,6 +1623,7 @@ dependencies = [
  "aspen-auth",
  "aspen-cluster-types",
  "aspen-constants",
+ "aspen-coordination",
  "aspen-core",
  "aspen-hlc",
  "aspen-kv-types",
@@ -1602,6 +1633,7 @@ dependencies = [
  "aspen-sharding",
  "aspen-sql",
  "aspen-storage-types",
+ "aspen-testing",
  "aspen-time",
  "aspen-traits",
  "aspen-transport",
@@ -1610,6 +1642,8 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "blake3",
+ "bolero 0.13.4",
+ "bolero-generator 0.13.5",
  "bytes",
  "chrono",
  "datafusion",
@@ -1623,6 +1657,7 @@ dependencies = [
  "openraft",
  "parking_lot",
  "postcard",
+ "proptest",
  "ractor",
  "rand 0.9.2",
  "redb 2.6.3",
@@ -1632,6 +1667,7 @@ dependencies = [
  "sha2 0.10.9",
  "snafu 0.8.9",
  "static_assertions",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -1651,11 +1687,13 @@ dependencies = [
  "async-trait",
  "iroh 0.95.1",
  "irpc",
+ "madsim",
  "openraft",
  "parking_lot",
  "postcard",
  "rand 0.9.2",
  "serde",
+ "serde_json",
  "static_assertions",
  "tokio",
  "tracing",
@@ -1669,7 +1707,9 @@ dependencies = [
  "iroh 0.95.1",
  "irpc",
  "openraft",
+ "postcard",
  "serde",
+ "serde_json",
  "tracing",
 ]
 
@@ -1681,6 +1721,7 @@ dependencies = [
  "blake3",
  "hex",
  "serde",
+ "tempfile",
 ]
 
 [[package]]
@@ -1700,11 +1741,14 @@ dependencies = [
  "aspen-hooks",
  "aspen-hooks-types",
  "aspen-jobs",
+ "aspen-nix-cache-gateway",
  "aspen-raft",
  "aspen-sharding",
  "aspen-sql",
+ "aspen-testing",
  "async-trait",
  "inventory",
+ "iroh 0.95.1",
  "serde",
  "tokio",
  "tracing",
@@ -1736,6 +1780,7 @@ dependencies = [
  "aspen-hooks-types",
  "aspen-job-handler",
  "aspen-jobs",
+ "aspen-nix-cache-gateway",
  "aspen-nix-handler",
  "aspen-raft",
  "aspen-rpc-core",
@@ -1743,15 +1788,19 @@ dependencies = [
  "aspen-secrets-handler",
  "aspen-sharding",
  "aspen-sql",
+ "aspen-testing",
  "aspen-ticket",
  "aspen-transport",
  "aspen-wasm-plugin",
  "async-trait",
  "blake3",
+ "bolero 0.13.4",
+ "bolero-generator 0.13.5",
  "iroh 0.95.1",
  "iroh-gossip",
  "irpc",
  "postcard",
+ "proptest",
  "serde",
  "serde_json",
  "tokio",
@@ -1812,6 +1861,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-core",
+ "aspen-testing",
  "async-trait",
  "parking_lot",
  "serde",
@@ -1874,6 +1924,7 @@ name = "aspen-storage-types"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "postcard",
  "redb 2.6.3",
  "serde",
 ]
@@ -1883,7 +1934,9 @@ name = "aspen-testing"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aspen-blob",
  "aspen-ci",
+ "aspen-cluster",
  "aspen-cluster-types",
  "aspen-constants",
  "aspen-coordination",
@@ -1895,6 +1948,7 @@ dependencies = [
  "aspen-testing-core",
  "aspen-testing-fixtures",
  "aspen-testing-madsim",
+ "aspen-testing-network",
  "aspen-traits",
  "async-trait",
  "base64 0.22.1",
@@ -1907,7 +1961,9 @@ dependencies = [
  "nix 0.29.0",
  "openraft",
  "parking_lot",
+ "proptest",
  "rand 0.9.2",
+ "reqwest",
  "serde",
  "serde_json",
  "snafu 0.8.9",
@@ -1923,6 +1979,7 @@ version = "0.1.0"
 dependencies = [
  "aspen-cluster-types",
  "aspen-constants",
+ "aspen-core",
  "aspen-kv-types",
  "aspen-traits",
  "async-trait",
@@ -1964,10 +2021,26 @@ dependencies = [
  "madsim",
  "openraft",
  "parking_lot",
+ "proptest",
  "rand 0.9.2",
  "serde",
  "serde_json",
  "snafu 0.8.9",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-testing-network"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "snafu 0.8.9",
+ "tempfile",
  "tokio",
  "tracing",
 ]
@@ -1996,6 +2069,7 @@ dependencies = [
  "aspen-cluster-types",
  "aspen-kv-types",
  "async-trait",
+ "tokio",
 ]
 
 [[package]]
@@ -2004,7 +2078,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-auth",
- "aspen-client-api",
+ "aspen-constants",
  "aspen-core",
  "aspen-raft-types",
  "aspen-sharding",
@@ -2105,6 +2179,17 @@ dependencies = [
  "compression-core",
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "async-entry"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25da1f05a97bc973c0432287f306071c06cd85f0fc5c8127b1adc5ef0d6cd286"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2638,18 +2723,44 @@ dependencies = [
 
 [[package]]
 name = "bolero"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "449a08ce58d0325f2a1df902aa326a84ab49c6aa2844f1a88fe5e0fc23c75010"
+dependencies = [
+ "bolero-afl 0.11.0",
+ "bolero-engine 0.11.2",
+ "bolero-generator 0.11.1",
+ "bolero-honggfuzz 0.11.0",
+ "bolero-kani 0.11.2",
+ "bolero-libfuzzer 0.11.0",
+ "cfg-if",
+ "rand 0.8.5",
+]
+
+[[package]]
+name = "bolero"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ff44d278fc0062c95327087ed96b3d256906d1d8f579e534a3de8d6b386913a"
 dependencies = [
- "bolero-afl",
- "bolero-engine",
- "bolero-generator",
- "bolero-honggfuzz",
- "bolero-kani",
- "bolero-libfuzzer",
+ "bolero-afl 0.13.0",
+ "bolero-engine 0.13.4",
+ "bolero-generator 0.13.5",
+ "bolero-honggfuzz 0.13.0",
+ "bolero-kani 0.13.0",
+ "bolero-libfuzzer 0.13.0",
  "cfg-if",
  "rand 0.9.2",
+]
+
+[[package]]
+name = "bolero-afl"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73c04ea97df540ec2224453cb006f4ab6cacc99636f9f6660b381970448bbaac"
+dependencies = [
+ "bolero-engine 0.11.2",
+ "cc",
 ]
 
 [[package]]
@@ -2658,8 +2769,23 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9bf4cbd0bacf9356d3c7e5d9d088480f2076ba3c595c15ee9a6a378cdd7b297"
 dependencies = [
- "bolero-engine",
+ "bolero-engine 0.13.4",
  "cc",
+]
+
+[[package]]
+name = "bolero-engine"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2558810916445396d4fa12415183c96cfeac7c9e84ef230dc33e2e1f8beca41e"
+dependencies = [
+ "anyhow",
+ "backtrace",
+ "bolero-generator 0.11.1",
+ "lazy_static",
+ "pretty-hex",
+ "rand 0.8.5",
+ "rand_xoshiro 0.6.0",
 ]
 
 [[package]]
@@ -2669,7 +2795,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dca199170a7c92c669c1019f9219a316b66bcdcfa4b36cac5a460a4c1a851aba"
 dependencies = [
  "anyhow",
- "bolero-generator",
+ "bolero-generator 0.13.5",
  "lazy_static",
  "pretty-hex",
  "rand 0.9.2",
@@ -2678,15 +2804,38 @@ dependencies = [
 
 [[package]]
 name = "bolero-generator"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c6b00e768523c6e13397f1e5e6cef7f8dbd01621ffd7aa6dec74b5ba3e1cf94"
+dependencies = [
+ "bolero-generator-derive 0.11.0",
+ "either",
+ "rand_core 0.6.4",
+]
+
+[[package]]
+name = "bolero-generator"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98a5782f2650f80d533f58ec339c6dce4cc5428f9c2755894f98156f52af81f2"
 dependencies = [
- "bolero-generator-derive",
+ "bolero-generator-derive 0.13.4",
  "either",
  "getrandom 0.3.4",
  "rand_core 0.9.5",
  "rand_xoshiro 0.7.0",
+]
+
+[[package]]
+name = "bolero-generator-derive"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bea8182a94fa5c6d0db1666969d0094e79d6b93eb68689325a375b1d8804a12b"
+dependencies = [
+ "proc-macro-crate 2.0.0",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2703,11 +2852,29 @@ dependencies = [
 
 [[package]]
 name = "bolero-honggfuzz"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b744c6bda3711a1c88ab7cbd5053b53daca1c7380d05cfa3af39c99d0ec52c0"
+dependencies = [
+ "bolero-engine 0.11.2",
+]
+
+[[package]]
+name = "bolero-honggfuzz"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a118ef27295eddefadc6a99728ee698d1b18d2e80dc4777d21bee3385096ffd"
 dependencies = [
- "bolero-engine",
+ "bolero-engine 0.13.4",
+]
+
+[[package]]
+name = "bolero-kani"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aee97a8044096c7b4a6fb4f5f5003544ad98277ebc7a65567a6c4ea912393388"
+dependencies = [
+ "bolero-engine 0.11.2",
 ]
 
 [[package]]
@@ -2716,7 +2883,17 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "852ea5784a9f3e68bfd302ca80b8b863bce140593eb5770fee6ab110899c28fc"
 dependencies = [
- "bolero-engine",
+ "bolero-engine 0.13.4",
+]
+
+[[package]]
+name = "bolero-libfuzzer"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aae3b3751a4b0dc94696063eace32fd9d3ddea904ae9e18d87c81de787023508"
+dependencies = [
+ "bolero-engine 0.11.2",
+ "cc",
 ]
 
 [[package]]
@@ -2725,7 +2902,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "858dc57c11725c52662501fa79fdbc6f7050339a05ca1bf1e587add0fed40d62"
 dependencies = [
- "bolero-engine",
+ "bolero-engine 0.13.4",
  "cc",
 ]
 
@@ -4689,6 +4866,12 @@ name = "diatomic-waker"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab03c107fafeb3ee9f5925686dbb7a73bc76e3932abb0d2b365cb64b169cf04c"
+
+[[package]]
+name = "diff"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
 
 [[package]]
 name = "digest"
@@ -8182,6 +8365,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3d25b0e0b648a86960ac23b7ad4abb9717601dec6f66c165f5b037f3f03065f"
 
 [[package]]
+name = "macrotest"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd198afd908012e57564b66e43e7d4d19056cec7e6232e9e6d54a1798622f81d"
+dependencies = [
+ "diff",
+ "fastrand",
+ "glob",
+ "prettyplease",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "syn 2.0.117",
+ "toml 1.0.3+spec-1.1.0",
+]
+
+[[package]]
 name = "mad-turmoil"
 version = "0.2.0"
 source = "git+https://github.com/s2-streamstore/mad-turmoil?rev=ef75169ec299c4160af3052b2194b3ee5b048b0a#ef75169ec299c4160af3052b2194b3ee5b048b0a"
@@ -9553,6 +9753,8 @@ name = "openraft"
 version = "0.10.0"
 dependencies = [
  "anyerror",
+ "anyhow",
+ "async-entry",
  "byte-unit",
  "chrono",
  "clap",
@@ -9560,8 +9762,10 @@ dependencies = [
  "futures",
  "maplit",
  "openraft-macros",
+ "pretty_assertions",
  "rand 0.9.2",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -9574,10 +9778,12 @@ name = "openraft-macros"
 version = "0.10.0"
 dependencies = [
  "chrono",
+ "macrotest",
  "proc-macro2",
  "quote",
  "semver",
  "syn 2.0.117",
+ "trybuild",
 ]
 
 [[package]]
@@ -10339,6 +10545,16 @@ name = "pretty-hex"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbc83ee4a840062f368f9096d80077a9841ec117e17e7f700df81958f1451254"
+
+[[package]]
+name = "pretty_assertions"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
+dependencies = [
+ "diff",
+ "yansi",
+]
 
 [[package]]
 name = "prettyplease"
@@ -12968,6 +13184,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "target-triple"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "591ef38edfb78ca4771ee32cf494cb8771944bee237a9b91fc9c1424ac4b777b"
+
+[[package]]
 name = "tempfile"
 version = "3.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13379,6 +13601,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml"
+version = "1.0.3+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7614eaf19ad818347db24addfa201729cf2a9b6fdfd9eb0ab870fcacc606c0c"
+dependencies = [
+ "indexmap 2.13.0",
+ "serde_core",
+ "serde_spanned 1.0.4",
+ "toml_datetime 1.0.0+spec-1.1.0",
+ "toml_parser",
+ "toml_writer",
+ "winnow 0.7.14",
+]
+
+[[package]]
 name = "toml_datetime"
 version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13392,6 +13629,15 @@ name = "toml_datetime"
 version = "0.7.5+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92e1cfed4a3038bc5a127e35a2d360f145e1f4b971b551a2ba5fd7aedf7e1347"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
+name = "toml_datetime"
+version = "1.0.0+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32c2555c699578a4f59f0cc68e5116c8d7cabbd45e1409b989d4be085b53f13e"
 dependencies = [
  "serde_core",
 ]
@@ -13784,6 +14030,21 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "trybuild"
+version = "1.0.116"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47c635f0191bd3a2941013e5062667100969f8c4e9cd787c14f977265d73616e"
+dependencies = [
+ "glob",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "target-triple",
+ "termcolor",
+ "toml 1.0.3+spec-1.1.0",
+]
 
 [[package]]
 name = "turmoil"

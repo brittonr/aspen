@@ -1,0 +1,25 @@
+[package]
+name = "aspen-hooks-types"
+version = "0.1.0"
+edition = "2024"
+description = "Lightweight type definitions for Aspen hook system (config, events, tickets)"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/blixard/aspen"
+
+[dependencies]
+aspen-hlc = { path = "../aspen-hlc" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "0.8"
+iroh = { version = "0.95.1" }
+iroh-tickets = "0.2"
+postcard = { version = "1", features = ["alloc"] }
+anyhow = "1"
+snafu = "0.8"
+
+[dev-dependencies]
+proptest = "1"
+
+[lints.clippy]
+unnecessary_to_owned = "allow"
+needless_borrow = "allow"

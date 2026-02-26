@@ -1,0 +1,59 @@
+// Docs operation response types.
+
+use serde::Deserialize;
+use serde::Serialize;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsSetResultResponse {
+    #[serde(rename = "success")]
+    pub is_success: bool,
+    pub key: Option<String>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsGetResultResponse {
+    #[serde(rename = "found")]
+    pub was_found: bool,
+    pub value: Option<Vec<u8>>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsDeleteResultResponse {
+    #[serde(rename = "success")]
+    pub is_success: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsListEntry {
+    pub key: String,
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
+    pub hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsListResultResponse {
+    pub entries: Vec<DocsListEntry>,
+    pub count: u32,
+    pub has_more: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsStatusResultResponse {
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
+    pub namespace_id: Option<String>,
+    pub author_id: Option<String>,
+    pub entry_count: Option<u64>,
+    #[serde(rename = "replica_open")]
+    pub is_replica_open: Option<bool>,
+    pub error: Option<String>,
+}
