@@ -18,31 +18,31 @@ aspen-coordination = { path = "../aspen-coordination" }
 # aspen-kv-handler removed — replaced by WASM plugin (aspen-kv-plugin)
 aspen-core-essentials-handler = { path = "../aspen-core-essentials-handler" }
 aspen-cluster-handler = { path = "../aspen-cluster-handler" }
-aspen-blob = { path = "../../../aspen-blob/crates/aspen-blob", optional = true }
-aspen-blob-handler = { path = "../../../aspen-rpc/crates/aspen-blob-handler", optional = true }
+aspen-blob = { path = "../aspen-blob", optional = true }
+aspen-blob-handler = { path = "../aspen-blob-handler", optional = true }
 
-aspen-sql = { path = "../../../aspen-sql/crates/aspen-sql", optional = true }
+aspen-sql = { path = "../aspen-sql", optional = true }
 aspen-auth = { path = "../aspen-auth" }
-aspen-forge = { path = "../../../aspen-forge/crates/aspen-forge", optional = true }
-aspen-forge-handler = { path = "../../../aspen-rpc/crates/aspen-forge-handler", optional = true }
+aspen-forge = { path = "../aspen-forge", optional = true }
+aspen-forge-handler = { path = "../aspen-forge-handler", optional = true }
 aspen-hooks-types = { workspace = true }
-aspen-hooks = { path = "../../../aspen-hooks/crates/aspen-hooks", optional = true }
-aspen-jobs = { path = "../../../aspen-jobs/crates/aspen-jobs", optional = true }
+aspen-hooks = { path = "../aspen-hooks", optional = true }
+aspen-jobs = { path = "../aspen-jobs", optional = true }
 aspen-raft = { path = "../aspen-raft" }
 aspen-cluster = { path = "../aspen-cluster" }
 aspen-transport = { path = "../aspen-transport" }
 aspen-sharding = { path = "../aspen-sharding" }
-aspen-docs = { path = "../../../aspen-docs/crates/aspen-docs", optional = true }
-aspen-docs-handler = { path = "../../../aspen-rpc/crates/aspen-docs-handler", optional = true }
-aspen-secrets = { path = "../../../aspen-secrets/crates/aspen-secrets", optional = true }
-aspen-secrets-handler = { path = "../../../aspen-rpc/crates/aspen-secrets-handler", optional = true }
-aspen-ci = { path = "../../../aspen-ci/crates/aspen-ci", optional = true }
-aspen-ci-handler = { path = "../../../aspen-rpc/crates/aspen-ci-handler", optional = true }
-aspen-nix-handler = { path = "../../../aspen-nix/crates/aspen-nix-handler", optional = true }
+aspen-docs = { path = "../aspen-docs", optional = true }
+aspen-docs-handler = { path = "../aspen-docs-handler", optional = true }
+aspen-secrets = { path = "../aspen-secrets", optional = true }
+aspen-secrets-handler = { path = "../aspen-secrets-handler", optional = true }
+aspen-ci = { path = "../aspen-ci", optional = true }
+aspen-ci-handler = { path = "../aspen-ci-handler", optional = true }
+aspen-nix-handler = { path = "../aspen-nix-handler", optional = true }
 # aspen-query-handler removed — replaced by WASM plugin (aspen-sql-plugin)
 # aspen-hooks-handler removed — replaced by WASM plugin (aspen-hooks-plugin)
-aspen-job-handler = { path = "../../../aspen-rpc/crates/aspen-job-handler", optional = true }
-aspen-nix-cache-gateway = { path = "../../../aspen-nix/crates/aspen-nix-cache-gateway", optional = true }
+aspen-job-handler = { path = "../aspen-job-handler", optional = true }
+# aspen-nix-cache-gateway removed: h3-iroh requires iroh 0.96+ (we use 0.95.1)
 aspen-wasm-plugin = { path = "../../../aspen-wasm-plugin/crates/aspen-wasm-plugin", optional = true }
 
 # Atomic pointer swap for hot-reload of plugin handlers
@@ -77,7 +77,7 @@ git-bridge = ["forge", "aspen-forge/git-bridge"]
 secrets = ["dep:aspen-secrets", "dep:aspen-secrets-handler"]
 automerge = ["aspen-client-api/automerge"]
 ci = ["dep:aspen-ci", "dep:aspen-ci-handler", "dep:aspen-nix-handler", "aspen-nix-handler?/cache", "forge", "aspen-client-api/ci", "aspen-rpc-core/ci", "aspen-rpc-core/nickel", "aspen-ci?/nickel"]
-nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "secrets", "aspen-rpc-core/nix-cache-gateway"]
+# nix-cache-gateway removed: h3-iroh requires iroh 0.96+ (we use 0.95.1)
 snix = ["dep:aspen-nix-handler", "aspen-nix-handler?/snix"]
 hooks = ["dep:aspen-hooks", "aspen-rpc-core/hooks", "aspen-wasm-plugin?/hooks"]
 jobs = ["dep:aspen-jobs", "dep:aspen-job-handler", "aspen-rpc-core/jobs", "aspen-rpc-core/worker"]

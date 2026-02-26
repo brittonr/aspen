@@ -1,0 +1,26 @@
+[package]
+name = "aspen-jobs-guest"
+version = "0.1.0"
+edition = "2024"
+authors = ["Aspen Contributors"]
+description = "Guest binary support for Aspen VM-based job execution"
+license = "Apache-2.0 OR MIT"
+
+[lib]
+# The #[panic_handler] and #[global_allocator] are gated behind cfg(not(test))
+# in lib.rs so unit tests compile without conflicting with std's panic_impl.
+# Doctests are disabled because they compile the lib without cfg(test), causing
+# an irreconcilable panic_handler conflict with std.
+doctest = false
+
+[dependencies]
+# Allocator for no_std
+linked_list_allocator = "0.10"
+
+# Serialization (no_std compatible)
+serde = { version = "1.0", features = ["derive"], default-features = false }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+
+[features]
+default = []
+std = ["serde/std", "serde_json/std"]

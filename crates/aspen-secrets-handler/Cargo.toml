@@ -1,0 +1,33 @@
+[package]
+name = "aspen-secrets-handler"
+version = "0.1.0"
+edition = "2024"
+description = "Secrets engine RPC handler for Aspen distributed cluster"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+# RPC core abstractions (RequestHandler trait, ClientProtocolContext)
+aspen-rpc-core = { path = "../aspen-rpc-core" }
+
+# Local crates
+aspen-client-api = { workspace = true }
+aspen-core = { path = "../aspen-core" }
+aspen-secrets = { path = "../aspen-secrets" }
+
+# Core dependencies
+tokio = { version = "1.0", features = ["macros"] }
+tracing = "0.1"
+anyhow = "1.0"
+async-trait = "0.1"
+
+# Encoding
+base64 = "0.22"
+
+[features]
+default = []
+
+[dev-dependencies]
+aspen-testing = { workspace = true }
+aspen-rpc-core = { path = "../aspen-rpc-core", features = ["testing"] }
+tokio = { version = "1.0", features = ["full", "test-util"] }
+iroh = "0.95.1"

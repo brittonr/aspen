@@ -23,15 +23,15 @@ aspen-hooks-types = { path = "../aspen-hooks-types" }
 aspen-dht-discovery = { path = "../aspen-dht-discovery" }
 
 # Optional feature-gated dependencies
-aspen-blob = { path = "../../../aspen-blob/crates/aspen-blob", optional = true }
-aspen-docs = { path = "../../../aspen-docs/crates/aspen-docs", optional = true }
-aspen-federation = { path = "../../../aspen-federation/crates/aspen-federation", optional = true }
-aspen-jobs = { path = "../../../aspen-jobs/crates/aspen-jobs", optional = true }
-aspen-jobs-worker-maintenance = { path = "../../../aspen-jobs/crates/aspen-jobs-worker-maintenance", optional = true }
-aspen-hooks = { path = "../../../aspen-hooks/crates/aspen-hooks", optional = true }
-aspen-cluster-bridges = { path = "../../../aspen-cluster-bridges/crates/aspen-cluster-bridges", optional = true }
-aspen-nickel = { path = "../../../aspen-ci/crates/aspen-nickel", optional = true }
-aspen-secrets = { path = "../../../aspen-secrets/crates/aspen-secrets", optional = true }
+aspen-blob = { path = "../aspen-blob", optional = true }
+aspen-docs = { path = "../aspen-docs", optional = true }
+aspen-federation = { path = "../aspen-federation", optional = true }
+aspen-jobs = { path = "../aspen-jobs", optional = true }
+aspen-jobs-worker-maintenance = { path = "../aspen-jobs-worker-maintenance", optional = true }
+aspen-hooks = { path = "../aspen-hooks", optional = true }
+aspen-cluster-bridges = { path = "../aspen-cluster-bridges", optional = true }
+aspen-nickel = { path = "../aspen-nickel", optional = true }
+aspen-secrets = { path = "../aspen-secrets", optional = true }
 
 # Networking and P2P
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }

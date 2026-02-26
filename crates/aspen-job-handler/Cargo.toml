@@ -1,0 +1,47 @@
+[package]
+name = "aspen-job-handler"
+version = "0.1.0"
+edition = "2024"
+description = "Job queue RPC handler for Aspen"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+# RPC core (ServiceExecutor, ServiceHandler, HandlerFactory, ClientProtocolContext)
+aspen-rpc-core = { path = "../aspen-rpc-core", features = ["jobs", "worker"] }
+
+# Client API types (ClientRpcRequest, ClientRpcResponse, result types)
+aspen-client-api = { workspace = true }
+
+# Core types (KeyValueStore, ScanRequest)
+aspen-core = { path = "../aspen-core" }
+
+# Job system types
+aspen-jobs = { path = "../aspen-jobs" }
+
+# Jobs protocol response types (in main aspen repo)
+aspen-jobs-protocol = { path = "../aspen-jobs-protocol" }
+
+# Worker coordination
+aspen-coordination = { path = "../aspen-coordination" }
+aspen-cluster = { path = "../aspen-cluster", features = ["jobs"] }
+
+# Error handling
+anyhow = "1.0"
+
+# Serialization
+serde_json = "1.0"
+
+# Time handling
+chrono = { workspace = true }
+
+# Async
+async-trait = "0.1"
+
+# Logging
+tracing = "0.1"
+
+# Handler self-registration
+inventory = "0.3"
+
+[features]
+default = []

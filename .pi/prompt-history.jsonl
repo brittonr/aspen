@@ -114,3 +114,14 @@
 {"text":"should we consider moving our sibling repos back into the directory now that they are decoupled?","timestamp":1772061962474}
 {"text":"idk","timestamp":1772062307790}
 {"text":"i want the flake and cargo to be in unity!","timestamp":1772062340439}
+{"text":"what next","timestamp":1772067914597}
+{"text":"i want to commit and push this crate and all sister crates to github - only this one is on there currently what do i need to d","timestamp":1772068154079}
+{"text":"public for all. agpl","timestamp":1772068205072}
+{"text":"so whats the layout","timestamp":1772069814842}
+{"text":"can i see the dag","timestamp":1772069966735}
+{"text":"commit","timestamp":1772070050279}
+{"text":"so should we have more workspaces and less crates for our aspen repos","timestamp":1772070402725}
+{"text":"confirm this before we start","timestamp":1772070510772}
+{"text":"lets begin","timestamp":1772071214092}
+{"text":"lets just remove that crate for now","timestamp":1772071714219}
+{"text":"commit all of these","timestamp":1772071784197}

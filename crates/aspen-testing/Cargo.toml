@@ -33,13 +33,13 @@ aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
 aspen-raft = { version = "0.1.0", path = "../aspen-raft", features = ["testing"], optional = true }
 
 # Blob, cluster, jobs dependencies (optional - required for router module)
-aspen-blob = { version = "0.1.0", path = "../../../aspen-blob/crates/aspen-blob", optional = true }
+aspen-blob = { version = "0.1.0", path = "../aspen-blob", optional = true }
 aspen-cluster = { version = "0.1.0", path = "../aspen-cluster", optional = true }
-aspen-jobs = { version = "0.1.0", path = "../../../aspen-jobs/crates/aspen-jobs", optional = true }
+aspen-jobs = { version = "0.1.0", path = "../aspen-jobs", optional = true }
 aspen-coordination = { version = "0.1.0", path = "../aspen-coordination", optional = true }
 
-aspen-forge = { version = "0.1.0", path = "../../../aspen-forge/crates/aspen-forge", optional = true }
-aspen-ci = { version = "0.1.0", path = "../../../aspen-ci/crates/aspen-ci", optional = true }
+aspen-forge = { version = "0.1.0", path = "../aspen-forge", optional = true }
+aspen-ci = { version = "0.1.0", path = "../aspen-ci", optional = true }
 
 # Iroh networking dependencies
 iroh = "0.95.1"

@@ -47,6 +47,7 @@ path = "examples/test_vm_standalone.rs"
 required-features = ["plugins-vm"]
 
 [workspace]
+
 members = [
     ".",
 
@@ -100,6 +101,52 @@ members = [
     "crates/aspen-testing-fixtures",
     "crates/aspen-testing-madsim",
     "crates/aspen-testing-network",
+
+    # Extension crates (previously separate repos)
+    "crates/aspen-blob",
+    "crates/aspen-sql",
+    "crates/aspen-forge",
+    "crates/aspen-docs",
+    "crates/aspen-hooks",
+    "crates/aspen-secrets",
+    "crates/aspen-automerge",
+    "crates/aspen-federation",
+    "crates/aspen-cli",
+    "crates/aspen-tui",
+    "crates/aspen-cluster-bridges",
+    "crates/aspen-plugin-api",
+    "crates/aspen-fuse",
+
+    # Jobs subsystem
+    "crates/aspen-jobs",
+    # "crates/aspen-jobs-guest",  # no_std — build separately with --target x86_64-hyperlight-none
+    "crates/aspen-jobs-worker-blob",
+    "crates/aspen-jobs-worker-maintenance",
+    "crates/aspen-jobs-worker-replication",
+    "crates/aspen-jobs-worker-shell",
+    "crates/aspen-jobs-worker-sql",
+
+    # CI subsystem
+    "crates/aspen-ci",
+    "crates/aspen-ci-core",
+    "crates/aspen-ci-executor-shell",
+    "crates/aspen-ci-executor-nix",
+    "crates/aspen-ci-executor-vm",
+    "crates/aspen-nickel",
+
+    # Nix integration
+    "crates/aspen-cache",
+    "crates/aspen-snix",
+
+    "crates/aspen-nix-handler",
+
+    # RPC handlers (feature-gated)
+    "crates/aspen-blob-handler",
+    "crates/aspen-forge-handler",
+    "crates/aspen-docs-handler",
+    "crates/aspen-secrets-handler",
+    "crates/aspen-ci-handler",
+    "crates/aspen-job-handler",
 
     # Vendored openraft
     "openraft/openraft",
@@ -191,30 +238,43 @@ aspen-testing-fixtures = { path = "crates/aspen-testing-fixtures" }
 aspen-testing-madsim = { path = "crates/aspen-testing-madsim" }
 aspen-testing-network = { path = "crates/aspen-testing-network" }
 
-# === Extension crates (external repos) ===
-aspen-blob = { path = "../aspen-blob/crates/aspen-blob" }
-aspen-sql = { path = "../aspen-sql/crates/aspen-sql" }
-aspen-forge = { path = "../aspen-forge/crates/aspen-forge" }
-aspen-hooks = { path = "../aspen-hooks/crates/aspen-hooks" }
-aspen-docs = { path = "../aspen-docs/crates/aspen-docs" }
-aspen-cluster-bridges = { path = "../aspen-cluster-bridges/crates/aspen-cluster-bridges" }
-aspen-tui = { path = "../aspen-tui/crates/aspen-tui" }
-aspen-cli = { path = "../aspen-cli/crates/aspen-cli" }
-aspen-jobs = { path = "../aspen-jobs/crates/aspen-jobs" }
-aspen-jobs-worker-blob = { path = "../aspen-jobs/crates/aspen-jobs-worker-blob" }
-aspen-jobs-worker-replication = { path = "../aspen-jobs/crates/aspen-jobs-worker-replication" }
-aspen-jobs-worker-sql = { path = "../aspen-jobs/crates/aspen-jobs-worker-sql" }
-aspen-jobs-worker-maintenance = { path = "../aspen-jobs/crates/aspen-jobs-worker-maintenance" }
-aspen-jobs-worker-shell = { path = "../aspen-jobs/crates/aspen-jobs-worker-shell" }
-aspen-secrets = { path = "../aspen-secrets/crates/aspen-secrets" }
-aspen-automerge = { path = "../aspen-automerge/crates/aspen-automerge" }
-aspen-nickel = { path = "../aspen-ci/crates/aspen-nickel" }
-aspen-ci = { path = "../aspen-ci/crates/aspen-ci" }
-aspen-ci-core = { path = "../aspen-ci/crates/aspen-ci-core" }
-aspen-ci-executor-shell = { path = "../aspen-ci/crates/aspen-ci-executor-shell" }
-aspen-ci-executor-nix = { path = "../aspen-ci/crates/aspen-ci-executor-nix" }
-aspen-ci-executor-vm = { path = "../aspen-ci/crates/aspen-ci-executor-vm" }
-aspen-cache = { path = "../aspen-nix/crates/aspen-cache" }
+# === Extension crates (now local) ===
+aspen-blob = { path = "crates/aspen-blob" }
+aspen-sql = { path = "crates/aspen-sql" }
+aspen-forge = { path = "crates/aspen-forge" }
+aspen-hooks = { path = "crates/aspen-hooks" }
+aspen-docs = { path = "crates/aspen-docs" }
+aspen-cluster-bridges = { path = "crates/aspen-cluster-bridges" }
+aspen-tui = { path = "crates/aspen-tui" }
+aspen-cli = { path = "crates/aspen-cli" }
+aspen-jobs = { path = "crates/aspen-jobs" }
+aspen-jobs-worker-blob = { path = "crates/aspen-jobs-worker-blob" }
+aspen-jobs-worker-replication = { path = "crates/aspen-jobs-worker-replication" }
+aspen-jobs-worker-sql = { path = "crates/aspen-jobs-worker-sql" }
+aspen-jobs-worker-maintenance = { path = "crates/aspen-jobs-worker-maintenance" }
+aspen-jobs-worker-shell = { path = "crates/aspen-jobs-worker-shell" }
+aspen-secrets = { path = "crates/aspen-secrets" }
+aspen-automerge = { path = "crates/aspen-automerge" }
+aspen-nickel = { path = "crates/aspen-nickel" }
+aspen-ci = { path = "crates/aspen-ci" }
+aspen-ci-core = { path = "crates/aspen-ci-core" }
+aspen-ci-executor-shell = { path = "crates/aspen-ci-executor-shell" }
+aspen-ci-executor-nix = { path = "crates/aspen-ci-executor-nix" }
+aspen-ci-executor-vm = { path = "crates/aspen-ci-executor-vm" }
+aspen-cache = { path = "crates/aspen-cache" }
+aspen-snix = { path = "crates/aspen-snix" }
+
+aspen-nix-handler = { path = "crates/aspen-nix-handler" }
+aspen-federation = { path = "crates/aspen-federation" }
+aspen-plugin-api = { path = "crates/aspen-plugin-api" }
+aspen-wasm-plugin = { path = "../aspen-wasm-plugin/crates/aspen-wasm-plugin" }
+aspen-fuse = { path = "crates/aspen-fuse" }
+aspen-blob-handler = { path = "crates/aspen-blob-handler" }
+aspen-forge-handler = { path = "crates/aspen-forge-handler" }
+aspen-docs-handler = { path = "crates/aspen-docs-handler" }
+aspen-secrets-handler = { path = "crates/aspen-secrets-handler" }
+aspen-ci-handler = { path = "crates/aspen-ci-handler" }
+aspen-job-handler = { path = "crates/aspen-job-handler" }
 irpc = { version = "0.11.0", features = ["derive"] }
 n0-future = "0.3.2"
 nickel-lang = "2.0"
@@ -229,19 +289,12 @@ bolero-generator = "0.13"  # Bolero generator support
 schemars = "0.8"  # JSON Schema generation (0.8 for Draft 7 compatibility with json-schema-to-nickel)
 
 # SNIX dependencies for Nix store integration
-# Using git with specific revision for reproducible builds
-# For local development, use .cargo/config.toml to override with path dependencies
 snix-castore = { git = "https://git.snix.dev/snix/snix.git", rev = "8fe3bade2013befd5ca98aa42224fa2a23551559" }
 snix-store = { git = "https://git.snix.dev/snix/snix.git", rev = "8fe3bade2013befd5ca98aa42224fa2a23551559" }
 nix-compat = { git = "https://git.snix.dev/snix/snix.git", rev = "8fe3bade2013befd5ca98aa42224fa2a23551559", features = ["async", "serde"] }
 prost = "0.13"  # Protobuf encoding for SNIX types
 tonic = { version = "0.12", features = ["transport"] }  # gRPC for SNIX services
 async-stream = "0.3"  # Async stream utilities for SNIX
-aspen-snix = { path = "../aspen-nix/crates/aspen-snix" }
-aspen-nix-cache-gateway = { path = "../aspen-nix/crates/aspen-nix-cache-gateway" }
-aspen-federation = { path = "../aspen-federation/crates/aspen-federation" }
-aspen-plugin-api = { path = "../aspen-plugin-api/crates/aspen-plugin-api" }
-aspen-wasm-plugin = { path = "../aspen-wasm-plugin/crates/aspen-wasm-plugin" }
 
 # h3-iroh for HTTP/3 over Iroh QUIC (Nix binary cache gateway)
 h3 = "0.0.8"
@@ -277,7 +330,7 @@ aspen-cache = { workspace = true, optional = true }
 aspen-snix = { workspace = true, optional = true }
 snix-castore = { workspace = true, optional = true }
 snix-store = { workspace = true, optional = true }
-aspen-nix-cache-gateway = { workspace = true, optional = true }
+
 aspen-proxy = { workspace = true, optional = true }
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
@@ -709,46 +762,3 @@ required-features = ["jobs", "docs", "hooks", "federation"]
 # (removed in Cargo 1.93) with stable --message-format=json.
 [patch.crates-io]
 cargo-hyperlight = { path = "vendor/cargo-hyperlight" }
-
-# Override git deps from extension repos that reference the aspen git repo
-[patch."https://github.com/brittonr/aspen.git"]
-aspen-core = { path = "crates/aspen-core" }
-aspen-auth = { path = "crates/aspen-auth" }
-aspen-ticket = { path = "crates/aspen-ticket" }
-aspen-client-api = { path = "crates/aspen-client-api" }
-aspen-client = { path = "crates/aspen-client" }
-aspen-testing = { path = "crates/aspen-testing" }
-aspen-constants = { path = "crates/aspen-constants" }
-aspen-cluster-types = { path = "crates/aspen-cluster-types" }
-aspen-kv-types = { path = "crates/aspen-kv-types" }
-aspen-traits = { path = "crates/aspen-traits" }
-aspen-hlc = { path = "crates/aspen-hlc" }
-aspen-time = { path = "crates/aspen-time" }
-aspen-disk = { path = "crates/aspen-disk" }
-aspen-storage-types = { path = "crates/aspen-storage-types" }
-aspen-coordination = { path = "crates/aspen-coordination" }
-aspen-coordination-protocol = { path = "crates/aspen-coordination-protocol" }
-aspen-forge-protocol = { path = "crates/aspen-forge-protocol" }
-aspen-jobs-protocol = { path = "crates/aspen-jobs-protocol" }
-aspen-layer = { path = "crates/aspen-layer" }
-aspen-dht-discovery = { path = "crates/aspen-dht-discovery" }
-aspen-raft = { path = "crates/aspen-raft" }
-aspen-raft-types = { path = "crates/aspen-raft-types" }
-aspen-raft-network = { path = "crates/aspen-raft-network" }
-aspen-redb-storage = { path = "crates/aspen-redb-storage" }
-aspen-transport = { path = "crates/aspen-transport" }
-aspen-cluster = { path = "crates/aspen-cluster" }
-aspen-proxy = { path = "crates/aspen-proxy" }
-aspen-hooks-types = { path = "crates/aspen-hooks-types" }
-# Extension crates (external repos)
-aspen-blob = { path = "../aspen-blob/crates/aspen-blob" }
-aspen-cache = { path = "../aspen-nix/crates/aspen-cache" }
-aspen-jobs = { path = "../aspen-jobs/crates/aspen-jobs" }
-aspen-forge = { path = "../aspen-forge/crates/aspen-forge" }
-aspen-docs = { path = "../aspen-docs/crates/aspen-docs" }
-aspen-secrets = { path = "../aspen-secrets/crates/aspen-secrets" }
-aspen-hooks = { path = "../aspen-hooks/crates/aspen-hooks" }
-aspen-federation = { path = "../aspen-federation/crates/aspen-federation" }
-aspen-sql = { path = "../aspen-sql/crates/aspen-sql" }
-aspen-plugin-api = { path = "../aspen-plugin-api/crates/aspen-plugin-api" }
-aspen-sharding = { path = "crates/aspen-sharding" }

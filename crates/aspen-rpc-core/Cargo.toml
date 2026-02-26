@@ -12,8 +12,8 @@ aspen-constants = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-auth = { path = "../aspen-auth" }
 aspen-hooks-types = { workspace = true }
-aspen-hooks = { path = "../../../aspen-hooks/crates/aspen-hooks", optional = true }
-aspen-jobs = { path = "../../../aspen-jobs/crates/aspen-jobs", optional = true }
+aspen-hooks = { path = "../aspen-hooks", optional = true }
+aspen-jobs = { path = "../aspen-jobs", optional = true }
 aspen-raft = { path = "../aspen-raft" }
 aspen-sharding = { path = "../aspen-sharding" }
 aspen-coordination = { path = "../aspen-coordination" }
@@ -29,14 +29,14 @@ serde = { workspace = true }
 inventory = "0.3"
 
 # Optional dependencies (feature-gated)
-aspen-blob = { path = "../../../aspen-blob/crates/aspen-blob", optional = true }
-aspen-sql = { path = "../../../aspen-sql/crates/aspen-sql", optional = true }
-aspen-forge = { path = "../../../aspen-forge/crates/aspen-forge", optional = true }
+aspen-blob = { path = "../aspen-blob", optional = true }
+aspen-sql = { path = "../aspen-sql", optional = true }
+aspen-forge = { path = "../aspen-forge", optional = true }
 # Note: aspen-secrets is NOT included here because SecretsService is handler-specific
 # and defined in aspen-rpc-handlers. Handler extraction will need trait abstraction.
-aspen-ci = { path = "../../../aspen-ci/crates/aspen-ci", optional = true }
+aspen-ci = { path = "../aspen-ci", optional = true }
 aspen-cluster = { path = "../aspen-cluster", optional = true, features = ["federation"] }
-aspen-nix-cache-gateway = { path = "../../../aspen-nix/crates/aspen-nix-cache-gateway", optional = true }
+# aspen-nix-cache-gateway removed: h3-iroh requires iroh 0.96+ (we use 0.95.1)
 aspen-testing = { workspace = true, optional = true }
 # Iroh for mock endpoint provider in tests
 iroh = { version = "0.95.1", optional = true }
@@ -50,7 +50,7 @@ forge = ["dep:aspen-forge", "dep:aspen-cluster"]
 ci = ["dep:aspen-ci", "forge"]
 # nickel feature enables TriggerService in ci_trigger_service context field
 nickel = ["aspen-ci?/nickel"]
-nix-cache-gateway = ["dep:aspen-nix-cache-gateway"]
+# nix-cache-gateway removed: h3-iroh requires iroh 0.96+ (we use 0.95.1)
 global-discovery = ["aspen-core/global-discovery"]
 worker = ["dep:aspen-cluster", "aspen-cluster/jobs"]
 jobs = ["dep:aspen-jobs"]

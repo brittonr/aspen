@@ -1,0 +1,34 @@
+[package]
+name = "aspen-cache"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Distributed Nix binary cache for Aspen using iroh-blobs storage"
+
+[dependencies]
+# Core types and traits
+aspen-core = { workspace = true }
+
+# Blob storage
+aspen-blob = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+snafu = "0.8.9"
+
+# Async
+async-trait = "0.1"
+tokio = { workspace = true, features = ["process"] }
+
+# Logging
+tracing = { workspace = true }
+
+# Encoding
+hex = "0.4"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+aspen-testing = { workspace = true }
