@@ -5,6 +5,7 @@ fn fail() {
 }
 
 #[test]
+#[ignore = "requires cargo-expand which is not in dev environment"]
 fn pass() {
     macrotest::expand("tests/expand/expand/*.rs");
 }

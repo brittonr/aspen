@@ -48,6 +48,7 @@ required-features = ["plugins-vm"]
 
 [workspace]
 
+
 members = [
     ".",
 
@@ -736,11 +737,11 @@ required-features = ["hooks"]
 
 [[test]]
 name = "blob_gc_integration_test"
-required-features = ["blob"]
+required-features = ["blob", "jobs", "docs", "hooks", "federation"]
 
 [[test]]
 name = "blob_replication_integration_test"
-required-features = ["blob"]
+required-features = ["blob", "jobs", "docs", "hooks", "federation"]
 
 [[test]]
 name = "job_integration_test"
