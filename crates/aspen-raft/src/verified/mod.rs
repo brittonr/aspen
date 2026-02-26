@@ -154,18 +154,23 @@ pub use membership::ClassifiedNodes;
 // Membership Building
 pub use membership::MembershipError;
 pub use membership::build_new_membership;
-// Quorum Calculation
-pub use membership::calculate_quorum_size;
-pub use membership::can_remove_voter_safely;
-pub use membership::classify_nodes_by_role;
-pub use membership::collect_voter_ids;
 // ============================================================================
 // Re-exports: Membership
 // ============================================================================
 
 // Learner Lag
+pub use membership::calculate_promotion_threshold;
+// Quorum Calculation
+pub use membership::calculate_quorum_size;
+pub use membership::can_remove_voter_safely;
+pub use membership::classify_nodes_by_role;
+pub use membership::collect_voter_ids;
 pub use membership::compute_learner_lag;
+pub use membership::fault_tolerance_for_size;
+pub use membership::has_quorum;
 pub use membership::is_learner_caught_up;
+pub use membership::is_promotion_eligible;
+pub use membership::min_cluster_size_for_tolerance;
 pub use membership::would_exceed_max_voters;
 // Response Handling
 pub use network::classify_response_health;

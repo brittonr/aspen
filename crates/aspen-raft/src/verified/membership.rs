@@ -162,9 +162,8 @@ pub const fn can_remove_voter_safely(current_voter_count: u32) -> bool {
 /// ```rust
 /// use aspen_raft::verified::would_exceed_max_voters;
 ///
-/// assert!(!would_exceed_max_voters(99, 100));  // 100 <= 100
-/// assert!(!would_exceed_max_voters(100, 100)); // Edge: 101 > 100, but we check after add
-/// assert!(would_exceed_max_voters(100, 100));  // Actually: 100 >= 100, so adding would make 101
+/// assert!(!would_exceed_max_voters(99, 100));  // 99 < 100, room for one more
+/// assert!(would_exceed_max_voters(100, 100));  // 100 >= 100, adding would make 101
 /// ```
 #[inline]
 pub const fn would_exceed_max_voters(current_voter_count: u32, max_voters: u32) -> bool {

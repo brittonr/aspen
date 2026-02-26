@@ -166,7 +166,7 @@ pub enum ConditionResult {
 ///     (CONDITION_KEY_EXISTS, "key1".to_string(), String::new()),
 /// ];
 ///
-/// let result = evaluate_conditions(&conditions, |k| store.get(k.as_str()).map(|v| *v));
+/// let result = evaluate_conditions(&conditions, |k| store.get(k).map(|v| *v));
 /// assert_eq!(result, ConditionResult::AllMet);
 /// ```
 pub fn evaluate_conditions<F>(conditions: &[(u8, String, String)], get_value: F) -> ConditionResult
