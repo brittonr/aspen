@@ -284,10 +284,12 @@ async fn handle_client_request_check_rate_limit(
             Ok(false)
         }
         Err(RateLimitError::StorageUnavailable { reason }) => {
-            warn!(client_id = %client_id, reason = %reason, "Rate limiter storage unavailable, rejecting request");
-            handle_client_request_send_error(send, "SERVICE_UNAVAILABLE", "rate limiter unavailable - try again later")
-                .await?;
-            Ok(false)
+            // Fail-open: allow the request when rate limiter storage is unavailable.
+            // This matches the fail-open behavior for follower nodes (NotLeader errors
+            // in the rate limiter). Blocking all requests due to a transient storage
+            // hiccup creates a cascading failure — the cure is worse than the disease.
+            warn!(client_id = %client_id, reason = %reason, "Rate limiter storage unavailable, allowing request (fail-open)");
+            Ok(true)
         }
     }
 }
