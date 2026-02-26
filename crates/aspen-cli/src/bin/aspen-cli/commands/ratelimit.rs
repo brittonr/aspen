@@ -153,7 +153,16 @@ impl RateLimitCommand {
     }
 }
 
+/// Validate rate parameter is positive and finite.
+fn validate_rate(rate: f64) -> Result<()> {
+    if !rate.is_finite() || rate <= 0.0 {
+        anyhow::bail!("rate must be a positive finite number, got: {}", rate);
+    }
+    Ok(())
+}
+
 async fn ratelimit_try_acquire(client: &AspenClient, args: TryAcquireArgs, json: bool) -> Result<()> {
+    validate_rate(args.rate)?;
     let response = client
         .send(ClientRpcRequest::RateLimiterTryAcquire {
             key: args.key.clone(),
@@ -185,6 +194,7 @@ async fn ratelimit_try_acquire(client: &AspenClient, args: TryAcquireArgs, json:
 }
 
 async fn ratelimit_acquire(client: &AspenClient, args: AcquireArgs, json: bool) -> Result<()> {
+    validate_rate(args.rate)?;
     let response = client
         .send(ClientRpcRequest::RateLimiterAcquire {
             key: args.key.clone(),
@@ -217,6 +227,7 @@ async fn ratelimit_acquire(client: &AspenClient, args: AcquireArgs, json: bool) 
 }
 
 async fn ratelimit_available(client: &AspenClient, args: AvailableArgs, json: bool) -> Result<()> {
+    validate_rate(args.rate)?;
     let response = client
         .send(ClientRpcRequest::RateLimiterAvailable {
             key: args.key.clone(),
@@ -247,6 +258,7 @@ async fn ratelimit_available(client: &AspenClient, args: AvailableArgs, json: bo
 }
 
 async fn ratelimit_reset(client: &AspenClient, args: ResetArgs, json: bool) -> Result<()> {
+    validate_rate(args.rate)?;
     let response = client
         .send(ClientRpcRequest::RateLimiterReset {
             key: args.key.clone(),

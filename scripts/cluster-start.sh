@@ -24,6 +24,9 @@ echo "$COOKIE" > "$CLUSTER_DIR/cookie"
 echo "Starting 3-node cluster..."
 for i in 1 2 3; do
   KEY=$(printf '%064x' $((1000 + i)))
+  ASPEN_DOCS_ENABLED=true \
+  ASPEN_DOCS_IN_MEMORY=true \
+  ASPEN_HOOKS_ENABLED=true \
   ./target/debug/aspen-node \
     --node-id "$i" \
     --data-dir "$CLUSTER_DIR/node$i" \

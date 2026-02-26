@@ -398,14 +398,41 @@ mod tests {
     }
 
     #[test]
-    fn test_kv_set_requires_key_and_value() {
-        // kv set with only key should fail
+    fn test_kv_set_requires_key_and_value_or_file() {
+        // kv set with only key should fail (no value or --file)
         let result = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "kv", "set", "key"]);
         assert!(result.is_err());
 
         // kv set with key and value should succeed
         let result = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "kv", "set", "key", "value"]);
         assert!(result.is_ok());
+
+        // kv set with key and --file should succeed (no value needed)
+        let result = Cli::try_parse_from([
+            "aspen-cli",
+            "--ticket",
+            "fake",
+            "kv",
+            "set",
+            "key",
+            "--file",
+            "/tmp/test",
+        ]);
+        assert!(result.is_ok());
+
+        // kv set with both value and --file should fail (conflicts)
+        let result = Cli::try_parse_from([
+            "aspen-cli",
+            "--ticket",
+            "fake",
+            "kv",
+            "set",
+            "key",
+            "value",
+            "--file",
+            "/tmp/test",
+        ]);
+        assert!(result.is_err());
     }
 
     #[test]

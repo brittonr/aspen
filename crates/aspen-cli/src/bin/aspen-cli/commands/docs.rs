@@ -356,7 +356,11 @@ async fn docs_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()>
         },
     };
 
+    let failed = !output.is_success;
     print_output(&output, json);
+    if failed {
+        std::process::exit(1);
+    }
     Ok(())
 }
 
@@ -380,7 +384,11 @@ async fn docs_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
         },
     };
 
+    let failed = output.error.is_some();
     print_output(&output, json);
+    if failed {
+        std::process::exit(1);
+    }
     Ok(())
 }
 
@@ -400,7 +408,11 @@ async fn docs_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Resu
         },
     };
 
+    let failed = !output.is_success;
     print_output(&output, json);
+    if failed {
+        std::process::exit(1);
+    }
     Ok(())
 }
 
@@ -438,7 +450,11 @@ async fn docs_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<(
         },
     };
 
+    let failed = output.error.is_some();
     print_output(&output, json);
+    if failed {
+        std::process::exit(1);
+    }
     Ok(())
 }
 
@@ -466,7 +482,11 @@ async fn docs_status(client: &AspenClient, json: bool) -> Result<()> {
         },
     };
 
+    let failed = output.error.is_some();
     print_output(&output, json);
+    if failed {
+        std::process::exit(1);
+    }
     Ok(())
 }
 
@@ -497,6 +517,10 @@ async fn docs_ticket(client: &AspenClient, args: TicketArgs, json: bool) -> Resu
         },
     };
 
+    let failed = output.error.is_some();
     print_output(&output, json);
+    if failed {
+        std::process::exit(1);
+    }
     Ok(())
 }

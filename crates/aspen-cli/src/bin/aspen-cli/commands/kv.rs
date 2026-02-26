@@ -62,11 +62,12 @@ pub struct SetArgs {
     /// Key to write.
     pub key: String,
 
-    /// Value to write (string, use --file for binary).
-    pub value: String,
+    /// Value to write (string). Omit when using --file.
+    #[arg(required_unless_present = "file")]
+    pub value: Option<String>,
 
     /// Read value from file instead of argument.
-    #[arg(long, short)]
+    #[arg(long, short, conflicts_with = "value")]
     pub file: Option<std::path::PathBuf>,
 }
 
@@ -181,9 +182,10 @@ async fn kv_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
 async fn kv_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()> {
     // Get value from file or argument
     let value = if let Some(ref path) = args.file {
-        std::fs::read(path).map_err(|e| anyhow::anyhow!("failed to read file: {}", e))?
+        std::fs::read(path).map_err(|e| anyhow::anyhow!("failed to read file '{}': {}", path.display(), e))?
     } else {
-        args.value.as_bytes().to_vec()
+        // Safe: clap's required_unless_present ensures value is Some when file is None
+        args.value.expect("value required when --file not provided").into_bytes()
     };
 
     let response = client

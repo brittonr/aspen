@@ -180,6 +180,15 @@ impl AspenClient {
 
                 match self.send_to_peer_addr(peer_addr, request.clone()).await {
                     Ok(response) => {
+                        // Convert CapabilityUnavailable to Error so all handlers
+                        // get a consistent error type they already match against.
+                        if let ClientRpcResponse::CapabilityUnavailable(ref cap) = response {
+                            return Ok(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
+                                code: "CAPABILITY_UNAVAILABLE".to_string(),
+                                message: cap.message.clone(),
+                            }));
+                        }
+
                         // Check if server returned a retryable error
                         if let ClientRpcResponse::Error(ref e) = response {
                             if e.code == "NOT_INITIALIZED" {
@@ -447,6 +456,14 @@ impl AspenClient {
 
         // Close connection gracefully
         connection.close(VarInt::from_u32(0), b"done");
+
+        // Convert CapabilityUnavailable to Error for consistent handler matching
+        if let ClientRpcResponse::CapabilityUnavailable(ref cap) = response {
+            return Ok(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
+                code: "CAPABILITY_UNAVAILABLE".to_string(),
+                message: cap.message.clone(),
+            }));
+        }
 
         Ok(response)
     }
