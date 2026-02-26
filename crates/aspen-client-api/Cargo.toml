@@ -23,7 +23,7 @@ aspen-jobs-protocol = { path = "../aspen-jobs-protocol" }
 thiserror = "2.0"
 
 [features]
-default = ["auth"]
+default = ["auth", "ci", "secrets", "automerge"]
 auth = ["dep:aspen-auth"]
 ci = []
 secrets = []

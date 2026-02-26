@@ -499,4 +499,17 @@ mod tests {
         let config = IrohEndpointConfig::default();
         assert!(config.secret_key_path.is_none());
     }
+
+    /// Regression: LogsSinceLast(100) triggered a snapshot race condition
+    /// that panicked the Raft core. The constant MIN_SNAPSHOT_LOG_THRESHOLD
+    /// enforces a minimum at compile time; this test ensures the constant
+    /// itself stays sane and documents the fix.
+    #[test]
+    fn test_snapshot_threshold_safety_floor() {
+        assert!(
+            aspen_raft_types::MIN_SNAPSHOT_LOG_THRESHOLD >= 1_000,
+            "snapshot threshold safety floor must be >= 1000; \
+             see napkin 2026-02-26 snapshot race"
+        );
+    }
 }

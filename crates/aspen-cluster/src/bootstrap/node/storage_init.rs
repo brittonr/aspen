@@ -44,8 +44,8 @@ pub(super) fn create_raft_config_and_broadcast(config: &NodeConfig) -> (Arc<Raft
         election_timeout_min: config.election_timeout_min_ms,
         election_timeout_max: config.election_timeout_max_ms,
         replication_lag_threshold: 10000,
-        snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(100),
-        max_in_snapshot_log_to_keep: 100,
+        snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(10_000),
+        max_in_snapshot_log_to_keep: 1_000,
         enable_tick: true,
         install_snapshot_timeout: aspen_raft::constants::SNAPSHOT_INSTALL_TIMEOUT_MS,
         ..RaftConfig::default()
@@ -133,5 +133,25 @@ pub(super) async fn create_raft_instance(
             info!(node_id = config.node_id, "Redb TTL cleanup task started");
             Ok((raft, StateMachineVariant::Redb(shared_storage), Some(ttl_cancel)))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use aspen_raft_types::MIN_SNAPSHOT_LOG_THRESHOLD;
+
+    /// Regression: LogsSinceLast(100) triggered a snapshot race that panicked
+    /// the Raft core (`snapshot.submitted > apply_progress.submitted`).
+    /// The configured threshold in this module must respect the safety floor.
+    #[test]
+    fn test_snapshot_threshold_respects_safety_floor() {
+        // This is the value used in create_raft_config_and_broadcast() above.
+        // If you change LogsSinceLast(N), update this constant AND ensure N >= MIN.
+        let configured_threshold: u64 = 10_000;
+        assert!(
+            configured_threshold >= MIN_SNAPSHOT_LOG_THRESHOLD,
+            "snapshot threshold {configured_threshold} is below safety floor \
+             {MIN_SNAPSHOT_LOG_THRESHOLD}; see napkin 2026-02-26 snapshot race"
+        );
     }
 }

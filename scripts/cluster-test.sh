@@ -7,7 +7,11 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 CLUSTER_DIR="/tmp/aspen-test-cluster"
 
-TICKET=$(cat "$CLUSTER_DIR/node1/cluster-ticket.txt")
+# Use cluster-generated ticket (includes all nodes) for failover resilience.
+# Fall back to node1's bootstrap ticket if the cluster ticket isn't available yet.
+BOOTSTRAP_TICKET=$(cat "$CLUSTER_DIR/node1/cluster-ticket.txt")
+CLUSTER_TICKET=$(./target/debug/aspen-cli -q --ticket "$BOOTSTRAP_TICKET" cluster ticket 2>/dev/null || echo "")
+TICKET="${CLUSTER_TICKET:-$BOOTSTRAP_TICKET}"
 TICKET2=$(cat "$CLUSTER_DIR/node2/cluster-ticket.txt")
 TICKET3=$(cat "$CLUSTER_DIR/node3/cluster-ticket.txt")
 CLI="./target/debug/aspen-cli -q --ticket $TICKET"
@@ -90,6 +94,35 @@ echo "── Verify Suite ──────────────────
 run_test "Verify KV"                 '$CLI verify kv | grep -q PASS'
 run_test "Verify blob"               '$CLI verify blob | grep -qi "PASS\|verified"'
 run_test "Verify all"                '$CLI verify all --continue-on-error | grep -qi passed'
+
+# ── Coordination Primitives (graceful error handling) ──
+# These require WASM plugins for full functionality. Without plugins,
+# they should return clean error messages (not deserialization crashes).
+# Note: { cmd || true; } suppresses CLI exit code for pipefail compat.
+echo "── Coordination Primitives (error handling) ──────"
+run_test "Lock CLI parses"           '{ $CLI lock try-acquire e2e-lock --holder cli-test --ttl 30000 2>&1 || true; } | grep -qiE "acquired|error|unavailable"'
+run_test "Counter CLI parses"        '{ $CLI counter get e2e-counter 2>&1 || true; } | grep -qiE "value|error|unavailable"'
+run_test "Sequence CLI parses"       '{ $CLI sequence next e2e-seq 2>&1 || true; } | grep -qiE "value|error|unavailable"'
+run_test "Queue CLI parses"          '{ $CLI queue enqueue e2e-q "item" 2>&1 || true; } | grep -qiE "enqueued|error|unavailable"'
+run_test "Semaphore CLI parses"      '{ $CLI semaphore try-acquire e2e-sem --permits 1 --holder cli-test --capacity 5 2>&1 || true; } | grep -qiE "acquired|error|unavailable"'
+run_test "Ratelimit CLI parses"      '{ $CLI ratelimit try-acquire e2e-rl --rate 100.0 --capacity 1000 2>&1 || true; } | grep -qiE "allowed|error|unavailable"'
+
+# ── Hooks ──────────────────────────────────────────────
+echo "── Hooks ─────────────────────────────────────────"
+run_test "Hook list (clean error)"   '{ $CLI hook list 2>&1 || true; } | grep -qiE "handler|error|unavailable"'
+run_test "Hook metrics (clean err)"  '{ $CLI hook metrics 2>&1 || true; } | grep -qiE "metrics|error|unavailable"'
+
+# ── Docs ───────────────────────────────────────────────
+echo "── Docs ──────────────────────────────────────────"
+run_test "Docs status"               '$CLI docs status'
+
+# ── Federation ─────────────────────────────────────────
+echo "── Federation ────────────────────────────────────"
+run_test "Federation (clean error)"  '{ $CLI federation status 2>&1 || true; } | grep -qiE "status|error|unavailable"'
+
+# ── Service Registry ───────────────────────────────────
+echo "── Service Registry ──────────────────────────────"
+run_test "Service list (clean err)"  '{ $CLI service list 2>&1 || true; } | grep -qiE "services|error|unavailable"'
 
 # ── Snapshot & Maintenance ──────────────────────────────
 echo "── Snapshot & Maintenance ──────────────────────────"

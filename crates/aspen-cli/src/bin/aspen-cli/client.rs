@@ -535,6 +535,86 @@ mod tests {
         }
     }
 
+    /// Regression: feature-gated response variants (CI, Automerge) caused
+    /// "Found a bool that wasn't 0 or 1" postcard deserialization crashes
+    /// when the CLI was built without those features. Since all features are
+    /// now default-on in aspen-client-api, every variant must roundtrip.
+    #[test]
+    fn test_all_feature_gated_responses_deserialize_cleanly() {
+        use aspen_client_api::*;
+
+        // CI-gated: CacheMigrationStartResult
+        let ci_resp =
+            ClientRpcResponse::CacheMigrationStartResult(aspen_client_api::ci::CacheMigrationStartResultResponse {
+                started: false,
+                status: None,
+                error: Some("not available".into()),
+            });
+        let ci_bytes = postcard::to_stdvec(&ci_resp).expect("CI serialize");
+        let ci_decoded: ClientRpcResponse = postcard::from_bytes(&ci_bytes).expect("CI deserialize must not crash");
+        assert!(matches!(ci_decoded, ClientRpcResponse::CacheMigrationStartResult(_)));
+
+        // Automerge-gated: AutomergeListResult
+        let am_resp =
+            ClientRpcResponse::AutomergeListResult(aspen_client_api::automerge::AutomergeListResultResponse {
+                is_success: true,
+                documents: vec![],
+                has_more: false,
+                continuation_token: None,
+                error: None,
+            });
+        let am_bytes = postcard::to_stdvec(&am_resp).expect("AM serialize");
+        let am_decoded: ClientRpcResponse =
+            postcard::from_bytes(&am_bytes).expect("Automerge deserialize must not crash");
+        assert!(matches!(am_decoded, ClientRpcResponse::AutomergeListResult(_)));
+
+        // Hook response (was crashing before the fix)
+        let hook_resp = ClientRpcResponse::HookListResult(aspen_client_api::HookListResultResponse {
+            is_enabled: false,
+            handlers: vec![],
+        });
+        let hook_bytes = postcard::to_stdvec(&hook_resp).expect("hook serialize");
+        let hook_decoded: ClientRpcResponse =
+            postcard::from_bytes(&hook_bytes).expect("Hook deserialize must not crash");
+        assert!(matches!(hook_decoded, ClientRpcResponse::HookListResult(_)));
+
+        // Federation response (was crashing before the fix)
+        let fed_resp = ClientRpcResponse::FederationStatus(aspen_client_api::FederationStatusResponse {
+            is_enabled: false,
+            cluster_name: String::new(),
+            cluster_key: String::new(),
+            dht_enabled: false,
+            gossip_enabled: false,
+            discovered_clusters: 0,
+            federated_repos: 0,
+            error: None,
+        });
+        let fed_bytes = postcard::to_stdvec(&fed_resp).expect("federation serialize");
+        let fed_decoded: ClientRpcResponse =
+            postcard::from_bytes(&fed_bytes).expect("Federation deserialize must not crash");
+        assert!(matches!(fed_decoded, ClientRpcResponse::FederationStatus(_)));
+    }
+
+    /// Error responses from the server must always decode correctly,
+    /// regardless of which features are enabled. This is critical for
+    /// the CLI's NOT_LEADER retry loop.
+    #[test]
+    fn test_error_response_always_decodable() {
+        // Simulate what the server sends for INTERNAL_ERROR
+        let err = ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
+            code: "INTERNAL_ERROR".to_string(),
+            message: "internal error".to_string(),
+        });
+        let bytes = postcard::to_stdvec(&err).expect("serialize");
+        let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
+        match decoded {
+            ClientRpcResponse::Error(e) => {
+                assert_eq!(e.code, "INTERNAL_ERROR");
+            }
+            other => panic!("expected Error, got: {other:?}"),
+        }
+    }
+
     /// Non-CapabilityUnavailable responses must pass through unchanged.
     #[test]
     fn test_normalize_passes_through_normal_responses() {

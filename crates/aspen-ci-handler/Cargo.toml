@@ -10,7 +10,7 @@ license = "AGPL-3.0-or-later"
 aspen-rpc-core = { path = "../aspen-rpc-core", features = ["ci", "forge", "blob", "nickel"] }
 
 # Local crates
-aspen-client-api = { workspace = true, features = ["ci"] }
+aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-ci = { path = "../aspen-ci", features = ["nickel"] }
 aspen-cache = { path = "../aspen-cache" }

@@ -49,6 +49,7 @@ pub use constants::MAX_RPC_MESSAGE_SIZE;
 pub use constants::MAX_SNAPSHOT_SIZE;
 pub use constants::MAX_STREAMS_PER_CONNECTION;
 pub use constants::MEMBERSHIP_OPERATION_TIMEOUT;
+pub use constants::MIN_SNAPSHOT_LOG_THRESHOLD;
 pub use constants::READ_INDEX_TIMEOUT;
 pub use constants::SNAPSHOT_INSTALL_TIMEOUT_MS;
 // Node metadata

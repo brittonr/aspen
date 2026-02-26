@@ -124,6 +124,23 @@ pub const MEMBERSHIP_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
 /// - `bootstrap.rs`: RaftConfig::install_snapshot_timeout
 pub const SNAPSHOT_INSTALL_TIMEOUT_MS: u64 = 5000;
 
+/// Minimum number of log entries between automatic snapshots.
+///
+/// Tiger Style: This is a safety floor. The actual configured value in
+/// `openraft::SnapshotPolicy::LogsSinceLast(N)` must be >= this constant.
+///
+/// Regression: A threshold of 100 caused a race between the state machine's
+/// eagerly-applied `last_applied` (updated during `append()`) and openraft's
+/// `apply_progress` (updated during `apply()` callback). When the snapshot
+/// fired at index 100 but apply_progress was at 99, openraft panicked with
+/// `snapshot.submitted(100) > apply_progress.submitted(99)`, killing the
+/// Raft core and making all operations return NOT_LEADER.
+///
+/// Used in:
+/// - `aspen-cluster::bootstrap::node::storage_init` snapshot policy
+/// - `aspen-cluster::bootstrap::node::sharding_init` snapshot policy
+pub const MIN_SNAPSHOT_LOG_THRESHOLD: u64 = 1_000;
+
 /// Capacity of failure detector update channel.
 ///
 /// Tiger Style: Bounded channel prevents unbounded task spawning.
@@ -159,6 +176,9 @@ const _: () = assert!(FAILURE_DETECTOR_CHANNEL_CAPACITY > 0);
 // Snapshot install timeout must be positive
 const _: () = assert!(SNAPSHOT_INSTALL_TIMEOUT_MS > 0);
 
+// Snapshot threshold must be >= safety floor
+const _: () = assert!(MIN_SNAPSHOT_LOG_THRESHOLD >= 1_000);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,5 +196,16 @@ mod tests {
 
         // Membership operations take longer due to consensus rounds
         assert!(MEMBERSHIP_OPERATION_TIMEOUT > READ_INDEX_TIMEOUT);
+    }
+
+    /// Regression: LogsSinceLast(100) triggered a snapshot race that panicked
+    /// the Raft core. The threshold must stay above the safety floor.
+    #[test]
+    fn test_snapshot_threshold_above_safety_floor() {
+        assert!(
+            MIN_SNAPSHOT_LOG_THRESHOLD >= 1_000,
+            "snapshot threshold must be >= 1000 to avoid the append/apply race \
+             (see napkin: 2026-02-26 snapshot race)"
+        );
     }
 }
