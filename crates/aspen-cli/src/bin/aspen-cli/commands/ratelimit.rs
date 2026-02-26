@@ -287,3 +287,37 @@ async fn ratelimit_reset(client: &AspenClient, args: ResetArgs, json: bool) -> R
         _ => anyhow::bail!("unexpected response type"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_rate_rejects_zero() {
+        assert!(validate_rate(0.0).is_err());
+    }
+
+    #[test]
+    fn test_validate_rate_rejects_negative() {
+        assert!(validate_rate(-1.0).is_err());
+        assert!(validate_rate(-0.001).is_err());
+    }
+
+    #[test]
+    fn test_validate_rate_rejects_nan() {
+        assert!(validate_rate(f64::NAN).is_err());
+    }
+
+    #[test]
+    fn test_validate_rate_rejects_infinity() {
+        assert!(validate_rate(f64::INFINITY).is_err());
+        assert!(validate_rate(f64::NEG_INFINITY).is_err());
+    }
+
+    #[test]
+    fn test_validate_rate_accepts_positive_finite() {
+        assert!(validate_rate(1.0).is_ok());
+        assert!(validate_rate(0.001).is_ok());
+        assert!(validate_rate(1_000_000.0).is_ok());
+    }
+}

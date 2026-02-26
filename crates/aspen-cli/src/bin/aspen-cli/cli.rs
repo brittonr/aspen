@@ -525,4 +525,58 @@ mod tests {
         ]);
         assert!(result.is_ok());
     }
+
+    /// All WASM-dependent subcommands must parse so the CLI can connect
+    /// and receive a clean CAPABILITY_UNAVAILABLE error from the server
+    /// rather than failing at argument parsing.
+    #[test]
+    fn test_wasm_dependent_commands_parse_correctly() {
+        // hooks
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "hook", "list"]);
+        assert!(r.is_ok(), "hook list must parse");
+
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "hook", "metrics"]);
+        assert!(r.is_ok(), "hook metrics must parse");
+
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "hook", "trigger", "write_committed"]);
+        assert!(r.is_ok(), "hook trigger must parse");
+
+        // coordination primitives
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "counter", "get", "c"]);
+        assert!(r.is_ok(), "counter get must parse");
+
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "sequence", "next", "s"]);
+        assert!(r.is_ok(), "sequence next must parse");
+
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "service", "list"]);
+        assert!(r.is_ok(), "service list must parse");
+
+        // federation
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "federation", "status"]);
+        assert!(r.is_ok(), "federation status must parse");
+    }
+
+    /// ratelimit commands must require --rate and --capacity so
+    /// validate_rate can reject bad values before any RPC call.
+    #[test]
+    fn test_ratelimit_requires_rate_and_capacity() {
+        // Missing --rate and --capacity
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "ratelimit", "try-acquire", "rl-key"]);
+        assert!(r.is_err(), "ratelimit try-acquire without --rate must fail");
+
+        // With required args
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "--ticket",
+            "fake",
+            "ratelimit",
+            "try-acquire",
+            "rl-key",
+            "--rate",
+            "1.0",
+            "--capacity",
+            "10",
+        ]);
+        assert!(r.is_ok(), "ratelimit try-acquire with all args must parse");
+    }
 }

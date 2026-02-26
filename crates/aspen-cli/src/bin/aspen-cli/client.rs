@@ -468,3 +468,88 @@ impl AspenClient {
         Ok(response)
     }
 }
+
+/// Convert a CapabilityUnavailable response into a standard Error.
+///
+/// Extracted as a free function so the logic can be unit-tested without
+/// a live network connection.
+pub(crate) fn normalize_capability_unavailable(response: ClientRpcResponse) -> ClientRpcResponse {
+    if let ClientRpcResponse::CapabilityUnavailable(ref cap) = response {
+        ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
+            code: "CAPABILITY_UNAVAILABLE".to_string(),
+            message: cap.message.clone(),
+        })
+    } else {
+        response
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// CapabilityUnavailable must become a standard Error so every command
+    /// handler's `ClientRpcResponse::Error(e)` arm catches it without
+    /// needing per-handler match arms.  Regression test for the
+    /// "failed to deserialize response / unexpected response type" crash.
+    #[test]
+    fn test_capability_unavailable_converts_to_error() {
+        let cap = ClientRpcResponse::CapabilityUnavailable(aspen_client_api::CapabilityUnavailableResponse {
+            required_app: "hooks".to_string(),
+            message: "the 'hooks' app is not loaded on this cluster".to_string(),
+            hints: vec![],
+        });
+
+        let result = normalize_capability_unavailable(cap);
+
+        match result {
+            ClientRpcResponse::Error(e) => {
+                assert_eq!(e.code, "CAPABILITY_UNAVAILABLE");
+                assert!(e.message.contains("hooks"));
+            }
+            other => panic!("expected Error, got: {other:?}"),
+        }
+    }
+
+    /// A CapabilityUnavailable response must survive a postcard round-trip
+    /// so the CLI can decode what the server actually sends.
+    #[test]
+    fn test_capability_unavailable_postcard_roundtrip() {
+        let original = ClientRpcResponse::CapabilityUnavailable(aspen_client_api::CapabilityUnavailableResponse {
+            required_app: "forge".to_string(),
+            message: "the 'forge' app is not loaded on this cluster".to_string(),
+            hints: vec![],
+        });
+
+        let bytes = postcard::to_stdvec(&original).expect("serialize");
+        let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
+
+        // After normalization, it must become a well-formed Error
+        let normalized = normalize_capability_unavailable(decoded);
+        match normalized {
+            ClientRpcResponse::Error(e) => {
+                assert_eq!(e.code, "CAPABILITY_UNAVAILABLE");
+                assert!(e.message.contains("forge"));
+            }
+            other => panic!("expected Error, got: {other:?}"),
+        }
+    }
+
+    /// Non-CapabilityUnavailable responses must pass through unchanged.
+    #[test]
+    fn test_normalize_passes_through_normal_responses() {
+        let ok = ClientRpcResponse::Pong;
+        let result = normalize_capability_unavailable(ok);
+        assert!(matches!(result, ClientRpcResponse::Pong));
+
+        let err = ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
+            code: "NOT_FOUND".to_string(),
+            message: "key not found".to_string(),
+        });
+        let result = normalize_capability_unavailable(err);
+        match result {
+            ClientRpcResponse::Error(e) => assert_eq!(e.code, "NOT_FOUND"),
+            other => panic!("expected Error, got: {other:?}"),
+        }
+    }
+}

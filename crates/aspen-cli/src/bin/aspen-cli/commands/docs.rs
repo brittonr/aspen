@@ -524,3 +524,89 @@ async fn docs_ticket(client: &AspenClient, args: TicketArgs, json: bool) -> Resu
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // These tests verify that the Outputable impls correctly surface errors
+    // in both human and JSON formats.  Before the fix, handlers returned
+    // Ok(()) even when the output carried an error, producing exit code 0.
+
+    #[test]
+    fn test_docs_set_output_shows_error_in_human_format() {
+        let output = DocsSetOutput {
+            is_success: false,
+            key: None,
+            size_bytes: None,
+            error: Some("namespace not initialized".to_string()),
+        };
+        let human = output.to_human();
+        assert!(human.contains("namespace not initialized"), "error must appear in human output: {human}");
+    }
+
+    #[test]
+    fn test_docs_set_output_shows_error_in_json_format() {
+        let output = DocsSetOutput {
+            is_success: false,
+            key: None,
+            size_bytes: None,
+            error: Some("namespace not initialized".to_string()),
+        };
+        let json = output.to_json();
+        assert_eq!(json["is_success"], false);
+        assert_eq!(json["error"], "namespace not initialized", "error must appear in JSON output");
+    }
+
+    #[test]
+    fn test_docs_get_output_error_is_surfaced() {
+        let output = DocsGetOutput {
+            was_found: false,
+            value: None,
+            size_bytes: None,
+            error: Some("docs subsystem disabled".to_string()),
+        };
+        assert!(output.error.is_some(), "error field must be Some for failure detection");
+
+        let json = output.to_json();
+        assert_eq!(json["error"], "docs subsystem disabled");
+    }
+
+    #[test]
+    fn test_docs_delete_output_failure_flag() {
+        let output = DocsDeleteOutput {
+            is_success: false,
+            error: Some("permission denied".to_string()),
+        };
+        assert!(!output.is_success, "is_success must be false so handler calls exit(1)");
+    }
+
+    #[test]
+    fn test_docs_status_output_error_is_surfaced() {
+        let output = DocsStatusOutput {
+            is_enabled: false,
+            namespace_id: None,
+            author_id: None,
+            entry_count: None,
+            replica_open: None,
+            error: Some("DocsExporter disabled by configuration".to_string()),
+        };
+        assert!(output.error.is_some(), "error field must be Some so handler calls exit(1)");
+
+        let json = output.to_json();
+        assert_eq!(json["error"], "DocsExporter disabled by configuration");
+    }
+
+    #[test]
+    fn test_docs_list_output_error_is_surfaced() {
+        let output = DocsListOutput {
+            entries: vec![],
+            count: 0,
+            has_more: false,
+            error: Some("timeout".to_string()),
+        };
+        assert!(output.error.is_some());
+        let human = output.to_human();
+        assert!(human.contains("timeout"), "error must appear in human output: {human}");
+    }
+}
