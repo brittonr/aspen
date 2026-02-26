@@ -130,7 +130,7 @@ mod tests {
         let decoded: ClientRpcResponse = postcard::from_bytes(&first_bytes).expect("first deserialize");
         assert!(matches!(decoded, ClientRpcResponse::Health(_)));
 
-        // Last non-gated variant before feature-gated section: CapabilityUnavailable
+        // CapabilityUnavailable — second-to-last non-gated variant
         let cap = ClientRpcResponse::CapabilityUnavailable(CapabilityUnavailableResponse {
             required_app: "test".into(),
             message: "not loaded".into(),
@@ -140,7 +140,8 @@ mod tests {
         let cap_decoded: ClientRpcResponse = postcard::from_bytes(&cap_bytes).expect("cap deserialize");
         assert!(matches!(cap_decoded, ClientRpcResponse::CapabilityUnavailable(_)));
 
-        // Very last variant: PluginReloadResult
+        // Last non-gated variant before feature-gated section: PluginReloadResult
+        // (moved here from after the automerge block to fix discriminant drift)
         let last = ClientRpcResponse::PluginReloadResult(PluginReloadResultResponse {
             is_success: true,
             plugin_count: 0,
@@ -170,6 +171,160 @@ mod tests {
             }
             other => panic!("Error discriminant {discriminant} decoded as {other:?}"),
         }
+    }
+
+    // =========================================================================
+    // Golden-file discriminant stability (fix #4)
+    //
+    // Postcard encodes enum variants as varint discriminants (0, 1, 2, ...).
+    // If a variant is inserted, removed, or reordered, ALL subsequent
+    // discriminants shift, silently breaking wire compatibility. These tests
+    // pin critical discriminants so any change is caught at test time.
+    // =========================================================================
+
+    /// Pin the postcard discriminant of critical response variants.
+    ///
+    /// If you intentionally add/remove/reorder variants, update this table.
+    /// Each entry is (variant_name, expected_discriminant_byte).
+    ///
+    /// NOTE: postcard uses varint encoding. For indices < 128 the discriminant
+    /// is a single byte equal to the index. For indices >= 128 it's multi-byte.
+    #[test]
+    fn test_response_discriminant_golden_table() {
+        // Helper: serialize a response and extract its postcard discriminant
+        fn discriminant_of(resp: &ClientRpcResponse) -> u8 {
+            let bytes = postcard::to_stdvec(resp).expect("serialize");
+            bytes[0]
+        }
+
+        // Critical variants with pinned discriminants.
+        // Format: (variant, expected discriminant, name for error message)
+        let golden: Vec<(ClientRpcResponse, u8, &str)> = vec![
+            (
+                ClientRpcResponse::Health(HealthResponse {
+                    status: "ok".into(),
+                    node_id: 0,
+                    raft_node_id: None,
+                    uptime_seconds: 0,
+                    is_initialized: false,
+                    membership_node_count: None,
+                }),
+                0,
+                "Health",
+            ),
+            (ClientRpcResponse::Pong, 12, "Pong"),
+            (ClientRpcResponse::error("X", "X"), 14, "Error"), // 14 = after Pong(12) + ClusterState(13)
+        ];
+
+        for (variant, expected, name) in &golden {
+            let actual = discriminant_of(variant);
+            assert_eq!(
+                actual, *expected,
+                "GOLDEN DISCRIMINANT MISMATCH: {name} expected {expected}, got {actual}. \
+                 Did you add/remove/reorder variants BEFORE {name}?"
+            );
+        }
+    }
+
+    /// Pin the postcard discriminant of critical request variants.
+    #[test]
+    fn test_request_discriminant_golden_table() {
+        fn discriminant_of(req: &ClientRpcRequest) -> u8 {
+            let bytes = postcard::to_stdvec(req).expect("serialize");
+            bytes[0]
+        }
+
+        let golden: Vec<(ClientRpcRequest, u8, &str)> = vec![
+            (ClientRpcRequest::GetHealth, 0, "GetHealth"),
+            (ClientRpcRequest::Ping, 13, "Ping"),
+            (ClientRpcRequest::ReadKey { key: String::new() }, 6, "ReadKey"),
+            (
+                ClientRpcRequest::WriteKey {
+                    key: String::new(),
+                    value: vec![],
+                },
+                7,
+                "WriteKey",
+            ),
+        ];
+
+        for (variant, expected, name) in &golden {
+            let actual = discriminant_of(variant);
+            assert_eq!(
+                actual, *expected,
+                "GOLDEN DISCRIMINANT MISMATCH: {name} expected {expected}, got {actual}. \
+                 Did you add/remove/reorder variants BEFORE {name}?"
+            );
+        }
+    }
+
+    // =========================================================================
+    // Variant ordering enforcement (fix #3)
+    //
+    // Regression: PluginReloadResult was placed AFTER the automerge
+    // #[cfg(feature)] block. Since it was non-gated, its discriminant
+    // shifted when automerge was toggled. This test ensures no non-gated
+    // variant appears after the feature-gated section.
+    // =========================================================================
+
+    /// Verify that PluginReloadResult (non-gated) appears before AutomergeCreateResult (gated).
+    ///
+    /// We check this by comparing their postcard discriminants: the non-gated
+    /// variant must have a LOWER discriminant than any gated variant.
+    #[test]
+    fn test_plugin_reload_result_before_feature_gated_variants() {
+        let plugin = ClientRpcResponse::PluginReloadResult(PluginReloadResultResponse {
+            is_success: true,
+            plugin_count: 0,
+            error: None,
+            message: String::new(),
+        });
+        let plugin_bytes = postcard::to_stdvec(&plugin).expect("serialize plugin");
+
+        let automerge = ClientRpcResponse::AutomergeCreateResult(automerge::AutomergeCreateResultResponse {
+            is_success: true,
+            document_id: None,
+            error: None,
+        });
+        let automerge_bytes = postcard::to_stdvec(&automerge).expect("serialize automerge");
+
+        assert!(
+            plugin_bytes[0] < automerge_bytes[0],
+            "PluginReloadResult (discriminant {}) must appear BEFORE \
+             AutomergeCreateResult (discriminant {}). Non-gated variants \
+             must not be placed after feature-gated variants.",
+            plugin_bytes[0],
+            automerge_bytes[0],
+        );
+    }
+
+    /// The `#[cfg(feature = "ci")]` CacheMigration variants must come before
+    /// the `#[cfg(feature = "automerge")]` Automerge variants to avoid
+    /// discriminant interleaving when one feature is on and the other off.
+    #[test]
+    fn test_feature_gated_variants_are_grouped_by_feature() {
+        let ci_variant = ClientRpcResponse::CacheMigrationStartResult(ci::CacheMigrationStartResultResponse {
+            started: true,
+            status: None,
+            error: None,
+        });
+        let ci_bytes = postcard::to_stdvec(&ci_variant).expect("serialize ci");
+
+        let am_variant = ClientRpcResponse::AutomergeCreateResult(automerge::AutomergeCreateResultResponse {
+            is_success: true,
+            document_id: None,
+            error: None,
+        });
+        let am_bytes = postcard::to_stdvec(&am_variant).expect("serialize automerge");
+
+        // CI-gated variants must all have lower discriminants than automerge-gated
+        assert!(
+            ci_bytes[0] < am_bytes[0],
+            "CI gated variants (discriminant {}) must precede automerge \
+             gated variants (discriminant {})",
+            ci_bytes[0],
+            am_bytes[0],
+        );
     }
 
     // =========================================================================

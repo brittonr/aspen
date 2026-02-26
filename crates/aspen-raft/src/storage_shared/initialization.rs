@@ -130,6 +130,7 @@ impl SharedRedbStorage {
             pending_responses: Arc::new(StdRwLock::new(BTreeMap::new())),
             hlc,
             index_registry,
+            confirmed_last_applied: Arc::new(StdRwLock::new(None)),
         })
     }
 

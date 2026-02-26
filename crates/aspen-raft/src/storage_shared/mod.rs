@@ -103,6 +103,7 @@ use aspen_core::layer::Tuple;
 use aspen_core::layer::extract_primary_key_from_tuple;
 // Re-export types from submodules for public API
 pub use error::*;
+use openraft::alias::LogIdOf;
 pub use snapshot::SharedRedbSnapshotBuilder;
 pub use types::*;
 
@@ -171,6 +172,12 @@ pub struct SharedRedbStorage {
     hlc: Arc<aspen_core::hlc::HLC>,
     /// Secondary index registry for maintaining indexes.
     index_registry: Arc<IndexRegistry>,
+    /// Last applied log ID confirmed by openraft's apply() callback.
+    /// This may lag behind the eagerly-applied value in SM_META_TABLE
+    /// because entries are applied during append() but only confirmed
+    /// during apply(). build_snapshot() must use this value to avoid
+    /// the TOCTOU race with openraft's apply_progress tracking.
+    confirmed_last_applied: Arc<StdRwLock<Option<LogIdOf<AppTypeConfig>>>>,
 }
 
 impl std::fmt::Debug for SharedRedbStorage {
@@ -188,6 +195,7 @@ impl std::fmt::Debug for SharedRedbStorage {
 
 #[cfg(test)]
 mod tests {
+    use openraft::alias::LogIdOf;
     use tempfile::TempDir;
 
     use super::*;
@@ -1285,5 +1293,239 @@ mod tests {
 
         assert!(storage2.get("key2").unwrap().is_some());
         assert!(storage2.get("key1").unwrap().is_none());
+    }
+
+    // =========================================================================
+    // Confirmed Last Applied Tests (Snapshot Race Fix)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_confirmed_last_applied_initialized_to_none() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage = create_test_storage(&temp_dir);
+
+        // confirmed_last_applied should start as None
+        let confirmed = storage.confirmed_last_applied.read().unwrap();
+        assert!(confirmed.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_confirmed_last_applied_not_updated_by_append() {
+        use openraft::entry::RaftEntry;
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        use crate::types::AppRequest;
+        use crate::types::NodeId;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut storage = create_test_storage(&temp_dir);
+
+        // confirmed_last_applied starts as None
+        {
+            let confirmed = storage.confirmed_last_applied.read().unwrap();
+            assert!(confirmed.is_none());
+        }
+
+        // Append an entry (this eagerly applies to state machine)
+        let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), 1);
+        let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(log_id, AppRequest::Set {
+            key: "test_key".to_string(),
+            value: "test_value".to_string(),
+        });
+        storage.append([entry], IOFlushed::<AppTypeConfig>::noop()).await.unwrap();
+
+        // confirmed_last_applied should still be None (not updated by append)
+        {
+            let confirmed = storage.confirmed_last_applied.read().unwrap();
+            assert!(confirmed.is_none());
+        }
+
+        // But SM_META_TABLE should have last_applied_log updated
+        let last_applied_in_db: Option<Option<LogIdOf<AppTypeConfig>>> =
+            storage.read_sm_meta("last_applied_log").unwrap();
+        assert!(last_applied_in_db.is_some());
+        assert_eq!(last_applied_in_db.unwrap().unwrap().index, 1);
+    }
+
+    #[tokio::test]
+    async fn test_confirmed_last_applied_updated_by_apply() {
+        use n0_future::stream;
+        use openraft::entry::RaftEntry;
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::storage::RaftStateMachine;
+        use openraft::testing::log_id;
+
+        use crate::types::AppRequest;
+        use crate::types::NodeId;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut storage = create_test_storage(&temp_dir);
+
+        // Append entries
+        let entries = vec![
+            <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, NodeId::from(1), 1),
+                AppRequest::Set {
+                    key: "key1".to_string(),
+                    value: "value1".to_string(),
+                },
+            ),
+            <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, NodeId::from(1), 2),
+                AppRequest::Set {
+                    key: "key2".to_string(),
+                    value: "value2".to_string(),
+                },
+            ),
+        ];
+        storage.append(entries, IOFlushed::<AppTypeConfig>::noop()).await.unwrap();
+
+        // confirmed_last_applied should still be None before apply()
+        {
+            let confirmed = storage.confirmed_last_applied.read().unwrap();
+            assert!(confirmed.is_none());
+        }
+
+        // Simulate apply() with the entries
+        let apply_entries = vec![
+            <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, NodeId::from(1), 1),
+                AppRequest::Set {
+                    key: "key1".to_string(),
+                    value: "value1".to_string(),
+                },
+            ),
+            <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, NodeId::from(1), 2),
+                AppRequest::Set {
+                    key: "key2".to_string(),
+                    value: "value2".to_string(),
+                },
+            ),
+        ];
+        let entries_stream = stream::iter(apply_entries.into_iter().map(|e| Ok((e, None))));
+        storage.apply(entries_stream).await.unwrap();
+
+        // confirmed_last_applied should now be updated to the last entry
+        {
+            let confirmed = storage.confirmed_last_applied.read().unwrap();
+            assert!(confirmed.is_some());
+            assert_eq!(confirmed.as_ref().unwrap().index, 2);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_confirmed_last_applied_monotonic() {
+        use n0_future::stream;
+        use openraft::entry::RaftEntry;
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::storage::RaftStateMachine;
+        use openraft::testing::log_id;
+
+        use crate::types::AppRequest;
+        use crate::types::NodeId;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut storage = create_test_storage(&temp_dir);
+
+        // Append and apply first batch
+        let entries1 = vec![<AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+            log_id::<AppTypeConfig>(1, NodeId::from(1), 5),
+            AppRequest::Set {
+                key: "key1".to_string(),
+                value: "value1".to_string(),
+            },
+        )];
+        storage.append(entries1, IOFlushed::<AppTypeConfig>::noop()).await.unwrap();
+
+        let apply_entries1 = vec![<AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+            log_id::<AppTypeConfig>(1, NodeId::from(1), 5),
+            AppRequest::Set {
+                key: "key1".to_string(),
+                value: "value1".to_string(),
+            },
+        )];
+        let stream1 = stream::iter(apply_entries1.into_iter().map(|e| Ok((e, None))));
+        storage.apply(stream1).await.unwrap();
+
+        {
+            let confirmed = storage.confirmed_last_applied.read().unwrap();
+            assert_eq!(confirmed.as_ref().unwrap().index, 5);
+        }
+
+        // Try to apply an older entry (index 3) - should not regress
+        let apply_entries2 = vec![<AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+            log_id::<AppTypeConfig>(1, NodeId::from(1), 3),
+            AppRequest::Set {
+                key: "key2".to_string(),
+                value: "value2".to_string(),
+            },
+        )];
+        let stream2 = stream::iter(apply_entries2.into_iter().map(|e| Ok((e, None))));
+        storage.apply(stream2).await.unwrap();
+
+        // confirmed_last_applied should remain at 5 (monotonic)
+        {
+            let confirmed = storage.confirmed_last_applied.read().unwrap();
+            assert_eq!(confirmed.as_ref().unwrap().index, 5);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_confirmed_last_applied_lags_behind_sm_meta() {
+        use openraft::entry::RaftEntry;
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        use crate::types::AppRequest;
+        use crate::types::NodeId;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut storage = create_test_storage(&temp_dir);
+
+        // Append multiple entries (eagerly applies to SM_META_TABLE)
+        let entries = vec![
+            <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, NodeId::from(1), 1),
+                AppRequest::Set {
+                    key: "key1".to_string(),
+                    value: "value1".to_string(),
+                },
+            ),
+            <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, NodeId::from(1), 2),
+                AppRequest::Set {
+                    key: "key2".to_string(),
+                    value: "value2".to_string(),
+                },
+            ),
+            <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, NodeId::from(1), 3),
+                AppRequest::Set {
+                    key: "key3".to_string(),
+                    value: "value3".to_string(),
+                },
+            ),
+        ];
+        storage.append(entries, IOFlushed::<AppTypeConfig>::noop()).await.unwrap();
+
+        // SM_META_TABLE should have last_applied = 3
+        let last_applied_in_db: Option<Option<LogIdOf<AppTypeConfig>>> =
+            storage.read_sm_meta("last_applied_log").unwrap();
+        assert_eq!(last_applied_in_db.unwrap().unwrap().index, 3);
+
+        // But confirmed_last_applied should still be None (not yet confirmed by apply)
+        {
+            let confirmed = storage.confirmed_last_applied.read().unwrap();
+            assert!(confirmed.is_none());
+        }
+
+        // This demonstrates the lag: SM_META_TABLE has index 3, confirmed has None
+        // This is the TOCTOU race that build_snapshot must account for
     }
 }

@@ -55,9 +55,14 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
         // State was already applied during append().
         // Retrieve the computed responses and send them via responders.
         // EntryResponder<C> is a tuple: (Entry<C>, Option<ApplyResponder<C>>)
+        let mut latest_log_id: Option<LogIdOf<AppTypeConfig>> = None;
+
         while let Some((entry, responder_opt)) = entries.try_next().await? {
             let log_index = entry.log_id.index;
             let log_term = entry.log_id.leader_id.term;
+
+            // Track the latest log_id for confirmed_last_applied update
+            latest_log_id = Some(entry.log_id);
 
             // Broadcast committed entry to subscribers (DocsExporter, etc.)
             if let Some(ref sender) = self.log_broadcast {
@@ -102,6 +107,25 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
                     .remove(&log_index)
                     .unwrap_or_default();
                 responder.send(response);
+            }
+        }
+
+        // Update confirmed_last_applied after processing all entries.
+        // This tracks what openraft has confirmed via apply() callback,
+        // which may lag behind the eagerly-applied value in SM_META_TABLE.
+        if let Some(new_log_id) = latest_log_id {
+            let mut confirmed = self
+                .confirmed_last_applied
+                .write()
+                .map_err(|_| io::Error::other("confirmed_last_applied lock poisoned in apply"))?;
+            // Only advance, never regress (monotonic)
+            match *confirmed {
+                Some(ref current) if new_log_id.index <= current.index => {
+                    // No update needed - we already have a higher or equal index
+                }
+                _ => {
+                    *confirmed = Some(new_log_id);
+                }
             }
         }
 

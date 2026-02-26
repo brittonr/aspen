@@ -9,6 +9,7 @@
 //!   WriteKeyWithLease
 //! - **Watch**: WatchCreate, WatchCancel, WatchStatus
 
+mod coordination;
 mod core;
 pub(crate) mod error_utils;
 mod kv;
@@ -22,6 +23,7 @@ use std::sync::Arc;
 pub use aspen_rpc_core::ClientProtocolContext;
 pub use aspen_rpc_core::HandlerFactory;
 pub use aspen_rpc_core::RequestHandler;
+pub use coordination::CoordinationHandler;
 pub use kv::KvHandler;
 pub use lease::LeaseHandler;
 pub use watch::WatchHandler;
@@ -160,8 +162,44 @@ impl HandlerFactory for KvHandlerFactory {
     }
 }
 
+/// Factory for creating `CoordinationHandler` instances.
+///
+/// Priority 220 (essential handler range: 200-299).
+/// When WASM coordination plugin is loaded at priority 220, it takes
+/// precedence for operations it handles (both have same priority, but
+/// WASM plugin handlers are added after native ones).
+pub struct CoordinationHandlerFactory;
+
+impl CoordinationHandlerFactory {
+    /// Create a new factory instance.
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for CoordinationHandlerFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HandlerFactory for CoordinationHandlerFactory {
+    fn create(&self, _ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
+        Some(Arc::new(CoordinationHandler))
+    }
+
+    fn name(&self) -> &'static str {
+        "CoordinationHandler"
+    }
+
+    fn priority(&self) -> u32 {
+        220
+    }
+}
+
 // Self-register via inventory
 aspen_rpc_core::submit_handler_factory!(CoreHandlerFactory);
 aspen_rpc_core::submit_handler_factory!(KvHandlerFactory);
 aspen_rpc_core::submit_handler_factory!(LeaseHandlerFactory);
 aspen_rpc_core::submit_handler_factory!(WatchHandlerFactory);
+aspen_rpc_core::submit_handler_factory!(CoordinationHandlerFactory);

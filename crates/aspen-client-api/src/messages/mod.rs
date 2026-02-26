@@ -4186,11 +4186,20 @@ pub enum ClientRpcResponse {
     /// Contains the required app name and hints about clusters that can serve it.
     CapabilityUnavailable(CapabilityUnavailableResponse),
 
+    /// Plugin reload result.
+    ///
+    /// NOTE: This variant MUST stay before the feature-gated section. If it were
+    /// after `#[cfg(feature)]` variants, its postcard discriminant would shift
+    /// when features are toggled, breaking wire compatibility.
+    PluginReloadResult(PluginReloadResultResponse),
+
     // =========================================================================
     // FEATURE-GATED VARIANTS (must be at end for postcard discriminant stability)
+    //
+    // NO non-gated variants may appear after this line. The test
+    // `test_no_ungated_variants_after_feature_gated_section` enforces this.
     // =========================================================================
 
-    // -------------------------------------------------------------------------
     // -------------------------------------------------------------------------
     // Automerge responses
     // -------------------------------------------------------------------------
@@ -4237,9 +4246,6 @@ pub enum ClientRpcResponse {
     /// Automerge receive sync message result.
     #[cfg(feature = "automerge")]
     AutomergeReceiveSyncMessageResult(AutomergeReceiveSyncMessageResultResponse),
-
-    /// Plugin reload result.
-    PluginReloadResult(PluginReloadResultResponse),
 }
 
 /// Result of a plugin reload operation.

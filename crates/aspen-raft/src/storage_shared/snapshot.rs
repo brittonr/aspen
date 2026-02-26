@@ -36,11 +36,13 @@ impl SharedRedbSnapshotBuilder {
         let kv_table = read_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
         let sm_meta_table = read_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
 
-        let last_applied: Option<LogIdOf<AppTypeConfig>> = sm_meta_table
-            .get("last_applied_log")
-            .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize(v.value()).ok())
-            .flatten();
+        // Use confirmed_last_applied (from apply() callback) instead of the
+        // eagerly-applied value in SM_META_TABLE. This prevents the TOCTOU race
+        // where build_snapshot sees last_applied > openraft's apply_progress.
+        let last_applied =
+            *self.storage.confirmed_last_applied.read().map_err(|_| SharedStorageError::LockPoisoned {
+                context: "reading confirmed_last_applied for snapshot".into(),
+            })?;
 
         let membership: StoredMembership<AppTypeConfig> = sm_meta_table
             .get("last_membership")
