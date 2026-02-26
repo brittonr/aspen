@@ -209,6 +209,13 @@ data/
 # Aspen local state (VM images, runtime data)
 .aspen/
 
+# Pi agent local state
+.pi/
+.agent/
+
+# Pre-commit cache
+.pre-commit-cache/
+
 # VM runtime artifacts (prevent nix flake copy failures)
 # Nix flakes can't copy Unix socket files, so these must be excluded
 *.sock
