@@ -261,3 +261,286 @@ pub struct WorkerCompleteJobResultResponse {
     /// Error message if completion recording failed.
     pub error: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper: postcard roundtrip.
+    fn postcard_roundtrip<T: Serialize + for<'de> Deserialize<'de> + std::fmt::Debug>(val: &T) {
+        let bytes = postcard::to_stdvec(val).expect("postcard serialize");
+        let _: T = postcard::from_bytes(&bytes).expect("postcard deserialize");
+    }
+
+    /// Helper: JSON roundtrip.
+    fn json_roundtrip<T: Serialize + for<'de> Deserialize<'de> + std::fmt::Debug>(val: &T) {
+        let json = serde_json::to_string(val).expect("json serialize");
+        let _: T = serde_json::from_str(&json).expect("json deserialize");
+    }
+
+    /// Helper: run both roundtrips.
+    fn roundtrip<T: Serialize + for<'de> Deserialize<'de> + std::fmt::Debug>(val: &T) {
+        postcard_roundtrip(val);
+        json_roundtrip(val);
+    }
+
+    fn sample_job_details() -> JobDetails {
+        JobDetails {
+            job_id: "job-001".into(),
+            job_type: "build".into(),
+            status: "running".into(),
+            priority: 2,
+            progress: 50,
+            progress_message: Some("compiling...".into()),
+            payload: r#"{"target":"x86_64"}"#.into(),
+            tags: vec!["ci".into(), "nightly".into()],
+            submitted_at: "2025-01-15T10:00:00Z".into(),
+            started_at: Some("2025-01-15T10:00:05Z".into()),
+            completed_at: None,
+            worker_id: Some("worker-3".into()),
+            attempts: 1,
+            result: None,
+            error_message: None,
+        }
+    }
+
+    // =========================================================================
+    // Job lifecycle
+    // =========================================================================
+
+    #[test]
+    fn job_submit_result_roundtrip() {
+        roundtrip(&JobSubmitResultResponse {
+            is_success: true,
+            job_id: Some("job-001".into()),
+            error: None,
+        });
+        roundtrip(&JobSubmitResultResponse {
+            is_success: false,
+            job_id: None,
+            error: Some("queue full".into()),
+        });
+    }
+
+    #[test]
+    fn job_details_roundtrip() {
+        roundtrip(&sample_job_details());
+        // Completed job with all optionals populated
+        roundtrip(&JobDetails {
+            completed_at: Some("2025-01-15T10:05:00Z".into()),
+            progress: 100,
+            progress_message: None,
+            result: Some(r#"{"status":"ok"}"#.into()),
+            error_message: None,
+            ..sample_job_details()
+        });
+        // Failed job
+        roundtrip(&JobDetails {
+            status: "failed".into(),
+            progress: 25,
+            result: None,
+            error_message: Some("OOM killed".into()),
+            ..sample_job_details()
+        });
+    }
+
+    #[test]
+    fn job_details_boundary_values() {
+        roundtrip(&JobDetails {
+            priority: 0,
+            progress: 0,
+            tags: vec![],
+            ..sample_job_details()
+        });
+        roundtrip(&JobDetails {
+            priority: u8::MAX,
+            progress: 100,
+            ..sample_job_details()
+        });
+    }
+
+    #[test]
+    fn job_get_result_roundtrip() {
+        roundtrip(&JobGetResultResponse {
+            was_found: true,
+            job: Some(sample_job_details()),
+            error: None,
+        });
+        roundtrip(&JobGetResultResponse {
+            was_found: false,
+            job: None,
+            error: None,
+        });
+    }
+
+    #[test]
+    fn job_list_result_roundtrip() {
+        roundtrip(&JobListResultResponse {
+            jobs: vec![sample_job_details()],
+            total_count: 1,
+            continuation_token: Some("page2".into()),
+            error: None,
+        });
+        roundtrip(&JobListResultResponse {
+            jobs: vec![],
+            total_count: 0,
+            continuation_token: None,
+            error: None,
+        });
+    }
+
+    #[test]
+    fn job_cancel_result_roundtrip() {
+        roundtrip(&JobCancelResultResponse {
+            is_success: true,
+            previous_status: Some("running".into()),
+            error: None,
+        });
+    }
+
+    #[test]
+    fn job_update_progress_result_roundtrip() {
+        roundtrip(&JobUpdateProgressResultResponse {
+            is_success: true,
+            error: None,
+        });
+    }
+
+    #[test]
+    fn job_queue_stats_roundtrip() {
+        roundtrip(&JobQueueStatsResultResponse {
+            pending_count: 10,
+            scheduled_count: 5,
+            running_count: 3,
+            completed_count: 100,
+            failed_count: 2,
+            cancelled_count: 1,
+            priority_counts: vec![PriorityCount { priority: 0, count: 5 }, PriorityCount {
+                priority: 2,
+                count: 8,
+            }],
+            type_counts: vec![TypeCount {
+                job_type: "build".into(),
+                count: 13,
+            }],
+            error: None,
+        });
+        // Empty stats
+        roundtrip(&JobQueueStatsResultResponse {
+            pending_count: 0,
+            scheduled_count: 0,
+            running_count: 0,
+            completed_count: 0,
+            failed_count: 0,
+            cancelled_count: 0,
+            priority_counts: vec![],
+            type_counts: vec![],
+            error: None,
+        });
+    }
+
+    // =========================================================================
+    // Worker management
+    // =========================================================================
+
+    #[test]
+    fn worker_status_result_roundtrip() {
+        roundtrip(&WorkerStatusResultResponse {
+            workers: vec![WorkerInfo {
+                worker_id: "w-1".into(),
+                status: "busy".into(),
+                capabilities: vec!["build".into(), "test".into()],
+                capacity_jobs: 4,
+                active_jobs: 2,
+                active_job_ids: vec!["job-001".into(), "job-002".into()],
+                last_heartbeat: "2025-01-15T10:00:00Z".into(),
+                total_processed: 150,
+                total_failed: 3,
+            }],
+            total_workers: 1,
+            idle_workers: 0,
+            busy_workers: 1,
+            offline_workers: 0,
+            total_capacity_jobs: 4,
+            used_capacity_jobs: 2,
+            error: None,
+        });
+    }
+
+    #[test]
+    fn worker_register_result_roundtrip() {
+        roundtrip(&WorkerRegisterResultResponse {
+            is_success: true,
+            worker_token: Some("tok-abc".into()),
+            error: None,
+        });
+    }
+
+    #[test]
+    fn worker_heartbeat_result_roundtrip() {
+        roundtrip(&WorkerHeartbeatResultResponse {
+            is_success: true,
+            jobs_to_process: vec!["job-003".into()],
+            error: None,
+        });
+        roundtrip(&WorkerHeartbeatResultResponse {
+            is_success: true,
+            jobs_to_process: vec![],
+            error: None,
+        });
+    }
+
+    #[test]
+    fn worker_deregister_result_roundtrip() {
+        roundtrip(&WorkerDeregisterResultResponse {
+            is_success: true,
+            error: None,
+        });
+    }
+
+    // =========================================================================
+    // Worker job coordination
+    // =========================================================================
+
+    #[test]
+    fn worker_poll_jobs_result_roundtrip() {
+        roundtrip(&WorkerPollJobsResultResponse {
+            is_success: true,
+            worker_id: "w-1".into(),
+            jobs: vec![WorkerJobInfo {
+                job_id: "job-005".into(),
+                job_type: "test".into(),
+                job_spec_json: r#"{"command":"cargo nextest run"}"#.into(),
+                priority: "high".into(),
+                created_at_ms: 1_700_000_000_000,
+                visibility_timeout_ms: 1_700_000_060_000,
+                receipt_handle: "rh-xyz".into(),
+                execution_token: "et-123".into(),
+            }],
+            error: None,
+        });
+        // No jobs available
+        roundtrip(&WorkerPollJobsResultResponse {
+            is_success: true,
+            worker_id: "w-1".into(),
+            jobs: vec![],
+            error: None,
+        });
+    }
+
+    #[test]
+    fn worker_complete_job_result_roundtrip() {
+        roundtrip(&WorkerCompleteJobResultResponse {
+            is_success: true,
+            worker_id: "w-1".into(),
+            job_id: "job-005".into(),
+            error: None,
+        });
+        roundtrip(&WorkerCompleteJobResultResponse {
+            is_success: false,
+            worker_id: "w-1".into(),
+            job_id: "job-005".into(),
+            error: Some("job already completed".into()),
+        });
+    }
+}

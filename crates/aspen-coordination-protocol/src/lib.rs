@@ -496,3 +496,471 @@ pub struct ServiceUpdateMetadataResultResponse {
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper: postcard roundtrip.
+    fn postcard_roundtrip<T: Serialize + for<'de> Deserialize<'de> + std::fmt::Debug>(val: &T) {
+        let bytes = postcard::to_stdvec(val).expect("postcard serialize");
+        let _: T = postcard::from_bytes(&bytes).expect("postcard deserialize");
+    }
+
+    /// Helper: JSON roundtrip.
+    fn json_roundtrip<T: Serialize + for<'de> Deserialize<'de> + std::fmt::Debug>(val: &T) {
+        let json = serde_json::to_string(val).expect("json serialize");
+        let _: T = serde_json::from_str(&json).expect("json deserialize");
+    }
+
+    /// Helper: run both roundtrips.
+    fn roundtrip<T: Serialize + for<'de> Deserialize<'de> + std::fmt::Debug>(val: &T) {
+        postcard_roundtrip(val);
+        json_roundtrip(val);
+    }
+
+    // =========================================================================
+    // Lock
+    // =========================================================================
+
+    #[test]
+    fn lock_result_roundtrip_success() {
+        roundtrip(&LockResultResponse {
+            is_success: true,
+            fencing_token: Some(42),
+            holder_id: Some("node-1".into()),
+            deadline_ms: Some(1_700_000_000_000),
+            error: None,
+        });
+    }
+
+    #[test]
+    fn lock_result_roundtrip_failure() {
+        roundtrip(&LockResultResponse {
+            is_success: false,
+            fencing_token: None,
+            holder_id: Some("other-holder".into()),
+            deadline_ms: None,
+            error: Some("lock already held".into()),
+        });
+    }
+
+    #[test]
+    fn lock_result_roundtrip_all_none() {
+        roundtrip(&LockResultResponse {
+            is_success: false,
+            fencing_token: None,
+            holder_id: None,
+            deadline_ms: None,
+            error: None,
+        });
+    }
+
+    // =========================================================================
+    // Counter
+    // =========================================================================
+
+    #[test]
+    fn counter_result_roundtrip() {
+        roundtrip(&CounterResultResponse {
+            is_success: true,
+            value: Some(100),
+            error: None,
+        });
+        roundtrip(&CounterResultResponse {
+            is_success: true,
+            value: Some(u64::MAX),
+            error: None,
+        });
+    }
+
+    #[test]
+    fn signed_counter_result_roundtrip() {
+        roundtrip(&SignedCounterResultResponse {
+            is_success: true,
+            value: Some(-42),
+            error: None,
+        });
+        roundtrip(&SignedCounterResultResponse {
+            is_success: true,
+            value: Some(i64::MIN),
+            error: None,
+        });
+        roundtrip(&SignedCounterResultResponse {
+            is_success: true,
+            value: Some(i64::MAX),
+            error: None,
+        });
+    }
+
+    // =========================================================================
+    // Sequence
+    // =========================================================================
+
+    #[test]
+    fn sequence_result_roundtrip() {
+        roundtrip(&SequenceResultResponse {
+            is_success: true,
+            value: Some(1),
+            error: None,
+        });
+        roundtrip(&SequenceResultResponse {
+            is_success: false,
+            value: None,
+            error: Some("sequence exhausted".into()),
+        });
+    }
+
+    // =========================================================================
+    // Rate Limiter
+    // =========================================================================
+
+    #[test]
+    fn rate_limiter_result_roundtrip() {
+        roundtrip(&RateLimiterResultResponse {
+            is_success: true,
+            tokens_remaining: Some(9),
+            retry_after_ms: None,
+            error: None,
+        });
+        roundtrip(&RateLimiterResultResponse {
+            is_success: false,
+            tokens_remaining: Some(0),
+            retry_after_ms: Some(1000),
+            error: Some("rate limited".into()),
+        });
+    }
+
+    // =========================================================================
+    // Barrier
+    // =========================================================================
+
+    #[test]
+    fn barrier_result_roundtrip() {
+        roundtrip(&BarrierResultResponse {
+            is_success: true,
+            current_count: Some(3),
+            required_count: Some(5),
+            phase: Some("waiting".into()),
+            error: None,
+        });
+    }
+
+    // =========================================================================
+    // Semaphore
+    // =========================================================================
+
+    #[test]
+    fn semaphore_result_roundtrip() {
+        roundtrip(&SemaphoreResultResponse {
+            is_success: true,
+            permits_acquired: Some(2),
+            available: Some(8),
+            capacity_permits: Some(10),
+            retry_after_ms: None,
+            error: None,
+        });
+        roundtrip(&SemaphoreResultResponse {
+            is_success: false,
+            permits_acquired: None,
+            available: Some(0),
+            capacity_permits: Some(10),
+            retry_after_ms: Some(500),
+            error: Some("no permits available".into()),
+        });
+    }
+
+    // =========================================================================
+    // RWLock
+    // =========================================================================
+
+    #[test]
+    fn rwlock_result_roundtrip() {
+        roundtrip(&RWLockResultResponse {
+            is_success: true,
+            mode: Some("write".into()),
+            fencing_token: Some(7),
+            deadline_ms: Some(1_700_000_000_000),
+            reader_count: Some(0),
+            writer_holder: Some("writer-1".into()),
+            error: None,
+        });
+        roundtrip(&RWLockResultResponse {
+            is_success: true,
+            mode: Some("read".into()),
+            fencing_token: None,
+            deadline_ms: Some(1_700_000_000_000),
+            reader_count: Some(3),
+            writer_holder: None,
+            error: None,
+        });
+    }
+
+    // =========================================================================
+    // Queue types
+    // =========================================================================
+
+    #[test]
+    fn queue_enqueue_item_roundtrip() {
+        roundtrip(&QueueEnqueueItem {
+            payload: vec![1, 2, 3],
+            ttl_ms: Some(60_000),
+            message_group_id: Some("group-a".into()),
+            deduplication_id: Some("dedup-1".into()),
+        });
+        roundtrip(&QueueEnqueueItem {
+            payload: vec![],
+            ttl_ms: None,
+            message_group_id: None,
+            deduplication_id: None,
+        });
+    }
+
+    #[test]
+    fn queue_create_result_roundtrip() {
+        roundtrip(&QueueCreateResultResponse {
+            is_success: true,
+            was_created: true,
+            error: None,
+        });
+    }
+
+    #[test]
+    fn queue_delete_result_roundtrip() {
+        roundtrip(&QueueDeleteResultResponse {
+            is_success: true,
+            items_deleted: Some(42),
+            error: None,
+        });
+    }
+
+    #[test]
+    fn queue_enqueue_result_roundtrip() {
+        roundtrip(&QueueEnqueueResultResponse {
+            is_success: true,
+            item_id: Some(12345),
+            error: None,
+        });
+    }
+
+    #[test]
+    fn queue_enqueue_batch_result_roundtrip() {
+        roundtrip(&QueueEnqueueBatchResultResponse {
+            is_success: true,
+            item_ids: vec![1, 2, 3, 4, 5],
+            error: None,
+        });
+        roundtrip(&QueueEnqueueBatchResultResponse {
+            is_success: true,
+            item_ids: vec![],
+            error: None,
+        });
+    }
+
+    #[test]
+    fn queue_dequeue_result_roundtrip() {
+        roundtrip(&QueueDequeueResultResponse {
+            is_success: true,
+            items: vec![QueueDequeuedItemResponse {
+                item_id: 1,
+                payload: vec![0xDE, 0xAD],
+                receipt_handle: "rh-abc".into(),
+                delivery_attempts: 1,
+                enqueued_at_ms: 1_700_000_000_000,
+                visibility_deadline_ms: 1_700_000_060_000,
+            }],
+            error: None,
+        });
+        // Empty dequeue
+        roundtrip(&QueueDequeueResultResponse {
+            is_success: true,
+            items: vec![],
+            error: None,
+        });
+    }
+
+    #[test]
+    fn queue_peek_result_roundtrip() {
+        roundtrip(&QueuePeekResultResponse {
+            is_success: true,
+            items: vec![QueueItemResponse {
+                item_id: 1,
+                payload: vec![42],
+                enqueued_at_ms: 1_700_000_000_000,
+                expires_at_ms: 0,
+                delivery_attempts: 0,
+            }],
+            error: None,
+        });
+    }
+
+    #[test]
+    fn queue_ack_nack_roundtrip() {
+        roundtrip(&QueueAckResultResponse {
+            is_success: true,
+            error: None,
+        });
+        roundtrip(&QueueNackResultResponse {
+            is_success: true,
+            error: None,
+        });
+    }
+
+    #[test]
+    fn queue_extend_visibility_roundtrip() {
+        roundtrip(&QueueExtendVisibilityResultResponse {
+            is_success: true,
+            new_deadline_ms: Some(1_700_000_120_000),
+            error: None,
+        });
+    }
+
+    #[test]
+    fn queue_status_roundtrip() {
+        roundtrip(&QueueStatusResultResponse {
+            is_success: true,
+            does_exist: true,
+            visible_count: Some(10),
+            pending_count: Some(3),
+            dlq_count: Some(1),
+            total_enqueued: Some(1000),
+            total_acked: Some(986),
+            error: None,
+        });
+    }
+
+    #[test]
+    fn queue_dlq_roundtrip() {
+        roundtrip(&QueueGetDLQResultResponse {
+            is_success: true,
+            items: vec![QueueDLQItemResponse {
+                item_id: 99,
+                payload: vec![1, 2, 3],
+                enqueued_at_ms: 1_700_000_000_000,
+                delivery_attempts: 5,
+                reason: "max retries exceeded".into(),
+                moved_at_ms: 1_700_000_300_000,
+                last_error: Some("timeout".into()),
+            }],
+            error: None,
+        });
+    }
+
+    #[test]
+    fn queue_redrive_dlq_roundtrip() {
+        roundtrip(&QueueRedriveDLQResultResponse {
+            is_success: true,
+            error: None,
+        });
+    }
+
+    // =========================================================================
+    // Service Registry
+    // =========================================================================
+
+    fn sample_instance() -> ServiceInstanceResponse {
+        ServiceInstanceResponse {
+            instance_id: "inst-1".into(),
+            service_name: "my-service".into(),
+            address: "10.0.0.1:8080".into(),
+            health_status: "healthy".into(),
+            version: "1.0.0".into(),
+            tags: vec!["region:us-east".into(), "env:prod".into()],
+            weight: 100,
+            custom_metadata: r#"{"zone":"a"}"#.into(),
+            registered_at_ms: 1_700_000_000_000,
+            last_heartbeat_ms: 1_700_000_060_000,
+            deadline_ms: 1_700_000_120_000,
+            lease_id: Some(42),
+            fencing_token: 7,
+        }
+    }
+
+    #[test]
+    fn service_register_result_roundtrip() {
+        roundtrip(&ServiceRegisterResultResponse {
+            is_success: true,
+            fencing_token: Some(1),
+            deadline_ms: Some(1_700_000_060_000),
+            error: None,
+        });
+    }
+
+    #[test]
+    fn service_deregister_result_roundtrip() {
+        roundtrip(&ServiceDeregisterResultResponse {
+            is_success: true,
+            was_registered: true,
+            error: None,
+        });
+    }
+
+    #[test]
+    fn service_discover_result_roundtrip() {
+        roundtrip(&ServiceDiscoverResultResponse {
+            is_success: true,
+            instances: vec![sample_instance()],
+            count: 1,
+            error: None,
+        });
+        // Empty results
+        roundtrip(&ServiceDiscoverResultResponse {
+            is_success: true,
+            instances: vec![],
+            count: 0,
+            error: None,
+        });
+    }
+
+    #[test]
+    fn service_list_result_roundtrip() {
+        roundtrip(&ServiceListResultResponse {
+            is_success: true,
+            services: vec!["svc-a".into(), "svc-b".into()],
+            count: 2,
+            error: None,
+        });
+    }
+
+    #[test]
+    fn service_get_instance_result_roundtrip() {
+        roundtrip(&ServiceGetInstanceResultResponse {
+            is_success: true,
+            was_found: true,
+            instance: Some(sample_instance()),
+            error: None,
+        });
+        roundtrip(&ServiceGetInstanceResultResponse {
+            is_success: true,
+            was_found: false,
+            instance: None,
+            error: None,
+        });
+    }
+
+    #[test]
+    fn service_heartbeat_result_roundtrip() {
+        roundtrip(&ServiceHeartbeatResultResponse {
+            is_success: true,
+            new_deadline_ms: Some(1_700_000_120_000),
+            health_status: Some("healthy".into()),
+            error: None,
+        });
+    }
+
+    #[test]
+    fn service_update_health_result_roundtrip() {
+        roundtrip(&ServiceUpdateHealthResultResponse {
+            is_success: true,
+            error: None,
+        });
+    }
+
+    #[test]
+    fn service_update_metadata_result_roundtrip() {
+        roundtrip(&ServiceUpdateMetadataResultResponse {
+            is_success: true,
+            error: None,
+        });
+    }
+}

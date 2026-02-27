@@ -1195,6 +1195,7 @@ dependencies = [
 name = "aspen-coordination-protocol"
 version = "0.1.0"
 dependencies = [
+ "postcard",
  "serde",
  "serde_json",
 ]
@@ -1585,6 +1586,7 @@ dependencies = [
 name = "aspen-jobs-protocol"
 version = "0.1.0"
 dependencies = [
+ "postcard",
  "serde",
  "serde_json",
 ]
