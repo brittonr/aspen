@@ -2,6 +2,7 @@
 //!
 //! Each module handles a category of operations.
 
+pub mod alert;
 #[cfg(feature = "automerge")]
 pub mod automerge;
 pub mod barrier;
@@ -23,6 +24,7 @@ pub mod job;
 pub mod kv;
 pub mod lease;
 pub mod lock;
+pub mod metric;
 pub mod patch;
 pub mod peer;
 #[cfg(feature = "plugins-rpc")]

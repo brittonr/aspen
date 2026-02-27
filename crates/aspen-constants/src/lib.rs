@@ -71,15 +71,27 @@ pub mod prelude {
 }
 
 // Re-export commonly used constants at crate root for backwards compatibility
+pub use api::ALERT_HISTORY_TTL_SECONDS;
+pub use api::DEFAULT_METRIC_QUERY_LIMIT;
 pub use api::DEFAULT_SCAN_LIMIT;
 #[cfg(feature = "sql")]
 pub use api::DEFAULT_SQL_RESULT_ROWS;
 #[cfg(feature = "sql")]
 pub use api::DEFAULT_SQL_TIMEOUT_MS;
 pub use api::DEFAULT_TRACE_QUERY_LIMIT;
+pub use api::MAX_ALERT_HISTORY_PER_RULE;
+pub use api::MAX_ALERT_NOTIFICATION_TARGETS;
+pub use api::MAX_ALERT_RULE_NAME_SIZE;
+pub use api::MAX_ALERT_RULES;
 pub use api::MAX_CUSTOM_INDEXES;
 pub use api::MAX_INDEX_NAME_SIZE;
 pub use api::MAX_KEY_SIZE;
+pub use api::MAX_METRIC_BATCH_SIZE;
+pub use api::MAX_METRIC_LABEL_SIZE;
+pub use api::MAX_METRIC_LABELS;
+pub use api::MAX_METRIC_LIST_RESULTS;
+pub use api::MAX_METRIC_NAME_SIZE;
+pub use api::MAX_METRIC_QUERY_RESULTS;
 pub use api::MAX_SCAN_RESULTS;
 pub use api::MAX_SETMULTI_KEYS;
 pub use api::MAX_SPAN_ATTRIBUTES;
@@ -95,6 +107,8 @@ pub use api::MAX_SQL_TIMEOUT_MS;
 pub use api::MAX_TRACE_BATCH_SIZE;
 pub use api::MAX_TRACE_QUERY_RESULTS;
 pub use api::MAX_VALUE_SIZE;
+pub use api::METRIC_DEFAULT_TTL_SECONDS;
+pub use api::METRIC_MAX_TTL_SECONDS;
 pub use coordination::CAS_RETRY_INITIAL_BACKOFF_MS;
 pub use coordination::CAS_RETRY_MAX_BACKOFF_MS;
 pub use coordination::MAX_CAS_RETRIES;
@@ -272,5 +286,32 @@ mod tests {
             network::GOSSIP_GLOBAL_BURST >= network::GOSSIP_PER_PEER_BURST,
             "global burst must be >= per-peer burst"
         );
+    }
+
+    #[test]
+    fn golden_metrics_and_alert_constants() {
+        assert_eq!(api::MAX_METRIC_BATCH_SIZE, 200, "MAX_METRIC_BATCH_SIZE changed");
+        assert_eq!(api::MAX_METRIC_LABELS, 16, "MAX_METRIC_LABELS changed");
+        assert_eq!(api::MAX_METRIC_NAME_SIZE, 128, "MAX_METRIC_NAME_SIZE changed");
+        assert_eq!(api::MAX_METRIC_LABEL_SIZE, 64, "MAX_METRIC_LABEL_SIZE changed");
+        assert_eq!(api::METRIC_DEFAULT_TTL_SECONDS, 86_400, "METRIC_DEFAULT_TTL_SECONDS changed");
+        assert_eq!(api::METRIC_MAX_TTL_SECONDS, 604_800, "METRIC_MAX_TTL_SECONDS changed");
+        assert_eq!(api::DEFAULT_METRIC_QUERY_LIMIT, 500, "DEFAULT_METRIC_QUERY_LIMIT changed");
+        assert_eq!(api::MAX_METRIC_QUERY_RESULTS, 5_000, "MAX_METRIC_QUERY_RESULTS changed");
+        assert_eq!(api::MAX_METRIC_LIST_RESULTS, 1_000, "MAX_METRIC_LIST_RESULTS changed");
+        assert_eq!(api::MAX_ALERT_RULES, 256, "MAX_ALERT_RULES changed");
+        assert_eq!(api::MAX_ALERT_RULE_NAME_SIZE, 128, "MAX_ALERT_RULE_NAME_SIZE changed");
+        assert_eq!(api::MAX_ALERT_HISTORY_PER_RULE, 100, "MAX_ALERT_HISTORY_PER_RULE changed");
+        assert_eq!(api::ALERT_HISTORY_TTL_SECONDS, 604_800, "ALERT_HISTORY_TTL_SECONDS changed");
+        assert_eq!(api::MAX_ALERT_NOTIFICATION_TARGETS, 8, "MAX_ALERT_NOTIFICATION_TARGETS changed");
+    }
+
+    #[test]
+    fn metrics_alert_ordering() {
+        const {
+            assert!(api::DEFAULT_METRIC_QUERY_LIMIT <= api::MAX_METRIC_QUERY_RESULTS);
+            assert!(api::MAX_METRIC_QUERY_RESULTS <= api::MAX_SCAN_RESULTS);
+            assert!(api::METRIC_DEFAULT_TTL_SECONDS <= api::METRIC_MAX_TTL_SECONDS);
+        }
     }
 }

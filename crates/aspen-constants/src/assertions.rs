@@ -379,3 +379,30 @@ const _: () = assert!(MAX_WORKFLOW_HISTORY_SIZE > 0);
 
 const _: () = assert!(MAX_TTL_EVENT_DISPATCHES > 0);
 const _: () = assert!(MAX_DOCS_EVENT_DISPATCHES > 0);
+
+// ============================================================================
+// Metrics Constants
+// ============================================================================
+
+const _: () = assert!(MAX_METRIC_BATCH_SIZE > 0);
+const _: () = assert!(MAX_METRIC_BATCH_SIZE <= MAX_SCAN_RESULTS);
+const _: () = assert!(MAX_METRIC_LABELS > 0);
+const _: () = assert!(MAX_METRIC_NAME_SIZE > 0);
+const _: () = assert!(MAX_METRIC_LABEL_SIZE > 0);
+const _: () = assert!(METRIC_DEFAULT_TTL_SECONDS > 0);
+const _: () = assert!(METRIC_DEFAULT_TTL_SECONDS <= METRIC_MAX_TTL_SECONDS);
+const _: () = assert!(DEFAULT_METRIC_QUERY_LIMIT > 0);
+const _: () = assert!(DEFAULT_METRIC_QUERY_LIMIT <= MAX_METRIC_QUERY_RESULTS);
+const _: () = assert!(MAX_METRIC_QUERY_RESULTS <= MAX_SCAN_RESULTS);
+const _: () = assert!(MAX_METRIC_LIST_RESULTS > 0);
+const _: () = assert!(MAX_METRIC_LIST_RESULTS <= MAX_SCAN_RESULTS);
+
+// ============================================================================
+// Alert Constants
+// ============================================================================
+
+const _: () = assert!(MAX_ALERT_RULES > 0);
+const _: () = assert!(MAX_ALERT_RULE_NAME_SIZE > 0);
+const _: () = assert!(MAX_ALERT_HISTORY_PER_RULE > 0);
+const _: () = assert!(ALERT_HISTORY_TTL_SECONDS > 0);
+const _: () = assert!(MAX_ALERT_NOTIFICATION_TARGETS > 0);

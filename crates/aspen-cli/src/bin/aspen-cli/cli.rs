@@ -12,6 +12,7 @@ use clap::Parser;
 use clap::Subcommand;
 
 use crate::client::AspenClient;
+use crate::commands::alert::AlertCommand;
 #[cfg(feature = "automerge")]
 use crate::commands::automerge::AutomergeCommand;
 use crate::commands::barrier::BarrierCommand;
@@ -33,6 +34,7 @@ use crate::commands::job::JobCommand;
 use crate::commands::kv::KvCommand;
 use crate::commands::lease::LeaseCommand;
 use crate::commands::lock::LockCommand;
+use crate::commands::metric::MetricCommand;
 use crate::commands::patch::PatchCommand;
 use crate::commands::peer::PeerCommand;
 #[cfg(feature = "plugins-rpc")]
@@ -276,6 +278,18 @@ pub enum Commands {
     #[command(subcommand)]
     Trace(TraceCommand),
 
+    /// Server-side metric operations.
+    ///
+    /// Ingest, list, and query metrics stored by the observability pipeline.
+    #[command(subcommand)]
+    Metric(MetricCommand),
+
+    /// Alert rule management.
+    ///
+    /// Create, delete, list, get, and evaluate alert rules.
+    #[command(subcommand)]
+    Alert(AlertCommand),
+
     /// Verify cluster replication (KV, docs, blobs).
     ///
     /// Run verification tests to ensure data is being replicated correctly.
@@ -368,6 +382,8 @@ impl Cli {
             Commands::Sql(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Tag(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Trace(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Metric(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Alert(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Verify(cmd) => cmd.run(&client, self.global.is_json).await,
         }
     }
@@ -665,5 +681,129 @@ mod tests {
     fn test_trace_search_no_filters_parses() {
         let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "trace", "search"]);
         assert!(r.is_ok(), "trace search with no filters must parse");
+    }
+
+    // =========================================================================
+    // Metric CLI parse tests
+    // =========================================================================
+
+    #[test]
+    fn test_metric_list_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "metric", "list"]);
+        assert!(r.is_ok(), "metric list must parse");
+    }
+
+    #[test]
+    fn test_metric_query_requires_name() {
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "metric", "query"]);
+        assert!(r.is_err(), "metric query without name must fail");
+    }
+
+    #[test]
+    fn test_metric_query_with_all_args_parses() {
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "--ticket",
+            "fake",
+            "metric",
+            "query",
+            "cpu.usage",
+            "--start-us",
+            "1000000",
+            "--end-us",
+            "2000000",
+            "--label",
+            "node=1",
+            "--aggregation",
+            "avg",
+            "--step-us",
+            "60000000",
+            "--limit",
+            "100",
+        ]);
+        assert!(r.is_ok(), "metric query with all args must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_metric_ingest_parses() {
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "--ticket",
+            "fake",
+            "metric",
+            "ingest",
+            "--ttl-seconds",
+            "3600",
+        ]);
+        assert!(r.is_ok(), "metric ingest must parse");
+    }
+
+    // =========================================================================
+    // Alert CLI parse tests
+    // =========================================================================
+
+    #[test]
+    fn test_alert_list_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "alert", "list"]);
+        assert!(r.is_ok(), "alert list must parse");
+    }
+
+    #[test]
+    fn test_alert_create_requires_metric_and_threshold() {
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "alert", "create", "my_rule"]);
+        assert!(r.is_err(), "alert create without --metric must fail");
+    }
+
+    #[test]
+    fn test_alert_create_with_all_args_parses() {
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "--ticket",
+            "fake",
+            "alert",
+            "create",
+            "high_cpu",
+            "--metric",
+            "cpu.usage",
+            "--comparison",
+            "gt",
+            "--threshold",
+            "90.0",
+            "--aggregation",
+            "avg",
+            "--window-seconds",
+            "300",
+            "--for-seconds",
+            "60",
+            "--severity",
+            "critical",
+            "--label",
+            "node=1",
+        ]);
+        assert!(r.is_ok(), "alert create with all args must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_alert_delete_requires_name() {
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "alert", "delete"]);
+        assert!(r.is_err(), "alert delete without name must fail");
+    }
+
+    #[test]
+    fn test_alert_get_requires_name() {
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "alert", "get"]);
+        assert!(r.is_err(), "alert get without name must fail");
+    }
+
+    #[test]
+    fn test_alert_evaluate_requires_name() {
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "alert", "evaluate"]);
+        assert!(r.is_err(), "alert evaluate without name must fail");
+    }
+
+    #[test]
+    fn test_alert_evaluate_with_name_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "alert", "evaluate", "my_rule"]);
+        assert!(r.is_ok(), "alert evaluate with name must parse");
     }
 }

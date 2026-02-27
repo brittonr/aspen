@@ -281,7 +281,25 @@ pub use lease::LeaseListResultResponse;
 pub use lease::LeaseRequest;
 pub use lease::LeaseRevokeResultResponse;
 pub use lease::LeaseTimeToLiveResultResponse;
+// Metric types
+pub use observability::AlertComparison;
+pub use observability::AlertEvaluateResultResponse;
+pub use observability::AlertGetResultResponse;
+pub use observability::AlertHistoryEntry;
+pub use observability::AlertListResultResponse;
+pub use observability::AlertRuleResultResponse;
+pub use observability::AlertRuleWire;
+pub use observability::AlertRuleWithState;
+pub use observability::AlertSeverity;
+pub use observability::AlertStateWire;
+pub use observability::AlertStatus;
 pub use observability::IngestSpan;
+pub use observability::MetricDataPoint;
+pub use observability::MetricIngestResultResponse;
+pub use observability::MetricListResultResponse;
+pub use observability::MetricMetadata;
+pub use observability::MetricQueryResultResponse;
+pub use observability::MetricTypeWire;
 pub use observability::SpanEventWire;
 pub use observability::SpanStatusWire;
 pub use observability::TraceGetResultResponse;
@@ -3032,6 +3050,89 @@ pub enum ClientRpcRequest {
     },
 
     // =========================================================================
+    // Metrics operations
+    // =========================================================================
+    /// Ingest a batch of metric data points.
+    ///
+    /// Data points are stored under `_sys:metrics:{name}:{timestamp_us:020}` with TTL.
+    /// Metadata is upserted under `_sys:metrics_meta:{name}`.
+    /// Batch size bounded by `MAX_METRIC_BATCH_SIZE`.
+    MetricIngest {
+        /// Batch of metric data points (max `MAX_METRIC_BATCH_SIZE`).
+        data_points: Vec<observability::MetricDataPoint>,
+        /// TTL in seconds for stored data points (default `METRIC_DEFAULT_TTL_SECONDS`).
+        ttl_seconds: Option<u32>,
+    },
+
+    /// List available metric names and metadata.
+    ///
+    /// Scans `_sys:metrics_meta:` prefix.
+    MetricList {
+        /// Optional prefix filter on metric name.
+        prefix: Option<String>,
+        /// Maximum results (default `MAX_METRIC_LIST_RESULTS`).
+        limit: Option<u32>,
+    },
+
+    /// Query metric data points by name and time range.
+    ///
+    /// Scans `_sys:metrics:{name}:` prefix, filters by time range and labels.
+    MetricQuery {
+        /// Metric name to query.
+        name: String,
+        /// Start of time range (Unix microseconds, inclusive).
+        start_time_us: Option<u64>,
+        /// End of time range (Unix microseconds, exclusive).
+        end_time_us: Option<u64>,
+        /// Label filters: only return data points matching ALL labels.
+        label_filters: Vec<(String, String)>,
+        /// Aggregation: "none" (raw points), "avg", "max", "min", "sum", "count".
+        aggregation: Option<String>,
+        /// Aggregation step/bucket size in microseconds (for time-series downsampling).
+        step_us: Option<u64>,
+        /// Maximum data points to return (default `DEFAULT_METRIC_QUERY_LIMIT`).
+        limit: Option<u32>,
+    },
+
+    // =========================================================================
+    // Alert operations
+    // =========================================================================
+    /// Create or update an alert rule.
+    ///
+    /// Stored under `_sys:alerts:rule:{name}`. Initializes state to Ok.
+    /// Total rules bounded by `MAX_ALERT_RULES`.
+    AlertCreate {
+        /// Alert rule definition.
+        rule: observability::AlertRuleWire,
+    },
+
+    /// Delete an alert rule and its state/history.
+    AlertDelete {
+        /// Rule name to delete.
+        name: String,
+    },
+
+    /// List all alert rules with current state.
+    AlertList,
+
+    /// Get a single alert rule with state and history.
+    AlertGet {
+        /// Rule name to retrieve.
+        name: String,
+    },
+
+    /// On-demand evaluation of an alert rule against stored metrics.
+    ///
+    /// Reads metric data for the rule's window, computes aggregation,
+    /// compares against threshold, updates state in KV, records history.
+    AlertEvaluate {
+        /// Rule name to evaluate.
+        name: String,
+        /// Current timestamp in Unix microseconds (explicit for determinism).
+        now_us: u64,
+    },
+
+    // =========================================================================
     // Index operations
     // =========================================================================
     /// Create a custom secondary index.
@@ -3383,6 +3484,14 @@ impl ClientRpcRequest {
             Self::TraceList { .. } => "TraceList",
             Self::TraceGet { .. } => "TraceGet",
             Self::TraceSearch { .. } => "TraceSearch",
+            Self::MetricIngest { .. } => "MetricIngest",
+            Self::MetricList { .. } => "MetricList",
+            Self::MetricQuery { .. } => "MetricQuery",
+            Self::AlertCreate { .. } => "AlertCreate",
+            Self::AlertDelete { .. } => "AlertDelete",
+            Self::AlertList => "AlertList",
+            Self::AlertGet { .. } => "AlertGet",
+            Self::AlertEvaluate { .. } => "AlertEvaluate",
             Self::IndexCreate { .. } => "IndexCreate",
             Self::IndexDrop { .. } => "IndexDrop",
             Self::IndexScan { .. } => "IndexScan",
@@ -3444,6 +3553,14 @@ impl ClientRpcRequest {
             | Self::TraceList { .. }
             | Self::TraceGet { .. }
             | Self::TraceSearch { .. }
+            | Self::MetricIngest { .. }
+            | Self::MetricList { .. }
+            | Self::MetricQuery { .. }
+            | Self::AlertCreate { .. }
+            | Self::AlertDelete { .. }
+            | Self::AlertList
+            | Self::AlertGet { .. }
+            | Self::AlertEvaluate { .. }
             | Self::IndexCreate { .. }
             | Self::IndexDrop { .. }
             | Self::IndexScan { .. }
@@ -4321,6 +4438,30 @@ pub enum ClientRpcResponse {
     TraceGetResult(TraceGetResultResponse),
     /// Trace search result.
     TraceSearchResult(TraceSearchResultResponse),
+
+    // -------------------------------------------------------------------------
+    // Metrics responses
+    // -------------------------------------------------------------------------
+    /// Metric ingest result.
+    MetricIngestResult(MetricIngestResultResponse),
+    /// Metric list result.
+    MetricListResult(MetricListResultResponse),
+    /// Metric query result.
+    MetricQueryResult(MetricQueryResultResponse),
+
+    // -------------------------------------------------------------------------
+    // Alert responses
+    // -------------------------------------------------------------------------
+    /// Alert create/update result.
+    AlertCreateResult(AlertRuleResultResponse),
+    /// Alert delete result.
+    AlertDeleteResult(AlertRuleResultResponse),
+    /// Alert list result.
+    AlertListResult(AlertListResultResponse),
+    /// Alert get result.
+    AlertGetResult(AlertGetResultResponse),
+    /// Alert evaluate result.
+    AlertEvaluateResult(AlertEvaluateResultResponse),
 
     // -------------------------------------------------------------------------
     // Index responses

@@ -11,9 +11,19 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use anyhow::Result;
+use aspen_client_api::AlertEvaluateResultResponse;
+use aspen_client_api::AlertGetResultResponse;
+use aspen_client_api::AlertListResultResponse;
+use aspen_client_api::AlertRuleResultResponse;
+use aspen_client_api::AlertRuleWire;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::IngestSpan;
+use aspen_client_api::MetricDataPoint;
+use aspen_client_api::MetricIngestResultResponse;
+use aspen_client_api::MetricListResultResponse;
+use aspen_client_api::MetricQueryResultResponse;
+use aspen_client_api::MetricTypeWire;
 use aspen_client_api::SpanEventWire;
 use aspen_client_api::SpanStatusWire;
 use aspen_client_api::TraceGetResultResponse;
@@ -315,6 +325,42 @@ impl MetricsCollector {
             format!("{{{}}}", labels.join(","))
         }
     }
+
+    /// Snapshot all in-memory metrics as data points for server-side ingest.
+    pub async fn to_data_points(&self, timestamp_us: u64) -> Vec<MetricDataPoint> {
+        let labels: Vec<(String, String)> = self.labels.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let mut points = Vec::new();
+
+        // Counters
+        for (name, value) in self.counters.read().await.iter() {
+            points.push(MetricDataPoint {
+                name: name.clone(),
+                metric_type: MetricTypeWire::Counter,
+                timestamp_us,
+                value: *value as f64,
+                labels: labels.clone(),
+                histogram_buckets: None,
+                histogram_sum: None,
+                histogram_count: None,
+            });
+        }
+
+        // Gauges
+        for (name, value) in self.gauges.read().await.iter() {
+            points.push(MetricDataPoint {
+                name: name.clone(),
+                metric_type: MetricTypeWire::Gauge,
+                timestamp_us,
+                value: *value,
+                labels: labels.clone(),
+                histogram_buckets: None,
+                histogram_sum: None,
+                histogram_count: None,
+            });
+        }
+
+        points
+    }
 }
 
 /// Statistics for histogram metrics.
@@ -605,6 +651,145 @@ impl<'a> ObservabilityClient<'a> {
     pub async fn clear_spans(&self) {
         self.spans.write().await.clear();
         self.pending_spans.write().await.clear();
+    }
+
+    // =========================================================================
+    // Metrics — server-side storage
+    // =========================================================================
+
+    /// Ingest a batch of metric data points to the server.
+    pub async fn ingest_metrics(
+        &self,
+        data_points: Vec<MetricDataPoint>,
+        ttl_seconds: Option<u32>,
+    ) -> Result<MetricIngestResultResponse> {
+        let response = self
+            .client
+            .send(ClientRpcRequest::MetricIngest {
+                data_points,
+                ttl_seconds,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::MetricIngestResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("metric ingest failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
+    }
+
+    /// List available metric names.
+    pub async fn list_metrics(&self, prefix: Option<&str>, limit: Option<u32>) -> Result<MetricListResultResponse> {
+        let response = self
+            .client
+            .send(ClientRpcRequest::MetricList {
+                prefix: prefix.map(String::from),
+                limit,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::MetricListResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("metric list failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
+    }
+
+    /// Query metric data points by name and optional filters.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn query_metrics(
+        &self,
+        name: &str,
+        start_time_us: Option<u64>,
+        end_time_us: Option<u64>,
+        label_filters: Vec<(String, String)>,
+        aggregation: Option<&str>,
+        step_us: Option<u64>,
+        limit: Option<u32>,
+    ) -> Result<MetricQueryResultResponse> {
+        let response = self
+            .client
+            .send(ClientRpcRequest::MetricQuery {
+                name: name.to_string(),
+                start_time_us,
+                end_time_us,
+                label_filters,
+                aggregation: aggregation.map(String::from),
+                step_us,
+                limit,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::MetricQueryResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("metric query failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
+    }
+
+    // =========================================================================
+    // Alerts
+    // =========================================================================
+
+    /// Create or update an alert rule.
+    pub async fn create_alert(&self, rule: AlertRuleWire) -> Result<AlertRuleResultResponse> {
+        let response = self.client.send(ClientRpcRequest::AlertCreate { rule }).await?;
+
+        match response {
+            ClientRpcResponse::AlertCreateResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("alert create failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
+    }
+
+    /// Delete an alert rule.
+    pub async fn delete_alert(&self, name: &str) -> Result<AlertRuleResultResponse> {
+        let response = self.client.send(ClientRpcRequest::AlertDelete { name: name.to_string() }).await?;
+
+        match response {
+            ClientRpcResponse::AlertDeleteResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("alert delete failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
+    }
+
+    /// List all alert rules with current state.
+    pub async fn list_alerts(&self) -> Result<AlertListResultResponse> {
+        let response = self.client.send(ClientRpcRequest::AlertList).await?;
+
+        match response {
+            ClientRpcResponse::AlertListResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("alert list failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
+    }
+
+    /// Get a single alert rule with state and history.
+    pub async fn get_alert(&self, name: &str) -> Result<AlertGetResultResponse> {
+        let response = self.client.send(ClientRpcRequest::AlertGet { name: name.to_string() }).await?;
+
+        match response {
+            ClientRpcResponse::AlertGetResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("alert get failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
+    }
+
+    /// Evaluate an alert rule on-demand.
+    pub async fn evaluate_alert(&self, name: &str, now_us: u64) -> Result<AlertEvaluateResultResponse> {
+        let response = self
+            .client
+            .send(ClientRpcRequest::AlertEvaluate {
+                name: name.to_string(),
+                now_us,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::AlertEvaluateResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("alert evaluate failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
     }
 }
 

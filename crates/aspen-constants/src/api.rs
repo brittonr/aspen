@@ -161,3 +161,81 @@ pub const MAX_INDEX_NAME_SIZE: u32 = 128;
 ///
 /// Tiger Style: Bounded index count prevents excessive storage overhead.
 pub const MAX_CUSTOM_INDEXES: u32 = 64;
+
+// ============================================================================
+// Metrics Constants
+// ============================================================================
+
+/// Maximum data points in a single metric ingest batch (200).
+///
+/// Tiger Style: Fixed limit prevents memory exhaustion from oversized batches.
+pub const MAX_METRIC_BATCH_SIZE: u32 = 200;
+
+/// Maximum labels per metric data point (16).
+///
+/// Tiger Style: Bounded label count prevents pathological cases.
+pub const MAX_METRIC_LABELS: u32 = 16;
+
+/// Maximum length of a metric name in bytes (128).
+///
+/// Tiger Style: Fixed limit prevents oversized metric names.
+pub const MAX_METRIC_NAME_SIZE: u32 = 128;
+
+/// Maximum length of a label key or value in bytes (64).
+///
+/// Tiger Style: Fixed limit prevents oversized label strings.
+pub const MAX_METRIC_LABEL_SIZE: u32 = 64;
+
+/// Default metric data point TTL in seconds (24 hours).
+///
+/// Tiger Style: Automatic expiration prevents unbounded storage growth.
+pub const METRIC_DEFAULT_TTL_SECONDS: u32 = 86_400;
+
+/// Maximum metric data point TTL in seconds (7 days).
+///
+/// Tiger Style: Upper bound on retention prevents indefinite storage.
+pub const METRIC_MAX_TTL_SECONDS: u32 = 604_800;
+
+/// Default limit for metric query results (500).
+///
+/// Tiger Style: Explicit default prevents unbounded queries.
+pub const DEFAULT_METRIC_QUERY_LIMIT: u32 = 500;
+
+/// Maximum metric query results (5,000).
+///
+/// Tiger Style: Fixed upper bound on metric query result sets.
+pub const MAX_METRIC_QUERY_RESULTS: u32 = 5_000;
+
+/// Maximum distinct metric names returned by MetricList (1,000).
+///
+/// Tiger Style: Bounded list prevents unbounded memory allocation.
+pub const MAX_METRIC_LIST_RESULTS: u32 = 1_000;
+
+// ============================================================================
+// Alert Constants
+// ============================================================================
+
+/// Maximum alert rules per cluster (256).
+///
+/// Tiger Style: Fixed limit prevents unbounded rule storage.
+pub const MAX_ALERT_RULES: u32 = 256;
+
+/// Maximum alert rule name length in bytes (128).
+///
+/// Tiger Style: Fixed limit prevents oversized rule names.
+pub const MAX_ALERT_RULE_NAME_SIZE: u32 = 128;
+
+/// Maximum alert history entries retained per rule (100).
+///
+/// Tiger Style: Bounded history prevents unbounded storage growth.
+pub const MAX_ALERT_HISTORY_PER_RULE: u32 = 100;
+
+/// Alert history TTL in seconds (7 days).
+///
+/// Tiger Style: Automatic expiration prevents indefinite retention.
+pub const ALERT_HISTORY_TTL_SECONDS: u32 = 604_800;
+
+/// Maximum notification targets per alert rule (8).
+///
+/// Tiger Style: Bounded notification fanout prevents amplification.
+pub const MAX_ALERT_NOTIFICATION_TARGETS: u32 = 8;

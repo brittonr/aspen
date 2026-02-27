@@ -1,15 +1,31 @@
 //! Core request handler for basic operations.
 //!
 //! Handles: Ping, GetHealth, GetRaftMetrics, GetNodeInfo, GetLeader, GetMetrics,
-//! CheckpointWal, ListVaults, GetVaultKeys.
+//! CheckpointWal, ListVaults, GetVaultKeys, Trace*, Metric*, Alert*.
 
 use std::collections::HashMap;
 
+use aspen_client_api::AlertComparison;
+use aspen_client_api::AlertEvaluateResultResponse;
+use aspen_client_api::AlertGetResultResponse;
+use aspen_client_api::AlertHistoryEntry;
+use aspen_client_api::AlertListResultResponse;
+use aspen_client_api::AlertRuleResultResponse;
+use aspen_client_api::AlertRuleWire;
+use aspen_client_api::AlertRuleWithState;
+use aspen_client_api::AlertStateWire;
+use aspen_client_api::AlertStatus;
 use aspen_client_api::CheckpointWalResultResponse;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::HealthResponse;
 use aspen_client_api::IngestSpan;
+use aspen_client_api::MetricDataPoint;
+use aspen_client_api::MetricIngestResultResponse;
+use aspen_client_api::MetricListResultResponse;
+use aspen_client_api::MetricMetadata;
+use aspen_client_api::MetricQueryResultResponse;
+use aspen_client_api::MetricTypeWire;
 use aspen_client_api::MetricsResponse;
 use aspen_client_api::NodeInfoResponse;
 use aspen_client_api::RaftMetricsResponse;
@@ -25,7 +41,11 @@ use aspen_client_api::VaultListResponse;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
 use aspen_core::CLIENT_RPC_REQUEST_COUNTER;
+use aspen_core::kv::DeleteRequest;
+use aspen_core::kv::ReadConsistency;
+use aspen_core::kv::ReadRequest;
 use aspen_core::kv::ScanRequest;
+use aspen_core::kv::WriteRequest;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;
 
@@ -50,6 +70,14 @@ impl RequestHandler for CoreHandler {
                 | ClientRpcRequest::TraceList { .. }
                 | ClientRpcRequest::TraceGet { .. }
                 | ClientRpcRequest::TraceSearch { .. }
+                | ClientRpcRequest::MetricIngest { .. }
+                | ClientRpcRequest::MetricList { .. }
+                | ClientRpcRequest::MetricQuery { .. }
+                | ClientRpcRequest::AlertCreate { .. }
+                | ClientRpcRequest::AlertDelete { .. }
+                | ClientRpcRequest::AlertList
+                | ClientRpcRequest::AlertGet { .. }
+                | ClientRpcRequest::AlertEvaluate { .. }
         )
     }
 
@@ -83,6 +111,28 @@ impl RequestHandler for CoreHandler {
                 status,
                 limit,
             } => handle_trace_search(ctx, operation, min_duration_us, max_duration_us, status, limit).await,
+            ClientRpcRequest::MetricIngest {
+                data_points,
+                ttl_seconds,
+            } => handle_metric_ingest(ctx, data_points, ttl_seconds).await,
+            ClientRpcRequest::MetricList { prefix, limit } => handle_metric_list(ctx, prefix, limit).await,
+            ClientRpcRequest::MetricQuery {
+                name,
+                start_time_us,
+                end_time_us,
+                label_filters,
+                aggregation,
+                step_us,
+                limit,
+            } => {
+                handle_metric_query(ctx, name, start_time_us, end_time_us, label_filters, aggregation, step_us, limit)
+                    .await
+            }
+            ClientRpcRequest::AlertCreate { rule } => handle_alert_create(ctx, rule).await,
+            ClientRpcRequest::AlertDelete { name } => handle_alert_delete(ctx, name).await,
+            ClientRpcRequest::AlertList => handle_alert_list(ctx).await,
+            ClientRpcRequest::AlertGet { name } => handle_alert_get(ctx, name).await,
+            ClientRpcRequest::AlertEvaluate { name, now_us } => handle_alert_evaluate(ctx, name, now_us).await,
             _ => Err(anyhow::anyhow!("request not handled by CoreHandler")),
         }
     }
@@ -478,10 +528,698 @@ async fn handle_trace_search(
     }))
 }
 
+/// Helper: read a key from the KV store with linearizable consistency.
+/// Returns `Some(value_string)` if found, `None` if not found or error.
+async fn kv_read_value(ctx: &ClientProtocolContext, key: &str) -> Option<String> {
+    let req = ReadRequest {
+        key: key.to_string(),
+        consistency: ReadConsistency::Linearizable,
+    };
+    match ctx.kv_store.read(req).await {
+        Ok(result) => result.kv.map(|kv| kv.value),
+        Err(_) => None,
+    }
+}
+
+// =============================================================================
+// Metric handlers
+// =============================================================================
+
+async fn handle_metric_ingest(
+    ctx: &ClientProtocolContext,
+    data_points: Vec<MetricDataPoint>,
+    ttl_seconds: Option<u32>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let max_batch = aspen_constants::MAX_METRIC_BATCH_SIZE as usize;
+    let total_count = data_points.len();
+    let accepted_count = total_count.min(max_batch) as u32;
+    let dropped_count = total_count.saturating_sub(max_batch) as u32;
+
+    let ttl = ttl_seconds
+        .unwrap_or(aspen_constants::METRIC_DEFAULT_TTL_SECONDS)
+        .min(aspen_constants::METRIC_MAX_TTL_SECONDS);
+
+    // Track unique metric names for metadata upsert
+    let mut seen_names: HashMap<String, &MetricDataPoint> = HashMap::new();
+
+    for dp in data_points.iter().take(max_batch) {
+        let key = format!("_sys:metrics:{}:{:020}", dp.name, dp.timestamp_us);
+        let value_json = serde_json::to_string(&dp).map_err(|e| anyhow::anyhow!("serialize metric: {}", e))?;
+        let write_req = WriteRequest::set_with_ttl(key, value_json, ttl);
+        if let Err(e) = ctx.kv_store.write(write_req).await {
+            tracing::warn!(error = %e, "failed to store metric data point");
+            return Ok(ClientRpcResponse::MetricIngestResult(MetricIngestResultResponse {
+                is_success: false,
+                accepted_count: 0,
+                dropped_count: total_count as u32,
+                error: Some(format!("storage error: {}", e)),
+            }));
+        }
+        seen_names.entry(dp.name.clone()).or_insert(dp);
+    }
+
+    // Upsert metadata for each unique metric name
+    for (name, sample) in &seen_names {
+        let label_keys: Vec<String> = sample.labels.iter().map(|(k, _)| k.clone()).collect();
+        let meta = MetricMetadata {
+            name: name.clone(),
+            metric_type: sample.metric_type.clone(),
+            description: String::new(),
+            unit: String::new(),
+            label_keys,
+            last_updated_us: sample.timestamp_us,
+        };
+        let meta_key = format!("_sys:metrics_meta:{}", name);
+        let meta_json = serde_json::to_string(&meta).map_err(|e| anyhow::anyhow!("serialize metadata: {}", e))?;
+        let write_req = WriteRequest::set(meta_key, meta_json);
+        if let Err(e) = ctx.kv_store.write(write_req).await {
+            tracing::warn!(error = %e, metric_name = %name, "failed to upsert metric metadata");
+        }
+    }
+
+    Ok(ClientRpcResponse::MetricIngestResult(MetricIngestResultResponse {
+        is_success: true,
+        accepted_count,
+        dropped_count,
+        error: None,
+    }))
+}
+
+async fn handle_metric_list(
+    ctx: &ClientProtocolContext,
+    prefix: Option<String>,
+    limit: Option<u32>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let scan_prefix = format!("_sys:metrics_meta:{}", prefix.as_deref().unwrap_or(""));
+    let effective_limit = limit
+        .unwrap_or(aspen_constants::MAX_METRIC_LIST_RESULTS)
+        .min(aspen_constants::MAX_METRIC_LIST_RESULTS);
+
+    let scan_req = ScanRequest {
+        prefix: scan_prefix,
+        limit_results: Some(effective_limit),
+        continuation_token: None,
+    };
+    let scan_result = match ctx.kv_store.scan(scan_req).await {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::warn!(error = %e, "metric list scan failed");
+            return Ok(ClientRpcResponse::MetricListResult(MetricListResultResponse {
+                metrics: vec![],
+                count: 0,
+                error: Some(format!("scan error: {}", e)),
+            }));
+        }
+    };
+
+    let mut metrics = Vec::with_capacity(scan_result.entries.len());
+    for entry in &scan_result.entries {
+        match serde_json::from_str::<MetricMetadata>(&entry.value) {
+            Ok(meta) => metrics.push(meta),
+            Err(e) => tracing::warn!(key = %entry.key, error = %e, "skip bad metric metadata"),
+        }
+    }
+
+    let count = metrics.len() as u32;
+    Ok(ClientRpcResponse::MetricListResult(MetricListResultResponse {
+        metrics,
+        count,
+        error: None,
+    }))
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn handle_metric_query(
+    ctx: &ClientProtocolContext,
+    name: String,
+    start_time_us: Option<u64>,
+    end_time_us: Option<u64>,
+    label_filters: Vec<(String, String)>,
+    aggregation: Option<String>,
+    step_us: Option<u64>,
+    limit: Option<u32>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let scan_prefix = format!("_sys:metrics:{}:", name);
+    let scan_req = ScanRequest {
+        prefix: scan_prefix,
+        limit_results: Some(aspen_constants::MAX_METRIC_QUERY_RESULTS),
+        continuation_token: None,
+    };
+    let scan_result = match ctx.kv_store.scan(scan_req).await {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::warn!(error = %e, metric_name = %name, "metric query scan failed");
+            return Ok(ClientRpcResponse::MetricQueryResult(MetricQueryResultResponse {
+                name,
+                data_points: vec![],
+                count: 0,
+                is_truncated: false,
+                error: Some(format!("scan error: {}", e)),
+            }));
+        }
+    };
+
+    // Deserialize and filter
+    let mut points: Vec<MetricDataPoint> = Vec::new();
+    for entry in &scan_result.entries {
+        let dp = match serde_json::from_str::<MetricDataPoint>(&entry.value) {
+            Ok(dp) => dp,
+            Err(e) => {
+                tracing::warn!(key = %entry.key, error = %e, "skip bad metric data point");
+                continue;
+            }
+        };
+        if let Some(start) = start_time_us
+            && dp.timestamp_us < start
+        {
+            continue;
+        }
+        if let Some(end) = end_time_us
+            && dp.timestamp_us >= end
+        {
+            continue;
+        }
+        if !matches_label_filters(&dp.labels, &label_filters) {
+            continue;
+        }
+        points.push(dp);
+    }
+
+    // Apply aggregation
+    let agg = aggregation.as_deref().unwrap_or("none");
+    let result_points = if agg == "none" {
+        points
+    } else {
+        aggregate_metric_points(&points, agg, step_us, &name)
+    };
+
+    let effective_limit = limit
+        .unwrap_or(aspen_constants::DEFAULT_METRIC_QUERY_LIMIT)
+        .min(aspen_constants::MAX_METRIC_QUERY_RESULTS) as usize;
+    let is_truncated = result_points.len() > effective_limit;
+    let truncated: Vec<MetricDataPoint> = result_points.into_iter().take(effective_limit).collect();
+    let count = truncated.len() as u32;
+
+    Ok(ClientRpcResponse::MetricQueryResult(MetricQueryResultResponse {
+        name,
+        data_points: truncated,
+        count,
+        is_truncated,
+        error: None,
+    }))
+}
+
+/// Check if a data point's labels match all required filters.
+fn matches_label_filters(dp_labels: &[(String, String)], filters: &[(String, String)]) -> bool {
+    filters.iter().all(|(fk, fv)| dp_labels.iter().any(|(dk, dv)| dk == fk && dv == fv))
+}
+
+/// Aggregate metric data points by time bucket.
+fn aggregate_metric_points(
+    points: &[MetricDataPoint],
+    aggregation: &str,
+    step_us: Option<u64>,
+    metric_name: &str,
+) -> Vec<MetricDataPoint> {
+    if points.is_empty() {
+        return vec![];
+    }
+
+    match step_us {
+        Some(step) if step > 0 => {
+            // Bucket points by timestamp
+            let mut buckets: HashMap<u64, Vec<f64>> = HashMap::new();
+            for dp in points {
+                let bucket_key = dp.timestamp_us / step * step;
+                buckets.entry(bucket_key).or_default().push(dp.value);
+            }
+            let mut result: Vec<MetricDataPoint> = buckets
+                .into_iter()
+                .map(|(ts, values)| MetricDataPoint {
+                    name: metric_name.to_string(),
+                    metric_type: MetricTypeWire::Gauge,
+                    timestamp_us: ts,
+                    value: compute_aggregation(&values, aggregation),
+                    labels: vec![],
+                    histogram_buckets: None,
+                    histogram_sum: None,
+                    histogram_count: None,
+                })
+                .collect();
+            result.sort_by_key(|dp| dp.timestamp_us);
+            result
+        }
+        _ => {
+            // Aggregate all points into a single result
+            let values: Vec<f64> = points.iter().map(|dp| dp.value).collect();
+            let ts = points.first().map(|dp| dp.timestamp_us).unwrap_or(0);
+            vec![MetricDataPoint {
+                name: metric_name.to_string(),
+                metric_type: MetricTypeWire::Gauge,
+                timestamp_us: ts,
+                value: compute_aggregation(&values, aggregation),
+                labels: vec![],
+                histogram_buckets: None,
+                histogram_sum: None,
+                histogram_count: None,
+            }]
+        }
+    }
+}
+
+/// Compute an aggregation function over a slice of values.
+fn compute_aggregation(values: &[f64], aggregation: &str) -> f64 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    match aggregation {
+        "avg" => values.iter().sum::<f64>() / values.len() as f64,
+        "sum" => values.iter().sum(),
+        "min" => values.iter().cloned().fold(f64::INFINITY, f64::min),
+        "max" => values.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+        "count" => values.len() as f64,
+        "last" => values.last().copied().unwrap_or(0.0),
+        _ => values.iter().sum::<f64>() / values.len() as f64, // default to avg
+    }
+}
+
+// =============================================================================
+// Alert handlers
+// =============================================================================
+
+async fn handle_alert_create(ctx: &ClientProtocolContext, rule: AlertRuleWire) -> anyhow::Result<ClientRpcResponse> {
+    // Validate name length
+    if rule.name.len() > aspen_constants::MAX_ALERT_RULE_NAME_SIZE as usize {
+        return Ok(ClientRpcResponse::AlertCreateResult(AlertRuleResultResponse {
+            is_success: false,
+            rule_name: rule.name,
+            error: Some(format!("rule name exceeds {} bytes", aspen_constants::MAX_ALERT_RULE_NAME_SIZE)),
+        }));
+    }
+
+    // Check if this is an update (rule already exists)
+    let rule_key = format!("_sys:alerts:rule:{}", rule.name);
+    let is_update = kv_read_value(ctx, &rule_key).await.is_some();
+
+    // Check rule count limit for new rules
+    if !is_update {
+        let scan_req = ScanRequest {
+            prefix: "_sys:alerts:rule:".to_string(),
+            limit_results: Some(aspen_constants::MAX_ALERT_RULES + 1),
+            continuation_token: None,
+        };
+        if let Ok(result) = ctx.kv_store.scan(scan_req).await
+            && result.entries.len() >= aspen_constants::MAX_ALERT_RULES as usize
+        {
+            return Ok(ClientRpcResponse::AlertCreateResult(AlertRuleResultResponse {
+                is_success: false,
+                rule_name: rule.name,
+                error: Some(format!("alert rule limit reached ({})", aspen_constants::MAX_ALERT_RULES)),
+            }));
+        }
+    }
+
+    // Write rule
+    let rule_json = serde_json::to_string(&rule).map_err(|e| anyhow::anyhow!("serialize rule: {}", e))?;
+    let write_req = WriteRequest::set(rule_key, rule_json);
+    if let Err(e) = ctx.kv_store.write(write_req).await {
+        return Ok(ClientRpcResponse::AlertCreateResult(AlertRuleResultResponse {
+            is_success: false,
+            rule_name: rule.name,
+            error: Some(format!("storage error: {}", e)),
+        }));
+    }
+
+    // Initialize state if new rule
+    if !is_update {
+        let state = AlertStateWire {
+            rule_name: rule.name.clone(),
+            status: AlertStatus::Ok,
+            last_value: None,
+            last_evaluated_us: 0,
+            condition_since_us: None,
+            last_fired_us: None,
+            last_resolved_us: None,
+        };
+        let state_key = format!("_sys:alerts:state:{}", rule.name);
+        let state_json = serde_json::to_string(&state).map_err(|e| anyhow::anyhow!("serialize state: {}", e))?;
+        let write_req = WriteRequest::set(state_key, state_json);
+        if let Err(e) = ctx.kv_store.write(write_req).await {
+            tracing::warn!(error = %e, rule = %rule.name, "failed to initialize alert state");
+        }
+    }
+
+    Ok(ClientRpcResponse::AlertCreateResult(AlertRuleResultResponse {
+        is_success: true,
+        rule_name: rule.name,
+        error: None,
+    }))
+}
+
+async fn handle_alert_delete(ctx: &ClientProtocolContext, name: String) -> anyhow::Result<ClientRpcResponse> {
+    // Delete rule
+    let _ = ctx.kv_store.delete(DeleteRequest::new(format!("_sys:alerts:rule:{}", name))).await;
+
+    // Delete state
+    let _ = ctx.kv_store.delete(DeleteRequest::new(format!("_sys:alerts:state:{}", name))).await;
+
+    // Delete history entries
+    let history_prefix = format!("_sys:alerts:history:{}:", name);
+    let scan_req = ScanRequest {
+        prefix: history_prefix,
+        limit_results: Some(aspen_constants::MAX_ALERT_HISTORY_PER_RULE),
+        continuation_token: None,
+    };
+    if let Ok(result) = ctx.kv_store.scan(scan_req).await {
+        for entry in &result.entries {
+            let _ = ctx.kv_store.delete(DeleteRequest::new(entry.key.clone())).await;
+        }
+    }
+
+    Ok(ClientRpcResponse::AlertDeleteResult(AlertRuleResultResponse {
+        is_success: true,
+        rule_name: name,
+        error: None,
+    }))
+}
+
+async fn handle_alert_list(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
+    let scan_req = ScanRequest {
+        prefix: "_sys:alerts:rule:".to_string(),
+        limit_results: Some(aspen_constants::MAX_ALERT_RULES),
+        continuation_token: None,
+    };
+    let scan_result = match ctx.kv_store.scan(scan_req).await {
+        Ok(result) => result,
+        Err(e) => {
+            return Ok(ClientRpcResponse::AlertListResult(AlertListResultResponse {
+                rules: vec![],
+                count: 0,
+                error: Some(format!("scan error: {}", e)),
+            }));
+        }
+    };
+
+    let mut rules = Vec::with_capacity(scan_result.entries.len());
+    for entry in &scan_result.entries {
+        let rule = match serde_json::from_str::<AlertRuleWire>(&entry.value) {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!(key = %entry.key, error = %e, "skip bad alert rule");
+                continue;
+            }
+        };
+        // Read state
+        let state_key = format!("_sys:alerts:state:{}", rule.name);
+        let state = kv_read_value(ctx, &state_key).await.and_then(|v| serde_json::from_str::<AlertStateWire>(&v).ok());
+        rules.push(AlertRuleWithState { rule, state });
+    }
+
+    let count = rules.len() as u32;
+    Ok(ClientRpcResponse::AlertListResult(AlertListResultResponse {
+        rules,
+        count,
+        error: None,
+    }))
+}
+
+async fn handle_alert_get(ctx: &ClientProtocolContext, name: String) -> anyhow::Result<ClientRpcResponse> {
+    // Read rule
+    let rule_key = format!("_sys:alerts:rule:{}", name);
+    let rule = kv_read_value(ctx, &rule_key).await.and_then(|v| serde_json::from_str::<AlertRuleWire>(&v).ok());
+
+    // Read state
+    let state_key = format!("_sys:alerts:state:{}", name);
+    let state = kv_read_value(ctx, &state_key).await.and_then(|v| serde_json::from_str::<AlertStateWire>(&v).ok());
+
+    // Read history
+    let history_prefix = format!("_sys:alerts:history:{}:", name);
+    let scan_req = ScanRequest {
+        prefix: history_prefix,
+        limit_results: Some(aspen_constants::MAX_ALERT_HISTORY_PER_RULE),
+        continuation_token: None,
+    };
+    let mut history = Vec::new();
+    if let Ok(result) = ctx.kv_store.scan(scan_req).await {
+        for entry in &result.entries {
+            if let Ok(h) = serde_json::from_str::<AlertHistoryEntry>(&entry.value) {
+                history.push(h);
+            }
+        }
+    }
+
+    Ok(ClientRpcResponse::AlertGetResult(AlertGetResultResponse {
+        rule,
+        state,
+        history,
+        error: None,
+    }))
+}
+
+async fn handle_alert_evaluate(
+    ctx: &ClientProtocolContext,
+    name: String,
+    now_us: u64,
+) -> anyhow::Result<ClientRpcResponse> {
+    // Read rule
+    let rule_key = format!("_sys:alerts:rule:{}", name);
+    let rule_value = kv_read_value(ctx, &rule_key).await;
+    let rule = match rule_value {
+        Some(v) => match serde_json::from_str::<AlertRuleWire>(&v) {
+            Ok(r) => r,
+            Err(e) => {
+                return Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
+                    rule_name: name,
+                    status: AlertStatus::Ok,
+                    computed_value: None,
+                    threshold: 0.0,
+                    did_transition: false,
+                    previous_status: None,
+                    error: Some(format!("bad rule data: {}", e)),
+                }));
+            }
+        },
+        None => {
+            return Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
+                rule_name: name,
+                status: AlertStatus::Ok,
+                computed_value: None,
+                threshold: 0.0,
+                did_transition: false,
+                previous_status: None,
+                error: Some("rule not found".to_string()),
+            }));
+        }
+    };
+
+    // If rule is disabled, return current state
+    if !rule.is_enabled {
+        let state_key = format!("_sys:alerts:state:{}", name);
+        let status = kv_read_value(ctx, &state_key)
+            .await
+            .and_then(|v| serde_json::from_str::<AlertStateWire>(&v).ok())
+            .map(|s| s.status)
+            .unwrap_or(AlertStatus::Ok);
+        return Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
+            rule_name: name,
+            status,
+            computed_value: None,
+            threshold: rule.threshold,
+            did_transition: false,
+            previous_status: None,
+            error: None,
+        }));
+    }
+
+    // Scan metric data for the evaluation window
+    let start_us = now_us.saturating_sub(rule.window_duration_us);
+    let scan_prefix = format!("_sys:metrics:{}:", rule.metric_name);
+    let scan_req = ScanRequest {
+        prefix: scan_prefix,
+        limit_results: Some(aspen_constants::MAX_METRIC_QUERY_RESULTS),
+        continuation_token: None,
+    };
+    let metric_values: Vec<f64> = match ctx.kv_store.scan(scan_req).await {
+        Ok(result) => result
+            .entries
+            .iter()
+            .filter_map(|entry| serde_json::from_str::<MetricDataPoint>(&entry.value).ok())
+            .filter(|dp| dp.timestamp_us >= start_us && dp.timestamp_us <= now_us)
+            .filter(|dp| matches_label_filters(&dp.labels, &rule.label_filters))
+            .map(|dp| dp.value)
+            .collect(),
+        Err(e) => {
+            return Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
+                rule_name: name,
+                status: AlertStatus::Ok,
+                computed_value: None,
+                threshold: rule.threshold,
+                did_transition: false,
+                previous_status: None,
+                error: Some(format!("metric scan error: {}", e)),
+            }));
+        }
+    };
+
+    // If no data, don't transition
+    if metric_values.is_empty() {
+        return Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
+            rule_name: name,
+            status: AlertStatus::Ok,
+            computed_value: None,
+            threshold: rule.threshold,
+            did_transition: false,
+            previous_status: None,
+            error: None,
+        }));
+    }
+
+    // Compute aggregated value
+    let computed_value = compute_aggregation(&metric_values, &rule.aggregation);
+    let is_breached = evaluate_threshold(computed_value, &rule.comparison, rule.threshold);
+
+    // Read current state
+    let state_key = format!("_sys:alerts:state:{}", name);
+    let default_state = || AlertStateWire {
+        rule_name: name.clone(),
+        status: AlertStatus::Ok,
+        last_value: None,
+        last_evaluated_us: 0,
+        condition_since_us: None,
+        last_fired_us: None,
+        last_resolved_us: None,
+    };
+    let mut current_state = kv_read_value(ctx, &state_key)
+        .await
+        .and_then(|v| serde_json::from_str::<AlertStateWire>(&v).ok())
+        .unwrap_or_else(default_state);
+
+    let previous_status = current_state.status.clone();
+    let new_status = compute_alert_transition(&current_state.status, is_breached, &current_state, &rule, now_us);
+    let did_transition = new_status != previous_status;
+
+    // Update state
+    if did_transition {
+        match &new_status {
+            AlertStatus::Pending => {
+                current_state.condition_since_us = Some(now_us);
+            }
+            AlertStatus::Firing => {
+                current_state.last_fired_us = Some(now_us);
+            }
+            AlertStatus::Ok => {
+                if previous_status == AlertStatus::Firing {
+                    current_state.last_resolved_us = Some(now_us);
+                }
+                current_state.condition_since_us = None;
+            }
+        }
+    }
+    current_state.status = new_status.clone();
+    current_state.last_value = Some(computed_value);
+    current_state.last_evaluated_us = now_us;
+
+    // Write updated state
+    let state_json =
+        serde_json::to_string(&current_state).map_err(|e| anyhow::anyhow!("serialize alert state: {}", e))?;
+    let write_req = WriteRequest::set(state_key, state_json);
+    if let Err(e) = ctx.kv_store.write(write_req).await {
+        tracing::warn!(error = %e, rule = %name, "failed to write alert state");
+    }
+
+    // Record history if transition occurred
+    if did_transition {
+        let history_entry = AlertHistoryEntry {
+            rule_name: name.clone(),
+            from_status: previous_status.clone(),
+            to_status: new_status.clone(),
+            value: computed_value,
+            threshold: rule.threshold,
+            timestamp_us: now_us,
+        };
+        let history_key = format!("_sys:alerts:history:{}:{:020}", name, now_us);
+        let history_json =
+            serde_json::to_string(&history_entry).map_err(|e| anyhow::anyhow!("serialize history: {}", e))?;
+        let write_req =
+            WriteRequest::set_with_ttl(history_key, history_json, aspen_constants::ALERT_HISTORY_TTL_SECONDS);
+        if let Err(e) = ctx.kv_store.write(write_req).await {
+            tracing::warn!(error = %e, rule = %name, "failed to write alert history");
+        }
+    }
+
+    Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
+        rule_name: name,
+        status: new_status,
+        computed_value: Some(computed_value),
+        threshold: rule.threshold,
+        did_transition,
+        previous_status: if did_transition { Some(previous_status) } else { None },
+        error: None,
+    }))
+}
+
+/// Evaluate whether a value breaches a threshold given a comparison operator.
+fn evaluate_threshold(value: f64, comparison: &AlertComparison, threshold: f64) -> bool {
+    match comparison {
+        AlertComparison::GreaterThan => value > threshold,
+        AlertComparison::GreaterThanOrEqual => value >= threshold,
+        AlertComparison::LessThan => value < threshold,
+        AlertComparison::LessThanOrEqual => value <= threshold,
+        AlertComparison::Equal => (value - threshold).abs() < f64::EPSILON,
+        AlertComparison::NotEqual => (value - threshold).abs() >= f64::EPSILON,
+    }
+}
+
+/// Compute alert state transition based on current status and threshold breach.
+///
+/// State machine:
+/// - Ok + breached → Pending (or Firing if for_duration_us == 0)
+/// - Pending + breached + duration elapsed → Firing
+/// - Pending + breached + duration not elapsed → Pending (no change)
+/// - Pending + not breached → Ok
+/// - Firing + not breached → Ok
+/// - Firing + breached → Firing (no change)
+fn compute_alert_transition(
+    current: &AlertStatus,
+    is_breached: bool,
+    state: &AlertStateWire,
+    rule: &AlertRuleWire,
+    now_us: u64,
+) -> AlertStatus {
+    match (current, is_breached) {
+        (AlertStatus::Ok, true) => {
+            if rule.for_duration_us == 0 {
+                AlertStatus::Firing
+            } else {
+                AlertStatus::Pending
+            }
+        }
+        (AlertStatus::Ok, false) => AlertStatus::Ok,
+        (AlertStatus::Pending, true) => {
+            if let Some(since) = state.condition_since_us {
+                if now_us.saturating_sub(since) >= rule.for_duration_us {
+                    AlertStatus::Firing
+                } else {
+                    AlertStatus::Pending
+                }
+            } else {
+                AlertStatus::Pending
+            }
+        }
+        (AlertStatus::Pending, false) => AlertStatus::Ok,
+        (AlertStatus::Firing, true) => AlertStatus::Firing,
+        (AlertStatus::Firing, false) => AlertStatus::Ok,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
+    use aspen_client_api::AlertComparison;
+    use aspen_client_api::AlertRuleWire;
+    use aspen_client_api::AlertSeverity;
+    use aspen_client_api::AlertStatus;
     use aspen_client_api::SpanEventWire;
     use aspen_rpc_core::test_support::MockEndpointProvider;
     use aspen_rpc_core::test_support::TestContextBuilder;
@@ -1713,5 +2451,788 @@ mod tests {
     fn test_can_handle_trace_ingest() {
         let handler = CoreHandler;
         assert!(handler.can_handle(&ClientRpcRequest::TraceIngest { spans: vec![] }));
+    }
+
+    // =========================================================================
+    // Metric handler tests
+    // =========================================================================
+
+    #[test]
+    fn test_can_handle_metric_ingest() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::MetricIngest {
+            data_points: vec![],
+            ttl_seconds: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_metric_list() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::MetricList {
+            prefix: None,
+            limit: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_metric_query() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::MetricQuery {
+            name: "test".to_string(),
+            start_time_us: None,
+            end_time_us: None,
+            label_filters: vec![],
+            aggregation: None,
+            step_us: None,
+            limit: None,
+        }));
+    }
+
+    fn make_gauge(name: &str, value: f64, timestamp_us: u64, labels: Vec<(&str, &str)>) -> MetricDataPoint {
+        MetricDataPoint {
+            name: name.to_string(),
+            metric_type: MetricTypeWire::Gauge,
+            timestamp_us,
+            value,
+            labels: labels.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            histogram_buckets: None,
+            histogram_sum: None,
+            histogram_count: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_metric_ingest_and_query() {
+        let handler = CoreHandler;
+        let ctx = setup_test_context().await;
+
+        // Ingest 3 data points
+        let data_points = vec![
+            make_gauge("cpu.usage", 50.0, 1000, vec![("node", "1")]),
+            make_gauge("cpu.usage", 75.0, 2000, vec![("node", "1")]),
+            make_gauge("cpu.usage", 90.0, 3000, vec![("node", "1")]),
+        ];
+        let result = handler
+            .handle(
+                ClientRpcRequest::MetricIngest {
+                    data_points,
+                    ttl_seconds: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::MetricIngestResult(r) => {
+                assert!(r.is_success);
+                assert_eq!(r.accepted_count, 3);
+                assert_eq!(r.dropped_count, 0);
+            }
+            other => panic!("expected MetricIngestResult, got {:?}", other),
+        }
+
+        // Query back
+        let result = handler
+            .handle(
+                ClientRpcRequest::MetricQuery {
+                    name: "cpu.usage".to_string(),
+                    start_time_us: None,
+                    end_time_us: None,
+                    label_filters: vec![],
+                    aggregation: None,
+                    step_us: None,
+                    limit: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::MetricQueryResult(r) => {
+                assert!(r.error.is_none());
+                assert_eq!(r.count, 3);
+                assert_eq!(r.name, "cpu.usage");
+            }
+            other => panic!("expected MetricQueryResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_metric_ingest_drops_excess() {
+        let handler = CoreHandler;
+        let ctx = setup_test_context().await;
+
+        let max = aspen_constants::MAX_METRIC_BATCH_SIZE as usize;
+        let data_points: Vec<MetricDataPoint> =
+            (0..max + 10).map(|i| make_gauge("big.batch", i as f64, i as u64, vec![])).collect();
+        let result = handler
+            .handle(
+                ClientRpcRequest::MetricIngest {
+                    data_points,
+                    ttl_seconds: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::MetricIngestResult(r) => {
+                assert!(r.is_success);
+                assert_eq!(r.accepted_count, max as u32);
+                assert_eq!(r.dropped_count, 10);
+            }
+            other => panic!("expected MetricIngestResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_metric_query_time_range_filter() {
+        let handler = CoreHandler;
+        let ctx = setup_test_context().await;
+
+        let data_points = vec![
+            make_gauge("latency", 10.0, 100, vec![]),
+            make_gauge("latency", 20.0, 200, vec![]),
+            make_gauge("latency", 30.0, 300, vec![]),
+        ];
+        handler
+            .handle(
+                ClientRpcRequest::MetricIngest {
+                    data_points,
+                    ttl_seconds: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        // Query with time range [150, 250) — should only get t=200
+        let result = handler
+            .handle(
+                ClientRpcRequest::MetricQuery {
+                    name: "latency".to_string(),
+                    start_time_us: Some(150),
+                    end_time_us: Some(250),
+                    label_filters: vec![],
+                    aggregation: None,
+                    step_us: None,
+                    limit: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::MetricQueryResult(r) => {
+                assert_eq!(r.count, 1);
+                assert!((r.data_points[0].value - 20.0).abs() < f64::EPSILON);
+            }
+            other => panic!("expected MetricQueryResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_metric_query_label_filter() {
+        let handler = CoreHandler;
+        let ctx = setup_test_context().await;
+
+        let data_points = vec![
+            make_gauge("mem", 100.0, 1000, vec![("node", "1")]),
+            make_gauge("mem", 200.0, 2000, vec![("node", "2")]),
+            make_gauge("mem", 300.0, 3000, vec![("node", "1")]),
+        ];
+        handler
+            .handle(
+                ClientRpcRequest::MetricIngest {
+                    data_points,
+                    ttl_seconds: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        // Filter for node=1 only
+        let result = handler
+            .handle(
+                ClientRpcRequest::MetricQuery {
+                    name: "mem".to_string(),
+                    start_time_us: None,
+                    end_time_us: None,
+                    label_filters: vec![("node".to_string(), "1".to_string())],
+                    aggregation: None,
+                    step_us: None,
+                    limit: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::MetricQueryResult(r) => {
+                assert_eq!(r.count, 2);
+            }
+            other => panic!("expected MetricQueryResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_metric_query_aggregation_avg() {
+        let handler = CoreHandler;
+        let ctx = setup_test_context().await;
+
+        let data_points = vec![
+            make_gauge("rps", 10.0, 1000, vec![]),
+            make_gauge("rps", 20.0, 2000, vec![]),
+            make_gauge("rps", 30.0, 3000, vec![]),
+        ];
+        handler
+            .handle(
+                ClientRpcRequest::MetricIngest {
+                    data_points,
+                    ttl_seconds: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::MetricQuery {
+                    name: "rps".to_string(),
+                    start_time_us: None,
+                    end_time_us: None,
+                    label_filters: vec![],
+                    aggregation: Some("avg".to_string()),
+                    step_us: None,
+                    limit: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::MetricQueryResult(r) => {
+                assert_eq!(r.count, 1);
+                assert!((r.data_points[0].value - 20.0).abs() < f64::EPSILON);
+            }
+            other => panic!("expected MetricQueryResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_metric_list_returns_metadata() {
+        let handler = CoreHandler;
+        let ctx = setup_test_context().await;
+
+        let data_points = vec![
+            make_gauge("cpu.usage", 50.0, 1000, vec![("node", "1")]),
+            make_gauge("mem.used", 80.0, 1000, vec![]),
+        ];
+        handler
+            .handle(
+                ClientRpcRequest::MetricIngest {
+                    data_points,
+                    ttl_seconds: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::MetricList {
+                    prefix: None,
+                    limit: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::MetricListResult(r) => {
+                assert!(r.error.is_none());
+                assert_eq!(r.count, 2);
+                let names: Vec<&str> = r.metrics.iter().map(|m| m.name.as_str()).collect();
+                assert!(names.contains(&"cpu.usage"));
+                assert!(names.contains(&"mem.used"));
+            }
+            other => panic!("expected MetricListResult, got {:?}", other),
+        }
+    }
+
+    // =========================================================================
+    // Alert handler tests
+    // =========================================================================
+
+    #[test]
+    fn test_can_handle_alert_create() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AlertCreate {
+            rule: AlertRuleWire {
+                name: "test".to_string(),
+                metric_name: "cpu".to_string(),
+                label_filters: vec![],
+                aggregation: "avg".to_string(),
+                window_duration_us: 300_000_000,
+                comparison: AlertComparison::GreaterThan,
+                threshold: 90.0,
+                for_duration_us: 0,
+                severity: AlertSeverity::Warning,
+                description: String::new(),
+                is_enabled: true,
+                created_at_us: 0,
+                updated_at_us: 0,
+            },
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_alert_list() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AlertList));
+    }
+
+    #[test]
+    fn test_can_handle_alert_evaluate() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AlertEvaluate {
+            name: "test".to_string(),
+            now_us: 0,
+        }));
+    }
+
+    fn make_alert_rule(name: &str, metric: &str, threshold: f64) -> AlertRuleWire {
+        AlertRuleWire {
+            name: name.to_string(),
+            metric_name: metric.to_string(),
+            label_filters: vec![],
+            aggregation: "avg".to_string(),
+            window_duration_us: 300_000_000, // 5 min
+            comparison: AlertComparison::GreaterThan,
+            threshold,
+            for_duration_us: 0,
+            severity: AlertSeverity::Warning,
+            description: "test rule".to_string(),
+            is_enabled: true,
+            created_at_us: 1000,
+            updated_at_us: 1000,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_alert_create_and_get() {
+        let handler = CoreHandler;
+        let ctx = setup_test_context().await;
+
+        let rule = make_alert_rule("high_cpu", "cpu.usage", 90.0);
+        let result = handler.handle(ClientRpcRequest::AlertCreate { rule: rule.clone() }, &ctx).await.unwrap();
+        match result {
+            ClientRpcResponse::AlertCreateResult(r) => {
+                assert!(r.is_success);
+                assert_eq!(r.rule_name, "high_cpu");
+            }
+            other => panic!("expected AlertCreateResult, got {:?}", other),
+        }
+
+        // Get it back
+        let result = handler
+            .handle(
+                ClientRpcRequest::AlertGet {
+                    name: "high_cpu".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::AlertGetResult(r) => {
+                assert!(r.error.is_none());
+                let rule = r.rule.expect("rule should exist");
+                assert_eq!(rule.name, "high_cpu");
+                assert_eq!(rule.metric_name, "cpu.usage");
+                let state = r.state.expect("state should exist");
+                assert_eq!(state.status, AlertStatus::Ok);
+            }
+            other => panic!("expected AlertGetResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_alert_delete_removes_everything() {
+        let handler = CoreHandler;
+        let ctx = setup_test_context().await;
+
+        // Create rule
+        let rule = make_alert_rule("to_delete", "cpu", 90.0);
+        handler.handle(ClientRpcRequest::AlertCreate { rule }, &ctx).await.unwrap();
+
+        // Delete it
+        let result = handler
+            .handle(
+                ClientRpcRequest::AlertDelete {
+                    name: "to_delete".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::AlertDeleteResult(r) => {
+                assert!(r.is_success);
+            }
+            other => panic!("expected AlertDeleteResult, got {:?}", other),
+        }
+
+        // Verify it's gone
+        let result = handler
+            .handle(
+                ClientRpcRequest::AlertGet {
+                    name: "to_delete".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::AlertGetResult(r) => {
+                assert!(r.rule.is_none());
+                assert!(r.state.is_none());
+            }
+            other => panic!("expected AlertGetResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_alert_evaluate_ok_to_firing() {
+        let handler = CoreHandler;
+        let ctx = setup_test_context().await;
+
+        // Create rule: cpu > 80 fires immediately
+        let rule = make_alert_rule("cpu_high", "cpu.usage", 80.0);
+        handler.handle(ClientRpcRequest::AlertCreate { rule }, &ctx).await.unwrap();
+
+        // Ingest metric above threshold
+        let data_points = vec![make_gauge("cpu.usage", 95.0, 5_000_000, vec![])];
+        handler
+            .handle(
+                ClientRpcRequest::MetricIngest {
+                    data_points,
+                    ttl_seconds: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        // Evaluate
+        let result = handler
+            .handle(
+                ClientRpcRequest::AlertEvaluate {
+                    name: "cpu_high".to_string(),
+                    now_us: 10_000_000,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::AlertEvaluateResult(r) => {
+                assert!(r.error.is_none());
+                assert_eq!(r.status, AlertStatus::Firing);
+                assert!(r.did_transition);
+                assert_eq!(r.previous_status, Some(AlertStatus::Ok));
+                assert!(r.computed_value.unwrap() > 80.0);
+            }
+            other => panic!("expected AlertEvaluateResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_alert_evaluate_pending_with_for_duration() {
+        let handler = CoreHandler;
+        let ctx = setup_test_context().await;
+
+        // Create rule with for_duration_us = 60s — needs to be breached for 60s
+        let mut rule = make_alert_rule("cpu_pending", "cpu.usage", 80.0);
+        rule.for_duration_us = 60_000_000; // 60 seconds
+        handler.handle(ClientRpcRequest::AlertCreate { rule }, &ctx).await.unwrap();
+
+        // Ingest metric above threshold
+        let data_points = vec![make_gauge("cpu.usage", 95.0, 100_000_000, vec![])];
+        handler
+            .handle(
+                ClientRpcRequest::MetricIngest {
+                    data_points,
+                    ttl_seconds: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        // First evaluation — should go to Pending
+        let result = handler
+            .handle(
+                ClientRpcRequest::AlertEvaluate {
+                    name: "cpu_pending".to_string(),
+                    now_us: 200_000_000,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match &result {
+            ClientRpcResponse::AlertEvaluateResult(r) => {
+                assert_eq!(r.status, AlertStatus::Pending);
+                assert!(r.did_transition);
+            }
+            other => panic!("expected AlertEvaluateResult, got {:?}", other),
+        }
+
+        // Second evaluation 30s later — still Pending (duration not met)
+        let result = handler
+            .handle(
+                ClientRpcRequest::AlertEvaluate {
+                    name: "cpu_pending".to_string(),
+                    now_us: 230_000_000, // 30s later
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match &result {
+            ClientRpcResponse::AlertEvaluateResult(r) => {
+                assert_eq!(r.status, AlertStatus::Pending);
+                assert!(!r.did_transition);
+            }
+            other => panic!("expected AlertEvaluateResult, got {:?}", other),
+        }
+
+        // Third evaluation 60s+ after first — should transition to Firing
+        let result = handler
+            .handle(
+                ClientRpcRequest::AlertEvaluate {
+                    name: "cpu_pending".to_string(),
+                    now_us: 260_000_001, // 60s+ after first eval
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::AlertEvaluateResult(r) => {
+                assert_eq!(r.status, AlertStatus::Firing);
+                assert!(r.did_transition);
+                assert_eq!(r.previous_status, Some(AlertStatus::Pending));
+            }
+            other => panic!("expected AlertEvaluateResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_alert_evaluate_firing_to_ok() {
+        let handler = CoreHandler;
+        let ctx = setup_test_context().await;
+
+        // Create rule and trigger firing
+        let rule = make_alert_rule("cpu_recover", "cpu.usage", 80.0);
+        handler.handle(ClientRpcRequest::AlertCreate { rule }, &ctx).await.unwrap();
+
+        // Ingest above threshold and evaluate to get Firing
+        handler
+            .handle(
+                ClientRpcRequest::MetricIngest {
+                    data_points: vec![make_gauge("cpu.usage", 95.0, 5_000_000, vec![])],
+                    ttl_seconds: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        handler
+            .handle(
+                ClientRpcRequest::AlertEvaluate {
+                    name: "cpu_recover".to_string(),
+                    now_us: 10_000_000,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        // Now ingest below threshold
+        handler
+            .handle(
+                ClientRpcRequest::MetricIngest {
+                    data_points: vec![make_gauge("cpu.usage", 50.0, 15_000_000, vec![])],
+                    ttl_seconds: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        // Evaluate again — should resolve to Ok
+        let result = handler
+            .handle(
+                ClientRpcRequest::AlertEvaluate {
+                    name: "cpu_recover".to_string(),
+                    now_us: 20_000_000,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::AlertEvaluateResult(r) => {
+                assert_eq!(r.status, AlertStatus::Ok);
+                assert!(r.did_transition);
+                assert_eq!(r.previous_status, Some(AlertStatus::Firing));
+            }
+            other => panic!("expected AlertEvaluateResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_alert_list_shows_rules() {
+        let handler = CoreHandler;
+        let ctx = setup_test_context().await;
+
+        handler
+            .handle(
+                ClientRpcRequest::AlertCreate {
+                    rule: make_alert_rule("rule_a", "cpu", 80.0),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        handler
+            .handle(
+                ClientRpcRequest::AlertCreate {
+                    rule: make_alert_rule("rule_b", "mem", 90.0),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        let result = handler.handle(ClientRpcRequest::AlertList, &ctx).await.unwrap();
+        match result {
+            ClientRpcResponse::AlertListResult(r) => {
+                assert!(r.error.is_none());
+                assert_eq!(r.count, 2);
+                let names: Vec<&str> = r.rules.iter().map(|rws| rws.rule.name.as_str()).collect();
+                assert!(names.contains(&"rule_a"));
+                assert!(names.contains(&"rule_b"));
+            }
+            other => panic!("expected AlertListResult, got {:?}", other),
+        }
+    }
+
+    // =========================================================================
+    // Pure function tests
+    // =========================================================================
+
+    #[test]
+    fn test_evaluate_threshold() {
+        assert!(evaluate_threshold(100.0, &AlertComparison::GreaterThan, 90.0));
+        assert!(!evaluate_threshold(80.0, &AlertComparison::GreaterThan, 90.0));
+        assert!(evaluate_threshold(90.0, &AlertComparison::GreaterThanOrEqual, 90.0));
+        assert!(evaluate_threshold(50.0, &AlertComparison::LessThan, 90.0));
+        assert!(!evaluate_threshold(100.0, &AlertComparison::LessThan, 90.0));
+        assert!(evaluate_threshold(90.0, &AlertComparison::LessThanOrEqual, 90.0));
+        assert!(evaluate_threshold(90.0, &AlertComparison::Equal, 90.0));
+        assert!(!evaluate_threshold(91.0, &AlertComparison::Equal, 90.0));
+        assert!(evaluate_threshold(91.0, &AlertComparison::NotEqual, 90.0));
+        assert!(!evaluate_threshold(90.0, &AlertComparison::NotEqual, 90.0));
+    }
+
+    #[test]
+    fn test_compute_aggregation() {
+        let values = vec![10.0, 20.0, 30.0];
+        assert!((compute_aggregation(&values, "avg") - 20.0).abs() < f64::EPSILON);
+        assert!((compute_aggregation(&values, "sum") - 60.0).abs() < f64::EPSILON);
+        assert!((compute_aggregation(&values, "min") - 10.0).abs() < f64::EPSILON);
+        assert!((compute_aggregation(&values, "max") - 30.0).abs() < f64::EPSILON);
+        assert!((compute_aggregation(&values, "count") - 3.0).abs() < f64::EPSILON);
+        assert!((compute_aggregation(&values, "last") - 30.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_aggregation_empty() {
+        assert!((compute_aggregation(&[], "avg") - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_matches_label_filters() {
+        let labels = vec![
+            ("node".to_string(), "1".to_string()),
+            ("region".to_string(), "us-east".to_string()),
+        ];
+        // All match
+        assert!(matches_label_filters(&labels, &[("node".to_string(), "1".to_string())]));
+        // Multi-filter
+        assert!(matches_label_filters(&labels, &[
+            ("node".to_string(), "1".to_string()),
+            ("region".to_string(), "us-east".to_string()),
+        ]));
+        // Mismatch
+        assert!(!matches_label_filters(&labels, &[("node".to_string(), "2".to_string())]));
+        // Empty filter matches everything
+        assert!(matches_label_filters(&labels, &[]));
+    }
+
+    #[test]
+    fn test_compute_alert_transition_ok_to_firing_immediate() {
+        let state = AlertStateWire {
+            rule_name: "test".to_string(),
+            status: AlertStatus::Ok,
+            last_value: None,
+            last_evaluated_us: 0,
+            condition_since_us: None,
+            last_fired_us: None,
+            last_resolved_us: None,
+        };
+        let rule = make_alert_rule("test", "cpu", 80.0);
+        let result = compute_alert_transition(&AlertStatus::Ok, true, &state, &rule, 1000);
+        assert_eq!(result, AlertStatus::Firing);
+    }
+
+    #[test]
+    fn test_compute_alert_transition_ok_to_pending_with_duration() {
+        let state = AlertStateWire {
+            rule_name: "test".to_string(),
+            status: AlertStatus::Ok,
+            last_value: None,
+            last_evaluated_us: 0,
+            condition_since_us: None,
+            last_fired_us: None,
+            last_resolved_us: None,
+        };
+        let mut rule = make_alert_rule("test", "cpu", 80.0);
+        rule.for_duration_us = 60_000_000;
+        let result = compute_alert_transition(&AlertStatus::Ok, true, &state, &rule, 1000);
+        assert_eq!(result, AlertStatus::Pending);
+    }
+
+    #[test]
+    fn test_compute_alert_transition_firing_to_ok() {
+        let state = AlertStateWire {
+            rule_name: "test".to_string(),
+            status: AlertStatus::Firing,
+            last_value: Some(95.0),
+            last_evaluated_us: 1000,
+            condition_since_us: Some(500),
+            last_fired_us: Some(800),
+            last_resolved_us: None,
+        };
+        let rule = make_alert_rule("test", "cpu", 80.0);
+        let result = compute_alert_transition(&AlertStatus::Firing, false, &state, &rule, 2000);
+        assert_eq!(result, AlertStatus::Ok);
     }
 }
