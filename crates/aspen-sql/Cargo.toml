@@ -6,7 +6,7 @@ license = "AGPL-3.0-or-later"
 description = "DataFusion SQL query engine for Aspen's Redb storage backend"
 
 [dependencies]
-aspen-core = { path = "../aspen-core", features = ["sql"] }
+aspen-core = { path = "../aspen-core", features = ["sql", "layer"] }
 aspen-storage-types = { path = "../aspen-storage-types" }
 
 # Database

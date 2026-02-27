@@ -1892,6 +1892,7 @@ dependencies = [
  "inventory",
  "iroh 0.95.1",
  "serde",
+ "serde_json",
  "tokio",
  "tracing",
 ]

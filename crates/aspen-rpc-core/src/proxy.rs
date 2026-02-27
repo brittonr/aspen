@@ -40,3 +40,39 @@ impl Default for ProxyConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_proxy_config_is_disabled() {
+        let config = ProxyConfig::default();
+        assert!(!config.enabled, "proxy must be opt-in");
+    }
+
+    #[test]
+    fn default_proxy_config_matches_constants() {
+        use aspen_constants::proxy::*;
+        let config = ProxyConfig::default();
+        assert_eq!(config.max_hops, MAX_PROXY_HOPS);
+        assert_eq!(config.timeout, std::time::Duration::from_secs(PROXY_TIMEOUT_SECS));
+        assert_eq!(config.max_targets, MAX_PROXY_TARGETS);
+    }
+
+    #[test]
+    fn proxy_config_json_roundtrip() {
+        let config = ProxyConfig {
+            enabled: true,
+            max_hops: 5,
+            timeout: std::time::Duration::from_secs(30),
+            max_targets: 10,
+        };
+        let json = serde_json::to_string(&config).expect("serialize");
+        let deserialized: ProxyConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(deserialized.enabled, config.enabled);
+        assert_eq!(deserialized.max_hops, config.max_hops);
+        assert_eq!(deserialized.timeout, config.timeout);
+        assert_eq!(deserialized.max_targets, config.max_targets);
+    }
+}

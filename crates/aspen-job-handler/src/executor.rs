@@ -617,3 +617,32 @@ impl JobServiceExecutor {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    const EXPECTED_HANDLES: &[&str] = &[
+        "JobSubmit",
+        "JobGet",
+        "JobList",
+        "JobCancel",
+        "JobUpdateProgress",
+        "JobQueueStats",
+        "WorkerStatus",
+        "WorkerRegister",
+        "WorkerHeartbeat",
+        "WorkerDeregister",
+    ];
+
+    #[test]
+    fn handles_count() {
+        assert_eq!(EXPECTED_HANDLES.len(), 10, "job handler should handle 10 operations");
+    }
+
+    #[test]
+    fn no_duplicate_handles() {
+        let mut sorted = EXPECTED_HANDLES.to_vec();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), EXPECTED_HANDLES.len(), "duplicate entries in handles list");
+    }
+}

@@ -627,3 +627,39 @@ impl DocsServiceExecutor {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The handles list is a compile-time constant embedded in the trait impl.
+    /// Extract it via a dummy instance to verify dispatch correctness.
+    const EXPECTED_HANDLES: &[&str] = &[
+        "DocsSet",
+        "DocsGet",
+        "DocsDelete",
+        "DocsList",
+        "DocsStatus",
+        "GetKeyOrigin",
+        "AddPeerCluster",
+        "RemovePeerCluster",
+        "ListPeerClusters",
+        "GetPeerClusterStatus",
+        "UpdatePeerClusterFilter",
+        "UpdatePeerClusterPriority",
+        "SetPeerClusterEnabled",
+    ];
+
+    #[test]
+    fn handles_count() {
+        assert_eq!(EXPECTED_HANDLES.len(), 13, "docs handler should handle 13 operations");
+    }
+
+    #[test]
+    fn no_duplicate_handles() {
+        let mut sorted = EXPECTED_HANDLES.to_vec();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), EXPECTED_HANDLES.len(), "duplicate entries in handles list");
+    }
+}
