@@ -155,7 +155,9 @@ impl WasmComponentWorker {
         let input_bytes: Vec<u8> = serde_json::to_vec(&job.spec.payload).unwrap_or_default();
 
         // Call the guest's "execute" export.
-        // TODO: Pass fuel_limit when hyperlight-wasm exposes fuel configuration.
+        // BLOCKED(hyperlight-wasm): fuel_limit is accepted but ignored — hyperlight-wasm
+        // does not yet expose wasmtime fuel configuration. Track:
+        // https://github.com/hyperlight-dev/hyperlight/issues — no public issue yet.
         let _fuel_limit = fuel_limit;
         let output: Vec<u8> =
             loaded.call_guest_function("execute", input_bytes).map_err(|e| JobError::VmExecutionFailed {

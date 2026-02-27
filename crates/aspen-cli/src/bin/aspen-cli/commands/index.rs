@@ -22,7 +22,8 @@ pub enum IndexCommand {
 
     /// Show details of a specific index.
     Show(ShowArgs),
-    // TODO: Future commands when RPC support is added:
+    // DEFERRED: Requires IndexCreate/IndexDrop/IndexScan RPC variants in
+    // ClientRpcRequest + server-side handlers. Currently indexes are builtin-only.
     // /// Create a new custom index.
     // Create(CreateArgs),
     // /// Drop an index.

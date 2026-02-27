@@ -15,10 +15,10 @@ use std::sync::Arc;
 use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
 
-// TODO: Generate typed WIT bindings when cargo-hyperlight supports Cargo 1.93+.
-// Blocked: cargo-hyperlight v0.1.5 uses --build-plan (removed in Cargo 1.93).
+// BLOCKED(cargo-hyperlight): Typed WIT bindings require cargo-hyperlight to drop
+// the deprecated `--build-plan` flag (removed in Cargo 1.93+). Currently on v0.1.5.
 //
-// When unblocked:
+// When unblocked, replace the manual host function registration below with:
 // 1. Compile WIT to binary: `wasm-tools component wit -w -o world.wasm wit/aspen-plugin.wit`
 // 2. Generate bindings: mod bindings { hyperlight_component_macro::host_bindgen!("world.wasm"); }
 // 3. Implement the generated Host trait on AspenHostContext, delegating to the standalone functions
@@ -287,9 +287,9 @@ pub fn blob_put(ctx: &AspenHostContext, data: &[u8]) -> Result<String, String> {
 // Sandbox registration (primitive mode)
 // ---------------------------------------------------------------------------
 
-// TODO: Replace with generated Component Model bindings (host_bindgen!) when
-// cargo-hyperlight drops the --build-plan dependency. The standalone functions
-// above will become trait delegation targets.
+// BLOCKED(cargo-hyperlight): Replace with generated Component Model bindings
+// (host_bindgen!) when cargo-hyperlight drops --build-plan. The standalone
+// functions above will become trait delegation targets. Same blocker as above.
 
 /// Register all host functions on a `ProtoWasmSandbox` using primitive mode.
 ///

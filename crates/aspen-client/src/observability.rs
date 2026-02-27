@@ -381,7 +381,8 @@ impl<'a> ObservabilityClient<'a> {
             SpanStatus::Unset => {}
         }
 
-        // TODO: Send span to server for aggregation
+        // DEFERRED: Send span to server for aggregation. Requires a TraceIngest
+        // RPC endpoint on the server side and a batching/flush strategy here.
         // self.client.send_trace(span).await;
     }
 

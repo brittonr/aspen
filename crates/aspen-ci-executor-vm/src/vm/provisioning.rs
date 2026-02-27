@@ -25,9 +25,9 @@ impl ManagedCiVm {
     /// backed by `AspenFs` (KV + iroh-blobs) -- see `vm/lifecycle.rs`. This
     /// method is used for the Nix store share which still uses external virtiofsd.
     ///
-    /// TODO: Replace plain virtiofsd for the Nix store with `AspenVirtioFsHandler`
-    /// backed by SNIX (store path metadata in KV, NAR content in blobs). This
-    /// requires SNIX integration work and is deferred.
+    /// DEFERRED: Replace plain virtiofsd for the Nix store with `AspenVirtioFsHandler`
+    /// backed by SNIX (store path metadata in KV, NAR content in blobs). Requires
+    /// SNIX PathInfoService integration with the virtio-fs layer.
     ///
     /// The `cache_mode` parameter controls guest-side caching:
     /// - "auto": Default caching based on modification times (good for static content like
@@ -309,13 +309,11 @@ impl ManagedCiVm {
                 // with async Rust, so for now we fall back to standard TAP mode
                 // and log a warning if TAP helper is not available.
                 if let Some(ref _helper_path) = self.config.tap_helper_path {
-                    // TODO: Implement fd passing via helper process
-                    // This requires:
-                    // 1. Run helper to create TAP and get fd
-                    // 2. Pass fd to cloud-hypervisor via process spawning
-                    // 3. Use fd={fd_num} in --net argument
-                    //
-                    // For now, fall back to standard TAP mode
+                    // DEFERRED: fd passing via helper process.
+                    // Requires: (1) run setcap helper to create TAP and get fd,
+                    // (2) pass fd to cloud-hypervisor via Command::pre_exec,
+                    // (3) use fd={fd_num} in --net argument.
+                    // Falls back to standard TAP mode for now.
                     warn!(
                         vm_id = %self.id,
                         "TapWithHelper mode not yet fully implemented, falling back to Tap mode"
