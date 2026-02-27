@@ -101,8 +101,8 @@ run_test "Verify all"                '$CLI verify all --continue-on-error | grep
 # Note: { cmd || true; } suppresses CLI exit code for pipefail compat.
 echo "── Coordination Primitives (error handling) ──────"
 run_test "Lock CLI parses"           '{ $CLI lock try-acquire e2e-lock --holder cli-test --ttl 30000 2>&1 || true; } | grep -qiE "acquired|error|unavailable"'
-run_test "Counter CLI parses"        '{ $CLI counter get e2e-counter 2>&1 || true; } | grep -qiE "value|error|unavailable"'
-run_test "Sequence CLI parses"       '{ $CLI sequence next e2e-seq 2>&1 || true; } | grep -qiE "value|error|unavailable"'
+run_test "Counter CLI parses"        '{ $CLI counter get e2e-counter 2>&1 || true; } | grep -qiE "^[0-9]+$|value|error|unavailable"'
+run_test "Sequence CLI parses"       '{ $CLI sequence next e2e-seq 2>&1 || true; } | grep -qiE "^[0-9]+$|value|error|unavailable"'
 run_test "Queue CLI parses"          '{ $CLI queue enqueue e2e-q "item" 2>&1 || true; } | grep -qiE "enqueued|error|unavailable"'
 run_test "Semaphore CLI parses"      '{ $CLI semaphore try-acquire e2e-sem --permits 1 --holder cli-test --capacity 5 2>&1 || true; } | grep -qiE "acquired|error|unavailable"'
 run_test "Ratelimit CLI parses"      '{ $CLI ratelimit try-acquire e2e-rl --rate 100.0 --capacity 1000 2>&1 || true; } | grep -qiE "allowed|error|unavailable"'
@@ -123,6 +123,79 @@ run_test "Federation (clean error)"  '{ $CLI federation status 2>&1 || true; } |
 # ── Service Registry ───────────────────────────────────
 echo "── Service Registry ──────────────────────────────"
 run_test "Service list (clean err)"  '{ $CLI service list 2>&1 || true; } | grep -qiE "services|error|unavailable"'
+
+# ── SQL ─────────────────────────────────────────────────
+echo "── SQL ─────────────────────────────────────────────"
+run_test "SQL (clean error)"         '{ $CLI sql query "SELECT 1" 2>&1 || true; } | grep -qiE "error|unavailable|num"'
+
+# ── Automerge ──────────────────────────────────────────
+echo "── Automerge ─────────────────────────────────────"
+run_test "Automerge list (clean)"    '{ $CLI automerge list 2>&1 || true; } | grep -qiE "error|unavailable|documents"'
+
+# ── Secrets ────────────────────────────────────────────
+echo "── Secrets ───────────────────────────────────────"
+run_test "Secrets kv list (clean)"   '{ $CLI secrets kv list 2>&1 || true; } | grep -qiE "error|unavailable|secrets"'
+
+# ── Barrier ────────────────────────────────────────────
+echo "── Barrier ───────────────────────────────────────"
+run_test "Barrier enter (clean err)" '{ $CLI barrier enter e2e-barrier --participant cli-test --count 2 2>&1 || true; } | grep -qiE "entered|error|unavailable|IMPLEMENTED"'
+run_test "Barrier status (clean)"    '{ $CLI barrier status e2e-barrier 2>&1 || true; } | grep -qiE "status|error|unavailable|IMPLEMENTED"'
+
+# ── RWLock ─────────────────────────────────────────────
+echo "── RWLock ────────────────────────────────────────"
+run_test "RWLock read (clean err)"   '{ $CLI rwlock read e2e-rwl --holder cli-test --ttl 30000 2>&1 || true; } | grep -qiE "acquired|error|unavailable|IMPLEMENTED"'
+run_test "RWLock status (clean)"     '{ $CLI rwlock status e2e-rwl 2>&1 || true; } | grep -qiE "status|error|unavailable|IMPLEMENTED"'
+
+# ── Job System ─────────────────────────────────────────
+echo "── Job System ────────────────────────────────────"
+# shellcheck disable=SC2034 # JOB_ID used inside run_test strings
+JOB_ID=$($CLI --json job submit shell '{"command":"echo hello"}' 2>&1 | grep -oP '"job_id":\s*"\K[^"]+' || echo "")
+run_test "Job submit"                '[ -n "$JOB_ID" ]'
+run_test "Job list"                  '$CLI job list | grep -qiE "job|No jobs"'
+run_test "Job status"                '[ -z "$JOB_ID" ] || $CLI --json job status "$JOB_ID" | grep -q job_id'
+
+# ── Git / Forge (clean errors) ─────────────────────────
+echo "── Git / Forge (error handling) ──────────────────"
+run_test "Git list (clean err)"      '{ $CLI git list 2>&1 || true; } | grep -qiE "error|unavailable|repo"'
+run_test "Git init (clean err)"      '{ $CLI git init e2e-repo 2>&1 || true; } | grep -qiE "error|unavailable|created"'
+run_test "Branch list (clean err)"   '{ $CLI branch list --repo e2e-repo 2>&1 || true; } | grep -qiE "error|unavailable|branch"'
+run_test "Tag list (clean err)"      '{ $CLI tag list --repo e2e-repo 2>&1 || true; } | grep -qiE "error|unavailable|tag"'
+run_test "Issue list (clean err)"    '{ $CLI issue list --repo e2e-repo 2>&1 || true; } | grep -qiE "error|unavailable|issue"'
+run_test "Patch list (clean err)"    '{ $CLI patch list --repo e2e-repo 2>&1 || true; } | grep -qiE "error|unavailable|patch"'
+
+# ── Peer ───────────────────────────────────────────────
+echo "── Peer ──────────────────────────────────────────"
+run_test "Peer list (clean error)"   '{ $CLI peer list 2>&1 || true; } | grep -qiE "error|unavailable|peer|enabled"'
+
+# ── Docs CRUD ──────────────────────────────────────────
+echo "── Docs CRUD ─────────────────────────────────────"
+run_test "Docs set"                  '{ $CLI docs set e2e-doc-key "hello-docs" 2>&1 || true; } | grep -qiE "e2e-doc-key|error|unavailable"'
+run_test "Docs get"                  '{ $CLI docs get e2e-doc-key 2>&1 || true; } | grep -qiE "hello-docs|not found|error"'
+run_test "Docs list"                 '{ $CLI docs list 2>&1 || true; } | grep -qiE "e2e-doc|no entries|total|error"'
+run_test "Docs delete"               '{ $CLI docs delete e2e-doc-key 2>&1 || true; } | grep -qiE "deleted|error|unavailable"'
+
+# ── Counter/Sequence CRUD ──────────────────────────────
+echo "── Counter/Sequence CRUD ─────────────────────────"
+run_test "Counter incr"              '{ $CLI counter incr e2e-ctr 2>&1 || true; } | grep -qiE "^[0-9]+$|error|unavailable"'
+run_test "Counter add"               '{ $CLI counter add e2e-ctr 5 2>&1 || true; } | grep -qiE "^[0-9]+$|error|unavailable"'
+run_test "Counter get after ops"     '{ $CLI counter get e2e-ctr 2>&1 || true; } | grep -qiE "^[0-9]+$|error|unavailable"'
+run_test "Sequence reserve"          '{ $CLI sequence reserve e2e-seq2 10 2>&1 || true; } | grep -qiE "^[0-9]+$|error|unavailable"'
+run_test "Sequence current"          '{ $CLI sequence current e2e-seq2 2>&1 || true; } | grep -qiE "^[0-9]+$|error|unavailable"'
+
+# ── Lock CRUD ──────────────────────────────────────────
+echo "── Lock CRUD ─────────────────────────────────────"
+LOCK_OUT=$($CLI --json lock try-acquire e2e-lock2 --holder cli-test --ttl 30000 2>&1 || true)
+# shellcheck disable=SC2034 # FENCING_TOKEN used inside run_test strings
+FENCING_TOKEN=$(echo "$LOCK_OUT" | grep -oP '"fencing_token":\s*\K\d+' || echo "")
+run_test "Lock acquire"              '[ -n "$FENCING_TOKEN" ]'
+run_test "Lock renew"                '{ $CLI lock renew e2e-lock2 --holder cli-test --ttl 30000 --fencing-token $FENCING_TOKEN 2>&1 || true; } | grep -qiE "renewed|error|IMPLEMENTED|unavailable"'
+run_test "Lock release"              '$CLI lock release e2e-lock2 --holder cli-test --fencing-token $FENCING_TOKEN'
+
+# ── JSON Output Mode ───────────────────────────────────
+echo "── JSON Output Mode ──────────────────────────────"
+run_test "KV get --json"             '$CLI --json kv get e2e-k1 2>/dev/null | python3 -m json.tool >/dev/null'
+run_test "Cluster health --json"     '$CLI --json cluster health 2>/dev/null | python3 -m json.tool >/dev/null'
+run_test "Cluster metrics --json"    '$CLI --json cluster metrics 2>/dev/null | python3 -m json.tool >/dev/null'
 
 # ── Snapshot & Maintenance ──────────────────────────────
 echo "── Snapshot & Maintenance ──────────────────────────"

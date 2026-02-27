@@ -348,6 +348,12 @@ async fn docs_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()>
             size_bytes: r.size_bytes,
             error: r.error,
         },
+        ClientRpcResponse::Error(e) => DocsSetOutput {
+            is_success: false,
+            key: None,
+            size_bytes: None,
+            error: Some(format!("{}: {}", e.code, e.message)),
+        },
         other => DocsSetOutput {
             is_success: false,
             key: None,
@@ -376,6 +382,12 @@ async fn docs_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
             size_bytes: r.size_bytes,
             error: r.error,
         },
+        ClientRpcResponse::Error(e) => DocsGetOutput {
+            was_found: false,
+            value: None,
+            size_bytes: None,
+            error: Some(format!("{}: {}", e.code, e.message)),
+        },
         other => DocsGetOutput {
             was_found: false,
             value: None,
@@ -401,6 +413,10 @@ async fn docs_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Resu
         ClientRpcResponse::DocsDeleteResult(r) => DocsDeleteOutput {
             is_success: r.is_success,
             error: r.error,
+        },
+        ClientRpcResponse::Error(e) => DocsDeleteOutput {
+            is_success: false,
+            error: Some(format!("{}: {}", e.code, e.message)),
         },
         other => DocsDeleteOutput {
             is_success: false,
@@ -442,6 +458,12 @@ async fn docs_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<(
                 error: r.error,
             }
         }
+        ClientRpcResponse::Error(e) => DocsListOutput {
+            entries: vec![],
+            count: 0,
+            has_more: false,
+            error: Some(format!("{}: {}", e.code, e.message)),
+        },
         other => DocsListOutput {
             entries: vec![],
             count: 0,
@@ -471,6 +493,14 @@ async fn docs_status(client: &AspenClient, json: bool) -> Result<()> {
             entry_count: r.entry_count,
             replica_open: r.replica_open,
             error: r.error,
+        },
+        ClientRpcResponse::Error(e) => DocsStatusOutput {
+            is_enabled: false,
+            namespace_id: None,
+            author_id: None,
+            entry_count: None,
+            replica_open: None,
+            error: Some(format!("{}: {}", e.code, e.message)),
         },
         other => DocsStatusOutput {
             is_enabled: false,
@@ -506,6 +536,14 @@ async fn docs_ticket(client: &AspenClient, args: TicketArgs, json: bool) -> Resu
             read_write: r.read_write,
             priority: r.priority,
             error: r.error,
+        },
+        ClientRpcResponse::Error(e) => DocsTicketOutput {
+            ticket: None,
+            cluster_id: None,
+            namespace_id: None,
+            read_write: false,
+            priority: 0,
+            error: Some(format!("{}: {}", e.code, e.message)),
         },
         other => DocsTicketOutput {
             ticket: None,

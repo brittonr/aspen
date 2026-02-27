@@ -448,6 +448,11 @@ async fn automerge_create(client: &AspenClient, args: CreateArgs, json: bool) ->
             document_id: r.document_id,
             error: r.error,
         },
+        ClientRpcResponse::Error(e) => CreateOutput {
+            is_success: false,
+            document_id: None,
+            error: Some(format!("{}: {}", e.code, e.message)),
+        },
         other => CreateOutput {
             is_success: false,
             document_id: None,
@@ -479,6 +484,13 @@ async fn automerge_get(client: &AspenClient, args: GetArgs, json: bool) -> Resul
                 error: r.error,
             }
         }
+        ClientRpcResponse::Error(e) => GetOutput {
+            was_found: false,
+            document_id: None,
+            content: None,
+            size_bytes: None,
+            error: Some(format!("{}: {}", e.code, e.message)),
+        },
         other => GetOutput {
             was_found: false,
             document_id: None,
@@ -502,6 +514,11 @@ async fn automerge_delete(client: &AspenClient, args: DeleteArgs, json: bool) ->
             is_success: r.is_success,
             existed: r.existed,
             error: r.error,
+        },
+        ClientRpcResponse::Error(e) => DeleteOutput {
+            is_success: false,
+            existed: false,
+            error: Some(format!("{}: {}", e.code, e.message)),
         },
         other => DeleteOutput {
             is_success: false,
@@ -547,6 +564,13 @@ async fn automerge_list(client: &AspenClient, args: ListArgs, json: bool) -> Res
                 error: r.error,
             }
         }
+        ClientRpcResponse::Error(e) => ListOutput {
+            documents: vec![],
+            count: 0,
+            has_more: false,
+            continuation_token: None,
+            error: Some(format!("{}: {}", e.code, e.message)),
+        },
         other => ListOutput {
             documents: vec![],
             count: 0,
@@ -611,6 +635,20 @@ async fn automerge_meta(client: &AspenClient, args: MetaArgs, json: bool) -> Res
                 }
             }
         }
+        ClientRpcResponse::Error(e) => MetaOutput {
+            was_found: false,
+            id: None,
+            namespace: None,
+            title: None,
+            description: None,
+            tags: vec![],
+            size_bytes: None,
+            change_count: None,
+            heads: vec![],
+            created_at: None,
+            updated_at: None,
+            error: Some(format!("{}: {}", e.code, e.message)),
+        },
         other => MetaOutput {
             was_found: false,
             id: None,
@@ -641,6 +679,10 @@ async fn automerge_exists(client: &AspenClient, args: ExistsArgs, json: bool) ->
             does_exist: r.does_exist,
             error: r.error,
         },
+        ClientRpcResponse::Error(e) => ExistsOutput {
+            does_exist: false,
+            error: Some(format!("{}: {}", e.code, e.message)),
+        },
         other => ExistsOutput {
             does_exist: false,
             error: Some(format!("unexpected response: {other:?}")),
@@ -665,6 +707,12 @@ async fn automerge_merge(client: &AspenClient, args: MergeArgs, json: bool) -> R
             changes_applied: r.change_count,
             new_heads: r.new_heads,
             error: r.error,
+        },
+        ClientRpcResponse::Error(e) => MergeOutput {
+            is_success: false,
+            changes_applied: None,
+            new_heads: vec![],
+            error: Some(format!("{}: {}", e.code, e.message)),
         },
         other => MergeOutput {
             is_success: false,
