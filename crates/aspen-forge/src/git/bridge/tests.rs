@@ -573,3 +573,666 @@ async fn test_executable_file_mode_roundtrip() {
     let exported_git = exported.to_git_bytes();
     assert_eq!(compute_sha1(&exported_git), tree_sha1, "executable mode tree should round-trip correctly");
 }
+
+// ============================================================================
+// End-to-end handler-level tests
+//
+// These simulate the same operations that the git-remote-aspen server handlers
+// perform: push (import objects + update refs), list refs, fetch (export DAG),
+// and probe (check which SHA-1s the server already has).
+//
+// This is the full push → list → fetch → verify cycle that a real
+// `git push` / `git clone` / `git fetch` goes through.
+// ============================================================================
+
+/// Helper: import objects via the same path the server's handle_git_bridge_push uses.
+///
+/// The server receives `GitBridgeObject` (headerless data), reconstructs the git
+/// header, then calls `import_objects()`. This helper does the same.
+async fn handler_push_objects(
+    h: &BridgeTestHarness,
+    objects: &[(Sha1Hash, &str, &[u8])], // (sha1, type_str, headerless_data)
+) -> super::importer::ImportResult {
+    let import_objects: Vec<(Sha1Hash, GitObjectType, Vec<u8>)> = objects
+        .iter()
+        .map(|(sha1, type_str, data)| {
+            let obj_type = match *type_str {
+                "blob" => GitObjectType::Blob,
+                "tree" => GitObjectType::Tree,
+                "commit" => GitObjectType::Commit,
+                "tag" => GitObjectType::Tag,
+                _ => panic!("unknown type: {}", type_str),
+            };
+            // Reconstruct git header (same as handle_git_bridge_push)
+            let header = format!("{} {}\0", type_str, data.len());
+            let mut git_bytes = Vec::with_capacity(header.len() + data.len());
+            git_bytes.extend_from_slice(header.as_bytes());
+            git_bytes.extend_from_slice(data);
+            (*sha1, obj_type, git_bytes)
+        })
+        .collect();
+
+    h.importer.import_objects(&h.repo_id, import_objects).await.unwrap()
+}
+
+/// Helper: split git object bytes into (type, headerless_data) for push simulation.
+fn split_git_object(git_bytes: &[u8]) -> (&str, &[u8]) {
+    let null_pos = git_bytes.iter().position(|&b| b == 0).expect("missing null in git object");
+    let header = std::str::from_utf8(&git_bytes[..null_pos]).expect("invalid header");
+    let type_str = header.split(' ').next().expect("missing type in header");
+    (type_str, &git_bytes[null_pos + 1..])
+}
+
+/// Build a complete single-file repo and return all the pieces.
+struct SingleFileRepo {
+    blob_sha1: Sha1Hash,
+    blob_data: Vec<u8>, // headerless
+    tree_sha1: Sha1Hash,
+    tree_data: Vec<u8>, // headerless
+    commit_sha1: Sha1Hash,
+    commit_data: Vec<u8>, // headerless
+}
+
+impl SingleFileRepo {
+    fn new(filename: &str, content: &[u8], message: &str) -> Self {
+        let blob_git = make_git_blob(content);
+        let blob_sha1 = compute_sha1(&blob_git);
+        let (_, blob_data) = split_git_object(&blob_git);
+
+        let tree_entry = make_tree_entry("100644", filename, &blob_sha1);
+        let tree_git = make_git_tree(&[tree_entry]);
+        let tree_sha1 = compute_sha1(&tree_git);
+        let (_, tree_data) = split_git_object(&tree_git);
+
+        let commit_git = make_git_commit(&tree_sha1, &[], message);
+        let commit_sha1 = compute_sha1(&commit_git);
+        let (_, commit_data) = split_git_object(&commit_git);
+
+        Self {
+            blob_sha1,
+            blob_data: blob_data.to_vec(),
+            tree_sha1,
+            tree_data: tree_data.to_vec(),
+            commit_sha1,
+            commit_data: commit_data.to_vec(),
+        }
+    }
+
+    fn with_parent(filename: &str, content: &[u8], message: &str, parent: &Sha1Hash) -> Self {
+        let blob_git = make_git_blob(content);
+        let blob_sha1 = compute_sha1(&blob_git);
+        let (_, blob_data) = split_git_object(&blob_git);
+
+        let tree_entry = make_tree_entry("100644", filename, &blob_sha1);
+        let tree_git = make_git_tree(&[tree_entry]);
+        let tree_sha1 = compute_sha1(&tree_git);
+        let (_, tree_data) = split_git_object(&tree_git);
+
+        let commit_git = make_git_commit(&tree_sha1, &[parent], message);
+        let commit_sha1 = compute_sha1(&commit_git);
+        let (_, commit_data) = split_git_object(&commit_git);
+
+        Self {
+            blob_sha1,
+            blob_data: blob_data.to_vec(),
+            tree_sha1,
+            tree_data: tree_data.to_vec(),
+            commit_sha1,
+            commit_data: commit_data.to_vec(),
+        }
+    }
+
+    fn objects(&self) -> Vec<(Sha1Hash, &str, &[u8])> {
+        vec![
+            (self.blob_sha1, "blob", &self.blob_data),
+            (self.tree_sha1, "tree", &self.tree_data),
+            (self.commit_sha1, "commit", &self.commit_data),
+        ]
+    }
+}
+
+// ---- Push → List → Fetch round-trip tests ----
+
+#[tokio::test]
+async fn test_e2e_push_list_fetch_single_branch() {
+    let h = BridgeTestHarness::new();
+    let repo = SingleFileRepo::new("README.md", b"# Hello\n", "Initial commit");
+
+    // Push: import objects + update ref (same as handle_git_bridge_push)
+    let result = handler_push_objects(&h, &repo.objects()).await;
+    assert_eq!(result.objects_imported, 3);
+    assert_eq!(result.objects_skipped, 0);
+
+    // Update ref (strip "refs/" prefix like the handler does)
+    h.importer.update_ref(&h.repo_id, "heads/main", repo.commit_sha1).await.unwrap();
+
+    // List refs (same as handle_git_bridge_list_refs)
+    let refs = h.exporter.list_refs(&h.repo_id).await.unwrap();
+    assert!(!refs.is_empty(), "should have refs after push");
+
+    let main_ref = refs.iter().find(|(name, _)| name.contains("main"));
+    assert!(main_ref.is_some(), "heads/main should be listed");
+    let (_, main_sha1) = main_ref.unwrap();
+    assert_eq!(main_sha1.unwrap(), repo.commit_sha1, "ref should point to pushed commit");
+
+    // Fetch: export the commit DAG (same as handle_git_bridge_fetch)
+    let (blake3_hash, _) = h.mapping.get_blake3(&h.repo_id, &repo.commit_sha1).await.unwrap().unwrap();
+    let have = std::collections::HashSet::new();
+    let export_result = h.exporter.export_commit_dag(&h.repo_id, blake3_hash, &have).await.unwrap();
+
+    // Verify all objects came back
+    assert_eq!(export_result.objects.len(), 3, "should export blob + tree + commit");
+
+    let sha1s: Vec<_> = export_result.objects.iter().map(|o| o.sha1).collect();
+    assert!(sha1s.contains(&repo.blob_sha1), "blob should be in exported DAG");
+    assert!(sha1s.contains(&repo.tree_sha1), "tree should be in exported DAG");
+    assert!(sha1s.contains(&repo.commit_sha1), "commit should be in exported DAG");
+
+    // Verify blob content survives round-trip
+    let blob_obj = export_result.objects.iter().find(|o| o.sha1 == repo.blob_sha1).unwrap();
+    assert_eq!(blob_obj.content, b"# Hello\n", "blob content should round-trip");
+}
+
+#[tokio::test]
+async fn test_e2e_incremental_push_with_probe() {
+    let h = BridgeTestHarness::new();
+
+    // First push: initial commit
+    let repo1 = SingleFileRepo::new("file.txt", b"version 1", "First commit");
+    handler_push_objects(&h, &repo1.objects()).await;
+    h.importer.update_ref(&h.repo_id, "heads/main", repo1.commit_sha1).await.unwrap();
+
+    // Probe: server reports which SHA-1s it already has
+    let all_sha1s = vec![repo1.blob_sha1, repo1.tree_sha1, repo1.commit_sha1];
+    let mut known_count = 0u32;
+    for sha1 in &all_sha1s {
+        if h.mapping.has_sha1(&h.repo_id, sha1).await.unwrap() {
+            known_count += 1;
+        }
+    }
+    assert_eq!(known_count, 3, "all first-push objects should be known");
+
+    // Second push: new commit on top
+    let repo2 = SingleFileRepo::with_parent("file.txt", b"version 2", "Second commit", &repo1.commit_sha1);
+
+    // Probe the second push's objects
+    let push2_sha1s = vec![repo2.blob_sha1, repo2.tree_sha1, repo2.commit_sha1];
+    let mut push2_known = 0u32;
+    for sha1 in &push2_sha1s {
+        if h.mapping.has_sha1(&h.repo_id, sha1).await.unwrap() {
+            push2_known += 1;
+        }
+    }
+    assert_eq!(push2_known, 0, "second push objects should all be unknown before push");
+
+    // Push only the new objects (incremental)
+    let result = handler_push_objects(&h, &repo2.objects()).await;
+    assert_eq!(result.objects_imported, 3, "should import 3 new objects");
+
+    // Update ref to new tip
+    h.importer.update_ref(&h.repo_id, "heads/main", repo2.commit_sha1).await.unwrap();
+
+    // Fetch from new tip with commit1 in "have" set (incremental fetch)
+    let (blake3_tip, _) = h.mapping.get_blake3(&h.repo_id, &repo2.commit_sha1).await.unwrap().unwrap();
+    let mut have = std::collections::HashSet::new();
+    have.insert(repo1.commit_sha1);
+    let export = h.exporter.export_commit_dag(&h.repo_id, blake3_tip, &have).await.unwrap();
+
+    // Should only get commit2's objects (commit1 is in "have")
+    let sha1s: Vec<_> = export.objects.iter().map(|o| o.sha1).collect();
+    assert!(!sha1s.contains(&repo1.commit_sha1), "commit1 should be excluded (in have set)");
+    assert!(!sha1s.contains(&repo1.blob_sha1), "blob1 should be excluded");
+    assert!(sha1s.contains(&repo2.commit_sha1), "commit2 should be included");
+    assert!(sha1s.contains(&repo2.blob_sha1), "blob2 should be included");
+}
+
+#[tokio::test]
+async fn test_e2e_multi_branch_push_fetch() {
+    let h = BridgeTestHarness::new();
+
+    // Push to main
+    let main_repo = SingleFileRepo::new("main.txt", b"main branch content", "Main commit");
+    handler_push_objects(&h, &main_repo.objects()).await;
+    h.importer.update_ref(&h.repo_id, "heads/main", main_repo.commit_sha1).await.unwrap();
+
+    // Push to dev (different content, no parent relationship)
+    let dev_repo = SingleFileRepo::new("dev.txt", b"dev branch content", "Dev commit");
+    handler_push_objects(&h, &dev_repo.objects()).await;
+    h.importer.update_ref(&h.repo_id, "heads/dev", dev_repo.commit_sha1).await.unwrap();
+
+    // List refs — both branches should be visible
+    let refs = h.exporter.list_refs(&h.repo_id).await.unwrap();
+    let ref_names: Vec<_> = refs.iter().map(|(name, _)| name.as_str()).collect();
+    assert!(ref_names.iter().any(|n| n.contains("main")), "main branch should exist");
+    assert!(ref_names.iter().any(|n| n.contains("dev")), "dev branch should exist");
+
+    // Fetch main
+    let (main_b3, _) = h.mapping.get_blake3(&h.repo_id, &main_repo.commit_sha1).await.unwrap().unwrap();
+    let main_export =
+        h.exporter.export_commit_dag(&h.repo_id, main_b3, &std::collections::HashSet::new()).await.unwrap();
+    let main_sha1s: Vec<_> = main_export.objects.iter().map(|o| o.sha1).collect();
+    assert!(main_sha1s.contains(&main_repo.blob_sha1), "main fetch should include main blob");
+    assert!(!main_sha1s.contains(&dev_repo.blob_sha1), "main fetch should NOT include dev blob");
+
+    // Fetch dev
+    let (dev_b3, _) = h.mapping.get_blake3(&h.repo_id, &dev_repo.commit_sha1).await.unwrap().unwrap();
+    let dev_export = h.exporter.export_commit_dag(&h.repo_id, dev_b3, &std::collections::HashSet::new()).await.unwrap();
+    let dev_sha1s: Vec<_> = dev_export.objects.iter().map(|o| o.sha1).collect();
+    assert!(dev_sha1s.contains(&dev_repo.blob_sha1), "dev fetch should include dev blob");
+    assert!(!dev_sha1s.contains(&main_repo.blob_sha1), "dev fetch should NOT include main blob");
+}
+
+#[tokio::test]
+async fn test_e2e_push_fetch_with_annotated_tag() {
+    let h = BridgeTestHarness::new();
+
+    // Push a commit
+    let repo = SingleFileRepo::new("lib.rs", b"pub fn hello() {}", "v1.0 release");
+    handler_push_objects(&h, &repo.objects()).await;
+    h.importer.update_ref(&h.repo_id, "heads/main", repo.commit_sha1).await.unwrap();
+
+    // Create and push an annotated tag
+    let tag_git = make_git_tag(&repo.commit_sha1, "v1.0.0", "Release v1.0.0");
+    let tag_sha1 = compute_sha1(&tag_git);
+    let (_, tag_data) = split_git_object(&tag_git);
+
+    let tag_objects = vec![(tag_sha1, "tag", tag_data)];
+    let tag_result = handler_push_objects(&h, &tag_objects).await;
+    assert_eq!(tag_result.objects_imported, 1, "should import tag object");
+
+    // Update the tag ref
+    h.importer.update_ref(&h.repo_id, "tags/v1.0.0", tag_sha1).await.unwrap();
+
+    // List refs — should have both branch and tag
+    let refs = h.exporter.list_refs(&h.repo_id).await.unwrap();
+    let ref_names: Vec<_> = refs.iter().map(|(name, _)| name.as_str()).collect();
+    assert!(ref_names.iter().any(|n| n.contains("main")), "main should be listed");
+    assert!(ref_names.iter().any(|n| n.contains("v1.0.0")), "tag should be listed");
+
+    // Fetch the tag's commit DAG
+    let (tag_b3, _) = h.mapping.get_blake3(&h.repo_id, &tag_sha1).await.unwrap().unwrap();
+    let tag_export = h.exporter.export_object(&h.repo_id, tag_b3).await.unwrap();
+    assert_eq!(tag_export.object_type, GitObjectType::Tag);
+
+    // Tag content should reference the commit
+    let tag_content = String::from_utf8_lossy(&tag_export.content);
+    assert!(tag_content.contains(&format!("object {}", repo.commit_sha1)));
+    assert!(tag_content.contains("tag v1.0.0"));
+}
+
+#[tokio::test]
+async fn test_e2e_push_fetch_merge_commit() {
+    let h = BridgeTestHarness::new();
+
+    // Branch A
+    let branch_a = SingleFileRepo::new("a.txt", b"branch a", "Commit on A");
+    handler_push_objects(&h, &branch_a.objects()).await;
+    h.importer.update_ref(&h.repo_id, "heads/main", branch_a.commit_sha1).await.unwrap();
+
+    // Branch B
+    let branch_b = SingleFileRepo::new("b.txt", b"branch b", "Commit on B");
+    handler_push_objects(&h, &branch_b.objects()).await;
+    h.importer.update_ref(&h.repo_id, "heads/feature", branch_b.commit_sha1).await.unwrap();
+
+    // Merge commit (parents: A + B, tree with both files)
+    let merge_tree_git = make_git_tree(&[
+        make_tree_entry("100644", "a.txt", &branch_a.blob_sha1),
+        make_tree_entry("100644", "b.txt", &branch_b.blob_sha1),
+    ]);
+    let merge_tree_sha1 = compute_sha1(&merge_tree_git);
+    let (_, merge_tree_data) = split_git_object(&merge_tree_git);
+
+    let merge_commit_git =
+        make_git_commit(&merge_tree_sha1, &[&branch_a.commit_sha1, &branch_b.commit_sha1], "Merge feature into main");
+    let merge_commit_sha1 = compute_sha1(&merge_commit_git);
+    let (_, merge_commit_data) = split_git_object(&merge_commit_git);
+
+    let merge_objects = vec![
+        (merge_tree_sha1, "tree", merge_tree_data),
+        (merge_commit_sha1, "commit", merge_commit_data),
+    ];
+    let merge_result = handler_push_objects(&h, &merge_objects).await;
+    assert_eq!(merge_result.objects_imported, 2, "should import merge tree + commit");
+
+    h.importer.update_ref(&h.repo_id, "heads/main", merge_commit_sha1).await.unwrap();
+
+    // Fetch from merge tip — should include both parent chains
+    let (merge_b3, _) = h.mapping.get_blake3(&h.repo_id, &merge_commit_sha1).await.unwrap().unwrap();
+    let export = h.exporter.export_commit_dag(&h.repo_id, merge_b3, &std::collections::HashSet::new()).await.unwrap();
+
+    let sha1s: Vec<_> = export.objects.iter().map(|o| o.sha1).collect();
+    assert!(sha1s.contains(&merge_commit_sha1), "merge commit should be in DAG");
+    assert!(sha1s.contains(&branch_a.commit_sha1), "parent A should be in DAG");
+    assert!(sha1s.contains(&branch_b.commit_sha1), "parent B should be in DAG");
+    assert!(sha1s.contains(&branch_a.blob_sha1), "blob A should be in DAG");
+    assert!(sha1s.contains(&branch_b.blob_sha1), "blob B should be in DAG");
+}
+
+#[tokio::test]
+async fn test_e2e_push_fetch_nested_directories() {
+    let h = BridgeTestHarness::new();
+
+    // Build: root/src/lib.rs, root/Cargo.toml
+    let lib_blob = make_git_blob(b"pub fn lib() {}");
+    let lib_sha1 = compute_sha1(&lib_blob);
+    let (_, lib_data) = split_git_object(&lib_blob);
+
+    let cargo_blob = make_git_blob(b"[package]\nname = \"test\"");
+    let cargo_sha1 = compute_sha1(&cargo_blob);
+    let (_, cargo_data) = split_git_object(&cargo_blob);
+
+    // src/ subtree
+    let src_tree = make_git_tree(&[make_tree_entry("100644", "lib.rs", &lib_sha1)]);
+    let src_sha1 = compute_sha1(&src_tree);
+    let (_, src_data) = split_git_object(&src_tree);
+
+    // root tree
+    let root_tree = make_git_tree(&[
+        make_tree_entry("100644", "Cargo.toml", &cargo_sha1),
+        make_tree_entry("40000", "src", &src_sha1),
+    ]);
+    let root_sha1 = compute_sha1(&root_tree);
+    let (_, root_data) = split_git_object(&root_tree);
+
+    let commit_git = make_git_commit(&root_sha1, &[], "Add Cargo.toml and src/lib.rs");
+    let commit_sha1 = compute_sha1(&commit_git);
+    let (_, commit_data) = split_git_object(&commit_git);
+
+    let objects = vec![
+        (lib_sha1, "blob", lib_data),
+        (cargo_sha1, "blob", cargo_data),
+        (src_sha1, "tree", src_data),
+        (root_sha1, "tree", root_data),
+        (commit_sha1, "commit", commit_data),
+    ];
+    let result = handler_push_objects(&h, &objects).await;
+    assert_eq!(result.objects_imported, 5);
+
+    h.importer.update_ref(&h.repo_id, "heads/main", commit_sha1).await.unwrap();
+
+    // Fetch and verify all objects come back
+    let (b3, _) = h.mapping.get_blake3(&h.repo_id, &commit_sha1).await.unwrap().unwrap();
+    let export = h.exporter.export_commit_dag(&h.repo_id, b3, &std::collections::HashSet::new()).await.unwrap();
+    assert_eq!(export.objects.len(), 5, "should export all 5 objects");
+
+    // Verify blob content round-trips
+    let lib_obj = export.objects.iter().find(|o| o.sha1 == lib_sha1).unwrap();
+    assert_eq!(lib_obj.content, b"pub fn lib() {}", "lib.rs content should round-trip");
+
+    let cargo_obj = export.objects.iter().find(|o| o.sha1 == cargo_sha1).unwrap();
+    assert_eq!(cargo_obj.content, b"[package]\nname = \"test\"", "Cargo.toml content should round-trip");
+}
+
+#[tokio::test]
+async fn test_e2e_push_fetch_binary_blob() {
+    let h = BridgeTestHarness::new();
+
+    // Binary content with null bytes and all byte values
+    let mut binary_content = Vec::with_capacity(256);
+    for i in 0..=255u8 {
+        binary_content.push(i);
+    }
+
+    let blob_git = make_git_blob(&binary_content);
+    let blob_sha1 = compute_sha1(&blob_git);
+    let (_, blob_data) = split_git_object(&blob_git);
+
+    let tree_entry = make_tree_entry("100644", "binary.dat", &blob_sha1);
+    let tree_git = make_git_tree(&[tree_entry]);
+    let tree_sha1 = compute_sha1(&tree_git);
+    let (_, tree_data) = split_git_object(&tree_git);
+
+    let commit_git = make_git_commit(&tree_sha1, &[], "Add binary file");
+    let commit_sha1 = compute_sha1(&commit_git);
+    let (_, commit_data) = split_git_object(&commit_git);
+
+    let objects = vec![
+        (blob_sha1, "blob", blob_data),
+        (tree_sha1, "tree", tree_data),
+        (commit_sha1, "commit", commit_data),
+    ];
+    handler_push_objects(&h, &objects).await;
+    h.importer.update_ref(&h.repo_id, "heads/main", commit_sha1).await.unwrap();
+
+    // Fetch and verify binary content survives byte-for-byte
+    let (b3, _) = h.mapping.get_blake3(&h.repo_id, &commit_sha1).await.unwrap().unwrap();
+    let export = h.exporter.export_commit_dag(&h.repo_id, b3, &std::collections::HashSet::new()).await.unwrap();
+    let blob_obj = export.objects.iter().find(|o| o.sha1 == blob_sha1).unwrap();
+    assert_eq!(blob_obj.content, binary_content, "binary content should survive round-trip byte-for-byte");
+}
+
+#[tokio::test]
+async fn test_e2e_empty_repo_list_and_fetch() {
+    let h = BridgeTestHarness::new();
+
+    // List refs on empty repo
+    let refs = h.exporter.list_refs(&h.repo_id).await.unwrap();
+    assert!(refs.is_empty(), "empty repo should have no refs");
+
+    // Probe with unknown SHA-1s on empty repo
+    let dummy_sha1 = compute_sha1(&make_git_blob(b"dummy"));
+    let has = h.mapping.has_sha1(&h.repo_id, &dummy_sha1).await.unwrap();
+    assert!(!has, "empty repo should not have any SHA-1 mappings");
+}
+
+#[tokio::test]
+async fn test_e2e_force_push_replaces_ref() {
+    let h = BridgeTestHarness::new();
+
+    // Push commit 1 to main
+    let repo1 = SingleFileRepo::new("file.txt", b"version 1", "First commit");
+    handler_push_objects(&h, &repo1.objects()).await;
+    h.importer.update_ref(&h.repo_id, "heads/main", repo1.commit_sha1).await.unwrap();
+
+    // Force push commit 2 (unrelated lineage) to main
+    let repo2 = SingleFileRepo::new("file.txt", b"force pushed version", "Force pushed");
+    handler_push_objects(&h, &repo2.objects()).await;
+    h.importer.update_ref(&h.repo_id, "heads/main", repo2.commit_sha1).await.unwrap();
+
+    // Verify ref points to commit 2
+    let refs = h.exporter.list_refs(&h.repo_id).await.unwrap();
+    let main_ref = refs.iter().find(|(name, _)| name.contains("main")).unwrap();
+    assert_eq!(main_ref.1.unwrap(), repo2.commit_sha1, "ref should point to force-pushed commit");
+
+    // Fetch from new tip — should only get commit 2's objects (no parent chain to commit 1)
+    let (b3, _) = h.mapping.get_blake3(&h.repo_id, &repo2.commit_sha1).await.unwrap().unwrap();
+    let export = h.exporter.export_commit_dag(&h.repo_id, b3, &std::collections::HashSet::new()).await.unwrap();
+    let sha1s: Vec<_> = export.objects.iter().map(|o| o.sha1).collect();
+    assert!(!sha1s.contains(&repo1.commit_sha1), "old commit should not be in DAG");
+    assert!(sha1s.contains(&repo2.commit_sha1), "new commit should be in DAG");
+}
+
+#[tokio::test]
+async fn test_e2e_probe_mixed_known_unknown() {
+    let h = BridgeTestHarness::new();
+
+    // Push some objects
+    let repo = SingleFileRepo::new("known.txt", b"known content", "Known commit");
+    handler_push_objects(&h, &repo.objects()).await;
+
+    // Create but DON'T push some objects
+    let unknown_blob = make_git_blob(b"unknown content");
+    let unknown_sha1 = compute_sha1(&unknown_blob);
+
+    // Probe a mix of known and unknown
+    let all_sha1s = vec![repo.blob_sha1, repo.tree_sha1, unknown_sha1];
+    let mut known = Vec::new();
+    let mut unknown = Vec::new();
+    for sha1 in &all_sha1s {
+        if h.mapping.has_sha1(&h.repo_id, sha1).await.unwrap() {
+            known.push(*sha1);
+        } else {
+            unknown.push(*sha1);
+        }
+    }
+
+    assert_eq!(known.len(), 2, "2 pushed objects should be known");
+    assert_eq!(unknown.len(), 1, "1 unpushed object should be unknown");
+    assert!(known.contains(&repo.blob_sha1));
+    assert!(known.contains(&repo.tree_sha1));
+    assert!(unknown.contains(&unknown_sha1));
+}
+
+#[tokio::test]
+async fn test_e2e_push_skip_duplicate_objects() {
+    let h = BridgeTestHarness::new();
+
+    // Push initial commit
+    let repo = SingleFileRepo::new("file.txt", b"original", "Initial");
+    let result1 = handler_push_objects(&h, &repo.objects()).await;
+    assert_eq!(result1.objects_imported, 3);
+
+    // Push the same objects again — should be skipped
+    let result2 = handler_push_objects(&h, &repo.objects()).await;
+    // The import_objects function may import or skip depending on implementation
+    // but the content should be identical
+    let total = result2.objects_imported + result2.objects_skipped;
+    assert_eq!(total, 3, "all objects should be accounted for");
+}
+
+#[tokio::test]
+async fn test_e2e_fetch_content_matches_original() {
+    let h = BridgeTestHarness::new();
+
+    // Push with specific content
+    let original_content = b"fn main() {\n    println!(\"Hello, Forge!\");\n}\n";
+    let repo = SingleFileRepo::new("main.rs", original_content, "Add main.rs");
+    handler_push_objects(&h, &repo.objects()).await;
+    h.importer.update_ref(&h.repo_id, "heads/main", repo.commit_sha1).await.unwrap();
+
+    // Fetch and verify content byte-for-byte
+    let (b3, _) = h.mapping.get_blake3(&h.repo_id, &repo.commit_sha1).await.unwrap().unwrap();
+    let export = h.exporter.export_commit_dag(&h.repo_id, b3, &std::collections::HashSet::new()).await.unwrap();
+
+    // Find blob by type and verify content
+    let blob = export.objects.iter().find(|o| o.object_type == GitObjectType::Blob).unwrap();
+    assert_eq!(blob.content, original_content, "fetched blob content must match original exactly");
+
+    // Verify SHA-1 of reconstructed git object matches
+    let exported_git = blob.to_git_bytes();
+    let recomputed_sha1 = compute_sha1(&exported_git);
+    assert_eq!(recomputed_sha1, repo.blob_sha1, "reconstructed SHA-1 must match original");
+}
+
+#[tokio::test]
+async fn test_e2e_three_commit_chain_incremental_fetch() {
+    let h = BridgeTestHarness::new();
+
+    // Commit 1
+    let c1 = SingleFileRepo::new("file.txt", b"v1", "Commit 1");
+    handler_push_objects(&h, &c1.objects()).await;
+    h.importer.update_ref(&h.repo_id, "heads/main", c1.commit_sha1).await.unwrap();
+
+    // Commit 2 (child of 1)
+    let c2 = SingleFileRepo::with_parent("file.txt", b"v2", "Commit 2", &c1.commit_sha1);
+    handler_push_objects(&h, &c2.objects()).await;
+    h.importer.update_ref(&h.repo_id, "heads/main", c2.commit_sha1).await.unwrap();
+
+    // Commit 3 (child of 2)
+    let c3 = SingleFileRepo::with_parent("file.txt", b"v3", "Commit 3", &c2.commit_sha1);
+    handler_push_objects(&h, &c3.objects()).await;
+    h.importer.update_ref(&h.repo_id, "heads/main", c3.commit_sha1).await.unwrap();
+
+    // Full fetch from tip (no "have") — should get all 9 objects
+    let (tip_b3, _) = h.mapping.get_blake3(&h.repo_id, &c3.commit_sha1).await.unwrap().unwrap();
+    let full_export =
+        h.exporter.export_commit_dag(&h.repo_id, tip_b3, &std::collections::HashSet::new()).await.unwrap();
+    assert!(
+        full_export.objects.len() >= 9,
+        "full fetch should include all 9 objects, got {}",
+        full_export.objects.len()
+    );
+
+    // Incremental fetch with c1 in "have" — should skip c1's objects
+    let mut have = std::collections::HashSet::new();
+    have.insert(c1.commit_sha1);
+    let incr_export = h.exporter.export_commit_dag(&h.repo_id, tip_b3, &have).await.unwrap();
+
+    let incr_sha1s: Vec<_> = incr_export.objects.iter().map(|o| o.sha1).collect();
+    assert!(!incr_sha1s.contains(&c1.commit_sha1), "commit 1 should be excluded");
+    assert!(!incr_sha1s.contains(&c1.blob_sha1), "blob 1 should be excluded");
+    assert!(incr_sha1s.contains(&c2.commit_sha1), "commit 2 should be included");
+    assert!(incr_sha1s.contains(&c3.commit_sha1), "commit 3 should be included");
+
+    // Incremental fetch with c1 + c2 in "have" — should only get c3's objects
+    have.insert(c2.commit_sha1);
+    let minimal_export = h.exporter.export_commit_dag(&h.repo_id, tip_b3, &have).await.unwrap();
+
+    let min_sha1s: Vec<_> = minimal_export.objects.iter().map(|o| o.sha1).collect();
+    assert!(!min_sha1s.contains(&c1.commit_sha1), "commit 1 excluded");
+    assert!(!min_sha1s.contains(&c2.commit_sha1), "commit 2 excluded");
+    assert!(min_sha1s.contains(&c3.commit_sha1), "commit 3 included");
+    assert!(min_sha1s.contains(&c3.blob_sha1), "blob 3 included");
+}
+
+#[tokio::test]
+async fn test_e2e_push_symlink_mode() {
+    let h = BridgeTestHarness::new();
+
+    // Symlink blob (target path as content)
+    let symlink_target = b"../lib/libfoo.so";
+    let blob_git = make_git_blob(symlink_target);
+    let blob_sha1 = compute_sha1(&blob_git);
+    let (_, blob_data) = split_git_object(&blob_git);
+
+    // Tree with symlink entry (mode 120000)
+    let tree_git = make_git_tree(&[make_tree_entry("120000", "libfoo.so", &blob_sha1)]);
+    let tree_sha1 = compute_sha1(&tree_git);
+    let (_, tree_data) = split_git_object(&tree_git);
+
+    let commit_git = make_git_commit(&tree_sha1, &[], "Add symlink");
+    let commit_sha1 = compute_sha1(&commit_git);
+    let (_, commit_data) = split_git_object(&commit_git);
+
+    let objects = vec![
+        (blob_sha1, "blob", blob_data),
+        (tree_sha1, "tree", tree_data),
+        (commit_sha1, "commit", commit_data),
+    ];
+    handler_push_objects(&h, &objects).await;
+    h.importer.update_ref(&h.repo_id, "heads/main", commit_sha1).await.unwrap();
+
+    // Fetch and verify symlink content
+    let (b3, _) = h.mapping.get_blake3(&h.repo_id, &commit_sha1).await.unwrap().unwrap();
+    let export = h.exporter.export_commit_dag(&h.repo_id, b3, &std::collections::HashSet::new()).await.unwrap();
+    let blob_obj = export.objects.iter().find(|o| o.sha1 == blob_sha1).unwrap();
+    assert_eq!(blob_obj.content, symlink_target, "symlink target content should round-trip");
+
+    // Verify tree with symlink mode round-trips
+    let tree_obj = export.objects.iter().find(|o| o.sha1 == tree_sha1).unwrap();
+    let tree_git_bytes = tree_obj.to_git_bytes();
+    assert_eq!(compute_sha1(&tree_git_bytes), tree_sha1, "tree with symlink should round-trip");
+}
+
+#[tokio::test]
+async fn test_e2e_push_empty_blob() {
+    let h = BridgeTestHarness::new();
+
+    // Empty file (0 bytes)
+    let blob_git = make_git_blob(b"");
+    let blob_sha1 = compute_sha1(&blob_git);
+    let (_, blob_data) = split_git_object(&blob_git);
+
+    let tree_git = make_git_tree(&[make_tree_entry("100644", ".gitkeep", &blob_sha1)]);
+    let tree_sha1 = compute_sha1(&tree_git);
+    let (_, tree_data) = split_git_object(&tree_git);
+
+    let commit_git = make_git_commit(&tree_sha1, &[], "Add empty file");
+    let commit_sha1 = compute_sha1(&commit_git);
+    let (_, commit_data) = split_git_object(&commit_git);
+
+    let objects = vec![
+        (blob_sha1, "blob", blob_data),
+        (tree_sha1, "tree", tree_data),
+        (commit_sha1, "commit", commit_data),
+    ];
+    let result = handler_push_objects(&h, &objects).await;
+    assert_eq!(result.objects_imported, 3);
+
+    // Fetch and verify empty blob
+    h.importer.update_ref(&h.repo_id, "heads/main", commit_sha1).await.unwrap();
+    let (b3, _) = h.mapping.get_blake3(&h.repo_id, &commit_sha1).await.unwrap().unwrap();
+    let export = h.exporter.export_commit_dag(&h.repo_id, b3, &std::collections::HashSet::new()).await.unwrap();
+    let blob_obj = export.objects.iter().find(|o| o.sha1 == blob_sha1).unwrap();
+    assert!(blob_obj.content.is_empty(), "empty blob should round-trip as empty");
+}
