@@ -107,6 +107,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             reason,
             moved_at_ms: now_unix_ms(),
             last_error: error_message,
+            message_group_id: pending.message_group_id.clone(),
         };
 
         let d_key = verified::dlq_key(name, pending.item_id);

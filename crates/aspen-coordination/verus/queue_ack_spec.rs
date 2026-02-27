@@ -167,6 +167,7 @@ verus! {
             delivery_count: inflight.delivery_count,
             reason,
             moved_at_ms: pre.current_time_ms,
+            message_group_id: inflight.message_group_id,
         };
 
         QueueState {
@@ -381,7 +382,7 @@ verus! {
                 0
             },
             visibility_deadline_ms: 0,
-            message_group_id: None,
+            message_group_id: inflight.message_group_id, // Preserve for FIFO-per-group
             deduplication_id: None,
         };
 
@@ -437,14 +438,13 @@ verus! {
     /// This ensures redriven items maintain their original ordering relative
     /// to other items with older/newer IDs.
     ///
-    /// Note: message_group_id would be preserved from the original item in a
-    /// full implementation. The DLQ item structure doesn't currently store it,
-    /// but the production implementation should track this for proper FIFO-per-group
-    /// semantics after redrive.
+    /// Note: message_group_id is preserved from the original item via DLQItemSpec,
+    /// ensuring proper FIFO-per-group semantics after redrive.
     ///
     /// Assumes:
     /// - pre.dlq.contains_key(item_id)
     pub open spec fn redrive_post(pre: QueueState, item_id: u64) -> QueueState {
+        let dlq_item = pre.dlq[item_id];
         let queue_item = QueueItemSpec {
             id: item_id,
             payload: Seq::empty(), // Would be preserved from original
@@ -453,7 +453,7 @@ verus! {
             expires_at_ms: 0,
             delivery_count: 0, // Reset delivery count
             visibility_deadline_ms: 0,
-            message_group_id: None, // TODO: Preserve from original via DLQItemSpec enhancement
+            message_group_id: dlq_item.message_group_id, // Preserved for FIFO-per-group
             deduplication_id: None, // Would be preserved from original
         };
 

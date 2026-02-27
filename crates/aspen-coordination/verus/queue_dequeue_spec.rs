@@ -409,6 +409,7 @@ verus! {
             delivery_count: item.delivery_count,
             reason: DLQReasonSpec::MaxDeliveryExceeded,
             moved_at_ms: pre.current_time_ms,
+            message_group_id: item.message_group_id,
         };
 
         QueueState {

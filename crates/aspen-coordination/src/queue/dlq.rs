@@ -53,8 +53,8 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             payload: dlq_item.payload,
             enqueued_at_ms: now_unix_ms(), // Reset enqueue time
             expires_at_ms: 0,
-            delivery_attempts: 0, // Reset attempts
-            message_group_id: None,
+            delivery_attempts: 0,                        // Reset attempts
+            message_group_id: dlq_item.message_group_id, // Preserve for FIFO-per-group
             deduplication_id: None,
         };
 
@@ -96,6 +96,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             reason,
             moved_at_ms: now_unix_ms(),
             last_error: error,
+            message_group_id: item.message_group_id.clone(),
         };
 
         let d_key = verified::dlq_key(name, item.item_id);

@@ -91,6 +91,8 @@ verus! {
         pub reason: DLQReasonSpec,
         /// Time moved to DLQ
         pub moved_at_ms: u64,
+        /// Original message group ID (preserved for FIFO-per-group after redrive)
+        pub message_group_id: Option<Seq<u8>>,
     }
 
     /// Reason for moving to DLQ

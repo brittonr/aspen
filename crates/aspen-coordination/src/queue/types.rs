@@ -123,6 +123,9 @@ pub struct DLQItem {
     pub moved_at_ms: u64,
     /// Last error message (if any).
     pub last_error: Option<String>,
+    /// Original message group ID (preserved for FIFO-per-group after redrive).
+    #[serde(default)]
+    pub message_group_id: Option<String>,
 }
 
 /// Reason for moving an item to the dead letter queue.

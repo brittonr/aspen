@@ -74,9 +74,10 @@ pub use verified::validate_cas_precondition;
 pub use verified::validate_cas_precondition_str;
 pub use verified::verify_entry_hash;
 
-// Storage modules will be added as the extraction continues
-// TODO: Add storage.rs, storage_shared.rs, storage_validation.rs modules
-// after updating their imports to use the verified functions from this crate
+// Note: storage.rs, storage_shared/, and storage_validation.rs remain in
+// aspen-raft because they depend on Raft-specific types (AppTypeConfig,
+// StoredSnapshot, NodeId). This crate provides the pure verified functions
+// that those modules call.
 
 #[cfg(test)]
 mod tests {
