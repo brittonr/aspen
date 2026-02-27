@@ -527,4 +527,4 @@ Fixed limits in `crates/aspen-constants/src/` to prevent resource exhaustion:
 
 - Rust 2024 edition
 - Backwards compatibility is not a concern; prioritize clean solutions
-- Stale comments referencing `RaftActor` remain in aspen-raft (3 doc comments) — harmless but could be cleaned up
+- All legacy `RaftActor` references have been removed; the codebase uses `RaftNode` throughout
