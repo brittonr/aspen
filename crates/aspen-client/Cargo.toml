@@ -9,6 +9,7 @@ description = "Pure client library for Aspen distributed systems - no raft/clust
 # Core Aspen dependencies
 aspen-auth = { path = "../aspen-auth" }
 aspen-client-api = { path = "../aspen-client-api" }
+aspen-constants = { path = "../aspen-constants" }
 aspen-core = { path = "../aspen-core" }
 aspen-ticket = { path = "../aspen-ticket" }
 aspen-transport = { path = "../aspen-transport" }

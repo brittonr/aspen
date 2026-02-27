@@ -7,10 +7,12 @@ use aspen_client_api::CheckpointWalResultResponse;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::HealthResponse;
+use aspen_client_api::IngestSpan;
 use aspen_client_api::MetricsResponse;
 use aspen_client_api::NodeInfoResponse;
 use aspen_client_api::RaftMetricsResponse;
 use aspen_client_api::ReplicationProgress;
+use aspen_client_api::TraceIngestResultResponse;
 use aspen_client_api::VaultKeysResponse;
 use aspen_client_api::VaultListResponse;
 use aspen_coordination::AtomicCounter;
@@ -36,6 +38,7 @@ impl RequestHandler for CoreHandler {
                 | ClientRpcRequest::CheckpointWal
                 | ClientRpcRequest::ListVaults
                 | ClientRpcRequest::GetVaultKeys { .. }
+                | ClientRpcRequest::TraceIngest { .. }
         )
     }
 
@@ -54,6 +57,7 @@ impl RequestHandler for CoreHandler {
             ClientRpcRequest::CheckpointWal => handle_checkpoint_wal(),
             ClientRpcRequest::ListVaults => handle_list_vaults(),
             ClientRpcRequest::GetVaultKeys { vault_name } => handle_get_vault_keys(vault_name),
+            ClientRpcRequest::TraceIngest { spans } => handle_trace_ingest(ctx, spans).await,
             _ => Err(anyhow::anyhow!("request not handled by CoreHandler")),
         }
     }
@@ -237,6 +241,36 @@ fn handle_get_vault_keys(vault_name: String) -> anyhow::Result<ClientRpcResponse
         vault: vault_name,
         keys: vec![],
         error: Some("GetVaultKeys is deprecated. Use ScanKeys with a prefix instead.".to_string()),
+    }))
+}
+
+async fn handle_trace_ingest(ctx: &ClientProtocolContext, spans: Vec<IngestSpan>) -> anyhow::Result<ClientRpcResponse> {
+    let max_batch = aspen_constants::MAX_TRACE_BATCH_SIZE as usize;
+    let total_count = spans.len();
+    let accepted_count = total_count.min(max_batch) as u32;
+    let dropped_count = total_count.saturating_sub(max_batch) as u32;
+
+    // Store each span as a KV entry under _sys:traces:{trace_id}:{span_id}
+    for span in spans.into_iter().take(max_batch) {
+        let key = format!("_sys:traces:{}:{}", span.trace_id, span.span_id);
+        let value_json = serde_json::to_string(&span).map_err(|e| anyhow::anyhow!("serialize span: {}", e))?;
+        let write_req = aspen_core::kv::WriteRequest::set(key, value_json);
+        if let Err(e) = ctx.kv_store.write(write_req).await {
+            tracing::warn!(error = %e, "failed to store trace span");
+            return Ok(ClientRpcResponse::TraceIngestResult(TraceIngestResultResponse {
+                is_success: false,
+                accepted_count: 0,
+                dropped_count: total_count as u32,
+                error: Some(format!("storage error: {}", e)),
+            }));
+        }
+    }
+
+    Ok(ClientRpcResponse::TraceIngestResult(TraceIngestResultResponse {
+        is_success: true,
+        accepted_count,
+        dropped_count,
+        error: None,
     }))
 }
 

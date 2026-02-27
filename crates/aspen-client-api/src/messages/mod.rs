@@ -29,6 +29,7 @@ pub mod hooks;
 pub mod jobs;
 pub mod kv;
 pub mod lease;
+pub mod observability;
 pub mod secrets;
 pub mod sql;
 #[cfg(feature = "auth")]
@@ -265,6 +266,11 @@ pub use jobs::WorkerPollJobsResultResponse;
 pub use jobs::WorkerRegisterResultResponse;
 pub use jobs::WorkerStatusResultResponse;
 pub use kv::DeleteResultResponse;
+pub use kv::IndexCreateResultResponse;
+pub use kv::IndexDefinitionWire;
+pub use kv::IndexDropResultResponse;
+pub use kv::IndexListResultResponse;
+pub use kv::IndexScanResultResponse;
 pub use kv::KvRequest;
 pub use kv::ScanEntry;
 pub use kv::ScanResultResponse;
@@ -275,6 +281,10 @@ pub use lease::LeaseListResultResponse;
 pub use lease::LeaseRequest;
 pub use lease::LeaseRevokeResultResponse;
 pub use lease::LeaseTimeToLiveResultResponse;
+pub use observability::IngestSpan;
+pub use observability::SpanEventWire;
+pub use observability::SpanStatusWire;
+pub use observability::TraceIngestResultResponse;
 pub use secrets::SecretsKvDeleteResultResponse;
 pub use secrets::SecretsKvListResultResponse;
 pub use secrets::SecretsKvMetadataResultResponse;
@@ -2965,6 +2975,66 @@ pub enum ClientRpcRequest {
     },
 
     // =========================================================================
+    // Observability operations
+    // =========================================================================
+    /// Ingest a batch of completed trace spans.
+    ///
+    /// Used by clients to report distributed tracing data to the cluster.
+    /// Spans are stored in KV under `_sys:traces:{trace_id}:{span_id}`.
+    /// Batch size is bounded by MAX_TRACE_BATCH_SIZE.
+    TraceIngest {
+        /// Batch of completed spans (max MAX_TRACE_BATCH_SIZE).
+        spans: Vec<observability::IngestSpan>,
+    },
+
+    // =========================================================================
+    // Index operations
+    // =========================================================================
+    /// Create a custom secondary index.
+    ///
+    /// Custom indexes enable efficient range scans on user-defined fields.
+    /// Index entries are updated atomically with primary KV writes.
+    IndexCreate {
+        /// Index name (must be unique, max MAX_INDEX_NAME_SIZE bytes).
+        name: String,
+        /// Field to index (e.g., metadata field name).
+        field: String,
+        /// Field type: "integer", "unsignedinteger", or "string".
+        field_type: String,
+        /// Whether to enforce uniqueness.
+        is_unique: bool,
+        /// Whether to index null values.
+        should_index_nulls: bool,
+    },
+
+    /// Drop a custom secondary index.
+    ///
+    /// Built-in indexes cannot be dropped.
+    IndexDrop {
+        /// Name of the index to drop.
+        name: String,
+    },
+
+    /// Scan a secondary index for matching entries.
+    ///
+    /// Returns primary keys of entries matching the index query.
+    IndexScan {
+        /// Index name to scan.
+        index_name: String,
+        /// Scan mode: "exact", "range", or "lt".
+        mode: String,
+        /// Value to match (for exact) or range start. Hex-encoded bytes.
+        value: String,
+        /// Range end (for range mode). Hex-encoded bytes.
+        end_value: Option<String>,
+        /// Maximum results (default 1000, max MAX_SCAN_RESULTS).
+        limit: Option<u32>,
+    },
+
+    /// List all secondary indexes.
+    IndexList,
+
+    // =========================================================================
     // Plugin management operations
     // =========================================================================
     /// Reload WASM plugins.
@@ -3265,6 +3335,11 @@ impl ClientRpcRequest {
             Self::WorkerStatus => "WorkerStatus",
             Self::WriteKey { .. } => "WriteKey",
             Self::WriteKeyWithLease { .. } => "WriteKeyWithLease",
+            Self::TraceIngest { .. } => "TraceIngest",
+            Self::IndexCreate { .. } => "IndexCreate",
+            Self::IndexDrop { .. } => "IndexDrop",
+            Self::IndexScan { .. } => "IndexScan",
+            Self::IndexList => "IndexList",
             Self::PluginReload { .. } => "PluginReload",
         }
     }
@@ -3318,6 +3393,11 @@ impl ClientRpcRequest {
             | Self::LeaseTimeToLive { .. }
             | Self::LeaseList
             | Self::WriteKeyWithLease { .. }
+            | Self::TraceIngest { .. }
+            | Self::IndexCreate { .. }
+            | Self::IndexDrop { .. }
+            | Self::IndexScan { .. }
+            | Self::IndexList
             | Self::PluginReload { .. } => None,
 
             // Coordination primitives
@@ -4179,6 +4259,24 @@ pub enum ClientRpcResponse {
     WorkerPollJobsResult(WorkerPollJobsResultResponse),
     /// Worker job completion result.
     WorkerCompleteJobResult(WorkerCompleteJobResultResponse),
+
+    // -------------------------------------------------------------------------
+    // Observability responses
+    // -------------------------------------------------------------------------
+    /// Trace ingest result.
+    TraceIngestResult(TraceIngestResultResponse),
+
+    // -------------------------------------------------------------------------
+    // Index responses
+    // -------------------------------------------------------------------------
+    /// Index create result.
+    IndexCreateResult(IndexCreateResultResponse),
+    /// Index drop result.
+    IndexDropResult(IndexDropResultResponse),
+    /// Index scan result.
+    IndexScanResult(IndexScanResultResponse),
+    /// Index list result.
+    IndexListResult(IndexListResultResponse),
 
     /// Capability unavailable response.
     ///

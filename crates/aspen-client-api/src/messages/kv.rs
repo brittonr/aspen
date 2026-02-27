@@ -133,6 +133,83 @@ pub struct ScanResultResponse {
     pub error: Option<String>,
 }
 
+// ============================================================================
+// Index Operation Types
+// ============================================================================
+
+/// Result of an index creation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexCreateResultResponse {
+    /// Whether the creation succeeded.
+    pub is_success: bool,
+    /// Name of the created index.
+    pub name: String,
+    /// Error message if creation failed.
+    pub error: Option<String>,
+}
+
+/// Result of an index drop.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexDropResultResponse {
+    /// Whether the drop succeeded.
+    pub is_success: bool,
+    /// Name of the dropped index.
+    pub name: String,
+    /// Whether the index was actually removed (false if not found).
+    pub was_dropped: bool,
+    /// Error message if drop failed.
+    pub error: Option<String>,
+}
+
+/// Result of an index scan.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexScanResultResponse {
+    /// Whether the scan succeeded.
+    pub is_success: bool,
+    /// Primary keys matching the query.
+    pub primary_keys: Vec<String>,
+    /// Whether more results are available beyond the limit.
+    pub has_more: bool,
+    /// Number of results returned.
+    pub count: u32,
+    /// Error message if scan failed.
+    pub error: Option<String>,
+}
+
+/// Result of listing indexes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexListResultResponse {
+    /// Whether the list succeeded.
+    pub is_success: bool,
+    /// Index definitions.
+    pub indexes: Vec<IndexDefinitionWire>,
+    /// Number of indexes returned.
+    pub count: u32,
+    /// Error message if list failed.
+    pub error: Option<String>,
+}
+
+/// Wire-format index definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexDefinitionWire {
+    /// Index name.
+    pub name: String,
+    /// Field being indexed (e.g., "mod_revision").
+    pub field: Option<String>,
+    /// Field type: "integer", "unsignedinteger", or "string".
+    pub field_type: String,
+    /// Whether this is a built-in index.
+    pub builtin: bool,
+    /// Whether the index enforces uniqueness.
+    pub is_unique: bool,
+    /// Whether null values are indexed.
+    pub should_index_nulls: bool,
+}
+
+// ============================================================================
+// Scan Types
+// ============================================================================
+
 /// Single entry from scan operation with revision metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanEntry {

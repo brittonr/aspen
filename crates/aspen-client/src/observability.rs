@@ -7,8 +7,16 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use anyhow::Result;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::IngestSpan;
+use aspen_client_api::SpanEventWire;
+use aspen_client_api::SpanStatusWire;
+use aspen_client_api::TraceIngestResultResponse;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;
@@ -92,8 +100,10 @@ pub struct Span {
     pub context: TraceContext,
     /// Operation name.
     pub operation: String,
-    /// Start time.
+    /// Start time (monotonic, for duration).
     pub start_time: Instant,
+    /// Start time (wall clock, for wire format).
+    pub start_system_time: SystemTime,
     /// End time (if completed).
     pub end_time: Option<Instant>,
     /// Span attributes.
@@ -116,6 +126,7 @@ impl Span {
             context,
             operation: operation.into(),
             start_time: Instant::now(),
+            start_system_time: SystemTime::now(),
             end_time: None,
             attributes: HashMap::new(),
             events: Vec::new(),
@@ -333,14 +344,64 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
     sorted[idx]
 }
 
+/// Convert a Span to the wire-format IngestSpan.
+///
+/// Pure function: converts monotonic Instant to absolute SystemTime for transport.
+fn span_to_ingest(span: &Span) -> IngestSpan {
+    let start_time_us = span.start_system_time.duration_since(UNIX_EPOCH).unwrap_or_default().as_micros() as u64;
+
+    let duration_us = span.duration().unwrap_or_default().as_micros() as u64;
+
+    let status = match &span.status {
+        SpanStatus::Unset => SpanStatusWire::Unset,
+        SpanStatus::Ok => SpanStatusWire::Ok,
+        SpanStatus::Error(msg) => SpanStatusWire::Error(msg.clone()),
+    };
+
+    let max_attrs = aspen_constants::MAX_SPAN_ATTRIBUTES as usize;
+    let max_events = aspen_constants::MAX_SPAN_EVENTS as usize;
+
+    let attributes: Vec<(String, String)> =
+        span.attributes.iter().take(max_attrs).map(|(k, v)| (k.clone(), v.clone())).collect();
+
+    let events: Vec<SpanEventWire> = span
+        .events
+        .iter()
+        .take(max_events)
+        .map(|e| {
+            // Approximate event timestamp: start_system_time + (event.timestamp - start_time)
+            let offset = e.timestamp.duration_since(span.start_time);
+            let event_us = start_time_us.saturating_add(offset.as_micros() as u64);
+            SpanEventWire {
+                name: e.name.clone(),
+                timestamp_us: event_us,
+                attributes: e.attributes.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+            }
+        })
+        .collect();
+
+    IngestSpan {
+        trace_id: span.context.trace_id.clone(),
+        span_id: span.context.span_id.clone(),
+        parent_id: span.context.parent_id.clone(),
+        operation: span.operation.clone(),
+        start_time_us,
+        duration_us,
+        status,
+        attributes,
+        events,
+    }
+}
+
 /// Observability client for distributed tracing and metrics.
 pub struct ObservabilityClient<'a> {
     /// Active spans.
     spans: Arc<RwLock<Vec<Span>>>,
+    /// Pending spans awaiting flush to server.
+    pending_spans: Arc<RwLock<Vec<IngestSpan>>>,
     /// Metrics collector.
     metrics: MetricsCollector,
     /// Client reference for sending traces.
-    #[allow(dead_code)]
     client: &'a AspenClient,
 }
 
@@ -349,6 +410,7 @@ impl<'a> ObservabilityClient<'a> {
     pub fn new(client: &'a AspenClient) -> Self {
         Self {
             spans: Arc::new(RwLock::new(Vec::new())),
+            pending_spans: Arc::new(RwLock::new(Vec::new())),
             metrics: MetricsCollector::new(),
             client,
         }
@@ -366,6 +428,9 @@ impl<'a> ObservabilityClient<'a> {
     }
 
     /// End a span and record it.
+    ///
+    /// The span is converted to wire format and added to the pending buffer.
+    /// When the buffer reaches MAX_TRACE_BATCH_SIZE, it auto-flushes.
     pub async fn end_span(&self, mut span: Span) {
         span.end();
 
@@ -381,9 +446,18 @@ impl<'a> ObservabilityClient<'a> {
             SpanStatus::Unset => {}
         }
 
-        // DEFERRED: Send span to server for aggregation. Requires a TraceIngest
-        // RPC endpoint on the server side and a batching/flush strategy here.
-        // self.client.send_trace(span).await;
+        // Convert to wire format and buffer
+        let ingest_span = span_to_ingest(&span);
+        let should_flush = {
+            let mut pending = self.pending_spans.write().await;
+            pending.push(ingest_span);
+            pending.len() >= aspen_constants::MAX_TRACE_BATCH_SIZE as usize
+        };
+
+        // Auto-flush when batch is full
+        if should_flush && let Err(e) = self.flush().await {
+            tracing::warn!("auto-flush trace spans failed: {}", e);
+        }
     }
 
     /// Record an operation with automatic span creation.
@@ -417,14 +491,48 @@ impl<'a> ObservabilityClient<'a> {
         &self.metrics
     }
 
+    /// Flush pending spans to the server.
+    ///
+    /// Drains the pending buffer and sends a TraceIngest RPC to the cluster.
+    /// Returns the server's response with accepted/dropped counts.
+    pub async fn flush(&self) -> Result<TraceIngestResultResponse> {
+        let spans = {
+            let mut pending = self.pending_spans.write().await;
+            std::mem::take(&mut *pending)
+        };
+
+        if spans.is_empty() {
+            return Ok(TraceIngestResultResponse {
+                is_success: true,
+                accepted_count: 0,
+                dropped_count: 0,
+                error: None,
+            });
+        }
+
+        let response = self.client.send(ClientRpcRequest::TraceIngest { spans }).await?;
+
+        match response {
+            ClientRpcResponse::TraceIngestResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("trace ingest failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
+    }
+
+    /// Get the number of pending spans awaiting flush.
+    pub async fn pending_count(&self) -> usize {
+        self.pending_spans.read().await.len()
+    }
+
     /// Export all spans in OpenTelemetry format.
     pub async fn export_spans(&self) -> Vec<Span> {
         self.spans.read().await.clone()
     }
 
-    /// Clear all collected spans.
+    /// Clear all collected spans and pending buffer.
     pub async fn clear_spans(&self) {
         self.spans.write().await.clear();
+        self.pending_spans.write().await.clear();
     }
 }
 

@@ -279,9 +279,13 @@ pub enum Commands {
 impl Cli {
     /// Execute the CLI command.
     pub async fn run(self) -> Result<()> {
-        // Handle commands that don't require a cluster connection first
-        if let Commands::Index(cmd) = self.command {
-            return cmd.run(self.global.is_json);
+        // Handle index commands that don't require a cluster connection
+        if let Commands::Index(ref cmd) = self.command {
+            if cmd.is_local() {
+                if let Commands::Index(cmd) = self.command {
+                    return cmd.run_local(self.global.is_json);
+                }
+            }
         }
 
         // Handle proxy commands — they create their own iroh endpoint
@@ -333,7 +337,7 @@ impl Cli {
             Commands::Federation(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Git(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Hook(cmd) => cmd.run(&client, self.global.is_json).await,
-            Commands::Index(_) => unreachable!("handled above"),
+            Commands::Index(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Issue(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Job(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Kv(cmd) => cmd.run(&client, self.global.is_json).await,

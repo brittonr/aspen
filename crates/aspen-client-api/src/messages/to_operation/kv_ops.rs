@@ -23,6 +23,19 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             value: vec![],
         })),
 
+        // Index read operations
+        ClientRpcRequest::IndexScan { .. } | ClientRpcRequest::IndexList => Some(Some(Operation::Read {
+            key: "_sys:index:".to_string(),
+        })),
+
+        // Index write operations
+        ClientRpcRequest::IndexCreate { name, .. } | ClientRpcRequest::IndexDrop { name, .. } => {
+            Some(Some(Operation::Write {
+                key: format!("_sys:index:{}", name),
+                value: vec![],
+            }))
+        }
+
         _ => None,
     }
 }

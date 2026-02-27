@@ -17,6 +17,11 @@ use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::CompareAndSwapResultResponse;
 use aspen_client_api::ConditionalBatchWriteResultResponse;
 use aspen_client_api::DeleteResultResponse;
+use aspen_client_api::IndexCreateResultResponse;
+use aspen_client_api::IndexDefinitionWire;
+use aspen_client_api::IndexDropResultResponse;
+use aspen_client_api::IndexListResultResponse;
+use aspen_client_api::IndexScanResultResponse;
 use aspen_client_api::ReadResultResponse;
 use aspen_client_api::ScanEntry;
 use aspen_client_api::ScanResultResponse;
@@ -28,6 +33,8 @@ use aspen_core::kv::ReadRequest;
 use aspen_core::kv::ScanRequest;
 use aspen_core::kv::WriteCommand;
 use aspen_core::kv::WriteRequest;
+use aspen_core::layer::IndexDefinition;
+use aspen_core::layer::IndexFieldType;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;
 
@@ -49,6 +56,10 @@ impl RequestHandler for KvHandler {
                 | ClientRpcRequest::BatchWrite { .. }
                 | ClientRpcRequest::ConditionalBatchWrite { .. }
                 | ClientRpcRequest::WriteKeyWithLease { .. }
+                | ClientRpcRequest::IndexCreate { .. }
+                | ClientRpcRequest::IndexDrop { .. }
+                | ClientRpcRequest::IndexScan { .. }
+                | ClientRpcRequest::IndexList
         )
     }
 
@@ -80,6 +91,22 @@ impl RequestHandler for KvHandler {
             ClientRpcRequest::WriteKeyWithLease { key, value, lease_id } => {
                 handle_write_with_lease(ctx, key, value, lease_id).await
             }
+            ClientRpcRequest::IndexCreate {
+                name,
+                field,
+                field_type,
+                is_unique,
+                should_index_nulls,
+            } => handle_index_create(ctx, name, field, field_type, is_unique, should_index_nulls).await,
+            ClientRpcRequest::IndexDrop { name } => handle_index_drop(ctx, name).await,
+            ClientRpcRequest::IndexScan {
+                index_name,
+                mode,
+                value,
+                end_value,
+                limit,
+            } => handle_index_scan(ctx, index_name, mode, value, end_value, limit),
+            ClientRpcRequest::IndexList => handle_index_list(ctx),
             _ => Err(anyhow::anyhow!("request not handled by KvHandler")),
         }
     }
@@ -481,6 +508,218 @@ async fn check_condition(ctx: &ClientProtocolContext, condition: &BatchCondition
             }
         }
     }
+}
+
+// =============================================================================
+// Index handler functions
+// =============================================================================
+
+async fn handle_index_create(
+    ctx: &ClientProtocolContext,
+    name: String,
+    field: String,
+    field_type: String,
+    is_unique: bool,
+    should_index_nulls: bool,
+) -> anyhow::Result<ClientRpcResponse> {
+    // Validate name length
+    if name.len() > aspen_constants::MAX_INDEX_NAME_SIZE as usize {
+        return Ok(ClientRpcResponse::IndexCreateResult(IndexCreateResultResponse {
+            is_success: false,
+            name,
+            error: Some(format!("index name exceeds {} bytes", aspen_constants::MAX_INDEX_NAME_SIZE)),
+        }));
+    }
+
+    // Reject builtin-reserved names
+    let builtins = IndexDefinition::builtins();
+    if builtins.iter().any(|b| b.name == name) {
+        return Ok(ClientRpcResponse::IndexCreateResult(IndexCreateResultResponse {
+            is_success: false,
+            name,
+            error: Some("cannot create index with built-in name".to_string()),
+        }));
+    }
+
+    // Parse field type
+    let parsed_type = match field_type.as_str() {
+        "integer" => IndexFieldType::Integer,
+        "unsignedinteger" => IndexFieldType::UnsignedInteger,
+        "string" => IndexFieldType::String,
+        _ => {
+            return Ok(ClientRpcResponse::IndexCreateResult(IndexCreateResultResponse {
+                is_success: false,
+                name,
+                error: Some(format!(
+                    "invalid field_type '{}': expected 'integer', 'unsignedinteger', or 'string'",
+                    field_type
+                )),
+            }));
+        }
+    };
+
+    // Store index definition in KV (persisted via Raft)
+    let def = IndexDefinition::custom(&name, &field, parsed_type)
+        .with_unique(is_unique)
+        .with_index_nulls(should_index_nulls);
+
+    let key = def.system_key();
+    let value_json = serde_json::to_string(&def).map_err(|e| anyhow::anyhow!("serialize index definition: {}", e))?;
+
+    let write_req = WriteRequest::set(key, value_json);
+    match ctx.kv_store.write(write_req).await {
+        Ok(_) => Ok(ClientRpcResponse::IndexCreateResult(IndexCreateResultResponse {
+            is_success: true,
+            name,
+            error: None,
+        })),
+        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(e) => Ok(ClientRpcResponse::IndexCreateResult(IndexCreateResultResponse {
+            is_success: false,
+            name,
+            error: Some(sanitize_kv_error(&e)),
+        })),
+    }
+}
+
+async fn handle_index_drop(ctx: &ClientProtocolContext, name: String) -> anyhow::Result<ClientRpcResponse> {
+    // Reject dropping builtin indexes
+    let builtins = IndexDefinition::builtins();
+    if builtins.iter().any(|b| b.name == name) {
+        return Ok(ClientRpcResponse::IndexDropResult(IndexDropResultResponse {
+            is_success: false,
+            name,
+            was_dropped: false,
+            error: Some("cannot drop built-in index".to_string()),
+        }));
+    }
+
+    // Delete the index definition from KV
+    let key = format!("_sys:index:{}", name);
+    let delete_req = DeleteRequest { key: key.clone() };
+    match ctx.kv_store.delete(delete_req).await {
+        Ok(result) => Ok(ClientRpcResponse::IndexDropResult(IndexDropResultResponse {
+            is_success: true,
+            name,
+            was_dropped: result.is_deleted,
+            error: None,
+        })),
+        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(e) => Ok(ClientRpcResponse::IndexDropResult(IndexDropResultResponse {
+            is_success: false,
+            name,
+            was_dropped: false,
+            error: Some(sanitize_kv_error(&e)),
+        })),
+    }
+}
+
+fn handle_index_scan(
+    ctx: &ClientProtocolContext,
+    index_name: String,
+    mode: String,
+    value: String,
+    end_value: Option<String>,
+    limit: Option<u32>,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_core::layer::IndexQueryExecutor;
+    use aspen_raft::StateMachineVariant;
+
+    let sm = match &ctx.state_machine {
+        Some(StateMachineVariant::Redb(sm)) => sm,
+        _ => {
+            return Ok(ClientRpcResponse::IndexScanResult(IndexScanResultResponse {
+                is_success: false,
+                primary_keys: vec![],
+                has_more: false,
+                count: 0,
+                error: Some("index scan requires redb state machine".to_string()),
+            }));
+        }
+    };
+
+    // Decode hex values
+    let value_bytes = hex::decode(&value).unwrap_or_else(|_| value.as_bytes().to_vec());
+    let scan_limit = limit.unwrap_or(aspen_constants::DEFAULT_SCAN_LIMIT).min(aspen_constants::MAX_SCAN_RESULTS);
+
+    let result = match mode.as_str() {
+        "exact" => sm.scan_by_index(&index_name, &value_bytes, scan_limit),
+        "range" => {
+            let end_bytes = end_value
+                .as_deref()
+                .map(|e| hex::decode(e).unwrap_or_else(|_| e.as_bytes().to_vec()))
+                .unwrap_or_default();
+            sm.range_by_index(&index_name, &value_bytes, &end_bytes, scan_limit)
+        }
+        "lt" => sm.scan_index_lt(&index_name, &value_bytes, scan_limit),
+        other => {
+            return Ok(ClientRpcResponse::IndexScanResult(IndexScanResultResponse {
+                is_success: false,
+                primary_keys: vec![],
+                has_more: false,
+                count: 0,
+                error: Some(format!("invalid scan mode '{}': expected 'exact', 'range', or 'lt'", other)),
+            }));
+        }
+    };
+
+    match result {
+        Ok(scan_result) => {
+            let primary_keys: Vec<String> = scan_result.primary_keys.iter().map(hex::encode).collect();
+            let count = primary_keys.len() as u32;
+            Ok(ClientRpcResponse::IndexScanResult(IndexScanResultResponse {
+                is_success: true,
+                primary_keys,
+                has_more: scan_result.has_more,
+                count,
+                error: None,
+            }))
+        }
+        Err(e) => Ok(ClientRpcResponse::IndexScanResult(IndexScanResultResponse {
+            is_success: false,
+            primary_keys: vec![],
+            has_more: false,
+            count: 0,
+            error: Some(format!("{}", e)),
+        })),
+    }
+}
+
+fn handle_index_list(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_raft::StateMachineVariant;
+
+    // Get definitions from the state machine registry if available
+    let definitions = match &ctx.state_machine {
+        Some(StateMachineVariant::Redb(sm)) => {
+            let registry = sm.index_registry();
+            registry.definitions()
+        }
+        _ => IndexDefinition::builtins(),
+    };
+
+    let indexes: Vec<IndexDefinitionWire> = definitions
+        .iter()
+        .map(|def| IndexDefinitionWire {
+            name: def.name.clone(),
+            field: def.field.clone(),
+            field_type: match def.field_type {
+                IndexFieldType::Integer => "integer".to_string(),
+                IndexFieldType::UnsignedInteger => "unsignedinteger".to_string(),
+                IndexFieldType::String => "string".to_string(),
+            },
+            builtin: def.builtin,
+            is_unique: def.options.unique,
+            should_index_nulls: def.options.index_nulls,
+        })
+        .collect();
+
+    let count = indexes.len() as u32;
+    Ok(ClientRpcResponse::IndexListResult(IndexListResultResponse {
+        is_success: true,
+        indexes,
+        count,
+        error: None,
+    }))
 }
 
 use crate::error_utils::is_not_leader_error;

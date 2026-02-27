@@ -1015,6 +1015,7 @@ dependencies = [
  "aspen-blob",
  "aspen-cache",
  "aspen-client-api",
+ "aspen-constants",
  "aspen-core",
  "aspen-ticket",
  "aspen-transport",
@@ -1241,12 +1242,17 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-client-api",
+ "aspen-constants",
  "aspen-coordination",
  "aspen-core",
+ "aspen-raft",
  "aspen-rpc-core",
  "aspen-testing",
  "async-trait",
+ "hex",
+ "serde_json",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

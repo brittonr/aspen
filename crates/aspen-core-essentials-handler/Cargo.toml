@@ -11,12 +11,17 @@ aspen-rpc-core = { path = "../aspen-rpc-core" }
 
 # Local crates
 aspen-client-api = { workspace = true }
-aspen-core = { path = "../aspen-core" }
+aspen-core = { path = "../aspen-core", features = ["layer"] }
 aspen-coordination = { path = "../aspen-coordination" }
+aspen-raft = { path = "../aspen-raft" }
 
 # Core dependencies
 async-trait = "0.1"
 anyhow = "1.0"
+hex = "0.4"
+serde_json = "1.0"
+aspen-constants = { path = "../aspen-constants" }
+tracing = "0.1"
 
 [features]
 default = []

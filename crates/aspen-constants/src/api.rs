@@ -118,3 +118,36 @@ pub const DEFAULT_VM_TIMEOUT_MS: u64 = 5_000;
 ///
 /// Tiger Style: Upper bound on execution time.
 pub const MAX_VM_TIMEOUT_MS: u64 = 60_000;
+
+// ============================================================================
+// Observability Constants
+// ============================================================================
+
+/// Maximum spans in a single trace ingest batch (100).
+///
+/// Tiger Style: Fixed limit prevents memory exhaustion from oversized batches.
+pub const MAX_TRACE_BATCH_SIZE: u32 = 100;
+
+/// Maximum attributes per span (32).
+///
+/// Tiger Style: Bounded attribute count prevents pathological cases.
+pub const MAX_SPAN_ATTRIBUTES: u32 = 32;
+
+/// Maximum events per span (16).
+///
+/// Tiger Style: Bounded event count prevents unbounded memory allocation.
+pub const MAX_SPAN_EVENTS: u32 = 16;
+
+// ============================================================================
+// Index Constants
+// ============================================================================
+
+/// Maximum length of an index name in bytes (128).
+///
+/// Tiger Style: Fixed limit prevents oversized index names.
+pub const MAX_INDEX_NAME_SIZE: u32 = 128;
+
+/// Maximum number of custom indexes (64).
+///
+/// Tiger Style: Bounded index count prevents excessive storage overhead.
+pub const MAX_CUSTOM_INDEXES: u32 = 64;
