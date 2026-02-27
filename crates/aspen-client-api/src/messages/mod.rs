@@ -284,7 +284,11 @@ pub use lease::LeaseTimeToLiveResultResponse;
 pub use observability::IngestSpan;
 pub use observability::SpanEventWire;
 pub use observability::SpanStatusWire;
+pub use observability::TraceGetResultResponse;
 pub use observability::TraceIngestResultResponse;
+pub use observability::TraceListResultResponse;
+pub use observability::TraceSearchResultResponse;
+pub use observability::TraceSummary;
 pub use secrets::SecretsKvDeleteResultResponse;
 pub use secrets::SecretsKvListResultResponse;
 pub use secrets::SecretsKvMetadataResultResponse;
@@ -2987,6 +2991,46 @@ pub enum ClientRpcRequest {
         spans: Vec<observability::IngestSpan>,
     },
 
+    /// List recent traces with optional time range filter.
+    ///
+    /// Scans `_sys:traces:` prefix and aggregates unique trace_ids.
+    /// Results bounded by MAX_TRACE_QUERY_RESULTS.
+    TraceList {
+        /// Start of time range filter (Unix microseconds, inclusive).
+        start_time_us: Option<u64>,
+        /// End of time range filter (Unix microseconds, exclusive).
+        end_time_us: Option<u64>,
+        /// Maximum traces to return (default DEFAULT_TRACE_QUERY_LIMIT).
+        limit: Option<u32>,
+        /// Continuation token from previous TraceList response.
+        continuation_token: Option<String>,
+    },
+
+    /// Get all spans for a specific trace.
+    ///
+    /// Scans `_sys:traces:{trace_id}:` prefix to find all spans.
+    TraceGet {
+        /// Trace ID (32 hex chars).
+        trace_id: String,
+    },
+
+    /// Search spans by criteria (server-side filtering).
+    ///
+    /// Scans all trace spans and filters in-memory. Operation match is
+    /// case-insensitive substring. Results bounded by MAX_TRACE_QUERY_RESULTS.
+    TraceSearch {
+        /// Filter by operation name (case-insensitive substring match).
+        operation: Option<String>,
+        /// Minimum span duration in microseconds (inclusive).
+        min_duration_us: Option<u64>,
+        /// Maximum span duration in microseconds (inclusive).
+        max_duration_us: Option<u64>,
+        /// Filter by status: "ok", "error", or "unset".
+        status: Option<String>,
+        /// Maximum spans to return (default DEFAULT_TRACE_QUERY_LIMIT).
+        limit: Option<u32>,
+    },
+
     // =========================================================================
     // Index operations
     // =========================================================================
@@ -3336,6 +3380,9 @@ impl ClientRpcRequest {
             Self::WriteKey { .. } => "WriteKey",
             Self::WriteKeyWithLease { .. } => "WriteKeyWithLease",
             Self::TraceIngest { .. } => "TraceIngest",
+            Self::TraceList { .. } => "TraceList",
+            Self::TraceGet { .. } => "TraceGet",
+            Self::TraceSearch { .. } => "TraceSearch",
             Self::IndexCreate { .. } => "IndexCreate",
             Self::IndexDrop { .. } => "IndexDrop",
             Self::IndexScan { .. } => "IndexScan",
@@ -3394,6 +3441,9 @@ impl ClientRpcRequest {
             | Self::LeaseList
             | Self::WriteKeyWithLease { .. }
             | Self::TraceIngest { .. }
+            | Self::TraceList { .. }
+            | Self::TraceGet { .. }
+            | Self::TraceSearch { .. }
             | Self::IndexCreate { .. }
             | Self::IndexDrop { .. }
             | Self::IndexScan { .. }
@@ -4265,6 +4315,12 @@ pub enum ClientRpcResponse {
     // -------------------------------------------------------------------------
     /// Trace ingest result.
     TraceIngestResult(TraceIngestResultResponse),
+    /// Trace list result.
+    TraceListResult(TraceListResultResponse),
+    /// Trace get result.
+    TraceGetResult(TraceGetResultResponse),
+    /// Trace search result.
+    TraceSearchResult(TraceSearchResultResponse),
 
     // -------------------------------------------------------------------------
     // Index responses

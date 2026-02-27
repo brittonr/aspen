@@ -8,6 +8,11 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
             key: "_sys:traces:".to_string(),
             value: vec![],
         })),
+        ClientRpcRequest::TraceList { .. }
+        | ClientRpcRequest::TraceGet { .. }
+        | ClientRpcRequest::TraceSearch { .. } => Some(Some(Operation::Read {
+            key: "_sys:traces:".to_string(),
+        })),
         _ => None,
     }
 }

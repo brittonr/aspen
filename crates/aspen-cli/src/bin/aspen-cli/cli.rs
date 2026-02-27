@@ -50,6 +50,7 @@ use crate::commands::service::ServiceCommand;
 #[cfg(feature = "sql")]
 use crate::commands::sql::SqlCommand;
 use crate::commands::tag::TagCommand;
+use crate::commands::trace::TraceCommand;
 use crate::commands::verify::VerifyCommand;
 
 /// Command-line interface for Aspen distributed system.
@@ -269,6 +270,12 @@ pub enum Commands {
     #[command(subcommand)]
     Tag(TagCommand),
 
+    /// Distributed trace query operations.
+    ///
+    /// List, get, and search traces stored by the observability pipeline.
+    #[command(subcommand)]
+    Trace(TraceCommand),
+
     /// Verify cluster replication (KV, docs, blobs).
     ///
     /// Run verification tests to ensure data is being replicated correctly.
@@ -360,6 +367,7 @@ impl Cli {
             #[cfg(feature = "sql")]
             Commands::Sql(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Tag(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Trace(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Verify(cmd) => cmd.run(&client, self.global.is_json).await,
         }
     }
@@ -582,5 +590,80 @@ mod tests {
             "10",
         ]);
         assert!(r.is_ok(), "ratelimit try-acquire with all args must parse");
+    }
+
+    // =========================================================================
+    // Trace CLI parse tests
+    // =========================================================================
+
+    #[test]
+    fn test_trace_list_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "trace", "list"]);
+        assert!(r.is_ok(), "trace list must parse");
+    }
+
+    #[test]
+    fn test_trace_list_with_filters_parses() {
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "--ticket",
+            "fake",
+            "trace",
+            "list",
+            "--start",
+            "1000000",
+            "--end",
+            "2000000",
+            "--limit",
+            "50",
+        ]);
+        assert!(r.is_ok(), "trace list with time range must parse");
+    }
+
+    #[test]
+    fn test_trace_get_requires_trace_id() {
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "trace", "get"]);
+        assert!(r.is_err(), "trace get without trace_id must fail");
+    }
+
+    #[test]
+    fn test_trace_get_with_trace_id_parses() {
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "--ticket",
+            "fake",
+            "trace",
+            "get",
+            "aabbccdd11223344aabbccdd11223344",
+        ]);
+        assert!(r.is_ok(), "trace get with trace_id must parse");
+    }
+
+    #[test]
+    fn test_trace_search_parses_with_filters() {
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "--ticket",
+            "fake",
+            "trace",
+            "search",
+            "--operation",
+            "kv.read",
+            "--min-duration-us",
+            "1000",
+            "--max-duration-us",
+            "5000000",
+            "--status",
+            "error",
+            "--limit",
+            "50",
+        ]);
+        assert!(r.is_ok(), "trace search with all filters must parse");
+    }
+
+    #[test]
+    fn test_trace_search_no_filters_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "trace", "search"]);
+        assert!(r.is_ok(), "trace search with no filters must parse");
     }
 }

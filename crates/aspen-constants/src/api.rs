@@ -138,6 +138,16 @@ pub const MAX_SPAN_ATTRIBUTES: u32 = 32;
 /// Tiger Style: Bounded event count prevents unbounded memory allocation.
 pub const MAX_SPAN_EVENTS: u32 = 16;
 
+/// Default limit for trace list/search query results (100).
+///
+/// Tiger Style: Explicit default prevents unbounded queries.
+pub const DEFAULT_TRACE_QUERY_LIMIT: u32 = 100;
+
+/// Maximum trace list/search query results (1,000).
+///
+/// Tiger Style: Fixed upper bound on trace query result sets.
+pub const MAX_TRACE_QUERY_RESULTS: u32 = 1_000;
+
 // ============================================================================
 // Index Constants
 // ============================================================================

@@ -76,6 +76,7 @@ pub use api::DEFAULT_SCAN_LIMIT;
 pub use api::DEFAULT_SQL_RESULT_ROWS;
 #[cfg(feature = "sql")]
 pub use api::DEFAULT_SQL_TIMEOUT_MS;
+pub use api::DEFAULT_TRACE_QUERY_LIMIT;
 pub use api::MAX_CUSTOM_INDEXES;
 pub use api::MAX_INDEX_NAME_SIZE;
 pub use api::MAX_KEY_SIZE;
@@ -92,6 +93,7 @@ pub use api::MAX_SQL_RESULT_ROWS;
 #[cfg(feature = "sql")]
 pub use api::MAX_SQL_TIMEOUT_MS;
 pub use api::MAX_TRACE_BATCH_SIZE;
+pub use api::MAX_TRACE_QUERY_RESULTS;
 pub use api::MAX_VALUE_SIZE;
 pub use coordination::CAS_RETRY_INITIAL_BACKOFF_MS;
 pub use coordination::CAS_RETRY_MAX_BACKOFF_MS;

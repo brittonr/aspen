@@ -73,3 +73,65 @@ pub struct TraceIngestResultResponse {
     /// Error message if ingest failed.
     pub error: Option<String>,
 }
+
+// =============================================================================
+// Trace query response types
+// =============================================================================
+
+/// Summary of a single trace (used in TraceList responses).
+///
+/// Aggregated from all spans sharing a trace_id.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceSummary {
+    /// Trace ID (32 hex chars).
+    pub trace_id: String,
+    /// Number of spans in this trace.
+    pub span_count: u32,
+    /// Operation name of the root span (parent_id == "0000000000000000").
+    pub root_operation: Option<String>,
+    /// Earliest span start time as Unix microseconds.
+    pub start_time_us: u64,
+    /// Total trace duration in microseconds (max end - min start).
+    pub total_duration_us: u64,
+    /// Whether any span in the trace has an error status.
+    pub has_error: bool,
+}
+
+/// Response from TraceList.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceListResultResponse {
+    /// Trace summaries (bounded by query limit).
+    pub traces: Vec<TraceSummary>,
+    /// Number of traces returned.
+    pub count: u32,
+    /// Whether results were truncated by the limit.
+    pub is_truncated: bool,
+    /// Error message if query failed.
+    pub error: Option<String>,
+}
+
+/// Response from TraceGet (all spans for one trace).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceGetResultResponse {
+    /// Trace ID queried.
+    pub trace_id: String,
+    /// All spans belonging to this trace.
+    pub spans: Vec<IngestSpan>,
+    /// Number of spans returned.
+    pub span_count: u32,
+    /// Error message if query failed.
+    pub error: Option<String>,
+}
+
+/// Response from TraceSearch.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceSearchResultResponse {
+    /// Matching spans (bounded by query limit).
+    pub spans: Vec<IngestSpan>,
+    /// Number of spans returned.
+    pub count: u32,
+    /// Whether results were truncated by the limit.
+    pub is_truncated: bool,
+    /// Error message if query failed.
+    pub error: Option<String>,
+}

@@ -16,7 +16,10 @@ use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::IngestSpan;
 use aspen_client_api::SpanEventWire;
 use aspen_client_api::SpanStatusWire;
+use aspen_client_api::TraceGetResultResponse;
 use aspen_client_api::TraceIngestResultResponse;
+use aspen_client_api::TraceListResultResponse;
+use aspen_client_api::TraceSearchResultResponse;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;
@@ -522,6 +525,75 @@ impl<'a> ObservabilityClient<'a> {
     /// Get the number of pending spans awaiting flush.
     pub async fn pending_count(&self) -> usize {
         self.pending_spans.read().await.len()
+    }
+
+    /// List recent traces with optional time range filter.
+    ///
+    /// Returns trace summaries sorted newest-first, bounded by `limit`.
+    pub async fn list_traces(
+        &self,
+        start_time_us: Option<u64>,
+        end_time_us: Option<u64>,
+        limit: Option<u32>,
+    ) -> Result<TraceListResultResponse> {
+        let response = self
+            .client
+            .send(ClientRpcRequest::TraceList {
+                start_time_us,
+                end_time_us,
+                limit,
+                continuation_token: None,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::TraceListResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("trace list failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
+    }
+
+    /// Get all spans for a specific trace.
+    pub async fn get_trace(&self, trace_id: &str) -> Result<TraceGetResultResponse> {
+        let response = self
+            .client
+            .send(ClientRpcRequest::TraceGet {
+                trace_id: trace_id.to_string(),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::TraceGetResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("trace get failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
+    }
+
+    /// Search spans by criteria (case-insensitive operation match).
+    pub async fn search_traces(
+        &self,
+        operation: Option<&str>,
+        min_duration_us: Option<u64>,
+        max_duration_us: Option<u64>,
+        status: Option<&str>,
+        limit: Option<u32>,
+    ) -> Result<TraceSearchResultResponse> {
+        let response = self
+            .client
+            .send(ClientRpcRequest::TraceSearch {
+                operation: operation.map(String::from),
+                min_duration_us,
+                max_duration_us,
+                status: status.map(String::from),
+                limit,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::TraceSearchResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("trace search failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
     }
 
     /// Export all spans in OpenTelemetry format.

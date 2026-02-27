@@ -3,6 +3,8 @@
 //! Handles: Ping, GetHealth, GetRaftMetrics, GetNodeInfo, GetLeader, GetMetrics,
 //! CheckpointWal, ListVaults, GetVaultKeys.
 
+use std::collections::HashMap;
+
 use aspen_client_api::CheckpointWalResultResponse;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
@@ -12,12 +14,18 @@ use aspen_client_api::MetricsResponse;
 use aspen_client_api::NodeInfoResponse;
 use aspen_client_api::RaftMetricsResponse;
 use aspen_client_api::ReplicationProgress;
+use aspen_client_api::SpanStatusWire;
+use aspen_client_api::TraceGetResultResponse;
 use aspen_client_api::TraceIngestResultResponse;
+use aspen_client_api::TraceListResultResponse;
+use aspen_client_api::TraceSearchResultResponse;
+use aspen_client_api::TraceSummary;
 use aspen_client_api::VaultKeysResponse;
 use aspen_client_api::VaultListResponse;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
 use aspen_core::CLIENT_RPC_REQUEST_COUNTER;
+use aspen_core::kv::ScanRequest;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;
 
@@ -39,6 +47,9 @@ impl RequestHandler for CoreHandler {
                 | ClientRpcRequest::ListVaults
                 | ClientRpcRequest::GetVaultKeys { .. }
                 | ClientRpcRequest::TraceIngest { .. }
+                | ClientRpcRequest::TraceList { .. }
+                | ClientRpcRequest::TraceGet { .. }
+                | ClientRpcRequest::TraceSearch { .. }
         )
     }
 
@@ -58,6 +69,20 @@ impl RequestHandler for CoreHandler {
             ClientRpcRequest::ListVaults => handle_list_vaults(),
             ClientRpcRequest::GetVaultKeys { vault_name } => handle_get_vault_keys(vault_name),
             ClientRpcRequest::TraceIngest { spans } => handle_trace_ingest(ctx, spans).await,
+            ClientRpcRequest::TraceList {
+                start_time_us,
+                end_time_us,
+                limit,
+                continuation_token,
+            } => handle_trace_list(ctx, start_time_us, end_time_us, limit, continuation_token).await,
+            ClientRpcRequest::TraceGet { trace_id } => handle_trace_get(ctx, trace_id).await,
+            ClientRpcRequest::TraceSearch {
+                operation,
+                min_duration_us,
+                max_duration_us,
+                status,
+                limit,
+            } => handle_trace_search(ctx, operation, min_duration_us, max_duration_us, status, limit).await,
             _ => Err(anyhow::anyhow!("request not handled by CoreHandler")),
         }
     }
@@ -270,6 +295,185 @@ async fn handle_trace_ingest(ctx: &ClientProtocolContext, spans: Vec<IngestSpan>
         is_success: true,
         accepted_count,
         dropped_count,
+        error: None,
+    }))
+}
+
+// =============================================================================
+// Trace query handlers
+// =============================================================================
+
+/// Scan KV for trace spans and deserialize, skipping unparseable entries.
+async fn scan_trace_spans(ctx: &ClientProtocolContext, prefix: &str) -> Vec<IngestSpan> {
+    let scan_req = ScanRequest {
+        prefix: prefix.to_string(),
+        limit_results: Some(aspen_constants::MAX_SCAN_RESULTS),
+        continuation_token: None,
+    };
+    let scan_result = match ctx.kv_store.scan(scan_req).await {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::warn!(error = %e, prefix, "trace scan failed");
+            return Vec::new();
+        }
+    };
+    let mut spans = Vec::with_capacity(scan_result.entries.len());
+    for entry in &scan_result.entries {
+        match serde_json::from_str::<IngestSpan>(&entry.value) {
+            Ok(span) => spans.push(span),
+            Err(e) => tracing::warn!(key = %entry.key, error = %e, "skip bad trace span"),
+        }
+    }
+    spans
+}
+
+/// Check if a span matches a status filter string.
+fn matches_status(span: &IngestSpan, filter: &str) -> bool {
+    match filter {
+        "ok" => span.status == SpanStatusWire::Ok,
+        "error" => matches!(span.status, SpanStatusWire::Error(_)),
+        "unset" => span.status == SpanStatusWire::Unset,
+        _ => true,
+    }
+}
+
+/// Build a TraceSummary from a group of spans sharing a trace_id.
+fn build_trace_summary(trace_id: String, spans: &[IngestSpan]) -> TraceSummary {
+    let span_count = spans.len() as u32;
+    let root_operation = spans.iter().find(|s| s.parent_id == "0000000000000000").map(|s| s.operation.clone());
+    let start_time_us = spans.iter().map(|s| s.start_time_us).min().unwrap_or(0);
+    let end_time_us = spans.iter().map(|s| s.start_time_us.saturating_add(s.duration_us)).max().unwrap_or(0);
+    let total_duration_us = end_time_us.saturating_sub(start_time_us);
+    let has_error = spans.iter().any(|s| matches!(s.status, SpanStatusWire::Error(_)));
+    TraceSummary {
+        trace_id,
+        span_count,
+        root_operation,
+        start_time_us,
+        total_duration_us,
+        has_error,
+    }
+}
+
+async fn handle_trace_list(
+    ctx: &ClientProtocolContext,
+    start_time_us: Option<u64>,
+    end_time_us: Option<u64>,
+    limit: Option<u32>,
+    _continuation_token: Option<String>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let effective_limit = limit
+        .unwrap_or(aspen_constants::DEFAULT_TRACE_QUERY_LIMIT)
+        .min(aspen_constants::MAX_TRACE_QUERY_RESULTS) as usize;
+
+    let spans = scan_trace_spans(ctx, "_sys:traces:").await;
+
+    // Group by trace_id
+    let mut groups: HashMap<String, Vec<&IngestSpan>> = HashMap::new();
+    for span in &spans {
+        groups.entry(span.trace_id.clone()).or_default().push(span);
+    }
+
+    // Build summaries with optional time-range filter
+    let mut summaries: Vec<TraceSummary> = groups
+        .into_iter()
+        .filter_map(|(trace_id, group)| {
+            let owned: Vec<IngestSpan> = group.into_iter().cloned().collect();
+            let summary = build_trace_summary(trace_id, &owned);
+            // Time-range filter: skip if entire trace is outside the range
+            if let Some(start) = start_time_us {
+                let trace_end = summary.start_time_us.saturating_add(summary.total_duration_us);
+                if trace_end < start {
+                    return None;
+                }
+            }
+            if let Some(end) = end_time_us
+                && summary.start_time_us >= end
+            {
+                return None;
+            }
+            Some(summary)
+        })
+        .collect();
+
+    // Sort newest first
+    summaries.sort_by_key(|s| std::cmp::Reverse(s.start_time_us));
+
+    let is_truncated = summaries.len() > effective_limit;
+    summaries.truncate(effective_limit);
+    let count = summaries.len() as u32;
+
+    Ok(ClientRpcResponse::TraceListResult(TraceListResultResponse {
+        traces: summaries,
+        count,
+        is_truncated,
+        error: None,
+    }))
+}
+
+async fn handle_trace_get(ctx: &ClientProtocolContext, trace_id: String) -> anyhow::Result<ClientRpcResponse> {
+    let prefix = format!("_sys:traces:{}:", trace_id);
+    let spans = scan_trace_spans(ctx, &prefix).await;
+    let span_count = spans.len() as u32;
+
+    Ok(ClientRpcResponse::TraceGetResult(TraceGetResultResponse {
+        trace_id,
+        spans,
+        span_count,
+        error: None,
+    }))
+}
+
+async fn handle_trace_search(
+    ctx: &ClientProtocolContext,
+    operation: Option<String>,
+    min_duration_us: Option<u64>,
+    max_duration_us: Option<u64>,
+    status: Option<String>,
+    limit: Option<u32>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let effective_limit = limit
+        .unwrap_or(aspen_constants::DEFAULT_TRACE_QUERY_LIMIT)
+        .min(aspen_constants::MAX_TRACE_QUERY_RESULTS) as usize;
+
+    let all_spans = scan_trace_spans(ctx, "_sys:traces:").await;
+    let op_lower = operation.as_deref().map(str::to_lowercase);
+
+    let mut matched: Vec<IngestSpan> = Vec::new();
+    for span in all_spans {
+        if let Some(ref op) = op_lower
+            && !span.operation.to_lowercase().contains(op.as_str())
+        {
+            continue;
+        }
+        if let Some(min) = min_duration_us
+            && span.duration_us < min
+        {
+            continue;
+        }
+        if let Some(max) = max_duration_us
+            && span.duration_us > max
+        {
+            continue;
+        }
+        if let Some(ref s) = status
+            && !matches_status(&span, s)
+        {
+            continue;
+        }
+        matched.push(span);
+        if matched.len() >= effective_limit {
+            break;
+        }
+    }
+
+    let is_truncated = matched.len() >= effective_limit;
+    let count = matched.len() as u32;
+
+    Ok(ClientRpcResponse::TraceSearchResult(TraceSearchResultResponse {
+        spans: matched,
+        count,
+        is_truncated,
         error: None,
     }))
 }
@@ -512,5 +716,336 @@ mod tests {
         let result = handler.handle(request, &ctx).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not handled"));
+    }
+
+    // =========================================================================
+    // Trace query tests
+    // =========================================================================
+
+    #[test]
+    fn test_can_handle_trace_list() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::TraceList {
+            start_time_us: None,
+            end_time_us: None,
+            limit: None,
+            continuation_token: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_trace_get() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::TraceGet {
+            trace_id: "abc123".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_trace_search() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::TraceSearch {
+            operation: None,
+            min_duration_us: None,
+            max_duration_us: None,
+            status: None,
+            limit: None,
+        }));
+    }
+
+    /// Helper: ingest spans into the test KV store via the handler.
+    async fn ingest_test_spans(ctx: &ClientProtocolContext, spans: Vec<IngestSpan>) {
+        let handler = CoreHandler;
+        let result = handler.handle(ClientRpcRequest::TraceIngest { spans }, ctx).await.expect("ingest should succeed");
+        match result {
+            ClientRpcResponse::TraceIngestResult(r) => assert!(r.is_success),
+            other => panic!("expected TraceIngestResult, got {:?}", other),
+        }
+    }
+
+    fn make_test_span(
+        trace_id: &str,
+        span_id: &str,
+        parent_id: &str,
+        op: &str,
+        start_us: u64,
+        dur_us: u64,
+        status: SpanStatusWire,
+    ) -> IngestSpan {
+        IngestSpan {
+            trace_id: trace_id.to_string(),
+            span_id: span_id.to_string(),
+            parent_id: parent_id.to_string(),
+            operation: op.to_string(),
+            start_time_us: start_us,
+            duration_us: dur_us,
+            status,
+            attributes: vec![],
+            events: vec![],
+        }
+    }
+
+    #[tokio::test]
+    async fn test_trace_get_empty() {
+        let ctx = setup_test_context().await;
+        let handler = CoreHandler;
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::TraceGet {
+                    trace_id: "nonexistent_trace_id_00000000".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::TraceGetResult(r) => {
+                assert_eq!(r.span_count, 0);
+                assert!(r.spans.is_empty());
+                assert!(r.error.is_none());
+            }
+            other => panic!("expected TraceGetResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_trace_list_with_ingested_spans() {
+        let ctx = setup_test_context().await;
+
+        // Ingest 3 spans across 2 traces
+        let spans = vec![
+            make_test_span("trace_aaa", "span_01", "0000000000000000", "http.request", 1000, 500, SpanStatusWire::Ok),
+            make_test_span("trace_aaa", "span_02", "span_01", "db.query", 1100, 200, SpanStatusWire::Ok),
+            make_test_span(
+                "trace_bbb",
+                "span_03",
+                "0000000000000000",
+                "grpc.call",
+                2000,
+                1000,
+                SpanStatusWire::Error("timeout".to_string()),
+            ),
+        ];
+        ingest_test_spans(&ctx, spans).await;
+
+        let handler = CoreHandler;
+        let result = handler
+            .handle(
+                ClientRpcRequest::TraceList {
+                    start_time_us: None,
+                    end_time_us: None,
+                    limit: None,
+                    continuation_token: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::TraceListResult(r) => {
+                assert_eq!(r.count, 2, "should have 2 traces");
+                assert!(!r.is_truncated);
+                // Newest first: trace_bbb (start=2000) before trace_aaa (start=1000)
+                assert_eq!(r.traces[0].trace_id, "trace_bbb");
+                assert_eq!(r.traces[0].span_count, 1);
+                assert!(r.traces[0].has_error);
+                assert_eq!(r.traces[0].root_operation.as_deref(), Some("grpc.call"));
+
+                assert_eq!(r.traces[1].trace_id, "trace_aaa");
+                assert_eq!(r.traces[1].span_count, 2);
+                assert!(!r.traces[1].has_error);
+                assert_eq!(r.traces[1].root_operation.as_deref(), Some("http.request"));
+            }
+            other => panic!("expected TraceListResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_trace_get_returns_all_spans_for_trace() {
+        let ctx = setup_test_context().await;
+
+        let spans = vec![
+            make_test_span("trace_ccc", "span_10", "0000000000000000", "root.op", 5000, 800, SpanStatusWire::Ok),
+            make_test_span("trace_ccc", "span_11", "span_10", "child.op", 5100, 300, SpanStatusWire::Ok),
+            make_test_span("trace_ddd", "span_12", "0000000000000000", "other.op", 6000, 100, SpanStatusWire::Unset),
+        ];
+        ingest_test_spans(&ctx, spans).await;
+
+        let handler = CoreHandler;
+        let result = handler
+            .handle(
+                ClientRpcRequest::TraceGet {
+                    trace_id: "trace_ccc".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::TraceGetResult(r) => {
+                assert_eq!(r.trace_id, "trace_ccc");
+                assert_eq!(r.span_count, 2);
+                let ops: Vec<&str> = r.spans.iter().map(|s| s.operation.as_str()).collect();
+                assert!(ops.contains(&"root.op"));
+                assert!(ops.contains(&"child.op"));
+            }
+            other => panic!("expected TraceGetResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_trace_search_by_operation() {
+        let ctx = setup_test_context().await;
+
+        let spans = vec![
+            make_test_span("trace_eee", "span_20", "0000000000000000", "kv.read", 7000, 50, SpanStatusWire::Ok),
+            make_test_span("trace_eee", "span_21", "span_20", "kv.write", 7100, 100, SpanStatusWire::Ok),
+            make_test_span("trace_eee", "span_22", "span_20", "http.request", 7200, 200, SpanStatusWire::Ok),
+        ];
+        ingest_test_spans(&ctx, spans).await;
+
+        let handler = CoreHandler;
+        let result = handler
+            .handle(
+                ClientRpcRequest::TraceSearch {
+                    operation: Some("kv".to_string()),
+                    min_duration_us: None,
+                    max_duration_us: None,
+                    status: None,
+                    limit: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::TraceSearchResult(r) => {
+                assert_eq!(r.count, 2, "should match 2 kv spans");
+                for span in &r.spans {
+                    assert!(
+                        span.operation.to_lowercase().contains("kv"),
+                        "all results should contain 'kv' in operation"
+                    );
+                }
+            }
+            other => panic!("expected TraceSearchResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_trace_search_by_duration() {
+        let ctx = setup_test_context().await;
+
+        let spans = vec![
+            make_test_span("trace_fff", "span_30", "0000000000000000", "fast.op", 8000, 10, SpanStatusWire::Ok),
+            make_test_span("trace_fff", "span_31", "span_30", "medium.op", 8100, 500, SpanStatusWire::Ok),
+            make_test_span("trace_fff", "span_32", "span_30", "slow.op", 8200, 5000, SpanStatusWire::Ok),
+        ];
+        ingest_test_spans(&ctx, spans).await;
+
+        let handler = CoreHandler;
+        // Search for spans >= 100µs and <= 1000µs
+        let result = handler
+            .handle(
+                ClientRpcRequest::TraceSearch {
+                    operation: None,
+                    min_duration_us: Some(100),
+                    max_duration_us: Some(1000),
+                    status: None,
+                    limit: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::TraceSearchResult(r) => {
+                assert_eq!(r.count, 1, "should match 1 span (medium.op=500µs)");
+                assert_eq!(r.spans[0].operation, "medium.op");
+            }
+            other => panic!("expected TraceSearchResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_trace_search_by_error_status() {
+        let ctx = setup_test_context().await;
+
+        let spans = vec![
+            make_test_span("trace_ggg", "span_40", "0000000000000000", "ok.op", 9000, 100, SpanStatusWire::Ok),
+            make_test_span(
+                "trace_ggg",
+                "span_41",
+                "span_40",
+                "err.op",
+                9100,
+                200,
+                SpanStatusWire::Error("fail".to_string()),
+            ),
+        ];
+        ingest_test_spans(&ctx, spans).await;
+
+        let handler = CoreHandler;
+        let result = handler
+            .handle(
+                ClientRpcRequest::TraceSearch {
+                    operation: None,
+                    min_duration_us: None,
+                    max_duration_us: None,
+                    status: Some("error".to_string()),
+                    limit: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::TraceSearchResult(r) => {
+                assert_eq!(r.count, 1);
+                assert_eq!(r.spans[0].operation, "err.op");
+            }
+            other => panic!("expected TraceSearchResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_trace_list_time_range_filter() {
+        let ctx = setup_test_context().await;
+
+        let spans = vec![
+            make_test_span("trace_hhh", "span_50", "0000000000000000", "early", 1000, 100, SpanStatusWire::Ok),
+            make_test_span("trace_iii", "span_51", "0000000000000000", "late", 5000, 100, SpanStatusWire::Ok),
+        ];
+        ingest_test_spans(&ctx, spans).await;
+
+        let handler = CoreHandler;
+        // Only traces starting at 3000+ should match
+        let result = handler
+            .handle(
+                ClientRpcRequest::TraceList {
+                    start_time_us: Some(3000),
+                    end_time_us: None,
+                    limit: None,
+                    continuation_token: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::TraceListResult(r) => {
+                assert_eq!(r.count, 1);
+                assert_eq!(r.traces[0].trace_id, "trace_iii");
+            }
+            other => panic!("expected TraceListResult, got {:?}", other),
+        }
     }
 }
