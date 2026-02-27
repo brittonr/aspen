@@ -66,35 +66,58 @@ pub use iroh_proxy_utils::downstream::TunnelClientStreams;
 pub use iroh_proxy_utils::upstream::{AcceptAll, AuthHandler, DenyAll, UpstreamProxy};
 
 use crate::auth::AspenAuthHandler;
+pub use crate::auth::TrustedPeers;
 
 /// Upstream proxy with Aspen cluster authentication.
 ///
 /// Wraps [`UpstreamProxy`] with an [`AspenAuthHandler`] that validates incoming
-/// proxy requests against the cluster's shared cookie. Only peers that present
-/// the correct cookie (via the cluster membership) are authorized.
+/// proxy requests against the cluster's shared cookie and optional trusted-peers
+/// allowlist.
 ///
 /// # Example
 ///
 /// ```ignore
+/// // Cookie-only (legacy)
 /// let proxy = AspenUpstreamProxy::new("my-cluster-cookie".to_string());
+///
+/// // Cookie + trusted-peers allowlist (production)
+/// let trusted = TrustedPeers::default();
+/// let proxy = AspenUpstreamProxy::with_trusted_peers("cookie".into(), trusted);
+///
 /// let handler = proxy.into_handler()?;
 /// // Register with router_builder.http_proxy(handler)
 /// ```
 pub struct AspenUpstreamProxy {
-    cluster_cookie: String,
+    auth: AspenAuthHandler,
 }
 
 impl AspenUpstreamProxy {
-    /// Create a new upstream proxy that authenticates against the given cluster cookie.
+    /// Create a new upstream proxy with cookie-only authentication.
+    ///
+    /// Without a trusted-peers allowlist, any iroh-authenticated peer that
+    /// doesn't send a wrong cookie is accepted. Use [`Self::with_trusted_peers`]
+    /// for production deployments.
     pub fn new(cluster_cookie: String) -> Self {
-        Self { cluster_cookie }
+        Self {
+            auth: AspenAuthHandler::new(cluster_cookie),
+        }
+    }
+
+    /// Create a new upstream proxy with cookie + trusted-peers allowlist.
+    ///
+    /// Peers without a cookie header are checked against the allowlist.
+    /// The allowlist can be updated dynamically via its `Arc<RwLock<_>>` handle
+    /// (e.g., from a cluster membership watcher).
+    pub fn with_trusted_peers(cluster_cookie: String, trusted_peers: TrustedPeers) -> Self {
+        Self {
+            auth: AspenAuthHandler::with_trusted_peers(cluster_cookie, trusted_peers),
+        }
     }
 
     /// Build the [`UpstreamProxy`] protocol handler.
     ///
     /// Returns an error if the HTTP client cannot be created.
     pub fn into_handler(self) -> Result<UpstreamProxy, Box<dyn std::error::Error + Send + Sync>> {
-        let auth = AspenAuthHandler::new(self.cluster_cookie);
-        UpstreamProxy::new(auth).map_err(|e| Box::new(e) as _)
+        UpstreamProxy::new(self.auth).map_err(|e| Box::new(e) as _)
     }
 }

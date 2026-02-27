@@ -4,30 +4,86 @@
 //! [`AuthHandler`] trait. Peers are identified by their iroh [`EndpointId`]
 //! (Ed25519 public key), and authorization is checked against the cluster's
 //! trusted peers or shared cookie.
+//!
+//! # Authentication Modes
+//!
+//! 1. **Cookie header**: If `X-Aspen-Cookie` is present and matches → authorized. If present but
+//!    wrong → rejected. This provides explicit cluster membership proof.
+//!
+//! 2. **Trusted peers allowlist**: If no cookie header, and a trusted-peers set is configured, the
+//!    `remote_id` is checked against it. Only cluster members (derived from Raft membership) are
+//!    allowed through.
+//!
+//! 3. **Transport-only auth (fallback)**: If no cookie and no allowlist configured, any
+//!    iroh-authenticated peer is accepted. This is the default for backwards compatibility but
+//!    should not be used in production.
+
+use std::collections::HashSet;
+use std::sync::Arc;
 
 use iroh::EndpointId;
 use iroh_proxy_utils::HttpProxyRequest;
 use iroh_proxy_utils::upstream::AuthError;
 use iroh_proxy_utils::upstream::AuthHandler;
+use tokio::sync::RwLock;
 use tracing::debug;
 use tracing::warn;
 
-/// Authentication handler that validates proxy requests against an Aspen cluster cookie.
+/// Shared, dynamically updatable set of trusted peer endpoint IDs.
 ///
-/// This handler checks the `Iroh-Destination` header or a custom `X-Aspen-Cookie` header
-/// for the cluster cookie. If the cookie matches, the request is authorized.
+/// Wrapped in `Arc<RwLock<_>>` so cluster membership changes can propagate
+/// to the auth handler without restart. Writers acquire the write lock
+/// briefly when membership changes; readers (every proxy request) take
+/// only a read lock.
+pub type TrustedPeers = Arc<RwLock<HashSet<EndpointId>>>;
+
+/// Authentication handler that validates proxy requests against an Aspen cluster cookie
+/// and/or a trusted-peers allowlist.
 ///
-/// For production deployments, this should be extended to use Aspen's full auth system
-/// (HMAC-SHA256 challenge-response, trusted peer registry, etc.).
+/// # Construction
+///
+/// - [`AspenAuthHandler::new`]: Cookie-only mode (backwards compatible, no allowlist).
+/// - [`AspenAuthHandler::with_trusted_peers`]: Cookie + allowlist mode (production).
+///
+/// # Thread Safety
+///
+/// The trusted-peers set is behind `Arc<RwLock<_>>` and can be updated
+/// concurrently (e.g., from a cluster membership watcher task).
 #[derive(Debug, Clone)]
 pub struct AspenAuthHandler {
     cluster_cookie: String,
+    /// Optional allowlist of trusted peer endpoint IDs.
+    /// When `Some`, peers without a cookie must be in this set.
+    /// When `None`, any iroh-authenticated peer is accepted (legacy mode).
+    trusted_peers: Option<TrustedPeers>,
 }
 
 impl AspenAuthHandler {
-    /// Create a new auth handler with the given cluster cookie.
+    /// Create a new auth handler with cookie-only authentication.
+    ///
+    /// Without a trusted-peers allowlist, any iroh-authenticated peer that
+    /// doesn't send a wrong cookie is accepted. Use [`Self::with_trusted_peers`]
+    /// for production deployments.
     pub fn new(cluster_cookie: String) -> Self {
-        Self { cluster_cookie }
+        Self {
+            cluster_cookie,
+            trusted_peers: None,
+        }
+    }
+
+    /// Create a new auth handler with cookie + trusted-peers allowlist.
+    ///
+    /// Peers that don't provide a cookie header are checked against the
+    /// allowlist. If the peer's `EndpointId` is not in the set, the
+    /// request is rejected with `Forbidden`.
+    ///
+    /// The `TrustedPeers` set can be updated dynamically (e.g., from a
+    /// cluster membership watcher) via its `Arc<RwLock<_>>` handle.
+    pub fn with_trusted_peers(cluster_cookie: String, trusted_peers: TrustedPeers) -> Self {
+        Self {
+            cluster_cookie,
+            trusted_peers: Some(trusted_peers),
+        }
     }
 }
 
@@ -56,18 +112,36 @@ impl AuthHandler for AspenAuthHandler {
             return Err(AuthError::Forbidden);
         }
 
-        // No cookie provided — accept based on iroh transport-level authentication.
+        // No cookie provided — check trusted-peers allowlist if configured.
+        if let Some(ref trusted_peers) = self.trusted_peers {
+            let peers = trusted_peers.read().await;
+            if peers.contains(&remote_id) {
+                debug!(
+                    remote=%remote_id.fmt_short(),
+                    "authorized via trusted-peers allowlist"
+                );
+                return Ok(());
+            }
+            warn!(
+                remote=%remote_id.fmt_short(),
+                trusted_count=peers.len(),
+                "peer not in trusted-peers allowlist"
+            );
+            return Err(AuthError::Forbidden);
+        }
+
+        // No cookie, no allowlist — accept based on iroh transport-level auth.
         //
         // iroh QUIC connections are TLS-authenticated: each peer has a verified
         // EndpointId (Ed25519 public key). To connect at all, the client must know
         // the node's EndpointId from the cluster ticket. The proxy ALPN is only
         // registered when --enable-proxy is set.
         //
-        // TODO: For production, consider maintaining a trusted-peers allowlist
-        // derived from cluster membership and checking remote_id against it.
+        // This fallback is for backwards compatibility. Production deployments
+        // should use `with_trusted_peers()` to restrict access to cluster members.
         debug!(
             remote=%remote_id.fmt_short(),
-            "authorized via iroh transport authentication (no cookie header)"
+            "authorized via iroh transport authentication (no allowlist configured)"
         );
         Ok(())
     }
@@ -97,10 +171,17 @@ mod tests {
     }
 
     fn test_endpoint_id() -> EndpointId {
-        // Use a deterministic key for testing
         let secret = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
         secret.public()
     }
+
+    fn make_trusted_peers(ids: &[EndpointId]) -> TrustedPeers {
+        Arc::new(RwLock::new(ids.iter().cloned().collect()))
+    }
+
+    // =========================================================================
+    // Cookie-only mode (no allowlist)
+    // =========================================================================
 
     #[tokio::test]
     async fn test_valid_cookie() {
@@ -119,13 +200,81 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_no_cookie_accepted_via_transport_auth() {
-        // No cookie header → accepted via iroh transport-level authentication.
-        // iroh-proxy-utils' DownstreamProxy sends bare CONNECT requests without
-        // custom headers, so this is the normal path.
+    async fn test_no_cookie_no_allowlist_accepted() {
+        // Legacy mode: no cookie, no allowlist → accepted via transport auth.
         let handler = AspenAuthHandler::new("test-cookie".to_string());
         let remote = test_endpoint_id();
         let req = make_request(None);
+        assert!(handler.authorize(remote, &req).await.is_ok());
+    }
+
+    // =========================================================================
+    // Trusted-peers allowlist mode
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_trusted_peer_accepted() {
+        let remote = test_endpoint_id();
+        let trusted = make_trusted_peers(&[remote]);
+        let handler = AspenAuthHandler::with_trusted_peers("cookie".into(), trusted);
+        let req = make_request(None);
+        assert!(handler.authorize(remote, &req).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_untrusted_peer_rejected() {
+        let remote = test_endpoint_id();
+        let other = test_endpoint_id();
+        // Allowlist contains `other` but not `remote`
+        let trusted = make_trusted_peers(&[other]);
+        let handler = AspenAuthHandler::with_trusted_peers("cookie".into(), trusted);
+        let req = make_request(None);
+        assert!(handler.authorize(remote, &req).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_empty_allowlist_rejects_all() {
+        let remote = test_endpoint_id();
+        let trusted = make_trusted_peers(&[]);
+        let handler = AspenAuthHandler::with_trusted_peers("cookie".into(), trusted);
+        let req = make_request(None);
+        assert!(handler.authorize(remote, &req).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_cookie_overrides_allowlist() {
+        // Valid cookie should work even if peer is NOT in the allowlist.
+        let remote = test_endpoint_id();
+        let trusted = make_trusted_peers(&[]); // empty allowlist
+        let handler = AspenAuthHandler::with_trusted_peers("cookie".into(), trusted);
+        let req = make_request(Some("cookie"));
+        assert!(handler.authorize(remote, &req).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_wrong_cookie_rejected_despite_allowlist() {
+        // Wrong cookie should fail even if peer IS in the allowlist.
+        let remote = test_endpoint_id();
+        let trusted = make_trusted_peers(&[remote]);
+        let handler = AspenAuthHandler::with_trusted_peers("cookie".into(), trusted);
+        let req = make_request(Some("wrong"));
+        assert!(handler.authorize(remote, &req).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_dynamic_allowlist_update() {
+        let remote = test_endpoint_id();
+        let trusted = make_trusted_peers(&[]); // start empty
+        let handler = AspenAuthHandler::with_trusted_peers("cookie".into(), trusted.clone());
+        let req = make_request(None);
+
+        // Should be rejected — not in allowlist
+        assert!(handler.authorize(remote, &req).await.is_err());
+
+        // Dynamically add the peer
+        trusted.write().await.insert(remote);
+
+        // Now should be accepted
         assert!(handler.authorize(remote, &req).await.is_ok());
     }
 }
