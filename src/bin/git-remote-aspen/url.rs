@@ -190,4 +190,70 @@ mod tests {
         let result = AspenUrl::parse(&url);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_parse_invalid_repo_id_hex() {
+        // Valid 52-char node ID but invalid repo ID (not valid hex)
+        let node_id = "a".repeat(52);
+        let url = format!("aspen://{}/not_valid_hex", node_id);
+
+        let result = AspenUrl::parse(&url);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_repo_id_wrong_length() {
+        // Valid node ID, repo ID that's hex but wrong length (not 64 chars)
+        let node_id = "a".repeat(52);
+        let url = format!("aspen://{}/abcdef", node_id);
+
+        let result = AspenUrl::parse(&url);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_empty_url() {
+        let result = AspenUrl::parse("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_just_scheme() {
+        let result = AspenUrl::parse("aspen://");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_repo_id_accessor() {
+        let ticket = create_test_ticket();
+        let ticket_str = ticket.serialize();
+        let repo_id_hex = "c".repeat(64);
+        let url = format!("aspen://{}/{}", ticket_str, repo_id_hex);
+
+        let parsed = AspenUrl::parse(&url).unwrap();
+        assert_eq!(parsed.repo_id().to_hex(), repo_id_hex);
+    }
+
+    #[test]
+    fn test_ticket_accessor() {
+        let ticket = create_test_ticket();
+        let ticket_str = ticket.serialize();
+        let repo_id_hex = "d".repeat(64);
+        let url = format!("aspen://{}/{}", ticket_str, repo_id_hex);
+
+        let parsed = AspenUrl::parse(&url).unwrap();
+        assert!(parsed.ticket().is_some());
+        assert!(!parsed.is_signed());
+    }
+
+    #[test]
+    fn test_node_id_has_no_ticket() {
+        let node_id = "a".repeat(52);
+        let repo_id_hex = "e".repeat(64);
+        let url = format!("aspen://{}/{}", node_id, repo_id_hex);
+
+        let parsed = AspenUrl::parse(&url).unwrap();
+        assert!(parsed.ticket().is_none());
+        assert!(!parsed.is_signed());
+    }
 }

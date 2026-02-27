@@ -209,25 +209,45 @@ pub(crate) async fn handle_git_bridge_fetch(
 
     for want_sha1 in &want_hashes {
         // Get the blake3 hash for this SHA-1 using the mapping
-        if let Ok(Some((blake3_hash, _))) = mapping.get_blake3(&repo_id, want_sha1).await {
-            match exporter.export_commit_dag(&repo_id, blake3_hash, &have_hashes).await {
-                Ok(exported) => {
-                    for obj in exported.objects {
-                        objects.push(GitBridgeObject {
-                            sha1: obj.sha1.to_hex(),
-                            object_type: obj.object_type.as_str().to_string(),
-                            data: obj.content,
-                        });
+        match mapping.get_blake3(&repo_id, want_sha1).await {
+            Ok(None) => {
+                tracing::warn!(
+                    target: "aspen_forge::git_bridge",
+                    sha1 = %want_sha1,
+                    "fetch: wanted SHA-1 has no BLAKE3 mapping, skipping"
+                );
+                continue;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "aspen_forge::git_bridge",
+                    sha1 = %want_sha1,
+                    error = %e,
+                    "fetch: failed to look up SHA-1 mapping"
+                );
+                continue;
+            }
+            Ok(Some((blake3_hash, _))) => {
+                // Found the mapping — export the commit DAG
+                match exporter.export_commit_dag(&repo_id, blake3_hash, &have_hashes).await {
+                    Ok(exported) => {
+                        for obj in exported.objects {
+                            objects.push(GitBridgeObject {
+                                sha1: obj.sha1.to_hex(),
+                                object_type: obj.object_type.as_str().to_string(),
+                                data: obj.content,
+                            });
+                        }
+                        skipped += exported.objects_skipped as u32;
                     }
-                    skipped += exported.objects_skipped as u32;
-                }
-                Err(e) => {
-                    return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
-                        is_success: false,
-                        objects: vec![],
-                        skipped: 0,
-                        error: Some(e.to_string()),
-                    }));
+                    Err(e) => {
+                        return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
+                            is_success: false,
+                            objects: vec![],
+                            skipped: 0,
+                            error: Some(e.to_string()),
+                        }));
+                    }
                 }
             }
         }
