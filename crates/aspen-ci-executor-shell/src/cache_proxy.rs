@@ -356,8 +356,10 @@ async fn handle_narinfo(state: &ProxyState, path: &str) -> ProxyResult<Response<
 
 /// Handle GET /nar/{hash}.nar
 async fn handle_nar(state: &ProxyState, path: &str, range_header: Option<&str>) -> ProxyResult<Response<Full<Bytes>>> {
-    // For now, forward the full NAR. Range support can be added later.
-    // TODO: Implement streaming for large NARs instead of buffering
+    // NARs are fully buffered up to MAX_RESPONSE_SIZE (100MB). Streaming would
+    // require changing the body type from Full<Bytes> to StreamBody and piping
+    // H3 recv_data chunks through an async channel. Worth doing if NARs >50MB
+    // are common in practice.
     let body = forward_get_request(state, path).await?;
 
     let mut builder = Response::builder()
