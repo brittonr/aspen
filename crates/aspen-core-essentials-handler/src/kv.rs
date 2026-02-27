@@ -594,8 +594,8 @@ async fn handle_index_drop(ctx: &ClientProtocolContext, name: String) -> anyhow:
         }));
     }
 
-    // Delete the index definition from KV
-    let key = format!("_sys:index:{}", name);
+    // Delete the index definition from KV using the canonical system_key
+    let key = format!("{}{}", aspen_core::layer::INDEX_METADATA_PREFIX, name);
     let delete_req = DeleteRequest { key: key.clone() };
     match ctx.kv_store.delete(delete_req).await {
         Ok(result) => Ok(ClientRpcResponse::IndexDropResult(IndexDropResultResponse {
@@ -724,3 +724,863 @@ fn handle_index_list(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcRes
 
 use crate::error_utils::is_not_leader_error;
 use crate::error_utils::sanitize_kv_error;
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use aspen_rpc_core::test_support::MockEndpointProvider;
+    use aspen_rpc_core::test_support::TestContextBuilder;
+    use aspen_testing::DeterministicClusterController;
+    use aspen_testing::DeterministicKeyValueStore;
+
+    use super::*;
+
+    async fn setup_test_context() -> ClientProtocolContext {
+        let controller = Arc::new(DeterministicClusterController::new());
+        let kv_store = Arc::new(DeterministicKeyValueStore::new());
+        let mock_endpoint = Arc::new(MockEndpointProvider::with_seed(12345).await);
+
+        TestContextBuilder::new()
+            .with_node_id(1)
+            .with_controller(controller)
+            .with_kv_store(kv_store)
+            .with_endpoint_manager(mock_endpoint)
+            .with_cookie("test_cluster")
+            .build()
+    }
+
+    // =========================================================================
+    // Routing tests
+    // =========================================================================
+
+    #[test]
+    fn test_can_handle_kv_operations() {
+        let handler = KvHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ReadKey { key: "k".to_string() }));
+        assert!(handler.can_handle(&ClientRpcRequest::WriteKey {
+            key: "k".to_string(),
+            value: vec![],
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::DeleteKey { key: "k".to_string() }));
+        assert!(handler.can_handle(&ClientRpcRequest::ScanKeys {
+            prefix: "p".to_string(),
+            limit: None,
+            continuation_token: None,
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::CompareAndSwapKey {
+            key: "k".to_string(),
+            expected: None,
+            new_value: vec![],
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::CompareAndDeleteKey {
+            key: "k".to_string(),
+            expected: vec![],
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::BatchRead { keys: vec![] }));
+        assert!(handler.can_handle(&ClientRpcRequest::BatchWrite { operations: vec![] }));
+        assert!(handler.can_handle(&ClientRpcRequest::ConditionalBatchWrite {
+            conditions: vec![],
+            operations: vec![],
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_index_operations() {
+        let handler = KvHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::IndexCreate {
+            name: "idx".to_string(),
+            field: "f".to_string(),
+            field_type: "string".to_string(),
+            is_unique: false,
+            should_index_nulls: false,
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::IndexDrop {
+            name: "idx".to_string()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::IndexScan {
+            index_name: "idx".to_string(),
+            mode: "exact".to_string(),
+            value: "v".to_string(),
+            end_value: None,
+            limit: None,
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::IndexList));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = KvHandler;
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+        assert!(!handler.can_handle(&ClientRpcRequest::InitCluster));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = KvHandler;
+        assert_eq!(handler.name(), "KvHandler");
+    }
+
+    // =========================================================================
+    // KV CRUD integration tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_write_then_read() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Write
+        let result = handler
+            .handle(
+                ClientRpcRequest::WriteKey {
+                    key: "mykey".to_string(),
+                    value: b"myvalue".to_vec(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::WriteResult(r) => assert!(r.is_success),
+            other => panic!("expected WriteResult, got {:?}", other),
+        }
+
+        // Read
+        let result = handler
+            .handle(
+                ClientRpcRequest::ReadKey {
+                    key: "mykey".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::ReadResult(r) => {
+                assert!(r.was_found);
+                assert_eq!(r.value, Some(b"myvalue".to_vec()));
+                assert!(r.error.is_none());
+            }
+            other => panic!("expected ReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_read_nonexistent_key() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::ReadKey {
+                    key: "nosuchkey".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::ReadResult(r) => {
+                assert!(!r.was_found);
+                assert!(r.value.is_none());
+                assert!(r.error.is_none());
+            }
+            other => panic!("expected ReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_delete_key() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Write then delete
+        handler
+            .handle(
+                ClientRpcRequest::WriteKey {
+                    key: "delme".to_string(),
+                    value: b"val".to_vec(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::DeleteKey {
+                    key: "delme".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::DeleteResult(r) => {
+                assert!(r.was_deleted);
+                assert_eq!(r.key, "delme");
+            }
+            other => panic!("expected DeleteResult, got {:?}", other),
+        }
+
+        // Verify deleted
+        let result = handler
+            .handle(
+                ClientRpcRequest::ReadKey {
+                    key: "delme".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::ReadResult(r) => assert!(!r.was_found),
+            other => panic!("expected ReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_scan_with_prefix() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Write several keys
+        for key in &["app:a", "app:b", "app:c", "other:x"] {
+            handler
+                .handle(
+                    ClientRpcRequest::WriteKey {
+                        key: key.to_string(),
+                        value: b"v".to_vec(),
+                    },
+                    &ctx,
+                )
+                .await
+                .unwrap();
+        }
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::ScanKeys {
+                    prefix: "app:".to_string(),
+                    limit: None,
+                    continuation_token: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::ScanResult(r) => {
+                assert_eq!(r.count, 3);
+                for entry in &r.entries {
+                    assert!(entry.key.starts_with("app:"), "key={} should start with app:", entry.key);
+                }
+                assert!(r.error.is_none());
+            }
+            other => panic!("expected ScanResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_scan_with_limit() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        for i in 0..5 {
+            handler
+                .handle(
+                    ClientRpcRequest::WriteKey {
+                        key: format!("lim:{:02}", i),
+                        value: b"v".to_vec(),
+                    },
+                    &ctx,
+                )
+                .await
+                .unwrap();
+        }
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::ScanKeys {
+                    prefix: "lim:".to_string(),
+                    limit: Some(2),
+                    continuation_token: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::ScanResult(r) => {
+                assert_eq!(r.count, 2);
+                assert!(r.is_truncated);
+            }
+            other => panic!("expected ScanResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_batch_read() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        handler
+            .handle(
+                ClientRpcRequest::WriteKey {
+                    key: "br:a".to_string(),
+                    value: b"va".to_vec(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        handler
+            .handle(
+                ClientRpcRequest::WriteKey {
+                    key: "br:c".to_string(),
+                    value: b"vc".to_vec(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::BatchRead {
+                    keys: vec!["br:a".to_string(), "br:missing".to_string(), "br:c".to_string()],
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::BatchReadResult(r) => {
+                assert!(r.is_success);
+                let values = r.values.unwrap();
+                assert_eq!(values.len(), 3);
+                assert_eq!(values[0], Some(b"va".to_vec()));
+                assert!(values[1].is_none(), "missing key should be None");
+                assert_eq!(values[2], Some(b"vc".to_vec()));
+            }
+            other => panic!("expected BatchReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_batch_write() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::BatchWrite {
+                    operations: vec![
+                        BatchWriteOperation::Set {
+                            key: "bw:a".to_string(),
+                            value: b"1".to_vec(),
+                        },
+                        BatchWriteOperation::Set {
+                            key: "bw:b".to_string(),
+                            value: b"2".to_vec(),
+                        },
+                    ],
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::BatchWriteResult(r) => {
+                assert!(r.is_success);
+                assert_eq!(r.operations_applied, Some(2));
+            }
+            other => panic!("expected BatchWriteResult, got {:?}", other),
+        }
+
+        // Verify both written
+        let result = handler
+            .handle(
+                ClientRpcRequest::ReadKey {
+                    key: "bw:a".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::ReadResult(r) => assert!(r.was_found),
+            other => panic!("expected ReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_compare_and_swap_success() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Write initial value
+        handler
+            .handle(
+                ClientRpcRequest::WriteKey {
+                    key: "cas:k".to_string(),
+                    value: b"old".to_vec(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        // CAS: old → new
+        let result = handler
+            .handle(
+                ClientRpcRequest::CompareAndSwapKey {
+                    key: "cas:k".to_string(),
+                    expected: Some(b"old".to_vec()),
+                    new_value: b"new".to_vec(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::CompareAndSwapResult(r) => {
+                assert!(r.is_success);
+                assert!(r.error.is_none());
+            }
+            other => panic!("expected CompareAndSwapResult, got {:?}", other),
+        }
+
+        // Verify new value
+        let result = handler
+            .handle(
+                ClientRpcRequest::ReadKey {
+                    key: "cas:k".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+        match result {
+            ClientRpcResponse::ReadResult(r) => {
+                assert!(r.was_found);
+                assert_eq!(r.value, Some(b"new".to_vec()));
+            }
+            other => panic!("expected ReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_compare_and_swap_conflict() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        handler
+            .handle(
+                ClientRpcRequest::WriteKey {
+                    key: "cas:conflict".to_string(),
+                    value: b"actual".to_vec(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        // CAS with wrong expected value
+        let result = handler
+            .handle(
+                ClientRpcRequest::CompareAndSwapKey {
+                    key: "cas:conflict".to_string(),
+                    expected: Some(b"wrong".to_vec()),
+                    new_value: b"new".to_vec(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::CompareAndSwapResult(r) => {
+                assert!(!r.is_success);
+            }
+            other => panic!("expected CompareAndSwapResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_unhandled_request() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        let result = handler.handle(ClientRpcRequest::Ping, &ctx).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not handled"));
+    }
+
+    // =========================================================================
+    // Index operation integration tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_index_create_success() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::IndexCreate {
+                    name: "idx_user_email".to_string(),
+                    field: "email".to_string(),
+                    field_type: "string".to_string(),
+                    is_unique: true,
+                    should_index_nulls: false,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::IndexCreateResult(r) => {
+                assert!(r.is_success);
+                assert_eq!(r.name, "idx_user_email");
+                assert!(r.error.is_none());
+            }
+            other => panic!("expected IndexCreateResult, got {:?}", other),
+        }
+
+        // Verify persisted in KV using the canonical system_key
+        let expected_key = format!("{}idx_user_email", aspen_core::layer::INDEX_METADATA_PREFIX);
+        let read_result = handler.handle(ClientRpcRequest::ReadKey { key: expected_key }, &ctx).await.unwrap();
+
+        match read_result {
+            ClientRpcResponse::ReadResult(r) => {
+                assert!(r.was_found, "index definition should be stored in KV");
+            }
+            other => panic!("expected ReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_index_create_builtin_name_rejected() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Get a builtin name
+        let builtins = IndexDefinition::builtins();
+        if builtins.is_empty() {
+            return; // No builtins to test against
+        }
+        let builtin_name = &builtins[0].name;
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::IndexCreate {
+                    name: builtin_name.clone(),
+                    field: "f".to_string(),
+                    field_type: "string".to_string(),
+                    is_unique: false,
+                    should_index_nulls: false,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::IndexCreateResult(r) => {
+                assert!(!r.is_success);
+                assert!(r.error.as_deref().unwrap().contains("built-in"));
+            }
+            other => panic!("expected IndexCreateResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_index_create_name_too_long() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        let long_name = "x".repeat(aspen_constants::MAX_INDEX_NAME_SIZE as usize + 1);
+        let result = handler
+            .handle(
+                ClientRpcRequest::IndexCreate {
+                    name: long_name,
+                    field: "f".to_string(),
+                    field_type: "string".to_string(),
+                    is_unique: false,
+                    should_index_nulls: false,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::IndexCreateResult(r) => {
+                assert!(!r.is_success);
+                assert!(r.error.as_deref().unwrap().contains("exceeds"));
+            }
+            other => panic!("expected IndexCreateResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_index_create_invalid_field_type() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::IndexCreate {
+                    name: "idx_bad_type".to_string(),
+                    field: "f".to_string(),
+                    field_type: "boolean".to_string(),
+                    is_unique: false,
+                    should_index_nulls: false,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::IndexCreateResult(r) => {
+                assert!(!r.is_success);
+                assert!(r.error.as_deref().unwrap().contains("invalid field_type"));
+            }
+            other => panic!("expected IndexCreateResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_index_create_all_field_types() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        for (name, field_type) in &[
+            ("idx_int", "integer"),
+            ("idx_uint", "unsignedinteger"),
+            ("idx_str", "string"),
+        ] {
+            let result = handler
+                .handle(
+                    ClientRpcRequest::IndexCreate {
+                        name: name.to_string(),
+                        field: "f".to_string(),
+                        field_type: field_type.to_string(),
+                        is_unique: false,
+                        should_index_nulls: false,
+                    },
+                    &ctx,
+                )
+                .await
+                .unwrap();
+
+            match result {
+                ClientRpcResponse::IndexCreateResult(r) => {
+                    assert!(r.is_success, "field_type '{}' should succeed", field_type);
+                }
+                other => panic!("expected IndexCreateResult for {}, got {:?}", field_type, other),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_index_drop_success() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Create first
+        handler
+            .handle(
+                ClientRpcRequest::IndexCreate {
+                    name: "idx_to_drop".to_string(),
+                    field: "f".to_string(),
+                    field_type: "string".to_string(),
+                    is_unique: false,
+                    should_index_nulls: false,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        // Drop
+        let result = handler
+            .handle(
+                ClientRpcRequest::IndexDrop {
+                    name: "idx_to_drop".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::IndexDropResult(r) => {
+                assert!(r.is_success);
+                assert!(r.was_dropped);
+                assert_eq!(r.name, "idx_to_drop");
+                assert!(r.error.is_none());
+            }
+            other => panic!("expected IndexDropResult, got {:?}", other),
+        }
+
+        // Verify removed from KV using the canonical system_key
+        let expected_key = format!("{}idx_to_drop", aspen_core::layer::INDEX_METADATA_PREFIX);
+        let read_result = handler.handle(ClientRpcRequest::ReadKey { key: expected_key }, &ctx).await.unwrap();
+
+        match read_result {
+            ClientRpcResponse::ReadResult(r) => {
+                assert!(!r.was_found, "index should be gone after drop");
+            }
+            other => panic!("expected ReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_index_drop_builtin_rejected() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        let builtins = IndexDefinition::builtins();
+        if builtins.is_empty() {
+            return;
+        }
+        let builtin_name = &builtins[0].name;
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::IndexDrop {
+                    name: builtin_name.clone(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::IndexDropResult(r) => {
+                assert!(!r.is_success);
+                assert!(!r.was_dropped);
+                assert!(r.error.as_deref().unwrap().contains("built-in"));
+            }
+            other => panic!("expected IndexDropResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_index_drop_nonexistent() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        let result = handler
+            .handle(
+                ClientRpcRequest::IndexDrop {
+                    name: "no_such_index".to_string(),
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::IndexDropResult(r) => {
+                assert!(r.is_success, "drop of nonexistent is not an error");
+                // was_dropped may be false since key didn't exist
+            }
+            other => panic!("expected IndexDropResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_index_scan_no_state_machine() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Test context has no redb state machine → should return error
+        let result = handler
+            .handle(
+                ClientRpcRequest::IndexScan {
+                    index_name: "idx_test".to_string(),
+                    mode: "exact".to_string(),
+                    value: hex::encode(b"test"),
+                    end_value: None,
+                    limit: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::IndexScanResult(r) => {
+                assert!(!r.is_success);
+                assert!(r.error.as_deref().unwrap().contains("redb state machine"));
+            }
+            other => panic!("expected IndexScanResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_index_scan_invalid_mode() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Without redb state machine, scan with any mode returns the "requires redb" error.
+        // The invalid mode error would only surface with a redb state machine present.
+        let result = handler
+            .handle(
+                ClientRpcRequest::IndexScan {
+                    index_name: "idx_test".to_string(),
+                    mode: "fuzzy".to_string(),
+                    value: "v".to_string(),
+                    end_value: None,
+                    limit: None,
+                },
+                &ctx,
+            )
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::IndexScanResult(r) => {
+                assert!(!r.is_success);
+                assert!(r.error.is_some());
+            }
+            other => panic!("expected IndexScanResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_index_list_no_state_machine() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Without redb state machine, should return builtins
+        let result = handler.handle(ClientRpcRequest::IndexList, &ctx).await.unwrap();
+
+        match result {
+            ClientRpcResponse::IndexListResult(r) => {
+                assert!(r.is_success);
+                // Should return at least the builtin indexes
+                let builtin_count = IndexDefinition::builtins().len() as u32;
+                assert_eq!(r.count, builtin_count);
+            }
+            other => panic!("expected IndexListResult, got {:?}", other),
+        }
+    }
+}

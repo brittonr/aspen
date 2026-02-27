@@ -677,3 +677,333 @@ impl ObservabilityBuilder {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // TraceContext tests
+    // =========================================================================
+
+    #[test]
+    fn test_trace_context_new_root() {
+        let ctx = TraceContext::new_root();
+        assert_eq!(ctx.trace_id.len(), 32, "trace_id should be 32 hex chars");
+        assert_eq!(ctx.span_id.len(), 16, "span_id should be 16 hex chars");
+        assert_eq!(ctx.parent_id, "0000000000000000", "root has zero parent");
+        assert_eq!(ctx.flags, 0x01, "default is sampled");
+        assert!(ctx.state.is_none());
+    }
+
+    #[test]
+    fn test_trace_context_new_root_unique_ids() {
+        let a = TraceContext::new_root();
+        let b = TraceContext::new_root();
+        assert_ne!(a.trace_id, b.trace_id, "different roots should have different trace IDs");
+        assert_ne!(a.span_id, b.span_id, "different roots should have different span IDs");
+    }
+
+    #[test]
+    fn test_trace_context_child_preserves_trace_id() {
+        let root = TraceContext::new_root();
+        let child = root.child();
+
+        assert_eq!(child.trace_id, root.trace_id, "child inherits trace_id");
+        assert_eq!(child.parent_id, root.span_id, "child's parent is root's span");
+        assert_ne!(child.span_id, root.span_id, "child gets new span_id");
+        assert_eq!(child.flags, root.flags, "child inherits flags");
+    }
+
+    #[test]
+    fn test_trace_context_child_chain() {
+        let root = TraceContext::new_root();
+        let child = root.child();
+        let grandchild = child.child();
+
+        assert_eq!(grandchild.trace_id, root.trace_id);
+        assert_eq!(grandchild.parent_id, child.span_id);
+        assert_ne!(grandchild.span_id, child.span_id);
+    }
+
+    #[test]
+    fn test_traceparent_roundtrip() {
+        let ctx = TraceContext::new_root();
+        let header = ctx.to_traceparent();
+
+        // Format: 00-{trace_id}-{span_id}-{flags}
+        let parts: Vec<&str> = header.split('-').collect();
+        assert_eq!(parts.len(), 4);
+        assert_eq!(parts[0], "00", "version");
+        assert_eq!(parts[1], ctx.trace_id);
+        assert_eq!(parts[2], ctx.span_id);
+        assert_eq!(parts[3], "01", "sampled flag");
+
+        let parsed = TraceContext::from_traceparent(&header).unwrap();
+        assert_eq!(parsed.trace_id, ctx.trace_id);
+        assert_eq!(parsed.span_id, ctx.span_id);
+        assert_eq!(parsed.flags, ctx.flags);
+    }
+
+    #[test]
+    fn test_traceparent_parse_invalid() {
+        assert!(TraceContext::from_traceparent("invalid").is_err());
+        assert!(TraceContext::from_traceparent("00-abc").is_err());
+        assert!(TraceContext::from_traceparent("").is_err());
+    }
+
+    // =========================================================================
+    // Span tests
+    // =========================================================================
+
+    #[test]
+    fn test_span_new_root() {
+        let span = Span::new("test.operation", None);
+        assert_eq!(span.operation, "test.operation");
+        assert_eq!(span.context.parent_id, "0000000000000000");
+        assert!(span.end_time.is_none());
+        assert_eq!(span.status, SpanStatus::Unset);
+        assert!(span.attributes.is_empty());
+        assert!(span.events.is_empty());
+    }
+
+    #[test]
+    fn test_span_new_with_parent() {
+        let parent_ctx = TraceContext::new_root();
+        let span = Span::new("child.op", Some(&parent_ctx));
+        assert_eq!(span.context.trace_id, parent_ctx.trace_id);
+        assert_eq!(span.context.parent_id, parent_ctx.span_id);
+    }
+
+    #[test]
+    fn test_span_set_attribute() {
+        let mut span = Span::new("op", None);
+        span.set_attribute("http.method", "GET");
+        span.set_attribute("http.status_code", "200");
+
+        assert_eq!(span.attributes.len(), 2);
+        assert_eq!(span.attributes.get("http.method").unwrap(), "GET");
+    }
+
+    #[test]
+    fn test_span_add_event() {
+        let mut span = Span::new("op", None);
+        let mut attrs = HashMap::new();
+        attrs.insert("key".to_string(), "value".to_string());
+        span.add_event("cache.miss", attrs);
+
+        assert_eq!(span.events.len(), 1);
+        assert_eq!(span.events[0].name, "cache.miss");
+    }
+
+    #[test]
+    fn test_span_set_status() {
+        let mut span = Span::new("op", None);
+        assert_eq!(span.status, SpanStatus::Unset);
+
+        span.set_status(SpanStatus::Ok);
+        assert_eq!(span.status, SpanStatus::Ok);
+
+        span.set_status(SpanStatus::Error("fail".to_string()));
+        assert_eq!(span.status, SpanStatus::Error("fail".to_string()));
+    }
+
+    #[test]
+    fn test_span_end_and_duration() {
+        let mut span = Span::new("op", None);
+        assert!(span.duration().is_none(), "unfinished span has no duration");
+
+        span.end();
+        assert!(span.end_time.is_some());
+        assert!(span.duration().is_some());
+    }
+
+    // =========================================================================
+    // span_to_ingest conversion tests
+    // =========================================================================
+
+    #[test]
+    fn test_span_to_ingest_basic() {
+        let mut span = Span::new("test.op", None);
+        span.set_status(SpanStatus::Ok);
+        span.end();
+
+        let ingest = span_to_ingest(&span);
+        assert_eq!(ingest.trace_id, span.context.trace_id);
+        assert_eq!(ingest.span_id, span.context.span_id);
+        assert_eq!(ingest.parent_id, span.context.parent_id);
+        assert_eq!(ingest.operation, "test.op");
+        assert!(ingest.start_time_us > 0, "should have a real timestamp");
+        assert_eq!(ingest.status, SpanStatusWire::Ok);
+    }
+
+    #[test]
+    fn test_span_to_ingest_error_status() {
+        let mut span = Span::new("fail.op", None);
+        span.set_status(SpanStatus::Error("boom".to_string()));
+        span.end();
+
+        let ingest = span_to_ingest(&span);
+        assert_eq!(ingest.status, SpanStatusWire::Error("boom".to_string()));
+    }
+
+    #[test]
+    fn test_span_to_ingest_with_attributes() {
+        let mut span = Span::new("op", None);
+        span.set_attribute("k1", "v1");
+        span.set_attribute("k2", "v2");
+        span.end();
+
+        let ingest = span_to_ingest(&span);
+        assert_eq!(ingest.attributes.len(), 2);
+    }
+
+    #[test]
+    fn test_span_to_ingest_truncates_attributes() {
+        let mut span = Span::new("op", None);
+        let max = aspen_constants::MAX_SPAN_ATTRIBUTES as usize;
+        for i in 0..max + 10 {
+            span.set_attribute(format!("key_{}", i), "val");
+        }
+        span.end();
+
+        let ingest = span_to_ingest(&span);
+        assert!(ingest.attributes.len() <= max, "should be bounded to MAX_SPAN_ATTRIBUTES");
+    }
+
+    #[test]
+    fn test_span_to_ingest_truncates_events() {
+        let mut span = Span::new("op", None);
+        let max = aspen_constants::MAX_SPAN_EVENTS as usize;
+        for i in 0..max + 5 {
+            span.add_event(format!("event_{}", i), HashMap::new());
+        }
+        span.end();
+
+        let ingest = span_to_ingest(&span);
+        assert!(ingest.events.len() <= max, "should be bounded to MAX_SPAN_EVENTS");
+    }
+
+    // =========================================================================
+    // MetricsCollector tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_metrics_counter() {
+        let metrics = MetricsCollector::new();
+        metrics.increment("requests", 1).await;
+        metrics.increment("requests", 5).await;
+
+        let counters = metrics.get_counters().await;
+        assert_eq!(counters.get("requests"), Some(&6));
+    }
+
+    #[tokio::test]
+    async fn test_metrics_gauge() {
+        let metrics = MetricsCollector::new();
+        metrics.gauge("active_connections", 42.0).await;
+        metrics.gauge("active_connections", 37.0).await;
+
+        let gauges = metrics.get_gauges().await;
+        assert_eq!(gauges.get("active_connections"), Some(&37.0));
+    }
+
+    #[tokio::test]
+    async fn test_metrics_histogram() {
+        let metrics = MetricsCollector::new();
+        for v in &[10.0, 20.0, 30.0, 40.0, 50.0] {
+            metrics.histogram("latency_ms", *v).await;
+        }
+
+        let stats = metrics.get_histogram_stats("latency_ms").await.unwrap();
+        assert_eq!(stats.count, 5);
+        assert!((stats.sum - 150.0).abs() < f64::EPSILON);
+        assert!((stats.mean - 30.0).abs() < f64::EPSILON);
+        assert!((stats.min - 10.0).abs() < f64::EPSILON);
+        assert!((stats.max - 50.0).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn test_metrics_histogram_nonexistent() {
+        let metrics = MetricsCollector::new();
+        assert!(metrics.get_histogram_stats("nosuch").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_metrics_prometheus_export() {
+        let metrics = MetricsCollector::new().with_label("node", "1");
+        metrics.increment("my_counter", 10).await;
+        metrics.gauge("my_gauge", 3.5).await;
+
+        let output = metrics.export_prometheus().await;
+        assert!(output.contains("my_counter"));
+        assert!(output.contains("10"));
+        assert!(output.contains("my_gauge"));
+        assert!(output.contains("3.5"));
+        assert!(output.contains("node=\"1\""));
+    }
+
+    // =========================================================================
+    // percentile helper
+    // =========================================================================
+
+    #[test]
+    fn test_percentile_empty() {
+        assert!((percentile(&[], 0.5) - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_percentile_single() {
+        assert!((percentile(&[42.0], 0.5) - 42.0).abs() < f64::EPSILON);
+        assert!((percentile(&[42.0], 0.99) - 42.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_percentile_sorted() {
+        let values: Vec<f64> = (1..=100).map(|i| i as f64).collect();
+        let p50 = percentile(&values, 0.50);
+        let p99 = percentile(&values, 0.99);
+        // p50 of 1..100 should be around 50
+        assert!((49.0..=51.0).contains(&p50));
+        // p99 should be around 99
+        assert!((98.0..=100.0).contains(&p99));
+    }
+
+    // =========================================================================
+    // ObservabilityBuilder tests
+    // =========================================================================
+
+    #[test]
+    fn test_builder_defaults() {
+        let builder = ObservabilityBuilder::default();
+        assert!(builder.tracing_enabled);
+        assert!(builder.metrics_enabled);
+        assert!((builder.sampling_rate - 1.0).abs() < f64::EPSILON);
+        assert_eq!(builder.max_spans, 10000);
+    }
+
+    #[test]
+    fn test_builder_sampling_rate_clamp() {
+        let builder = ObservabilityBuilder::default().with_sampling_rate(2.0);
+        assert!((builder.sampling_rate - 1.0).abs() < f64::EPSILON);
+
+        let builder = ObservabilityBuilder::default().with_sampling_rate(-0.5);
+        assert!((builder.sampling_rate - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_builder_chaining() {
+        let builder = ObservabilityBuilder::default()
+            .with_tracing(false)
+            .with_metrics(false)
+            .with_sampling_rate(0.5)
+            .with_max_spans(500)
+            .with_export_interval(Duration::from_secs(30));
+
+        assert!(!builder.tracing_enabled);
+        assert!(!builder.metrics_enabled);
+        assert!((builder.sampling_rate - 0.5).abs() < f64::EPSILON);
+        assert_eq!(builder.max_spans, 500);
+        assert_eq!(builder.export_interval, Duration::from_secs(30));
+    }
+}
