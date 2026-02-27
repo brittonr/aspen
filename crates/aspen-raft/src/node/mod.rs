@@ -6,12 +6,6 @@
 //!
 //! ## Architecture
 //!
-//! Instead of:
-//! ```text
-//! Client -> ActorRef -> Message -> RaftActor -> OpenRaft
-//! ```
-//!
-//! We have:
 //! ```text
 //! Client -> RaftNode -> OpenRaft
 //! ```

@@ -320,8 +320,8 @@ impl RedbLogStore {
 
     /// Validates storage integrity (used by supervisor before restart).
     ///
-    /// This method is called by the actor supervision system before allowing
-    /// a RaftActor to restart after a crash. It ensures the storage is not
+    /// This method is called by the supervision system before allowing
+    /// a RaftNode to restart after a crash. It ensures the storage is not
     /// corrupted and safe to use.
     ///
     /// # Returns

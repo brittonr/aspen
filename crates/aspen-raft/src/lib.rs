@@ -108,7 +108,7 @@ pub use write_batcher::BatchConfig;
 
 /// State machine variant that can hold either in-memory or redb-backed storage.
 ///
-/// This enum allows the RaftActor to read from the same state machine that
+/// This enum allows the RaftNode to read from the same state machine that
 /// receives writes through the Raft core, fixing the NotFound bug where reads
 /// queried a placeholder state machine.
 #[derive(Clone, Debug)]
