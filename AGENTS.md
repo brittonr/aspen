@@ -6,7 +6,7 @@ This file provides guidance when working with code in this repository.
 
 Aspen is a foundational orchestration layer for distributed systems, written in Rust. It provides distributed primitives for managing and coordinating distributed systems, drawing inspiration from Erlang/BEAM, Plan9, Kubernetes, FoundationDB, etcd, and Antithesis.
 
-**Status**: Production-ready with ~311,000 lines of code across 33 crates and 350+ passing tests. All trait-based APIs have complete implementations with no stubs or placeholders. The codebase uses direct async APIs (actor-based architecture was removed Dec 13, 2025).
+**Status**: Production-ready with ~386,000 lines of Rust across 72 crates and 683 passing tests. All trait-based APIs have complete implementations with no stubs or placeholders.
 
 **Goal: Self-Hosted Infrastructure** - Aspen aims to build and host itself using its own distributed primitives:
 
@@ -28,20 +28,23 @@ This "eating our own dog food" approach ensures Aspen is robust enough for produ
 
 ### Feature Flags
 
-Default features (enabled in production):
+Default features are empty — users opt-in as needed. The `full` feature enables everything:
 
 - **sql**: DataFusion SQL engine
-- **dns**: DNS with hickory-server
 - **forge/git-bridge**: Git hosting and bidirectional sync
-- **pijul**: Pijul VCS integration
-- **ci**: CI/CD pipelines
+- **ci/ci-basic**: CI/CD pipelines (basic = shell executor, full = VM executor)
 - **secrets**: SOPS secrets management
 - **automerge**: CRDT documents
 - **global-discovery**: BitTorrent DHT
-- **plugins**: Hyperlight-based execution (VM, WASM, Nanvix, RPC plugins)
+- **plugins**: Hyperlight-based execution (VM, WASM, RPC plugins)
 - **shell-worker**: Shell command job execution
+- **blob/docs**: iroh-blobs storage and iroh-docs CRDT replication
+- **hooks**: Event hook system
+- **jobs**: Job execution framework
+- **federation**: Cross-cluster federation
+- **proxy**: Reverse proxy
 
-Dev features: testing, fuzzing, bolero, snix, nix-cache-gateway
+Dev features: testing, fuzzing, bolero, simulation
 
 ## Vendored openraft
 
@@ -98,7 +101,7 @@ Both implemented by `RaftNode` for production; deterministic in-memory versions 
 ### Key Modules
 
 - **crates/aspen-core/**: Core types, traits (`ClusterController`, `KeyValueStore`), and constants
-- **crates/aspen-raft/**: Raft consensus (~22,000 lines) - `RaftNode`, storage, network
+- **crates/aspen-raft/**: Raft consensus (~30,000 lines) - `RaftNode`, storage, network
 - **crates/aspen-coordination/**: Distributed primitives (queues, locks, barriers)
 - **crates/aspen-rpc-handlers/**: Central RPC infrastructure for protocol handlers
 - **crates/aspen-cluster/**: Cluster coordination - `IrohEndpointManager`, bootstrap, gossip
@@ -111,7 +114,7 @@ Both implemented by `RaftNode` for production; deterministic in-memory versions 
 - **crates/aspen-tui/**: Terminal UI (separate binary)
 - **crates/aspen-cli/**: Command-line client (separate binary)
 
-See `docs/architecture/` for detailed design documents.
+See `docs/` for design documents (federation, forge, plugins, simulations).
 
 ## Development Commands
 
@@ -132,8 +135,8 @@ cargo clippy --all-targets -- --deny warnings
 nix run .#rustfmt                        # Format Rust (IMPORTANT: use this, not cargo fmt)
 
 # Run binaries
-cargo run --bin aspen-node -- --node-id 1 --cookie my-cluster
-cargo run --bin aspen-cli -- kv get mykey
+cargo run --features jobs,docs,blob,hooks,automerge --bin aspen-node -- --node-id 1 --cookie my-cluster
+cargo run -p aspen-cli --bin aspen-cli -- kv get mykey
 ```
 
 **Test results**: JUnit XML at `target/nextest/default/junit.xml`
@@ -156,13 +159,14 @@ nix run .#cluster              # Launch 3-node cluster
 
 ### Binaries
 
-- **aspen-node**: Cluster node server
-- **aspen-cli**: Command-line client
-- **aspen-tui**: Terminal UI
-- **aspen-ci-agent**: CI job agent
-- **aspen-fuse**: FUSE filesystem
-- **git-remote-aspen**: Git remote helper
-- **aspen-generate-schema**: Schema generator
+- **aspen-node**: Cluster node server (requires `jobs,docs,blob,hooks,automerge` features)
+- **aspen-cli**: Command-line client (separate crate: `aspen-cli`)
+- **aspen-tui**: Terminal UI (separate crate: `aspen-tui`)
+- **aspen-ci-agent**: CI job agent (separate crate: `aspen-ci`)
+- **aspen-fuse**: FUSE filesystem (separate crate: `aspen-fuse`)
+- **git-remote-aspen**: Git remote helper (requires `git-bridge` feature)
+- **aspen-generate-schema**: Schema generator (requires `ci` feature)
+- **aspen-token**: Token utility
 
 ## Coding Style: Tiger Style
 
@@ -482,9 +486,9 @@ verus! {
 
 | Crate | Verified Modules | Spec Files | Key Invariants |
 | ----- | ---------------- | ---------- | -------------- |
-| aspen-coordination | 14 | 28 | Locks, elections, queues, barriers, fencing |
-| aspen-raft | 11 | 14 | Storage, chain integrity, batching, TTL |
-| aspen-core | 2 | 7 | HLC, tuple encoding, directory ops |
+| aspen-coordination | 20 | 27 | Locks, elections, queues, barriers, fencing |
+| aspen-raft | 10 | 13 | Storage, chain integrity, batching, TTL |
+| aspen-core | 1 | 6 | HLC, tuple encoding, directory ops |
 
 ### Trusted Axioms
 
@@ -505,61 +509,13 @@ Verus specs assume:
 
 ## Resource Bounds
 
-Fixed limits in `crates/aspen-core/src/constants/` to prevent resource exhaustion:
+Fixed limits in `crates/aspen-constants/src/` to prevent resource exhaustion:
 
 - `MAX_BATCH_SIZE` = 1,000 entries
 - `MAX_SCAN_RESULTS` = 10,000 keys
 - `MAX_KEY_SIZE` = 1 KB, `MAX_VALUE_SIZE` = 1 MB
 - `MAX_PEERS` = 1,000, `MAX_CONCURRENT_CONNECTIONS` = 500
 - Timeouts: 5s connect, 2s stream, 10s read
-
-## Self-Hosting Architecture
-
-Aspen's self-hosting strategy uses three integrated components:
-
-### Forge (Decentralized Git)
-
-Git hosting via `git-remote-aspen` helper:
-
-```bash
-# Clone Aspen from an Aspen cluster
-git clone aspen://<ticket>/<repo_id> aspen
-cd aspen && git push aspen main
-```
-
-**Components**: GitBlobStore (iroh-blobs), RefStore (Raft KV), COB system (issues, patches), gossip announcements
-
-### Aspen CI (Distributed CI/CD)
-
-Pipeline configuration in `.aspen/ci.ncl` (Nickel):
-
-```nickel
-{
-  stages = [
-    { name = "check", jobs = [{ type = 'shell, command = "cargo fmt --check" }] },
-    { name = "build", jobs = [{ type = 'nix, flake_attr = "packages.x86_64-linux.default" }] },
-    { name = "test", jobs = [{ type = 'shell, command = "cargo nextest run" }] },
-  ]
-}
-```
-
-**Components**: TriggerService (gossip-triggered builds), PipelineOrchestrator, NixBuildWorker, artifact storage in iroh-blobs
-
-### Nix Integration
-
-Built store paths automatically registered in Aspen's distributed binary cache:
-
-- NAR archives stored in iroh-blobs (P2P distribution)
-- CacheIndex tracks store paths with metadata
-- SNIX storage for decomposed content-addressed storage
-- Workers share build artifacts across cluster
-
-### Self-Hosting Roadmap
-
-1. **Phase 1** (Complete): Core Forge and CI implementations
-2. **Phase 2** (In Progress): Integration testing, real cluster deployments
-3. **Phase 3** (Planned): Full dogfooding - host Aspen development on Aspen
-4. **Phase 4** (Planned): Public Aspen instance for external contributors
 
 ## Git Commit Guidelines
 
@@ -571,4 +527,4 @@ Built store paths automatically registered in Aspen's distributed binary cache:
 
 - Rust 2024 edition
 - Backwards compatibility is not a concern; prioritize clean solutions
-- Outdated references: `RaftActor`, `RaftControlClient`, `KvServiceBuilder`, `NodeServerHandle`
+- Stale comments referencing `RaftActor` remain in aspen-raft (3 doc comments) — harmless but could be cleaned up
