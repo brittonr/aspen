@@ -72,6 +72,9 @@ pub mod mapping;
 pub mod sha1;
 pub mod topological;
 
+#[cfg(all(test, feature = "git-bridge"))]
+mod tests;
+
 // Re-export primary types
 pub use constants::GIT_BRIDGE_ALPN;
 pub use converter::GitObjectConverter;

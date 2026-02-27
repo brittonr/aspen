@@ -1367,6 +1367,7 @@ dependencies = [
  "aspen-cluster",
  "aspen-core",
  "aspen-testing",
+ "aspen-testing-core",
  "async-trait",
  "base64 0.22.1",
  "bincode",

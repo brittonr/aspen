@@ -315,4 +315,115 @@ mod tests {
         assert!(matches!(Command::parse(""), Command::Empty));
         assert!(matches!(Command::parse("  "), Command::Empty));
     }
+
+    // ========================================================================
+    // Batch protocol tests — verify multi-ref fetch/push batching
+    // ========================================================================
+
+    #[test]
+    fn test_read_fetch_batch() {
+        let input = b"fetch aaa111 refs/heads/main\nfetch bbb222 refs/heads/dev\n\n";
+        let mut reader = ProtocolReader::new(&input[..]);
+        let batch = reader.read_batch().unwrap();
+
+        assert_eq!(batch.len(), 2);
+        match &batch[0] {
+            Command::Fetch { sha1, ref_name } => {
+                assert_eq!(sha1, "aaa111");
+                assert_eq!(ref_name, "refs/heads/main");
+            }
+            _ => panic!("expected Fetch"),
+        }
+        match &batch[1] {
+            Command::Fetch { sha1, ref_name } => {
+                assert_eq!(sha1, "bbb222");
+                assert_eq!(ref_name, "refs/heads/dev");
+            }
+            _ => panic!("expected Fetch"),
+        }
+    }
+
+    #[test]
+    fn test_read_push_batch() {
+        let input = b"push refs/heads/main:refs/heads/main\npush refs/heads/dev:refs/heads/dev\n\n";
+        let mut reader = ProtocolReader::new(&input[..]);
+        let batch = reader.read_batch().unwrap();
+
+        assert_eq!(batch.len(), 2);
+        match &batch[0] {
+            Command::Push { src, dst, force } => {
+                assert_eq!(src, "refs/heads/main");
+                assert_eq!(dst, "refs/heads/main");
+                assert!(!force);
+            }
+            _ => panic!("expected Push"),
+        }
+        match &batch[1] {
+            Command::Push { src, dst, force } => {
+                assert_eq!(src, "refs/heads/dev");
+                assert_eq!(dst, "refs/heads/dev");
+                assert!(!force);
+            }
+            _ => panic!("expected Push"),
+        }
+    }
+
+    #[test]
+    fn test_parse_push_delete_ref() {
+        // "push :refs/heads/old-branch" deletes the remote ref
+        match Command::parse("push :refs/heads/old-branch") {
+            Command::Push { src, dst, force } => {
+                assert_eq!(src, "");
+                assert_eq!(dst, "refs/heads/old-branch");
+                assert!(!force);
+            }
+            _ => panic!("expected Push with empty src (delete)"),
+        }
+    }
+
+    #[test]
+    fn test_parse_push_force_delete_ref() {
+        // "push +:refs/heads/old-branch" force-deletes the remote ref
+        match Command::parse("push +:refs/heads/old-branch") {
+            Command::Push { src, dst, force } => {
+                assert_eq!(src, "");
+                assert_eq!(dst, "refs/heads/old-branch");
+                assert!(force);
+            }
+            _ => panic!("expected Push with force + empty src (force delete)"),
+        }
+    }
+
+    #[test]
+    fn test_read_mixed_batch_stops_at_empty() {
+        // Fetch batch followed by more commands — batch stops at first blank line
+        let input = b"fetch aaa111 refs/heads/main\n\ncapabilities\n";
+        let mut reader = ProtocolReader::new(&input[..]);
+        let batch = reader.read_batch().unwrap();
+
+        assert_eq!(batch.len(), 1);
+        // Next command after batch should be "capabilities"
+        let next = reader.read_command().unwrap();
+        assert!(matches!(next, Command::Capabilities));
+    }
+
+    #[test]
+    fn test_read_single_fetch_batch() {
+        // Single fetch followed by blank line is still a valid batch
+        let input = b"fetch abc123 refs/heads/main\n\n";
+        let mut reader = ProtocolReader::new(&input[..]);
+        let batch = reader.read_batch().unwrap();
+
+        assert_eq!(batch.len(), 1);
+    }
+
+    #[test]
+    fn test_read_empty_batch() {
+        // Blank line immediately = empty batch
+        let input = b"\n";
+        let mut reader = ProtocolReader::new(&input[..]);
+        let batch = reader.read_batch().unwrap();
+
+        assert!(batch.is_empty());
+    }
 }
