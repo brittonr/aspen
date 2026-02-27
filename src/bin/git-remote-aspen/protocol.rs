@@ -143,13 +143,11 @@ impl<W: Write> ProtocolWriter<W> {
     }
 
     /// Write a ref listing.
-    #[allow(dead_code)]
     pub fn write_ref(&mut self, sha1: &str, ref_name: &str) -> std::io::Result<()> {
         writeln!(self.writer, "{} {}", sha1, ref_name)
     }
 
     /// Write HEAD symref.
-    #[allow(dead_code)]
     pub fn write_head_symref(&mut self, sha1: &str, target: &str) -> std::io::Result<()> {
         writeln!(self.writer, "{} HEAD", sha1)?;
         writeln!(self.writer, "@{} HEAD", target)
@@ -178,7 +176,6 @@ impl<W: Write> ProtocolWriter<W> {
     }
 
     /// Write push response.
-    #[allow(dead_code)]
     pub fn write_push_ok(&mut self, ref_name: &str) -> std::io::Result<()> {
         writeln!(self.writer, "ok {}", ref_name)?;
         self.writer.flush()
@@ -425,5 +422,229 @@ mod tests {
         let batch = reader.read_batch().unwrap();
 
         assert!(batch.is_empty());
+    }
+
+    // ========================================================================
+    // Writer output format tests
+    // ========================================================================
+
+    #[test]
+    fn test_write_capabilities_format() {
+        let mut output = Vec::new();
+        {
+            let mut writer = ProtocolWriter::new(&mut output);
+            writer.write_capabilities().unwrap();
+        }
+        let text = String::from_utf8(output).unwrap();
+        assert!(text.contains("fetch\n"), "should list fetch capability");
+        assert!(text.contains("push\n"), "should list push capability");
+        assert!(text.contains("option\n"), "should list option capability");
+        assert!(text.ends_with("\n\n"), "capabilities should end with blank line");
+    }
+
+    #[test]
+    fn test_write_ref_format() {
+        let mut output = Vec::new();
+        {
+            let mut writer = ProtocolWriter::new(&mut output);
+            writer.write_ref("abc123", "refs/heads/main").unwrap();
+        }
+        let text = String::from_utf8(output).unwrap();
+        assert_eq!(text, "abc123 refs/heads/main\n");
+    }
+
+    #[test]
+    fn test_write_head_symref_format() {
+        let mut output = Vec::new();
+        {
+            let mut writer = ProtocolWriter::new(&mut output);
+            writer.write_head_symref("abc123", "refs/heads/main").unwrap();
+        }
+        let text = String::from_utf8(output).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], "abc123 HEAD");
+        assert_eq!(lines[1], "@refs/heads/main HEAD");
+    }
+
+    #[test]
+    fn test_write_push_ok_format() {
+        let mut output = Vec::new();
+        {
+            let mut writer = ProtocolWriter::new(&mut output);
+            writer.write_push_ok("refs/heads/main").unwrap();
+        }
+        let text = String::from_utf8(output).unwrap();
+        assert_eq!(text, "ok refs/heads/main\n");
+    }
+
+    #[test]
+    fn test_write_push_error_format() {
+        let mut output = Vec::new();
+        {
+            let mut writer = ProtocolWriter::new(&mut output);
+            writer.write_push_error("refs/heads/main", "non-fast-forward").unwrap();
+        }
+        let text = String::from_utf8(output).unwrap();
+        assert_eq!(text, "error refs/heads/main non-fast-forward\n");
+    }
+
+    #[test]
+    fn test_write_option_supported() {
+        let mut output = Vec::new();
+        {
+            let mut writer = ProtocolWriter::new(&mut output);
+            writer.write_option_response(true).unwrap();
+        }
+        assert_eq!(String::from_utf8(output).unwrap(), "ok\n");
+    }
+
+    #[test]
+    fn test_write_option_unsupported() {
+        let mut output = Vec::new();
+        {
+            let mut writer = ProtocolWriter::new(&mut output);
+            writer.write_option_response(false).unwrap();
+        }
+        assert_eq!(String::from_utf8(output).unwrap(), "unsupported\n");
+    }
+
+    #[test]
+    fn test_write_end_format() {
+        let mut output = Vec::new();
+        {
+            let mut writer = ProtocolWriter::new(&mut output);
+            writer.write_end().unwrap();
+        }
+        assert_eq!(String::from_utf8(output).unwrap(), "\n");
+    }
+
+    #[test]
+    fn test_write_fetch_done_format() {
+        let mut output = Vec::new();
+        {
+            let mut writer = ProtocolWriter::new(&mut output);
+            writer.write_fetch_done().unwrap();
+        }
+        assert_eq!(String::from_utf8(output).unwrap(), "\n");
+    }
+
+    // ========================================================================
+    // Full session simulation tests
+    // ========================================================================
+
+    #[test]
+    fn test_full_list_session() {
+        // Simulates: capabilities → list → empty (done)
+        let input = b"capabilities\nlist\n\n";
+        let mut reader = ProtocolReader::new(&input[..]);
+        let mut output = Vec::new();
+
+        // capabilities
+        let cmd = reader.read_command().unwrap();
+        assert!(matches!(cmd, Command::Capabilities));
+        {
+            let mut writer = ProtocolWriter::new(&mut output);
+            writer.write_capabilities().unwrap();
+        }
+
+        // list
+        let cmd = reader.read_command().unwrap();
+        assert!(matches!(cmd, Command::List { for_push: false }));
+        {
+            let mut writer = ProtocolWriter::new(&mut output);
+            writer.write_ref("aaa111", "refs/heads/main").unwrap();
+            writer.write_ref("bbb222", "refs/heads/dev").unwrap();
+            writer.write_end().unwrap();
+        }
+
+        // empty = done
+        let cmd = reader.read_command().unwrap();
+        assert!(matches!(cmd, Command::Empty));
+
+        let text = String::from_utf8(output).unwrap();
+        assert!(text.contains("aaa111 refs/heads/main"));
+        assert!(text.contains("bbb222 refs/heads/dev"));
+    }
+
+    #[test]
+    fn test_full_push_session_multi_ref() {
+        // Simulates: capabilities → list for-push → push batch → empty (done)
+        let input = b"capabilities\nlist for-push\npush refs/heads/main:refs/heads/main\npush +refs/heads/dev:refs/heads/dev\n\n\n";
+        let mut reader = ProtocolReader::new(&input[..]);
+
+        let cmd = reader.read_command().unwrap();
+        assert!(matches!(cmd, Command::Capabilities));
+
+        let cmd = reader.read_command().unwrap();
+        assert!(matches!(cmd, Command::List { for_push: true }));
+
+        // Read push batch
+        let batch = reader.read_batch().unwrap();
+        assert_eq!(batch.len(), 2);
+        match &batch[0] {
+            Command::Push { src, dst, force } => {
+                assert_eq!(src, "refs/heads/main");
+                assert_eq!(dst, "refs/heads/main");
+                assert!(!force);
+            }
+            _ => panic!("expected Push"),
+        }
+        match &batch[1] {
+            Command::Push { src, dst, force } => {
+                assert_eq!(src, "refs/heads/dev");
+                assert_eq!(dst, "refs/heads/dev");
+                assert!(*force);
+            }
+            _ => panic!("expected force Push"),
+        }
+    }
+
+    #[test]
+    fn test_parse_option_with_no_value() {
+        match Command::parse("option progress") {
+            Command::Option { name, value } => {
+                assert_eq!(name, "progress");
+                assert_eq!(value, "");
+            }
+            _ => panic!("expected Option with empty value"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unknown_command() {
+        match Command::parse("import abc123") {
+            Command::Unknown(line) => assert_eq!(line, "import abc123"),
+            _ => panic!("expected Unknown"),
+        }
+    }
+
+    #[test]
+    fn test_reader_eof_returns_empty() {
+        let input = b"";
+        let mut reader = ProtocolReader::new(&input[..]);
+        let cmd = reader.read_command().unwrap();
+        assert!(matches!(cmd, Command::Empty));
+    }
+
+    #[test]
+    fn test_write_ref_list_with_head() {
+        // Simulate a full ref listing with HEAD symref
+        let mut output = Vec::new();
+        {
+            let mut writer = ProtocolWriter::new(&mut output);
+            let sha1 = "a".repeat(40);
+            writer.write_head_symref(&sha1, "refs/heads/main").unwrap();
+            writer.write_ref(&sha1, "refs/heads/main").unwrap();
+            writer.write_ref(&"b".repeat(40), "refs/heads/dev").unwrap();
+            writer.write_end().unwrap();
+        }
+        let text = String::from_utf8(output).unwrap();
+        // Should contain HEAD, symref, two refs, then blank line terminator
+        assert!(text.contains(&format!("{} HEAD", "a".repeat(40))));
+        assert!(text.contains("@refs/heads/main HEAD"));
+        assert!(text.contains(&format!("{} refs/heads/main", "a".repeat(40))));
+        assert!(text.contains(&format!("{} refs/heads/dev", "b".repeat(40))));
+        assert!(text.ends_with('\n'), "listing should end with newline");
     }
 }

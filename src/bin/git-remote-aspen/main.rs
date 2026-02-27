@@ -981,77 +981,89 @@ impl RemoteHelper {
         &self,
         objects: Vec<aspen::client_rpc::GitBridgeObject>,
     ) -> Vec<Vec<aspen::client_rpc::GitBridgeObject>> {
-        let mut blobs = Vec::new();
-        let mut trees = Vec::new();
-        let mut commits = Vec::new();
-        let mut tags = Vec::new();
-        let mut other = Vec::new();
+        build_object_batches_inner(objects, self.options.verbosity)
+    }
+}
 
-        for obj in objects {
-            match obj.object_type.as_str() {
-                "blob" => blobs.push(obj),
-                "tree" => trees.push(obj),
-                "commit" => commits.push(obj),
-                "tag" => tags.push(obj),
-                _ => other.push(obj),
-            }
+/// Build ordered object batches: blobs → trees (single batch) → commits → tags.
+///
+/// Extracted as a free function for testability. `verbosity` controls stderr output.
+fn build_object_batches_inner(
+    objects: Vec<aspen::client_rpc::GitBridgeObject>,
+    verbosity: u32,
+) -> Vec<Vec<aspen::client_rpc::GitBridgeObject>> {
+    let mut blobs = Vec::new();
+    let mut trees = Vec::new();
+    let mut commits = Vec::new();
+    let mut tags = Vec::new();
+    let mut other = Vec::new();
+
+    for obj in objects {
+        match obj.object_type.as_str() {
+            "blob" => blobs.push(obj),
+            "tree" => trees.push(obj),
+            "commit" => commits.push(obj),
+            "tag" => tags.push(obj),
+            _ => other.push(obj),
         }
-
-        let mut batches: Vec<Vec<aspen::client_rpc::GitBridgeObject>> = Vec::new();
-
-        let add_batched = |objects: Vec<aspen::client_rpc::GitBridgeObject>,
-                           batches: &mut Vec<Vec<aspen::client_rpc::GitBridgeObject>>| {
-            let mut current_batch: Vec<aspen::client_rpc::GitBridgeObject> = Vec::new();
-            let mut current_batch_bytes = 0usize;
-
-            for obj in objects {
-                let obj_size = obj.sha1.len() + obj.object_type.len() + obj.data.len() + 32;
-                if (current_batch_bytes + obj_size > MAX_BATCH_BYTES || current_batch.len() >= MAX_BATCH_OBJECTS)
-                    && !current_batch.is_empty()
-                {
-                    batches.push(std::mem::take(&mut current_batch));
-                    current_batch_bytes = 0;
-                }
-                current_batch_bytes += obj_size;
-                current_batch.push(obj);
-            }
-            if !current_batch.is_empty() {
-                batches.push(current_batch);
-            }
-        };
-
-        if self.options.verbosity > 0 && !blobs.is_empty() {
-            eprintln!("git-remote-aspen: batching {} blobs", blobs.len());
-        }
-        add_batched(blobs, &mut batches);
-
-        if !trees.is_empty() {
-            if self.options.verbosity > 0 {
-                let tree_bytes: usize = trees.iter().map(|t| t.data.len()).sum();
-                eprintln!(
-                    "git-remote-aspen: sending all {} trees together ({:.2} MB)",
-                    trees.len(),
-                    tree_bytes as f64 / (1024.0 * 1024.0)
-                );
-            }
-            batches.push(trees);
-        }
-
-        if self.options.verbosity > 0 && !commits.is_empty() {
-            eprintln!("git-remote-aspen: batching {} commits", commits.len());
-        }
-        add_batched(commits, &mut batches);
-
-        if !tags.is_empty() {
-            add_batched(tags, &mut batches);
-        }
-        if !other.is_empty() {
-            add_batched(other, &mut batches);
-        }
-
-        batches
     }
 
+    let mut batches: Vec<Vec<aspen::client_rpc::GitBridgeObject>> = Vec::new();
+
+    let add_batched = |objects: Vec<aspen::client_rpc::GitBridgeObject>,
+                       batches: &mut Vec<Vec<aspen::client_rpc::GitBridgeObject>>| {
+        let mut current_batch: Vec<aspen::client_rpc::GitBridgeObject> = Vec::new();
+        let mut current_batch_bytes = 0usize;
+
+        for obj in objects {
+            let obj_size = obj.sha1.len() + obj.object_type.len() + obj.data.len() + 32;
+            if (current_batch_bytes + obj_size > MAX_BATCH_BYTES || current_batch.len() >= MAX_BATCH_OBJECTS)
+                && !current_batch.is_empty()
+            {
+                batches.push(std::mem::take(&mut current_batch));
+                current_batch_bytes = 0;
+            }
+            current_batch_bytes += obj_size;
+            current_batch.push(obj);
+        }
+        if !current_batch.is_empty() {
+            batches.push(current_batch);
+        }
+    };
+
+    if verbosity > 0 && !blobs.is_empty() {
+        eprintln!("git-remote-aspen: batching {} blobs", blobs.len());
+    }
+    add_batched(blobs, &mut batches);
+
+    if !trees.is_empty() {
+        if verbosity > 0 {
+            let tree_bytes: usize = trees.iter().map(|t| t.data.len()).sum();
+            eprintln!(
+                "git-remote-aspen: sending all {} trees together ({:.2} MB)",
+                trees.len(),
+                tree_bytes as f64 / (1024.0 * 1024.0)
+            );
+        }
+        batches.push(trees);
+    }
+
+    if verbosity > 0 && !commits.is_empty() {
+        eprintln!("git-remote-aspen: batching {} commits", commits.len());
+    }
+    add_batched(commits, &mut batches);
+
+    if !tags.is_empty() {
+        add_batched(tags, &mut batches);
+    }
+    if !other.is_empty() {
+        add_batched(other, &mut batches);
+    }
+
+    batches
+}
+
+impl RemoteHelper {
     /// Resolve a git ref to a SHA-1 hash.
     fn resolve_ref(&self, git_dir: &std::path::Path, refspec: &str) -> io::Result<String> {
         // First, check if it's already a full SHA-1
@@ -1496,4 +1508,183 @@ async fn main() -> io::Result<()> {
 
     let mut helper = RemoteHelper::new(remote_name.clone(), url)?;
     helper.run().await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper to create a GitBridgeObject for testing.
+    fn make_obj(sha1: &str, obj_type: &str, data_size: usize) -> aspen::client_rpc::GitBridgeObject {
+        aspen::client_rpc::GitBridgeObject {
+            sha1: sha1.to_string(),
+            object_type: obj_type.to_string(),
+            data: vec![0u8; data_size],
+        }
+    }
+
+    // ========================================================================
+    // Object batching tests
+    // ========================================================================
+
+    #[test]
+    fn test_batch_type_ordering() {
+        // Objects arrive in random order — batches should be: blobs, trees, commits, tags
+        let objects = vec![
+            make_obj("c1", "commit", 100),
+            make_obj("b1", "blob", 100),
+            make_obj("t1", "tag", 100),
+            make_obj("tr1", "tree", 100),
+        ];
+
+        let batches = build_object_batches_inner(objects, 0);
+
+        // Collect types per batch
+        let batch_types: Vec<Vec<&str>> =
+            batches.iter().map(|batch| batch.iter().map(|o| o.object_type.as_str()).collect()).collect();
+
+        // Find first occurrence of each type
+        let mut type_order = Vec::new();
+        for types in &batch_types {
+            for t in types {
+                if !type_order.contains(t) {
+                    type_order.push(*t);
+                }
+            }
+        }
+
+        assert_eq!(
+            type_order,
+            vec!["blob", "tree", "commit", "tag"],
+            "type order should be blob → tree → commit → tag"
+        );
+    }
+
+    #[test]
+    fn test_batch_empty_objects() {
+        let batches = build_object_batches_inner(vec![], 0);
+        assert!(batches.is_empty(), "empty input should produce no batches");
+    }
+
+    #[test]
+    fn test_batch_trees_single_batch() {
+        // All trees should go in one batch regardless of count
+        let objects: Vec<_> = (0..100).map(|i| make_obj(&format!("t{}", i), "tree", 100)).collect();
+        let batches = build_object_batches_inner(objects, 0);
+
+        // Find the tree batch
+        let tree_batch = batches.iter().find(|b| b[0].object_type == "tree");
+        assert!(tree_batch.is_some(), "should have a tree batch");
+        assert_eq!(tree_batch.unwrap().len(), 100, "all trees should be in one batch");
+    }
+
+    #[test]
+    fn test_batch_blobs_split_by_size() {
+        // Create blobs that exceed MAX_BATCH_BYTES
+        // MAX_BATCH_BYTES is 4MB. Each blob has ~1MB data + overhead.
+        let objects: Vec<_> = (0..10).map(|i| make_obj(&format!("b{}", i), "blob", 1_000_000)).collect();
+
+        let batches = build_object_batches_inner(objects, 0);
+
+        // With 10 blobs of 1MB each, should need at least 3 batches (4MB limit)
+        assert!(batches.len() >= 3, "10x1MB blobs should split into at least 3 batches, got {}", batches.len());
+
+        // All batches should contain only blobs
+        for batch in &batches {
+            for obj in batch {
+                assert_eq!(obj.object_type, "blob");
+            }
+        }
+    }
+
+    #[test]
+    fn test_batch_blobs_split_by_count() {
+        // MAX_BATCH_OBJECTS is 2000. Create more than that.
+        let objects: Vec<_> = (0..2500).map(|i| make_obj(&format!("b{}", i), "blob", 10)).collect();
+
+        let batches = build_object_batches_inner(objects, 0);
+
+        // Should split into 2 batches (2000 + 500)
+        assert_eq!(batches.len(), 2, "2500 small blobs should split into 2 batches");
+        assert_eq!(batches[0].len(), 2000);
+        assert_eq!(batches[1].len(), 500);
+    }
+
+    #[test]
+    fn test_batch_mixed_types() {
+        let objects = vec![
+            make_obj("b1", "blob", 100),
+            make_obj("b2", "blob", 100),
+            make_obj("t1", "tree", 100),
+            make_obj("t2", "tree", 100),
+            make_obj("c1", "commit", 100),
+            make_obj("tag1", "tag", 100),
+        ];
+
+        let batches = build_object_batches_inner(objects, 0);
+
+        // Should have separate batches for blobs, trees, commits, tags
+        // but small objects may combine within limits
+        let total: usize = batches.iter().map(|b| b.len()).sum();
+        assert_eq!(total, 6, "all 6 objects should be batched");
+
+        // Verify ordering: all blobs before trees before commits before tags
+        let mut all_types: Vec<&str> = Vec::new();
+        for batch in &batches {
+            for obj in batch {
+                all_types.push(&obj.object_type);
+            }
+        }
+        let blob_last = all_types.iter().rposition(|&t| t == "blob").unwrap_or(0);
+        let tree_first = all_types.iter().position(|&t| t == "tree").unwrap_or(usize::MAX);
+        let tree_last = all_types.iter().rposition(|&t| t == "tree").unwrap_or(0);
+        let commit_first = all_types.iter().position(|&t| t == "commit").unwrap_or(usize::MAX);
+        let commit_last = all_types.iter().rposition(|&t| t == "commit").unwrap_or(0);
+        let tag_first = all_types.iter().position(|&t| t == "tag").unwrap_or(usize::MAX);
+
+        assert!(blob_last < tree_first, "all blobs should come before all trees");
+        assert!(tree_last < commit_first, "all trees should come before all commits");
+        assert!(commit_last < tag_first, "all commits should come before all tags");
+    }
+
+    #[test]
+    fn test_batch_only_commits() {
+        let objects = vec![
+            make_obj("c1", "commit", 500),
+            make_obj("c2", "commit", 500),
+            make_obj("c3", "commit", 500),
+        ];
+
+        let batches = build_object_batches_inner(objects, 0);
+        assert_eq!(batches.len(), 1, "3 small commits should fit in 1 batch");
+        assert_eq!(batches[0].len(), 3);
+        for obj in &batches[0] {
+            assert_eq!(obj.object_type, "commit");
+        }
+    }
+
+    #[test]
+    fn test_batch_only_tags() {
+        let objects = vec![make_obj("tag1", "tag", 200), make_obj("tag2", "tag", 200)];
+
+        let batches = build_object_batches_inner(objects, 0);
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].len(), 2);
+    }
+
+    #[test]
+    fn test_batch_preserves_sha1s() {
+        let objects = vec![
+            make_obj("aaa", "blob", 50),
+            make_obj("bbb", "tree", 50),
+            make_obj("ccc", "commit", 50),
+        ];
+
+        let batches = build_object_batches_inner(objects, 0);
+        let all_sha1s: Vec<&str> = batches.iter().flat_map(|b| b.iter().map(|o| o.sha1.as_str())).collect();
+
+        assert!(all_sha1s.contains(&"aaa"));
+        assert!(all_sha1s.contains(&"bbb"));
+        assert!(all_sha1s.contains(&"ccc"));
+    }
 }
