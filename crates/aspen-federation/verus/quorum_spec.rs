@@ -15,7 +15,7 @@ pub open spec fn quorum_spec(total: u32) -> u32 {
     if total == 0 {
         1u32
     } else {
-        (total / 2) + 1
+        ((total / 2) + 1) as u32
     }
 }
 

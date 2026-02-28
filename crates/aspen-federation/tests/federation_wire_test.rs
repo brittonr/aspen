@@ -32,13 +32,18 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use aspen_core::Signature;
 use aspen_federation::identity::ClusterIdentity;
+use aspen_federation::resolver::FederationResourceError;
+use aspen_federation::resolver::FederationResourceResolver;
+use aspen_federation::resolver::FederationResourceState;
 use aspen_federation::sync::FEDERATION_ALPN;
 use aspen_federation::sync::FEDERATION_PROTOCOL_VERSION;
 use aspen_federation::sync::FederationProtocolContext;
 use aspen_federation::sync::FederationProtocolHandler;
 use aspen_federation::sync::FederationRequest;
 use aspen_federation::sync::FederationResponse;
+use aspen_federation::sync::SyncObject;
 use aspen_federation::sync::get_remote_resource_state;
 use aspen_federation::sync::list_remote_resources;
 use aspen_federation::sync::sync_remote_objects;
@@ -46,6 +51,7 @@ use aspen_federation::trust::TrustManager;
 use aspen_federation::types::FederatedId;
 use aspen_federation::types::FederationMode;
 use aspen_federation::types::FederationSettings;
+use async_trait::async_trait;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::endpoint::Connection;
@@ -55,6 +61,46 @@ use tokio::sync::RwLock;
 // ============================================================================
 // Test Helpers
 // ============================================================================
+
+/// Mock resource resolver for testing object verification.
+struct MockResolver {
+    objects: Arc<RwLock<Vec<SyncObject>>>,
+    state: Arc<RwLock<FederationResourceState>>,
+}
+
+impl MockResolver {
+    /// Create a new mock resolver with the given objects.
+    fn new(objects: Vec<SyncObject>) -> Self {
+        Self {
+            objects: Arc::new(RwLock::new(objects)),
+            state: Arc::new(RwLock::new(FederationResourceState::default())),
+        }
+    }
+}
+
+#[async_trait]
+impl FederationResourceResolver for MockResolver {
+    async fn get_resource_state(
+        &self,
+        _fed_id: &FederatedId,
+    ) -> Result<FederationResourceState, FederationResourceError> {
+        Ok(self.state.read().await.clone())
+    }
+
+    async fn sync_objects(
+        &self,
+        _fed_id: &FederatedId,
+        _want_types: &[String],
+        _have_hashes: &[[u8; 32]],
+        _limit: u32,
+    ) -> Result<Vec<SyncObject>, FederationResourceError> {
+        Ok(self.objects.read().await.clone())
+    }
+
+    async fn resource_exists(&self, _fed_id: &FederatedId) -> bool {
+        true
+    }
+}
 
 /// A minimal federation cluster for testing.
 struct TestCluster {
@@ -69,6 +115,11 @@ struct TestCluster {
 impl TestCluster {
     /// Create a new test cluster with an iroh endpoint and federation handler.
     async fn new(name: &str) -> Self {
+        Self::new_with_resolver(name, None).await
+    }
+
+    /// Create a new test cluster with an optional resource resolver.
+    async fn new_with_resolver(name: &str, resource_resolver: Option<Arc<dyn FederationResourceResolver>>) -> Self {
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
         let identity = ClusterIdentity::generate(name.to_string());
         let trust_manager = Arc::new(TrustManager::new());
@@ -86,7 +137,7 @@ impl TestCluster {
             resource_settings: resource_settings.clone(),
             endpoint: Arc::new(endpoint.clone()),
             hlc,
-            resource_resolver: None,
+            resource_resolver,
         };
 
         let handler = FederationProtocolHandler::new(context);
@@ -110,11 +161,17 @@ impl TestCluster {
 
     /// Add a federated resource with the given mode.
     async fn add_resource(&self, fed_id: FederatedId, mode: FederationMode) {
+        self.add_typed_resource(fed_id, mode, "forge:repo").await;
+    }
+
+    /// Add a federated resource with the given mode and resource type.
+    async fn add_typed_resource(&self, fed_id: FederatedId, mode: FederationMode, resource_type: &str) {
         let settings = match mode {
             FederationMode::Public => FederationSettings::public(),
             FederationMode::AllowList => FederationSettings::allowlist(vec![]),
             FederationMode::Disabled => FederationSettings::disabled(),
-        };
+        }
+        .with_resource_type(resource_type);
         self.resource_settings.write().await.insert(fed_id, settings);
     }
 
@@ -563,4 +620,271 @@ async fn test_full_sync_flow() {
 
     assert!(objects.is_empty(), "no resolver = no objects");
     assert!(!has_more);
+}
+
+// ============================================================================
+// Content Hash and Delegate Signature Verification Tests
+// ============================================================================
+
+#[tokio::test]
+#[ignore]
+async fn test_sync_objects_drops_bad_content_hash() {
+    let alice = TestCluster::new("alice").await;
+
+    // Create mock resolver that returns objects with mismatched hashes
+    let good_data = b"this is the correct data";
+    let good_hash = *blake3::hash(good_data).as_bytes();
+
+    let bad_data = b"this is the wrong data";
+    let bad_hash = *blake3::hash(b"different content").as_bytes(); // Hash doesn't match data
+
+    let mock_objects = vec![
+        // Good object: hash matches data
+        SyncObject {
+            object_type: "blob".to_string(),
+            hash: good_hash,
+            data: good_data.to_vec(),
+            signature: None,
+            signer: None,
+        },
+        // Bad object: hash doesn't match data
+        SyncObject {
+            object_type: "blob".to_string(),
+            hash: bad_hash,
+            data: bad_data.to_vec(),
+            signature: None,
+            signer: None,
+        },
+    ];
+
+    let resolver = Arc::new(MockResolver::new(mock_objects));
+    let bob = TestCluster::new_with_resolver("bob", Some(resolver)).await;
+
+    alice.trust_manager.add_trusted(bob.cluster_key(), "bob".to_string(), None);
+    bob.trust_manager.add_trusted(alice.cluster_key(), "alice".to_string(), None);
+
+    let repo = test_fed_id(bob.cluster_key(), "test-repo");
+    bob.add_resource(repo, FederationMode::Public).await;
+
+    let (conn, _) = tokio::time::timeout(
+        Duration::from_secs(10),
+        connect_and_handshake(&alice.endpoint, &alice.identity, bob.endpoint_addr()),
+    )
+    .await
+    .expect("timeout")
+    .expect("connect");
+
+    // Sync objects without delegate verification
+    let (objects, _has_more) = tokio::time::timeout(
+        Duration::from_secs(10),
+        sync_remote_objects(&conn, &repo, vec!["blob".to_string()], vec![], 100, None),
+    )
+    .await
+    .expect("timeout")
+    .expect("sync");
+
+    // Only the good object should be returned (bad hash dropped)
+    assert_eq!(objects.len(), 1, "bad content hash should be dropped");
+    assert_eq!(objects[0].hash, good_hash);
+    assert_eq!(objects[0].data, good_data);
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_sync_objects_drops_bad_delegate_signature() {
+    let alice = TestCluster::new("alice").await;
+
+    // Create a valid delegate key
+    let delegate_secret = iroh::SecretKey::generate(&mut rand::rng());
+    let delegate_pub = delegate_secret.public();
+
+    // Create an unauthorized key (not in delegates list)
+    let unauthorized_secret = iroh::SecretKey::generate(&mut rand::rng());
+
+    let data = b"signed object data";
+    let hash = *blake3::hash(data).as_bytes();
+
+    // Create FederatedId for signing
+    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let fed_id = test_fed_id(origin, "test-repo");
+
+    // Build the signed message (same format as verify_delegate_signature)
+    let object_type = "commit";
+    let timestamp_ms = 0u64;
+    let mut message = Vec::new();
+    message.extend_from_slice(fed_id.origin().as_bytes());
+    message.extend_from_slice(fed_id.local_id());
+    message.extend_from_slice(object_type.as_bytes());
+    message.extend_from_slice(&hash);
+    message.extend_from_slice(&timestamp_ms.to_le_bytes());
+
+    // Sign with unauthorized key (invalid)
+    let bad_sig = unauthorized_secret.sign(&message);
+    let bad_signature = Signature(bad_sig.to_bytes());
+
+    let mock_objects = vec![SyncObject {
+        object_type: object_type.to_string(),
+        hash,
+        data: data.to_vec(),
+        signature: Some(bad_signature),
+        signer: Some(*unauthorized_secret.public().as_bytes()),
+    }];
+
+    let resolver = Arc::new(MockResolver::new(mock_objects));
+    let bob = TestCluster::new_with_resolver("bob", Some(resolver)).await;
+
+    alice.trust_manager.add_trusted(bob.cluster_key(), "bob".to_string(), None);
+    bob.trust_manager.add_trusted(alice.cluster_key(), "alice".to_string(), None);
+
+    bob.add_resource(fed_id, FederationMode::Public).await;
+
+    let (conn, _) = tokio::time::timeout(
+        Duration::from_secs(10),
+        connect_and_handshake(&alice.endpoint, &alice.identity, bob.endpoint_addr()),
+    )
+    .await
+    .expect("timeout")
+    .expect("connect");
+
+    // Sync with delegate verification enabled
+    let (objects, _has_more) = tokio::time::timeout(
+        Duration::from_secs(10),
+        sync_remote_objects(&conn, &fed_id, vec![object_type.to_string()], vec![], 100, Some(&[delegate_pub])),
+    )
+    .await
+    .expect("timeout")
+    .expect("sync");
+
+    // Object with invalid signature should be dropped
+    assert_eq!(objects.len(), 0, "bad delegate signature should be dropped");
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_sync_objects_passes_valid_delegate_signature() {
+    let alice = TestCluster::new("alice").await;
+
+    // Create a valid delegate key
+    let delegate_secret = iroh::SecretKey::generate(&mut rand::rng());
+    let delegate_pub = delegate_secret.public();
+
+    let data = b"properly signed object data";
+    let hash = *blake3::hash(data).as_bytes();
+
+    // Create FederatedId for signing
+    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let fed_id = test_fed_id(origin, "test-repo");
+
+    // Build the signed message
+    let object_type = "commit";
+    let timestamp_ms = 0u64;
+    let mut message = Vec::new();
+    message.extend_from_slice(fed_id.origin().as_bytes());
+    message.extend_from_slice(fed_id.local_id());
+    message.extend_from_slice(object_type.as_bytes());
+    message.extend_from_slice(&hash);
+    message.extend_from_slice(&timestamp_ms.to_le_bytes());
+
+    // Sign with valid delegate key
+    let valid_sig = delegate_secret.sign(&message);
+    let signature = Signature(valid_sig.to_bytes());
+
+    let mock_objects = vec![SyncObject {
+        object_type: object_type.to_string(),
+        hash,
+        data: data.to_vec(),
+        signature: Some(signature),
+        signer: Some(*delegate_pub.as_bytes()),
+    }];
+
+    let resolver = Arc::new(MockResolver::new(mock_objects));
+    let bob = TestCluster::new_with_resolver("bob", Some(resolver)).await;
+
+    alice.trust_manager.add_trusted(bob.cluster_key(), "bob".to_string(), None);
+    bob.trust_manager.add_trusted(alice.cluster_key(), "alice".to_string(), None);
+
+    bob.add_resource(fed_id, FederationMode::Public).await;
+
+    let (conn, _) = tokio::time::timeout(
+        Duration::from_secs(10),
+        connect_and_handshake(&alice.endpoint, &alice.identity, bob.endpoint_addr()),
+    )
+    .await
+    .expect("timeout")
+    .expect("connect");
+
+    // Sync with delegate verification enabled
+    let (objects, _has_more) = tokio::time::timeout(
+        Duration::from_secs(10),
+        sync_remote_objects(&conn, &fed_id, vec![object_type.to_string()], vec![], 100, Some(&[delegate_pub])),
+    )
+    .await
+    .expect("timeout")
+    .expect("sync");
+
+    // Valid signature should pass through
+    assert_eq!(objects.len(), 1, "valid delegate signature should pass");
+    assert_eq!(objects[0].hash, hash);
+    assert_eq!(objects[0].data, data);
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_sync_objects_accepts_unsigned_when_no_delegates() {
+    let alice = TestCluster::new("alice").await;
+
+    // Create unsigned objects
+    let data1 = b"unsigned object 1";
+    let hash1 = *blake3::hash(data1).as_bytes();
+
+    let data2 = b"unsigned object 2";
+    let hash2 = *blake3::hash(data2).as_bytes();
+
+    let mock_objects = vec![
+        SyncObject {
+            object_type: "blob".to_string(),
+            hash: hash1,
+            data: data1.to_vec(),
+            signature: None,
+            signer: None,
+        },
+        SyncObject {
+            object_type: "blob".to_string(),
+            hash: hash2,
+            data: data2.to_vec(),
+            signature: None,
+            signer: None,
+        },
+    ];
+
+    let resolver = Arc::new(MockResolver::new(mock_objects));
+    let bob = TestCluster::new_with_resolver("bob", Some(resolver)).await;
+
+    alice.trust_manager.add_trusted(bob.cluster_key(), "bob".to_string(), None);
+    bob.trust_manager.add_trusted(alice.cluster_key(), "alice".to_string(), None);
+
+    let repo = test_fed_id(bob.cluster_key(), "test-repo");
+    bob.add_resource(repo, FederationMode::Public).await;
+
+    let (conn, _) = tokio::time::timeout(
+        Duration::from_secs(10),
+        connect_and_handshake(&alice.endpoint, &alice.identity, bob.endpoint_addr()),
+    )
+    .await
+    .expect("timeout")
+    .expect("connect");
+
+    // Sync without delegate verification (delegates = None)
+    let (objects, _has_more) = tokio::time::timeout(
+        Duration::from_secs(10),
+        sync_remote_objects(&conn, &repo, vec!["blob".to_string()], vec![], 100, None),
+    )
+    .await
+    .expect("timeout")
+    .expect("sync");
+
+    // All unsigned objects should pass (only hash check applies)
+    assert_eq!(objects.len(), 2, "unsigned objects should pass when delegates = None");
+    assert_eq!(objects[0].hash, hash1);
+    assert_eq!(objects[1].hash, hash2);
 }

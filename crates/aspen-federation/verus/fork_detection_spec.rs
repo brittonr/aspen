@@ -68,8 +68,8 @@ pub open spec fn agreement_implies_no_fork(
 ) -> bool {
     // If all claims for ref_name have the same hash value,
     // then there should be no fork for this ref.
-    (forall|i: int| 0 <= i < claims.len() ==>
-        forall|j: int| 0 <= j < claims[i].heads.len() ==>
+    (forall|i: int| #![trigger claims[i]] 0 <= i < claims.len() ==>
+        forall|j: int| #![trigger claims[i].heads[j]] 0 <= j < claims[i].heads.len() ==>
             claims[i].heads[j].0 == ref_name ==>
                 claims[i].heads[j].1 == agreed_hash
     ) ==> !ref_has_fork(claims, ref_name)
@@ -106,13 +106,16 @@ pub open spec fn disagreement_implies_fork(
 ///
 /// Used in fork detection to compare ref heads from different seeders.
 pub fn hashes_equal(a: &[u8; 32], b: &[u8; 32]) -> (result: bool)
-    ensures result == (a@ == b@)
+    ensures result == (a@ =~= b@)
 {
     let mut i: usize = 0;
     while i < 32
         invariant
             0 <= i <= 32,
+            a@.len() == 32,
+            b@.len() == 32,
             forall|j: int| 0 <= j < i as int ==> a@[j] == b@[j]
+        decreases 32 - i
     {
         if a[i] != b[i] {
             return false;

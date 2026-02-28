@@ -33,3 +33,5 @@
 
 mod fork_detection_spec;
 mod quorum_spec;
+
+fn main() {}

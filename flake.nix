@@ -1957,10 +1957,10 @@
               ''}";
             };
 
-            # Verus formal verification (all specs: Core + Raft + Coordination + Cluster + Transport)
+            # Verus formal verification (all specs: Core + Raft + Coordination + Cluster + Transport + Federation)
             # Usage: nix run .#verify-verus [command]
-            # Commands: all (default), quick, core, cluster
-            # NOTE: raft, coordination, transport specs extracted to sibling repos
+            # Commands: all (default), federation, core, cluster, ...
+            # NOTE: most specs extracted to sibling repos; federation verifies in-repo
             verify-verus = {
               type = "app";
               program = "${pkgs.writeShellScript "verify-verus" ''
@@ -1975,12 +1975,22 @@
                   all|"")
                     echo "=== Verus Formal Verification ==="
                     echo ""
-                    echo "All verus specs have been extracted to sibling repos:"
+                    echo "In-repo specs (can verify directly):"
+                    echo "  Federation:   nix run .#verify-verus federation"
+                    echo ""
+                    echo "Extracted to sibling repos:"
                     echo "  Core:         cd ~/git/aspen-core && verus crates/aspen-core/verus/lib.rs"
                     echo "  Cluster:      cd ~/git/aspen-cluster && verus crates/aspen-cluster/verus/lib.rs"
                     echo "  Raft:         cd ~/git/aspen-raft && nix run .#verify-verus"
                     echo "  Coordination: cd ~/git/aspen-coordination && nix run .#verify-verus"
                     echo "  Transport:    cd ~/git/aspen-transport && nix run .#verify-verus"
+                    ;;
+                  federation|fed)
+                    echo "=== Verifying Federation specs ==="
+                    "${verusRoot}/rust_verify" \
+                      --crate-type=bin \
+                      "''${FLAKE_ROOT:-.}/crates/aspen-federation/verus/lib.rs"
+                    echo "Federation: all specs verified ✓"
                     ;;
                   core)
                     echo "Core specs extracted to ~/git/aspen-core"
@@ -2011,7 +2021,8 @@
                     echo "All verus specs have been extracted to sibling repos."
                     echo ""
                     echo "Commands:"
-                    echo "  all (default)    Show sibling repo locations"
+                    echo "  all (default)    Show all spec locations"
+                    echo "  federation       Verify Federation specs (in-repo)"
                     echo "  core             Show Core repo location"
                     echo "  cluster          Show Cluster repo location"
                     echo "  raft             Show Raft repo location"
