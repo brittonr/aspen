@@ -29,7 +29,8 @@
 mod client;
 mod handler;
 mod types;
-mod wire;
+/// Wire format utilities (length-prefixed postcard framing).
+pub mod wire;
 
 use std::time::Duration;
 
