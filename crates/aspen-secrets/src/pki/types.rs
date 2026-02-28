@@ -504,3 +504,301 @@ pub struct PendingIntermediateCa {
     /// Organization from the CSR.
     pub organization: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // PkiKeyType
+    // =========================================================================
+
+    #[test]
+    fn test_pki_key_type_default_is_rsa2048() {
+        assert_eq!(PkiKeyType::default(), PkiKeyType::Rsa2048);
+    }
+
+    #[test]
+    fn test_pki_key_type_names_are_unique() {
+        let variants = [
+            PkiKeyType::Rsa2048,
+            PkiKeyType::Rsa3072,
+            PkiKeyType::Rsa4096,
+            PkiKeyType::EcdsaP256,
+            PkiKeyType::EcdsaP384,
+            PkiKeyType::Ed25519,
+        ];
+        let names: Vec<&str> = variants.iter().map(|v| v.name()).collect();
+        let mut deduped = names.clone();
+        deduped.sort();
+        deduped.dedup();
+        assert_eq!(names.len(), deduped.len(), "key type names must be unique");
+    }
+
+    #[test]
+    fn test_pki_key_type_name_values() {
+        assert_eq!(PkiKeyType::Rsa2048.name(), "rsa-2048");
+        assert_eq!(PkiKeyType::Rsa3072.name(), "rsa-3072");
+        assert_eq!(PkiKeyType::Rsa4096.name(), "rsa-4096");
+        assert_eq!(PkiKeyType::EcdsaP256.name(), "ec-p256");
+        assert_eq!(PkiKeyType::EcdsaP384.name(), "ec-p384");
+        assert_eq!(PkiKeyType::Ed25519.name(), "ed25519");
+    }
+
+    #[test]
+    fn test_pki_key_type_serde_roundtrip() {
+        let variants = [
+            PkiKeyType::Rsa2048,
+            PkiKeyType::Rsa3072,
+            PkiKeyType::Rsa4096,
+            PkiKeyType::EcdsaP256,
+            PkiKeyType::EcdsaP384,
+            PkiKeyType::Ed25519,
+        ];
+        for v in &variants {
+            let json = serde_json::to_string(v).expect("serialize key type");
+            let back: PkiKeyType = serde_json::from_str(&json).expect("deserialize key type");
+            assert_eq!(*v, back);
+        }
+    }
+
+    // =========================================================================
+    // PkiRole
+    // =========================================================================
+
+    #[test]
+    fn test_pki_role_default_has_sensible_values() {
+        let role = PkiRole::default();
+        assert!(role.name.is_empty());
+        assert!(role.allowed_domains.is_empty());
+        assert!(!role.allow_subdomains);
+        assert!(!role.allow_bare_domains);
+        assert!(!role.allow_localhost);
+        assert!(role.generate_key);
+        assert!(role.require_cn);
+        assert!(!role.no_store);
+        assert!(role.max_ttl_secs > 0, "default TTL must be positive");
+        assert_eq!(role.key_type, PkiKeyType::Rsa2048);
+        assert!(!role.key_usages.is_empty());
+        assert!(!role.ext_key_usages.is_empty());
+    }
+
+    #[test]
+    fn test_pki_role_new_sets_name() {
+        let role = PkiRole::new("web-server");
+        assert_eq!(role.name, "web-server");
+    }
+
+    #[test]
+    fn test_allows_domain_rejects_by_default() {
+        let role = PkiRole::new("empty");
+        assert!(!role.allows_domain("example.com"));
+        assert!(!role.allows_domain("localhost"));
+        assert!(!role.allows_domain("sub.example.com"));
+    }
+
+    #[test]
+    fn test_allows_domain_localhost_flag() {
+        let mut role = PkiRole::new("local");
+        role.allow_localhost = true;
+        assert!(role.allows_domain("localhost"));
+        assert!(!role.allows_domain("example.com"));
+    }
+
+    #[test]
+    fn test_allows_domain_bare_domain() {
+        let mut role = PkiRole::new("web");
+        role.allowed_domains = vec!["example.com".into()];
+        // Without allow_bare_domains, exact match is rejected
+        assert!(!role.allows_domain("example.com"));
+        role.allow_bare_domains = true;
+        assert!(role.allows_domain("example.com"));
+    }
+
+    #[test]
+    fn test_allows_domain_subdomains() {
+        let mut role = PkiRole::new("web");
+        role.allowed_domains = vec!["example.com".into()];
+        role.allow_subdomains = true;
+        assert!(role.allows_domain("sub.example.com"));
+        assert!(role.allows_domain("deep.sub.example.com"));
+        // Bare domain without allow_bare_domains
+        assert!(!role.allows_domain("example.com"));
+    }
+
+    #[test]
+    fn test_allows_domain_wildcard() {
+        let mut role = PkiRole::new("web");
+        role.allowed_domains = vec!["example.com".into()];
+        role.allow_wildcard_certificates = true;
+        assert!(role.allows_domain("*.example.com"));
+        // Wildcard of unrelated domain
+        assert!(!role.allows_domain("*.other.com"));
+    }
+
+    #[test]
+    fn test_allows_domain_no_cross_domain() {
+        let mut role = PkiRole::new("web");
+        role.allowed_domains = vec!["example.com".into()];
+        role.allow_bare_domains = true;
+        role.allow_subdomains = true;
+        assert!(!role.allows_domain("notexample.com"));
+        assert!(!role.allows_domain("evil-example.com"));
+    }
+
+    #[test]
+    fn test_pki_role_serde_roundtrip() {
+        let mut role = PkiRole::new("test-role");
+        role.allowed_domains = vec!["example.com".into(), "test.io".into()];
+        role.allow_subdomains = true;
+        role.max_ttl_secs = 86400;
+        let json = serde_json::to_string(&role).expect("serialize role");
+        let back: PkiRole = serde_json::from_str(&json).expect("deserialize role");
+        assert_eq!(back.name, "test-role");
+        assert_eq!(back.allowed_domains.len(), 2);
+        assert!(back.allow_subdomains);
+        assert_eq!(back.max_ttl_secs, 86400);
+    }
+
+    // =========================================================================
+    // GenerateRootRequest
+    // =========================================================================
+
+    #[test]
+    fn test_generate_root_request_defaults() {
+        let req = GenerateRootRequest::new("My Root CA");
+        assert_eq!(req.common_name, "My Root CA");
+        assert_eq!(req.key_type, PkiKeyType::Rsa2048);
+        assert_eq!(req.ttl_secs, 10 * 365 * 24 * 3600);
+        assert!(req.organization.is_none());
+    }
+
+    #[test]
+    fn test_generate_root_request_builder() {
+        let req = GenerateRootRequest::new("CA").with_key_type(PkiKeyType::EcdsaP384).with_ttl_secs(3600);
+        assert_eq!(req.key_type, PkiKeyType::EcdsaP384);
+        assert_eq!(req.ttl_secs, 3600);
+    }
+
+    // =========================================================================
+    // CreateRoleRequest
+    // =========================================================================
+
+    #[test]
+    fn test_create_role_request_builder() {
+        let req = CreateRoleRequest::new("my-role")
+            .with_allowed_domains(vec!["example.com".into()])
+            .allow_subdomains()
+            .allow_bare_domains()
+            .with_max_ttl_secs(7200)
+            .with_ttl_secs(3600);
+        assert_eq!(req.name, "my-role");
+        assert_eq!(req.config.allowed_domains, vec!["example.com"]);
+        assert!(req.config.allow_subdomains);
+        assert!(req.config.allow_bare_domains);
+        assert_eq!(req.config.max_ttl_secs, 7200);
+        assert_eq!(req.config.ttl_secs, 3600);
+    }
+
+    // =========================================================================
+    // IssueCertificateRequest
+    // =========================================================================
+
+    #[test]
+    fn test_issue_cert_request_defaults() {
+        let req = IssueCertificateRequest::new("web", "example.com");
+        assert_eq!(req.role, "web");
+        assert_eq!(req.common_name, "example.com");
+        assert!(req.alt_names.is_empty());
+        assert!(req.ip_sans.is_empty());
+        assert!(req.ttl_secs.is_none());
+        assert!(!req.exclude_cn_from_sans);
+    }
+
+    #[test]
+    fn test_issue_cert_request_builder() {
+        let req = IssueCertificateRequest::new("web", "example.com")
+            .with_alt_names(vec!["www.example.com".into()])
+            .with_ttl_secs(3600);
+        assert_eq!(req.alt_names, vec!["www.example.com"]);
+        assert_eq!(req.ttl_secs, Some(3600));
+    }
+
+    // =========================================================================
+    // CrlState
+    // =========================================================================
+
+    #[test]
+    fn test_crl_state_default_is_empty() {
+        let crl = CrlState::default();
+        assert!(crl.entries.is_empty());
+        assert_eq!(crl.last_update_unix_ms, 0);
+        assert_eq!(crl.next_update_unix_ms, 0);
+    }
+
+    // =========================================================================
+    // CertificateAuthority serde
+    // =========================================================================
+
+    #[test]
+    fn test_certificate_authority_serde_roundtrip() {
+        let ca = CertificateAuthority {
+            certificate: "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----".into(),
+            private_key: vec![1, 2, 3, 4],
+            key_type: PkiKeyType::EcdsaP256,
+            next_serial: 42,
+            created_time_unix_ms: 1000,
+            expiry_time_unix_ms: 2000,
+            is_root: true,
+            ca_chain: vec![],
+            common_name: "Test CA".into(),
+            organization: Some("Aspen".into()),
+            ou: None,
+            country: Some("US".into()),
+            province: None,
+            locality: None,
+        };
+        let json = serde_json::to_string(&ca).expect("serialize CA");
+        let back: CertificateAuthority = serde_json::from_str(&json).expect("deserialize CA");
+        assert_eq!(back.common_name, "Test CA");
+        assert_eq!(back.key_type, PkiKeyType::EcdsaP256);
+        assert_eq!(back.next_serial, 42);
+        assert!(back.is_root);
+    }
+
+    // =========================================================================
+    // PkiConfig
+    // =========================================================================
+
+    #[test]
+    fn test_pki_config_default_has_zeroes() {
+        let cfg = PkiConfig::default();
+        assert_eq!(cfg.default_ttl_secs, 0);
+        assert_eq!(cfg.max_ttl_secs, 0);
+        assert!(cfg.crl_distribution_points.is_empty());
+    }
+
+    // =========================================================================
+    // Simple construction tests
+    // =========================================================================
+
+    #[test]
+    fn test_generate_intermediate_request_defaults() {
+        let req = GenerateIntermediateRequest::new("Intermediate CA");
+        assert_eq!(req.common_name, "Intermediate CA");
+        assert_eq!(req.key_type, PkiKeyType::Rsa2048);
+        assert!(req.organization.is_none());
+    }
+
+    #[test]
+    fn test_revoke_certificate_request() {
+        let req = RevokeCertificateRequest::new("AA:BB:CC");
+        assert_eq!(req.serial, "AA:BB:CC");
+    }
+
+    #[test]
+    fn test_read_certificate_request() {
+        let req = ReadCertificateRequest::new("DD:EE:FF");
+        assert_eq!(req.serial, "DD:EE:FF");
+    }
+}

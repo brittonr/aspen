@@ -127,4 +127,107 @@ mod tests {
         assert!(!is_blob_ref("__blo:not quite"));
         assert!(BlobRef::from_kv_value("regular value").is_none());
     }
+
+    #[test]
+    fn test_blob_ref_prefix_detection() {
+        assert!(is_blob_ref("__blob:{\"hash\":\"...\"}"));
+        assert!(!is_blob_ref(""));
+        assert!(!is_blob_ref("__blob")); // no colon
+    }
+
+    #[test]
+    fn test_blob_ref_from_kv_value_malformed_json() {
+        // Has prefix but invalid JSON
+        assert!(BlobRef::from_kv_value("__blob:not-json").is_none());
+    }
+
+    #[test]
+    fn test_blob_ref_new_fields() {
+        let hash = Hash::new([0u8; 32]);
+        let br = BlobRef::new(hash, 0, BlobFormat::Raw);
+        assert_eq!(br.size_bytes, 0);
+        assert_eq!(br.format, BlobFormat::Raw);
+    }
+
+    #[test]
+    fn test_blob_ref_hashseq_format() {
+        let hash = Hash::new([1u8; 32]);
+        let br = BlobRef::new(hash, 999, BlobFormat::HashSeq);
+        let kv = br.to_kv_value().expect("serialize");
+        let back = BlobRef::from_kv_value(&kv).expect("deserialize");
+        assert_eq!(back.format, BlobFormat::HashSeq);
+        assert_eq!(back.size_bytes, 999);
+    }
+
+    #[test]
+    fn test_blob_ref_serde_json_roundtrip() {
+        let hash = Hash::new([7u8; 32]);
+        let br = BlobRef::new(hash, 42, BlobFormat::Raw);
+        let json = serde_json::to_string(&br).expect("json serialize");
+        let back: BlobRef = serde_json::from_str(&json).expect("json deserialize");
+        assert_eq!(back, br);
+    }
+
+    #[test]
+    fn test_blob_status_serde_roundtrip() {
+        let status = BlobStatus {
+            hash: Hash::new([5u8; 32]),
+            size_bytes: Some(1024),
+            is_complete: true,
+            tags: vec!["keep".into(), "important".into()],
+        };
+        let json = serde_json::to_string(&status).expect("serialize");
+        let back: BlobStatus = serde_json::from_str(&json).expect("deserialize");
+        assert!(back.is_complete);
+        assert_eq!(back.size_bytes, Some(1024));
+        assert_eq!(back.tags.len(), 2);
+    }
+
+    #[test]
+    fn test_blob_status_complete_alias() {
+        // Test that the "complete" alias works for deserialization
+        let json = r#"{"hash":"0505050505050505050505050505050505050505050505050505050505050505","size":100,"complete":false,"tags":[]}"#;
+        let status: BlobStatus = serde_json::from_str(json).expect("deserialize with alias");
+        assert!(!status.is_complete);
+    }
+
+    #[test]
+    fn test_blob_list_entry_serde() {
+        let entry = BlobListEntry {
+            hash: Hash::new([9u8; 32]),
+            size_bytes: 2048,
+            format: BlobFormat::Raw,
+        };
+        let json = serde_json::to_string(&entry).expect("serialize");
+        let back: BlobListEntry = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.size_bytes, 2048);
+    }
+
+    #[test]
+    fn test_blob_list_result_empty() {
+        let result = BlobListResult {
+            blobs: vec![],
+            continuation_token: None,
+        };
+        let json = serde_json::to_string(&result).expect("serialize");
+        let back: BlobListResult = serde_json::from_str(&json).expect("deserialize");
+        assert!(back.blobs.is_empty());
+        assert!(back.continuation_token.is_none());
+    }
+
+    #[test]
+    fn test_blob_list_result_with_pagination() {
+        let result = BlobListResult {
+            blobs: vec![BlobListEntry {
+                hash: Hash::new([0u8; 32]),
+                size_bytes: 100,
+                format: BlobFormat::Raw,
+            }],
+            continuation_token: Some("next-page-token".into()),
+        };
+        let json = serde_json::to_string(&result).expect("serialize");
+        let back: BlobListResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.blobs.len(), 1);
+        assert_eq!(back.continuation_token.as_deref(), Some("next-page-token"));
+    }
 }

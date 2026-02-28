@@ -421,3 +421,346 @@ pub struct ListSecretsResponse {
     /// Keys ending in "/" represent sub-paths.
     pub keys: Vec<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // SecretData
+    // =========================================================================
+
+    #[test]
+    fn test_secret_data_empty() {
+        let sd = SecretData::empty();
+        assert!(sd.data.is_empty());
+        assert_eq!(sd.size_bytes(), 0);
+    }
+
+    #[test]
+    fn test_secret_data_new_and_get() {
+        let mut data = HashMap::new();
+        data.insert("password".into(), "s3cret".into());
+        data.insert("username".into(), "admin".into());
+        let sd = SecretData::new(data);
+        assert_eq!(sd.get("password"), Some("s3cret"));
+        assert_eq!(sd.get("username"), Some("admin"));
+        assert_eq!(sd.get("missing"), None);
+    }
+
+    #[test]
+    fn test_secret_data_insert() {
+        let mut sd = SecretData::empty();
+        sd.insert("key".into(), "value".into());
+        assert_eq!(sd.get("key"), Some("value"));
+    }
+
+    #[test]
+    fn test_secret_data_merge_overwrites() {
+        let mut base = SecretData::new(HashMap::from([("a".into(), "1".into()), ("b".into(), "2".into())]));
+        let patch = SecretData::new(HashMap::from([("b".into(), "updated".into()), ("c".into(), "3".into())]));
+        base.merge(&patch);
+        assert_eq!(base.get("a"), Some("1"));
+        assert_eq!(base.get("b"), Some("updated"));
+        assert_eq!(base.get("c"), Some("3"));
+    }
+
+    #[test]
+    fn test_secret_data_size_bytes() {
+        let sd = SecretData::new(HashMap::from([
+            ("key".into(), "val".into()), // 3 + 3 = 6
+            ("ab".into(), "cdef".into()), // 2 + 4 = 6
+        ]));
+        assert_eq!(sd.size_bytes(), 12);
+    }
+
+    #[test]
+    fn test_secret_data_serde_roundtrip() {
+        let sd = SecretData::new(HashMap::from([("password".into(), "hunter2".into())]));
+        let json = serde_json::to_string(&sd).expect("serialize");
+        let back: SecretData = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.get("password"), Some("hunter2"));
+    }
+
+    // =========================================================================
+    // VersionMetadata
+    // =========================================================================
+
+    #[test]
+    fn test_version_metadata_new_is_accessible() {
+        let vm = VersionMetadata::new(1, 1000);
+        assert_eq!(vm.version, 1);
+        assert_eq!(vm.created_time_unix_ms, 1000);
+        assert!(vm.is_accessible());
+        assert!(!vm.is_soft_deleted());
+        assert!(!vm.destroyed);
+    }
+
+    #[test]
+    fn test_version_metadata_soft_delete() {
+        let mut vm = VersionMetadata::new(1, 1000);
+        vm.deletion_time_unix_ms = Some(2000);
+        assert!(!vm.is_accessible());
+        assert!(vm.is_soft_deleted());
+    }
+
+    #[test]
+    fn test_version_metadata_destroyed() {
+        let mut vm = VersionMetadata::new(1, 1000);
+        vm.destroyed = true;
+        assert!(!vm.is_accessible());
+        assert!(!vm.is_soft_deleted()); // destroyed overrides soft-delete
+    }
+
+    #[test]
+    fn test_version_metadata_destroyed_and_deleted() {
+        let mut vm = VersionMetadata::new(1, 1000);
+        vm.deletion_time_unix_ms = Some(2000);
+        vm.destroyed = true;
+        assert!(!vm.is_accessible());
+        assert!(!vm.is_soft_deleted()); // destroyed takes priority
+    }
+
+    // =========================================================================
+    // SecretMetadata
+    // =========================================================================
+
+    #[test]
+    fn test_secret_metadata_new() {
+        let sm = SecretMetadata::new(5000);
+        assert_eq!(sm.current_version, 0);
+        assert_eq!(sm.created_time_unix_ms, 5000);
+        assert_eq!(sm.updated_time_unix_ms, 5000);
+        assert!(!sm.cas_required);
+        assert_eq!(sm.max_versions, 0);
+        assert!(sm.versions.is_empty());
+    }
+
+    #[test]
+    fn test_secret_metadata_next_version() {
+        let mut sm = SecretMetadata::new(1000);
+        let v1 = sm.next_version(2000);
+        assert_eq!(v1, 1);
+        assert_eq!(sm.current_version, 1);
+        assert_eq!(sm.updated_time_unix_ms, 2000);
+        assert!(sm.versions.contains_key(&1));
+
+        let v2 = sm.next_version(3000);
+        assert_eq!(v2, 2);
+        assert_eq!(sm.versions.len(), 2);
+    }
+
+    #[test]
+    fn test_secret_metadata_oldest_version() {
+        let mut sm = SecretMetadata::new(0);
+        assert_eq!(sm.oldest_version(), None);
+        sm.next_version(100);
+        sm.next_version(200);
+        sm.next_version(300);
+        assert_eq!(sm.oldest_version(), Some(1));
+    }
+
+    #[test]
+    fn test_secret_metadata_current_version_metadata() {
+        let mut sm = SecretMetadata::new(0);
+        assert!(sm.current_version_metadata().is_none());
+        sm.next_version(1000);
+        let meta = sm.current_version_metadata().expect("should have v1");
+        assert_eq!(meta.version, 1);
+        assert_eq!(meta.created_time_unix_ms, 1000);
+    }
+
+    #[test]
+    fn test_secret_metadata_version_access() {
+        let mut sm = SecretMetadata::new(0);
+        sm.next_version(100);
+        sm.next_version(200);
+        assert!(sm.version(1).is_some());
+        assert!(sm.version(2).is_some());
+        assert!(sm.version(3).is_none());
+    }
+
+    #[test]
+    fn test_secret_metadata_version_mut() {
+        let mut sm = SecretMetadata::new(0);
+        sm.next_version(100);
+        let v = sm.version_mut(1).expect("v1 exists");
+        v.deletion_time_unix_ms = Some(500);
+        assert!(sm.version(1).expect("v1").is_soft_deleted());
+    }
+
+    // =========================================================================
+    // prune_versions
+    // =========================================================================
+
+    #[test]
+    fn test_prune_versions_no_op_when_under_limit() {
+        let mut sm = SecretMetadata::new(0);
+        sm.next_version(100);
+        sm.next_version(200);
+        let removed = sm.prune_versions(5);
+        assert!(removed.is_empty());
+        assert_eq!(sm.versions.len(), 2);
+    }
+
+    #[test]
+    fn test_prune_versions_zero_means_unlimited() {
+        let mut sm = SecretMetadata::new(0);
+        for i in 1..=10 {
+            sm.next_version(i * 100);
+        }
+        let removed = sm.prune_versions(0);
+        assert!(removed.is_empty());
+        assert_eq!(sm.versions.len(), 10);
+    }
+
+    #[test]
+    fn test_prune_versions_removes_oldest() {
+        let mut sm = SecretMetadata::new(0);
+        for i in 1..=5 {
+            sm.next_version(i * 100);
+        }
+        let removed = sm.prune_versions(3);
+        assert_eq!(removed, vec![1, 2]);
+        assert_eq!(sm.versions.len(), 3);
+        assert!(sm.version(1).is_none());
+        assert!(sm.version(2).is_none());
+        assert!(sm.version(3).is_some());
+        assert!(sm.version(5).is_some());
+    }
+
+    // =========================================================================
+    // expired_versions
+    // =========================================================================
+
+    #[test]
+    fn test_expired_versions_disabled_when_zero() {
+        let mut sm = SecretMetadata::new(0);
+        sm.next_version(100);
+        sm.delete_version_after_secs = 0;
+        let expired = sm.expired_versions(999_999);
+        assert!(expired.is_empty());
+    }
+
+    #[test]
+    fn test_expired_versions_returns_old_versions() {
+        let mut sm = SecretMetadata::new(0);
+        sm.next_version(1000); // created at 1000ms
+        sm.next_version(5000); // created at 5000ms
+        sm.delete_version_after_secs = 3; // 3 seconds = 3000ms
+
+        // At time 5000ms: v1 is 4000ms old (>3000ms), v2 is 0ms old
+        let expired = sm.expired_versions(5000);
+        assert_eq!(expired, vec![1]);
+    }
+
+    #[test]
+    fn test_expired_versions_skips_deleted() {
+        let mut sm = SecretMetadata::new(0);
+        sm.next_version(1000);
+        sm.next_version(2000);
+        sm.delete_version_after_secs = 1; // 1 second
+
+        // Soft-delete v1
+        sm.version_mut(1).expect("v1").deletion_time_unix_ms = Some(1500);
+
+        // At time 10000ms: v1 is soft-deleted (not accessible), v2 is expired
+        let expired = sm.expired_versions(10000);
+        assert!(!expired.contains(&1)); // not accessible
+        assert!(expired.contains(&2));
+    }
+
+    // =========================================================================
+    // KvConfig
+    // =========================================================================
+
+    #[test]
+    fn test_kv_config_default() {
+        let cfg = KvConfig::default();
+        assert_eq!(cfg.max_versions, crate::constants::DEFAULT_MAX_VERSIONS);
+        assert!(!cfg.cas_required);
+        assert_eq!(cfg.delete_version_after_secs, 0);
+    }
+
+    // =========================================================================
+    // Request constructors
+    // =========================================================================
+
+    #[test]
+    fn test_read_secret_request_current() {
+        let req = ReadSecretRequest::new("secret/myapp");
+        assert_eq!(req.path, "secret/myapp");
+        assert!(req.version.is_none());
+    }
+
+    #[test]
+    fn test_read_secret_request_versioned() {
+        let req = ReadSecretRequest::with_version("secret/myapp", 3);
+        assert_eq!(req.path, "secret/myapp");
+        assert_eq!(req.version, Some(3));
+    }
+
+    #[test]
+    fn test_write_secret_request_without_cas() {
+        let data = SecretData::new(HashMap::from([("key".into(), "val".into())]));
+        let req = WriteSecretRequest::new("path", data);
+        assert_eq!(req.path, "path");
+        assert!(req.cas.is_none());
+    }
+
+    #[test]
+    fn test_write_secret_request_with_cas() {
+        let data = SecretData::empty();
+        let req = WriteSecretRequest::with_cas("path", data, 5);
+        assert_eq!(req.cas, Some(5));
+    }
+
+    #[test]
+    fn test_delete_secret_request_current() {
+        let req = DeleteSecretRequest::current("secret/db");
+        assert_eq!(req.path, "secret/db");
+        assert!(req.versions.is_empty());
+    }
+
+    #[test]
+    fn test_delete_secret_request_versions() {
+        let req = DeleteSecretRequest::versions("secret/db", vec![1, 3, 5]);
+        assert_eq!(req.versions, vec![1, 3, 5]);
+    }
+
+    #[test]
+    fn test_destroy_secret_request() {
+        let req = DestroySecretRequest::new("path", vec![2, 4]);
+        assert_eq!(req.path, "path");
+        assert_eq!(req.versions, vec![2, 4]);
+    }
+
+    #[test]
+    fn test_undelete_secret_request() {
+        let req = UndeleteSecretRequest::new("path", vec![1]);
+        assert_eq!(req.path, "path");
+        assert_eq!(req.versions, vec![1]);
+    }
+
+    #[test]
+    fn test_read_metadata_request() {
+        let req = ReadMetadataRequest::new("secret/app");
+        assert_eq!(req.path, "secret/app");
+    }
+
+    #[test]
+    fn test_update_metadata_request_builder() {
+        let req = UpdateMetadataRequest::new("path").with_max_versions(20).with_cas_required(true);
+        assert_eq!(req.path, "path");
+        assert_eq!(req.max_versions, Some(20));
+        assert_eq!(req.cas_required, Some(true));
+        assert!(req.delete_version_after_secs.is_none());
+        assert!(req.custom_metadata.is_none());
+    }
+
+    #[test]
+    fn test_list_secrets_request() {
+        let req = ListSecretsRequest::new("secret/");
+        assert_eq!(req.path, "secret/");
+    }
+}

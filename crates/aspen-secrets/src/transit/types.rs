@@ -468,3 +468,243 @@ pub struct BatchResultItem<T> {
     /// Error message if failed.
     pub error: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // KeyType
+    // =========================================================================
+
+    #[test]
+    fn test_key_type_default_is_xchacha20() {
+        assert_eq!(KeyType::default(), KeyType::XChaCha20Poly1305);
+    }
+
+    #[test]
+    fn test_key_type_supports_encryption() {
+        assert!(KeyType::Aes256Gcm.supports_encryption());
+        assert!(KeyType::XChaCha20Poly1305.supports_encryption());
+        assert!(!KeyType::Ed25519.supports_encryption());
+    }
+
+    #[test]
+    fn test_key_type_supports_signing() {
+        assert!(!KeyType::Aes256Gcm.supports_signing());
+        assert!(!KeyType::XChaCha20Poly1305.supports_signing());
+        assert!(KeyType::Ed25519.supports_signing());
+    }
+
+    #[test]
+    fn test_key_type_no_type_supports_both() {
+        let types = [KeyType::Aes256Gcm, KeyType::XChaCha20Poly1305, KeyType::Ed25519];
+        for kt in &types {
+            assert!(
+                !(kt.supports_encryption() && kt.supports_signing()),
+                "{:?} should not support both encryption and signing",
+                kt
+            );
+        }
+    }
+
+    #[test]
+    fn test_key_type_all_have_32_byte_keys() {
+        let types = [KeyType::Aes256Gcm, KeyType::XChaCha20Poly1305, KeyType::Ed25519];
+        for kt in &types {
+            assert_eq!(kt.key_size(), 32, "{:?} should have 32-byte keys", kt);
+        }
+    }
+
+    #[test]
+    fn test_key_type_serde_roundtrip() {
+        let types = [KeyType::Aes256Gcm, KeyType::XChaCha20Poly1305, KeyType::Ed25519];
+        for kt in &types {
+            let json = serde_json::to_string(kt).expect("serialize key type");
+            let back: KeyType = serde_json::from_str(&json).expect("deserialize key type");
+            assert_eq!(*kt, back);
+        }
+    }
+
+    // =========================================================================
+    // TransitKey
+    // =========================================================================
+
+    #[test]
+    fn test_transit_key_new_has_one_version() {
+        let key = TransitKey::new("test-key".into(), KeyType::Aes256Gcm, 1000, vec![0u8; 32], None);
+        assert_eq!(key.name, "test-key");
+        assert_eq!(key.current_version, 1);
+        assert_eq!(key.versions.len(), 1);
+        assert!(!key.deletion_allowed);
+        assert!(!key.exportable);
+    }
+
+    #[test]
+    fn test_transit_key_current_key_material() {
+        let material = vec![42u8; 32];
+        let key = TransitKey::new("k".into(), KeyType::XChaCha20Poly1305, 0, material.clone(), None);
+        assert_eq!(key.current_key_material(), Some(material.as_slice()));
+    }
+
+    #[test]
+    fn test_transit_key_rotate_increments_version() {
+        let mut key = TransitKey::new("k".into(), KeyType::Aes256Gcm, 1000, vec![1u8; 32], None);
+        assert_eq!(key.current_version, 1);
+
+        key.rotate(vec![2u8; 32], None, 2000);
+        assert_eq!(key.current_version, 2);
+        assert_eq!(key.versions.len(), 2);
+        assert_eq!(key.latest_version_time_unix_ms, 2000);
+
+        key.rotate(vec![3u8; 32], None, 3000);
+        assert_eq!(key.current_version, 3);
+        assert_eq!(key.versions.len(), 3);
+    }
+
+    #[test]
+    fn test_transit_key_material_by_version() {
+        let mut key = TransitKey::new("k".into(), KeyType::Aes256Gcm, 0, vec![1u8; 32], None);
+        key.rotate(vec![2u8; 32], None, 1000);
+
+        assert_eq!(key.key_material(1), Some([1u8; 32].as_slice()));
+        assert_eq!(key.key_material(2), Some([2u8; 32].as_slice()));
+        assert_eq!(key.key_material(3), None);
+    }
+
+    #[test]
+    fn test_transit_key_effective_encryption_version() {
+        let mut key = TransitKey::new("k".into(), KeyType::Aes256Gcm, 0, vec![0; 32], None);
+        // min_encryption_version=0 means use current
+        assert_eq!(key.effective_encryption_version(), 1);
+
+        key.rotate(vec![0; 32], None, 1000);
+        assert_eq!(key.effective_encryption_version(), 2);
+
+        key.min_encryption_version = 1;
+        // max(1, 2) = 2
+        assert_eq!(key.effective_encryption_version(), 2);
+
+        key.min_encryption_version = 5;
+        // max(5, 2) = 5
+        assert_eq!(key.effective_encryption_version(), 5);
+    }
+
+    #[test]
+    fn test_transit_key_can_decrypt_version() {
+        let mut key = TransitKey::new("k".into(), KeyType::Aes256Gcm, 0, vec![0; 32], None);
+        key.rotate(vec![0; 32], None, 1000);
+        key.rotate(vec![0; 32], None, 2000);
+
+        // All versions available, min_decryption=1
+        assert!(key.can_decrypt_version(1));
+        assert!(key.can_decrypt_version(2));
+        assert!(key.can_decrypt_version(3));
+        assert!(!key.can_decrypt_version(4)); // doesn't exist
+
+        key.min_decryption_version = 2;
+        assert!(!key.can_decrypt_version(1)); // below minimum
+        assert!(key.can_decrypt_version(2));
+        assert!(key.can_decrypt_version(3));
+    }
+
+    #[test]
+    fn test_transit_key_ed25519_has_public_key() {
+        let key = TransitKey::new("signing".into(), KeyType::Ed25519, 0, vec![0u8; 32], Some(vec![99u8; 32]));
+        let v1 = key.versions.get(&1).expect("version 1 exists");
+        assert!(v1.public_key.is_some());
+        assert_eq!(v1.public_key.as_ref().expect("has pubkey").len(), 32);
+    }
+
+    #[test]
+    fn test_transit_key_serde_roundtrip() {
+        let key = TransitKey::new("test".into(), KeyType::Aes256Gcm, 5000, vec![7u8; 32], None);
+        let json = serde_json::to_string(&key).expect("serialize transit key");
+        let back: TransitKey = serde_json::from_str(&json).expect("deserialize transit key");
+        assert_eq!(back.name, "test");
+        assert_eq!(back.current_version, 1);
+        assert_eq!(back.created_time_unix_ms, 5000);
+    }
+
+    // =========================================================================
+    // Request builders
+    // =========================================================================
+
+    #[test]
+    fn test_create_key_request_defaults() {
+        let req = CreateKeyRequest::new("my-key");
+        assert_eq!(req.name, "my-key");
+        assert_eq!(req.key_type, KeyType::XChaCha20Poly1305);
+        assert!(!req.exportable);
+        assert!(!req.deletion_allowed);
+        assert!(!req.convergent_encryption);
+    }
+
+    #[test]
+    fn test_create_key_request_builder() {
+        let req = CreateKeyRequest::new("k").with_type(KeyType::Ed25519).exportable().deletion_allowed();
+        assert_eq!(req.key_type, KeyType::Ed25519);
+        assert!(req.exportable);
+        assert!(req.deletion_allowed);
+    }
+
+    #[test]
+    fn test_encrypt_request_builder() {
+        let req = EncryptRequest::new("k", vec![1, 2, 3]).with_context(vec![4, 5, 6]);
+        assert_eq!(req.key_name, "k");
+        assert_eq!(req.plaintext, vec![1, 2, 3]);
+        assert_eq!(req.context, Some(vec![4, 5, 6]));
+    }
+
+    #[test]
+    fn test_decrypt_request_construction() {
+        let req = DecryptRequest::new("k", "aspen:v1:ciphertext".into());
+        assert_eq!(req.key_name, "k");
+        assert_eq!(req.ciphertext, "aspen:v1:ciphertext");
+        assert!(req.context.is_none());
+    }
+
+    #[test]
+    fn test_sign_request_defaults() {
+        let req = SignRequest::new("signing-key", vec![0xDE, 0xAD]);
+        assert_eq!(req.key_name, "signing-key");
+        assert_eq!(req.input, vec![0xDE, 0xAD]);
+        assert!(!req.prehashed);
+        assert!(req.hash_algorithm.is_none());
+        assert!(req.key_version.is_none());
+    }
+
+    #[test]
+    fn test_verify_request_construction() {
+        let req = VerifyRequest::new("k", vec![1, 2], "aspen:v1:sig".into());
+        assert_eq!(req.key_name, "k");
+        assert_eq!(req.input, vec![1, 2]);
+        assert_eq!(req.signature, "aspen:v1:sig");
+    }
+
+    #[test]
+    fn test_rewrap_request_construction() {
+        let req = RewrapRequest::new("k", "aspen:v1:old".into());
+        assert_eq!(req.key_name, "k");
+        assert_eq!(req.ciphertext, "aspen:v1:old");
+        assert!(req.context.is_none());
+    }
+
+    #[test]
+    fn test_data_key_request_construction() {
+        let req = DataKeyRequest::new("k", 256);
+        assert_eq!(req.key_name, "k");
+        assert_eq!(req.bits, 256);
+        assert!(req.context.is_none());
+    }
+
+    #[test]
+    fn test_update_key_config_request_builder() {
+        let req = UpdateKeyConfigRequest::new("k").with_min_decryption_version(3).with_deletion_allowed(true);
+        assert_eq!(req.name, "k");
+        assert_eq!(req.min_decryption_version, Some(3));
+        assert_eq!(req.deletion_allowed, Some(true));
+        assert!(req.min_encryption_version.is_none());
+        assert!(req.exportable.is_none());
+    }
+}

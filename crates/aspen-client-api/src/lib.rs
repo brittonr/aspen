@@ -467,3 +467,343 @@ mod tests {
         }
     }
 }
+
+// =========================================================================
+// Comprehensive method tests for ClientRpcRequest and ClientRpcResponse
+// =========================================================================
+
+/// Test that variant_name() returns non-empty strings for all core request variants.
+#[test]
+fn test_variant_name_core_requests() {
+    assert_eq!(ClientRpcRequest::GetHealth.variant_name(), "GetHealth");
+    assert_eq!(ClientRpcRequest::Ping.variant_name(), "Ping");
+    assert_eq!(ClientRpcRequest::GetLeader.variant_name(), "GetLeader");
+    assert_eq!(ClientRpcRequest::GetNodeInfo.variant_name(), "GetNodeInfo");
+    assert_eq!(ClientRpcRequest::InitCluster.variant_name(), "InitCluster");
+    assert_eq!(ClientRpcRequest::TriggerSnapshot.variant_name(), "TriggerSnapshot");
+
+    assert_eq!(ClientRpcRequest::ReadKey { key: "k".into() }.variant_name(), "ReadKey");
+    assert_eq!(
+        ClientRpcRequest::WriteKey {
+            key: "k".into(),
+            value: vec![],
+        }
+        .variant_name(),
+        "WriteKey"
+    );
+    assert_eq!(ClientRpcRequest::DeleteKey { key: "k".into() }.variant_name(), "DeleteKey");
+}
+
+/// Test that required_app() returns correct values for representative variants.
+#[test]
+fn test_required_app_returns_correct_domain() {
+    // Core operations return None
+    assert_eq!(ClientRpcRequest::GetHealth.required_app(), None);
+    assert_eq!(ClientRpcRequest::ReadKey { key: "k".into() }.required_app(), None);
+    assert_eq!(ClientRpcRequest::Ping.required_app(), None);
+
+    // Forge operations return Some("forge")
+    assert_eq!(
+        ClientRpcRequest::ForgeCreateRepo {
+            name: "repo".into(),
+            description: None,
+            default_branch: None,
+        }
+        .required_app(),
+        Some("forge")
+    );
+
+    // CI operations return Some("ci")
+    assert_eq!(
+        ClientRpcRequest::CiTriggerPipeline {
+            repo_id: "r".into(),
+            ref_name: "main".into(),
+            commit_hash: None,
+        }
+        .required_app(),
+        Some("ci")
+    );
+
+    // Secrets operations return Some("secrets")
+    assert_eq!(
+        ClientRpcRequest::SecretsKvRead {
+            mount: "secret".into(),
+            path: "db/pass".into(),
+            version: None,
+        }
+        .required_app(),
+        Some("secrets")
+    );
+
+    // Jobs operations return Some("jobs")
+    assert_eq!(
+        ClientRpcRequest::JobSubmit {
+            job_type: "build".into(),
+            payload: "{}".into(),
+            priority: None,
+            timeout_ms: None,
+            max_retries: None,
+            retry_delay_ms: None,
+            schedule: None,
+            tags: vec![],
+        }
+        .required_app(),
+        Some("jobs")
+    );
+
+    // Hooks operations return Some("hooks")
+    assert_eq!(ClientRpcRequest::HookList.required_app(), Some("hooks"));
+}
+
+/// Test to_operation() for KV operations.
+#[cfg(feature = "auth")]
+#[test]
+fn test_to_operation_kv_operations() {
+    use aspen_auth::Operation;
+
+    let read = ClientRpcRequest::ReadKey { key: "mykey".into() };
+    match read.to_operation() {
+        Some(Operation::Read { key }) => {
+            assert_eq!(key, "mykey");
+        }
+        other => panic!("Expected Read operation for ReadKey, got {other:?}"),
+    }
+
+    let write = ClientRpcRequest::WriteKey {
+        key: "mykey".into(),
+        value: vec![1, 2, 3],
+    };
+    match write.to_operation() {
+        Some(Operation::Write { key, value }) => {
+            assert_eq!(key, "mykey");
+            assert_eq!(value, vec![1, 2, 3]);
+        }
+        other => panic!("Expected Write operation for WriteKey, got {other:?}"),
+    }
+
+    let delete = ClientRpcRequest::DeleteKey { key: "mykey".into() };
+    match delete.to_operation() {
+        Some(Operation::Write { key, value }) => {
+            assert_eq!(key, "mykey");
+            assert_eq!(value, Vec::<u8>::new());
+        }
+        other => panic!("Expected Write operation for DeleteKey, got {other:?}"),
+    }
+}
+
+/// Test to_operation() for cluster admin operations.
+#[cfg(feature = "auth")]
+#[test]
+fn test_to_operation_cluster_admin() {
+    use aspen_auth::Operation;
+
+    let init = ClientRpcRequest::InitCluster;
+    match init.to_operation() {
+        Some(Operation::ClusterAdmin { action }) => {
+            assert_eq!(action, "cluster_operation");
+        }
+        other => panic!("Expected ClusterAdmin for InitCluster, got {other:?}"),
+    }
+
+    let snapshot = ClientRpcRequest::TriggerSnapshot;
+    match snapshot.to_operation() {
+        Some(Operation::ClusterAdmin { action }) => {
+            assert_eq!(action, "cluster_operation");
+        }
+        other => panic!("Expected ClusterAdmin for TriggerSnapshot, got {other:?}"),
+    }
+}
+
+/// Test to_operation() returns None for operations that don't require auth.
+#[cfg(feature = "auth")]
+#[test]
+fn test_to_operation_none_for_public_operations() {
+    assert!(ClientRpcRequest::GetHealth.to_operation().is_none());
+    assert!(ClientRpcRequest::Ping.to_operation().is_none());
+    assert!(ClientRpcRequest::GetLeader.to_operation().is_none());
+    assert!(ClientRpcRequest::GetNodeInfo.to_operation().is_none());
+}
+
+/// Test postcard serialization round-trip for batch operations.
+#[test]
+fn test_batch_operations_postcard_roundtrip() {
+    use messages::batch::BatchCondition;
+    use messages::batch::BatchWriteOperation;
+
+    // BatchRead
+    let req = ClientRpcRequest::BatchRead {
+        keys: vec!["k1".into(), "k2".into(), "k3".into()],
+    };
+    let bytes = postcard::to_stdvec(&req).expect("serialize BatchRead");
+    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize BatchRead");
+    assert_eq!(decoded.variant_name(), "BatchRead");
+
+    // BatchWrite
+    let req = ClientRpcRequest::BatchWrite {
+        operations: vec![
+            BatchWriteOperation::Set {
+                key: "k1".into(),
+                value: vec![1, 2],
+            },
+            BatchWriteOperation::Delete { key: "k2".into() },
+        ],
+    };
+    let bytes = postcard::to_stdvec(&req).expect("serialize BatchWrite");
+    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize BatchWrite");
+    assert_eq!(decoded.variant_name(), "BatchWrite");
+
+    // ConditionalBatchWrite
+    let req = ClientRpcRequest::ConditionalBatchWrite {
+        conditions: vec![BatchCondition::KeyExists { key: "k1".into() }],
+        operations: vec![BatchWriteOperation::Set {
+            key: "k2".into(),
+            value: vec![3, 4],
+        }],
+    };
+    let bytes = postcard::to_stdvec(&req).expect("serialize ConditionalBatchWrite");
+    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize ConditionalBatchWrite");
+    assert_eq!(decoded.variant_name(), "ConditionalBatchWrite");
+}
+
+/// Test postcard serialization round-trip for watch operations.
+#[test]
+fn test_watch_operations_postcard_roundtrip() {
+    let req = ClientRpcRequest::WatchCreate {
+        prefix: "user:".into(),
+        start_index: 0,
+        should_include_prev_value: true,
+    };
+    let bytes = postcard::to_stdvec(&req).expect("serialize WatchCreate");
+    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize WatchCreate");
+    assert_eq!(decoded.variant_name(), "WatchCreate");
+
+    let req = ClientRpcRequest::WatchCancel { watch_id: 123 };
+    let bytes = postcard::to_stdvec(&req).expect("serialize WatchCancel");
+    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize WatchCancel");
+    assert_eq!(decoded.variant_name(), "WatchCancel");
+}
+
+/// Test postcard serialization round-trip for lease operations.
+#[test]
+fn test_lease_operations_postcard_roundtrip() {
+    let req = ClientRpcRequest::LeaseGrant {
+        ttl_seconds: 60,
+        lease_id: Some(789),
+    };
+    let bytes = postcard::to_stdvec(&req).expect("serialize LeaseGrant");
+    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize LeaseGrant");
+    assert_eq!(decoded.variant_name(), "LeaseGrant");
+
+    let req = ClientRpcRequest::LeaseRevoke { lease_id: 789 };
+    let bytes = postcard::to_stdvec(&req).expect("serialize LeaseRevoke");
+    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize LeaseRevoke");
+    assert_eq!(decoded.variant_name(), "LeaseRevoke");
+}
+
+/// Test postcard serialization round-trip for coordination primitives.
+#[test]
+fn test_coordination_operations_postcard_roundtrip() {
+    // Lock operations
+    let req = ClientRpcRequest::LockAcquire {
+        key: "lock1".into(),
+        holder_id: "h1".into(),
+        ttl_ms: 1000,
+        timeout_ms: 5000,
+    };
+    let bytes = postcard::to_stdvec(&req).expect("serialize LockAcquire");
+    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize LockAcquire");
+    assert_eq!(decoded.variant_name(), "LockAcquire");
+
+    // Counter operations
+    let req = ClientRpcRequest::CounterIncrement { key: "cnt".into() };
+    let bytes = postcard::to_stdvec(&req).expect("serialize CounterIncrement");
+    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize CounterIncrement");
+    assert_eq!(decoded.variant_name(), "CounterIncrement");
+
+    // Sequence operations
+    let req = ClientRpcRequest::SequenceNext { key: "seq".into() };
+    let bytes = postcard::to_stdvec(&req).expect("serialize SequenceNext");
+    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize SequenceNext");
+    assert_eq!(decoded.variant_name(), "SequenceNext");
+}
+
+/// Test postcard serialization round-trip for blob operations.
+#[test]
+fn test_blob_operations_postcard_roundtrip() {
+    let req = ClientRpcRequest::AddBlob {
+        data: vec![1, 2, 3, 4, 5],
+        tag: Some("important".into()),
+    };
+    let bytes = postcard::to_stdvec(&req).expect("serialize AddBlob");
+    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize AddBlob");
+    assert_eq!(decoded.variant_name(), "AddBlob");
+
+    let req = ClientRpcRequest::GetBlob { hash: "a".repeat(64) };
+    let bytes = postcard::to_stdvec(&req).expect("serialize GetBlob");
+    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize GetBlob");
+    assert_eq!(decoded.variant_name(), "GetBlob");
+}
+
+/// Test ErrorResponse creation and fields.
+#[test]
+fn test_error_response_creation_and_fields() {
+    let err = ClientRpcResponse::error("NOT_FOUND", "Key does not exist");
+    match err {
+        ClientRpcResponse::Error(e) => {
+            assert_eq!(e.code, "NOT_FOUND");
+            assert_eq!(e.message, "Key does not exist");
+        }
+        _ => panic!("Expected Error variant"),
+    }
+
+    // Test with different codes
+    let err = ClientRpcResponse::error("NOT_LEADER", "Node is not the leader");
+    match err {
+        ClientRpcResponse::Error(e) => {
+            assert_eq!(e.code, "NOT_LEADER");
+            assert!(e.message.contains("leader"));
+        }
+        _ => panic!("Expected Error variant"),
+    }
+}
+
+/// Test AuthenticatedRequest with proxy hops.
+#[test]
+fn test_authenticated_request_with_proxy_hops() {
+    let req = AuthenticatedRequest::with_proxy_hops(ClientRpcRequest::Ping, None, 2);
+    assert_eq!(req.proxy_hops, 2);
+    assert!(req.token.is_none());
+    assert_eq!(req.request.variant_name(), "Ping");
+
+    // Test serialization with proxy hops
+    let bytes = postcard::to_stdvec(&req).expect("serialize with hops");
+    let decoded: AuthenticatedRequest = postcard::from_bytes(&bytes).expect("deserialize with hops");
+    assert_eq!(decoded.proxy_hops, 2);
+    assert_eq!(decoded.request.variant_name(), "Ping");
+}
+
+/// Test CapabilityUnavailableResponse.
+#[test]
+fn test_capability_unavailable_response() {
+    let resp = ClientRpcResponse::CapabilityUnavailable(CapabilityUnavailableResponse {
+        required_app: "forge".into(),
+        message: "Forge app not loaded on this cluster".into(),
+        hints: vec![CapabilityHint {
+            cluster_key: "abc123".into(),
+            name: "forge-cluster".into(),
+            app_version: Some("1.0.0".into()),
+        }],
+    });
+
+    let bytes = postcard::to_stdvec(&resp).expect("serialize");
+    let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
+
+    match decoded {
+        ClientRpcResponse::CapabilityUnavailable(cap) => {
+            assert_eq!(cap.required_app, "forge");
+            assert_eq!(cap.hints.len(), 1);
+            assert_eq!(cap.hints[0].cluster_key, "abc123");
+        }
+        _ => panic!("Expected CapabilityUnavailable variant"),
+    }
+}

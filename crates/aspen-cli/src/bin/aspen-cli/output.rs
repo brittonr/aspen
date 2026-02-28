@@ -40,6 +40,1810 @@ pub fn print_success(message: &str, json: bool) {
     }
 }
 
+/// Print an error message.
+pub fn print_error(message: &str, json: bool) {
+    if json {
+        eprintln!(
+            "{}",
+            serde_json::json!({
+                "status": "error",
+                "message": message
+            })
+        );
+    } else {
+        eprintln!("Error: {}", message);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =============================================================================
+    // Test Category 1: to_json() Round-Trip Tests
+    // =============================================================================
+
+    #[test]
+    fn test_health_output_to_json_with_raft_node_id() {
+        let output = HealthOutput {
+            status: "healthy".to_string(),
+            node_id: 1,
+            raft_node_id: Some(42),
+            uptime_seconds: 3600,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["status"], "healthy");
+        assert_eq!(json["node_id"], 1);
+        assert_eq!(json["raft_node_id"], 42);
+        assert_eq!(json["uptime_seconds"], 3600);
+    }
+
+    #[test]
+    fn test_health_output_to_json_without_raft_node_id() {
+        let output = HealthOutput {
+            status: "initializing".to_string(),
+            node_id: 2,
+            raft_node_id: None,
+            uptime_seconds: 0,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["status"], "initializing");
+        assert_eq!(json["node_id"], 2);
+        assert!(json["raft_node_id"].is_null());
+        assert_eq!(json["uptime_seconds"], 0);
+    }
+
+    #[test]
+    fn test_raft_metrics_output_to_json_with_leader() {
+        let output = RaftMetricsOutput {
+            state: "Follower".to_string(),
+            current_leader: Some(1),
+            current_term: 5,
+            last_log_index: 100,
+            last_applied: 99,
+            snapshot_index: 50,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["state"], "Follower");
+        assert_eq!(json["current_leader"], 1);
+        assert_eq!(json["current_term"], 5);
+        assert_eq!(json["last_log_index"], 100);
+        assert_eq!(json["last_applied"], 99);
+        assert_eq!(json["snapshot_index"], 50);
+    }
+
+    #[test]
+    fn test_raft_metrics_output_to_json_without_leader() {
+        let output = RaftMetricsOutput {
+            state: "Leader".to_string(),
+            current_leader: None,
+            current_term: 0,
+            last_log_index: 0,
+            last_applied: 0,
+            snapshot_index: 0,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["state"], "Leader");
+        assert!(json["current_leader"].is_null());
+        assert_eq!(json["current_term"], 0);
+    }
+
+    #[test]
+    fn test_cluster_state_output_to_json_with_nodes() {
+        let output = ClusterStateOutput {
+            nodes: vec![
+                NodeInfo {
+                    node_id: 1,
+                    endpoint_id: "abc123".to_string(),
+                    is_leader: true,
+                    is_voter: true,
+                },
+                NodeInfo {
+                    node_id: 2,
+                    endpoint_id: "def456".to_string(),
+                    is_leader: false,
+                    is_voter: false,
+                },
+            ],
+        };
+
+        let json = output.to_json();
+        let nodes = json["nodes"].as_array().expect("nodes should be array");
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(nodes[0]["node_id"], 1);
+        assert_eq!(nodes[0]["endpoint_id"], "abc123");
+        assert_eq!(nodes[0]["is_leader"], true);
+        assert_eq!(nodes[0]["is_voter"], true);
+        assert_eq!(nodes[1]["node_id"], 2);
+        assert_eq!(nodes[1]["is_leader"], false);
+    }
+
+    #[test]
+    fn test_cluster_state_output_to_json_empty_nodes() {
+        let output = ClusterStateOutput { nodes: vec![] };
+
+        let json = output.to_json();
+        let nodes = json["nodes"].as_array().expect("nodes should be array");
+        assert_eq!(nodes.len(), 0);
+    }
+
+    #[test]
+    fn test_kv_read_output_to_json_with_value() {
+        let output = KvReadOutput {
+            key: "mykey".to_string(),
+            value: Some(b"myvalue".to_vec()),
+            does_exist: true,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["key"], "mykey");
+        assert_eq!(json["does_exist"], true);
+        assert_eq!(json["value"], "myvalue");
+    }
+
+    #[test]
+    fn test_kv_read_output_to_json_with_binary_value() {
+        let binary_data = vec![0xFF, 0xFE, 0xFD, 0xFC];
+        let output = KvReadOutput {
+            key: "binkey".to_string(),
+            value: Some(binary_data.clone()),
+            does_exist: true,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["key"], "binkey");
+        assert_eq!(json["does_exist"], true);
+
+        // Binary should be base64 encoded
+        let value_obj = json["value"].as_object().expect("binary value should be object");
+        assert!(value_obj.contains_key("base64"));
+        assert_eq!(value_obj["base64"], base64_encode(&binary_data));
+    }
+
+    #[test]
+    fn test_kv_read_output_to_json_key_not_found() {
+        let output = KvReadOutput {
+            key: "missing".to_string(),
+            value: None,
+            does_exist: false,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["key"], "missing");
+        assert_eq!(json["does_exist"], false);
+        assert!(json["value"].is_null());
+    }
+
+    #[test]
+    fn test_kv_scan_output_to_json_with_entries() {
+        let output = KvScanOutput {
+            entries: vec![
+                ("key1".to_string(), b"value1".to_vec()),
+                ("key2".to_string(), b"value2".to_vec()),
+            ],
+            continuation_token: Some("token123".to_string()),
+        };
+
+        let json = output.to_json();
+        let entries = json["entries"].as_array().expect("entries should be array");
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0]["key"], "key1");
+        assert_eq!(entries[0]["value"], "value1");
+        assert_eq!(json["count"], 2);
+        assert_eq!(json["continuation_token"], "token123");
+    }
+
+    #[test]
+    fn test_kv_scan_output_to_json_empty() {
+        let output = KvScanOutput {
+            entries: vec![],
+            continuation_token: None,
+        };
+
+        let json = output.to_json();
+        let entries = json["entries"].as_array().expect("entries should be array");
+        assert_eq!(entries.len(), 0);
+        assert_eq!(json["count"], 0);
+        assert!(json["continuation_token"].is_null());
+    }
+
+    #[test]
+    fn test_kv_batch_read_output_to_json() {
+        let output = KvBatchReadOutput {
+            keys: vec!["k1".to_string(), "k2".to_string(), "k3".to_string()],
+            values: vec![Some(b"v1".to_vec()), None, Some(b"v3".to_vec())],
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["count"], 3);
+        let results = json["results"].as_array().expect("results should be array");
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0]["key"], "k1");
+        assert_eq!(results[0]["value"], "v1");
+        assert_eq!(results[0]["does_exist"], true);
+        assert_eq!(results[1]["key"], "k2");
+        assert!(results[1]["value"].is_null());
+        assert_eq!(results[1]["does_exist"], false);
+    }
+
+    #[test]
+    fn test_kv_batch_read_output_to_json_empty() {
+        let output = KvBatchReadOutput {
+            keys: vec![],
+            values: vec![],
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["count"], 0);
+        let results = json["results"].as_array().expect("results should be array");
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_kv_batch_write_output_to_json_success() {
+        let output = KvBatchWriteOutput {
+            is_success: true,
+            operations_applied: 42,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["is_success"], true);
+        assert_eq!(json["operations_applied"], 42);
+    }
+
+    #[test]
+    fn test_kv_batch_write_output_to_json_failure() {
+        let output = KvBatchWriteOutput {
+            is_success: false,
+            operations_applied: 0,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["is_success"], false);
+        assert_eq!(json["operations_applied"], 0);
+    }
+
+    #[test]
+    #[cfg(feature = "sql")]
+    fn test_sql_query_output_to_json() {
+        use aspen_client_api::SqlCellValue;
+
+        use crate::commands::sql::OutputFormat;
+
+        let output = SqlQueryOutput {
+            columns: vec!["id".to_string(), "name".to_string(), "score".to_string()],
+            rows: vec![
+                vec![
+                    SqlCellValue::Integer(1),
+                    SqlCellValue::Text("Alice".to_string()),
+                    SqlCellValue::Real(95.5),
+                ],
+                vec![SqlCellValue::Integer(2), SqlCellValue::Null, SqlCellValue::Real(88.0)],
+            ],
+            row_count: 2,
+            is_truncated: false,
+            execution_time_ms: 42,
+            show_headers: true,
+            format: OutputFormat::Table,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["row_count"], 2);
+        assert_eq!(json["is_truncated"], false);
+        assert_eq!(json["execution_time_ms"], 42);
+
+        let columns = json["columns"].as_array().expect("columns should be array");
+        assert_eq!(columns.len(), 3);
+        assert_eq!(columns[0], "id");
+
+        let rows = json["rows"].as_array().expect("rows should be array");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["id"], 1);
+        assert_eq!(rows[0]["name"], "Alice");
+        assert_eq!(rows[0]["score"], 95.5);
+        assert!(rows[1]["name"].is_null());
+    }
+
+    #[test]
+    fn test_repo_list_output_to_json() {
+        let output = RepoListOutput {
+            repos: vec![
+                RepoListItem {
+                    id: "repo123".to_string(),
+                    name: "my-project".to_string(),
+                    description: Some("A cool project".to_string()),
+                    default_branch: "main".to_string(),
+                },
+                RepoListItem {
+                    id: "repo456".to_string(),
+                    name: "another-project".to_string(),
+                    description: None,
+                    default_branch: "master".to_string(),
+                },
+            ],
+            count: 2,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["count"], 2);
+        let repos = json["repos"].as_array().expect("repos should be array");
+        assert_eq!(repos.len(), 2);
+        assert_eq!(repos[0]["id"], "repo123");
+        assert_eq!(repos[0]["name"], "my-project");
+        assert_eq!(repos[0]["description"], "A cool project");
+        assert_eq!(repos[0]["default_branch"], "main");
+        assert!(repos[1]["description"].is_null());
+    }
+
+    #[test]
+    fn test_repo_list_output_to_json_empty() {
+        let output = RepoListOutput {
+            repos: vec![],
+            count: 0,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["count"], 0);
+        let repos = json["repos"].as_array().expect("repos should be array");
+        assert_eq!(repos.len(), 0);
+    }
+
+    #[test]
+    fn test_repo_output_to_json() {
+        let output = RepoOutput {
+            id: "repo789".to_string(),
+            name: "test-repo".to_string(),
+            description: Some("Test repository".to_string()),
+            default_branch: "develop".to_string(),
+            delegates: vec!["delegate1".to_string(), "delegate2".to_string()],
+            threshold: 2,
+            created_at_ms: 1234567890,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["id"], "repo789");
+        assert_eq!(json["name"], "test-repo");
+        assert_eq!(json["description"], "Test repository");
+        assert_eq!(json["default_branch"], "develop");
+        assert_eq!(json["threshold"], 2);
+        assert_eq!(json["created_at_ms"], 1234567890);
+
+        let delegates = json["delegates"].as_array().expect("delegates should be array");
+        assert_eq!(delegates.len(), 2);
+    }
+
+    #[test]
+    fn test_commit_output_to_json() {
+        let output = CommitOutput {
+            hash: "abc123def456".to_string(),
+            tree: "tree789".to_string(),
+            parents: vec!["parent1".to_string(), "parent2".to_string()],
+            author_name: "Alice".to_string(),
+            author_email: Some("alice@example.com".to_string()),
+            message: "Initial commit".to_string(),
+            timestamp_ms: 9876543210,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["hash"], "abc123def456");
+        assert_eq!(json["tree"], "tree789");
+        assert_eq!(json["author_name"], "Alice");
+        assert_eq!(json["author_email"], "alice@example.com");
+        assert_eq!(json["message"], "Initial commit");
+        assert_eq!(json["timestamp_ms"], 9876543210_u64);
+
+        let parents = json["parents"].as_array().expect("parents should be array");
+        assert_eq!(parents.len(), 2);
+    }
+
+    #[test]
+    fn test_commit_output_to_json_no_email_no_parents() {
+        let output = CommitOutput {
+            hash: "hash123".to_string(),
+            tree: "tree456".to_string(),
+            parents: vec![],
+            author_name: "Bob".to_string(),
+            author_email: None,
+            message: "Root commit".to_string(),
+            timestamp_ms: 1111111111,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["author_name"], "Bob");
+        assert!(json["author_email"].is_null());
+        let parents = json["parents"].as_array().expect("parents should be array");
+        assert_eq!(parents.len(), 0);
+    }
+
+    #[test]
+    fn test_log_output_to_json() {
+        let output = LogOutput {
+            commits: vec![
+                CommitOutput {
+                    hash: "commit1".to_string(),
+                    tree: "tree1".to_string(),
+                    parents: vec![],
+                    author_name: "Alice".to_string(),
+                    author_email: None,
+                    message: "First".to_string(),
+                    timestamp_ms: 1000,
+                },
+                CommitOutput {
+                    hash: "commit2".to_string(),
+                    tree: "tree2".to_string(),
+                    parents: vec!["commit1".to_string()],
+                    author_name: "Bob".to_string(),
+                    author_email: None,
+                    message: "Second".to_string(),
+                    timestamp_ms: 2000,
+                },
+            ],
+            count: 2,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["count"], 2);
+        let commits_json = json["commits"].as_array().expect("commits should be array");
+        assert_eq!(commits_json.len(), 2);
+        assert_eq!(commits_json[0]["hash"], "commit1");
+        assert_eq!(commits_json[1]["hash"], "commit2");
+    }
+
+    #[test]
+    fn test_log_output_to_json_empty() {
+        let output = LogOutput {
+            commits: vec![],
+            count: 0,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["count"], 0);
+        let commits = json["commits"].as_array().expect("commits should be array");
+        assert_eq!(commits.len(), 0);
+    }
+
+    #[test]
+    fn test_ref_output_to_json() {
+        let output = RefOutput {
+            name: "refs/heads/main".to_string(),
+            hash: "abc123".to_string(),
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["name"], "refs/heads/main");
+        assert_eq!(json["hash"], "abc123");
+    }
+
+    #[test]
+    fn test_ref_list_output_to_json() {
+        let output = RefListOutput {
+            refs: vec![
+                RefOutput {
+                    name: "refs/heads/main".to_string(),
+                    hash: "hash1".to_string(),
+                },
+                RefOutput {
+                    name: "refs/tags/v1.0".to_string(),
+                    hash: "hash2".to_string(),
+                },
+            ],
+            count: 2,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["count"], 2);
+        let refs = json["refs"].as_array().expect("refs should be array");
+        assert_eq!(refs.len(), 2);
+        assert_eq!(refs[0]["name"], "refs/heads/main");
+        assert_eq!(refs[1]["name"], "refs/tags/v1.0");
+    }
+
+    #[test]
+    fn test_comment_output_to_json() {
+        let output = CommentOutput {
+            hash: "comment123abc".to_string(),
+            author: "author456def".to_string(),
+            body: "This is a comment".to_string(),
+            timestamp_ms: 5555555555,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["hash"], "comment123abc");
+        assert_eq!(json["author"], "author456def");
+        assert_eq!(json["body"], "This is a comment");
+        assert_eq!(json["timestamp_ms"], 5555555555_u64);
+    }
+
+    #[test]
+    fn test_issue_output_to_json() {
+        let output = IssueOutput {
+            id: "issue123".to_string(),
+            title: "Bug report".to_string(),
+            state: "open".to_string(),
+            labels: vec!["bug".to_string(), "priority".to_string()],
+            comment_count: 5,
+            created_at_ms: 1000,
+            updated_at_ms: 2000,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["id"], "issue123");
+        assert_eq!(json["title"], "Bug report");
+        assert_eq!(json["state"], "open");
+        assert_eq!(json["comment_count"], 5);
+
+        let labels = json["labels"].as_array().expect("labels should be array");
+        assert_eq!(labels.len(), 2);
+        assert_eq!(labels[0], "bug");
+    }
+
+    #[test]
+    fn test_issue_list_output_to_json() {
+        let output = IssueListOutput {
+            issues: vec![IssueOutput {
+                id: "issue1".to_string(),
+                title: "First issue".to_string(),
+                state: "open".to_string(),
+                labels: vec![],
+                comment_count: 0,
+                created_at_ms: 1000,
+                updated_at_ms: 1000,
+            }],
+            count: 1,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["count"], 1);
+        let issues = json["issues"].as_array().expect("issues should be array");
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn test_issue_detail_output_to_json_with_comments() {
+        let output = IssueDetailOutput {
+            id: "issue789".to_string(),
+            title: "Detailed issue".to_string(),
+            body: "Issue description".to_string(),
+            state: "closed".to_string(),
+            labels: vec!["feature".to_string()],
+            assignees: vec!["user1".to_string(), "user2".to_string()],
+            comment_count: 2,
+            created_at_ms: 3000,
+            updated_at_ms: 4000,
+            comments: Some(vec![CommentOutput {
+                hash: "c1".to_string(),
+                author: "a1".to_string(),
+                body: "Comment 1".to_string(),
+                timestamp_ms: 3500,
+            }]),
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["id"], "issue789");
+        assert_eq!(json["title"], "Detailed issue");
+        assert_eq!(json["body"], "Issue description");
+        assert_eq!(json["state"], "closed");
+
+        let labels = json["labels"].as_array().expect("labels should be array");
+        assert_eq!(labels.len(), 1);
+
+        let assignees = json["assignees"].as_array().expect("assignees should be array");
+        assert_eq!(assignees.len(), 2);
+
+        let comments = json["comments"].as_array().expect("comments should be array");
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0]["body"], "Comment 1");
+    }
+
+    #[test]
+    fn test_issue_detail_output_to_json_without_comments() {
+        let output = IssueDetailOutput {
+            id: "issue999".to_string(),
+            title: "No comments".to_string(),
+            body: "Body".to_string(),
+            state: "open".to_string(),
+            labels: vec![],
+            assignees: vec![],
+            comment_count: 0,
+            created_at_ms: 5000,
+            updated_at_ms: 5000,
+            comments: None,
+        };
+
+        let json = output.to_json();
+        assert!(json["comments"].is_null());
+        let labels = json["labels"].as_array().expect("labels should be array");
+        assert_eq!(labels.len(), 0);
+    }
+
+    #[test]
+    fn test_patch_output_to_json() {
+        let output = PatchOutput {
+            id: "patch123".to_string(),
+            title: "Feature patch".to_string(),
+            state: "merged".to_string(),
+            base: "basehash".to_string(),
+            head: "headhash".to_string(),
+            labels: vec!["enhancement".to_string()],
+            revision_count: 3,
+            approval_count: 2,
+            created_at_ms: 6000,
+            updated_at_ms: 7000,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["id"], "patch123");
+        assert_eq!(json["title"], "Feature patch");
+        assert_eq!(json["state"], "merged");
+        assert_eq!(json["base"], "basehash");
+        assert_eq!(json["head"], "headhash");
+        assert_eq!(json["revision_count"], 3);
+        assert_eq!(json["approval_count"], 2);
+    }
+
+    #[test]
+    fn test_patch_list_output_to_json() {
+        let output = PatchListOutput {
+            patches: vec![PatchOutput {
+                id: "p1".to_string(),
+                title: "Patch 1".to_string(),
+                state: "open".to_string(),
+                base: "b1".to_string(),
+                head: "h1".to_string(),
+                labels: vec![],
+                revision_count: 1,
+                approval_count: 0,
+                created_at_ms: 1000,
+                updated_at_ms: 1000,
+            }],
+            count: 1,
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["count"], 1);
+        let patches = json["patches"].as_array().expect("patches should be array");
+        assert_eq!(patches.len(), 1);
+    }
+
+    #[test]
+    fn test_patch_detail_output_to_json_complete() {
+        let output = PatchDetailOutput {
+            id: "patch789".to_string(),
+            title: "Big patch".to_string(),
+            description: "Long description".to_string(),
+            state: "approved".to_string(),
+            base: "basecommit".to_string(),
+            head: "headcommit".to_string(),
+            labels: vec!["critical".to_string()],
+            assignees: vec!["reviewer1".to_string()],
+            revision_count: 2,
+            approval_count: 1,
+            created_at_ms: 8000,
+            updated_at_ms: 9000,
+            comments: Some(vec![CommentOutput {
+                hash: "c1".to_string(),
+                author: "a1".to_string(),
+                body: "LGTM".to_string(),
+                timestamp_ms: 8500,
+            }]),
+            revisions: Some(vec![RevisionOutput {
+                hash: "r1".to_string(),
+                head: "h1".to_string(),
+                message: Some("Rev 1".to_string()),
+                author: "author1".to_string(),
+                timestamp_ms: 8200,
+            }]),
+            approvals: Some(vec![ApprovalOutput {
+                author: "approver1".to_string(),
+                commit: "commitabc".to_string(),
+                message: Some("Approved".to_string()),
+                timestamp_ms: 8800,
+            }]),
+        };
+
+        let json = output.to_json();
+        assert_eq!(json["id"], "patch789");
+
+        let comments = json["comments"].as_array().expect("comments should be array");
+        assert_eq!(comments.len(), 1);
+
+        let revisions = json["revisions"].as_array().expect("revisions should be array");
+        assert_eq!(revisions.len(), 1);
+        assert_eq!(revisions[0]["hash"], "r1");
+        assert_eq!(revisions[0]["message"], "Rev 1");
+
+        let approvals = json["approvals"].as_array().expect("approvals should be array");
+        assert_eq!(approvals.len(), 1);
+        assert_eq!(approvals[0]["author"], "approver1");
+        assert_eq!(approvals[0]["commit"], "commitabc");
+    }
+
+    #[test]
+    fn test_patch_detail_output_to_json_minimal() {
+        let output = PatchDetailOutput {
+            id: "minimal".to_string(),
+            title: "Min".to_string(),
+            description: "".to_string(),
+            state: "draft".to_string(),
+            base: "b".to_string(),
+            head: "h".to_string(),
+            labels: vec![],
+            assignees: vec![],
+            revision_count: 0,
+            approval_count: 0,
+            created_at_ms: 0,
+            updated_at_ms: 0,
+            comments: None,
+            revisions: None,
+            approvals: None,
+        };
+
+        let json = output.to_json();
+        assert!(json["comments"].is_null());
+        assert!(json["revisions"].is_null());
+        assert!(json["approvals"].is_null());
+    }
+
+    // =============================================================================
+    // Test Category 2: to_human() Formatting Tests
+    // =============================================================================
+
+    #[test]
+    fn test_health_output_to_human_with_raft_id() {
+        let output = HealthOutput {
+            status: "healthy".to_string(),
+            node_id: 1,
+            raft_node_id: Some(42),
+            uptime_seconds: 3600,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("Health Status"));
+        assert!(human.contains("healthy"));
+        assert!(human.contains("Node ID:        1"));
+        assert!(human.contains("Raft Node ID:   42"));
+        assert!(human.contains("Uptime:         3600s"));
+    }
+
+    #[test]
+    fn test_health_output_to_human_without_raft_id() {
+        let output = HealthOutput {
+            status: "degraded".to_string(),
+            node_id: 99,
+            raft_node_id: None,
+            uptime_seconds: 0,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("degraded"));
+        assert!(human.contains("Raft Node ID:   N/A"));
+        assert!(human.contains("Uptime:         0s"));
+    }
+
+    #[test]
+    fn test_raft_metrics_output_to_human() {
+        let output = RaftMetricsOutput {
+            state: "Leader".to_string(),
+            current_leader: Some(5),
+            current_term: 10,
+            last_log_index: 500,
+            last_applied: 499,
+            snapshot_index: 400,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("Raft Metrics"));
+        assert!(human.contains("State:          Leader"));
+        assert!(human.contains("Current Leader: 5"));
+        assert!(human.contains("Current Term:   10"));
+        assert!(human.contains("Last Log Index: 500"));
+    }
+
+    #[test]
+    fn test_cluster_state_output_to_human_with_nodes() {
+        let output = ClusterStateOutput {
+            nodes: vec![
+                NodeInfo {
+                    node_id: 1,
+                    endpoint_id: "abc123".to_string(),
+                    is_leader: true,
+                    is_voter: true,
+                },
+                NodeInfo {
+                    node_id: 2,
+                    endpoint_id: "def456".to_string(),
+                    is_leader: false,
+                    is_voter: false,
+                },
+            ],
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("Cluster State"));
+        assert!(human.contains("Node ID"));
+        assert!(human.contains("Leader"));
+        assert!(human.contains("Voter"));
+        assert!(human.contains("*")); // Leader marker
+        assert!(human.contains("Y")); // Voter marker
+        assert!(human.contains("N")); // Non-voter marker
+    }
+
+    #[test]
+    fn test_cluster_state_output_to_human_empty() {
+        let output = ClusterStateOutput { nodes: vec![] };
+
+        let human = output.to_human();
+        assert_eq!(human, "No nodes in cluster");
+    }
+
+    #[test]
+    fn test_kv_read_output_to_human_found() {
+        let output = KvReadOutput {
+            key: "testkey".to_string(),
+            value: Some(b"testvalue".to_vec()),
+            does_exist: true,
+        };
+
+        let human = output.to_human();
+        assert_eq!(human, "testvalue");
+    }
+
+    #[test]
+    fn test_kv_read_output_to_human_not_found() {
+        let output = KvReadOutput {
+            key: "missing".to_string(),
+            value: None,
+            does_exist: false,
+        };
+
+        let human = output.to_human();
+        assert_eq!(human, "Key 'missing' not found");
+    }
+
+    #[test]
+    fn test_kv_read_output_to_human_binary() {
+        let output = KvReadOutput {
+            key: "binkey".to_string(),
+            value: Some(vec![0xFF, 0xFE, 0xFD]),
+            does_exist: true,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("<binary: 3 bytes>"));
+    }
+
+    #[test]
+    fn test_kv_scan_output_to_human_with_results() {
+        let output = KvScanOutput {
+            entries: vec![
+                ("key1".to_string(), b"short".to_vec()),
+                ("key2".to_string(), b"this is a very long value that should be truncated in display".to_vec()),
+            ],
+            continuation_token: None,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("Found 2 key(s)"));
+        assert!(human.contains("key1: short"));
+        assert!(human.contains("key2:"));
+        assert!(human.contains("...")); // Truncation indicator
+    }
+
+    #[test]
+    fn test_kv_scan_output_to_human_with_token() {
+        let output = KvScanOutput {
+            entries: vec![("k".to_string(), b"v".to_vec())],
+            continuation_token: Some("nextpage".to_string()),
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("More results available"));
+        assert!(human.contains("--token nextpage"));
+    }
+
+    #[test]
+    fn test_kv_scan_output_to_human_empty() {
+        let output = KvScanOutput {
+            entries: vec![],
+            continuation_token: None,
+        };
+
+        let human = output.to_human();
+        assert_eq!(human, "No keys found");
+    }
+
+    #[test]
+    fn test_kv_batch_write_output_to_human_success() {
+        let output = KvBatchWriteOutput {
+            is_success: true,
+            operations_applied: 10,
+        };
+
+        let human = output.to_human();
+        assert_eq!(human, "OK: 10 operation(s) applied");
+    }
+
+    #[test]
+    fn test_kv_batch_write_output_to_human_failure() {
+        let output = KvBatchWriteOutput {
+            is_success: false,
+            operations_applied: 0,
+        };
+
+        let human = output.to_human();
+        assert_eq!(human, "Batch write failed");
+    }
+
+    #[test]
+    #[cfg(feature = "sql")]
+    fn test_sql_query_output_to_human_table_format() {
+        use aspen_client_api::SqlCellValue;
+
+        use crate::commands::sql::OutputFormat;
+
+        let output = SqlQueryOutput {
+            columns: vec!["id".to_string(), "name".to_string()],
+            rows: vec![
+                vec![SqlCellValue::Integer(1), SqlCellValue::Text("Alice".to_string())],
+                vec![SqlCellValue::Integer(2), SqlCellValue::Text("Bob".to_string())],
+            ],
+            row_count: 2,
+            is_truncated: false,
+            execution_time_ms: 15,
+            show_headers: true,
+            format: OutputFormat::Table,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("id"));
+        assert!(human.contains("name"));
+        assert!(human.contains("Alice"));
+        assert!(human.contains("Bob"));
+        assert!(human.contains("2 row(s) returned"));
+        assert!(human.contains("15 ms"));
+    }
+
+    #[test]
+    #[cfg(feature = "sql")]
+    fn test_sql_query_output_to_human_empty() {
+        use crate::commands::sql::OutputFormat;
+
+        let output = SqlQueryOutput {
+            columns: vec![],
+            rows: vec![],
+            row_count: 0,
+            is_truncated: false,
+            execution_time_ms: 5,
+            show_headers: true,
+            format: OutputFormat::Table,
+        };
+
+        let human = output.to_human();
+        assert_eq!(human, "No rows returned (5 ms)");
+    }
+
+    #[test]
+    fn test_repo_list_output_to_human() {
+        let output = RepoListOutput {
+            repos: vec![RepoListItem {
+                id: "1234567890abcdef1234".to_string(),
+                name: "my-repo".to_string(),
+                description: Some("A test repository".to_string()),
+                default_branch: "main".to_string(),
+            }],
+            count: 1,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("Repositories (1)"));
+        assert!(human.contains("my-repo"));
+        assert!(human.contains("1234567890abcdef")); // First 16 chars of ID
+        assert!(human.contains("A test repository"));
+    }
+
+    #[test]
+    fn test_repo_list_output_to_human_empty() {
+        let output = RepoListOutput {
+            repos: vec![],
+            count: 0,
+        };
+
+        let human = output.to_human();
+        assert_eq!(human, "No repositories found.");
+    }
+
+    #[test]
+    fn test_repo_output_to_human() {
+        let output = RepoOutput {
+            id: "repoabc123".to_string(),
+            name: "test-repo".to_string(),
+            description: Some("Description".to_string()),
+            default_branch: "main".to_string(),
+            delegates: vec!["d1".to_string(), "d2".to_string(), "d3".to_string()],
+            threshold: 2,
+            created_at_ms: 1000000,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("Repository: test-repo"));
+        assert!(human.contains("ID:             repoabc123"));
+        assert!(human.contains("Default Branch: main"));
+        assert!(human.contains("Description:    Description"));
+        assert!(human.contains("Delegates:      3"));
+        assert!(human.contains("Threshold:      2"));
+    }
+
+    #[test]
+    fn test_commit_output_to_human_with_email() {
+        let output = CommitOutput {
+            hash: "commitabc123".to_string(),
+            tree: "treexyz".to_string(),
+            parents: vec!["parent1".to_string()],
+            author_name: "Alice".to_string(),
+            author_email: Some("alice@example.com".to_string()),
+            message: "Fix bug\n\nDetailed description".to_string(),
+            timestamp_ms: 1234567890,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("commit commitabc123"));
+        assert!(human.contains("Author: Alice <alice@example.com>"));
+        assert!(human.contains("Parent: parent1"));
+        assert!(human.contains("Fix bug"));
+        assert!(human.contains("Detailed description"));
+    }
+
+    #[test]
+    fn test_log_output_to_human_multiple_commits() {
+        let output = LogOutput {
+            commits: vec![
+                CommitOutput {
+                    hash: "c1".to_string(),
+                    tree: "t1".to_string(),
+                    parents: vec![],
+                    author_name: "A".to_string(),
+                    author_email: None,
+                    message: "M1".to_string(),
+                    timestamp_ms: 1000,
+                },
+                CommitOutput {
+                    hash: "c2".to_string(),
+                    tree: "t2".to_string(),
+                    parents: vec![],
+                    author_name: "B".to_string(),
+                    author_email: None,
+                    message: "M2".to_string(),
+                    timestamp_ms: 2000,
+                },
+            ],
+            count: 2,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("commit c1"));
+        assert!(human.contains("commit c2"));
+        assert!(human.contains("M1"));
+        assert!(human.contains("M2"));
+    }
+
+    #[test]
+    fn test_log_output_to_human_empty() {
+        let output = LogOutput {
+            commits: vec![],
+            count: 0,
+        };
+
+        let human = output.to_human();
+        assert_eq!(human, "No commits found");
+    }
+
+    #[test]
+    fn test_ref_output_to_human() {
+        let output = RefOutput {
+            name: "refs/heads/feature-branch".to_string(),
+            hash: "abc123def456".to_string(),
+        };
+
+        let human = output.to_human();
+        assert_eq!(human, "refs/heads/feature-branch -> abc123def456");
+    }
+
+    #[test]
+    fn test_issue_output_to_human_with_labels() {
+        let output = IssueOutput {
+            id: "issue12345678".to_string(),
+            title: "Critical bug".to_string(),
+            state: "open".to_string(),
+            labels: vec!["bug".to_string(), "critical".to_string()],
+            comment_count: 3,
+            created_at_ms: 1000,
+            updated_at_ms: 2000,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("#issue123")); // First 8 chars of ID
+        assert!(human.contains("OPEN"));
+        assert!(human.contains("Critical bug"));
+        assert!(human.contains("[bug, critical]"));
+        assert!(human.contains("3 comments"));
+    }
+
+    #[test]
+    fn test_issue_output_to_human_no_labels() {
+        let output = IssueOutput {
+            id: "issuexyz".to_string(),
+            title: "Simple issue".to_string(),
+            state: "closed".to_string(),
+            labels: vec![],
+            comment_count: 0,
+            created_at_ms: 1000,
+            updated_at_ms: 1000,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("CLOSED"));
+        assert!(!human.contains("[]")); // No empty labels brackets
+    }
+
+    #[test]
+    fn test_issue_detail_output_to_human_complete() {
+        let output = IssueDetailOutput {
+            id: "detailedissue123".to_string(),
+            title: "Feature request".to_string(),
+            body: "Please add this feature".to_string(),
+            state: "open".to_string(),
+            labels: vec!["enhancement".to_string()],
+            assignees: vec!["assignee123456".to_string()],
+            comment_count: 1,
+            created_at_ms: 1000,
+            updated_at_ms: 2000,
+            comments: Some(vec![CommentOutput {
+                hash: "commenthash123".to_string(),
+                author: "authorhash456".to_string(),
+                body: "Good idea".to_string(),
+                timestamp_ms: 1500,
+            }]),
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("Issue #detailed")); // First 8 chars
+        assert!(human.contains("[OPEN]"));
+        assert!(human.contains("Title: Feature request"));
+        assert!(human.contains("Labels: enhancement"));
+        assert!(human.contains("Assignees: assignee")); // First 8 chars
+        assert!(human.contains("Please add this feature"));
+        assert!(human.contains("Comments:"));
+        assert!(human.contains("Good idea"));
+    }
+
+    #[test]
+    fn test_patch_output_to_human() {
+        let output = PatchOutput {
+            id: "patchabc12345678".to_string(),
+            title: "Add feature".to_string(),
+            state: "merged".to_string(),
+            base: "basecommit".to_string(),
+            head: "headcommit".to_string(),
+            labels: vec!["feature".to_string()],
+            revision_count: 2,
+            approval_count: 1,
+            created_at_ms: 1000,
+            updated_at_ms: 2000,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("!patchabc")); // First 8 chars
+        assert!(human.contains("MERGED"));
+        assert!(human.contains("Add feature"));
+        assert!(human.contains("[feature]"));
+        assert!(human.contains("2 revisions"));
+        assert!(human.contains("1 approvals"));
+    }
+
+    #[test]
+    fn test_patch_detail_output_to_human() {
+        let output = PatchDetailOutput {
+            id: "patchdetail123".to_string(),
+            title: "Big change".to_string(),
+            description: "This changes everything".to_string(),
+            state: "approved".to_string(),
+            base: "basecommitabc123".to_string(),
+            head: "headcommitdef456".to_string(),
+            labels: vec![],
+            assignees: vec![],
+            revision_count: 1,
+            approval_count: 1,
+            created_at_ms: 1000,
+            updated_at_ms: 2000,
+            comments: None,
+            revisions: None,
+            approvals: Some(vec![ApprovalOutput {
+                author: "approver12345678".to_string(),
+                commit: "approvedcommit123".to_string(),
+                message: Some("LGTM".to_string()),
+                timestamp_ms: 1500,
+            }]),
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("Patch !patchdet")); // First 8 chars
+        assert!(human.contains("[APPROVED]"));
+        assert!(human.contains("Title: Big change"));
+        assert!(human.contains("Base:  basecommitab")); // First 12 chars
+        assert!(human.contains("Head:  headcommitde")); // First 12 chars
+        assert!(human.contains("This changes everything"));
+        assert!(human.contains("Approvals (1):"));
+        assert!(human.contains("approver")); // First 8 chars
+        assert!(human.contains("LGTM"));
+    }
+
+    // =============================================================================
+    // Test Category 3: Edge Cases
+    // =============================================================================
+
+    #[test]
+    fn test_cluster_state_output_long_endpoint_id() {
+        let output = ClusterStateOutput {
+            nodes: vec![NodeInfo {
+                node_id: 1,
+                endpoint_id: "a".repeat(100), // Very long endpoint ID
+                is_leader: true,
+                is_voter: true,
+            }],
+        };
+
+        let human = output.to_human();
+        // Should truncate to 40 chars
+        let lines: Vec<&str> = human.lines().collect();
+        let data_line = lines.iter().find(|l| l.contains("1")).unwrap();
+        assert!(data_line.len() < 150); // Not full 100 char endpoint
+    }
+
+    #[test]
+    fn test_kv_scan_output_long_value_truncation() {
+        let long_value = "x".repeat(100);
+        let output = KvScanOutput {
+            entries: vec![("key".to_string(), long_value.as_bytes().to_vec())],
+            continuation_token: None,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("..."));
+        assert!(human.len() < long_value.len() + 50); // Truncated
+    }
+
+    #[test]
+    fn test_kv_batch_read_output_long_value_truncation() {
+        let long_value = "y".repeat(100);
+        let output = KvBatchReadOutput {
+            keys: vec!["key".to_string()],
+            values: vec![Some(long_value.as_bytes().to_vec())],
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("..."));
+    }
+
+    #[test]
+    fn test_repo_list_output_long_description() {
+        let output = RepoListOutput {
+            repos: vec![RepoListItem {
+                id: "repoid1234567890abc".to_string(),
+                name: "repo".to_string(),
+                description: Some("a".repeat(100)),
+                default_branch: "main".to_string(),
+            }],
+            count: 1,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("..."));
+        assert!(human.len() < 200); // Truncated
+    }
+
+    #[test]
+    fn test_repo_output_no_description() {
+        let output = RepoOutput {
+            id: "id".to_string(),
+            name: "repo".to_string(),
+            description: None,
+            default_branch: "main".to_string(),
+            delegates: vec![],
+            threshold: 1,
+            created_at_ms: 0,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("Description:    -"));
+    }
+
+    #[test]
+    fn test_base64_encode_helper() {
+        let data = vec![0x00, 0xFF, 0xAB, 0xCD];
+        let encoded = base64_encode(&data);
+        assert_eq!(encoded, "AP+rzQ==");
+    }
+
+    #[test]
+    fn test_base64_encode_empty() {
+        let data = vec![];
+        let encoded = base64_encode(&data);
+        assert_eq!(encoded, "");
+    }
+
+    // =============================================================================
+    // Test Category 4: print_output() Tests
+    // =============================================================================
+
+    #[test]
+    fn test_print_output_json_mode_no_panic() {
+        let output = HealthOutput {
+            status: "ok".to_string(),
+            node_id: 1,
+            raft_node_id: Some(2),
+            uptime_seconds: 100,
+        };
+
+        // Just ensure it doesn't panic - we can't easily capture stdout in tests
+        print_output(&output, true);
+    }
+
+    #[test]
+    fn test_print_output_human_mode_no_panic() {
+        let output = HealthOutput {
+            status: "ok".to_string(),
+            node_id: 1,
+            raft_node_id: Some(2),
+            uptime_seconds: 100,
+        };
+
+        // Just ensure it doesn't panic
+        print_output(&output, false);
+    }
+
+    #[test]
+    fn test_print_output_with_complex_type() {
+        let output = ClusterStateOutput {
+            nodes: vec![NodeInfo {
+                node_id: 1,
+                endpoint_id: "abc".to_string(),
+                is_leader: true,
+                is_voter: true,
+            }],
+        };
+
+        print_output(&output, true);
+        print_output(&output, false);
+    }
+
+    // =============================================================================
+    // Test Category 5: print_success() and print_error() Tests
+    // =============================================================================
+
+    #[test]
+    fn test_print_success_json_mode_no_panic() {
+        print_success("Operation completed", true);
+    }
+
+    #[test]
+    fn test_print_success_human_mode_no_panic() {
+        print_success("Operation completed", false);
+    }
+
+    #[test]
+    fn test_print_error_json_mode_no_panic() {
+        print_error("Something went wrong", true);
+    }
+
+    #[test]
+    fn test_print_error_human_mode_no_panic() {
+        print_error("Something went wrong", false);
+    }
+
+    #[test]
+    fn test_print_success_empty_message() {
+        print_success("", true);
+        print_success("", false);
+    }
+
+    #[test]
+    fn test_print_error_empty_message() {
+        print_error("", true);
+        print_error("", false);
+    }
+
+    #[test]
+    fn test_print_success_special_characters() {
+        print_success("Success: 100% complete! 🎉", true);
+        print_success("Success: 100% complete! 🎉", false);
+    }
+
+    #[test]
+    fn test_print_error_special_characters() {
+        print_error("Error: failed with 'quotes' and \"double quotes\"", true);
+        print_error("Error: failed with 'quotes' and \"double quotes\"", false);
+    }
+
+    // =============================================================================
+    // Additional Edge Case Tests
+    // =============================================================================
+
+    #[test]
+    fn test_commit_output_multiline_message() {
+        let output = CommitOutput {
+            hash: "abc".to_string(),
+            tree: "tree".to_string(),
+            parents: vec![],
+            author_name: "Author".to_string(),
+            author_email: None,
+            message: "Line 1\nLine 2\nLine 3".to_string(),
+            timestamp_ms: 1000,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("    Line 1"));
+        assert!(human.contains("    Line 2"));
+        assert!(human.contains("    Line 3"));
+    }
+
+    #[test]
+    fn test_issue_detail_output_empty_comments() {
+        let output = IssueDetailOutput {
+            id: "issueabc12345".to_string(),
+            title: "Title".to_string(),
+            body: "Body".to_string(),
+            state: "open".to_string(),
+            labels: vec![],
+            assignees: vec![],
+            comment_count: 0,
+            created_at_ms: 1000,
+            updated_at_ms: 1000,
+            comments: Some(vec![]),
+        };
+
+        let human = output.to_human();
+        // Should not show comments section if empty
+        assert!(!human.contains("Comments:"));
+    }
+
+    #[test]
+    fn test_patch_detail_output_no_approvals() {
+        let output = PatchDetailOutput {
+            id: "patchabc123".to_string(),
+            title: "Title".to_string(),
+            description: "Desc".to_string(),
+            state: "open".to_string(),
+            base: "basecommit123456".to_string(),
+            head: "headcommit123456".to_string(),
+            labels: vec![],
+            assignees: vec![],
+            revision_count: 0,
+            approval_count: 0,
+            created_at_ms: 1000,
+            updated_at_ms: 1000,
+            comments: None,
+            revisions: None,
+            approvals: Some(vec![]),
+        };
+
+        let human = output.to_human();
+        // Should not show approvals section if empty
+        assert!(!human.contains("Approvals"));
+    }
+
+    #[test]
+    fn test_kv_read_output_exists_but_no_value() {
+        let output = KvReadOutput {
+            key: "key".to_string(),
+            value: None,
+            does_exist: true,
+        };
+
+        let human = output.to_human();
+        assert_eq!(human, "Key 'key' exists but has no value");
+    }
+
+    #[test]
+    #[cfg(feature = "sql")]
+    fn test_sql_query_output_all_formats() {
+        use aspen_client_api::SqlCellValue;
+
+        use crate::commands::sql::OutputFormat;
+
+        // Test Table format
+        let table_output = SqlQueryOutput {
+            columns: vec!["col1".to_string(), "col2".to_string()],
+            rows: vec![
+                vec![SqlCellValue::Integer(1), SqlCellValue::Text("a".to_string())],
+                vec![SqlCellValue::Integer(2), SqlCellValue::Text("b".to_string())],
+            ],
+            row_count: 2,
+            is_truncated: false,
+            execution_time_ms: 10,
+            show_headers: true,
+            format: OutputFormat::Table,
+        };
+        let table_human = table_output.to_human();
+        assert!(table_human.contains("+"));
+        assert!(table_human.contains("|"));
+
+        // Test TSV format
+        let tsv_output = SqlQueryOutput {
+            columns: vec!["col1".to_string(), "col2".to_string()],
+            rows: vec![
+                vec![SqlCellValue::Integer(1), SqlCellValue::Text("a".to_string())],
+                vec![SqlCellValue::Integer(2), SqlCellValue::Text("b".to_string())],
+            ],
+            row_count: 2,
+            is_truncated: false,
+            execution_time_ms: 10,
+            show_headers: true,
+            format: OutputFormat::Tsv,
+        };
+        let tsv_human = tsv_output.to_human();
+        assert!(tsv_human.contains("\t"));
+
+        // Test CSV format
+        let csv_output = SqlQueryOutput {
+            columns: vec!["col1".to_string(), "col2".to_string()],
+            rows: vec![
+                vec![SqlCellValue::Integer(1), SqlCellValue::Text("a".to_string())],
+                vec![SqlCellValue::Integer(2), SqlCellValue::Text("b".to_string())],
+            ],
+            row_count: 2,
+            is_truncated: false,
+            execution_time_ms: 10,
+            show_headers: true,
+            format: OutputFormat::Csv,
+        };
+        let csv_human = csv_output.to_human();
+        assert!(csv_human.contains(","));
+
+        // Test Vertical format
+        let vertical_output = SqlQueryOutput {
+            columns: vec!["col1".to_string(), "col2".to_string()],
+            rows: vec![
+                vec![SqlCellValue::Integer(1), SqlCellValue::Text("a".to_string())],
+                vec![SqlCellValue::Integer(2), SqlCellValue::Text("b".to_string())],
+            ],
+            row_count: 2,
+            is_truncated: false,
+            execution_time_ms: 10,
+            show_headers: true,
+            format: OutputFormat::Vertical,
+        };
+        let vertical_human = vertical_output.to_human();
+        assert!(vertical_human.contains("***"));
+        assert!(vertical_human.contains("1. row"));
+    }
+
+    #[test]
+    #[cfg(feature = "sql")]
+    fn test_sql_query_output_csv_escaping() {
+        use aspen_client_api::SqlCellValue;
+
+        use crate::commands::sql::OutputFormat;
+
+        let output = SqlQueryOutput {
+            columns: vec!["data".to_string()],
+            rows: vec![
+                vec![SqlCellValue::Text("has,comma".to_string())],
+                vec![SqlCellValue::Text("has\"quote".to_string())],
+                vec![SqlCellValue::Text("has\nnewline".to_string())],
+            ],
+            row_count: 3,
+            is_truncated: false,
+            execution_time_ms: 5,
+            show_headers: true,
+            format: OutputFormat::Csv,
+        };
+
+        let csv_human = output.to_human();
+        // Values with special chars should be quoted
+        assert!(csv_human.contains("\"has,comma\""));
+        assert!(csv_human.contains("\"has\"\"quote\""));
+        assert!(csv_human.contains("\"has\nnewline\""));
+    }
+
+    #[test]
+    #[cfg(feature = "sql")]
+    fn test_sql_query_output_truncated() {
+        use aspen_client_api::SqlCellValue;
+
+        use crate::commands::sql::OutputFormat;
+
+        let output = SqlQueryOutput {
+            columns: vec!["id".to_string()],
+            rows: vec![vec![SqlCellValue::Integer(1)]],
+            row_count: 1,
+            is_truncated: true,
+            execution_time_ms: 20,
+            show_headers: true,
+            format: OutputFormat::Table,
+        };
+
+        let human = output.to_human();
+        assert!(human.contains("(truncated)"));
+    }
+
+    #[test]
+    fn test_all_outputable_types_implement_trait() {
+        // Compile-time check that all types implement Outputable
+        fn assert_outputable<T: Outputable>(_: &T) {}
+
+        let health = HealthOutput {
+            status: "ok".to_string(),
+            node_id: 1,
+            raft_node_id: None,
+            uptime_seconds: 0,
+        };
+        assert_outputable(&health);
+
+        let raft = RaftMetricsOutput {
+            state: "Leader".to_string(),
+            current_leader: None,
+            current_term: 0,
+            last_log_index: 0,
+            last_applied: 0,
+            snapshot_index: 0,
+        };
+        assert_outputable(&raft);
+
+        let cluster = ClusterStateOutput { nodes: vec![] };
+        assert_outputable(&cluster);
+
+        let kv_read = KvReadOutput {
+            key: "k".to_string(),
+            value: None,
+            does_exist: false,
+        };
+        assert_outputable(&kv_read);
+
+        let kv_scan = KvScanOutput {
+            entries: vec![],
+            continuation_token: None,
+        };
+        assert_outputable(&kv_scan);
+
+        let batch_read = KvBatchReadOutput {
+            keys: vec![],
+            values: vec![],
+        };
+        assert_outputable(&batch_read);
+
+        let batch_write = KvBatchWriteOutput {
+            is_success: true,
+            operations_applied: 0,
+        };
+        assert_outputable(&batch_write);
+
+        let repo_list = RepoListOutput {
+            repos: vec![],
+            count: 0,
+        };
+        assert_outputable(&repo_list);
+
+        let repo = RepoOutput {
+            id: "id".to_string(),
+            name: "name".to_string(),
+            description: None,
+            default_branch: "main".to_string(),
+            delegates: vec![],
+            threshold: 1,
+            created_at_ms: 0,
+        };
+        assert_outputable(&repo);
+
+        let commit = CommitOutput {
+            hash: "h".to_string(),
+            tree: "t".to_string(),
+            parents: vec![],
+            author_name: "a".to_string(),
+            author_email: None,
+            message: "m".to_string(),
+            timestamp_ms: 0,
+        };
+        assert_outputable(&commit);
+
+        let log = LogOutput {
+            commits: vec![],
+            count: 0,
+        };
+        assert_outputable(&log);
+
+        let ref_out = RefOutput {
+            name: "n".to_string(),
+            hash: "h".to_string(),
+        };
+        assert_outputable(&ref_out);
+
+        let ref_list = RefListOutput { refs: vec![], count: 0 };
+        assert_outputable(&ref_list);
+
+        let comment = CommentOutput {
+            hash: "h".to_string(),
+            author: "a".to_string(),
+            body: "b".to_string(),
+            timestamp_ms: 0,
+        };
+        assert_outputable(&comment);
+
+        let issue = IssueOutput {
+            id: "i".to_string(),
+            title: "t".to_string(),
+            state: "s".to_string(),
+            labels: vec![],
+            comment_count: 0,
+            created_at_ms: 0,
+            updated_at_ms: 0,
+        };
+        assert_outputable(&issue);
+
+        let issue_list = IssueListOutput {
+            issues: vec![],
+            count: 0,
+        };
+        assert_outputable(&issue_list);
+
+        let issue_detail = IssueDetailOutput {
+            id: "i".to_string(),
+            title: "t".to_string(),
+            body: "b".to_string(),
+            state: "s".to_string(),
+            labels: vec![],
+            assignees: vec![],
+            comment_count: 0,
+            created_at_ms: 0,
+            updated_at_ms: 0,
+            comments: None,
+        };
+        assert_outputable(&issue_detail);
+
+        let patch = PatchOutput {
+            id: "p".to_string(),
+            title: "t".to_string(),
+            state: "s".to_string(),
+            base: "b".to_string(),
+            head: "h".to_string(),
+            labels: vec![],
+            revision_count: 0,
+            approval_count: 0,
+            created_at_ms: 0,
+            updated_at_ms: 0,
+        };
+        assert_outputable(&patch);
+
+        let patch_list = PatchListOutput {
+            patches: vec![],
+            count: 0,
+        };
+        assert_outputable(&patch_list);
+
+        let patch_detail = PatchDetailOutput {
+            id: "p".to_string(),
+            title: "t".to_string(),
+            description: "d".to_string(),
+            state: "s".to_string(),
+            base: "b".to_string(),
+            head: "h".to_string(),
+            labels: vec![],
+            assignees: vec![],
+            revision_count: 0,
+            approval_count: 0,
+            created_at_ms: 0,
+            updated_at_ms: 0,
+            comments: None,
+            revisions: None,
+            approvals: None,
+        };
+        assert_outputable(&patch_detail);
+    }
+}
+
 /// Health status output.
 pub struct HealthOutput {
     pub status: String,

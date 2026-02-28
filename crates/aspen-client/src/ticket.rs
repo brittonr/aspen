@@ -117,6 +117,43 @@ mod tests {
 
     use super::*;
 
+    // Helper to create a test endpoint address
+    fn test_endpoint_addr() -> EndpointAddr {
+        let secret_key = SecretKey::from([1u8; 32]);
+        let endpoint_id: EndpointId = secret_key.public();
+        EndpointAddr::new(endpoint_id)
+    }
+
+    #[test]
+    fn test_new_defaults() {
+        let addr = test_endpoint_addr();
+        let ticket = AspenClientTicket::new("test-cluster", vec![addr]);
+
+        assert_eq!(ticket.cluster_id, "test-cluster");
+        assert_eq!(ticket.bootstrap_peers.len(), 1);
+        assert_eq!(ticket.access, AccessLevel::ReadOnly);
+        assert_eq!(ticket.expires_at_secs, 0);
+        assert_eq!(ticket.auth_token, None);
+        assert_eq!(ticket.priority, 0);
+    }
+
+    #[test]
+    fn test_builder_pattern() {
+        let addr = test_endpoint_addr();
+        let auth_token = [42u8; 32];
+
+        let ticket = AspenClientTicket::new("cluster-1", vec![addr])
+            .with_access(AccessLevel::ReadWrite)
+            .with_expiry(1234567890)
+            .with_auth_token(auth_token)
+            .with_priority(5);
+
+        assert_eq!(ticket.access, AccessLevel::ReadWrite);
+        assert_eq!(ticket.expires_at_secs, 1234567890);
+        assert_eq!(ticket.auth_token, Some(auth_token));
+        assert_eq!(ticket.priority, 5);
+    }
+
     #[test]
     fn test_ticket_roundtrip() {
         let secret_key = SecretKey::from([1u8; 32]);
@@ -137,22 +174,180 @@ mod tests {
     }
 
     #[test]
-    fn test_expiry() {
+    fn test_roundtrip_with_all_fields() {
+        let addr = test_endpoint_addr();
+        let auth_token = [99u8; 32];
+
+        let original = AspenClientTicket::new("full-cluster", vec![addr.clone(), addr])
+            .with_access(AccessLevel::ReadWrite)
+            .with_expiry(9999999999)
+            .with_auth_token(auth_token)
+            .with_priority(10);
+
+        let serialized = original.serialize();
+        let parsed = AspenClientTicket::deserialize(&serialized).expect("should parse");
+
+        assert_eq!(parsed, original);
+        assert_eq!(parsed.cluster_id, "full-cluster");
+        assert_eq!(parsed.bootstrap_peers.len(), 2);
+        assert_eq!(parsed.access, AccessLevel::ReadWrite);
+        assert_eq!(parsed.expires_at_secs, 9999999999);
+        assert_eq!(parsed.auth_token, Some(auth_token));
+        assert_eq!(parsed.priority, 10);
+    }
+
+    #[test]
+    fn test_expiry_never_expires() {
         let ticket = AspenClientTicket::new("test", vec![]);
         assert!(!ticket.is_expired());
+        assert_eq!(ticket.expires_at_secs, 0);
+    }
 
+    #[test]
+    fn test_expiry_past() {
         // Set expiry to past
-        let expired = ticket.clone().with_expiry(1);
+        let expired = AspenClientTicket::new("test", vec![]).with_expiry(1);
         assert!(expired.is_expired());
+    }
 
+    #[test]
+    fn test_expiry_far_future() {
         // Set expiry to far future
         let future = AspenClientTicket::new("test", vec![]).with_expiry(u64::MAX);
         assert!(!future.is_expired());
     }
 
     #[test]
-    fn test_invalid_ticket() {
+    fn test_expiry_edge_case_zero() {
+        // Zero means no expiry
+        let ticket = AspenClientTicket::new("test", vec![]).with_expiry(0);
+        assert!(!ticket.is_expired());
+    }
+
+    #[test]
+    fn test_invalid_ticket_empty() {
+        assert!(AspenClientTicket::deserialize("").is_err());
+    }
+
+    #[test]
+    fn test_invalid_ticket_garbage() {
         assert!(AspenClientTicket::deserialize("invalid").is_err());
         assert!(AspenClientTicket::deserialize("aspenclient!!").is_err());
+        assert!(AspenClientTicket::deserialize("aspenclient").is_err());
+    }
+
+    #[test]
+    fn test_invalid_ticket_wrong_prefix() {
+        assert!(AspenClientTicket::deserialize("wrongprefix123").is_err());
+    }
+
+    #[test]
+    fn test_empty_cluster_id() {
+        let addr = test_endpoint_addr();
+        let ticket = AspenClientTicket::new("", vec![addr]);
+        assert_eq!(ticket.cluster_id, "");
+
+        // Should still roundtrip correctly
+        let serialized = ticket.serialize();
+        let parsed = AspenClientTicket::deserialize(&serialized).expect("should parse");
+        assert_eq!(parsed.cluster_id, "");
+    }
+
+    #[test]
+    fn test_empty_bootstrap_peers() {
+        let ticket = AspenClientTicket::new("cluster-1", vec![]);
+        assert_eq!(ticket.bootstrap_peers.len(), 0);
+
+        // Should still roundtrip correctly
+        let serialized = ticket.serialize();
+        let parsed = AspenClientTicket::deserialize(&serialized).expect("should parse");
+        assert_eq!(parsed.bootstrap_peers.len(), 0);
+    }
+
+    #[test]
+    fn test_multiple_bootstrap_peers() {
+        let addr1 = test_endpoint_addr();
+        let secret_key2 = SecretKey::from([2u8; 32]);
+        let endpoint_id2: EndpointId = secret_key2.public();
+        let addr2 = EndpointAddr::new(endpoint_id2);
+
+        let ticket = AspenClientTicket::new("cluster-1", vec![addr1, addr2]);
+        assert_eq!(ticket.bootstrap_peers.len(), 2);
+
+        let serialized = ticket.serialize();
+        let parsed = AspenClientTicket::deserialize(&serialized).expect("should parse");
+        assert_eq!(parsed.bootstrap_peers.len(), 2);
+    }
+
+    #[test]
+    fn test_access_levels() {
+        let addr = test_endpoint_addr();
+
+        let readonly = AspenClientTicket::new("test", vec![addr.clone()]).with_access(AccessLevel::ReadOnly);
+        assert_eq!(readonly.access, AccessLevel::ReadOnly);
+
+        let readwrite = AspenClientTicket::new("test", vec![addr]).with_access(AccessLevel::ReadWrite);
+        assert_eq!(readwrite.access, AccessLevel::ReadWrite);
+    }
+
+    #[test]
+    fn test_priority_range() {
+        let addr = test_endpoint_addr();
+
+        // Min priority
+        let min = AspenClientTicket::new("test", vec![addr.clone()]).with_priority(0);
+        assert_eq!(min.priority, 0);
+
+        // Max priority
+        let max = AspenClientTicket::new("test", vec![addr.clone()]).with_priority(255);
+        assert_eq!(max.priority, 255);
+
+        // Mid priority
+        let mid = AspenClientTicket::new("test", vec![addr]).with_priority(128);
+        assert_eq!(mid.priority, 128);
+    }
+
+    #[test]
+    fn test_auth_token_roundtrip() {
+        let addr = test_endpoint_addr();
+        let token1 = [0u8; 32];
+        let token2 = [255u8; 32];
+        let mut token3 = [0u8; 32];
+        for (i, byte) in token3.iter_mut().enumerate() {
+            *byte = i as u8;
+        }
+
+        for token in [token1, token2, token3] {
+            let ticket = AspenClientTicket::new("test", vec![addr.clone()]).with_auth_token(token);
+            assert_eq!(ticket.auth_token, Some(token));
+
+            let serialized = ticket.serialize();
+            let parsed = AspenClientTicket::deserialize(&serialized).expect("should parse");
+            assert_eq!(parsed.auth_token, Some(token));
+        }
+    }
+
+    #[test]
+    fn test_clone_and_eq() {
+        let addr = test_endpoint_addr();
+        let ticket1 = AspenClientTicket::new("cluster-1", vec![addr.clone()])
+            .with_access(AccessLevel::ReadWrite)
+            .with_priority(5);
+
+        let ticket2 = ticket1.clone();
+        assert_eq!(ticket1, ticket2);
+
+        let ticket3 = AspenClientTicket::new("cluster-2", vec![addr]).with_priority(5);
+        assert_ne!(ticket1, ticket3);
+    }
+
+    #[test]
+    fn test_serialization_deterministic() {
+        let addr = test_endpoint_addr();
+        let ticket = AspenClientTicket::new("test", vec![addr]).with_priority(7);
+
+        let ser1 = ticket.serialize();
+        let ser2 = ticket.serialize();
+        assert_eq!(ser1, ser2);
     }
 }

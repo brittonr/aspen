@@ -806,4 +806,455 @@ mod tests {
         let r = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "alert", "evaluate", "my_rule"]);
         assert!(r.is_ok(), "alert evaluate with name must parse");
     }
+
+    // =========================================================================
+    // Global options
+    // =========================================================================
+
+    #[test]
+    fn test_global_json_flag() {
+        let cli = Cli::try_parse_from(["aspen-cli", "--json", "verify", "all"]).expect("parse");
+        assert!(cli.global.is_json);
+    }
+
+    #[test]
+    fn test_global_timeout_default() {
+        let cli = Cli::try_parse_from(["aspen-cli", "verify", "all"]).expect("parse");
+        assert_eq!(cli.global.timeout_ms, 30000);
+    }
+
+    #[test]
+    fn test_global_timeout_custom() {
+        let cli = Cli::try_parse_from(["aspen-cli", "--timeout", "5000", "verify", "all"]).expect("parse");
+        assert_eq!(cli.global.timeout_ms, 5000);
+    }
+
+    #[test]
+    fn test_global_verbose_flag() {
+        let cli = Cli::try_parse_from(["aspen-cli", "-v", "verify", "all"]).expect("parse");
+        assert!(cli.global.is_verbose);
+    }
+
+    #[test]
+    fn test_global_quiet_flag() {
+        let cli = Cli::try_parse_from(["aspen-cli", "-q", "verify", "all"]).expect("parse");
+        assert!(cli.global.is_quiet);
+    }
+
+    #[test]
+    fn test_global_ticket_option() {
+        let cli = Cli::try_parse_from(["aspen-cli", "--ticket", "aspen-ticket-123", "verify", "all"]).expect("parse");
+        assert_eq!(cli.global.ticket.as_deref(), Some("aspen-ticket-123"));
+    }
+
+    #[test]
+    fn test_global_token_option() {
+        let cli = Cli::try_parse_from(["aspen-cli", "--token", "base64token", "verify", "all"]).expect("parse");
+        assert_eq!(cli.global.token.as_deref(), Some("base64token"));
+    }
+
+    #[test]
+    fn test_no_command_shows_help() {
+        let r = Cli::try_parse_from(["aspen-cli"]);
+        assert!(r.is_err(), "no subcommand should fail with help");
+    }
+
+    #[test]
+    fn test_invalid_command_fails() {
+        let r = Cli::try_parse_from(["aspen-cli", "nonexistent-command"]);
+        assert!(r.is_err());
+    }
+
+    // =========================================================================
+    // KV command parsing (without ticket - tests ticket-optional parsing)
+    // =========================================================================
+
+    #[test]
+    fn test_kv_get_no_ticket_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "kv", "get", "mykey"]);
+        assert!(r.is_ok(), "kv get without ticket must parse");
+    }
+
+    #[test]
+    fn test_kv_delete_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "kv", "delete", "mykey"]);
+        assert!(r.is_ok(), "kv delete with key must parse");
+    }
+
+    #[test]
+    fn test_kv_scan_parses_with_default_prefix() {
+        // scan has prefix as positional with default ""
+        let r = Cli::try_parse_from(["aspen-cli", "kv", "scan"]);
+        assert!(r.is_ok(), "kv scan without prefix must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_kv_scan_with_limit_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "kv", "scan", "app/", "--limit", "50"]);
+        assert!(r.is_ok(), "kv scan with prefix and limit must parse: {:?}", r.err());
+    }
+
+    // =========================================================================
+    // Cluster command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_cluster_status_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "cluster", "status"]);
+        assert!(r.is_ok(), "cluster status must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_cluster_health_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "cluster", "health"]);
+        assert!(r.is_ok(), "cluster health must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_cluster_metrics_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "cluster", "metrics"]);
+        assert!(r.is_ok(), "cluster metrics must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_cluster_ticket_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "cluster", "ticket"]);
+        assert!(r.is_ok(), "cluster ticket must parse: {:?}", r.err());
+    }
+
+    // =========================================================================
+    // Blob command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_blob_add_with_data_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "blob", "add", "--data", "hello-world"]);
+        assert!(r.is_ok(), "blob add --data must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_blob_add_with_file_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "blob", "add", "/tmp/test.txt"]);
+        assert!(r.is_ok(), "blob add with file path must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_blob_add_no_args_parses() {
+        // Both file and data are optional (reads stdin)
+        let r = Cli::try_parse_from(["aspen-cli", "blob", "add"]);
+        assert!(r.is_ok(), "blob add with no args must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_blob_get_requires_hash() {
+        let r = Cli::try_parse_from(["aspen-cli", "blob", "get"]);
+        assert!(r.is_err(), "blob get without hash must fail");
+    }
+
+    #[test]
+    fn test_blob_list_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "blob", "list"]);
+        assert!(r.is_ok(), "blob list must parse");
+    }
+
+    // =========================================================================
+    // Docs command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_docs_status_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "docs", "status"]);
+        assert!(r.is_ok(), "docs status must parse");
+    }
+
+    #[test]
+    fn test_docs_set_requires_key_and_value() {
+        let r = Cli::try_parse_from(["aspen-cli", "docs", "set"]);
+        assert!(r.is_err(), "docs set without key must fail");
+    }
+
+    #[test]
+    fn test_docs_get_requires_key() {
+        let r = Cli::try_parse_from(["aspen-cli", "docs", "get"]);
+        assert!(r.is_err(), "docs get without key must fail");
+    }
+
+    // =========================================================================
+    // Queue command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_queue_create_requires_name() {
+        let r = Cli::try_parse_from(["aspen-cli", "queue", "create"]);
+        assert!(r.is_err(), "queue create without name must fail");
+    }
+
+    #[test]
+    fn test_queue_create_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "queue", "create", "myqueue"]);
+        assert!(r.is_ok(), "queue create must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_queue_enqueue_requires_name() {
+        let r = Cli::try_parse_from(["aspen-cli", "queue", "enqueue"]);
+        assert!(r.is_err(), "queue enqueue without name must fail");
+    }
+
+    #[test]
+    fn test_queue_status_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "queue", "status", "myqueue"]);
+        assert!(r.is_ok(), "queue status must parse: {:?}", r.err());
+    }
+
+    // =========================================================================
+    // Lease command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_lease_grant_requires_ttl() {
+        let r = Cli::try_parse_from(["aspen-cli", "lease", "grant"]);
+        assert!(r.is_err(), "lease grant without ttl must fail");
+    }
+
+    #[test]
+    fn test_lease_grant_parses() {
+        // ttl_secs is a positional arg
+        let r = Cli::try_parse_from(["aspen-cli", "lease", "grant", "60"]);
+        assert!(r.is_ok(), "lease grant with ttl must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_lease_revoke_requires_id() {
+        let r = Cli::try_parse_from(["aspen-cli", "lease", "revoke"]);
+        assert!(r.is_err(), "lease revoke without id must fail");
+    }
+
+    // =========================================================================
+    // Job command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_job_list_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "job", "list"]);
+        assert!(r.is_ok(), "job list must parse");
+    }
+
+    #[test]
+    fn test_job_status_requires_id() {
+        let r = Cli::try_parse_from(["aspen-cli", "job", "status"]);
+        assert!(r.is_err(), "job status without id must fail");
+    }
+
+    // =========================================================================
+    // Barrier command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_barrier_enter_requires_key() {
+        let r = Cli::try_parse_from(["aspen-cli", "barrier", "enter"]);
+        assert!(r.is_err(), "barrier enter without key must fail");
+    }
+
+    #[test]
+    fn test_barrier_status_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "barrier", "status", "mybarrier"]);
+        assert!(r.is_ok(), "barrier status must parse: {:?}", r.err());
+    }
+
+    // =========================================================================
+    // Semaphore command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_semaphore_acquire_requires_key() {
+        let r = Cli::try_parse_from(["aspen-cli", "semaphore", "acquire"]);
+        assert!(r.is_err(), "semaphore acquire without key must fail");
+    }
+
+    #[test]
+    fn test_semaphore_status_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "semaphore", "status", "mysem"]);
+        assert!(r.is_ok(), "semaphore status must parse: {:?}", r.err());
+    }
+
+    // =========================================================================
+    // Sequence command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_sequence_next_requires_key() {
+        let r = Cli::try_parse_from(["aspen-cli", "sequence", "next"]);
+        assert!(r.is_err(), "sequence next without key must fail");
+    }
+
+    // =========================================================================
+    // Index command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_index_list_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "index", "list"]);
+        assert!(r.is_ok(), "index list must parse");
+    }
+
+    #[test]
+    fn test_index_scan_requires_name() {
+        let r = Cli::try_parse_from(["aspen-cli", "index", "scan"]);
+        assert!(r.is_err(), "index scan without name must fail");
+    }
+
+    // =========================================================================
+    // Git command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_git_log_requires_repo() {
+        // --repo is required
+        let r = Cli::try_parse_from(["aspen-cli", "git", "log"]);
+        assert!(r.is_err(), "git log without --repo must fail");
+    }
+
+    #[test]
+    fn test_git_log_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "git", "log", "--repo", "myrepo"]);
+        assert!(r.is_ok(), "git log with --repo must parse: {:?}", r.err());
+    }
+
+    // =========================================================================
+    // Issue command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_issue_list_requires_repo() {
+        // --repo is a required flag
+        let r = Cli::try_parse_from(["aspen-cli", "issue", "list"]);
+        assert!(r.is_err(), "issue list without --repo must fail");
+    }
+
+    #[test]
+    fn test_issue_list_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "issue", "list", "--repo", "myrepo"]);
+        assert!(r.is_ok(), "issue list must parse: {:?}", r.err());
+    }
+
+    // =========================================================================
+    // Patch command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_patch_list_requires_repo() {
+        let r = Cli::try_parse_from(["aspen-cli", "patch", "list"]);
+        assert!(r.is_err(), "patch list without --repo must fail");
+    }
+
+    #[test]
+    fn test_patch_list_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "patch", "list", "--repo", "myrepo"]);
+        assert!(r.is_ok(), "patch list must parse: {:?}", r.err());
+    }
+
+    // =========================================================================
+    // Federation command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_federation_status_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "federation", "status"]);
+        assert!(r.is_ok(), "federation status must parse");
+    }
+
+    #[test]
+    fn test_federation_trust_requires_peer() {
+        let r = Cli::try_parse_from(["aspen-cli", "federation", "trust"]);
+        assert!(r.is_err(), "federation trust without peer must fail");
+    }
+
+    // =========================================================================
+    // Verify command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_verify_all_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "verify", "all"]);
+        assert!(r.is_ok(), "verify all must parse");
+    }
+
+    #[test]
+    fn test_verify_kv_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "verify", "kv"]);
+        assert!(r.is_ok(), "verify kv must parse");
+    }
+
+    #[test]
+    fn test_verify_blob_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "verify", "blob"]);
+        assert!(r.is_ok(), "verify blob must parse: {:?}", r.err());
+    }
+
+    // =========================================================================
+    // RWLock command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_rwlock_read_requires_key_and_holder() {
+        let r = Cli::try_parse_from(["aspen-cli", "rwlock", "read", "myrwlock"]);
+        assert!(r.is_err(), "rwlock read without --holder must fail");
+    }
+
+    #[test]
+    fn test_rwlock_write_requires_key_and_holder() {
+        let r = Cli::try_parse_from(["aspen-cli", "rwlock", "write", "myrwlock"]);
+        assert!(r.is_err(), "rwlock write without --holder must fail");
+    }
+
+    // =========================================================================
+    // Service command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_service_list_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "service", "list"]);
+        assert!(r.is_ok(), "service list must parse");
+    }
+
+    #[test]
+    fn test_service_register_requires_name() {
+        let r = Cli::try_parse_from(["aspen-cli", "service", "register"]);
+        assert!(r.is_err(), "service register without name must fail");
+    }
+
+    // =========================================================================
+    // Combined flags
+    // =========================================================================
+
+    #[test]
+    fn test_all_global_flags_together() {
+        let cli = Cli::try_parse_from([
+            "aspen-cli",
+            "--json",
+            "-v",
+            "--ticket",
+            "my-ticket",
+            "--token",
+            "my-token",
+            "--timeout",
+            "10000",
+            "verify",
+            "all",
+        ])
+        .expect("all global flags must parse together");
+        assert!(cli.global.is_json);
+        assert!(cli.global.is_verbose);
+        assert_eq!(cli.global.ticket.as_deref(), Some("my-ticket"));
+        assert_eq!(cli.global.token.as_deref(), Some("my-token"));
+        assert_eq!(cli.global.timeout_ms, 10000);
+    }
+
+    #[test]
+    fn test_global_flags_after_subcommand() {
+        // clap propagated globals work after the subcommand too
+        let cli = Cli::try_parse_from(["aspen-cli", "verify", "all", "--json"]).expect("json after subcommand");
+        assert!(cli.global.is_json);
+    }
 }
