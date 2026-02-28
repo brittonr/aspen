@@ -6,16 +6,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen_blob::InMemoryBlobStore;
-use aspen_jobs::DependencyFailurePolicy;
-use aspen_jobs::DependencyState;
 use aspen_jobs::HyperlightWorker;
 use aspen_jobs::Job;
-use aspen_jobs::JobId;
 use aspen_jobs::JobSpec;
-use aspen_jobs::JobStatus;
 use aspen_jobs::VmJobPayload;
 use aspen_jobs::Worker;
-use chrono::Utc;
 
 fn create_test_worker() -> HyperlightWorker {
     let blob_store = Arc::new(InMemoryBlobStore::new());
@@ -165,34 +160,15 @@ async fn test_hyperlight_worker_execution() {
     let worker = create_test_worker();
 
     // Create a simple test job referencing a blob binary
-    let job_spec = JobSpec::with_blob_binary("test_blob_hash", 1024, "elf").timeout(Duration::from_secs(1));
+    // Use valid 64-char hex hash format (BLAKE3) even though the blob won't exist
+    let job_spec =
+        JobSpec::with_blob_binary("0000000000000000000000000000000000000000000000000000000000000000", 1024, "elf")
+            .timeout(Duration::from_secs(1));
 
-    let job = Job {
-        id: JobId::new(),
-        spec: job_spec,
-        status: JobStatus::Running,
-        attempts: 0,
-        last_error: None,
-        result: None,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-        scheduled_at: None,
-        started_at: Some(Utc::now()),
-        completed_at: None,
-        worker_id: Some("test-worker".to_string()),
-        next_retry_at: None,
-        progress: None,
-        progress_message: None,
-        version: 1,
-        dlq_metadata: None,
-        dependency_state: DependencyState::Ready,
-        blocked_by: vec![],
-        blocking: vec![],
-        dependency_failure_policy: DependencyFailurePolicy::FailCascade,
-    };
+    let job = Job::from_spec(job_spec);
 
     let result = worker.execute(job).await;
 
-    // Since we're using a test hash without actual blob data, expect failure
+    // Since we're using a zeroed hash without actual blob data, expect failure
     assert!(!result.is_success());
 }

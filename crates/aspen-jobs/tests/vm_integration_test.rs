@@ -112,7 +112,9 @@ async fn test_vm_execution_with_blob_binary() {
     };
 
     // Reference a test blob (would need to be uploaded to blob store first)
-    let spec = JobSpec::with_blob_binary("test_blob_hash", 64, "elf").timeout(Duration::from_secs(1));
+    // Use valid 64-char hex hash format (BLAKE3) — blob won't exist, we assert failure
+    let spec = JobSpec::with_blob_binary("0000000000000000000000000000000000000000000000000000000000000000", 64, "elf")
+        .timeout(Duration::from_secs(1));
 
     let job = Job::from_spec(spec);
 
