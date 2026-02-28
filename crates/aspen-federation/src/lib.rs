@@ -106,10 +106,12 @@ pub mod app_registry;
 pub mod discovery;
 pub mod gossip;
 pub mod identity;
+pub mod policy;
 pub mod resolver;
 pub mod sync;
 pub mod trust;
 pub mod types;
+pub mod verified;
 
 // App registry types
 pub use app_registry::AppManifest;
@@ -129,6 +131,16 @@ pub use gossip::FederationGossipService;
 pub use gossip::SignedFederationMessage;
 pub use identity::ClusterIdentity;
 pub use identity::SignedClusterIdentity;
+// Policy
+pub use policy::ClusterSelector;
+pub use policy::DefaultClusterSelector;
+pub use policy::ForkDetectionMode;
+pub use policy::RankedCluster;
+pub use policy::RankedSeeder;
+pub use policy::ResourcePolicy;
+pub use policy::SeederQuorumVerifier;
+pub use policy::SelectionStrategy;
+pub use policy::VerificationConfig;
 pub use resolver::DirectResourceResolver;
 pub use resolver::FederationResourceError;
 pub use resolver::FederationResourceResolver;
@@ -145,3 +157,12 @@ pub use trust::TrustRequest;
 pub use types::FederatedId;
 pub use types::FederationMode;
 pub use types::FederationSettings;
+// Verified pure functions
+pub use verified::ForkBranch;
+pub use verified::ForkInfo;
+pub use verified::QuorumCheckResult;
+pub use verified::QuorumFailure;
+pub use verified::SeederReport;
+pub use verified::calculate_seeder_quorum;
+pub use verified::check_quorum;
+pub use verified::detect_ref_forks;

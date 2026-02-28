@@ -235,6 +235,19 @@ async fn process_federation_request(
             signature,
             signer,
         } => handle_verify_ref_update(fed_id, ref_name, new_hash, signature, signer),
+
+        FederationRequest::VerifyUpdate {
+            fed_id,
+            update_type: _,
+            key,
+            new_value,
+            signature,
+            signer,
+        } => {
+            // Generic verify delegates to the same signature check.
+            // The `key` field serves the same role as `ref_name`.
+            handle_verify_ref_update(fed_id, key, new_value, signature, signer)
+        }
     }
 }
 
@@ -284,9 +297,9 @@ async fn handle_list_resources(
             // Only include public resources for now
             matches!(s.mode, crate::types::FederationMode::Public)
         })
-        .map(|(fed_id, _)| ResourceInfo {
+        .map(|(fed_id, s)| ResourceInfo {
             fed_id: *fed_id,
-            resource_type: "forge:repo".to_string(),
+            resource_type: s.resource_type.clone().unwrap_or_else(|| "unknown".to_string()),
             name: fed_id.short(),
             mode: "public".to_string(),
             updated_at_hlc: SerializableTimestamp::from(context.hlc.new_timestamp()),

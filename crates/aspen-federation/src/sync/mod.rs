@@ -51,6 +51,9 @@ pub use types::ResourceInfo;
 pub use types::ResourceMetadata;
 pub use types::SyncObject;
 
+// Re-export ResourcePolicy through sync for convenience
+pub use crate::policy::ResourcePolicy;
+
 // ============================================================================
 // Constants (Tiger Style: Fixed limits)
 // ============================================================================
@@ -589,6 +592,8 @@ mod tests {
             threshold_replicas: 2,
             created_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
             updated_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
+            policy: None,
+            app_metadata: Vec::new(),
         };
 
         let response = FederationResponse::ResourceState {
@@ -811,6 +816,8 @@ mod tests {
             threshold_replicas: 1,
             created_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
             updated_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
+            policy: None,
+            app_metadata: Vec::new(),
         };
 
         let bytes = postcard::to_allocvec(&metadata).unwrap();
@@ -832,6 +839,8 @@ mod tests {
             threshold_replicas: 0,
             created_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
             updated_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
+            policy: None,
+            app_metadata: Vec::new(),
         };
 
         let bytes = postcard::to_allocvec(&metadata).unwrap();

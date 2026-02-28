@@ -266,6 +266,13 @@ pub struct FederationSettings {
     /// Tiger Style: Bounded to MAX_ALLOWED_CLUSTERS entries.
     #[serde(default)]
     pub allowed_clusters: Vec<PublicKey>,
+
+    /// Resource type identifier (e.g., "forge:repo", "ci:pipeline", "blob:collection").
+    ///
+    /// Used by the federation protocol handler to report resource types
+    /// without hardcoding application-specific values.
+    #[serde(default)]
+    pub resource_type: Option<String>,
 }
 
 impl FederationSettings {
@@ -274,6 +281,7 @@ impl FederationSettings {
         Self {
             mode: FederationMode::Disabled,
             allowed_clusters: Vec::new(),
+            resource_type: None,
         }
     }
 
@@ -282,6 +290,7 @@ impl FederationSettings {
         Self {
             mode: FederationMode::Public,
             allowed_clusters: Vec::new(),
+            resource_type: None,
         }
     }
 
@@ -293,7 +302,14 @@ impl FederationSettings {
         Self {
             mode: FederationMode::AllowList,
             allowed_clusters,
+            resource_type: None,
         }
+    }
+
+    /// Set the resource type for these settings.
+    pub fn with_resource_type(mut self, resource_type: impl Into<String>) -> Self {
+        self.resource_type = Some(resource_type.into());
+        self
     }
 
     /// Check if a cluster is allowed to sync this resource.

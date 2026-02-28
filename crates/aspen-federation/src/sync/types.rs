@@ -10,6 +10,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::identity::SignedClusterIdentity;
+use crate::policy::ResourcePolicy;
 use crate::types::FederatedId;
 
 // ============================================================================
@@ -57,7 +58,7 @@ pub enum FederationRequest {
         limit: u32,
     },
 
-    /// Verify a ref update signature.
+    /// Verify a ref update signature (legacy alias for VerifyUpdate).
     VerifyRefUpdate {
         /// The federated resource ID.
         fed_id: FederatedId,
@@ -66,6 +67,25 @@ pub enum FederationRequest {
         /// New hash.
         new_hash: [u8; 32],
         /// Signature.
+        signature: Signature,
+        /// Signer public key.
+        signer: [u8; 32],
+    },
+
+    /// Verify an update signature (generic, any resource type).
+    ///
+    /// This is the app-agnostic version of `VerifyRefUpdate`. Any application
+    /// can use this to verify that an update was signed by an authorized delegate.
+    VerifyUpdate {
+        /// The federated resource ID.
+        fed_id: FederatedId,
+        /// Update type (e.g., "ref", "cob", "blob_collection", "crdt_doc").
+        update_type: String,
+        /// Key identifying what was updated (e.g., ref name, blob hash, doc ID).
+        key: String,
+        /// New value hash (BLAKE3).
+        new_value: [u8; 32],
+        /// Signature over the update.
         signature: Signature,
         /// Signer public key.
         signer: [u8; 32],
@@ -169,6 +189,19 @@ pub struct ResourceMetadata {
     pub created_at_hlc: SerializableTimestamp,
     /// HLC timestamp when last updated.
     pub updated_at_hlc: SerializableTimestamp,
+    /// Generic federation policy for this resource.
+    ///
+    /// When set, provides quorum requirements, selection strategy, and
+    /// fork detection mode. This is the platform-level policy; apps configure
+    /// it via [`ResourcePolicy`] and the federation layer enforces it.
+    #[serde(default)]
+    pub policy: Option<ResourcePolicy>,
+    /// Opaque application-specific metadata (postcard-encoded bytes).
+    ///
+    /// Applications store their own data here. For example, Forge stores
+    /// delegate signing keys. The federation layer does not interpret this.
+    #[serde(default)]
+    pub app_metadata: Vec<u8>,
 }
 
 /// A synced object.

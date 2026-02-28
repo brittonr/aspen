@@ -432,7 +432,7 @@ async fn test_sync_objects_empty_resource() {
     // Sync from Bob (no resolver configured, so returns empty)
     let (objects, has_more) = tokio::time::timeout(
         Duration::from_secs(10),
-        sync_remote_objects(&conn, &repo, vec!["commit".to_string()], vec![], 100),
+        sync_remote_objects(&conn, &repo, vec!["commit".to_string()], vec![], 100, None),
     )
     .await
     .expect("timeout")
@@ -461,10 +461,12 @@ async fn test_sync_objects_not_found() {
 
     // Try to sync a non-existent resource
     let nonexistent = test_fed_id(bob.cluster_key(), "no-such-repo");
-    let result =
-        tokio::time::timeout(Duration::from_secs(10), sync_remote_objects(&conn, &nonexistent, vec![], vec![], 100))
-            .await
-            .expect("timeout");
+    let result = tokio::time::timeout(
+        Duration::from_secs(10),
+        sync_remote_objects(&conn, &nonexistent, vec![], vec![], 100, None),
+    )
+    .await
+    .expect("timeout");
 
     // Should return an error
     assert!(result.is_err());
@@ -553,7 +555,7 @@ async fn test_full_sync_flow() {
     // Step 4: Sync objects (empty since no resolver)
     let (objects, has_more) = tokio::time::timeout(
         Duration::from_secs(5),
-        sync_remote_objects(&conn, &repo, vec!["commit".to_string()], vec![], 100),
+        sync_remote_objects(&conn, &repo, vec!["commit".to_string()], vec![], 100, None),
     )
     .await
     .expect("timeout")

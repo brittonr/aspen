@@ -111,15 +111,26 @@ impl ProxyService {
                 return Ok(None);
             }
 
-            // Try up to max_targets clusters
-            let max_targets = self.config.max_targets.min(clusters.len());
-            for cluster in clusters.into_iter().take(max_targets) {
+            // Rank clusters by trust, freshness, and capability score
+            let ranked = if let Some(trust_manager) = ctx.federation_trust_manager.as_ref() {
+                let selector = aspen_cluster::federation::DefaultClusterSelector::new(
+                    aspen_cluster::federation::SelectionStrategy::Scored,
+                );
+                let ranked = selector.rank_clusters(&clusters, trust_manager);
+                ranked.into_iter().map(|r| r.cluster).collect::<Vec<_>>()
+            } else {
+                clusters
+            };
+
+            // Try up to max_targets clusters (now in ranked order)
+            let max_targets = self.config.max_targets.min(ranked.len());
+            for cluster in ranked.into_iter().take(max_targets) {
                 info!(
                     app = required_app,
                     cluster_key = %cluster.cluster_key,
                     cluster_name = %cluster.name,
                     proxy_hops,
-                    "attempting to proxy request to cluster"
+                    "attempting to proxy request to cluster (ranked)"
                 );
 
                 match self.send_to_cluster(&cluster, request.clone(), proxy_hops).await {

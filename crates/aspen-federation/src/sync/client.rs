@@ -10,6 +10,7 @@ use anyhow::Result;
 use iroh::Endpoint;
 use iroh::endpoint::Connection;
 use tracing::info;
+use tracing::warn;
 
 use super::FEDERATION_ALPN;
 use super::FEDERATION_PROTOCOL_VERSION;
@@ -22,6 +23,8 @@ use super::wire::read_message;
 use super::wire::write_message;
 use crate::identity::ClusterIdentity;
 use crate::identity::SignedClusterIdentity;
+use crate::trust::verify_content_hash;
+use crate::trust::verify_delegate_signature;
 use crate::types::FederatedId;
 
 /// Connect to a federated cluster and perform handshake.
@@ -123,12 +126,21 @@ pub async fn get_remote_resource_state(
 }
 
 /// Sync objects from a remote cluster.
+///
+/// Objects are verified before being returned:
+/// 1. **Content hash** (BLAKE3) — always checked, mismatches are dropped
+/// 2. **Delegate signature** — checked when `delegates` is provided and the object has a signature.
+///    Invalid signatures are dropped.
+///
+/// Pass `None` for `delegates` to skip signature verification (e.g., for
+/// CRDTs that don't use delegate signing).
 pub async fn sync_remote_objects(
     connection: &Connection,
     fed_id: &FederatedId,
     want_types: Vec<String>,
     have_hashes: Vec<[u8; 32]>,
     limit: u32,
+    delegates: Option<&[iroh::PublicKey]>,
 ) -> Result<(Vec<SyncObject>, bool)> {
     let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
 
@@ -143,7 +155,61 @@ pub async fn sync_remote_objects(
     let response: FederationResponse = read_message(&mut recv).await?;
 
     match response {
-        FederationResponse::Objects { objects, has_more } => Ok((objects, has_more)),
+        FederationResponse::Objects { objects, has_more } => {
+            // Tiger Style: Never accept unverified data from remote peers.
+            // Two verification layers:
+            //   1. Content hash (BLAKE3) — always
+            //   2. Delegate signature — when delegates provided and object is signed
+            let mut verified_objects = Vec::with_capacity(objects.len());
+            for obj in objects {
+                // Layer 1: Content hash verification
+                if !verify_content_hash(&obj.data, &obj.hash) {
+                    warn!(
+                        object_type = %obj.object_type,
+                        expected_hash = %hex::encode(obj.hash),
+                        "rejected sync object: content hash mismatch"
+                    );
+                    continue;
+                }
+
+                // Layer 2: Delegate signature verification (when applicable)
+                if let (Some(sig), Some(signer_bytes), Some(valid_delegates)) = (&obj.signature, &obj.signer, delegates)
+                {
+                    if let Ok(signer_key) = iroh::PublicKey::from_bytes(signer_bytes) {
+                        // Use obj.object_type as the "ref_name" equivalent and
+                        // current time as timestamp since we don't have the original.
+                        // The delegate check verifies the signer is in the delegate list
+                        // and the signature covers the expected message.
+                        if !verify_delegate_signature(
+                            fed_id,
+                            &obj.object_type,
+                            &obj.hash,
+                            0, // timestamp not available in SyncObject; verified by content hash
+                            sig,
+                            &signer_key,
+                            valid_delegates,
+                        ) {
+                            warn!(
+                                object_type = %obj.object_type,
+                                signer = %hex::encode(signer_bytes),
+                                "rejected sync object: delegate signature verification failed"
+                            );
+                            continue;
+                        }
+                    } else {
+                        warn!(
+                            object_type = %obj.object_type,
+                            "rejected sync object: invalid signer public key"
+                        );
+                        continue;
+                    }
+                }
+
+                verified_objects.push(obj);
+            }
+
+            Ok((verified_objects, has_more))
+        }
         FederationResponse::Error { code, message } => {
             anyhow::bail!("Sync objects failed: {} - {}", code, message)
         }
