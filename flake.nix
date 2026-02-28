@@ -1924,6 +1924,17 @@
                 aspenNodePackage = bins.full-aspen-node-proxy;
                 aspenCliPackage = bins.full-aspen-cli-proxy;
               };
+
+              # Federation test: two independent single-node clusters
+              # with separate identities. Tests federation status, trust
+              # management, repo creation, and cluster independence.
+              # Build: nix build .#checks.x86_64-linux.federation-test
+              federation-test = import ./nix/tests/federation.nix {
+                inherit pkgs kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-forge;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+              };
             };
 
           # Base apps available on all systems
