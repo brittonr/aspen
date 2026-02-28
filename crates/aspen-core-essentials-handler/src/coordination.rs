@@ -1,23 +1,21 @@
 //! Native coordination primitive handler.
 //!
-//! Provides native implementations for the most commonly used coordination
-//! primitives (counter, sequence, lock) so they work without WASM plugins.
-//! Complex operations (queue, barrier, semaphore, rwlock, service registry)
-//! return NOT_IMPLEMENTED errors directing users to load the WASM plugin.
+//! Provides native implementations for coordination primitives that have
+//! building blocks in `aspen-coordination`: counters, sequences, locks,
+//! and rate limiters.
 //!
-//! ## Why native?
-//!
-//! Without this handler, coordination requests hit the "no handler found"
-//! path in the registry, which either returns `CapabilityUnavailable` (if
-//! the request has a `required_app`) or a generic error. Since coordination
-//! primitives return `required_app() = None` (they're core), the error path
-//! is opaque. This handler gives clean, actionable error messages.
+//! Operations that require the WASM coordination plugin (queue, barrier,
+//! semaphore, rwlock, service registry) are NOT claimed by this handler,
+//! allowing them to fall through to the WASM plugin handler in the
+//! dispatch chain.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::RateLimiterResultResponse;
 use aspen_client_api::coordination::CounterResultResponse;
 use aspen_client_api::coordination::LockResultResponse;
 use aspen_client_api::coordination::SequenceResultResponse;
@@ -25,7 +23,9 @@ use aspen_client_api::coordination::SignedCounterResultResponse;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
 use aspen_coordination::DistributedLock;
+use aspen_coordination::DistributedRateLimiter;
 use aspen_coordination::LockConfig;
+use aspen_coordination::RateLimiterConfig;
 use aspen_coordination::SequenceConfig;
 use aspen_coordination::SequenceGenerator;
 use aspen_coordination::SignedAtomicCounter;
@@ -37,9 +37,10 @@ use crate::RequestHandler;
 
 /// Native handler for distributed coordination primitives.
 ///
-/// Handles counter, sequence, and lock operations natively using the
-/// `aspen-coordination` library. Other coordination operations (queue,
-/// barrier, semaphore, rwlock, service registry) return NOT_IMPLEMENTED.
+/// Handles counter, sequence, lock, and rate limiter operations natively
+/// using the `aspen-coordination` library. Other coordination operations
+/// (queue, barrier, semaphore, rwlock, service registry) are NOT claimed
+/// here — they fall through to the WASM plugin handler.
 pub struct CoordinationHandler;
 
 impl CoordinationHandler {
@@ -49,13 +50,8 @@ impl CoordinationHandler {
     const SEQUENCE_PREFIX: &'static str = "__coord:seq:";
     /// KV key prefix for coordination locks.
     const LOCK_PREFIX: &'static str = "__coord:lock:";
-
-    fn not_implemented(op: &str) -> ClientRpcResponse {
-        ClientRpcResponse::error(
-            "NOT_IMPLEMENTED",
-            format!("{op} requires the WASM coordination plugin; load it with `aspen-cli plugin reload`"),
-        )
-    }
+    /// KV key prefix for rate limiters.
+    const RATE_LIMITER_PREFIX: &'static str = "__coord:ratelimit:";
 }
 
 #[async_trait]
@@ -63,7 +59,7 @@ impl RequestHandler for CoordinationHandler {
     fn can_handle(&self, request: &ClientRpcRequest) -> bool {
         matches!(
             request,
-            // Lock
+            // Lock (all four operations implemented natively)
             ClientRpcRequest::LockAcquire { .. }
                 | ClientRpcRequest::LockTryAcquire { .. }
                 | ClientRpcRequest::LockRelease { .. }
@@ -83,52 +79,11 @@ impl RequestHandler for CoordinationHandler {
                 | ClientRpcRequest::SequenceNext { .. }
                 | ClientRpcRequest::SequenceReserve { .. }
                 | ClientRpcRequest::SequenceCurrent { .. }
-                // Rate limiter
+                // Rate limiter (all four operations implemented natively)
                 | ClientRpcRequest::RateLimiterTryAcquire { .. }
                 | ClientRpcRequest::RateLimiterAcquire { .. }
                 | ClientRpcRequest::RateLimiterAvailable { .. }
                 | ClientRpcRequest::RateLimiterReset { .. }
-                // Barrier
-                | ClientRpcRequest::BarrierEnter { .. }
-                | ClientRpcRequest::BarrierLeave { .. }
-                | ClientRpcRequest::BarrierStatus { .. }
-                // Semaphore
-                | ClientRpcRequest::SemaphoreAcquire { .. }
-                | ClientRpcRequest::SemaphoreTryAcquire { .. }
-                | ClientRpcRequest::SemaphoreRelease { .. }
-                | ClientRpcRequest::SemaphoreStatus { .. }
-                // RWLock
-                | ClientRpcRequest::RWLockAcquireRead { .. }
-                | ClientRpcRequest::RWLockTryAcquireRead { .. }
-                | ClientRpcRequest::RWLockAcquireWrite { .. }
-                | ClientRpcRequest::RWLockTryAcquireWrite { .. }
-                | ClientRpcRequest::RWLockReleaseRead { .. }
-                | ClientRpcRequest::RWLockReleaseWrite { .. }
-                | ClientRpcRequest::RWLockDowngrade { .. }
-                | ClientRpcRequest::RWLockStatus { .. }
-                // Queue
-                | ClientRpcRequest::QueueCreate { .. }
-                | ClientRpcRequest::QueueDelete { .. }
-                | ClientRpcRequest::QueueEnqueue { .. }
-                | ClientRpcRequest::QueueEnqueueBatch { .. }
-                | ClientRpcRequest::QueueDequeue { .. }
-                | ClientRpcRequest::QueueDequeueWait { .. }
-                | ClientRpcRequest::QueuePeek { .. }
-                | ClientRpcRequest::QueueAck { .. }
-                | ClientRpcRequest::QueueNack { .. }
-                | ClientRpcRequest::QueueExtendVisibility { .. }
-                | ClientRpcRequest::QueueStatus { .. }
-                | ClientRpcRequest::QueueGetDLQ { .. }
-                | ClientRpcRequest::QueueRedriveDLQ { .. }
-                // Service registry
-                | ClientRpcRequest::ServiceRegister { .. }
-                | ClientRpcRequest::ServiceDeregister { .. }
-                | ClientRpcRequest::ServiceDiscover { .. }
-                | ClientRpcRequest::ServiceList { .. }
-                | ClientRpcRequest::ServiceGetInstance { .. }
-                | ClientRpcRequest::ServiceHeartbeat { .. }
-                | ClientRpcRequest::ServiceUpdateHealth { .. }
-                | ClientRpcRequest::ServiceUpdateMetadata { .. }
         )
     }
 
@@ -335,13 +290,29 @@ impl RequestHandler for CoordinationHandler {
             }
 
             // =================================================================
-            // Lock operations (partial native: try_acquire + release)
+            // Lock operations (all native)
             // =================================================================
-            ClientRpcRequest::LockTryAcquire { key, holder_id, ttl_ms } => {
-                let lock = self.make_lock(&ctx.kv_store, &key, &holder_id, ttl_ms);
-                match lock.try_acquire().await {
+            ClientRpcRequest::LockAcquire {
+                key,
+                holder_id,
+                ttl_ms,
+                timeout_ms,
+            } => {
+                let config = LockConfig {
+                    ttl_ms,
+                    acquire_timeout_ms: timeout_ms,
+                    ..LockConfig::default()
+                };
+                let lock = DistributedLock::new(
+                    Arc::clone(&ctx.kv_store),
+                    format!("{}{key}", Self::LOCK_PREFIX),
+                    &holder_id,
+                    config,
+                );
+                match lock.acquire().await {
                     Ok(guard) => {
                         let token = guard.fencing_token();
+                        let deadline = guard.deadline_ms();
                         // Intentionally forget the guard so the lock persists beyond this request.
                         // The lock is released via LockRelease or TTL expiration.
                         std::mem::forget(guard);
@@ -349,7 +320,31 @@ impl RequestHandler for CoordinationHandler {
                             is_success: true,
                             fencing_token: Some(token.value()),
                             holder_id: Some(holder_id),
-                            deadline_ms: None,
+                            deadline_ms: Some(deadline),
+                            error: None,
+                        }))
+                    }
+                    Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                        is_success: false,
+                        fencing_token: None,
+                        holder_id: None,
+                        deadline_ms: None,
+                        error: Some(e.to_string()),
+                    })),
+                }
+            }
+            ClientRpcRequest::LockTryAcquire { key, holder_id, ttl_ms } => {
+                let lock = self.make_lock(&ctx.kv_store, &key, &holder_id, ttl_ms);
+                match lock.try_acquire().await {
+                    Ok(guard) => {
+                        let token = guard.fencing_token();
+                        let deadline = guard.deadline_ms();
+                        std::mem::forget(guard);
+                        Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                            is_success: true,
+                            fencing_token: Some(token.value()),
+                            holder_id: Some(holder_id),
+                            deadline_ms: Some(deadline),
                             error: None,
                         }))
                     }
@@ -367,8 +362,6 @@ impl RequestHandler for CoordinationHandler {
                 holder_id,
                 fencing_token: _,
             } => {
-                // Release by writing a "released" lock entry via CAS
-                // The simplest approach: delete the lock key
                 let lock_key = format!("{}{key}", Self::LOCK_PREFIX);
                 match ctx.kv_store.delete(aspen_core::DeleteRequest { key: lock_key }).await {
                     Ok(_) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
@@ -387,59 +380,149 @@ impl RequestHandler for CoordinationHandler {
                     })),
                 }
             }
-
-            // Lock acquire (blocking) and renew — need WASM for timeout handling
-            ClientRpcRequest::LockAcquire { .. } => Ok(Self::not_implemented("lock acquire (blocking)")),
-            ClientRpcRequest::LockRenew { .. } => Ok(Self::not_implemented("lock renew")),
+            ClientRpcRequest::LockRenew {
+                key,
+                holder_id,
+                fencing_token,
+                ttl_ms,
+            } => {
+                // Renew by re-acquiring with same holder — if holder matches,
+                // DistributedLock.try_acquire() re-ups the deadline for the same holder.
+                let lock = self.make_lock(&ctx.kv_store, &key, &holder_id, ttl_ms);
+                match lock.try_acquire().await {
+                    Ok(guard) => {
+                        let new_token = guard.fencing_token().value();
+                        let deadline = guard.deadline_ms();
+                        std::mem::forget(guard);
+                        // Verify fencing token matches (holder hasn't lost and regained the lock)
+                        if new_token != fencing_token {
+                            Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                                is_success: false,
+                                fencing_token: Some(new_token),
+                                holder_id: Some(holder_id),
+                                deadline_ms: Some(deadline),
+                                error: Some(format!(
+                                    "fencing token mismatch: expected {fencing_token}, got {new_token}"
+                                )),
+                            }))
+                        } else {
+                            Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                                is_success: true,
+                                fencing_token: Some(new_token),
+                                holder_id: Some(holder_id),
+                                deadline_ms: Some(deadline),
+                                error: None,
+                            }))
+                        }
+                    }
+                    Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                        is_success: false,
+                        fencing_token: None,
+                        holder_id: Some(holder_id),
+                        deadline_ms: None,
+                        error: Some(e.to_string()),
+                    })),
+                }
+            }
 
             // =================================================================
-            // NOT_IMPLEMENTED: complex operations require WASM plugin
+            // Rate limiter operations (native)
             // =================================================================
-            ClientRpcRequest::RateLimiterTryAcquire { .. }
-            | ClientRpcRequest::RateLimiterAcquire { .. }
-            | ClientRpcRequest::RateLimiterAvailable { .. }
-            | ClientRpcRequest::RateLimiterReset { .. } => Ok(Self::not_implemented("rate limiter")),
-
-            ClientRpcRequest::BarrierEnter { .. }
-            | ClientRpcRequest::BarrierLeave { .. }
-            | ClientRpcRequest::BarrierStatus { .. } => Ok(Self::not_implemented("barrier")),
-
-            ClientRpcRequest::SemaphoreAcquire { .. }
-            | ClientRpcRequest::SemaphoreTryAcquire { .. }
-            | ClientRpcRequest::SemaphoreRelease { .. }
-            | ClientRpcRequest::SemaphoreStatus { .. } => Ok(Self::not_implemented("semaphore")),
-
-            ClientRpcRequest::RWLockAcquireRead { .. }
-            | ClientRpcRequest::RWLockTryAcquireRead { .. }
-            | ClientRpcRequest::RWLockAcquireWrite { .. }
-            | ClientRpcRequest::RWLockTryAcquireWrite { .. }
-            | ClientRpcRequest::RWLockReleaseRead { .. }
-            | ClientRpcRequest::RWLockReleaseWrite { .. }
-            | ClientRpcRequest::RWLockDowngrade { .. }
-            | ClientRpcRequest::RWLockStatus { .. } => Ok(Self::not_implemented("rwlock")),
-
-            ClientRpcRequest::QueueCreate { .. }
-            | ClientRpcRequest::QueueDelete { .. }
-            | ClientRpcRequest::QueueEnqueue { .. }
-            | ClientRpcRequest::QueueEnqueueBatch { .. }
-            | ClientRpcRequest::QueueDequeue { .. }
-            | ClientRpcRequest::QueueDequeueWait { .. }
-            | ClientRpcRequest::QueuePeek { .. }
-            | ClientRpcRequest::QueueAck { .. }
-            | ClientRpcRequest::QueueNack { .. }
-            | ClientRpcRequest::QueueExtendVisibility { .. }
-            | ClientRpcRequest::QueueStatus { .. }
-            | ClientRpcRequest::QueueGetDLQ { .. }
-            | ClientRpcRequest::QueueRedriveDLQ { .. } => Ok(Self::not_implemented("queue")),
-
-            ClientRpcRequest::ServiceRegister { .. }
-            | ClientRpcRequest::ServiceDeregister { .. }
-            | ClientRpcRequest::ServiceDiscover { .. }
-            | ClientRpcRequest::ServiceList { .. }
-            | ClientRpcRequest::ServiceGetInstance { .. }
-            | ClientRpcRequest::ServiceHeartbeat { .. }
-            | ClientRpcRequest::ServiceUpdateHealth { .. }
-            | ClientRpcRequest::ServiceUpdateMetadata { .. } => Ok(Self::not_implemented("service registry")),
+            ClientRpcRequest::RateLimiterTryAcquire {
+                key,
+                tokens,
+                capacity_tokens,
+                refill_rate,
+            } => {
+                let limiter = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
+                match limiter.try_acquire_n(tokens).await {
+                    Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                        is_success: true,
+                        tokens_remaining: Some(remaining),
+                        retry_after_ms: None,
+                        error: None,
+                    })),
+                    Err(aspen_coordination::RateLimitError::TokensExhausted { retry_after_ms, .. }) => {
+                        Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                            is_success: false,
+                            tokens_remaining: None,
+                            retry_after_ms: Some(retry_after_ms),
+                            error: Some("rate limited".into()),
+                        }))
+                    }
+                    Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                        is_success: false,
+                        tokens_remaining: None,
+                        retry_after_ms: None,
+                        error: Some(e.to_string()),
+                    })),
+                }
+            }
+            ClientRpcRequest::RateLimiterAcquire {
+                key,
+                tokens,
+                capacity_tokens,
+                refill_rate,
+                timeout_ms,
+            } => {
+                let limiter = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
+                match limiter.acquire_n(tokens, Duration::from_millis(timeout_ms)).await {
+                    Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                        is_success: true,
+                        tokens_remaining: Some(remaining),
+                        retry_after_ms: None,
+                        error: None,
+                    })),
+                    Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                        is_success: false,
+                        tokens_remaining: None,
+                        retry_after_ms: None,
+                        error: Some(e.to_string()),
+                    })),
+                }
+            }
+            ClientRpcRequest::RateLimiterAvailable {
+                key,
+                capacity_tokens,
+                refill_rate,
+            } => {
+                let limiter = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
+                match limiter.available().await {
+                    Ok(available) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                        is_success: true,
+                        tokens_remaining: Some(available),
+                        retry_after_ms: None,
+                        error: None,
+                    })),
+                    Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                        is_success: false,
+                        tokens_remaining: None,
+                        retry_after_ms: None,
+                        error: Some(e.to_string()),
+                    })),
+                }
+            }
+            ClientRpcRequest::RateLimiterReset {
+                key,
+                capacity_tokens,
+                refill_rate,
+            } => {
+                let limiter = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
+                match limiter.reset().await {
+                    Ok(()) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                        is_success: true,
+                        tokens_remaining: Some(capacity_tokens),
+                        retry_after_ms: None,
+                        error: None,
+                    })),
+                    Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                        is_success: false,
+                        tokens_remaining: None,
+                        retry_after_ms: None,
+                        error: Some(e.to_string()),
+                    })),
+                }
+            }
 
             _ => Err(anyhow::anyhow!("unexpected request in CoordinationHandler")),
         }
@@ -484,6 +567,18 @@ impl CoordinationHandler {
         };
         DistributedLock::new(Arc::clone(store), prefixed, holder_id, config)
     }
+
+    fn make_rate_limiter(
+        &self,
+        store: &Arc<dyn KeyValueStore>,
+        key: &str,
+        refill_rate: f64,
+        capacity_tokens: u64,
+    ) -> DistributedRateLimiter<dyn KeyValueStore> {
+        let prefixed = format!("{}{key}", Self::RATE_LIMITER_PREFIX);
+        let config = RateLimiterConfig::new(refill_rate, capacity_tokens);
+        DistributedRateLimiter::new(Arc::clone(store), prefixed, config)
+    }
 }
 
 #[cfg(test)]
@@ -495,7 +590,7 @@ mod tests {
     }
 
     // =========================================================================
-    // can_handle coverage
+    // can_handle: operations we implement natively → true
     // =========================================================================
 
     #[test]
@@ -580,24 +675,68 @@ mod tests {
             capacity_tokens: 10,
             refill_rate: 1.0,
         }));
+        assert!(h.can_handle(&ClientRpcRequest::RateLimiterAcquire {
+            key: "r".into(),
+            tokens: 1,
+            capacity_tokens: 10,
+            refill_rate: 1.0,
+            timeout_ms: 5000,
+        }));
+        assert!(h.can_handle(&ClientRpcRequest::RateLimiterAvailable {
+            key: "r".into(),
+            capacity_tokens: 10,
+            refill_rate: 1.0,
+        }));
+        assert!(h.can_handle(&ClientRpcRequest::RateLimiterReset {
+            key: "r".into(),
+            capacity_tokens: 10,
+            refill_rate: 1.0,
+        }));
+    }
+
+    // =========================================================================
+    // can_handle: WASM-plugin-only operations → false (fall through to plugin)
+    // =========================================================================
+
+    #[test]
+    fn test_cannot_handle_barrier_variants() {
+        let h = handler();
+        assert!(!h.can_handle(&ClientRpcRequest::BarrierEnter {
+            name: "b".into(),
+            participant_id: "p".into(),
+            required_count: 3,
+            timeout_ms: 5000,
+        }));
     }
 
     #[test]
-    fn test_can_handle_queue_variants() {
+    fn test_cannot_handle_semaphore_variants() {
         let h = handler();
-        assert!(h.can_handle(&ClientRpcRequest::QueueCreate {
+        assert!(!h.can_handle(&ClientRpcRequest::SemaphoreStatus { name: "s".into() }));
+    }
+
+    #[test]
+    fn test_cannot_handle_rwlock_variants() {
+        let h = handler();
+        assert!(!h.can_handle(&ClientRpcRequest::RWLockStatus { name: "rw".into() }));
+    }
+
+    #[test]
+    fn test_cannot_handle_queue_variants() {
+        let h = handler();
+        assert!(!h.can_handle(&ClientRpcRequest::QueueCreate {
             queue_name: "q".into(),
             default_visibility_timeout_ms: None,
             default_ttl_ms: None,
             max_delivery_attempts: None,
         }));
-        assert!(h.can_handle(&ClientRpcRequest::QueueStatus { queue_name: "q".into() }));
+        assert!(!h.can_handle(&ClientRpcRequest::QueueStatus { queue_name: "q".into() }));
     }
 
     #[test]
-    fn test_can_handle_service_registry_variants() {
+    fn test_cannot_handle_service_registry_variants() {
         let h = handler();
-        assert!(h.can_handle(&ClientRpcRequest::ServiceDiscover {
+        assert!(!h.can_handle(&ClientRpcRequest::ServiceDiscover {
             service_name: "svc".into(),
             healthy_only: true,
             tags: String::new(),

@@ -382,7 +382,7 @@ in
               "| base64 > /tmp/large-kv.txt"
           )
           cli_text(leader_node,
-                   "kv set large:repl dummy --file /tmp/large-kv.txt")
+                   "kv set large:repl --file /tmp/large-kv.txt")
           time.sleep(3)
 
           for nid, nref in follower_nodes:

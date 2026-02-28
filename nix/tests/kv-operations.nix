@@ -367,7 +367,7 @@ in
           node1.succeed(
               "printf 'line1\\nline2\\ttabbed\\x00null' > /tmp/kv-file.dat"
           )
-          cli_text("kv set file-key dummy --file /tmp/kv-file.dat")
+          cli_text("kv set file-key --file /tmp/kv-file.dat")
 
           # Read it back
           out = cli("kv get file-key")
@@ -384,7 +384,7 @@ in
               "dd if=/dev/urandom bs=1024 count=5 2>/dev/null "
               "| base64 > /tmp/large-value.txt"
           )
-          cli_text("kv set large-key dummy --file /tmp/large-value.txt")
+          cli_text("kv set large-key --file /tmp/large-value.txt")
 
           out = cli("kv get large-key")
           assert out.get("does_exist") is True, \
@@ -422,11 +422,11 @@ in
           # (Cannot pass literal empty string via shell args inside Nix
           # indented strings without escaping issues.)
           node1.succeed("truncate -s 0 /tmp/empty.dat")
-          cli_text("kv set empty-val dummy --file /tmp/empty.dat")
+          cli_text("kv set empty-val --file /tmp/empty.dat")
           out = cli("kv get empty-val")
           assert out.get("does_exist") is True, \
               f"empty value key not found: {out}"
-          # Value may be empty string or the dummy arg is overridden by --file
+          # Value may be empty string (--file reads raw bytes from the file)
           node1.log(f"empty value: value={out.get('value')!r}")
 
       # ── scan prefix isolation ────────────────────────────────────────
