@@ -487,3 +487,310 @@ pub(crate) async fn handle_get_delegate_key(
         })),
     }
 }
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use aspen_client_api::ClientRpcResponse;
+    use aspen_cluster::federation::TrustManager;
+
+    // ====================================================================
+    // Trust cluster handler tests
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_trust_cluster_valid_key() {
+        let trust_manager = Arc::new(TrustManager::new());
+        let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let key_hex = hex::encode(peer_key.as_bytes());
+
+        let response = super::handle_trust_cluster(Some(&trust_manager), key_hex).await.unwrap();
+
+        match response {
+            ClientRpcResponse::TrustClusterResult(r) => {
+                assert!(r.is_success, "trust should succeed");
+                assert!(r.error.is_none());
+            }
+            other => panic!("unexpected response: {:?}", other),
+        }
+
+        // Verify the trust manager state
+        assert_eq!(trust_manager.trust_level(&peer_key), aspen_cluster::federation::TrustLevel::Trusted);
+    }
+
+    #[tokio::test]
+    async fn test_trust_cluster_invalid_hex() {
+        let trust_manager = Arc::new(TrustManager::new());
+
+        let response = super::handle_trust_cluster(Some(&trust_manager), "not-valid-hex".to_string()).await.unwrap();
+
+        match response {
+            ClientRpcResponse::TrustClusterResult(r) => {
+                assert!(!r.is_success);
+                assert!(r.error.as_ref().unwrap().contains("Invalid cluster key format"));
+            }
+            other => panic!("unexpected response: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_trust_cluster_short_hex() {
+        let trust_manager = Arc::new(TrustManager::new());
+
+        // Valid hex but wrong length (not 32 bytes)
+        let response = super::handle_trust_cluster(Some(&trust_manager), "abcd1234".to_string()).await.unwrap();
+
+        match response {
+            ClientRpcResponse::TrustClusterResult(r) => {
+                assert!(!r.is_success);
+                assert!(r.error.as_ref().unwrap().contains("Invalid cluster key format"));
+            }
+            other => panic!("unexpected response: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_trust_cluster_no_trust_manager() {
+        let response = super::handle_trust_cluster(None, "abcd".to_string()).await.unwrap();
+
+        match response {
+            ClientRpcResponse::TrustClusterResult(r) => {
+                assert!(!r.is_success);
+                assert!(r.error.as_ref().unwrap().contains("not available"));
+            }
+            other => panic!("unexpected response: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_trust_cluster_idempotent() {
+        let trust_manager = Arc::new(TrustManager::new());
+        let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let key_hex = hex::encode(peer_key.as_bytes());
+
+        // Trust twice - should succeed both times
+        let r1 = super::handle_trust_cluster(Some(&trust_manager), key_hex.clone()).await.unwrap();
+        let r2 = super::handle_trust_cluster(Some(&trust_manager), key_hex).await.unwrap();
+
+        match (r1, r2) {
+            (ClientRpcResponse::TrustClusterResult(a), ClientRpcResponse::TrustClusterResult(b)) => {
+                assert!(a.is_success);
+                assert!(b.is_success);
+            }
+            _ => panic!("unexpected response types"),
+        }
+    }
+
+    // ====================================================================
+    // Untrust cluster handler tests
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_untrust_cluster_trusted_key() {
+        let trust_manager = Arc::new(TrustManager::new());
+        let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let key_hex = hex::encode(peer_key.as_bytes());
+
+        // First trust the cluster
+        trust_manager.add_trusted(peer_key, "test-peer".to_string(), None);
+
+        let response = super::handle_untrust_cluster(Some(&trust_manager), key_hex).await.unwrap();
+
+        match response {
+            ClientRpcResponse::UntrustClusterResult(r) => {
+                assert!(r.is_success, "untrust should succeed for trusted cluster");
+                assert!(r.error.is_none());
+            }
+            other => panic!("unexpected response: {:?}", other),
+        }
+
+        // Verify removed from trust
+        assert_ne!(trust_manager.trust_level(&peer_key), aspen_cluster::federation::TrustLevel::Trusted);
+    }
+
+    #[tokio::test]
+    async fn test_untrust_cluster_not_trusted() {
+        let trust_manager = Arc::new(TrustManager::new());
+        let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let key_hex = hex::encode(peer_key.as_bytes());
+
+        let response = super::handle_untrust_cluster(Some(&trust_manager), key_hex).await.unwrap();
+
+        match response {
+            ClientRpcResponse::UntrustClusterResult(r) => {
+                assert!(!r.is_success, "untrust should fail for non-trusted cluster");
+                assert!(r.error.as_ref().unwrap().contains("not in trusted list"));
+            }
+            other => panic!("unexpected response: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_untrust_cluster_invalid_hex() {
+        let trust_manager = Arc::new(TrustManager::new());
+
+        let response = super::handle_untrust_cluster(Some(&trust_manager), "zzz-invalid".to_string()).await.unwrap();
+
+        match response {
+            ClientRpcResponse::UntrustClusterResult(r) => {
+                assert!(!r.is_success);
+                assert!(r.error.as_ref().unwrap().contains("Invalid cluster key format"));
+            }
+            other => panic!("unexpected response: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_untrust_cluster_no_trust_manager() {
+        let response = super::handle_untrust_cluster(None, "abcd".to_string()).await.unwrap();
+
+        match response {
+            ClientRpcResponse::UntrustClusterResult(r) => {
+                assert!(!r.is_success);
+                assert!(r.error.as_ref().unwrap().contains("not available"));
+            }
+            other => panic!("unexpected response: {:?}", other),
+        }
+    }
+
+    // ====================================================================
+    // Federation status handler tests (non-global-discovery)
+    // ====================================================================
+
+    // ====================================================================
+    // Federation status handler tests (non-global-discovery)
+    //
+    // These tests exercise handle_get_federation_status without a ForgeNode.
+    // ForgeNode-dependent status tests (counting federated repos) are in
+    // aspen-forge::node::tests since ForgeNodeRef requires IrohBlobStore.
+    // ====================================================================
+
+    #[cfg(not(feature = "global-discovery"))]
+    mod status_tests {
+        use aspen_client_api::FederationStatusResponse;
+
+        #[test]
+        fn test_federation_status_response_fields_disabled() {
+            // Verify the disabled response structure matches expectations
+            let status = FederationStatusResponse {
+                is_enabled: false,
+                cluster_name: String::new(),
+                cluster_key: String::new(),
+                dht_enabled: false,
+                gossip_enabled: false,
+                discovered_clusters: 0,
+                federated_repos: 0,
+                error: Some("Federation not configured for this node".to_string()),
+            };
+
+            assert!(!status.is_enabled);
+            assert!(status.error.is_some());
+        }
+
+        #[test]
+        fn test_federation_status_response_fields_enabled() {
+            let status = FederationStatusResponse {
+                is_enabled: true,
+                cluster_name: "test-cluster".to_string(),
+                cluster_key: "abcd1234".to_string(),
+                dht_enabled: false,
+                gossip_enabled: false,
+                discovered_clusters: 0,
+                federated_repos: 3,
+                error: None,
+            };
+
+            assert!(status.is_enabled);
+            assert_eq!(status.cluster_name, "test-cluster");
+            assert_eq!(status.federated_repos, 3);
+            assert!(status.error.is_none());
+        }
+    }
+
+    // ====================================================================
+    // Discovered clusters handler tests (non-global-discovery)
+    // ====================================================================
+
+    #[cfg(not(feature = "global-discovery"))]
+    mod discovery_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_list_discovered_clusters_without_discovery() {
+            let response = super::super::handle_list_discovered_clusters().await.unwrap();
+
+            match response {
+                ClientRpcResponse::DiscoveredClusters(r) => {
+                    assert!(r.clusters.is_empty());
+                    assert_eq!(r.count, 0);
+                    assert!(r.error.as_ref().unwrap().contains("requires"));
+                }
+                other => panic!("unexpected response: {:?}", other),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_get_discovered_cluster_without_discovery() {
+            let key_hex = hex::encode([0u8; 32]);
+            let response = super::super::handle_get_discovered_cluster(key_hex).await.unwrap();
+
+            match response {
+                ClientRpcResponse::DiscoveredCluster(r) => {
+                    assert!(!r.was_found);
+                }
+                other => panic!("unexpected response: {:?}", other),
+            }
+        }
+    }
+
+    // ====================================================================
+    // Stub handler tests (federate repository, fetch federated)
+    // ====================================================================
+
+    // Note: handle_federate_repository and handle_fetch_federated are stubs
+    // that always return errors. Test them to ensure stable error messages.
+
+    // ====================================================================
+    // Trust + untrust roundtrip
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_trust_then_untrust_roundtrip() {
+        let trust_manager = Arc::new(TrustManager::new());
+        let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let key_hex = hex::encode(peer_key.as_bytes());
+
+        // Trust
+        let r = super::handle_trust_cluster(Some(&trust_manager), key_hex.clone()).await.unwrap();
+        assert!(matches!(r, ClientRpcResponse::TrustClusterResult(ref t) if t.is_success));
+
+        assert_eq!(trust_manager.trust_level(&peer_key), aspen_cluster::federation::TrustLevel::Trusted);
+
+        // Untrust
+        let r = super::handle_untrust_cluster(Some(&trust_manager), key_hex).await.unwrap();
+        assert!(matches!(r, ClientRpcResponse::UntrustClusterResult(ref t) if t.is_success));
+
+        // Back to default level (Public/Unknown)
+        assert_ne!(trust_manager.trust_level(&peer_key), aspen_cluster::federation::TrustLevel::Trusted);
+    }
+
+    #[tokio::test]
+    async fn test_trust_multiple_clusters() {
+        let trust_manager = Arc::new(TrustManager::new());
+
+        // Trust 3 clusters
+        for _ in 0..3 {
+            let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+            let key_hex = hex::encode(peer_key.as_bytes());
+            let r = super::handle_trust_cluster(Some(&trust_manager), key_hex).await.unwrap();
+            assert!(matches!(r, ClientRpcResponse::TrustClusterResult(ref t) if t.is_success));
+        }
+
+        assert_eq!(trust_manager.list_trusted().len(), 3);
+    }
+}

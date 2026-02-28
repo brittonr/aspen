@@ -756,4 +756,159 @@ mod tests {
         let head = node.get_head(&identity.repo_id()).await.expect("should get head");
         assert_eq!(head, Some(commit));
     }
+
+    // ========================================================================
+    // Federation KV integration tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_count_federated_resources_empty() {
+        let node = create_test_node().await;
+        let count = node.count_federated_resources().await.expect("should count");
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_count_federated_resources_with_public_repos() {
+        let node = create_test_node().await;
+
+        // Store federation settings for two public repos
+        let settings = aspen_cluster::federation::FederationSettings::public();
+        let json = serde_json::to_string(&settings).unwrap();
+
+        let fed_id_1 = format!("{}repo1", crate::constants::KV_PREFIX_FEDERATION_SETTINGS);
+        let fed_id_2 = format!("{}repo2", crate::constants::KV_PREFIX_FEDERATION_SETTINGS);
+
+        node.kv()
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::SetMulti {
+                    pairs: vec![(fed_id_1, json.clone()), (fed_id_2, json)],
+                },
+            })
+            .await
+            .unwrap();
+
+        let count = node.count_federated_resources().await.expect("should count");
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn test_count_federated_resources_excludes_disabled() {
+        let node = create_test_node().await;
+
+        let public_json = serde_json::to_string(&aspen_cluster::federation::FederationSettings::public()).unwrap();
+        let disabled_json = serde_json::to_string(&aspen_cluster::federation::FederationSettings::disabled()).unwrap();
+
+        let key_public = format!("{}repo_pub", crate::constants::KV_PREFIX_FEDERATION_SETTINGS);
+        let key_disabled = format!("{}repo_off", crate::constants::KV_PREFIX_FEDERATION_SETTINGS);
+
+        node.kv()
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::SetMulti {
+                    pairs: vec![(key_public, public_json), (key_disabled, disabled_json)],
+                },
+            })
+            .await
+            .unwrap();
+
+        let count = node.count_federated_resources().await.expect("should count");
+        assert_eq!(count, 1, "disabled repos should not be counted");
+    }
+
+    #[tokio::test]
+    async fn test_count_federated_resources_includes_allowlist() {
+        let node = create_test_node().await;
+
+        let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let settings = aspen_cluster::federation::FederationSettings::allowlist(vec![peer_key]);
+        let json = serde_json::to_string(&settings).unwrap();
+
+        let key = format!("{}repo_al", crate::constants::KV_PREFIX_FEDERATION_SETTINGS);
+        node.kv()
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::Set { key, value: json },
+            })
+            .await
+            .unwrap();
+
+        let count = node.count_federated_resources().await.expect("should count");
+        assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_list_federated_resources_empty() {
+        let node = create_test_node().await;
+        let list = node.list_federated_resources(None, 100).await.expect("should list");
+        assert!(list.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_federated_resources_filters_disabled() {
+        let node = create_test_node().await;
+
+        // Create a valid FederatedId for the key suffix
+        let origin_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let local_id: [u8; 32] = blake3::hash(b"test-repo").into();
+        let fed_id = aspen_cluster::federation::FederatedId::new(origin_key, local_id);
+
+        let public_settings = aspen_cluster::federation::FederationSettings::public();
+        let disabled_settings = aspen_cluster::federation::FederationSettings::disabled();
+
+        let key_pub = format!("{}{}", crate::constants::KV_PREFIX_FEDERATION_SETTINGS, fed_id);
+
+        // Use a different local_id for the disabled one
+        let local_id_2: [u8; 32] = blake3::hash(b"disabled-repo").into();
+        let fed_id_2 = aspen_cluster::federation::FederatedId::new(origin_key, local_id_2);
+        let key_dis = format!("{}{}", crate::constants::KV_PREFIX_FEDERATION_SETTINGS, fed_id_2);
+
+        node.kv()
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::SetMulti {
+                    pairs: vec![
+                        (key_pub, serde_json::to_string(&public_settings).unwrap()),
+                        (key_dis, serde_json::to_string(&disabled_settings).unwrap()),
+                    ],
+                },
+            })
+            .await
+            .unwrap();
+
+        let list = node.list_federated_resources(None, 100).await.expect("should list");
+        assert_eq!(list.len(), 1, "disabled repos should be filtered out");
+        assert_eq!(list[0].1.mode, aspen_cluster::federation::FederationMode::Public);
+    }
+
+    #[tokio::test]
+    async fn test_list_federated_resources_limit_capped() {
+        let node = create_test_node().await;
+
+        let origin_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let public_json = serde_json::to_string(&aspen_cluster::federation::FederationSettings::public()).unwrap();
+
+        // Create 5 federated repos
+        let mut pairs = Vec::new();
+        for i in 0..5u8 {
+            let local_id: [u8; 32] = blake3::hash(&[i]).into();
+            let fed_id = aspen_cluster::federation::FederatedId::new(origin_key, local_id);
+            let key = format!("{}{}", crate::constants::KV_PREFIX_FEDERATION_SETTINGS, fed_id);
+            pairs.push((key, public_json.clone()));
+        }
+
+        node.kv()
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::SetMulti { pairs },
+            })
+            .await
+            .unwrap();
+
+        // Request with limit 3
+        let list = node.list_federated_resources(None, 3).await.expect("should list");
+        assert!(list.len() <= 3, "should respect limit");
+    }
+
+    #[tokio::test]
+    async fn test_has_gossip_default_false() {
+        let node = create_test_node().await;
+        assert!(!node.has_gossip(), "gossip should be disabled by default");
+    }
 }

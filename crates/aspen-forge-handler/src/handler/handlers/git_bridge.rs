@@ -238,7 +238,7 @@ pub(crate) async fn handle_git_bridge_fetch(
                                 data: obj.content,
                             });
                         }
-                        skipped += exported.objects_skipped as u32;
+                        skipped += exported.objects_skipped;
                     }
                     Err(e) => {
                         return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
@@ -323,7 +323,7 @@ pub(crate) async fn handle_git_bridge_push(
 
     // Import objects using batch import which handles topological ordering
     let (objects_imported, objects_skipped) = match importer.import_objects(&repo_id, import_objects).await {
-        Ok(result) => (result.objects_imported as u32, result.objects_skipped as u32),
+        Ok(result) => (result.objects_imported, result.objects_skipped),
         Err(e) => {
             return Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
                 is_success: false,
@@ -461,7 +461,7 @@ pub(crate) async fn handle_git_bridge_push_start(
     };
 
     let store = get_session_store();
-    let mut sessions = lock_sessions(&store);
+    let mut sessions = lock_sessions(store);
 
     // Cleanup expired sessions first (Tiger Style: opportunistic cleanup)
     sessions.retain(|_, s| s.created_at.elapsed() < PUSH_SESSION_TIMEOUT);
@@ -533,7 +533,7 @@ pub(crate) async fn handle_git_bridge_push_chunk(
 
     // Store chunk data and validate sequence
     let store = get_session_store();
-    let mut sessions = lock_sessions(&store);
+    let mut sessions = lock_sessions(store);
 
     let session = match sessions.get_mut(&session_id) {
         Some(s) => s,
@@ -613,7 +613,7 @@ pub(crate) async fn handle_git_bridge_push_complete(
     // Retrieve and remove session from store
     let session = {
         let store = get_session_store();
-        let mut sessions = lock_sessions(&store);
+        let mut sessions = lock_sessions(store);
         match sessions.remove(&session_id) {
             Some(s) => s,
             None => {

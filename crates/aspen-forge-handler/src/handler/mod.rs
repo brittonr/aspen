@@ -17,8 +17,6 @@ pub(crate) mod handlers;
 
 #[cfg(test)]
 mod tests {
-    use aspen_client_api::ClientRpcRequest;
-    use aspen_rpc_core::ServiceExecutor;
 
     /// Verify the executor handles the correct set of operations.
     #[test]
