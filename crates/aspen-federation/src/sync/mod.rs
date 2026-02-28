@@ -50,6 +50,13 @@ pub use types::FederationResponse;
 pub use types::ResourceInfo;
 pub use types::ResourceMetadata;
 pub use types::SyncObject;
+// Orchestrator
+pub mod orchestrator;
+pub use orchestrator::OrchestratedSyncError;
+pub use orchestrator::OrchestratedSyncResult;
+pub use orchestrator::SeederEndpoint;
+pub use orchestrator::SyncRequest;
+pub use orchestrator::orchestrated_sync;
 
 // Re-export ResourcePolicy through sync for convenience
 pub use crate::policy::ResourcePolicy;

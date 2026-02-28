@@ -88,6 +88,18 @@ impl VerificationConfig {
         }
     }
 
+    /// Require delegate signatures on updates.
+    pub fn with_delegate_signatures(mut self) -> Self {
+        self.require_delegate_signatures = true;
+        self
+    }
+
+    /// Set maximum acceptable report age.
+    pub fn with_max_report_age_us(mut self, max_age_us: u64) -> Self {
+        self.max_report_age_us = max_age_us;
+        self
+    }
+
     /// Whether quorum verification is enabled.
     pub fn is_quorum_enabled(&self) -> bool {
         self.quorum_threshold > 0 || self.use_dynamic_majority

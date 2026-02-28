@@ -72,6 +72,7 @@
 
 pub mod constants;
 pub mod error;
+pub mod federation;
 pub mod types;
 /// Verified pure functions for Forge logic.
 pub mod verified;
@@ -97,6 +98,9 @@ pub use cob::FieldConflict;
 pub use cob::FieldResolution;
 pub use cob::MergeStrategy;
 pub use error::ForgeError;
+// Federation
+pub use federation::FORGE_RESOURCE_TYPE;
+pub use federation::forge_repo_policy;
 #[cfg(feature = "git-bridge")]
 pub use git::GIT_BRIDGE_ALPN;
 pub use git::GitBlobStore;

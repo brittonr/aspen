@@ -164,10 +164,11 @@ async fn handle_federation_connection(connection: Connection, context: Arc<Feder
 
         let (mut send, mut recv) = stream;
         let ctx = context.clone();
+        let peer_key = remote_id;
 
         // Handle stream in background
         tokio::spawn(async move {
-            if let Err(e) = handle_federation_stream(&mut send, &mut recv, &ctx).await {
+            if let Err(e) = handle_federation_stream(&mut send, &mut recv, &ctx, peer_key).await {
                 warn!(remote = %remote_id, error = %e, "federation stream error");
             }
         });
@@ -181,6 +182,7 @@ async fn handle_federation_stream(
     send: &mut iroh::endpoint::SendStream,
     recv: &mut iroh::endpoint::RecvStream,
     context: &FederationProtocolContext,
+    remote_peer: PublicKey,
 ) -> Result<()> {
     // Read request with size limit and per-message timeout
     // Tiger Style: Prevents CPU exhaustion from slow/malicious senders
@@ -190,10 +192,11 @@ async fn handle_federation_stream(
         .context("failed to read federation request")?;
 
     // Process request with timeout to prevent CPU exhaustion
-    let response = tokio::time::timeout(MESSAGE_PROCESSING_TIMEOUT, process_federation_request(request, context))
-        .await
-        .context("message processing timeout")?
-        .context("failed to process federation request")?;
+    let response =
+        tokio::time::timeout(MESSAGE_PROCESSING_TIMEOUT, process_federation_request(request, context, remote_peer))
+            .await
+            .context("message processing timeout")?
+            .context("failed to process federation request")?;
 
     // Write response
     write_message(send, &response).await?;
@@ -205,6 +208,7 @@ async fn handle_federation_stream(
 async fn process_federation_request(
     request: FederationRequest,
     context: &FederationProtocolContext,
+    remote_peer: PublicKey,
 ) -> Result<FederationResponse> {
     match request {
         FederationRequest::Handshake {
@@ -219,14 +223,24 @@ async fn process_federation_request(
             limit,
         } => handle_list_resources(resource_type, limit, context).await,
 
-        FederationRequest::GetResourceState { fed_id } => handle_get_resource_state(fed_id, context).await,
+        FederationRequest::GetResourceState { fed_id } => {
+            if let Some(denied) = check_resource_access(&fed_id, &remote_peer, context).await {
+                return Ok(denied);
+            }
+            handle_get_resource_state(fed_id, context).await
+        }
 
         FederationRequest::SyncObjects {
             fed_id,
             want_types,
             have_hashes,
             limit,
-        } => handle_sync_objects(fed_id, want_types, have_hashes, limit, context).await,
+        } => {
+            if let Some(denied) = check_resource_access(&fed_id, &remote_peer, context).await {
+                return Ok(denied);
+            }
+            handle_sync_objects(fed_id, want_types, have_hashes, limit, context).await
+        }
 
         FederationRequest::VerifyRefUpdate {
             fed_id,
@@ -249,6 +263,38 @@ async fn process_federation_request(
             handle_verify_ref_update(fed_id, key, new_value, signature, signer)
         }
     }
+}
+
+/// Check if the remote peer is allowed to access a federated resource.
+///
+/// Returns `Some(FederationResponse::Error)` if denied, `None` if allowed.
+/// Public resources allow everyone; AllowList requires explicit permission;
+/// Disabled resources deny all access.
+async fn check_resource_access(
+    fed_id: &FederatedId,
+    remote_peer: &PublicKey,
+    context: &FederationProtocolContext,
+) -> Option<FederationResponse> {
+    let settings = context.resource_settings.read().await;
+    let Some(resource_settings) = settings.get(fed_id) else {
+        // Resource not in settings — don't block, let the handler return NotFound
+        return None;
+    };
+
+    if !resource_settings.is_cluster_allowed(remote_peer) {
+        warn!(
+            fed_id = %fed_id.short(),
+            remote_peer = %remote_peer,
+            mode = ?resource_settings.mode,
+            "access denied: peer not allowed for this resource"
+        );
+        return Some(FederationResponse::Error {
+            code: "ACCESS_DENIED".to_string(),
+            message: format!("Access denied for resource: {}", fed_id.short()),
+        });
+    }
+
+    None
 }
 
 fn handle_handshake(

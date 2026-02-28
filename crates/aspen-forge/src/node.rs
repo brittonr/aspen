@@ -773,7 +773,8 @@ mod tests {
         let node = create_test_node().await;
 
         // Store federation settings for two public repos
-        let settings = aspen_cluster::federation::FederationSettings::public();
+        let settings = aspen_cluster::federation::FederationSettings::public()
+            .with_resource_type(crate::federation::FORGE_RESOURCE_TYPE);
         let json = serde_json::to_string(&settings).unwrap();
 
         let fed_id_1 = format!("{}repo1", crate::constants::KV_PREFIX_FEDERATION_SETTINGS);
@@ -796,8 +797,16 @@ mod tests {
     async fn test_count_federated_resources_excludes_disabled() {
         let node = create_test_node().await;
 
-        let public_json = serde_json::to_string(&aspen_cluster::federation::FederationSettings::public()).unwrap();
-        let disabled_json = serde_json::to_string(&aspen_cluster::federation::FederationSettings::disabled()).unwrap();
+        let public_json = serde_json::to_string(
+            &aspen_cluster::federation::FederationSettings::public()
+                .with_resource_type(crate::federation::FORGE_RESOURCE_TYPE),
+        )
+        .unwrap();
+        let disabled_json = serde_json::to_string(
+            &aspen_cluster::federation::FederationSettings::disabled()
+                .with_resource_type(crate::federation::FORGE_RESOURCE_TYPE),
+        )
+        .unwrap();
 
         let key_public = format!("{}repo_pub", crate::constants::KV_PREFIX_FEDERATION_SETTINGS);
         let key_disabled = format!("{}repo_off", crate::constants::KV_PREFIX_FEDERATION_SETTINGS);
@@ -820,7 +829,8 @@ mod tests {
         let node = create_test_node().await;
 
         let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
-        let settings = aspen_cluster::federation::FederationSettings::allowlist(vec![peer_key]);
+        let settings = aspen_cluster::federation::FederationSettings::allowlist(vec![peer_key])
+            .with_resource_type(crate::federation::FORGE_RESOURCE_TYPE);
         let json = serde_json::to_string(&settings).unwrap();
 
         let key = format!("{}repo_al", crate::constants::KV_PREFIX_FEDERATION_SETTINGS);
@@ -851,8 +861,10 @@ mod tests {
         let local_id: [u8; 32] = blake3::hash(b"test-repo").into();
         let fed_id = aspen_cluster::federation::FederatedId::new(origin_key, local_id);
 
-        let public_settings = aspen_cluster::federation::FederationSettings::public();
-        let disabled_settings = aspen_cluster::federation::FederationSettings::disabled();
+        let public_settings = aspen_cluster::federation::FederationSettings::public()
+            .with_resource_type(crate::federation::FORGE_RESOURCE_TYPE);
+        let disabled_settings = aspen_cluster::federation::FederationSettings::disabled()
+            .with_resource_type(crate::federation::FORGE_RESOURCE_TYPE);
 
         let key_pub = format!("{}{}", crate::constants::KV_PREFIX_FEDERATION_SETTINGS, fed_id);
 
@@ -883,7 +895,11 @@ mod tests {
         let node = create_test_node().await;
 
         let origin_key = iroh::SecretKey::generate(&mut rand::rng()).public();
-        let public_json = serde_json::to_string(&aspen_cluster::federation::FederationSettings::public()).unwrap();
+        let public_json = serde_json::to_string(
+            &aspen_cluster::federation::FederationSettings::public()
+                .with_resource_type(crate::federation::FORGE_RESOURCE_TYPE),
+        )
+        .unwrap();
 
         // Create 5 federated repos
         let mut pairs = Vec::new();
