@@ -25,10 +25,10 @@ use base64::Engine;
 use prost::Message;
 use snix_castore::B3Digest;
 use snix_castore::Directory;
-use snix_castore::Error;
 use snix_castore::Node;
 use snix_castore::directoryservice::DirectoryPutter;
 use snix_castore::directoryservice::DirectoryService;
+use snix_castore::directoryservice::Error;
 use tracing::debug;
 use tracing::instrument;
 
@@ -86,7 +86,7 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static
                 debug!("directory not found");
                 return Ok(None);
             }
-            Err(e) => return Err(Error::StorageError(format!("KV read error: {}", e))),
+            Err(e) => return Err(format!("KV read error: {e}").into()),
         };
 
         match result.kv {
@@ -94,15 +94,15 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static
                 // Decode from base64 (KV stores strings, not bytes)
                 let bytes = base64::engine::general_purpose::STANDARD
                     .decode(&kv.value)
-                    .map_err(|e| Error::StorageError(format!("base64 decode error: {}", e)))?;
+                    .map_err(|e| -> Error { format!("base64 decode error: {e}").into() })?;
 
                 // Decode protobuf
                 let proto_dir = snix_castore::proto::Directory::decode(bytes.as_slice())
-                    .map_err(|e| Error::StorageError(format!("protobuf decode error: {}", e)))?;
+                    .map_err(|e| -> Error { format!("protobuf decode error: {e}").into() })?;
 
                 // Convert to Directory
                 let dir = Directory::try_from(proto_dir)
-                    .map_err(|e| Error::StorageError(format!("directory conversion error: {}", e)))?;
+                    .map_err(|e| -> Error { format!("directory conversion error: {e}").into() })?;
 
                 debug!(size = dir.size(), "directory retrieved");
                 Ok(Some(dir))
@@ -133,7 +133,7 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static
                 command: aspen_core::kv::WriteCommand::Set { key, value },
             })
             .await
-            .map_err(|e| Error::StorageError(format!("KV write error: {}", e)))?;
+            .map_err(|e| -> Error { format!("KV write error: {e}").into() })?;
 
         debug!(digest = %digest, "directory stored");
         Ok(digest)
@@ -162,18 +162,20 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static
 
                 // Check depth limit
                 if depth > MAX_DIRECTORY_DEPTH {
-                    Err(Error::StorageError(format!(
+                    let err: Error = format!(
                         "maximum directory depth {} exceeded",
                         MAX_DIRECTORY_DEPTH
-                    )))?;
+                    ).into();
+                    Err(err)?;
                 }
 
                 // Check buffer limit
                 if queue.len() as u32 > MAX_RECURSIVE_BUFFER {
-                    Err(Error::StorageError(format!(
+                    let err: Error = format!(
                         "maximum recursive buffer {} exceeded",
                         MAX_RECURSIVE_BUFFER
-                    )))?;
+                    ).into();
+                    Err(err)?;
                 }
 
                 if let Some(dir) = self.get(&digest).await? {
@@ -237,7 +239,7 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static
                 command: aspen_core::kv::WriteCommand::Set { key, value },
             })
             .await
-            .map_err(|e| Error::StorageError(format!("KV write error: {}", e)))?;
+            .map_err(|e| -> Error { format!("KV write error: {e}").into() })?;
 
         // Track as potential root
         self.last_digest = Some(digest);
@@ -246,7 +248,7 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static
     }
 
     async fn close(&mut self) -> Result<B3Digest, Error> {
-        self.last_digest.take().ok_or_else(|| Error::StorageError("no directories were put".to_string()))
+        self.last_digest.take().ok_or_else(|| -> Error { "no directories were put".into() })
     }
 }
 

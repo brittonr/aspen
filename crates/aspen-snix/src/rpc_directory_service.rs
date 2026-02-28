@@ -36,9 +36,9 @@ use iroh::PublicKey;
 use prost::Message;
 use snix_castore::B3Digest;
 use snix_castore::Directory;
-use snix_castore::Error;
 use snix_castore::directoryservice::DirectoryPutter;
 use snix_castore::directoryservice::DirectoryService;
+use snix_castore::directoryservice::Error;
 use tokio::time::timeout;
 use tracing::debug;
 use tracing::error;
@@ -99,46 +99,48 @@ impl RpcDirectoryService {
             }
             Ok(Err(e)) => {
                 error!(gateway = %self.gateway_node.fmt_short(), error = %e, "RPC connection failed");
-                return Err(Error::StorageError(format!("RPC connection failed: {}", e)));
+                return Err(format!("RPC connection failed: {e}").into());
             }
             Err(_) => {
                 error!(gateway = %self.gateway_node.fmt_short(), timeout_secs = RPC_TIMEOUT.as_secs(), "RPC connection timeout");
-                return Err(Error::StorageError("RPC connection timeout".to_string()));
+                return Err("RPC connection timeout".into());
             }
         };
 
         // Open bidirectional stream
         trace!("opening bidirectional stream");
-        let (mut send, mut recv) = connection.open_bi().await.map_err(|e| {
+        let (send, recv) = connection.open_bi().await.map_err(|e| {
             error!(error = %e, "failed to open RPC stream");
-            Error::StorageError(format!("failed to open RPC stream: {}", e))
+            Error::from(format!("failed to open RPC stream: {e}"))
         })?;
 
         // Serialize request
         let request_bytes = postcard::to_allocvec(&request).map_err(|e| {
             error!(error = %e, "failed to serialize request");
-            Error::StorageError(format!("failed to serialize request: {}", e))
+            Error::from(format!("failed to serialize request: {e}"))
         })?;
 
         trace!(request_size = request_bytes.len(), "sending RPC request");
 
         // Send request data (no length prefix - gateway uses read_to_end)
+        let mut send = send;
         send.write_all(&request_bytes).await.map_err(|e| {
             error!(error = %e, "failed to send request body");
-            Error::StorageError(format!("failed to send request: {}", e))
+            Error::from(format!("failed to send request: {e}"))
         })?;
         send.finish().map_err(|e| {
             error!(error = %e, "failed to finish send stream");
-            Error::StorageError(format!("failed to finish send: {}", e))
+            Error::from(format!("failed to finish send: {e}"))
         })?;
 
         trace!("request sent, waiting for response");
 
         // Read response (no length prefix - gateway sends raw postcard bytes)
         const MAX_RESPONSE_SIZE: usize = 256 * 1024 * 1024; // Match MAX_CLIENT_MESSAGE_SIZE
+        let mut recv = recv;
         let response_bytes = recv.read_to_end(MAX_RESPONSE_SIZE).await.map_err(|e| {
             error!(error = %e, "failed to read response");
-            Error::StorageError(format!("failed to read response: {}", e))
+            Error::from(format!("failed to read response: {e}"))
         })?;
 
         trace!(response_size = response_bytes.len(), "received response");
@@ -146,7 +148,7 @@ impl RpcDirectoryService {
         // Deserialize response
         let response: ClientRpcResponse = postcard::from_bytes(&response_bytes).map_err(|e| {
             error!(error = %e, response_size = response_bytes.len(), "failed to deserialize response");
-            Error::StorageError(format!("failed to deserialize response: {}", e))
+            Error::from(format!("failed to deserialize response: {e}"))
         })?;
 
         let response_type = format!("{:?}", std::mem::discriminant(&response));
@@ -176,7 +178,7 @@ impl DirectoryService for RpcDirectoryService {
                 error,
             }) => {
                 if let Some(err) = error {
-                    return Err(Error::StorageError(format!("RPC error: {}", err)));
+                    return Err(format!("RPC error: {err}").into());
                 }
 
                 if !was_found {
@@ -185,25 +187,24 @@ impl DirectoryService for RpcDirectoryService {
                 }
 
                 // Decode base64
-                let bytes = directory_bytes
-                    .ok_or_else(|| Error::StorageError("missing directory_bytes in response".to_string()))?;
+                let bytes = directory_bytes.ok_or_else(|| -> Error { "missing directory_bytes in response".into() })?;
                 let decoded = base64::engine::general_purpose::STANDARD
                     .decode(&bytes)
-                    .map_err(|e| Error::StorageError(format!("base64 decode error: {}", e)))?;
+                    .map_err(|e| -> Error { format!("base64 decode error: {e}").into() })?;
 
                 // Decode protobuf
                 let proto_dir = snix_castore::proto::Directory::decode(decoded.as_slice())
-                    .map_err(|e| Error::StorageError(format!("protobuf decode error: {}", e)))?;
+                    .map_err(|e| -> Error { format!("protobuf decode error: {e}").into() })?;
 
                 // Convert to Directory
                 let dir = Directory::try_from(proto_dir)
-                    .map_err(|e| Error::StorageError(format!("directory conversion error: {}", e)))?;
+                    .map_err(|e| -> Error { format!("directory conversion error: {e}").into() })?;
 
                 debug!(digest = %digest_hex, size = dir.size(), "directory retrieved via RPC");
                 Ok(Some(dir))
             }
-            ClientRpcResponse::Error(err) => Err(Error::StorageError(format!("RPC error: {}", err.message))),
-            other => Err(Error::StorageError(format!("unexpected RPC response: {:?}", other))),
+            ClientRpcResponse::Error(err) => Err(format!("RPC error: {}", err.message).into()),
+            other => Err(format!("unexpected RPC response: {:?}", other).into()),
         }
     }
 
@@ -235,27 +236,27 @@ impl DirectoryService for RpcDirectoryService {
             }) => {
                 if let Some(err) = error {
                     error!(error = %err, entries = dir_size, "RPC directory put returned error");
-                    return Err(Error::StorageError(format!("RPC error: {}", err)));
+                    return Err(format!("RPC error: {err}").into());
                 }
 
                 if !is_success {
                     error!(entries = dir_size, "RPC directory put failed without error message");
-                    return Err(Error::StorageError("directory put failed".to_string()));
+                    return Err("directory put failed".into());
                 }
 
                 // Decode the digest from hex
                 let digest_hex = digest.ok_or_else(|| {
                     error!(entries = dir_size, "missing digest in RPC directory put response");
-                    Error::StorageError("missing digest in response".to_string())
+                    Error::from("missing digest in response")
                 })?;
                 let digest_bytes = hex::decode(&digest_hex).map_err(|e| {
                     error!(digest = %digest_hex, error = %e, "hex decode error in directory put response");
-                    Error::StorageError(format!("hex decode error: {}", e))
+                    Error::from(format!("hex decode error: {e}"))
                 })?;
 
                 let b3_digest: B3Digest = digest_bytes.as_slice().try_into().map_err(|e| {
                     error!(digest = %digest_hex, error = %e, "invalid digest length in directory put response");
-                    Error::StorageError(format!("invalid digest length: {}", e))
+                    Error::from(format!("invalid digest length: {e}"))
                 })?;
 
                 info!(digest = %digest_hex, entries = dir_size, "directory stored successfully via RPC");
@@ -263,11 +264,11 @@ impl DirectoryService for RpcDirectoryService {
             }
             ClientRpcResponse::Error(err) => {
                 error!(error = %err.message, entries = dir_size, "RPC directory put failed with error response");
-                Err(Error::StorageError(format!("RPC error: {}", err.message)))
+                Err(format!("RPC error: {}", err.message).into())
             }
             other => {
                 error!(response = ?other, entries = dir_size, "unexpected RPC response to directory put");
-                Err(Error::StorageError(format!("unexpected RPC response: {:?}", other)))
+                Err(format!("unexpected RPC response: {:?}", other).into())
             }
         }
     }
@@ -292,18 +293,20 @@ impl DirectoryService for RpcDirectoryService {
 
                 // Check depth limit
                 if depth > MAX_DIRECTORY_DEPTH {
-                    Err(Error::StorageError(format!(
+                    let err: Error = format!(
                         "maximum directory depth {} exceeded",
                         MAX_DIRECTORY_DEPTH
-                    )))?;
+                    ).into();
+                    Err(err)?;
                 }
 
                 // Check buffer limit
                 if queue.len() as u32 > MAX_RECURSIVE_BUFFER {
-                    Err(Error::StorageError(format!(
+                    let err: Error = format!(
                         "maximum recursive buffer {} exceeded",
                         MAX_RECURSIVE_BUFFER
-                    )))?;
+                    ).into();
+                    Err(err)?;
                 }
 
                 if let Some(dir) = self.get(&digest).await? {
@@ -352,7 +355,7 @@ impl DirectoryPutter for RpcDirectoryPutter {
     }
 
     async fn close(&mut self) -> Result<B3Digest, Error> {
-        self.last_digest.take().ok_or_else(|| Error::StorageError("no directories were put".to_string()))
+        self.last_digest.take().ok_or_else(|| -> Error { "no directories were put".into() })
     }
 }
 
