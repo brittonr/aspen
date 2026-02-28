@@ -27,3 +27,6 @@ MD036: false
 
 # Allow flexible table column style (compact pipes in technical docs)
 MD060: false
+
+# Allow files to start without a top-level heading (OpenSpec uses YAML frontmatter)
+MD041: false

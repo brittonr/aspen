@@ -96,3 +96,9 @@ aspen-extracted/
 .agent/
 .pre-commit-cache/
 .config/sops/
+
+# OpenSpec (checked in — slash commands for AI coding assistants)
+!.agent/workflows/opsx-*.md
+!.pi/prompts/opsx-*.md
+!.claude/commands/opsx/
+!.claude/skills/openspec-*
