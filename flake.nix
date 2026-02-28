@@ -1474,7 +1474,7 @@
                 fullPluginsCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc";
+                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob";
                   doCheck = false;
                 }
               );
@@ -1484,6 +1484,10 @@
               full-aspen-cli-ci = fullCliBin ["ci"];
               full-aspen-cli-secrets = fullCliBin ["secrets" "ci"];
               full-aspen-cli-proxy = fullCliBin ["proxy"];
+              full-git-remote-aspen = fullBin {
+                name = "git-remote-aspen";
+                features = ["git-bridge"];
+              };
             };
         in
           bins
@@ -1741,6 +1745,7 @@
                 aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-forge;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
               };
 
               # Multi-node cluster test: 3-node Raft consensus, replication,

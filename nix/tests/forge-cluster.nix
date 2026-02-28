@@ -10,7 +10,8 @@
 #   - Ref management (push, get-ref, branch list/create/delete, tag list/create/delete)
 #   - Issue tracking (create, list, show, comment, close, reopen)
 #   - Patch workflow (create, list, show, update, approve, merge, close)
-#   - Clone (full working-directory checkout)
+#   - Clone (full working-directory checkout via CLI)
+#   - Native git push/clone/fetch via git-remote-aspen (real git interop)
 #   - Federation (federate, list-federated)
 #
 # Run:
@@ -27,6 +28,8 @@
   aspenCliPlugins,
   kvPluginWasm,
   forgePluginWasm,
+  # git-remote-aspen binary for native git push/clone/fetch tests.
+  gitRemoteAspenPackage,
 }: let
   # Deterministic Iroh secret key (64 hex chars = 32 bytes).
   secretKey = "0000000000000001000000000000000100000000000000010000000000000001";
@@ -76,7 +79,7 @@ in
           features = ["forge" "blob"];
         };
 
-        environment.systemPackages = [aspenCliPackage];
+        environment.systemPackages = [aspenCliPackage gitRemoteAspenPackage pkgs.git];
 
         networking.firewall.enable = false;
 
@@ -335,11 +338,133 @@ in
               f"--merge-commit {commit3_hash}"
           )
 
-      # ── clone ────────────────────────────────────────────────────────
+      # ── clone (CLI) ────────────────────────────────────────────────────
       with subtest("clone"):
           cli_text(f"git clone {repo_id} --path /tmp/cloned-repo")
           node1.succeed("test -d /tmp/cloned-repo/.aspen")
           node1.succeed("test -f /tmp/cloned-repo/.aspen/config.json")
+
+      # ── native git via git-remote-aspen ─────────────────────────────
+      # These tests exercise the real `git push`/`git clone`/`git fetch`
+      # workflow using git-remote-aspen as a git remote helper, which is
+      # how users actually interact with the forge.
+
+      with subtest("git-remote-aspen: create repo for native git"):
+          git_repo_out = cli("git init native-git-repo --description 'Native git test'")
+          git_repo_id = git_repo_out.get("id") or git_repo_out.get("repo_id", "")
+          assert git_repo_id, f"repo init failed: {git_repo_out}"
+          node1.log(f"Created native git repo: {git_repo_id}")
+
+      with subtest("git-remote-aspen: git push"):
+          ticket = get_ticket()
+          remote_url = f"aspen://{ticket}/{git_repo_id}"
+
+          # Create a local git repo with files
+          node1.succeed("mkdir -p /tmp/git-source")
+          node1.succeed(
+              "cd /tmp/git-source && "
+              "git init --initial-branch=main && "
+              "git config user.email 'test@example.com' && "
+              "git config user.name 'Test User'"
+          )
+          node1.succeed(
+              "cd /tmp/git-source && "
+              "echo '# Native Git Test' > README.md && "
+              "mkdir -p src && "
+              "echo 'fn main() { println!(\"hello forge\"); }' > src/main.rs && "
+              "git add -A && "
+              "git commit -m 'Initial commit via native git'"
+          )
+
+          # Get the HEAD SHA-1 before push
+          source_head = node1.succeed(
+              "cd /tmp/git-source && git rev-parse HEAD"
+          ).strip()
+          node1.log(f"Source HEAD: {source_head}")
+
+          # Add forge remote
+          node1.succeed(
+              f"cd /tmp/git-source && "
+              f"git remote add forge '{remote_url}'"
+          )
+
+          # Push to forge via git-remote-aspen
+          # Capture both stdout and stderr for debugging.
+          # Use execute() first to see exit code, then assert.
+          rc, output = node1.execute(
+              f"cd /tmp/git-source && "
+              f"RUST_LOG=warn git push forge main "
+              f">/tmp/git-push-stdout.txt 2>/tmp/git-push-stderr.txt"
+          )
+          push_stdout = node1.succeed("cat /tmp/git-push-stdout.txt 2>/dev/null || true")
+          push_stderr = node1.succeed("cat /tmp/git-push-stderr.txt 2>/dev/null || true")
+          node1.log(f"git push exit code: {rc}")
+          node1.log(f"git push stdout: {push_stdout}")
+          node1.log(f"git push stderr: {push_stderr}")
+          assert rc == 0, f"git push failed (exit {rc}): stdout={push_stdout!r} stderr={push_stderr!r}"
+
+      with subtest("git-remote-aspen: git clone"):
+          # Clone from forge into a new directory
+          node1.succeed(
+              f"RUST_LOG=warn git clone '{remote_url}' /tmp/git-cloned 2>/tmp/git-clone-stderr.txt"
+          )
+          clone_stderr = node1.succeed("cat /tmp/git-clone-stderr.txt")
+          node1.log(f"git clone stderr: {clone_stderr}")
+
+          # Verify HEAD matches
+          clone_head = node1.succeed(
+              "cd /tmp/git-cloned && git rev-parse HEAD"
+          ).strip()
+          node1.log(f"Clone HEAD: {clone_head}")
+          assert source_head == clone_head, \
+              f"HEAD mismatch: source={source_head} clone={clone_head}"
+
+          # Verify file contents
+          readme = node1.succeed("cat /tmp/git-cloned/README.md").strip()
+          assert readme == "# Native Git Test", f"README mismatch: {readme!r}"
+
+          main_rs = node1.succeed("cat /tmp/git-cloned/src/main.rs").strip()
+          assert "hello forge" in main_rs, f"main.rs mismatch: {main_rs!r}"
+
+      with subtest("git-remote-aspen: incremental push"):
+          # Add a second commit and push again — should be incremental
+          node1.succeed(
+              "cd /tmp/git-source && "
+              "echo 'More content' >> README.md && "
+              "git add -A && "
+              "git commit -m 'Second commit'"
+          )
+          source_head2 = node1.succeed(
+              "cd /tmp/git-source && git rev-parse HEAD"
+          ).strip()
+
+          node1.succeed(
+              f"cd /tmp/git-source && "
+              f"RUST_LOG=warn git push forge main 2>/tmp/git-push2-stderr.txt"
+          )
+          push2_stderr = node1.succeed("cat /tmp/git-push2-stderr.txt")
+          node1.log(f"Incremental push stderr: {push2_stderr}")
+
+      with subtest("git-remote-aspen: git fetch"):
+          # Fetch the second commit into the cloned repo
+          node1.succeed(
+              f"cd /tmp/git-cloned && "
+              f"RUST_LOG=warn git fetch origin 2>/tmp/git-fetch-stderr.txt"
+          )
+          fetch_stderr = node1.succeed("cat /tmp/git-fetch-stderr.txt")
+          node1.log(f"git fetch stderr: {fetch_stderr}")
+
+          # Merge and verify
+          node1.succeed("cd /tmp/git-cloned && git merge origin/main")
+          fetch_head = node1.succeed(
+              "cd /tmp/git-cloned && git rev-parse HEAD"
+          ).strip()
+          assert source_head2 == fetch_head, \
+              f"Fetch HEAD mismatch: source={source_head2} fetch={fetch_head}"
+
+          # Verify updated content
+          readme2 = node1.succeed("cat /tmp/git-cloned/README.md")
+          assert "More content" in readme2, f"README not updated: {readme2!r}"
 
       # ── federation ───────────────────────────────────────────────────
       # Federation requires global-discovery feature which may not be enabled.
