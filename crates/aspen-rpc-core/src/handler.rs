@@ -121,6 +121,18 @@ pub trait RequestHandler: Send + Sync {
     ///
     /// This should be a short, descriptive name like "ForgeHandler" or "BlobHandler".
     fn name(&self) -> &'static str;
+
+    /// Returns true if this handler explicitly claims the KV key/prefix in
+    /// the request via a declared `kv_prefixes` set.
+    ///
+    /// Used by the two-pass dispatch in `HandlerRegistry::dispatch`: prefix-claiming
+    /// handlers are tried first, allowing WASM plugins to intercept KV operations
+    /// for their namespace before the catch-all core KV handler.
+    ///
+    /// Default returns false (native handlers don't claim specific prefixes).
+    fn claims_kv_prefix(&self, _request: &ClientRpcRequest) -> bool {
+        false
+    }
 }
 
 // =============================================================================

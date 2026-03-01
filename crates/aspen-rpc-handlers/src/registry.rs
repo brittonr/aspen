@@ -151,6 +151,25 @@ impl HandlerRegistry {
         // Load the current handler snapshot (lock-free, wait-free)
         let handlers = self.handlers.load();
 
+        // Two-pass dispatch for KV operations: first check if any handler
+        // (typically a WASM plugin) claims this specific key prefix. If so,
+        // dispatch to it. Otherwise, fall back to the default priority order.
+        // This allows plugins at priority >= 900 to intercept KV operations
+        // for their declared prefixes before the core KV handler at priority 110.
+        //
+        // For non-KV operations, this first pass is a no-op since
+        // `claims_kv_prefix` returns false.
+        for handler in handlers.iter() {
+            if handler.claims_kv_prefix(&request) {
+                debug!(
+                    handler = handler.name(),
+                    request = ?std::mem::discriminant(&request),
+                    "dispatching KV request to prefix-claiming handler"
+                );
+                return handler.handle(request, ctx).await;
+            }
+        }
+
         for handler in handlers.iter() {
             if handler.can_handle(&request) {
                 debug!(
