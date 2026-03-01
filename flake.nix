@@ -1329,6 +1329,9 @@
           ];
         };
 
+        # Short alias used throughout the flake
+        aspenNode = u2nWorkspace.workspaceMembers."aspen".build;
+
         u2nWorkspace = unit2nix.lib.${system}.buildFromUnitGraph {
           inherit pkgs;
           src = u2nSrc;
@@ -1543,7 +1546,7 @@
         in
           bins
           // rec {
-            default = bins.aspen-node;
+            default = aspenNode;
 
             # Development builds with incremental compilation enabled
             # Use these for faster iteration during development
@@ -1991,7 +1994,7 @@
           # Base apps available on all systems
           apps = {
             aspen-node = flake-utils.lib.mkApp {
-              drv = bins.aspen-node;
+              drv = aspenNode;
               exePath = "/bin/aspen-node";
             };
 
@@ -2198,7 +2201,7 @@
               program = "${pkgs.writeShellScript "aspen-cluster" ''
                 export PATH="${
                   pkgs.lib.makeBinPath [
-                    bins.aspen-node
+                    aspenNode
                     # bins.aspen-cli  # Extracted to ~/git/aspen-cli
                     pkgs.bash
                     pkgs.coreutils
@@ -2208,7 +2211,7 @@
                     pkgs.gnused
                   ]
                 }:$PATH"
-                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                export ASPEN_NODE_BIN="${aspenNode}/bin/aspen-node"
                 export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
                 exec ${scriptsDir}/cluster.sh "$@"
               ''}";
@@ -2241,7 +2244,7 @@
                 echo "For multi-node:      nix run .#cluster"
                 echo ""
 
-                exec ${bins.aspen-node}/bin/aspen-node \
+                exec ${aspenNode}/bin/aspen-node \
                   --node-id 1 \
                   --cookie "dev-cookie-$USER" \
                   --data-dir "$DATA_DIR" \
@@ -2712,7 +2715,7 @@
 
                 export PATH="${
                   pkgs.lib.makeBinPath [
-                    bins.aspen-node
+                    aspenNode
                     bins.aspen-cli
                     bins.git-remote-aspen
                     pkgs.cloud-hypervisor
@@ -2728,7 +2731,7 @@
                   ]
                 }:$PATH"
 
-                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                export ASPEN_NODE_BIN="${aspenNode}/bin/aspen-node"
                 export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
                 export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
                 export ASPEN_NODE_COUNT="$NODE_COUNT"
@@ -2756,7 +2759,7 @@
 
                 export PATH="${
                   pkgs.lib.makeBinPath [
-                    bins.aspen-node
+                    aspenNode
                     bins.aspen-cli
                     bins.git-remote-aspen
                     pkgs.bash
@@ -2768,7 +2771,7 @@
                   ]
                 }:$PATH"
 
-                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                export ASPEN_NODE_BIN="${aspenNode}/bin/aspen-node"
                 export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
                 export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
                 export PROJECT_DIR="$PWD"
@@ -2793,7 +2796,7 @@
 
                 export PATH="${
                   pkgs.lib.makeBinPath [
-                    bins.aspen-node
+                    aspenNode
                     bins.aspen-cli
                     bins.git-remote-aspen
                     pkgs.bash
@@ -2807,7 +2810,7 @@
                   ]
                 }:$PATH"
 
-                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                export ASPEN_NODE_BIN="${aspenNode}/bin/aspen-node"
                 export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
                 export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
                 export CLOUD_HYPERVISOR_BIN="${pkgs.cloud-hypervisor}/bin/cloud-hypervisor"
@@ -2865,10 +2868,12 @@
           # Packages exposed by the flake
           packages =
             {
-              default = bins.aspen-node;
-              aspen-node = bins.aspen-node;
-              # Full-source builds for inspection/debugging
-              # _debug-full-src = fullSrc;
+              # ── Primary builds (unit2nix: per-crate, incremental) ─────
+              default = aspenNode;
+              aspen-node = aspenNode;
+
+              # ── Crane builds (kept for specialized variants + VM tests)
+              crane-aspen-node = bins.aspen-node;
               # aspen-tui extracted to ~/git/aspen-tui
               aspen-cli = bins.aspen-cli;
               aspen-cli-forge = bins.aspen-cli-forge;
@@ -2878,8 +2883,6 @@
               vm-test-setup = vm-test-setup;
               vm-test-run = vm-test-run;
               # Pre-built cargo dependencies for CI and binary cache.
-              # Push these to your cache first — they're the most expensive derivations.
-              #   nix build .#cargoArtifacts .#nodeCargoArtifacts .#cliCargoArtifacts
               inherit cargoArtifacts nodeCargoArtifacts cliCargoArtifacts;
               # Verus formal verification tool (binary release with proper library setup)
               inherit verus;
@@ -2887,11 +2890,6 @@
               verus-root = verusRoot;
               # Z3 4.12.5 (required by Verus)
               z3 = z3_4_12_5;
-
-              # ── unit2nix builds (per-crate, incremental) ──────────────
-              # These replace the monolithic crane builds above.
-              # Only rebuilds crates that actually changed.
-              u2n-aspen-node = u2nWorkspace.workspaceMembers."aspen".build;
             }
             // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") (
               let
@@ -2904,7 +2902,7 @@
                       inherit pkgs;
                       lib = nixpkgs.lib;
                       vmId = "aspen-ci-vm";
-                      aspenNodePackage = bins.aspen-node;
+                      aspenNodePackage = aspenNode;
                     })
                   ];
                 };
