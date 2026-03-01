@@ -42,6 +42,11 @@
       url = "github:verus-lang/verus/release/0.2026.01.30.44ebdee";
       flake = false;
     };
+
+    # unit2nix - Per-crate Nix builds from Cargo's unit graph
+    unit2nix = {
+      url = "path:/home/brittonr/git/unit2nix";
+    };
   };
 
   nixConfig = {
@@ -97,6 +102,7 @@
     snix-src,
     microvm,
     verus-src,
+    unit2nix,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (
@@ -1300,6 +1306,51 @@
           # Call rust_verify directly (the verus binary expects rustup, which we don't have)
           exec "${verusRoot}/rust_verify" "$@"
         '';
+
+        # ── unit2nix: Per-crate Nix builds ────────────────────────────
+        # Replaces crane's monolithic builds with individual buildRustCrate
+        # derivations. Changing one crate only rebuilds its dependents,
+        # not the entire 648-crate workspace.
+        #
+        # Regenerate build-plan.json whenever Cargo.lock changes:
+        #   nix run .#generate-build-plan
+        #
+        # The build plan is generated from the real workspace (not stubs),
+        # so it captures the exact dependency graph Cargo resolves.
+        u2nSrc = lib.fileset.toSource {
+          root = ./.;
+          fileset = lib.fileset.unions [
+            ./Cargo.toml
+            ./Cargo.lock
+            ./build.rs
+            ./src
+            ./crates
+            ./openraft
+          ];
+        };
+
+        u2nWorkspace = unit2nix.lib.${system}.buildFromUnitGraph {
+          inherit pkgs;
+          src = u2nSrc;
+          resolvedJson = ./build-plan.json;
+          defaultCrateOverrides =
+            pkgs.defaultCrateOverrides
+            // {
+              # Root aspen crate: build.rs needs git + date
+              aspen = attrs: {
+                nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [pkgs.git];
+                # In Nix sandbox, git rev-parse fails. Set env vars directly.
+                GIT_HASH = self.shortRev or self.dirtyShortRev or "nix";
+                BUILD_TIME = "1970-01-01 00:00:00 UTC";
+              };
+              # ring: needs cc + LLVM for assembly. stdenv.cc is provided by buildRustCrate.
+              ring = attrs: {
+                # ring's build.rs uses the cc crate; buildRustCrate's stdenv handles this.
+                # But ring's assembly files need the target env var set correctly.
+                RING_CORE_PREFIX = "";
+              };
+            };
+        };
 
         bins = let
           bin = {
@@ -2792,6 +2843,22 @@
             };
 
             # build-plugins and deploy-plugin: moved to ~/git/aspen-plugins repo
+
+            # Regenerate build-plan.json for unit2nix
+            # Usage: nix run .#generate-build-plan
+            generate-build-plan = {
+              type = "app";
+              program = "${pkgs.writeShellScript "generate-build-plan" ''
+                set -e
+                echo "Generating build-plan.json from Cargo's unit graph..."
+                ${unit2nix.packages.${system}.default}/bin/unit2nix \
+                  --manifest-path ./Cargo.toml \
+                  --bin aspen-node \
+                  --features ci,docs,hooks,shell-worker,automerge,secrets \
+                  -o build-plan.json
+                echo "Done! Commit build-plan.json to the repo."
+              ''}";
+            };
           };
         }
         // {
@@ -2820,6 +2887,11 @@
               verus-root = verusRoot;
               # Z3 4.12.5 (required by Verus)
               z3 = z3_4_12_5;
+
+              # ── unit2nix builds (per-crate, incremental) ──────────────
+              # These replace the monolithic crane builds above.
+              # Only rebuilds crates that actually changed.
+              u2n-aspen-node = u2nWorkspace.workspaceMembers."aspen".build;
             }
             // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") (
               let
