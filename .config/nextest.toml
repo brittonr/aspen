@@ -148,6 +148,12 @@ filter = "test(/pijul_real_changes/)"
 retries = 1
 slow-timeout = { period = "60s", terminate-after = 1 }
 
+# Relay status tests: verify iroh relay connectivity in real clusters
+[[profile.network.overrides]]
+filter = "test(/relay_status/)"
+retries = 2
+slow-timeout = { period = "120s", terminate-after = 1 }
+
 # Large file tests
 [[profile.network.overrides]]
 filter = "test(/large_file/)"

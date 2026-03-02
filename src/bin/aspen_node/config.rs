@@ -69,6 +69,7 @@ pub fn build_cluster_config(args: &Args) -> NodeConfig {
         pkarr_relay_url: args.pkarr_relay_url.clone(),
         relay_mode,
         relay_urls: args.relay_url.clone(),
+        relay_server: None,
         enable_raft_auth: args.enable_raft_auth,
         bind_port: args.bind_port.unwrap_or(0),
     };
