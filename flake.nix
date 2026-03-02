@@ -1992,13 +1992,13 @@
             }
             // lib.optionalAttrs (system == "x86_64-linux") {
               # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.
-              # MicroVM + VirtioFS integration test: nginx in a Cloud Hypervisor
-              # guest serving files through VirtioFS from the host.
-              # Proves: host dir → virtiofsd → vhost-user → CH → guest mount → nginx → curl
-              # Same vhost-user protocol path that AspenFs VirtioFS daemon uses.
+              # MicroVM + AspenFs VirtioFS integration test: nginx in a Cloud
+              # Hypervisor guest serving files from AspenFs in-memory KV store.
+              # Proves: AspenFs KV → VirtioFS daemon → vhost-user → CH → guest mount → nginx → curl
               # Build: nix build .#checks.x86_64-linux.microvm-nginx-test
               microvm-nginx-test = import ./nix/tests/microvm-nginx.nix {
                 inherit pkgs microvm;
+                inherit (self.packages.${system}) aspen-virtiofs-test-server;
               };
             };
 
@@ -2929,6 +2929,111 @@
                 ci-vm-runner = ciVmConfig.config.microvm.runner.cloud-hypervisor;
                 # VirtioFS test initramfs
                 inherit virtiofsTestInitrd;
+
+                # AspenFs VirtioFS test server — serves in-memory KV over vhost-user socket.
+                # Uses fullRawSrc (all crates present) but doesn't need external repos
+                # (no plugins, no wasm). Stubs out git deps that aspen-fuse doesn't need.
+                aspen-virtiofs-test-server = let
+                  fuseSrc = pkgs.runCommand "aspen-fuse-src" {} ''
+                    mkdir -p $out/aspen
+                    cp -r ${fullRawSrc}/. $out/aspen/
+                    chmod -R u+w $out/aspen
+
+                    # Remove [patch.*] sections
+                    if [ -f $out/aspen/.cargo/config.toml ]; then
+                      ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/aspen/.cargo/config.toml
+                    fi
+
+                    # Stub aspen-wasm-plugin (not needed for fuse, but workspace references it)
+                    # Path matches workspace Cargo.toml: ../aspen-wasm-plugin/crates/aspen-wasm-plugin
+                    mkdir -p "$out/aspen-wasm-plugin/crates/aspen-wasm-plugin/src"
+                    cat > "$out/aspen-wasm-plugin/crates/aspen-wasm-plugin/Cargo.toml" << 'EOF'
+                    [package]
+                    name = "aspen-wasm-plugin"
+                    version = "0.1.0"
+                    edition = "2024"
+                    [features]
+                    default = []
+                    hooks = []
+                    EOF
+                    echo '// stub' > "$out/aspen-wasm-plugin/crates/aspen-wasm-plugin/src/lib.rs"
+
+                    # Stub iroh-proxy-utils (referenced by aspen-proxy)
+                    mkdir -p "$out/iroh-proxy-utils/src"
+                    cat > "$out/iroh-proxy-utils/Cargo.toml" << 'EOF'
+                    [package]
+                    name = "iroh-proxy-utils"
+                    version = "0.1.0"
+                    edition = "2021"
+                    EOF
+                    echo '// stub' > "$out/iroh-proxy-utils/src/lib.rs"
+
+                    # Stub git deps
+                    stub() {
+                      local name="$1"; shift
+                      local dir="$out/aspen/.nix-stubs/$name"
+                      mkdir -p "$dir/src"
+                      {
+                        echo '[package]'
+                        echo "name = \"$name\""
+                        echo 'version = "0.1.0"'
+                        echo 'edition = "2024"'
+                        echo '[features]'
+                        for feat in "$@"; do echo "$feat = []"; done
+                      } > "$dir/Cargo.toml"
+                      echo '// stub' > "$dir/src/lib.rs"
+                    }
+                    stub mad-turmoil
+                    stub snix-castore
+                    stub snix-store
+                    stub nix-compat async serde
+                    stub nix-compat-derive
+                    stub h3-iroh
+
+                    # Rewrite git deps to path stubs in root Cargo.toml
+                    ${pkgs.gnused}/bin/sed -i \
+                      -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
+                      -e 's|snix-castore = { git = "[^"]*"[^}]*}|snix-castore = { path = ".nix-stubs/snix-castore" }|' \
+                      -e 's|snix-store = { git = "[^"]*"[^}]*}|snix-store = { path = ".nix-stubs/snix-store" }|' \
+                      -e 's|nix-compat = { git = "[^"]*"[^}]*}|nix-compat = { path = ".nix-stubs/nix-compat", features = ["async", "serde"] }|' \
+                      -e 's|h3-iroh = { git = "[^"]*"[^}]*}|h3-iroh = { path = ".nix-stubs/h3-iroh" }|' \
+                      $out/aspen/Cargo.toml
+                    ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
+
+                    # Strip git source lines from Cargo.lock
+                    ${pkgs.gnused}/bin/sed -i '/^source = "git+https:\/\/github.com\/n0-computer\/iroh-proxy-utils/d' $out/aspen/Cargo.lock
+
+                    # Rewrite git deps in subcrates
+                    find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
+                      -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
+                      -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../../iroh-proxy-utils" }|' \
+                      -e 's|bolero = { version = "0.11"|bolero = { version = "0.13"|g' \
+                      -e 's|bolero-generator = { version = "0.11"|bolero-generator = { version = "0.13"|g' \
+                      -e 's|bolero = "0.11"|bolero = "0.13"|g' \
+                      -e 's|bolero-generator = "0.11"|bolero-generator = "0.13"|g' \
+                      {} \;
+                  '';
+                  fuseBasicArgs =
+                    basicArgs
+                    // {
+                      src = fuseSrc;
+                      postUnpack = ''sourceRoot="$sourceRoot/aspen"'';
+                      cargoToml = ./Cargo.toml;
+                      cargoExtraArgs = "";
+                    };
+                  fuseCargoVendorDir = craneLib.vendorCargoDeps {
+                    src = fuseSrc + "/aspen";
+                  };
+                in
+                  craneLib.buildPackage (
+                    fuseBasicArgs
+                    // {
+                      inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                      cargoVendorDir = fuseCargoVendorDir;
+                      cargoExtraArgs = "--package aspen-fuse --bin aspen-virtiofs-test-server --features virtiofs";
+                      doCheck = false;
+                    }
+                  );
 
                 # Minimal nginx microVM — smoke test for the Cloud Hypervisor boot path
                 # Build: nix build .#nginx-vm-runner
