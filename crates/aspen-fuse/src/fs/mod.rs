@@ -162,6 +162,20 @@ impl AspenFs {
         (fs, store)
     }
 
+    /// Create a filesystem from an existing shared in-memory KV store.
+    ///
+    /// Useful for tests that pre-seed the store before mounting.
+    pub fn from_shared_store(uid: u32, gid: u32, store: SharedInMemoryStore) -> Self {
+        Self {
+            inodes: InodeManager::new(),
+            uid,
+            gid,
+            backend: KvBackend::InMemory(store),
+            key_prefix: String::new(),
+            cache: ReadCache::new(),
+        }
+    }
+
     /// Convert a filesystem path to a KV key.
     ///
     /// Strips leading slash, normalizes the path, and rejects path traversal attempts.

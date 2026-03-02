@@ -75,3 +75,8 @@ vmm-sys-util = "0.12"
 [[bin]]
 name = "aspen-fuse"
 path = "src/main.rs"
+
+[[bin]]
+name = "aspen-virtiofs-test-server"
+path = "src/bin/aspen-virtiofs-test-server.rs"
+required-features = ["virtiofs"]

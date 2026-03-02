@@ -1992,9 +1992,10 @@
             }
             // lib.optionalAttrs (system == "x86_64-linux") {
               # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.
-              # Boots a QEMU host that launches a CH guest running nginx,
-              # then curls it to verify the full microVM boot path works.
-              # No Aspen binaries needed — pure microvm.nix infrastructure test.
+              # MicroVM + VirtioFS integration test: nginx in a Cloud Hypervisor
+              # guest serving files through VirtioFS from the host.
+              # Proves: host dir → virtiofsd → vhost-user → CH → guest mount → nginx → curl
+              # Same vhost-user protocol path that AspenFs VirtioFS daemon uses.
               # Build: nix build .#checks.x86_64-linux.microvm-nginx-test
               microvm-nginx-test = import ./nix/tests/microvm-nginx.nix {
                 inherit pkgs microvm;

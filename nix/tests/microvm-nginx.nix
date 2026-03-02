@@ -1,8 +1,16 @@
-# NixOS VM integration test: nginx running inside a microvm.nix guest.
+# NixOS VM integration test: nginx in a Cloud Hypervisor microVM serving
+# files via VirtioFS from the host.
 #
-# Boots a QEMU VM (the "host") which launches a Cloud Hypervisor microVM
-# (the "guest") running nginx. The host then curls the guest to verify
-# the full microVM boot path works end-to-end.
+# Proves the full VirtioFS data path end-to-end:
+#   Host: virtiofsd shares a directory over vhost-user socket
+#   VMM:  Cloud Hypervisor connects to socket, exposes virtio-fs device
+#   Guest: NixOS mounts virtiofs → nginx serves files from the host
+#   Test:  curl from host through TAP → guest nginx → VirtioFS content
+#
+# This validates the same vhost-user protocol path that AspenFs uses
+# (AspenFs VirtioFS daemon is a drop-in replacement for virtiofsd).
+# The AspenFs-specific FileSystem trait impl is tested separately in
+# crates/aspen-fuse/tests/cloud_hypervisor_virtiofs_test.rs.
 #
 # Requires nested KVM (enabled by default on most systems).
 #
@@ -20,6 +28,9 @@
   hostIp = "10.10.0.1";
   tapName = "vm-nginx";
   guestMac = "02:00:00:00:00:01";
+  virtiofsTag = "aspenfs";
+  virtiofsSocket = "/tmp/aspenfs.sock";
+  sharedDir = "/tmp/virtiofs-share";
 
   # Build the microVM guest as a standalone NixOS system
   nginxGuest = pkgs.nixos [
@@ -29,24 +40,34 @@
         hypervisor = "cloud-hypervisor";
         mem = 512;
         vcpu = 1;
+        cloud-hypervisor.extraArgs = [
+          "--serial"
+          "file=/tmp/guest-serial.log"
+          "--console"
+          "off"
+        ];
         kernelParams = [
           "console=ttyS0"
           "panic=1"
         ];
         volumes = [];
-        shares = [];
+        # VirtioFS share — socket created by virtiofsd on the host;
+        # microvm.nix wires it into the CH --fs argument.
+        shares = [
+          {
+            source = sharedDir;
+            mountPoint = "/var/www/aspen";
+            tag = virtiofsTag;
+            proto = "virtiofs";
+            socket = virtiofsSocket;
+          }
+        ];
         interfaces = [
           {
             type = "tap";
             id = tapName;
             mac = guestMac;
           }
-        ];
-        cloud-hypervisor.extraArgs = [
-          "--serial"
-          "file=/tmp/guest-serial.log"
-          "--console"
-          "off"
         ];
       };
 
@@ -55,11 +76,12 @@
       programs.command-not-found.enable = false;
       boot.loader.grub.enable = false;
 
+      # nginx serves files from the VirtioFS mount
       services.nginx = {
         enable = true;
         virtualHosts.default = {
           default = true;
-          locations."/".return = ''200 "hello from microvm\n"'';
+          root = "/var/www/aspen";
         };
       };
 
@@ -67,12 +89,9 @@
         hostName = "nginx-guest";
         firewall.enable = false;
         useDHCP = false;
-        # Disable predictable names so virtio-net becomes eth0
         usePredictableInterfaceNames = false;
       };
 
-      # Use systemd-networkd to assign the static IP.
-      # Match any ether device so it works regardless of interface naming.
       systemd.network = {
         enable = true;
         networks."10-guest" = {
@@ -84,7 +103,6 @@
     })
   ];
 
-  # The cloud-hypervisor runner for this guest
   guestRunner = nginxGuest.config.microvm.runner.cloud-hypervisor;
 in
   pkgs.testers.nixosTest {
@@ -96,7 +114,6 @@ in
       lib,
       ...
     }: {
-      # Nested KVM: pass host CPU features through QEMU
       virtualisation.qemu.options = [
         "-enable-kvm"
         "-cpu"
@@ -108,6 +125,7 @@ in
       environment.systemPackages = [
         guestRunner
         pkgs.cloud-hypervisor
+        pkgs.virtiofsd
         pkgs.curl
         pkgs.iproute2
       ];
@@ -121,21 +139,42 @@ in
       host.start()
       host.wait_for_unit("multi-user.target")
 
-      # Verify nested KVM is available inside the QEMU host
+      # Verify nested KVM
       kvm_check = host.succeed("test -c /dev/kvm && echo 'kvm ok' || echo 'no kvm'")
-      host.log(f"KVM check: {kvm_check.strip()}")
-      assert "kvm ok" in kvm_check, "Nested KVM not available inside QEMU host"
+      assert "kvm ok" in kvm_check, "Nested KVM not available"
 
-      # Create and configure TAP device for the guest
+      # Create the shared directory with pre-seeded content
+      # This simulates what AspenFs would serve from its KV store
+      host.succeed("mkdir -p ${sharedDir}")
+      host.succeed("echo -n 'hello from aspen kv' > ${sharedDir}/index.html")
+      host.succeed('echo -n \'{"source":"aspen-kv","ok":true}\' > ${sharedDir}/status.json')
+      host.log("Created shared directory with test content")
+
+      # Create TAP for guest networking
       host.succeed("ip tuntap add ${tapName} mode tap")
       host.succeed("ip addr add ${hostIp}/24 dev ${tapName}")
       host.succeed("ip link set ${tapName} up")
-      tap_info = host.succeed("ip addr show ${tapName}")
-      host.log(f"TAP device:\n{tap_info}")
 
-      # Launch the microVM via systemd-run so it's properly daemonized.
-      # microvm-run uses exec to replace with cloud-hypervisor (full store paths),
-      # but the script also calls `rm` which needs PATH set.
+      # Start virtiofsd — serves the shared directory over vhost-user socket.
+      # This is the same protocol path AspenFs VirtioFS daemon uses.
+      host.succeed(
+          "systemd-run --unit=virtiofsd "
+          "--property=StandardOutput=file:/tmp/virtiofsd-stdout.log "
+          "--property=StandardError=file:/tmp/virtiofsd-stderr.log "
+          "'--property=Environment=PATH=/run/current-system/sw/bin' "
+          "virtiofsd "
+          "--socket-path=${virtiofsSocket} "
+          "--shared-dir=${sharedDir} "
+          "--xattr "
+          "--announce-submounts "
+      )
+      host.log("Started virtiofsd")
+
+      # Wait for the socket to appear
+      host.wait_until_succeeds("test -S ${virtiofsSocket}", timeout=10)
+      host.log("VirtioFS socket ready")
+
+      # Launch the microVM — Cloud Hypervisor connects to the VirtioFS socket
       host.succeed(
           "systemd-run --unit=microvm-nginx "
           "--property=StandardOutput=file:/tmp/ch-stdout.log "
@@ -144,57 +183,51 @@ in
           "'--property=Environment=PATH=/run/current-system/sw/bin' "
           "microvm-run"
       )
-      host.log("Launched microvm-run via systemd-run")
+      host.log("Launched Cloud Hypervisor microVM")
 
-      # Give Cloud Hypervisor time to start and guest to boot
+      # Wait for CH to be running
       time.sleep(3)
-
-      # Always dump diagnostic info
       ch_status = host.succeed("systemctl is-active microvm-nginx.service || echo 'dead'").strip()
-      host.log(f"Service status: {ch_status}")
-
-      ch_log = host.succeed("cat /tmp/ch-stdout.log 2>/dev/null || echo 'no stdout'")
-      ch_err = host.succeed("cat /tmp/ch-stderr.log 2>/dev/null || echo 'no stderr'")
-      jlog = host.succeed("journalctl -u microvm-nginx.service --no-pager -n 20 2>/dev/null || echo 'no journal'")
-      host.log(f"CH stdout:\n{ch_log}")
-      host.log(f"CH stderr:\n{ch_err}")
-      host.log(f"Journal:\n{jlog}")
-
-      # Check KVM access
-      kvm_test = host.succeed("test -c /dev/kvm && echo 'kvm ok' || echo 'no kvm'").strip()
-      host.log(f"KVM: {kvm_test}")
-
-      # Check the microvm-run script can find cloud-hypervisor
-      host.succeed("head -20 $(which microvm-run)")
+      host.log(f"CH service status: {ch_status}")
 
       if "dead" in ch_status or "failed" in ch_status:
-          raise Exception(f"Cloud Hypervisor service failed: {ch_status}")
+          ch_err = host.succeed("cat /tmp/ch-stderr.log 2>/dev/null || echo 'none'")
+          vfs_err = host.succeed("cat /tmp/virtiofsd-stderr.log 2>/dev/null || echo 'none'")
+          host.log(f"CH stderr: {ch_err}")
+          host.log(f"virtiofsd stderr: {vfs_err}")
+          raise Exception(f"Cloud Hypervisor failed: {ch_status}")
 
-      # Poll until curl succeeds (guest boots + nginx starts)
+      # Wait for nginx to be reachable (guest boot + virtiofs mount + nginx start)
       host.wait_until_succeeds(
           "curl -sf --connect-timeout 2 http://${guestIp}",
           timeout=90,
       )
 
-      # Verify the response content
-      output = host.succeed("curl -sf http://${guestIp}")
-      assert "hello from microvm" in output, f"unexpected response: {output!r}"
-      host.log(f"Got response from microVM nginx: {output.strip()}")
+      # Verify index.html is served through VirtioFS
+      output = host.succeed("curl -sf http://${guestIp}/index.html")
+      assert "hello from aspen kv" in output, f"unexpected index.html: {output!r}"
+      host.log(f"index.html via VirtioFS: {output.strip()}")
 
-      # Verify it's actually serving HTTP properly (check headers)
-      headers = host.succeed("curl -sfI http://${guestIp}")
-      assert "200" in headers, f"expected 200 in headers: {headers!r}"
-      assert "nginx" in headers.lower(), f"expected nginx in headers: {headers!r}"
-      host.log("HTTP headers OK")
+      # Verify status.json is also served through VirtioFS
+      status = host.succeed("curl -sf http://${guestIp}/status.json")
+      assert '"source":"aspen-kv"' in status, f"unexpected status.json: {status!r}"
+      host.log(f"status.json via VirtioFS: {status.strip()}")
 
-      # Show guest serial log
-      serial = host.succeed("cat /tmp/guest-serial.log 2>/dev/null | tail -20 || echo 'no serial log'")
-      host.log(f"Guest serial (last 20 lines):\n{serial}")
+      # Verify HTTP headers show nginx
+      headers = host.succeed("curl -sfI http://${guestIp}/index.html")
+      assert "200" in headers, f"expected 200: {headers!r}"
+      assert "nginx" in headers.lower(), f"expected nginx: {headers!r}"
+      host.log("HTTP headers OK — nginx serving VirtioFS content")
+
+      # Show guest serial log for debugging
+      serial = host.succeed("cat /tmp/guest-serial.log 2>/dev/null | tail -10 || echo 'no serial'")
+      host.log(f"Guest serial:\n{serial}")
 
       # Clean up
-      host.succeed("systemctl stop microvm-nginx.service 2>/dev/null || pkill -f cloud-hypervisor || true")
-      time.sleep(2)
+      host.succeed("systemctl stop microvm-nginx.service 2>/dev/null || true")
+      host.succeed("systemctl stop virtiofsd.service 2>/dev/null || true")
+      time.sleep(1)
 
-      host.log("microvm-nginx test passed!")
+      host.log("PASSED: nginx in CH microVM served files via VirtioFS from host!")
     '';
   }
