@@ -166,7 +166,7 @@ nix run .#cluster              # Launch 3-node cluster
 - **aspen-fuse**: FUSE filesystem (separate crate: `aspen-fuse`)
 - **git-remote-aspen**: Git remote helper (requires `git-bridge` feature)
 - **aspen-generate-schema**: Schema generator (requires `ci` feature)
-- **aspen-token**: Token utility
+- **aspen-cli token**: Capability token management (generate, inspect, delegate)
 
 ## Coding Style: Tiger Style
 

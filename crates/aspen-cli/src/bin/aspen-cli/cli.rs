@@ -52,6 +52,7 @@ use crate::commands::service::ServiceCommand;
 #[cfg(feature = "sql")]
 use crate::commands::sql::SqlCommand;
 use crate::commands::tag::TagCommand;
+use crate::commands::token::TokenCommand;
 use crate::commands::trace::TraceCommand;
 use crate::commands::verify::VerifyCommand;
 
@@ -272,6 +273,12 @@ pub enum Commands {
     #[command(subcommand)]
     Tag(TagCommand),
 
+    /// Capability token management (offline — no cluster connection needed).
+    ///
+    /// Generate, inspect, and delegate capability tokens for authorization.
+    #[command(subcommand)]
+    Token(TokenCommand),
+
     /// Distributed trace query operations.
     ///
     /// List, get, and search traces stored by the observability pipeline.
@@ -300,6 +307,11 @@ pub enum Commands {
 impl Cli {
     /// Execute the CLI command.
     pub async fn run(self) -> Result<()> {
+        // Handle token commands — fully offline, no cluster connection needed
+        if let Commands::Token(cmd) = self.command {
+            return cmd.run(self.global.is_json);
+        }
+
         // Handle index commands that don't require a cluster connection
         if let Commands::Index(ref cmd) = self.command {
             if cmd.is_local() {
@@ -381,6 +393,7 @@ impl Cli {
             #[cfg(feature = "sql")]
             Commands::Sql(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Tag(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Token(_) => unreachable!("handled above"),
             Commands::Trace(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Metric(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Alert(cmd) => cmd.run(&client, self.global.is_json).await,

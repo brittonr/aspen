@@ -42,5 +42,6 @@ pub mod service;
 #[cfg(feature = "sql")]
 pub mod sql;
 pub mod tag;
+pub mod token;
 pub mod trace;
 pub mod verify;
