@@ -40,7 +40,9 @@ impl ClusterController for RaftNode {
             let iroh_addr = cluster_node.iroh_addr().ok_or_else(|| ControlPlaneError::InvalidRequest {
                 reason: format!("node_addr must be set for node {}", cluster_node.id),
             })?;
-            nodes.insert(cluster_node.id.into(), RaftMemberInfo::new(iroh_addr.clone()));
+            let mut member_info = RaftMemberInfo::new(iroh_addr.clone());
+            member_info.relay_url = cluster_node.relay_url.clone();
+            nodes.insert(cluster_node.id.into(), member_info);
         }
 
         // Tiger Style: nodes map must match input
@@ -85,11 +87,13 @@ impl ClusterController for RaftNode {
             reason: format!("node_addr must be set for node {}", learner.id),
         })?;
 
-        let node = RaftMemberInfo::new(iroh_addr.clone());
+        let mut node = RaftMemberInfo::new(iroh_addr.clone());
+        node.relay_url = learner.relay_url.clone();
 
         info!(
             learner_id = learner.id,
             endpoint_id = %iroh_addr.id,
+            relay_url = ?learner.relay_url,
             "adding learner with Iroh address"
         );
 

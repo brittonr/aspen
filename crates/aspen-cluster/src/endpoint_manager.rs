@@ -16,6 +16,10 @@ use iroh_gossip::net::Gossip;
 use crate::IrohEndpointConfig;
 use crate::RouterBuilder;
 use crate::config;
+#[cfg(feature = "relay-server")]
+use crate::relay_server::AllowedEndpoints;
+#[cfg(feature = "relay-server")]
+use crate::relay_server::RelayServer;
 use crate::transport;
 
 /// Manages the lifecycle of an Iroh endpoint for P2P transport.
@@ -35,6 +39,9 @@ pub struct IrohEndpointManager {
     /// The Iroh Router for ALPN-based protocol dispatching.
     /// If None, protocol handlers must be registered separately.
     router: Option<Router>,
+    /// The embedded iroh relay server, if enabled.
+    #[cfg(feature = "relay-server")]
+    relay_server: parking_lot::Mutex<Option<RelayServer>>,
 }
 
 impl IrohEndpointManager {
@@ -95,6 +102,8 @@ impl IrohEndpointManager {
             secret_key,
             gossip,
             router: None, // Router is created later via spawn_router()
+            #[cfg(feature = "relay-server")]
+            relay_server: parking_lot::Mutex::new(None),
         })
     }
 
@@ -696,11 +705,75 @@ impl IrohEndpointManager {
         Ok(())
     }
 
+    /// Spawn an embedded iroh relay server.
+    ///
+    /// The relay server runs alongside the iroh endpoint, providing relay
+    /// services for cluster members that cannot establish direct connections.
+    ///
+    /// # Arguments
+    /// * `config` - Relay server configuration
+    /// * `allowed_endpoints` - Shared set of authorized endpoint IDs
+    ///
+    /// # Tiger Style
+    /// - Must be called before `spawn_router()` so the relay URL is known
+    /// - Fails fast if the relay server cannot start
+    #[cfg(feature = "relay-server")]
+    pub async fn spawn_relay_server(
+        &self,
+        config: &crate::config::RelayServerConfig,
+        allowed_endpoints: AllowedEndpoints,
+    ) -> Result<()> {
+        let server = RelayServer::spawn(config, allowed_endpoints).await?;
+        tracing::info!(
+            relay_url = %server.relay_url(),
+            "embedded relay server ready"
+        );
+        let mut guard = self.relay_server.lock();
+        *guard = Some(server);
+        Ok(())
+    }
+
+    /// Store a pre-created relay server in this endpoint manager.
+    ///
+    /// Used during bootstrap when the relay server is spawned before
+    /// the endpoint manager is fully constructed.
+    #[cfg(feature = "relay-server")]
+    pub fn set_relay_server(&self, server: RelayServer) {
+        let mut guard = self.relay_server.lock();
+        *guard = Some(server);
+    }
+
+    /// Get the relay server's URL, if running.
+    #[cfg(feature = "relay-server")]
+    pub fn relay_url(&self) -> Option<String> {
+        let guard = self.relay_server.lock();
+        guard.as_ref().map(|s| s.relay_url())
+    }
+
+    /// Get access to the relay server's allowed-endpoints set, if running.
+    #[cfg(feature = "relay-server")]
+    pub fn relay_allowed_endpoints(&self) -> Option<AllowedEndpoints> {
+        let guard = self.relay_server.lock();
+        guard.as_ref().map(|s| s.allowed_endpoints().clone())
+    }
+
     /// Shutdown the endpoint and close all connections.
     ///
     /// Tiger Style: Explicit cleanup with bounded wait time.
     pub async fn shutdown(&self) -> Result<()> {
-        // Shutdown the Router first (this stops accepting new connections)
+        // Shutdown the relay server first
+        #[cfg(feature = "relay-server")]
+        {
+            let relay = {
+                let mut guard = self.relay_server.lock();
+                guard.take()
+            };
+            if let Some(relay) = relay {
+                relay.shutdown().await.context("failed to shutdown relay server")?;
+            }
+        }
+
+        // Shutdown the Router (this stops accepting new connections)
         if let Some(router) = &self.router {
             router.shutdown().await.context("failed to shutdown Iroh Router")?;
             tracing::info!("Iroh Router shutdown complete");

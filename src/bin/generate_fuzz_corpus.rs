@@ -151,6 +151,7 @@ fn generate_http_api_corpus(corpus_dir: &Path) -> Result<()> {
                     addr: "127.0.0.1:5302".to_string(),
                     raft_addr: Some("127.0.0.1:5302".to_string()),
                     node_addr: None,
+                    relay_url: None,
                 },
             })
             .context("failed to serialize add_learner")?,

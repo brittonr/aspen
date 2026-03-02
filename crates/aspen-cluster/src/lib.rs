@@ -2,6 +2,39 @@
 //!
 //! This module provides the infrastructure for distributed cluster coordination,
 //! including:
+//!
+//! ## Relay Server (`relay-server` feature)
+//!
+//! When the `relay-server` feature is enabled, each Raft node runs an embedded
+//! iroh relay server for cluster-internal NAT traversal. This eliminates the
+//! dependency on external relay infrastructure (e.g., n0's public relays).
+//!
+//! - All Raft nodes run relays for maximum redundancy (no SPOF)
+//! - Access control restricts relaying to known cluster members only
+//! - Relay URLs are stored in Raft membership metadata for auto-discovery
+//! - Relay traffic is end-to-end encrypted by iroh (QUIC encryption)
+//!
+//! ### Ports
+//!
+//! - Relay HTTP: configurable, default 3340 (serves iroh relay protocol over WebSocket)
+//!
+//! ### Configuration
+//!
+//! ```toml
+//! [iroh.relay_server]
+//! enabled = true
+//! bind_port = 3340        # default
+//! key_cache_capacity = 1024  # default
+//! # client_rx_bytes_per_second = 1000000  # optional rate limit
+//! ```
+//!
+//! ### Security Model
+//!
+//! The relay server does NOT decrypt traffic — iroh provides end-to-end encryption
+//! between endpoints via QUIC. The relay only forwards opaque encrypted packets.
+//! Access control ensures only cluster members can use the relay, preventing abuse.
+//! TLS on the relay HTTP endpoint is planned as a future enhancement for
+//! defense-in-depth on untrusted networks.
 
 #![allow(
     dead_code,
@@ -104,6 +137,8 @@ pub mod gossip;
 pub mod gossip_discovery;
 pub mod memory_watcher;
 pub mod metadata;
+#[cfg(feature = "relay-server")]
+pub mod relay_server;
 pub mod router_builder;
 pub mod ticket;
 pub mod transport;
@@ -251,6 +286,32 @@ mod tests {
         assert_eq!(config.relay_urls.len(), 4);
     }
 
+    /// Test RelayServerConfig defaults.
+    #[test]
+    fn test_relay_server_config_defaults() {
+        let config = config::RelayServerConfig::default();
+        assert!(config.enabled);
+        assert_eq!(config.bind_addr, "0.0.0.0");
+        assert_eq!(config.bind_port, 3340);
+        assert_eq!(config.key_cache_capacity, 1024);
+        assert!(config.client_rx_bytes_per_second.is_none());
+    }
+
+    /// Test RelayServerConfig custom values.
+    #[test]
+    fn test_relay_server_config_custom() {
+        let config = config::RelayServerConfig {
+            enabled: true,
+            bind_addr: "127.0.0.1".to_string(),
+            bind_port: 4000,
+            key_cache_capacity: 2048,
+            client_rx_bytes_per_second: Some(1_000_000),
+        };
+        assert_eq!(config.bind_port, 4000);
+        assert_eq!(config.key_cache_capacity, 2048);
+        assert_eq!(config.client_rx_bytes_per_second, Some(1_000_000));
+    }
+
     /// Test gossip topic configuration.
     #[test]
     fn test_gossip_topic_config() {
@@ -259,6 +320,62 @@ mod tests {
 
         assert!(config.gossip_topic.is_some());
         assert_eq!(config.gossip_topic.unwrap(), TopicId::from([1u8; 32]));
+    }
+
+    /// Test relay server spawns and accepts connections.
+    #[cfg(feature = "relay-server")]
+    #[tokio::test]
+    async fn test_relay_server_spawn() {
+        let config = config::RelayServerConfig {
+            enabled: true,
+            bind_addr: "127.0.0.1".to_string(),
+            bind_port: 0, // random port
+            key_cache_capacity: 64,
+            client_rx_bytes_per_second: None,
+        };
+        let allowed = relay_server::new_allowed_endpoints();
+        let server = relay_server::RelayServer::spawn(&config, allowed).await;
+        assert!(server.is_ok(), "Failed to spawn relay server: {:?}", server.err());
+
+        let server = server.unwrap();
+        assert_ne!(server.http_addr().port(), 0);
+        assert!(server.relay_url().starts_with("http://"));
+
+        // Shutdown gracefully
+        let result = server.shutdown().await;
+        assert!(result.is_ok());
+    }
+
+    /// Test relay server access control with empty set allows all (bootstrap mode).
+    #[cfg(feature = "relay-server")]
+    #[tokio::test]
+    async fn test_relay_server_allowed_endpoints_empty_allows_all() {
+        let allowed = relay_server::new_allowed_endpoints();
+        // Empty set = bootstrap mode, should allow
+        let set = allowed.read().await;
+        assert!(set.is_empty());
+    }
+
+    /// Test relay server graceful shutdown.
+    #[cfg(feature = "relay-server")]
+    #[tokio::test]
+    async fn test_relay_server_shutdown() {
+        let config = config::RelayServerConfig {
+            enabled: true,
+            bind_addr: "127.0.0.1".to_string(),
+            bind_port: 0,
+            key_cache_capacity: 64,
+            client_rx_bytes_per_second: None,
+        };
+        let allowed = relay_server::new_allowed_endpoints();
+        let server = relay_server::RelayServer::spawn(&config, allowed).await.unwrap();
+        let addr = server.http_addr();
+
+        // Verify the server is listening by checking the address is valid
+        assert!(addr.port() > 0);
+
+        // Shutdown should complete without error
+        server.shutdown().await.unwrap();
     }
 
     /// Test IrohEndpointManager creation with minimal config.

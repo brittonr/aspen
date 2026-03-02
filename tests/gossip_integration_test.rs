@@ -30,7 +30,7 @@ fn create_test_config(node_id: u64, enable_gossip: bool) -> NodeConfig {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
+        iroh: aspen::cluster::config::IrohConfig {
             secret_key: None,
             enable_gossip,
             gossip_ticket: None,
@@ -47,6 +47,7 @@ fn create_test_config(node_id: u64, enable_gossip: bool) -> NodeConfig {
             relay_urls: Vec::new(),
             enable_raft_auth: false,
             bind_port: 0,
+            relay_server: None,
         },
         ..Default::default()
     }
@@ -205,7 +206,7 @@ fn test_config_gossip_enabled_by_default() {
 
 #[test]
 fn test_config_gossip_disabled() {
-    let config = IrohConfig {
+    let config = aspen::cluster::config::IrohConfig {
         enable_gossip: false,
         ..Default::default()
     };
@@ -218,7 +219,7 @@ fn test_config_with_ticket() {
     let ticket = AspenClusterTicket::new(topic_id, "test".into());
     let ticket_str = ticket.serialize();
 
-    let config = IrohConfig {
+    let config = aspen::cluster::config::IrohConfig {
         secret_key: None,
         enable_gossip: true,
         gossip_ticket: Some(ticket_str.clone()),
@@ -235,6 +236,7 @@ fn test_config_with_ticket() {
         relay_urls: Vec::new(),
         enable_raft_auth: false,
         bind_port: 0,
+        relay_server: None,
     };
 
     assert_eq!(config.gossip_ticket, Some(ticket_str));
@@ -295,7 +297,7 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
         node_id: 1,
         host: "127.0.0.1".into(),
         cookie: "base-cookie".into(),
-        iroh: IrohConfig {
+        iroh: aspen::cluster::config::IrohConfig {
             secret_key: None,
             enable_gossip: true,
             gossip_ticket: None,
@@ -312,6 +314,7 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             relay_urls: Vec::new(),
             enable_raft_auth: false,
             bind_port: 0,
+            relay_server: None,
         },
         ..Default::default()
     };
@@ -320,7 +323,7 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
         node_id: 0,
         host: "127.0.0.1".into(),
         cookie: "base-cookie".into(),
-        iroh: IrohConfig {
+        iroh: aspen::cluster::config::IrohConfig {
             secret_key: None,
             enable_gossip: false, // Override to disable
             gossip_ticket: Some("test-ticket".into()),
@@ -337,6 +340,7 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             relay_urls: Vec::new(),
             enable_raft_auth: true, // Override to enable
             bind_port: 0,
+            relay_server: None,
         },
         ..Default::default()
     };

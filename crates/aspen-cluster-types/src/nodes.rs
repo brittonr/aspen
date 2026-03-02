@@ -177,6 +177,12 @@ pub struct ClusterNode {
     pub raft_addr: Option<String>,
     /// P2P endpoint address for connecting to this node.
     pub node_addr: Option<NodeAddress>,
+    /// Optional relay server URL if this node runs an embedded relay.
+    ///
+    /// When present, other cluster nodes can use this URL for NAT traversal
+    /// via the cluster's own relay infrastructure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay_url: Option<String>,
 }
 
 impl ClusterNode {
@@ -187,6 +193,7 @@ impl ClusterNode {
             addr: addr.into(),
             raft_addr,
             node_addr: None,
+            relay_url: None,
         }
     }
 
@@ -197,12 +204,19 @@ impl ClusterNode {
             addr: node_addr.id(),
             raft_addr: None,
             node_addr: Some(node_addr),
+            relay_url: None,
         }
     }
 
     /// Create a ClusterNode with an iroh EndpointAddr.
     pub fn with_iroh_addr(id: u64, iroh_addr: iroh::EndpointAddr) -> Self {
         Self::with_node_addr(id, NodeAddress::new(iroh_addr))
+    }
+
+    /// Set the relay URL for this cluster node.
+    pub fn with_relay_url(mut self, relay_url: String) -> Self {
+        self.relay_url = Some(relay_url);
+        self
     }
 
     /// Get the node address as an iroh EndpointAddr, if available.

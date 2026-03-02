@@ -6,6 +6,8 @@ use iroh::SecretKey;
 use iroh_gossip::proto::TopicId;
 
 use crate::config;
+#[cfg(feature = "relay-server")]
+use crate::config::RelayServerConfig;
 
 /// Configuration for Iroh endpoint creation.
 ///
@@ -130,6 +132,11 @@ pub struct IrohEndpointConfig {
     /// - Testing scenarios without Router
     /// - Custom endpoint configurations
     pub alpns: Vec<Vec<u8>>,
+    /// Relay server configuration (feature-gated behind `relay-server`).
+    ///
+    /// When set, the endpoint manager will spawn an embedded iroh relay server.
+    #[cfg(feature = "relay-server")]
+    pub relay_server_config: Option<RelayServerConfig>,
 }
 
 impl Default for IrohEndpointConfig {
@@ -153,6 +160,8 @@ impl Default for IrohEndpointConfig {
             relay_mode: config::RelayMode::Default,
             relay_urls: Vec::new(),
             alpns: Vec::new(),
+            #[cfg(feature = "relay-server")]
+            relay_server_config: None,
         }
     }
 }
@@ -314,6 +323,16 @@ impl IrohEndpointConfig {
     /// Add a single ALPN to accept on this endpoint.
     pub fn with_alpn(mut self, alpn: Vec<u8>) -> Self {
         self.alpns.push(alpn);
+        self
+    }
+
+    #[cfg(feature = "relay-server")]
+    /// Set the relay server configuration.
+    ///
+    /// When set, the endpoint manager will spawn an embedded iroh relay server
+    /// on the configured address and port.
+    pub fn with_relay_server(mut self, config: RelayServerConfig) -> Self {
+        self.relay_server_config = Some(config);
         self
     }
 }

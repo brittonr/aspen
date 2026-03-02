@@ -39,6 +39,7 @@ iroh-base = "0.95.1"
 iroh-blobs = { version = "0.97", optional = true }
 iroh-gossip = "0.95"
 iroh-docs = { version = "0.95", optional = true }
+iroh-relay = { version = "0.95.1", features = ["server"], optional = true }
 iroh-tickets = "0.2"
 irpc = { version = "0.11.0", features = ["derive"] }
 
@@ -102,3 +103,4 @@ jobs = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance"]
 hooks = ["dep:aspen-hooks", "dep:aspen-cluster-bridges", "aspen-cluster-bridges?/hooks", "jobs"]
 nickel = ["dep:aspen-nickel"]
 proxy = ["dep:aspen-proxy"]
+relay-server = ["dep:iroh-relay"]

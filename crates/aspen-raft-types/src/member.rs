@@ -26,12 +26,29 @@ use serde::Serialize;
 pub struct RaftMemberInfo {
     /// The Iroh endpoint address for connecting to this node.
     pub iroh_addr: EndpointAddr,
+    /// Optional cluster-internal relay server URL for this node.
+    ///
+    /// When a node runs its own relay server, this field stores the URL
+    /// (e.g., "https://relay.example.com") to enable other cluster members
+    /// to use it for NAT traversal and P2P connectivity.
+    pub relay_url: Option<String>,
 }
 
 impl RaftMemberInfo {
     /// Creates a new `RaftMemberInfo` with the given Iroh endpoint address.
     pub fn new(iroh_addr: EndpointAddr) -> Self {
-        Self { iroh_addr }
+        Self {
+            iroh_addr,
+            relay_url: None,
+        }
+    }
+
+    /// Creates a new `RaftMemberInfo` with an endpoint address and relay URL.
+    pub fn with_relay(iroh_addr: EndpointAddr, relay_url: String) -> Self {
+        Self {
+            iroh_addr,
+            relay_url: Some(relay_url),
+        }
     }
 }
 
@@ -48,6 +65,7 @@ impl Default for RaftMemberInfo {
 
         Self {
             iroh_addr: EndpointAddr::new(endpoint_id),
+            relay_url: None,
         }
     }
 }

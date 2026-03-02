@@ -66,7 +66,7 @@ mod cluster;
 mod docs;
 mod federation;
 mod forge;
-mod iroh;
+mod iroh_config;
 mod nix_cache;
 mod peer_sync;
 mod proxy;
@@ -111,13 +111,13 @@ use federation::default_federation_gossip;
 use federation::default_federation_max_peers;
 pub use federation::*;
 pub use forge::*;
-use iroh::default_enable_gossip;
-use iroh::default_enable_mdns;
-use iroh::default_enable_pkarr_dht;
-use iroh::default_enable_pkarr_relay;
-use iroh::default_include_pkarr_direct_addresses;
-use iroh::default_pkarr_republish_delay_secs;
-pub use iroh::*;
+use iroh_config::default_enable_gossip;
+use iroh_config::default_enable_mdns;
+use iroh_config::default_enable_pkarr_dht;
+use iroh_config::default_enable_pkarr_relay;
+use iroh_config::default_include_pkarr_direct_addresses;
+use iroh_config::default_pkarr_republish_delay_secs;
+pub use iroh_config::*;
 use nix_cache::default_enable_ci_substituter;
 use nix_cache::default_nix_cache_priority;
 use nix_cache::default_nix_cache_transit_mount;
@@ -779,6 +779,9 @@ fn merge_iroh_config(target: &mut IrohConfig, other: IrohConfig) {
     if !other.relay_urls.is_empty() {
         target.relay_urls = other.relay_urls;
     }
+    if other.relay_server.is_some() {
+        target.relay_server = other.relay_server;
+    }
     if other.enable_raft_auth {
         target.enable_raft_auth = other.enable_raft_auth;
     }
@@ -1038,6 +1041,16 @@ fn from_env_iroh() -> IrohConfig {
         pkarr_relay_url: parse_env("ASPEN_IROH_PKARR_RELAY_URL"),
         relay_mode: parse_env("ASPEN_IROH_RELAY_MODE").unwrap_or_default(),
         relay_urls: parse_env_vec("ASPEN_IROH_RELAY_URLS"),
+        relay_server: parse_env::<bool>("ASPEN_RELAY_SERVER_ENABLED").map(|enabled| {
+            let mut config = RelayServerConfig {
+                enabled,
+                ..Default::default()
+            };
+            if let Some(port) = parse_env::<u16>("ASPEN_RELAY_SERVER_PORT") {
+                config.bind_port = port;
+            }
+            config
+        }),
         enable_raft_auth: parse_env("ASPEN_IROH_ENABLE_RAFT_AUTH").unwrap_or(false),
         bind_port: parse_env("ASPEN_IROH_BIND_PORT").unwrap_or(0),
     }
@@ -1357,7 +1370,7 @@ mod tests {
             heartbeat_interval_ms: 1000,
             election_timeout_min_ms: 2000,
             election_timeout_max_ms: 4000,
-            iroh: IrohConfig {
+            iroh: iroh_config::IrohConfig {
                 secret_key: Some("a".repeat(64)),
                 enable_gossip: false,
                 gossip_ticket: Some("test-ticket".into()),
@@ -1372,6 +1385,7 @@ mod tests {
                 pkarr_relay_url: Some("https://pkarr.example.com".into()),
                 relay_mode: RelayMode::Custom,
                 relay_urls: vec!["https://relay1.example.com".into()],
+                relay_server: None,
                 enable_raft_auth: false,
                 bind_port: 7777,
             },

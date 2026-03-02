@@ -47,6 +47,77 @@ impl std::str::FromStr for RelayMode {
     }
 }
 
+/// Configuration for the embedded iroh relay server.
+///
+/// When enabled, the node runs an iroh relay server that allows other
+/// cluster members to relay encrypted traffic through this node for
+/// NAT traversal. All Raft nodes in the cluster run relay servers
+/// for maximum redundancy.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RelayServerConfig {
+    /// Whether the relay server is enabled.
+    ///
+    /// Default: true (when the `relay-server` feature is compiled in).
+    #[serde(default = "default_relay_server_enabled")]
+    pub enabled: bool,
+
+    /// Bind address for the relay HTTP server.
+    ///
+    /// Default: "0.0.0.0" (all interfaces).
+    #[serde(default = "default_relay_server_bind_addr")]
+    pub bind_addr: String,
+
+    /// Port for the relay HTTP server.
+    ///
+    /// This port serves the iroh relay protocol over HTTP/WebSocket.
+    /// Default: 3340.
+    #[serde(default = "default_relay_server_bind_port")]
+    pub bind_port: u16,
+
+    /// Key cache capacity for the relay server.
+    ///
+    /// Number of endpoint keys to cache. Cluster relays serve far fewer
+    /// clients than public relays, so a small cache is sufficient.
+    /// Default: 1024.
+    #[serde(default = "default_relay_server_key_cache_capacity")]
+    pub key_cache_capacity: u32,
+
+    /// Optional client receive rate limit in bytes per second.
+    ///
+    /// When set, limits the rate of incoming data from each client connection.
+    /// Default: None (unlimited).
+    #[serde(default)]
+    pub client_rx_bytes_per_second: Option<u32>,
+}
+
+impl Default for RelayServerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_relay_server_enabled(),
+            bind_addr: default_relay_server_bind_addr(),
+            bind_port: default_relay_server_bind_port(),
+            key_cache_capacity: default_relay_server_key_cache_capacity(),
+            client_rx_bytes_per_second: None,
+        }
+    }
+}
+
+fn default_relay_server_enabled() -> bool {
+    true
+}
+
+fn default_relay_server_bind_addr() -> String {
+    "0.0.0.0".to_string()
+}
+
+fn default_relay_server_bind_port() -> u16 {
+    3340
+}
+
+fn default_relay_server_key_cache_capacity() -> u32 {
+    1024
+}
+
 /// Iroh networking configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct IrohConfig {
@@ -177,6 +248,16 @@ pub struct IrohConfig {
     #[serde(default)]
     pub relay_urls: Vec<String>,
 
+    /// Embedded relay server configuration.
+    ///
+    /// When the `relay-server` feature is enabled, each node can run an iroh relay
+    /// server for cluster-internal NAT traversal. When set, the relay server starts
+    /// automatically and other cluster nodes use it for relay fallback.
+    ///
+    /// Default: None (relay server not configured).
+    #[serde(default)]
+    pub relay_server: Option<RelayServerConfig>,
+
     /// Enable HMAC-SHA256 authentication for Raft RPC.
     ///
     /// When enabled, nodes perform mutual authentication using the cluster
@@ -214,6 +295,7 @@ impl Default for IrohConfig {
             pkarr_relay_url: None,
             relay_mode: RelayMode::default(),
             relay_urls: Vec::new(),
+            relay_server: None,
             enable_raft_auth: false,
             bind_port: 0,
         }

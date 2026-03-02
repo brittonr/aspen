@@ -21,7 +21,6 @@ use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::SecretKey;
 pub use multi_node::MultiNodeClient;
-pub use multi_node::NodeConnection;
 use tokio::sync::RwLock;
 use tracing::info;
 

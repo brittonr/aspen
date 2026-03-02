@@ -18,5 +18,4 @@ mod vault_ops;
 
 pub use state::App;
 pub use types::ActiveView;
-pub use types::ClusterOperation;
 pub use types::InputMode;

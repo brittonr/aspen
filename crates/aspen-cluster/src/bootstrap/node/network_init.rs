@@ -81,9 +81,36 @@ pub(super) fn build_iroh_config_from_node_config(config: &NodeConfig) -> Result<
 }
 
 /// Initialize Iroh endpoint manager.
+///
+/// When the `relay-server` feature is enabled and relay server config is present,
+/// spawns an embedded relay server and configures the endpoint to use it.
 pub(super) async fn initialize_iroh_endpoint(config: &NodeConfig) -> Result<Arc<IrohEndpointManager>> {
-    let iroh_config =
+    let mut iroh_config =
         build_iroh_config_from_node_config(config).context("failed to build Iroh config from NodeConfig")?;
+
+    // Spawn relay server before creating the endpoint so we can configure
+    // the endpoint's relay mode to use the cluster's own relay.
+    #[cfg(feature = "relay-server")]
+    let relay_server_resources = {
+        if let Some(ref relay_cfg) = config.iroh.relay_server {
+            if relay_cfg.enabled {
+                let allowed = crate::relay_server::new_allowed_endpoints();
+                let server = crate::relay_server::RelayServer::spawn(relay_cfg, allowed)
+                    .await
+                    .context("failed to spawn embedded relay server")?;
+                let relay_url = server.relay_url();
+
+                // Configure the endpoint to use our relay server
+                crate::relay_server::configure_endpoint_for_cluster_relay(&mut iroh_config, &relay_url);
+
+                Some(server)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
 
     let iroh_manager =
         Arc::new(IrohEndpointManager::new(iroh_config).await.context("failed to create Iroh endpoint manager")?);
@@ -92,6 +119,19 @@ pub(super) async fn initialize_iroh_endpoint(config: &NodeConfig) -> Result<Arc<
         endpoint_id = %iroh_manager.node_addr().id,
         "created Iroh endpoint"
     );
+
+    // Store the relay server in the endpoint manager
+    #[cfg(feature = "relay-server")]
+    if let Some(server) = relay_server_resources {
+        let relay_url = server.relay_url();
+        let allowed = server.allowed_endpoints().clone();
+        iroh_manager.set_relay_server(server);
+        info!(
+            relay_url = %relay_url,
+            "embedded relay server attached to endpoint manager"
+        );
+        let _ = allowed; // Will be used for membership updates
+    }
 
     Ok(iroh_manager)
 }
