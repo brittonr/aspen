@@ -1989,6 +1989,16 @@
                 aspenCliPackage = bins.full-aspen-cli-forge;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
               };
+            }
+            // lib.optionalAttrs (system == "x86_64-linux") {
+              # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.
+              # Boots a QEMU host that launches a CH guest running nginx,
+              # then curls it to verify the full microVM boot path works.
+              # No Aspen binaries needed — pure microvm.nix infrastructure test.
+              # Build: nix build .#checks.x86_64-linux.microvm-nginx-test
+              microvm-nginx-test = import ./nix/tests/microvm-nginx.nix {
+                inherit pkgs microvm;
+              };
             };
 
           # Base apps available on all systems
@@ -2918,6 +2928,20 @@
                 ci-vm-runner = ciVmConfig.config.microvm.runner.cloud-hypervisor;
                 # VirtioFS test initramfs
                 inherit virtiofsTestInitrd;
+
+                # Minimal nginx microVM — smoke test for the Cloud Hypervisor boot path
+                # Build: nix build .#nginx-vm-runner
+                # Run:   ./result/bin/microvm-run
+                nginx-vm-runner = let
+                  nginxVm = nixpkgs.lib.nixosSystem {
+                    system = "x86_64-linux";
+                    modules = [
+                      microvm.nixosModules.microvm
+                      ./nix/vms/nginx-demo.nix
+                    ];
+                  };
+                in
+                  nginxVm.config.microvm.runner.cloud-hypervisor;
               }
             );
         }
