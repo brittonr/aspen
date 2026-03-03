@@ -104,11 +104,11 @@
 - [x] 8.2 Implement auto DNS record creation in `registry.rs`: when `publish()` is called, also call `DnsStore::set_record()` to create SRV (`_tcp.{name}.aspen`) and A (`{name}.aspen`) records in the `aspen` zone
 - [x] 8.3 Implement auto DNS record deletion in `registry.rs`: when `unpublish()` is called, delete the corresponding SRV and A records via `DnsStore::delete_record()`
 - [x] 8.4 Implement loopback address allocator for A records: assign `127.0.0.{2..255}` to services, LRU eviction when full, consistent assignment for same service name
-- [ ] 8.5 In daemon: create `AspenDnsClient` using `DnsClientTicket` from cluster, sync `aspen` zone via iroh-docs
-- [ ] 8.6 In daemon: start `DnsProtocolServer` with zone `["aspen"]`, upstream forwarding to system resolver, bind on configured port (default 5353)
-- [ ] 8.7 In daemon: wire `--no-dns` flag to skip DNS server startup
-- [ ] 8.8 Integration test: publish service, verify DNS A and SRV records resolvable via `DnsProtocolServer`
-- [ ] 8.9 Integration test: unpublish service, verify DNS records removed
+- [x] 8.5 In daemon: create `AspenDnsClient` using `DnsClientTicket` from cluster, sync `aspen` zone via iroh-docs
+- [x] 8.6 In daemon: start `DnsProtocolServer` with zone `["aspen"]`, upstream forwarding to system resolver, bind on configured port (default 5353)
+- [x] 8.7 In daemon: wire `--no-dns` flag to skip DNS server startup
+- [x] 8.8 Integration test: publish service, verify DNS A and SRV records resolvable via `DnsProtocolServer`
+- [x] 8.9 Integration test: unpublish service, verify DNS records removed
 
 ## 9. Client API RPC Types
 
@@ -129,7 +129,7 @@
 - [x] 10.3 Each handler: deserialize request, call `ServiceRegistry` method, serialize response. Token auth is enforced at the daemon/CLI level, not the RPC handler level (RPC handlers use cluster cookie auth like all other handlers).
 - [x] 10.4 Register net handler in `aspen-rpc-handlers` handler registry (feature-gated behind `net`)
 - [x] 10.5 Wire UpstreamProxy into node's iroh router when `net` feature is enabled (register on `iroh-http-proxy/1` ALPN) — `net` feature implies `proxy` which already registers UpstreamProxy
-- [ ] 10.6 Integration test: publish service via RPC, lookup via RPC, verify round-trip
+- [x] 10.6 Integration test: publish service via RPC, lookup via RPC, verify round-trip
 
 ## 11. Daemon Orchestration
 
@@ -162,19 +162,19 @@
 
 - [x] 13.1 In aspen-node startup (when `net` feature enabled): create `AspenUpstreamProxy` and register on router with `iroh-http-proxy/1` ALPN — `net` implies `proxy`, reuses existing UpstreamProxy registration
 - [x] 13.2 Use `AspenAuthHandler::with_trusted_peers()` for auth (same trusted-peers set as existing proxy, updated from Raft membership) — already done by proxy feature's router setup
-- [ ] 13.3 Verify: DownstreamProxy on daemon side can create_tunnel() to UpstreamProxy on node side
+- [x] 13.3 Verify: DownstreamProxy on daemon side can create_tunnel() to UpstreamProxy on node side
 
 ## 14. Tests
 
 - [x] 14.1 Unit tests for `verified/` pure functions (service name validation)
 - [x] 14.2 Unit tests in `aspen-auth`: NetConnect/NetPublish/NetAdmin capability authorization, prefix matching, delegation containment chains
-- [ ] 14.3 Integration test: full SOCKS5 tunnel — daemon with valid token connects to cluster, publishes service, resolves name, tunnels TCP through iroh to a local TCP echo server
-- [ ] 14.4 Integration test: port forward — forward local port to remote service, send data, receive response
-- [ ] 14.5 Integration test: token deny — daemon with `NetConnect { service_prefix: "allowed/" }` token, verify SOCKS5 returns connection refused for `denied/mydb`
-- [ ] 14.6 Integration test: expired token — daemon with expired token, verify new connections are rejected but existing tunnels continue
-- [ ] 14.7 Integration test: service publish/unpublish lifecycle — publish, verify lookup, unpublish, verify gone
-- [ ] 14.8 Integration test: delegation chain — root token delegates to team token with narrower scope, verify attenuation works
-- [ ] 14.9 NixOS VM integration test: multi-node cluster with daemon, publish postgres on node A, forward from node B, run SQL query through tunnel
+- [x] 14.3 Integration test: full SOCKS5 tunnel — daemon with valid token connects to cluster, publishes service, resolves name, tunnels TCP through iroh to a local TCP echo server
+- [x] 14.4 Integration test: port forward — forward local port to remote service, send data, receive response
+- [x] 14.5 Integration test: token deny — daemon with `NetConnect { service_prefix: "allowed/" }` token, verify SOCKS5 returns connection refused for `denied/mydb`
+- [x] 14.6 Integration test: expired token — daemon with expired token, verify new connections are rejected but existing tunnels continue
+- [x] 14.7 Integration test: service publish/unpublish lifecycle — publish, verify lookup, unpublish, verify gone
+- [x] 14.8 Integration test: delegation chain — root token delegates to team token with narrower scope, verify attenuation works
+- [x] 14.9 NixOS VM integration test: multi-node cluster with daemon, publish postgres on node A, forward from node B, run SQL query through tunnel
 
 ## 15. Documentation
 
