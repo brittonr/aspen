@@ -67,9 +67,9 @@
   - `check_connect(&self, service: &str, port: u16) -> Result<()>`: verify token + authorize NetConnect
   - `check_publish(&self, service: &str) -> Result<()>`: verify token + authorize NetPublish
   - `is_token_valid(&self) -> bool`: check expiration without full verification
-- [ ] 5.12 Add periodic revocation list refresh task (polls `KeyValueRevocationStore` every `NET_REVOCATION_POLL_INTERVAL_SECS`)
+- [x] 5.12 Add periodic revocation list refresh task (polls `KeyValueRevocationStore` every `NET_REVOCATION_POLL_INTERVAL_SECS`)
 - [x] 5.13 Unit tests in `aspen-auth`: NetConnect/NetPublish/NetAdmin authorization, prefix matching, delegation containment, NetAdmin contains all
-- [ ] 5.14 Unit tests in `aspen-net`: NetAuthenticator token verification, expired token rejection, connect/publish checks
+- [x] 5.14 Unit tests in `aspen-net`: NetAuthenticator token verification, expired token rejection, connect/publish checks
 
 ## 6. SOCKS5 Proxy Server
 
@@ -112,14 +112,14 @@
 
 ## 9. Client API RPC Types
 
-- [ ] 9.1 Add `NetPublish(NetPublishRequest)` variant to `ClientRpcRequest` in `aspen-client-api` (feature-gated behind `net`)
-- [ ] 9.2 Add `NetUnpublish(NetUnpublishRequest)` variant
-- [ ] 9.3 Add `NetLookup(NetLookupRequest)` variant
-- [ ] 9.4 Add `NetList(NetListRequest)` variant
-- [ ] 9.5 Add corresponding response variants to `ClientRpcResponse` (NetPublishResult, NetUnpublishResult, NetLookupResult, NetListResult)
+- [x] 9.1 Add `NetPublish(NetPublishRequest)` variant to `ClientRpcRequest` in `aspen-client-api` (feature-gated behind `net`)
+- [x] 9.2 Add `NetUnpublish(NetUnpublishRequest)` variant
+- [x] 9.3 Add `NetLookup(NetLookupRequest)` variant
+- [x] 9.4 Add `NetList(NetListRequest)` variant
+- [x] 9.5 Add corresponding response variants to `ClientRpcResponse` (NetPublishResult, NetUnpublishResult, NetLookupResult, NetListResult)
 - [ ] 9.6 Define request/response structs with serde derives in `aspen-client-api/src/net.rs` (feature-gated)
 - [ ] 9.7 Update `variant_name()`, `domain()`, `to_operation()` for all new variants
-- [ ] 9.8 Add to HANDLES list and update handles_count test
+- [x] 9.8 Add to HANDLES list and update handles_count test
 - [ ] 9.9 Verify postcard discriminant stability: add golden-file tests for new variants (they must be added AFTER all non-gated variants, before other feature-gated sections, or at the end of the feature-gated block)
 
 ## 10. RPC Handler
@@ -133,8 +133,8 @@
 
 ## 11. Daemon Orchestration
 
-- [ ] 11.1 Create `crates/aspen-net/src/daemon.rs` with `NetDaemon` struct holding: iroh `Endpoint`, `DownstreamProxy`, `NameResolver`, `NetAuthenticator`, `Socks5Server`, `AspenDnsClient` + `DnsProtocolServer` (optional), `CancellationToken`
-- [ ] 11.2 Implement `NetDaemon::start(config: DaemonConfig) -> Result<Self>`:
+- [x] 11.1 Create `crates/aspen-net/src/daemon.rs` with `NetDaemon` struct holding: iroh `Endpoint`, `DownstreamProxy`, `NameResolver`, `NetAuthenticator`, `Socks5Server`, `AspenDnsClient` + `DnsProtocolServer` (optional), `CancellationToken`
+- [x] 11.2 Implement `NetDaemon::start(config: DaemonConfig) -> Result<Self>`:
   - Create iroh endpoint
   - Connect to cluster via ticket (create a client that can make RPCs)
   - Initialize `ServiceRegistry` (via client RPCs)
@@ -144,10 +144,10 @@
   - Start `AspenDnsClient` + `DnsProtocolServer` if DNS enabled (not `--no-dns`)
   - Auto-publish configured local services
   - Spawn registry watcher task (polls every `NET_REGISTRY_POLL_INTERVAL_SECS`)
-- [ ] 11.3 Implement `NetDaemon::shutdown(&self)` with graceful drain
+- [x] 11.3 Implement `NetDaemon::shutdown(&self)` with graceful drain
 - [ ] 11.4 Create `crates/aspen-net/bin/aspen-net.rs` binary with clap CLI:
   - Subcommands: `up`, `down`, `forward`, `publish`, `unpublish`, `services`, `peers`, `status`
-- [ ] 11.5 Implement signal handling (SIGTERM, SIGINT → graceful shutdown)
+- [x] 11.5 Implement signal handling (SIGTERM, SIGINT → graceful shutdown)
 
 ## 12. CLI Integration
 
@@ -166,8 +166,8 @@
 
 ## 14. Tests
 
-- [ ] 14.1 Unit tests for `verified/` pure functions (service name validation)
-- [ ] 14.2 Unit tests in `aspen-auth`: NetConnect/NetPublish/NetAdmin capability authorization, prefix matching, delegation containment chains
+- [x] 14.1 Unit tests for `verified/` pure functions (service name validation)
+- [x] 14.2 Unit tests in `aspen-auth`: NetConnect/NetPublish/NetAdmin capability authorization, prefix matching, delegation containment chains
 - [ ] 14.3 Integration test: full SOCKS5 tunnel — daemon with valid token connects to cluster, publishes service, resolves name, tunnels TCP through iroh to a local TCP echo server
 - [ ] 14.4 Integration test: port forward — forward local port to remote service, send data, receive response
 - [ ] 14.5 Integration test: token deny — daemon with `NetConnect { service_prefix: "allowed/" }` token, verify SOCKS5 returns connection refused for `denied/mydb`
@@ -178,8 +178,8 @@
 
 ## 15. Documentation
 
-- [ ] 15.1 Crate-level rustdoc for `aspen-net` with architecture overview and usage examples
-- [ ] 15.2 Document `net` feature flag in workspace README and `AGENTS.md`
-- [ ] 15.3 Document KV schema (`/_sys/net/` prefix) in design doc or README
+- [x] 15.1 Crate-level rustdoc for `aspen-net` with architecture overview and usage examples
+- [x] 15.2 Document `net` feature flag in workspace README and `AGENTS.md`
+- [x] 15.3 Document KV schema (`/_sys/net/` prefix) in design doc or README
 - [ ] 15.4 Document CLI commands with examples in `aspen-net --help` and `aspen-cli net --help`
-- [ ] 15.5 Add `aspen-net` to the "Key Modules" section in `AGENTS.md`
+- [x] 15.5 Add `aspen-net` to the "Key Modules" section in `AGENTS.md`
