@@ -2000,6 +2000,14 @@
                 inherit pkgs microvm;
                 inherit (self.packages.${system}) aspen-virtiofs-test-server;
               };
+
+              # aspen-node in a Cloud Hypervisor microVM — proves the node boots,
+              # initializes Raft consensus, and spawns the Iroh router inside a VM.
+              # Build: nix build .#checks.x86_64-linux.microvm-aspen-node-test
+              microvm-aspen-node-test = import ./nix/tests/microvm-aspen-node.nix {
+                inherit pkgs microvm;
+                inherit (self.packages.${system}) aspen-node-vm-test;
+              };
             };
 
           # Base apps available on all systems
@@ -2917,24 +2925,30 @@
                     })
                   ];
                 };
-              in {
-                # CI VM kernel for Cloud Hypervisor worker
-                ci-vm-kernel = ciVmConfig.config.microvm.kernel;
-                # CI VM initrd for Cloud Hypervisor worker
-                ci-vm-initrd = ciVmConfig.config.system.build.initialRamdisk;
-                # CI VM toplevel (NixOS system with init script)
-                # The kernel cmdline needs init=${toplevel}/init to boot NixOS properly
-                ci-vm-toplevel = ciVmConfig.config.system.build.toplevel;
-                # Full CI VM runner (includes cloud-hypervisor command)
-                ci-vm-runner = ciVmConfig.config.microvm.runner.cloud-hypervisor;
-                # VirtioFS test initramfs
-                inherit virtiofsTestInitrd;
+              in
+                {
+                  # CI VM kernel for Cloud Hypervisor worker
+                  ci-vm-kernel = ciVmConfig.config.microvm.kernel;
+                  # CI VM initrd for Cloud Hypervisor worker
+                  ci-vm-initrd = ciVmConfig.config.system.build.initialRamdisk;
+                  # CI VM toplevel (NixOS system with init script)
+                  # The kernel cmdline needs init=${toplevel}/init to boot NixOS properly
+                  ci-vm-toplevel = ciVmConfig.config.system.build.toplevel;
+                  # Full CI VM runner (includes cloud-hypervisor command)
+                  ci-vm-runner = ciVmConfig.config.microvm.runner.cloud-hypervisor;
+                  # VirtioFS test initramfs
+                  inherit virtiofsTestInitrd;
 
-                # AspenFs VirtioFS test server — serves in-memory KV over vhost-user socket.
-                # Uses fullRawSrc (all crates present) but doesn't need external repos
-                # (no plugins, no wasm). Stubs out git deps that aspen-fuse doesn't need.
-                aspen-virtiofs-test-server = let
-                  fuseSrc = pkgs.runCommand "aspen-fuse-src" {} ''
+                  # ── Pure-eval workspace builds (no external repos needed) ─────
+                  # Uses fullRawSrc (all workspace crates) with stubs for external
+                  # deps (wasm plugins, iroh-proxy-utils, git deps). Works in pure
+                  # eval mode — no --impure, no sibling repos required.
+                  #
+                  # Used for: VM integration test binaries (aspen-fuse, aspen-node)
+                  # that need real workspace crates, not the lightweight stubs.
+                }
+                // (let
+                  pureSrc = pkgs.runCommand "aspen-pure-src" {} ''
                     mkdir -p $out/aspen
                     cp -r ${fullRawSrc}/. $out/aspen/
                     chmod -R u+w $out/aspen
@@ -2944,7 +2958,7 @@
                       ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/aspen/.cargo/config.toml
                     fi
 
-                    # Stub aspen-wasm-plugin (not needed for fuse, but workspace references it)
+                    # Stub aspen-wasm-plugin (workspace references it, but VM test binaries don't need it)
                     # Path matches workspace Cargo.toml: ../aspen-wasm-plugin/crates/aspen-wasm-plugin
                     mkdir -p "$out/aspen-wasm-plugin/crates/aspen-wasm-plugin/src"
                     cat > "$out/aspen-wasm-plugin/crates/aspen-wasm-plugin/Cargo.toml" << 'EOF'
@@ -3013,42 +3027,58 @@
                       -e 's|bolero-generator = "0.11"|bolero-generator = "0.13"|g' \
                       {} \;
                   '';
-                  fuseBasicArgs =
+                  pureBasicArgs =
                     basicArgs
                     // {
-                      src = fuseSrc;
+                      src = pureSrc;
                       postUnpack = ''sourceRoot="$sourceRoot/aspen"'';
                       cargoToml = ./Cargo.toml;
                       cargoExtraArgs = "";
                     };
-                  fuseCargoVendorDir = craneLib.vendorCargoDeps {
-                    src = fuseSrc + "/aspen";
+                  pureCargoVendorDir = craneLib.vendorCargoDeps {
+                    src = pureSrc + "/aspen";
                   };
-                in
-                  craneLib.buildPackage (
-                    fuseBasicArgs
-                    // {
-                      inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                      cargoVendorDir = fuseCargoVendorDir;
-                      cargoExtraArgs = "--package aspen-fuse --bin aspen-virtiofs-test-server --features virtiofs";
-                      doCheck = false;
-                    }
-                  );
+                  pureBin = {
+                    name,
+                    cargoExtraArgs,
+                  }:
+                    craneLib.buildPackage (
+                      pureBasicArgs
+                      // {
+                        inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                        inherit cargoExtraArgs;
+                        cargoVendorDir = pureCargoVendorDir;
+                        doCheck = false;
+                      }
+                    );
+                in {
+                  # AspenFs VirtioFS test server — serves in-memory KV over vhost-user socket
+                  aspen-virtiofs-test-server = pureBin {
+                    name = "aspen-virtiofs-test-server";
+                    cargoExtraArgs = "--package aspen-fuse --bin aspen-virtiofs-test-server --features virtiofs";
+                  };
 
-                # Minimal nginx microVM — smoke test for the Cloud Hypervisor boot path
-                # Build: nix build .#nginx-vm-runner
-                # Run:   ./result/bin/microvm-run
-                nginx-vm-runner = let
-                  nginxVm = nixpkgs.lib.nixosSystem {
-                    system = "x86_64-linux";
-                    modules = [
-                      microvm.nixosModules.microvm
-                      ./nix/vms/nginx-demo.nix
-                    ];
+                  # aspen-node for VM integration tests (no plugins, no wasm)
+                  aspen-node-vm-test = pureBin {
+                    name = "aspen-node-vm-test";
+                    cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets";
                   };
-                in
-                  nginxVm.config.microvm.runner.cloud-hypervisor;
-              }
+                })
+                // {
+                  # Minimal nginx microVM — smoke test for the Cloud Hypervisor boot path
+                  # Build: nix build .#nginx-vm-runner
+                  # Run:   ./result/bin/microvm-run
+                  nginx-vm-runner = let
+                    nginxVm = nixpkgs.lib.nixosSystem {
+                      system = "x86_64-linux";
+                      modules = [
+                        microvm.nixosModules.microvm
+                        ./nix/vms/nginx-demo.nix
+                      ];
+                    };
+                  in
+                    nginxVm.config.microvm.runner.cloud-hypervisor;
+                }
             );
         }
         // {
