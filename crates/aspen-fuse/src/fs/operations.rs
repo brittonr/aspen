@@ -210,7 +210,7 @@ impl FileSystem for AspenFs {
         // Scan for children
         let keys = self.kv_scan(&prefix)?;
 
-        // Extract direct children (not nested)
+        // Extract direct children (not nested), filtering out internal keys
         let mut children: BTreeSet<String> = BTreeSet::new();
         let prefix_len = prefix.len();
 
@@ -222,6 +222,16 @@ impl FileSystem for AspenFs {
                     Some(pos) => &suffix[..pos],
                     None => suffix,
                 };
+
+                // Filter out internal keys: .meta, .symlink, .xattr., .chunk.
+                if child.ends_with(META_SUFFIX)
+                    || child.ends_with(SYMLINK_SUFFIX)
+                    || child.contains(crate::constants::XATTR_PREFIX)
+                    || child.contains(crate::constants::CHUNK_KEY_SUFFIX)
+                {
+                    continue;
+                }
+
                 children.insert(child.to_string());
             }
         }
@@ -357,18 +367,14 @@ impl FileSystem for AspenFs {
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         let key = Self::path_to_key(&entry.path)?;
-        let value = self.kv_read(&key)?.unwrap_or_default();
 
-        // Calculate read range
-        let start = offset as usize;
-        if start >= value.len() {
+        // Use chunked read — only fetches the chunks that overlap with the range
+        let data = crate::chunking::chunked_read_range(self, &key, offset, size)?;
+        if data.is_empty() {
             return Ok(0);
         }
-        let end = std::cmp::min(start + size as usize, value.len());
-        let data = &value[start..end];
 
-        // Write to buffer
-        w.write_all(data)?;
+        w.write_all(&data)?;
         Ok(data.len())
     }
 
@@ -395,24 +401,12 @@ impl FileSystem for AspenFs {
 
         let key = Self::path_to_key(&entry.path)?;
 
-        // Read existing value
-        let mut value = self.kv_read(&key)?.unwrap_or_default();
-
-        // Extend if needed
-        let end = offset as usize + size as usize;
-        if value.len() < end {
-            value.resize(end, 0);
-        }
-
-        // Read new data into buffer
+        // Read new data from the FUSE client
         let mut buf = vec![0u8; size as usize];
         r.read_exact(&mut buf)?;
 
-        // Copy to value
-        value[offset as usize..end].copy_from_slice(&buf);
-
-        // Write back
-        self.kv_write(&key, &value)?;
+        // Use chunked write — only updates affected chunks
+        crate::chunking::chunked_write_range(self, &key, offset, &buf)?;
 
         // Update timestamps: both mtime and ctime change on write
         let meta = self.read_metadata(&key)?.unwrap_or_else(FileMetadata::now).touch();
@@ -500,8 +494,8 @@ impl FileSystem for AspenFs {
 
         let key = Self::path_to_key(&child_path)?;
 
-        // Delete from KV (data + metadata)
-        self.kv_delete(&key)?;
+        // Delete from KV (data + all chunks + metadata)
+        crate::chunking::chunked_delete(self, &key)?;
         let _ = self.delete_metadata(&key);
 
         // Remove from inode cache
@@ -934,18 +928,12 @@ impl FileSystem for AspenFs {
 impl AspenFs {
     /// Rename a file or symlink by copying data, metadata, and xattrs to the new key.
     fn rename_file_or_symlink(&self, old_key: &str, new_key: &str) -> std::io::Result<()> {
-        // Read old value
-        let value = self.kv_read(old_key)?.unwrap_or_default();
+        // Use chunked rename — handles both small files and chunked large files
+        crate::chunking::chunked_rename(self, old_key, new_key)?;
 
-        // For symlinks, also copy the target
+        // For symlinks, also move the target
         let symlink_old = format!("{}{}", old_key, SYMLINK_SUFFIX);
-        let symlink_target = self.kv_read(&symlink_old)?;
-
-        // Write to new location
-        self.kv_write(new_key, &value)?;
-
-        // If symlink, also write target
-        if let Some(target) = symlink_target {
+        if let Some(target) = self.kv_read(&symlink_old)? {
             let symlink_new = format!("{}{}", new_key, SYMLINK_SUFFIX);
             self.kv_write(&symlink_new, &target)?;
             self.kv_delete(&symlink_old)?;
@@ -957,9 +945,6 @@ impl AspenFs {
             self.write_metadata(new_key, &updated)?;
             let _ = self.delete_metadata(old_key);
         }
-
-        // Delete old
-        self.kv_delete(old_key)?;
 
         // Copy xattrs
         let xattr_prefix = format!("{}{}", old_key, XATTR_PREFIX);

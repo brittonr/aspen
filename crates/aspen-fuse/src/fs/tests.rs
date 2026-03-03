@@ -133,12 +133,22 @@ mod tests {
     }
 
     #[test]
-    fn test_kv_write_rejects_oversized_value() {
-        let fs = AspenFs::new_mock(1000, 1000);
-        let oversized_value = vec![0u8; MAX_VALUE_SIZE + 1];
-        let result = fs.kv_write("key", &oversized_value);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("value too large"));
+    fn test_chunked_write_handles_large_values() {
+        // kv_write no longer rejects oversized values directly — the chunking
+        // layer splits large files into chunks. Individual kv_write calls are
+        // always within chunk size limits.
+        let fs = AspenFs::new_in_memory(1000, 1000);
+        let large_value = vec![0xAB; crate::constants::CHUNK_SIZE + 100];
+        let result = crate::chunking::chunked_write(&fs, "key", &large_value);
+        assert!(result.is_ok());
+
+        // Verify it's stored as chunks
+        let stored = fs.kv_read("key").unwrap().unwrap();
+        assert!(crate::chunking::is_chunk_manifest(&stored));
+
+        // Verify round-trip
+        let read_back = crate::chunking::chunked_read(&fs, "key").unwrap().unwrap();
+        assert_eq!(read_back, large_value);
     }
 
     #[test]

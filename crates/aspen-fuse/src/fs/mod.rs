@@ -34,7 +34,6 @@ use crate::constants::DEFAULT_SYMLINK_MODE;
 use crate::constants::ENTRY_TTL;
 use crate::constants::MAX_KEY_SIZE;
 use crate::constants::MAX_READDIR_ENTRIES;
-use crate::constants::MAX_VALUE_SIZE;
 use crate::constants::META_SUFFIX;
 use crate::constants::ROOT_INODE;
 use crate::inode::EntryType;
@@ -328,7 +327,7 @@ impl AspenFs {
     }
 
     /// Read a key from the KV store (with caching).
-    fn kv_read(&self, key: &str) -> std::io::Result<Option<Vec<u8>>> {
+    pub(crate) fn kv_read(&self, key: &str) -> std::io::Result<Option<Vec<u8>>> {
         // Check cache first
         if let Some(cached) = self.cache.get_data(key) {
             return Ok(Some(cached));
@@ -357,13 +356,14 @@ impl AspenFs {
     }
 
     /// Write a key to the KV store (invalidates cache).
-    fn kv_write(&self, key: &str, value: &[u8]) -> std::io::Result<()> {
+    ///
+    /// Individual chunks are within CHUNK_SIZE (512KB) which is under the
+    /// KV store's max value size, so no size check needed here — the chunking
+    /// layer handles splitting large files.
+    pub(crate) fn kv_write(&self, key: &str, value: &[u8]) -> std::io::Result<()> {
         let prefixed = self.prefixed_key(key);
         if prefixed.len() > MAX_KEY_SIZE {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "key too large"));
-        }
-        if value.len() > MAX_VALUE_SIZE {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "value too large"));
         }
 
         match &self.backend {
@@ -387,7 +387,7 @@ impl AspenFs {
     }
 
     /// Delete a key from the KV store (invalidates cache).
-    fn kv_delete(&self, key: &str) -> std::io::Result<()> {
+    pub(crate) fn kv_delete(&self, key: &str) -> std::io::Result<()> {
         match &self.backend {
             KvBackend::Client(client) => {
                 let prefixed = self.prefixed_key(key);
@@ -411,7 +411,7 @@ impl AspenFs {
     }
 
     /// Scan keys with a prefix from the KV store (with caching).
-    fn kv_scan(&self, prefix: &str) -> std::io::Result<Vec<String>> {
+    pub(crate) fn kv_scan(&self, prefix: &str) -> std::io::Result<Vec<String>> {
         // Check cache first
         if let Some(cached) = self.cache.get_scan(prefix) {
             return Ok(cached);
@@ -489,7 +489,7 @@ impl AspenFs {
         let key = Self::path_to_key(path)?;
         let (size, meta) = match entry_type {
             EntryType::File => {
-                let sz = self.kv_read(&key)?.map(|v| v.len() as u64).unwrap_or(0);
+                let sz = crate::chunking::chunked_size(self, &key)?.unwrap_or(0);
                 let meta = self.read_metadata(&key)?;
                 (sz, meta)
             }

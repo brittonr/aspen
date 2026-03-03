@@ -30,6 +30,22 @@ pub const MAX_KEY_SIZE: usize = 1024;
 /// Maximum value size in bytes (1 MB).
 pub const MAX_VALUE_SIZE: usize = 1024 * 1024;
 
+// ============================================================================
+// File Chunking
+// ============================================================================
+
+/// Chunk size for large files (512 KB). Files larger than this are split.
+pub const CHUNK_SIZE: usize = 512 * 1024;
+
+/// Maximum file size (4 GB). Theoretical limit with u32 chunk count.
+pub const MAX_FILE_SIZE: u64 = 4 * 1024 * 1024 * 1024;
+
+/// Magic bytes for chunk manifest entries (distinguishes from raw file data).
+pub const CHUNK_MANIFEST_MAGIC: &[u8] = b"ASPEN_CHUNKED\x00";
+
+/// Suffix for chunk keys.
+pub const CHUNK_KEY_SUFFIX: &str = ".chunk.";
+
 /// Connection timeout for Aspen cluster.
 pub const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -159,3 +175,11 @@ const _: () = assert!(CACHE_MAX_SCAN_ENTRIES > 0);
 
 // Connection pool
 const _: () = assert!(POOL_MAX_CONNECTIONS > 0);
+
+// Chunking limits
+const _: () = assert!(CHUNK_SIZE > 0);
+const _: () = assert!(CHUNK_SIZE < MAX_VALUE_SIZE); // Chunks must fit in KV values
+const _: () = assert!(MAX_FILE_SIZE > 0);
+const _: () = assert!(MAX_FILE_SIZE > CHUNK_SIZE as u64); // Max must be larger than chunk
+const _: () = assert!(!CHUNK_MANIFEST_MAGIC.is_empty());
+const _: () = assert!(!CHUNK_KEY_SUFFIX.is_empty());

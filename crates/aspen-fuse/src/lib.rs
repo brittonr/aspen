@@ -33,6 +33,7 @@
 //! - Bounded retries with backoff
 
 pub mod cache;
+pub mod chunking;
 pub mod client;
 pub mod constants;
 pub mod fs;
@@ -42,6 +43,8 @@ pub mod metadata;
 #[cfg(feature = "virtiofs")]
 pub mod virtiofs;
 
+pub use chunking::chunked_read;
+pub use chunking::chunked_write;
 pub use client::FuseSyncClient;
 pub use client::SharedClient;
 pub use fs::AspenFs;
