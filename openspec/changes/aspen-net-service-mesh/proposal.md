@@ -13,7 +13,7 @@ A traditional VPN approach (TUN device, IP allocation, IP routing) would fight a
 - SOCKS5 proxy server that resolves `*.aspen` service names and tunnels TCP connections through iroh QUIC via `DownstreamProxy::create_tunnel()`
 - Port forwarding command that wraps `DownstreamProxy` with `ProxyMode::Tcp` for direct local-port-to-remote-service mapping
 - Authorization via existing UCAN capability tokens (`aspen-auth`): new `NetConnect` and `NetPublish` capability variants enable decentralized, offline-verifiable access control with delegation chains — no central ACL store needed
-- MagicDNS stub resolver for `*.aspen` domains mapping to loopback addresses
+- DNS integration via existing `aspen-dns` sibling repo: service registrations auto-create DNS records, `DnsProtocolServer` serves `*.aspen` queries, records sync via iroh-docs P2P replication
 - Daemon mode (`aspen net up/down`) orchestrating SOCKS5 + DNS + service publishing
 - CLI subcommands under `aspen net` for publish, forward, proxy, status, and peers
 
@@ -30,7 +30,7 @@ A traditional VPN approach (TUN device, IP allocation, IP routing) would fight a
 
 ### Modified Capabilities
 
-- `cli`: New `aspen net` subcommand group with publish, unpublish, forward, proxy, status, peers, dns, up, down.
+- `cli`: New `aspen net` subcommand group with publish, unpublish, forward, proxy, status, peers, up, down.
 - `client-api`: New RPC variants for service mesh operations (NetPublish, NetUnpublish, NetLookup, NetList).
 - `auth`: New `Capability` variants (`NetConnect`, `NetPublish`, `NetAdmin`) and corresponding `Operation` variants in `aspen-auth`.
 - `rpc-handlers`: Registration of net service handler in the handler registry.
@@ -43,6 +43,6 @@ A traditional VPN approach (TUN device, IP allocation, IP routing) would fight a
 - **No kernel interface**: No TUN device, no root required, no IP allocation. Purely userspace.
 - **No new ALPN**: Uses existing `iroh-http-proxy/1` ALPN from iroh-proxy-utils for all tunneling.
 - **No central ACL store**: Authorization is token-based via `aspen-auth`. No `/_sys/net/acl/` keys needed. Token verification is local and offline.
-- **Raft KV schema**: New `/_sys/net/` key prefix for service registry and DNS overrides only.
+- **Raft KV schema**: New `/_sys/net/` key prefix for service registry. DNS records stored via `aspen-dns` under its own `dns:` prefix.
 - **Auth changes**: New `Capability` and `Operation` variants in `aspen-auth` (additive, no breaking changes).
 - **Feature gated**: Behind `net` feature flag so it's opt-in.

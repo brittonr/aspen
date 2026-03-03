@@ -85,6 +85,7 @@ members = [
     "crates/aspen-auth",
     "crates/aspen-sharding",
     "crates/aspen-proxy",
+    "crates/aspen-net",
     "crates/aspen-rpc-core",
 
     # Tier 4: RPC integration (always-on handlers)
@@ -226,6 +227,7 @@ openraft-macros = { path = "openraft/macros", version = "0.10.0" }
 aspen-cluster = { path = "crates/aspen-cluster" }
 aspen-transport = { path = "crates/aspen-transport" }
 aspen-proxy = { path = "crates/aspen-proxy" }
+aspen-net = { path = "crates/aspen-net" }
 aspen-dht-discovery = { path = "crates/aspen-dht-discovery" }
 aspen-rpc-core = { path = "crates/aspen-rpc-core" }
 aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers", default-features = false }
@@ -333,6 +335,7 @@ snix-castore = { workspace = true, optional = true }
 snix-store = { workspace = true, optional = true }
 
 aspen-proxy = { workspace = true, optional = true }
+aspen-net = { workspace = true, optional = true }
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
 iroh-gossip = "0.95"
@@ -416,7 +419,7 @@ cloud-hypervisor-client = "0.3"
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
 default = []
 
-full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "relay-server"]
+full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server"]
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
@@ -443,6 +446,7 @@ hooks = ["dep:aspen-hooks", "aspen-rpc-handlers/hooks", "aspen-cluster/hooks", "
 jobs = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance", "aspen-rpc-handlers/jobs", "aspen-cluster/jobs", "aspen-testing?/jobs"]
 docs = ["dep:aspen-docs", "dep:iroh-docs", "dep:iroh-blobs", "blob", "aspen-rpc-handlers/docs", "aspen-cluster/docs"]
 proxy = ["dep:aspen-proxy", "aspen-cluster/proxy"]
+net = ["dep:aspen-net"]
 federation = ["aspen-cluster/federation"]
 relay-server = ["aspen-cluster/relay-server"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]

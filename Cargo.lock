@@ -606,6 +606,7 @@ dependencies = [
  "aspen-jobs",
  "aspen-jobs-worker-maintenance",
  "aspen-jobs-worker-shell",
+ "aspen-net",
  "aspen-proxy",
  "aspen-raft",
  "aspen-raft-types",
@@ -1703,6 +1704,29 @@ dependencies = [
  "serde",
  "serde_json",
  "snafu",
+]
+
+[[package]]
+name = "aspen-net"
+version = "0.1.0"
+dependencies = [
+ "aspen-auth",
+ "aspen-client-api",
+ "aspen-constants",
+ "aspen-core",
+ "aspen-kv-types",
+ "aspen-proxy",
+ "aspen-testing-core",
+ "aspen-traits",
+ "iroh 0.95.1",
+ "iroh-proxy-utils",
+ "n0-future",
+ "serde",
+ "serde_json",
+ "snafu",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
