@@ -361,6 +361,10 @@ fn format_capability(cap: &Capability) -> String {
         Capability::PkiRevoke => "PkiRevoke".to_string(),
         Capability::PkiReadCa => "PkiReadCa".to_string(),
         Capability::PkiManage => "PkiManage".to_string(),
+        // Net service mesh
+        Capability::NetConnect { service_prefix } => format!("NetConnect (prefix: {service_prefix})"),
+        Capability::NetPublish { service_prefix } => format!("NetPublish (prefix: {service_prefix})"),
+        Capability::NetAdmin => "NetAdmin".to_string(),
     }
 }
 

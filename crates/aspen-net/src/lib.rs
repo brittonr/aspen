@@ -17,6 +17,7 @@ pub mod auth;
 pub mod constants;
 pub mod daemon;
 pub mod forward;
+pub mod handler;
 pub mod registry;
 pub mod resolver;
 pub mod socks5;

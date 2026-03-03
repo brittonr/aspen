@@ -25,6 +25,7 @@ pub mod kv;
 pub mod lease;
 pub mod lock;
 pub mod metric;
+pub mod net;
 pub mod patch;
 pub mod peer;
 #[cfg(feature = "plugins-rpc")]

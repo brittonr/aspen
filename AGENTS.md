@@ -164,6 +164,7 @@ nix run .#cluster              # Launch 3-node cluster
 - **aspen-tui**: Terminal UI (separate crate: `aspen-tui`)
 - **aspen-ci-agent**: CI job agent (separate crate: `aspen-ci`)
 - **aspen-fuse**: FUSE filesystem (separate crate: `aspen-fuse`)
+- **aspen-net**: Service mesh daemon with SOCKS5 proxy, DNS, port forwarding (separate crate: `aspen-net`)
 - **git-remote-aspen**: Git remote helper (requires `git-bridge` feature)
 - **aspen-generate-schema**: Schema generator (requires `ci` feature)
 - **aspen-cli token**: Capability token management (generate, inspect, delegate)

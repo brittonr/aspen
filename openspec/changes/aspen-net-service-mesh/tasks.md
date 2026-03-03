@@ -23,7 +23,7 @@
   - `NET_REVOCATION_POLL_INTERVAL_SECS: u64 = 60`
   - `NET_SHUTDOWN_TIMEOUT_SECS: u64 = 30`
 - [x] 2.4 Add KV prefix constants: `NET_SVC_PREFIX = "/_sys/net/svc/"`, `NET_NODE_PREFIX = "/_sys/net/node/"` (DNS uses aspen-dns's `dns:` prefix, not `/_sys/net/dns/`)
-- [ ] 2.5 Add compile-time assertions for all constants (positive, within bounds)
+- [x] 2.5 Add compile-time assertions for all constants (positive, within bounds)
 
 ## 3. Service Registry
 
@@ -117,17 +117,17 @@
 - [x] 9.3 Add `NetLookup(NetLookupRequest)` variant
 - [x] 9.4 Add `NetList(NetListRequest)` variant
 - [x] 9.5 Add corresponding response variants to `ClientRpcResponse` (NetPublishResult, NetUnpublishResult, NetLookupResult, NetListResult)
-- [ ] 9.6 Define request/response structs with serde derives in `aspen-client-api/src/net.rs` (feature-gated)
-- [ ] 9.7 Update `variant_name()`, `domain()`, `to_operation()` for all new variants
+- [x] 9.6 Define request/response structs with serde derives in `aspen-client-api/src/net.rs` (feature-gated)
+- [x] 9.7 Update `variant_name()`, `domain()`, `to_operation()` for all new variants
 - [x] 9.8 Add to HANDLES list and update handles_count test
-- [ ] 9.9 Verify postcard discriminant stability: add golden-file tests for new variants (they must be added AFTER all non-gated variants, before other feature-gated sections, or at the end of the feature-gated block)
+- [x] 9.9 Verify postcard discriminant stability: add golden-file tests for new variants (they must be added AFTER all non-gated variants, before other feature-gated sections, or at the end of the feature-gated block)
 
 ## 10. RPC Handler
 
-- [ ] 10.1 Create `crates/aspen-net/src/handler.rs` (or add to aspen-rpc-handlers) implementing `ServiceExecutor` for net operations
-- [ ] 10.2 Implement dispatch for: NetPublish, NetUnpublish, NetLookup, NetList
-- [ ] 10.3 Each handler: deserialize request, call `ServiceRegistry` method, serialize response. Token auth is enforced at the daemon/CLI level, not the RPC handler level (RPC handlers use cluster cookie auth like all other handlers).
-- [ ] 10.4 Register net handler in `aspen-rpc-handlers` handler registry (feature-gated behind `net`)
+- [x] 10.1 Create `crates/aspen-net/src/handler.rs` (or add to aspen-rpc-handlers) implementing `ServiceExecutor` for net operations
+- [x] 10.2 Implement dispatch for: NetPublish, NetUnpublish, NetLookup, NetList
+- [x] 10.3 Each handler: deserialize request, call `ServiceRegistry` method, serialize response. Token auth is enforced at the daemon/CLI level, not the RPC handler level (RPC handlers use cluster cookie auth like all other handlers).
+- [x] 10.4 Register net handler in `aspen-rpc-handlers` handler registry (feature-gated behind `net`)
 - [ ] 10.5 Wire UpstreamProxy into node's iroh router when `net` feature is enabled (register on `iroh-http-proxy/1` ALPN)
 - [ ] 10.6 Integration test: publish service via RPC, lookup via RPC, verify round-trip
 
@@ -145,17 +145,17 @@
   - Auto-publish configured local services
   - Spawn registry watcher task (polls every `NET_REGISTRY_POLL_INTERVAL_SECS`)
 - [x] 11.3 Implement `NetDaemon::shutdown(&self)` with graceful drain
-- [ ] 11.4 Create `crates/aspen-net/bin/aspen-net.rs` binary with clap CLI:
+- [x] 11.4 Create `crates/aspen-net/bin/aspen-net.rs` binary with clap CLI:
   - Subcommands: `up`, `down`, `forward`, `publish`, `unpublish`, `services`, `peers`, `status`
 - [x] 11.5 Implement signal handling (SIGTERM, SIGINT → graceful shutdown)
 
 ## 12. CLI Integration
 
-- [ ] 12.1 Add `net` subcommand group to `aspen-cli` with subcommands: `publish`, `unpublish`, `services`, `peers`
-- [ ] 12.2 Implement `aspen-cli net publish <name> --port <port> [--proto tcp] [--tag <tag>]...`: sends `NetPublish` RPC (requires token with `NetPublish` capability)
-- [ ] 12.3 Implement `aspen-cli net unpublish <name>`: sends `NetUnpublish` RPC
-- [ ] 12.4 Implement `aspen-cli net services [--tag <tag>]`: sends `NetList` RPC, formats table output
-- [ ] 12.5 Implement `aspen-cli net peers`: sends `NetList` + groups by endpoint, formats table
+- [x] 12.1 Add `net` subcommand group to `aspen-cli` with subcommands: `publish`, `unpublish`, `services`, `peers`
+- [x] 12.2 Implement `aspen-cli net publish <name> --port <port> [--proto tcp] [--tag <tag>]...`: sends `NetPublish` RPC (requires token with `NetPublish` capability)
+- [x] 12.3 Implement `aspen-cli net unpublish <name>`: sends `NetUnpublish` RPC
+- [x] 12.4 Implement `aspen-cli net services [--tag <tag>]`: sends `NetList` RPC, formats table output
+- [x] 12.5 Implement `aspen-cli net peers`: sends `NetList` + groups by endpoint, formats table
 - [ ] 12.6 Note: `aspen net up/down/forward/proxy` live in the standalone `aspen-net` binary, not `aspen-cli`, because they need a local iroh endpoint (not just RPC calls). DNS management uses the existing `aspen-dns-plugin` WASM plugin's RPC commands.
 
 ## 13. Node-Side UpstreamProxy Integration
@@ -181,5 +181,5 @@
 - [x] 15.1 Crate-level rustdoc for `aspen-net` with architecture overview and usage examples
 - [x] 15.2 Document `net` feature flag in workspace README and `AGENTS.md`
 - [x] 15.3 Document KV schema (`/_sys/net/` prefix) in design doc or README
-- [ ] 15.4 Document CLI commands with examples in `aspen-net --help` and `aspen-cli net --help`
+- [x] 15.4 Document CLI commands with examples in `aspen-net --help` and `aspen-cli net --help`
 - [x] 15.5 Add `aspen-net` to the "Key Modules" section in `AGENTS.md`

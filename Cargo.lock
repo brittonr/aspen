@@ -1710,14 +1710,18 @@ dependencies = [
 name = "aspen-net"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "aspen-auth",
  "aspen-client-api",
  "aspen-constants",
  "aspen-core",
  "aspen-kv-types",
  "aspen-proxy",
+ "aspen-rpc-core",
  "aspen-testing-core",
  "aspen-traits",
+ "async-trait",
+ "clap",
  "iroh 0.95.1",
  "iroh-proxy-utils",
  "n0-future",

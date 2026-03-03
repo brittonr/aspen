@@ -35,6 +35,7 @@ use crate::commands::kv::KvCommand;
 use crate::commands::lease::LeaseCommand;
 use crate::commands::lock::LockCommand;
 use crate::commands::metric::MetricCommand;
+use crate::commands::net::NetCommand;
 use crate::commands::patch::PatchCommand;
 use crate::commands::peer::PeerCommand;
 #[cfg(feature = "plugins-rpc")]
@@ -207,6 +208,12 @@ pub enum Commands {
     #[command(subcommand)]
     Lock(LockCommand),
 
+    /// Service mesh operations.
+    ///
+    /// Publish, discover, and list services in the Aspen service mesh.
+    #[command(subcommand)]
+    Net(NetCommand),
+
     /// Patch management (collaborative objects).
     ///
     /// Create and manage patches (pull requests) as immutable, content-addressed DAGs.
@@ -376,6 +383,7 @@ impl Cli {
             Commands::Kv(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Lease(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Lock(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Net(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Patch(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Peer(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "plugins-rpc")]
