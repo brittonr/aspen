@@ -128,7 +128,7 @@
 - [x] 10.2 Implement dispatch for: NetPublish, NetUnpublish, NetLookup, NetList
 - [x] 10.3 Each handler: deserialize request, call `ServiceRegistry` method, serialize response. Token auth is enforced at the daemon/CLI level, not the RPC handler level (RPC handlers use cluster cookie auth like all other handlers).
 - [x] 10.4 Register net handler in `aspen-rpc-handlers` handler registry (feature-gated behind `net`)
-- [ ] 10.5 Wire UpstreamProxy into node's iroh router when `net` feature is enabled (register on `iroh-http-proxy/1` ALPN)
+- [x] 10.5 Wire UpstreamProxy into node's iroh router when `net` feature is enabled (register on `iroh-http-proxy/1` ALPN) — `net` feature implies `proxy` which already registers UpstreamProxy
 - [ ] 10.6 Integration test: publish service via RPC, lookup via RPC, verify round-trip
 
 ## 11. Daemon Orchestration
@@ -160,8 +160,8 @@
 
 ## 13. Node-Side UpstreamProxy Integration
 
-- [ ] 13.1 In aspen-node startup (when `net` feature enabled): create `AspenUpstreamProxy` and register on router with `iroh-http-proxy/1` ALPN
-- [ ] 13.2 Use `AspenAuthHandler::with_trusted_peers()` for auth (same trusted-peers set as existing proxy, updated from Raft membership)
+- [x] 13.1 In aspen-node startup (when `net` feature enabled): create `AspenUpstreamProxy` and register on router with `iroh-http-proxy/1` ALPN — `net` implies `proxy`, reuses existing UpstreamProxy registration
+- [x] 13.2 Use `AspenAuthHandler::with_trusted_peers()` for auth (same trusted-peers set as existing proxy, updated from Raft membership) — already done by proxy feature's router setup
 - [ ] 13.3 Verify: DownstreamProxy on daemon side can create_tunnel() to UpstreamProxy on node side
 
 ## 14. Tests

@@ -446,13 +446,13 @@ hooks = ["dep:aspen-hooks", "aspen-rpc-handlers/hooks", "aspen-cluster/hooks", "
 jobs = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance", "aspen-rpc-handlers/jobs", "aspen-cluster/jobs", "aspen-testing?/jobs"]
 docs = ["dep:aspen-docs", "dep:iroh-docs", "dep:iroh-blobs", "blob", "aspen-rpc-handlers/docs", "aspen-cluster/docs"]
 proxy = ["dep:aspen-proxy", "aspen-cluster/proxy"]
-net = ["dep:aspen-net"]
+net = ["dep:aspen-net", "proxy"]
 federation = ["aspen-cluster/federation"]
 relay-server = ["aspen-cluster/relay-server"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit
