@@ -86,3 +86,8 @@ required-features = ["virtiofs"]
 name = "aspen-cluster-virtiofs-server"
 path = "src/bin/aspen-cluster-virtiofs-server.rs"
 required-features = ["virtiofs"]
+
+[[bin]]
+name = "aspen-ci-workspace-server"
+path = "src/bin/aspen-ci-workspace-server.rs"
+required-features = ["virtiofs"]

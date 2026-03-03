@@ -2030,6 +2030,14 @@
                 inherit pkgs microvm;
                 inherit (self.packages.${system}) aspen-virtiofs-test-server;
               };
+
+              # CI workspace pipeline: Raft cluster → AspenFs::with_prefix → VirtioFS → CH guest
+              # Proves the CI executor's workspace data path with bidirectional I/O and namespace isolation.
+              # Build: nix build .#checks.x86_64-linux.ci-workspace-virtiofs-test
+              ci-workspace-virtiofs-test = import ./nix/tests/ci-workspace-virtiofs.nix {
+                inherit pkgs microvm;
+                inherit (self.packages.${system}) aspen-node-vm-test aspen-ci-workspace-server;
+              };
             };
 
           # Base apps available on all systems
@@ -3096,6 +3104,11 @@
                   aspen-cluster-virtiofs-server = pureBin {
                     name = "aspen-cluster-virtiofs-server";
                     cargoExtraArgs = "--package aspen-fuse --bin aspen-cluster-virtiofs-server --features virtiofs";
+                  };
+
+                  aspen-ci-workspace-server = pureBin {
+                    name = "aspen-ci-workspace-server";
+                    cargoExtraArgs = "--package aspen-fuse --bin aspen-ci-workspace-server --features virtiofs";
                   };
                 })
                 // {
