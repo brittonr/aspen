@@ -25,7 +25,7 @@ A traditional VPN approach (TUN device, IP allocation, IP routing) would fight a
 - `net-socks5`: Local SOCKS5 proxy server (RFC 1928) that resolves `*.aspen` service names via the registry and creates CONNECT tunnels through iroh-proxy-utils' `DownstreamProxy`.
 - `net-forward`: TCP port forwarding that maps a local port to a named remote service, wrapping `DownstreamProxy` with `ProxyMode::Tcp`.
 - `net-auth`: Authorization via existing UCAN capability tokens (`aspen-auth`). New `NetConnect { service_prefix }` and `NetPublish { service_prefix }` capability variants. Daemon verifies its token locally at connect/publish time — no Raft read needed. Supports delegation chains (admin → team → CI runner with attenuated access).
-- `net-dns`: MagicDNS stub resolver for `*.aspen` domains. Maps service names to loopback addresses, enabling `curl http://mydb.aspen:8080` without proxy configuration.
+- `net-dns`: Integration with existing `aspen-dns` crate (sibling repo). Service mesh registrations auto-create DNS records in the `aspen` zone via `DnsStore`. The existing `DnsProtocolServer` (hickory-server, UDP/TCP) serves `*.aspen` queries from local cache synced via iroh-docs P2P replication. No new DNS code — just wiring.
 - `net-daemon`: Long-running daemon orchestrating SOCKS5 proxy, DNS resolver, and service auto-publishing. Started with `aspen net up`, stopped with `aspen net down`.
 
 ### Modified Capabilities
@@ -38,7 +38,7 @@ A traditional VPN approach (TUN device, IP allocation, IP routing) would fight a
 
 ## Impact
 
-- **Dependencies**: `fast-socks5` or hand-rolled SOCKS5 (~200 lines), `hickory-dns` for DNS stub resolver. No new heavy dependencies — the data plane is entirely `iroh-proxy-utils` (already vendored).
+- **Dependencies**: `fast-socks5` or hand-rolled SOCKS5 (~200 lines). DNS uses existing `aspen-dns` crate (hickory-server already there). No new heavy dependencies — the data plane is entirely `iroh-proxy-utils` (already vendored).
 - **New crate**: `aspen-net` (~1,200 lines) — thin control plane over existing proxy infrastructure. Simpler than originally planned since auth delegates to `aspen-auth` capability tokens.
 - **No kernel interface**: No TUN device, no root required, no IP allocation. Purely userspace.
 - **No new ALPN**: Uses existing `iroh-http-proxy/1` ALPN from iroh-proxy-utils for all tunneling.

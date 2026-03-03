@@ -72,7 +72,7 @@ All Raft KV operations use the existing `KeyValueStore` trait — the same patte
 ```
 /_sys/net/svc/{name}              → ServiceEntry (JSON)
 /_sys/net/node/{endpoint_id_hex}  → NodeEntry (JSON)
-/_sys/net/dns/{hostname}          → DnsOverride (JSON)
+dns:{name}.aspen:{type}           → DnsRecord (via aspen-dns DnsStore)
 ```
 
 Note: No `/_sys/net/acl/` prefix — authorization is handled by capability tokens, not centralized rules.
@@ -111,13 +111,32 @@ Root token: [NetAdmin + NetConnect { "*" } + Delegate]
 
 **Alternative considered**: Tag-based ACLs stored in Raft KV — rejected because it duplicates `aspen-auth`, requires consensus reads per connection, doesn't support delegation, and is less aligned with Aspen's decentralized philosophy.
 
-### 7. MagicDNS via local stub resolver
+### 7. DNS via existing aspen-dns crate
 
-**Decision**: Run a local DNS server (UDP port 5353 by default, or 53 with appropriate permissions) that resolves `*.aspen` queries by looking up the service registry. Non-`.aspen` queries are forwarded to the system resolver.
+**Decision**: Use the existing `aspen-dns` sibling repo (`../aspen-dns/`) for all DNS functionality. When a service is published, auto-create DNS records (A, SRV) in the `aspen` zone via `DnsStore`. The existing `DnsProtocolServer` (hickory-server, UDP/TCP :5353) serves queries. The `AspenDnsClient` syncs records to local cache via iroh-docs P2P replication.
 
-**Rationale**: Enables `curl http://mydb.aspen:8080` without proxy configuration. The DNS resolver returns loopback addresses (127.0.0.x), and a transparent proxy (iptables REDIRECT or similar) routes those connections through the SOCKS5 proxy. This is the most seamless UX but optional — SOCKS5 alone works without DNS.
+**Rationale**: `aspen-dns` is a fully built DNS system with:
+- `DnsStore` trait + `AspenDnsStore` (Raft KV-backed CRUD for dns:* keys)
+- `DnsProtocolServer` (hickory-server with zone-based authority, upstream forwarding)
+- `AspenDnsClient` (iroh-docs sync → local cache → instant lookups)
+- `AspenDnsAuthority` (hickory Authority impl backed by local cache)
+- Full record type support (A, AAAA, CNAME, MX, TXT, SRV, NS, SOA, PTR, CAA)
+- Wildcard resolution, zone management, validation
 
-**Implementation**: Use `hickory-dns` (formerly trust-dns) for the DNS server. Responses are synthetic — no actual DNS records exist. TTL is short (5s) since service registrations can change.
+Building a separate MagicDNS stub resolver would duplicate this. Instead, service mesh publishes create real DNS records in the `aspen` zone, and the existing DNS infrastructure serves them.
+
+**Integration flow:**
+```
+aspen net publish mydb --port 5432
+  → Write /_sys/net/svc/mydb (service registry)
+  → DnsStore::set_record(SRV _tcp.mydb.aspen → endpoint:5432)
+  → DnsStore::set_record(A mydb.aspen → 127.0.0.x)
+  → Raft → DocsExporter → iroh-docs sync
+  → All AspenDnsClients get the record via P2P
+  → DnsProtocolServer answers: dig mydb.aspen @localhost:5353
+```
+
+**Alternative considered**: Custom MagicDNS stub in aspen-net — rejected because aspen-dns already exists with full DNS protocol support, zone management, and P2P sync.
 
 ### 8. Standalone daemon binary
 
@@ -210,14 +229,13 @@ NEW:
   crates/aspen-net/
   ├── src/
   │   ├── lib.rs              ← Public API, feature re-exports
-  │   ├── registry.rs         ← Service CRUD (KV read/write wrappers)
+  │   ├── registry.rs         ← Service CRUD (KV wrappers + auto DNS record creation)
   │   ├── resolver.rs         ← Name → (endpoint_id, port) resolution
   │   ├── socks5.rs           ← SOCKS5 server (RFC 1928 handshake + tunnel)
   │   ├── forward.rs          ← Port forwarding (thin wrapper over DownstreamProxy)
-  │   ├── dns.rs              ← MagicDNS stub resolver
-  │   ├── daemon.rs           ← Orchestration (SOCKS5 + DNS + registry watcher)
+  │   ├── daemon.rs           ← Orchestration (SOCKS5 + AspenDnsClient + registry watcher)
   │   ├── auth.rs             ← Token verification wrapper (delegates to aspen-auth)
-  │   ├── types.rs            ← ServiceEntry, NodeEntry, DnsOverride
+  │   ├── types.rs            ← ServiceEntry, NodeEntry
   │   ├── constants.rs        ← Tiger Style bounds
   │   └── verified/
   │       ├── mod.rs
@@ -225,6 +243,10 @@ NEW:
   ├── bin/
   │   └── aspen-net.rs        ← Standalone daemon binary
   └── Cargo.toml
+
+EXTERNAL (sibling repo, already built):
+  ../aspen-dns/crates/aspen-dns/     ← DnsStore, DnsProtocolServer, AspenDnsClient
+  ../aspen-dns/crates/aspen-dns-plugin/  ← WASM plugin (DnsSetRecord, DnsGetRecord)
 
 MODIFIED:
   crates/aspen-auth/           ← New Capability variants (NetConnect, NetPublish, NetAdmin)

@@ -1,82 +1,87 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
-### Requirement: MagicDNS Stub Resolver
+### Requirement: DNS Record Auto-Creation on Service Publish
 
-The daemon SHALL run a local DNS server that resolves `*.aspen` queries by looking up the service registry.
+When a service is published to the mesh, DNS records SHALL be automatically created in the `aspen` zone via the existing `aspen-dns` crate's `DnsStore`.
 
-#### Scenario: Resolve a known service
+#### Scenario: Publish creates SRV and A records
 
-- **GIVEN** a service `mydb` is registered in the service registry
+- **GIVEN** a running Aspen cluster with `aspen-dns` enabled
+- **WHEN** a service `mydb` is published with endpoint ID `abc123...` and port `5432`
+- **THEN** the following DNS records SHALL be created via `DnsStore::set_record()`:
+  - `SRV _tcp.mydb.aspen` → `0 0 5432 {endpoint_short}.aspen`
+  - `A mydb.aspen` → synthetic loopback address (e.g., `127.0.0.2`)
+- **AND** the records SHALL have TTL equal to `NET_DNS_TTL_SECS` (30 seconds)
+
+#### Scenario: Unpublish removes DNS records
+
+- **GIVEN** a service `mydb` has DNS records in the `aspen` zone
+- **WHEN** the service is unpublished
+- **THEN** the SRV and A records for `mydb.aspen` SHALL be deleted via `DnsStore::delete_record()`
+
+#### Scenario: DNS records sync via iroh-docs
+
+- **WHEN** a DNS record is created on the server side
+- **THEN** the record SHALL propagate to all `AspenDnsClient` instances via iroh-docs P2P CRDT sync
+- **AND** the `DnsProtocolServer` on each client SHALL serve the updated record
+
+### Requirement: DnsProtocolServer Serves aspen Zone
+
+The existing `DnsProtocolServer` from `aspen-dns` SHALL serve the `aspen` zone for service mesh name resolution.
+
+#### Scenario: Resolve a published service via DNS
+
+- **GIVEN** a service `mydb` is published and DNS records exist
+- **AND** a `DnsProtocolServer` is running on port 5353 with zone `aspen`
 - **WHEN** a DNS A query for `mydb.aspen` is received
-- **THEN** the resolver SHALL return a synthetic loopback address (e.g., `127.0.0.2`)
-- **AND** the TTL SHALL be `NET_DNS_TTL_SECS` (5 seconds)
+- **THEN** the server SHALL return the synthetic A record from the local cache
 
-#### Scenario: Resolve an unknown service
+#### Scenario: SRV query for service discovery
 
-- **WHEN** a DNS A query for `unknown.aspen` is received
-- **AND** no service named `unknown` is registered
-- **THEN** the resolver SHALL return NXDOMAIN
+- **GIVEN** a service `mydb` is published on port 5432
+- **WHEN** a DNS SRV query for `_tcp.mydb.aspen` is received
+- **THEN** the server SHALL return the SRV record with the port and target
 
-#### Scenario: Non-.aspen query forwarded
+#### Scenario: NXDOMAIN for unknown service
+
+- **WHEN** a DNS query for `unknown.aspen` is received
+- **AND** no service named `unknown` is published
+- **THEN** the server SHALL return NXDOMAIN
+
+#### Scenario: Non-aspen queries forwarded
 
 - **WHEN** a DNS query for `example.com` is received
-- **THEN** the resolver SHALL forward the query to the system's upstream DNS resolver
-- **AND** return the upstream response to the client
+- **AND** forwarding is enabled with upstream resolvers configured
+- **THEN** the query SHALL be forwarded to the configured upstream DNS server
 
-#### Scenario: AAAA query for .aspen
+### Requirement: AspenDnsClient Integration in Daemon
 
-- **WHEN** a DNS AAAA query for `mydb.aspen` is received
-- **THEN** the resolver SHALL return an empty response (no AAAA record)
-- **AND** the response SHALL have NOERROR status (not NXDOMAIN)
+The service mesh daemon SHALL use `AspenDnsClient` for local DNS cache and resolution.
+
+#### Scenario: Daemon starts with DNS client
+
+- **WHEN** the daemon starts with `--ticket <cluster-ticket>`
+- **THEN** it SHALL create an `AspenDnsClient` that syncs the `aspen` zone via iroh-docs
+- **AND** start a `DnsProtocolServer` serving the synced zone on the configured port
+
+#### Scenario: DNS is optional
+
+- **WHEN** the daemon starts with `--no-dns` flag
+- **THEN** no `DnsProtocolServer` SHALL be started
+- **AND** name resolution SHALL still work via the service registry (RPC-based)
 
 ### Requirement: Loopback Address Management
 
-The DNS resolver SHALL manage a mapping of service names to loopback addresses.
+The service registry SHALL manage a mapping of service names to loopback addresses for DNS A records.
 
 #### Scenario: Consistent address assignment
 
-- **GIVEN** `mydb.aspen` resolves to `127.0.0.2`
-- **WHEN** the same query is made again
-- **THEN** the resolver SHALL return the same address `127.0.0.2`
+- **GIVEN** `mydb.aspen` is assigned loopback `127.0.0.2`
+- **WHEN** the A record is queried multiple times
+- **THEN** the same address `127.0.0.2` SHALL be returned
 
 #### Scenario: Address recycling
 
 - **WHEN** the number of active service-to-address mappings reaches `MAX_NET_DNS_LOOPBACK_ADDRS` (254)
 - **AND** a new service needs an address
 - **THEN** the least-recently-used mapping SHALL be evicted
-- **AND** its address SHALL be reassigned
-
-### Requirement: DNS Custom Overrides
-
-Users SHALL be able to set custom DNS records for `.aspen` names.
-
-#### Scenario: Custom A record
-
-- **WHEN** a user sets a DNS override: `myhost.aspen` → `10.0.1.5`
-- **THEN** DNS queries for `myhost.aspen` SHALL return `10.0.1.5`
-- **AND** the override SHALL be stored at `/_sys/net/dns/myhost`
-
-#### Scenario: Override takes precedence
-
-- **GIVEN** a service `mydb` is registered AND a DNS override `mydb.aspen` → `10.0.1.5` exists
-- **WHEN** a DNS query for `mydb.aspen` is received
-- **THEN** the override SHALL take precedence, returning `10.0.1.5`
-
-### Requirement: DNS Server Configuration
-
-#### Scenario: Default port
-
-- **WHEN** the DNS resolver starts without explicit port configuration
-- **THEN** it SHALL bind on UDP port `5353`
-
-#### Scenario: Custom port
-
-- **WHEN** the DNS resolver is configured with port `53`
-- **THEN** it SHALL bind on UDP port `53`
-- **AND** the user is responsible for having appropriate permissions (CAP_NET_BIND_SERVICE)
-
-#### Scenario: DNS resolver is optional
-
-- **WHEN** the daemon starts with `--no-dns` flag
-- **THEN** the DNS resolver SHALL NOT be started
-- **AND** the SOCKS5 proxy SHALL still function normally

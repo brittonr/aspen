@@ -1,7 +1,7 @@
 ## 1. Crate Scaffold and Feature Wiring
 
 - [ ] 1.1 Create `crates/aspen-net/Cargo.toml` with dependencies: `aspen-core`, `aspen-constants`, `aspen-client-api`, `aspen-proxy` (for DownstreamProxy re-export), `iroh`, `iroh-proxy-utils`, `tokio`, `serde`, `serde_json`, `snafu`, `tracing`
-- [ ] 1.2 Create `crates/aspen-net/src/lib.rs` with module declarations: `registry`, `resolver`, `socks5`, `forward`, `auth`, `dns`, `daemon`, `types`, `constants`, `verified`
+- [ ] 1.2 Create `crates/aspen-net/src/lib.rs` with module declarations: `registry`, `resolver`, `socks5`, `forward`, `auth`, `daemon`, `types`, `constants`, `verified`
 - [ ] 1.3 Add `net` feature flag to workspace root `Cargo.toml` that enables `aspen-net` and wires through `aspen-rpc-handlers/net`
 - [ ] 1.4 Add `aspen-net` to workspace `members` list
 - [ ] 1.5 Verify `cargo check -p aspen-net` compiles with empty module stubs
@@ -10,8 +10,7 @@
 
 - [ ] 2.1 Create `crates/aspen-net/src/types.rs` with `ServiceEntry` struct: `name: String`, `endpoint_id: String`, `port: u16`, `proto: String`, `tags: Vec<String>`, `hostname: Option<String>`, `published_at_ms: u64`. Derive `Serialize`, `Deserialize`, `Clone`, `Debug`.
 - [ ] 2.2 Add `NodeEntry` struct: `endpoint_id: String`, `hostname: String`, `tags: Vec<String>`, `services: Vec<String>`, `last_seen_ms: u64`
-- [ ] 2.3 Add `DnsOverride` struct: `hostname: String`, `address: String`
-- [ ] 2.4 Create `crates/aspen-net/src/constants.rs` with Tiger Style bounds:
+- [ ] 2.3 Create `crates/aspen-net/src/constants.rs` with Tiger Style bounds:
   - `MAX_NET_SERVICES: u32 = 10_000`
   - `MAX_NET_TAGS_PER_SERVICE: u32 = 32`
   - `MAX_NET_SERVICE_NAME_LEN: u32 = 253`
@@ -23,7 +22,7 @@
   - `NET_REGISTRY_POLL_INTERVAL_SECS: u64 = 10`
   - `NET_REVOCATION_POLL_INTERVAL_SECS: u64 = 60`
   - `NET_SHUTDOWN_TIMEOUT_SECS: u64 = 30`
-- [ ] 2.5 Add KV prefix constants: `NET_SVC_PREFIX = "/_sys/net/svc/"`, `NET_NODE_PREFIX = "/_sys/net/node/"`, `NET_DNS_PREFIX = "/_sys/net/dns/"`
+- [ ] 2.4 Add KV prefix constants: `NET_SVC_PREFIX = "/_sys/net/svc/"`, `NET_NODE_PREFIX = "/_sys/net/node/"` (DNS uses aspen-dns's `dns:` prefix, not `/_sys/net/dns/`)
 - [ ] 2.8 Add compile-time assertions for all constants (positive, within bounds)
 
 ## 3. Service Registry
@@ -99,18 +98,17 @@
 - [ ] 7.3 Parse forward spec string: `[bind_addr:]local_port:service[:remote_port]` → `(SocketAddr, String, Option<u16>)`
 - [ ] 7.4 Unit tests: spec string parsing. Integration tests: forward local port, connect through it.
 
-## 8. MagicDNS Stub Resolver
+## 8. DNS Integration (aspen-dns)
 
-- [ ] 8.1 Create `crates/aspen-net/src/dns.rs` with `MagicDnsServer` struct holding: `NameResolver`, address map (`HashMap<String, Ipv4Addr>`), next loopback counter, upstream resolver address
-- [ ] 8.2 Add `hickory-dns` (or `hickory-server`) dependency to `Cargo.toml` (feature-gated behind `dns`)
-- [ ] 8.3 Implement DNS request handler: parse query, check if domain ends in `.aspen`, if yes → resolve via registry, if no → forward to upstream
-- [ ] 8.4 Implement loopback address allocation: assign `127.0.0.{2..255}` to services, LRU eviction when full, consistent assignment for same service
-- [ ] 8.5 Implement DNS response construction: A record with allocated loopback IP, TTL = `NET_DNS_TTL_SECS`
-- [ ] 8.6 Implement NXDOMAIN response for unknown `.aspen` services
-- [ ] 8.7 Implement AAAA query handling: return NOERROR with empty answer for `.aspen` domains
-- [ ] 8.8 Implement DNS override lookup: check `/_sys/net/dns/{hostname}` before service registry
-- [ ] 8.9 Implement `MagicDnsServer::run(&self, bind_addr: SocketAddr)` with UDP socket and per-query handling
-- [ ] 8.10 Unit tests: `.aspen` resolution, NXDOMAIN, upstream forwarding, loopback allocation, override precedence
+- [ ] 8.1 Add `aspen-dns` as a dependency of `aspen-net` (git dep to `../aspen-dns/` or workspace path once consolidated)
+- [ ] 8.2 Implement auto DNS record creation in `registry.rs`: when `publish()` is called, also call `DnsStore::set_record()` to create SRV (`_tcp.{name}.aspen`) and A (`{name}.aspen`) records in the `aspen` zone
+- [ ] 8.3 Implement auto DNS record deletion in `registry.rs`: when `unpublish()` is called, delete the corresponding SRV and A records via `DnsStore::delete_record()`
+- [ ] 8.4 Implement loopback address allocator for A records: assign `127.0.0.{2..255}` to services, LRU eviction when full, consistent assignment for same service name
+- [ ] 8.5 In daemon: create `AspenDnsClient` using `DnsClientTicket` from cluster, sync `aspen` zone via iroh-docs
+- [ ] 8.6 In daemon: start `DnsProtocolServer` with zone `["aspen"]`, upstream forwarding to system resolver, bind on configured port (default 5353)
+- [ ] 8.7 In daemon: wire `--no-dns` flag to skip DNS server startup
+- [ ] 8.8 Integration test: publish service, verify DNS A and SRV records resolvable via `DnsProtocolServer`
+- [ ] 8.9 Integration test: unpublish service, verify DNS records removed
 
 ## 9. Client API RPC Types
 
@@ -118,9 +116,7 @@
 - [ ] 9.2 Add `NetUnpublish(NetUnpublishRequest)` variant
 - [ ] 9.3 Add `NetLookup(NetLookupRequest)` variant
 - [ ] 9.4 Add `NetList(NetListRequest)` variant
-- [ ] 9.5 Add `NetDnsSet(NetDnsSetRequest)` variant
-- [ ] 9.6 Add `NetDnsList` variant
-- [ ] 9.7 Add corresponding response variants to `ClientRpcResponse`
+- [ ] 9.5 Add corresponding response variants to `ClientRpcResponse`
 - [ ] 9.8 Define request/response structs with serde derives in `aspen-client-api/src/net.rs` (feature-gated)
 - [ ] 9.9 Update `variant_name()`, `domain()`, `to_operation()` for all new variants
 - [ ] 9.10 Add to HANDLES list and update handles_count test
@@ -137,7 +133,7 @@
 
 ## 11. Daemon Orchestration
 
-- [ ] 11.1 Create `crates/aspen-net/src/daemon.rs` with `NetDaemon` struct holding: iroh `Endpoint`, `DownstreamProxy`, `NameResolver`, `NetAuthenticator`, `Socks5Server`, `MagicDnsServer` (optional), `CancellationToken`
+- [ ] 11.1 Create `crates/aspen-net/src/daemon.rs` with `NetDaemon` struct holding: iroh `Endpoint`, `DownstreamProxy`, `NameResolver`, `NetAuthenticator`, `Socks5Server`, `AspenDnsClient` + `DnsProtocolServer` (optional), `CancellationToken`
 - [ ] 11.2 Implement `NetDaemon::start(config: DaemonConfig) -> Result<Self>`:
   - Create iroh endpoint
   - Connect to cluster via ticket (create a client that can make RPCs)
@@ -155,13 +151,12 @@
 
 ## 12. CLI Integration
 
-- [ ] 12.1 Add `net` subcommand group to `aspen-cli` with subcommands: `publish`, `unpublish`, `services`, `peers`, `dns` (set/list)
+- [ ] 12.1 Add `net` subcommand group to `aspen-cli` with subcommands: `publish`, `unpublish`, `services`, `peers`
 - [ ] 12.2 Implement `aspen-cli net publish <name> --port <port> [--proto tcp] [--tag <tag>]...`: sends `NetPublish` RPC (requires token with `NetPublish` capability)
 - [ ] 12.3 Implement `aspen-cli net unpublish <name>`: sends `NetUnpublish` RPC
 - [ ] 12.4 Implement `aspen-cli net services [--tag <tag>]`: sends `NetList` RPC, formats table output
 - [ ] 12.5 Implement `aspen-cli net peers`: sends `NetList` + groups by endpoint, formats table
-- [ ] 12.6 Implement `aspen-cli net dns set/list`: sends appropriate DNS RPCs (requires token with `NetAdmin` capability)
-- [ ] 12.7 Note: `aspen net up/down/forward/proxy` live in the standalone `aspen-net` binary, not `aspen-cli`, because they need a local iroh endpoint (not just RPC calls)
+- [ ] 12.6 Note: `aspen net up/down/forward/proxy` live in the standalone `aspen-net` binary, not `aspen-cli`, because they need a local iroh endpoint (not just RPC calls). DNS management uses the existing `aspen-dns-plugin` WASM plugin's RPC commands.
 
 ## 13. Node-Side UpstreamProxy Integration
 
