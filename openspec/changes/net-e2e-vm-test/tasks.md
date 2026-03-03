@@ -30,14 +30,14 @@
 
 ## 4. NetHandler Registration in Node
 
-- [ ] 4.1 Add `aspen-net` as optional dependency in root `Cargo.toml` [dependencies] (already present as `aspen-net = { workspace = true, optional = true }`)
-- [ ] 4.2 In `src/bin/aspen_node/setup/client.rs`: add `#[cfg(feature = "net")]` block that creates `ServiceRegistry` from the node's KV store, wraps in `NetHandler`, pushes into handler list
-- [ ] 4.3 Verify `cargo check --features net` compiles the handler registration
-- [ ] 4.4 Add `net` feature to `full-aspen-node` and `full-aspen-node-plugins` feature lists in `flake.nix`
+- [x] 4.1 `aspen-net` already an optional dep in root Cargo.toml; added `aspen-rpc-handlers/net` to `net` feature chain
+- [x] 4.2 Registered via `submit_handler_factory!(NetHandlerFactory)` in `aspen-net/src/lib.rs`; inventory auto-collects when crate is linked
+- [x] 4.3 Verified `cargo check --features net` compiles successfully
+- [x] 4.4 Added `net` to `full-aspen-node` features and `full-aspen-node-plugins` cargoExtraArgs in flake.nix
 
 ## 5. Daemon Cluster Wiring
 
-- [ ] 5.1 Add `aspen-client` and `aspen-transport` as dependencies in `crates/aspen-net/Cargo.toml`
+- [x] 5.1 Added `aspen-client` and `aspen-transport` as dependencies in `crates/aspen-net/Cargo.toml`
 - [ ] 5.2 In `NetDaemon::start()`: parse `cluster_ticket` (extract peer addresses from the ticket format used by aspen-client)
 - [ ] 5.3 Create an `iroh::Endpoint` (discovery disabled for daemon — addresses come from ticket)
 - [ ] 5.4 Create `ClientKvAdapter` from the endpoint and peer addresses
@@ -51,8 +51,8 @@
 
 ## 6. TunnelAcceptor in Node
 
-- [ ] 6.1 In the node's iroh Router setup: when `net` feature is enabled, register `TunnelAcceptor` to accept `NET_TUNNEL_ALPN` connections
-- [ ] 6.2 Verify the Router builder accepts the new protocol alongside existing ALPNs (RAFT_ALPN, CLIENT_ALPN, etc.)
+- [x] 6.1 Registered `TunnelAcceptor` in `setup/router.rs` behind `#[cfg(feature = "net")]` with NET_TUNNEL_ALPN
+- [x] 6.2 Verified Router builder accepts the new protocol alongside existing ALPNs
 
 ## 7. NixOS VM Test
 

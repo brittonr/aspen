@@ -296,6 +296,11 @@ impl AspenClient {
         self.endpoint.id()
     }
 
+    /// Get a reference to the underlying iroh endpoint.
+    pub fn endpoint(&self) -> &iroh::Endpoint {
+        &self.endpoint
+    }
+
     /// Shutdown the client and close the endpoint.
     pub async fn shutdown(self) {
         self.endpoint.close().await;

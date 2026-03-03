@@ -36,6 +36,26 @@ impl NetAuthenticator {
         Self { token, verifier }
     }
 
+    /// Create a permissive authenticator that allows all operations.
+    ///
+    /// Uses a self-signed token with `NetAdmin` capability.
+    /// Suitable for trusted environments (e.g., cluster-internal daemons).
+    pub fn permissive() -> Self {
+        use std::time::Duration;
+
+        use aspen_auth::Capability;
+        use aspen_auth::TokenBuilder;
+
+        let key = iroh::SecretKey::generate(&mut rand::rng());
+        let token = TokenBuilder::new(key)
+            .with_capability(Capability::NetAdmin)
+            .with_lifetime(Duration::from_secs(365 * 24 * 3600))
+            .build()
+            .expect("permissive token build should not fail");
+        let verifier = TokenVerifier::new();
+        Self { token, verifier }
+    }
+
     /// Check that the token grants `NetConnect` for the given service and port.
     pub fn check_connect(&self, service: &str, port: u16) -> Result<(), NetAuthError> {
         let op = Operation::NetConnect {

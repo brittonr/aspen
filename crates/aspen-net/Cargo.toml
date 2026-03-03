@@ -38,6 +38,9 @@ serde_json = "1.0"
 # Error handling
 snafu = "0.8.9"
 
+# Random number generation
+rand = "0.9"
+
 # Tracing
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -571,9 +571,11 @@ async fn daemon_start_stop_no_dns() {
     use aspen_net::daemon::DaemonConfig;
     use aspen_net::daemon::NetDaemon;
 
+    // Daemon now actually connects to a cluster, so an invalid ticket
+    // should produce a ClusterConnect error.
     let config = DaemonConfig {
         cluster_ticket: "test-ticket".to_string(),
-        token: "test-token".to_string(),
+        token: String::new(),
         socks5_addr: DaemonConfig::default_socks5_addr(),
         dns_addr: DaemonConfig::default_dns_addr(),
         dns_enabled: false,
@@ -581,11 +583,10 @@ async fn daemon_start_stop_no_dns() {
         tags: vec![],
     };
 
-    let mut daemon = NetDaemon::start(config).await.unwrap();
-    assert!(daemon.is_running());
-
-    daemon.shutdown().await;
-    assert!(!daemon.is_running());
+    let result = NetDaemon::start(config).await;
+    assert!(result.is_err(), "daemon should fail with invalid ticket");
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains("cluster connection failed"), "error should mention cluster connection: {err}");
 }
 
 #[tokio::test]
