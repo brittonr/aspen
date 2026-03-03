@@ -100,10 +100,10 @@
 
 ## 8. DNS Integration (aspen-dns)
 
-- [ ] 8.1 Add `aspen-dns` as a dependency of `aspen-net` (git dep to `../aspen-dns/` or workspace path once consolidated)
-- [ ] 8.2 Implement auto DNS record creation in `registry.rs`: when `publish()` is called, also call `DnsStore::set_record()` to create SRV (`_tcp.{name}.aspen`) and A (`{name}.aspen`) records in the `aspen` zone
-- [ ] 8.3 Implement auto DNS record deletion in `registry.rs`: when `unpublish()` is called, delete the corresponding SRV and A records via `DnsStore::delete_record()`
-- [ ] 8.4 Implement loopback address allocator for A records: assign `127.0.0.{2..255}` to services, LRU eviction when full, consistent assignment for same service name
+- [x] 8.1 Add `aspen-dns` as a dependency of `aspen-net` (git dep to `../aspen-dns/` or workspace path once consolidated)
+- [x] 8.2 Implement auto DNS record creation in `registry.rs`: when `publish()` is called, also call `DnsStore::set_record()` to create SRV (`_tcp.{name}.aspen`) and A (`{name}.aspen`) records in the `aspen` zone
+- [x] 8.3 Implement auto DNS record deletion in `registry.rs`: when `unpublish()` is called, delete the corresponding SRV and A records via `DnsStore::delete_record()`
+- [x] 8.4 Implement loopback address allocator for A records: assign `127.0.0.{2..255}` to services, LRU eviction when full, consistent assignment for same service name
 - [ ] 8.5 In daemon: create `AspenDnsClient` using `DnsClientTicket` from cluster, sync `aspen` zone via iroh-docs
 - [ ] 8.6 In daemon: start `DnsProtocolServer` with zone `["aspen"]`, upstream forwarding to system resolver, bind on configured port (default 5353)
 - [ ] 8.7 In daemon: wire `--no-dns` flag to skip DNS server startup
@@ -156,7 +156,7 @@
 - [x] 12.3 Implement `aspen-cli net unpublish <name>`: sends `NetUnpublish` RPC
 - [x] 12.4 Implement `aspen-cli net services [--tag <tag>]`: sends `NetList` RPC, formats table output
 - [x] 12.5 Implement `aspen-cli net peers`: sends `NetList` + groups by endpoint, formats table
-- [ ] 12.6 Note: `aspen net up/down/forward/proxy` live in the standalone `aspen-net` binary, not `aspen-cli`, because they need a local iroh endpoint (not just RPC calls). DNS management uses the existing `aspen-dns-plugin` WASM plugin's RPC commands.
+- [x] 12.6 Note: `aspen net up/down/forward/proxy` live in the standalone `aspen-net` binary, not `aspen-cli`, because they need a local iroh endpoint (not just RPC calls). DNS management uses the existing `aspen-dns-plugin` WASM plugin's RPC commands.
 
 ## 13. Node-Side UpstreamProxy Integration
 
