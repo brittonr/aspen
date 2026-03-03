@@ -80,3 +80,8 @@ path = "src/main.rs"
 name = "aspen-virtiofs-test-server"
 path = "src/bin/aspen-virtiofs-test-server.rs"
 required-features = ["virtiofs"]
+
+[[bin]]
+name = "aspen-cluster-virtiofs-server"
+path = "src/bin/aspen-cluster-virtiofs-server.rs"
+required-features = ["virtiofs"]

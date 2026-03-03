@@ -2009,12 +2009,20 @@
                 inherit (self.packages.${system}) aspen-node-vm-test;
               };
 
-              # 3-node Raft cluster + AspenFs VirtioFS + nginx microVM.
-              # The ultimate integration test: Raft consensus → VirtioFS → CH → nginx → HTTP
+              # 3-node Raft cluster + AspenFs VirtioFS connectivity test.
+              # Proves: Raft consensus → cluster ticket exchange → VirtioFS daemon connects
               # Build: nix build .#checks.x86_64-linux.microvm-cluster-test
               microvm-cluster-test = import ./nix/tests/microvm-cluster.nix {
                 inherit pkgs microvm;
                 inherit (self.packages.${system}) aspen-node-vm-test aspen-fuse-vm-test;
+              };
+
+              # Full end-to-end: Raft cluster → VirtioFS → Cloud Hypervisor → nginx → HTTP
+              # The ultimate integration test — data flows from Raft KV through every layer.
+              # Build: nix build .#checks.x86_64-linux.microvm-raft-virtiofs-test
+              microvm-raft-virtiofs-test = import ./nix/tests/microvm-raft-virtiofs.nix {
+                inherit pkgs microvm;
+                inherit (self.packages.${system}) aspen-node-vm-test aspen-cluster-virtiofs-server;
               };
             };
 
@@ -3076,6 +3084,12 @@
                   aspen-fuse-vm-test = pureBin {
                     name = "aspen-fuse-vm-test";
                     cargoExtraArgs = "--package aspen-fuse --bin aspen-fuse --features virtiofs";
+                  };
+
+                  # VirtioFS server backed by a real Raft cluster (for integration tests)
+                  aspen-cluster-virtiofs-server = pureBin {
+                    name = "aspen-cluster-virtiofs-server";
+                    cargoExtraArgs = "--package aspen-fuse --bin aspen-cluster-virtiofs-server --features virtiofs";
                   };
                 })
                 // {

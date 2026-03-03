@@ -30,6 +30,7 @@ use aspen_client::CLIENT_ALPN;
 use aspen_client::ClientRpcRequest;
 use aspen_client::ClientRpcResponse;
 use aspen_client::DeleteResultResponse;
+use aspen_client::InitResultResponse;
 use aspen_client::MAX_CLIENT_MESSAGE_SIZE;
 use aspen_client::ReadResultResponse;
 use aspen_client::ScanResultResponse;
@@ -355,6 +356,30 @@ impl FuseSyncClient {
                 Ok(entries.into_iter().map(|e| (e.key, e.value.into_bytes())).collect())
             }
             _ => anyhow::bail!("unexpected response type for ScanKeys"),
+        }
+    }
+
+    /// Initialize the cluster (single-node bootstrap).
+    ///
+    /// Must be called once on a fresh cluster before KV operations work.
+    /// Idempotent — calling on an already-initialized cluster is harmless.
+    pub fn init_cluster(&self) -> Result<bool> {
+        let response = self.send_rpc(ClientRpcRequest::InitCluster, WRITE_TIMEOUT)?;
+
+        match response {
+            ClientRpcResponse::InitResult(InitResultResponse { is_success, error }) => {
+                if let Some(err) = error
+                    && !is_success
+                {
+                    // "already initialized" is not an error for our purposes
+                    if err.contains("already initialized") || err.contains("NotAllowed") {
+                        return Ok(true);
+                    }
+                    anyhow::bail!("init cluster error: {}", err);
+                }
+                Ok(is_success)
+            }
+            _ => anyhow::bail!("unexpected response type for InitCluster"),
         }
     }
 
