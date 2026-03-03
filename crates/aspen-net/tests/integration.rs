@@ -61,6 +61,14 @@ fn test_entry(name: &str, port: u16) -> ServiceEntry {
     }
 }
 
+/// Create a test iroh endpoint for SOCKS5 server.
+///
+/// The handshake-only tests never reach the tunnel code, so the endpoint
+/// doesn't need to be connected to anything.
+async fn test_endpoint() -> Arc<iroh::Endpoint> {
+    Arc::new(iroh::Endpoint::builder().bind().await.expect("test endpoint should bind"))
+}
+
 /// Build a signed token with NetConnect for all services.
 fn make_connect_token() -> NetAuthenticator {
     let key = test_secret_key();
@@ -300,15 +308,18 @@ async fn socks5_handshake_with_registry() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let proxy_addr = listener.local_addr().unwrap();
 
-    let server = Socks5Server::new(resolver, auth, cancel.clone());
+    let endpoint = test_endpoint().await;
+    let server = Socks5Server::new(resolver, auth, endpoint, cancel.clone());
     let server_task = tokio::spawn(async move { server.run(listener).await });
 
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    // SOCKS5 CONNECT to valid service
+    // SOCKS5 CONNECT to valid service — handshake resolves the name, but the
+    // tunnel to the remote endpoint fails because no real iroh peer exists.
+    // The server returns HOST_UNREACHABLE (0x04) when the tunnel can't connect.
     let mut client = TcpStream::connect(proxy_addr).await.unwrap();
     let reply = socks5_connect(&mut client, "mydb.aspen", 5432).await.unwrap();
-    assert_eq!(reply, 0x00, "SOCKS5 CONNECT should succeed for valid service");
+    assert_eq!(reply, 0x04, "SOCKS5 should return HOST_UNREACHABLE when tunnel can't connect to remote endpoint");
 
     cancel.cancel();
     let _ = tokio::time::timeout(Duration::from_secs(2), server_task).await;
@@ -380,14 +391,16 @@ async fn socks5_token_deny_unauthorized_service() {
     // Start SOCKS5 server
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let proxy_addr = listener.local_addr().unwrap();
-    let server = Socks5Server::new(resolver, auth, cancel.clone());
+    let endpoint = test_endpoint().await;
+    let server = Socks5Server::new(resolver, auth, endpoint, cancel.clone());
     let server_task = tokio::spawn(async move { server.run(listener).await });
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    // Allowed service: should succeed
+    // Allowed service: handshake + auth succeeds, but tunnel can't connect to fake endpoint.
+    // HOST_UNREACHABLE (0x04) confirms the request was authorized and resolution worked.
     let mut client = TcpStream::connect(proxy_addr).await.unwrap();
     let reply = socks5_connect(&mut client, "allowed-svc.aspen", 5432).await.unwrap();
-    assert_eq!(reply, 0x00, "allowed service should get SOCKS5 success");
+    assert_eq!(reply, 0x04, "allowed service should pass auth but fail tunnel (HOST_UNREACHABLE)");
 
     // Denied service: should get connection refused (0x05)
     let mut client = TcpStream::connect(proxy_addr).await.unwrap();
@@ -414,7 +427,8 @@ async fn socks5_expired_token_rejects() {
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let proxy_addr = listener.local_addr().unwrap();
-    let server = Socks5Server::new(resolver, auth, cancel.clone());
+    let endpoint = test_endpoint().await;
+    let server = Socks5Server::new(resolver, auth, endpoint, cancel.clone());
     let server_task = tokio::spawn(async move { server.run(listener).await });
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -557,9 +571,11 @@ async fn daemon_start_stop_no_dns() {
     use aspen_net::daemon::DaemonConfig;
     use aspen_net::daemon::NetDaemon;
 
+    // Daemon now actually connects to a cluster, so an invalid ticket
+    // should produce a ClusterConnect error.
     let config = DaemonConfig {
         cluster_ticket: "test-ticket".to_string(),
-        token: "test-token".to_string(),
+        token: String::new(),
         socks5_addr: DaemonConfig::default_socks5_addr(),
         dns_addr: DaemonConfig::default_dns_addr(),
         dns_enabled: false,
@@ -567,11 +583,10 @@ async fn daemon_start_stop_no_dns() {
         tags: vec![],
     };
 
-    let mut daemon = NetDaemon::start(config).await.unwrap();
-    assert!(daemon.is_running());
-
-    daemon.shutdown().await;
-    assert!(!daemon.is_running());
+    let result = NetDaemon::start(config).await;
+    assert!(result.is_err(), "daemon should fail with invalid ticket");
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains("cluster connection failed"), "error should mention cluster connection: {err}");
 }
 
 #[tokio::test]
@@ -604,7 +619,8 @@ async fn socks5_rejects_non_aspen_domain() {
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let proxy_addr = listener.local_addr().unwrap();
-    let server = Socks5Server::new(resolver, auth, cancel.clone());
+    let endpoint = test_endpoint().await;
+    let server = Socks5Server::new(resolver, auth, endpoint, cancel.clone());
     let server_task = tokio::spawn(async move { server.run(listener).await });
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -624,7 +640,8 @@ async fn socks5_host_unreachable_unknown_service() {
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let proxy_addr = listener.local_addr().unwrap();
-    let server = Socks5Server::new(resolver, auth, cancel.clone());
+    let endpoint = test_endpoint().await;
+    let server = Socks5Server::new(resolver, auth, endpoint, cancel.clone());
     let server_task = tokio::spawn(async move { server.run(listener).await });
     tokio::time::sleep(Duration::from_millis(50)).await;
 

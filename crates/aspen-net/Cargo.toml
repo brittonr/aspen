@@ -14,7 +14,9 @@ aspen-proxy = { path = "../aspen-proxy" }
 aspen-auth = { path = "../aspen-auth" }
 aspen-traits = { path = "../aspen-traits" }
 aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-client = { path = "../aspen-client" }
 aspen-rpc-core = { path = "../aspen-rpc-core" }
+aspen-transport = { path = "../aspen-transport" }
 aspen-dns = { path = "../../../aspen-dns/crates/aspen-dns", optional = true }
 clap = { version = "4.5", features = ["derive"] }
 anyhow = "1.0"
@@ -35,6 +37,9 @@ serde_json = "1.0"
 
 # Error handling
 snafu = "0.8.9"
+
+# Random number generation
+rand = "0.9"
 
 # Tracing
 tracing = "0.1"

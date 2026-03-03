@@ -32,6 +32,8 @@ pub use aspen_docs_handler::DocsServiceExecutor;
 pub use aspen_forge_handler::ForgeServiceExecutor;
 #[cfg(feature = "jobs")]
 pub use aspen_job_handler::JobServiceExecutor;
+#[cfg(feature = "net")]
+pub use aspen_net;
 #[cfg(feature = "ci")]
 pub use aspen_nix_handler::CacheHandler;
 #[cfg(feature = "ci")]

@@ -47,11 +47,11 @@ pub enum RegistryError {
 ///
 /// Provides publish, unpublish, lookup, list operations for named services.
 /// All writes go through Raft consensus via the `KeyValueStore` trait.
-pub struct ServiceRegistry<S: KeyValueStore> {
+pub struct ServiceRegistry<S: KeyValueStore + ?Sized> {
     store: Arc<S>,
 }
 
-impl<S: KeyValueStore> ServiceRegistry<S> {
+impl<S: KeyValueStore + ?Sized> ServiceRegistry<S> {
     /// Create a new registry wrapping the given KV store.
     pub fn new(store: Arc<S>) -> Self {
         Self { store }

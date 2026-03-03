@@ -179,6 +179,18 @@ pub fn setup_router(
         }
     }
 
+    // Add net tunnel acceptor if enabled
+    #[cfg(feature = "net")]
+    {
+        use aspen_net::tunnel::TunnelAcceptor;
+        use aspen_transport::constants::NET_TUNNEL_ALPN;
+
+        let tunnel_cancel = tokio_util::sync::CancellationToken::new();
+        let tunnel_acceptor = TunnelAcceptor::new(tunnel_cancel);
+        builder = builder.accept(NET_TUNNEL_ALPN, tunnel_acceptor);
+        info!("Net tunnel acceptor registered (ALPN: /aspen/net-tunnel/0)");
+    }
+
     builder.spawn()
 }
 

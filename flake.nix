@@ -1529,7 +1529,7 @@
             // lib.optionalAttrs hasExternalRepos {
               full-aspen-node = fullBin {
                 name = "aspen-node";
-                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets"];
+                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "net"];
               };
               full-aspen-node-proxy = fullBin {
                 name = "aspen-node";
@@ -1540,10 +1540,14 @@
                 fullPluginsCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob";
+                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net";
                   doCheck = false;
                 }
               );
+              full-aspen-net-daemon = fullBin {
+                name = "aspen-net";
+                features = ["net"];
+              };
               full-aspen-cli = fullCliBin [];
               full-aspen-cli-forge = fullCliBin ["forge"];
               full-aspen-cli-plugins = fullCliBin ["plugins-rpc" "ci" "automerge"];
@@ -2000,6 +2004,17 @@
                 aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-forge;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
+              };
+
+              # Net service mesh E2E: SOCKS5 proxy routing through a real Raft cluster.
+              # Publishes an HTTP service, routes curl through SOCKS5 proxy over iroh QUIC tunnel.
+              # Build: nix build .#checks.x86_64-linux.net-service-mesh-test --impure
+              net-service-mesh-test = import ./nix/tests/net-service-mesh.nix {
+                inherit pkgs kvPluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                aspenNetPackage = bins.full-aspen-net-daemon;
               };
             }
             // lib.optionalAttrs (system == "x86_64-linux") {

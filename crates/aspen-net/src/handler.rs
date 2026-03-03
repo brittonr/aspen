@@ -23,11 +23,11 @@ use crate::registry::ServiceRegistry;
 use crate::types::ServiceEntry;
 
 /// Handler for net service mesh RPC requests.
-pub struct NetHandler<S: KeyValueStore> {
+pub struct NetHandler<S: KeyValueStore + ?Sized> {
     registry: Arc<ServiceRegistry<S>>,
 }
 
-impl<S: KeyValueStore> NetHandler<S> {
+impl<S: KeyValueStore + ?Sized> NetHandler<S> {
     /// Create a new handler wrapping the given registry.
     pub fn new(registry: Arc<ServiceRegistry<S>>) -> Self {
         Self { registry }
@@ -35,7 +35,7 @@ impl<S: KeyValueStore> NetHandler<S> {
 }
 
 #[async_trait]
-impl<S: KeyValueStore + 'static> RequestHandler for NetHandler<S> {
+impl<S: KeyValueStore + ?Sized + 'static> RequestHandler for NetHandler<S> {
     fn can_handle(&self, request: &ClientRpcRequest) -> bool {
         matches!(
             request,

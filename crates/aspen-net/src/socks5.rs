@@ -25,9 +25,9 @@ use crate::auth::NetAuthError;
 use crate::auth::NetAuthenticator;
 use crate::constants::MAX_SOCKS5_CONNECTIONS;
 use crate::constants::SOCKS5_HANDSHAKE_TIMEOUT_SECS;
-use crate::constants::SOCKS5_IDLE_TIMEOUT_SECS;
 use crate::resolver::NameResolver;
 use crate::resolver::ResolverError;
+use crate::tunnel::TunnelError;
 
 /// SOCKS5 protocol constants.
 const SOCKS5_VERSION: u8 = 0x05;
@@ -66,6 +66,10 @@ pub enum Socks5Error {
     /// Auth error.
     #[snafu(display("auth error: {source}"))]
     Auth { source: NetAuthError },
+
+    /// Tunnel error.
+    #[snafu(display("tunnel error: {source}"))]
+    Tunnel { source: TunnelError },
 }
 
 /// SOCKS5 proxy server.
@@ -75,20 +79,23 @@ pub enum Socks5Error {
 pub struct Socks5Server<S: KeyValueStore> {
     resolver: Arc<NameResolver<S>>,
     authenticator: Arc<NetAuthenticator>,
+    endpoint: Arc<iroh::Endpoint>,
     active_connections: Arc<AtomicU32>,
     cancel: tokio_util::sync::CancellationToken,
 }
 
 impl<S: KeyValueStore + 'static> Socks5Server<S> {
-    /// Create a new SOCKS5 server.
+    /// Create a new SOCKS5 server with an iroh endpoint for tunneling.
     pub fn new(
         resolver: Arc<NameResolver<S>>,
         authenticator: Arc<NetAuthenticator>,
+        endpoint: Arc<iroh::Endpoint>,
         cancel: tokio_util::sync::CancellationToken,
     ) -> Self {
         Self {
             resolver,
             authenticator,
+            endpoint,
             active_connections: Arc::new(AtomicU32::new(0)),
             cancel,
         }
@@ -118,11 +125,12 @@ impl<S: KeyValueStore + 'static> Socks5Server<S> {
                     self.active_connections.fetch_add(1, Ordering::Relaxed);
                     let resolver = Arc::clone(&self.resolver);
                     let auth = Arc::clone(&self.authenticator);
+                    let endpoint = Arc::clone(&self.endpoint);
                     let counter = Arc::clone(&self.active_connections);
                     let cancel = self.cancel.clone();
 
                     tokio::spawn(async move {
-                        if let Err(e) = handle_connection(stream, addr, &resolver, &auth, cancel).await {
+                        if let Err(e) = handle_connection(stream, addr, &resolver, &auth, &endpoint, cancel).await {
                             debug!("SOCKS5 connection from {addr} error: {e}");
                         }
                         counter.fetch_sub(1, Ordering::Relaxed);
@@ -146,6 +154,7 @@ async fn handle_connection<S: KeyValueStore + 'static>(
     addr: SocketAddr,
     resolver: &NameResolver<S>,
     auth: &NetAuthenticator,
+    endpoint: &iroh::Endpoint,
     cancel: tokio_util::sync::CancellationToken,
 ) -> Result<(), Socks5Error> {
     // Wrap handshake in a timeout
@@ -155,7 +164,7 @@ async fn handle_connection<S: KeyValueStore + 'static>(
     )
     .await;
 
-    let (_domain, _port, _endpoint_id, _remote_port) = match handshake_result {
+    let (domain, _port, endpoint_id, remote_port) = match handshake_result {
         Ok(Ok(result)) => result,
         Ok(Err(e)) => return Err(e),
         Err(_) => {
@@ -166,20 +175,64 @@ async fn handle_connection<S: KeyValueStore + 'static>(
         }
     };
 
-    // Send success response
+    // Parse the endpoint ID and build an EndpointAddr for iroh connection
+    let remote_id: iroh::EndpointId = match endpoint_id.parse() {
+        Ok(id) => id,
+        Err(e) => {
+            warn!("SOCKS5 invalid endpoint id '{endpoint_id}': {e}");
+            send_reply(&mut stream, REPLY_HOST_UNREACHABLE).await?;
+            return Err(Socks5Error::Protocol {
+                reason: format!("invalid endpoint id '{endpoint_id}': {e}"),
+            });
+        }
+    };
+    let remote_addr = iroh::EndpointAddr::new(remote_id);
+
+    // Open the tunnel through iroh QUIC
+    let (mut send, mut recv) = match crate::tunnel::open_tunnel(endpoint, remote_addr, remote_port).await {
+        Ok(streams) => streams,
+        Err(e) => {
+            warn!(
+                addr = %addr,
+                domain = %domain,
+                error = %e,
+                "SOCKS5 tunnel connection failed"
+            );
+            send_reply(&mut stream, REPLY_HOST_UNREACHABLE).await?;
+            return Err(Socks5Error::Tunnel { source: e });
+        }
+    };
+
+    // Send success response — tunnel is established
     send_reply(&mut stream, REPLY_SUCCESS).await?;
 
-    debug!("SOCKS5 tunnel established: {addr} -> {_domain}:{_port} (endpoint={_endpoint_id}, port={_remote_port})");
+    debug!("SOCKS5 tunnel established: {addr} -> {domain}:{remote_port} (endpoint={endpoint_id})");
 
-    // In a full implementation, we'd create a tunnel via DownstreamProxy here.
-    // For now, we close after successful handshake since the tunnel requires
-    // a running iroh endpoint which is wired up in the daemon.
+    // Bidirectional copy between TCP socket and QUIC stream
+    let (mut tcp_read, mut tcp_write) = stream.split();
 
-    // Wait for cancel signal or idle timeout (placeholder for tunnel copy)
     tokio::select! {
-        _ = cancel.cancelled() => {},
-        _ = time::sleep(std::time::Duration::from_secs(SOCKS5_IDLE_TIMEOUT_SECS)) => {},
-    };
+        _ = cancel.cancelled() => {
+            debug!("SOCKS5 tunnel cancelled: {addr} -> {domain}");
+        }
+        result = async {
+            let c2s = tokio::io::copy(&mut tcp_read, &mut send);
+            let s2c = tokio::io::copy(&mut recv, &mut tcp_write);
+            tokio::try_join!(c2s, s2c)
+        } => {
+            match result {
+                Ok((c2s, s2c)) => {
+                    debug!("SOCKS5 tunnel closed: {addr} -> {domain} (c2s={c2s}, s2c={s2c})");
+                }
+                Err(e) => {
+                    debug!("SOCKS5 tunnel error: {addr} -> {domain}: {e}");
+                }
+            }
+        }
+    }
+
+    // Best-effort shutdown
+    let _ = send.finish();
 
     Ok(())
 }

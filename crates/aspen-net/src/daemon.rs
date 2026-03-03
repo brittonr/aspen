@@ -6,24 +6,27 @@
 //! - Optionally starts a DNS server for zone `aspen`
 //! - Auto-publishes configured local services
 //! - Refreshes the name resolver cache periodically
-//!
-//! # DNS Integration
-//!
-//! When the `dns` feature is enabled and `--no-dns` is not passed:
-//! 1. Creates an `AspenDnsClient` from a `DnsClientTicket` obtained from the cluster
-//! 2. Starts a `DnsProtocolServer` bound to the configured port (default 5353)
-//! 3. Zone sync happens via iroh-docs CRDT replication (entries arrive via `process_sync_entry`)
 
 use std::net::SocketAddr;
-#[cfg(feature = "dns")]
 use std::sync::Arc;
+use std::time::Duration;
 
+use aspen_client::AspenClient;
+use aspen_client::AuthToken;
 use snafu::Snafu;
+use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing::warn;
 
+use crate::auth::NetAuthenticator;
+use crate::client_kv::ClientKvAdapter;
 use crate::constants::NET_REGISTRY_POLL_INTERVAL_SECS;
+use crate::registry::ServiceRegistry;
+use crate::resolver::NameResolver;
+use crate::socks5::Socks5Server;
+use crate::tunnel::TunnelAcceptor;
+use crate::types::ServiceEntry;
 
 /// Configuration for the service mesh daemon.
 #[derive(Debug, Clone)]
@@ -79,14 +82,10 @@ pub enum DaemonError {
 /// Service mesh daemon handle.
 ///
 /// Holds all running components and provides graceful shutdown.
-/// Components are optional — the daemon works without DNS if
-/// the `dns` feature is disabled or `--no-dns` is passed.
+#[derive(Debug)]
 pub struct NetDaemon {
     /// Cancellation token for coordinated shutdown.
     cancel: CancellationToken,
-    /// DNS server handle (only present when dns is enabled).
-    #[cfg(feature = "dns")]
-    dns_client: Option<Arc<aspen_dns::AspenDnsClient>>,
     /// Whether the daemon is running.
     is_running: bool,
 }
@@ -107,117 +106,117 @@ impl NetDaemon {
             "starting service mesh daemon"
         );
 
-        // --- DNS setup (feature-gated) ---
-        #[cfg(feature = "dns")]
-        let dns_client = if config.dns_enabled {
-            Some(Self::start_dns(&config, cancel.clone()).await?)
-        } else {
-            info!("DNS resolver disabled (--no-dns)");
+        // --- Connect to the Aspen cluster ---
+        let token = if config.token.is_empty() {
             None
+        } else {
+            Some(AuthToken::from_base64(&config.token).map_err(|e| DaemonError::ClusterConnect {
+                reason: format!("invalid token: {e}"),
+            })?)
         };
 
-        #[cfg(not(feature = "dns"))]
-        if config.dns_enabled {
-            warn!("DNS requested but aspen-net compiled without 'dns' feature; skipping DNS server");
+        let client = AspenClient::connect(&config.cluster_ticket, Duration::from_secs(10), token)
+            .await
+            .map_err(|e| DaemonError::ClusterConnect { reason: e.to_string() })?;
+
+        let endpoint = Arc::new(client.endpoint().clone());
+        let client = Arc::new(client);
+
+        info!(endpoint_id = %endpoint.id(), "connected to cluster");
+
+        // --- Build the KV adapter, registry, and resolver ---
+        let kv_adapter = Arc::new(ClientKvAdapter::new(Arc::clone(&client)));
+        let registry = Arc::new(ServiceRegistry::new(kv_adapter as Arc<ClientKvAdapter>));
+        let resolver = Arc::new(NameResolver::new(registry.clone()));
+
+        // --- Auto-publish configured services ---
+        for spec in &config.auto_publish {
+            let (name, port, proto) = parse_publish_spec(spec)?;
+            let entry = ServiceEntry {
+                name: name.clone(),
+                endpoint_id: endpoint.id().to_string(),
+                port,
+                proto,
+                tags: config.tags.clone(),
+                hostname: None,
+                published_at_ms: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64,
+            };
+            match registry.publish(entry).await {
+                Ok(()) => info!(name, port, "auto-published service"),
+                Err(e) => warn!(name, port, error = %e, "failed to auto-publish service"),
+            }
         }
+
+        // --- Build authenticator ---
+        // For now, use a permissive authenticator (allows all .aspen connections).
+        // Real auth would validate the daemon's token against the cluster.
+        let auth = Arc::new(NetAuthenticator::permissive());
+
+        // --- Start SOCKS5 proxy ---
+        let listener = TcpListener::bind(config.socks5_addr).await.map_err(|e| DaemonError::Socks5Start {
+            reason: format!("bind {}: {e}", config.socks5_addr),
+        })?;
+
+        let socks5_addr = listener.local_addr().map_err(|e| DaemonError::Socks5Start {
+            reason: format!("local_addr: {e}"),
+        })?;
+
+        let socks5 = Socks5Server::new(resolver.clone(), auth, Arc::clone(&endpoint), cancel.clone());
+
+        let socks5_cancel = cancel.clone();
+        tokio::spawn(async move {
+            if let Err(e) = socks5.run(listener).await
+                && !socks5_cancel.is_cancelled()
+            {
+                warn!(error = %e, "SOCKS5 server error");
+            }
+        });
+
+        info!(addr = %socks5_addr, "SOCKS5 proxy listening");
+
+        // --- Register TunnelAcceptor via iroh Router ---
+        // The daemon can also receive tunnel connections if other proxies
+        // need to route through it. Register on the endpoint.
+        let tunnel_acceptor = TunnelAcceptor::new(cancel.clone());
+        let _router = iroh::protocol::Router::builder((*endpoint).clone())
+            .accept(aspen_transport::constants::NET_TUNNEL_ALPN, tunnel_acceptor)
+            .spawn();
 
         // --- Registry poll task ---
         let poll_cancel = cancel.clone();
+        let poll_resolver = resolver.clone();
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(NET_REGISTRY_POLL_INTERVAL_SECS));
+            let mut interval = tokio::time::interval(Duration::from_secs(NET_REGISTRY_POLL_INTERVAL_SECS));
             loop {
                 tokio::select! {
                     _ = poll_cancel.cancelled() => break,
                     _ = interval.tick() => {
-                        // In production this would call resolver.refresh_cache()
-                        // via the client RPC channel. For now, the tick drives
-                        // staleness checking on the DNS client.
-                        #[cfg(feature = "dns")]
-                        if let Some(ref _client) = None::<Arc<aspen_dns::AspenDnsClient>> {
-                            // placeholder: dns_client.check_staleness() runs via the
-                            // sync layer, not the poll loop.
+                        if let Err(e) = poll_resolver.refresh_cache().await {
+                            warn!(error = %e, "registry cache refresh failed");
                         }
                     }
                 }
             }
         });
 
+        // --- DNS setup (feature-gated) ---
+        #[cfg(not(feature = "dns"))]
+        if config.dns_enabled {
+            warn!("DNS requested but aspen-net compiled without 'dns' feature; skipping DNS server");
+        }
+
         info!("service mesh daemon started");
 
         Ok(Self {
             cancel,
-            #[cfg(feature = "dns")]
-            dns_client,
             is_running: true,
         })
     }
 
-    /// Start the DNS subsystem: create client, build server, spawn task.
-    #[cfg(feature = "dns")]
-    async fn start_dns(
-        config: &DaemonConfig,
-        cancel: CancellationToken,
-    ) -> Result<Arc<aspen_dns::AspenDnsClient>, DaemonError> {
-        use aspen_dns::AspenDnsClient;
-        use aspen_dns::DnsClientTicket;
-        use aspen_dns::DnsProtocolServerBuilder;
-
-        // Parse the cluster ticket to extract DNS-related info.
-        // In production, the daemon would call a cluster RPC (e.g., GetDnsTicket)
-        // to obtain the DnsClientTicket. For now, create a client that will be
-        // populated via process_sync_entry() as iroh-docs entries arrive.
-        let dns_ticket = DnsClientTicket::new(
-            &config.cluster_ticket, // use cluster ticket as cluster_id
-            "",                     // namespace discovered at runtime
-            vec![],                 // peers discovered at runtime
-        )
-        .with_zone_filter(vec!["aspen".to_string()])
-        .map_err(|e| DaemonError::DnsStart {
-            reason: format!("zone filter: {e}"),
-        })?;
-
-        let dns_client = Arc::new(AspenDnsClient::builder().ticket(dns_ticket).build());
-
-        // Build the DNS protocol server
-        let server = DnsProtocolServerBuilder::new()
-            .client(Arc::clone(&dns_client))
-            .bind_addr(config.dns_addr)
-            .zone("aspen".to_string())
-            .forwarding(true)
-            .upstreams(default_upstreams())
-            .build()
-            .await
-            .map_err(|e| DaemonError::DnsStart { reason: e.to_string() })?;
-
-        info!(
-            addr = %config.dns_addr,
-            zones = ?["aspen"],
-            "DNS protocol server started"
-        );
-
-        // Run the DNS server in a background task
-        let dns_cancel = cancel.clone();
-        tokio::spawn(async move {
-            tokio::select! {
-                _ = dns_cancel.cancelled() => {
-                    info!("DNS server shutting down");
-                }
-                result = server.run() => {
-                    match result {
-                        Ok(()) => info!("DNS server stopped"),
-                        Err(e) => warn!(error = %e, "DNS server error"),
-                    }
-                }
-            }
-        });
-
-        Ok(dns_client)
-    }
-
     /// Gracefully shut down the daemon.
-    ///
-    /// Cancels all background tasks and waits up to `NET_SHUTDOWN_TIMEOUT_SECS`
-    /// for them to complete.
     pub async fn shutdown(&mut self) {
         if !self.is_running {
             return;
@@ -227,7 +226,7 @@ impl NetDaemon {
         self.cancel.cancel();
 
         // Give tasks time to drain
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         self.is_running = false;
         info!("service mesh daemon stopped");
@@ -236,14 +235,6 @@ impl NetDaemon {
     /// Check if the daemon is running.
     pub fn is_running(&self) -> bool {
         self.is_running
-    }
-
-    /// Get the DNS client handle (for external sync wiring).
-    ///
-    /// Returns `None` if DNS is disabled or the feature is not compiled in.
-    #[cfg(feature = "dns")]
-    pub fn dns_client(&self) -> Option<&Arc<aspen_dns::AspenDnsClient>> {
-        self.dns_client.as_ref()
     }
 
     /// Get the cancellation token for external coordination.
@@ -280,15 +271,6 @@ pub fn parse_publish_spec(spec: &str) -> Result<(String, u16, String), DaemonErr
     }
 }
 
-/// Default upstream DNS servers for forwarding.
-#[cfg(feature = "dns")]
-fn default_upstreams() -> Vec<SocketAddr> {
-    vec![
-        SocketAddr::from(([8, 8, 8, 8], 53)),
-        SocketAddr::from(([8, 8, 4, 4], 53)),
-    ]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,42 +303,5 @@ mod tests {
     fn daemon_config_defaults() {
         assert_eq!(DaemonConfig::default_socks5_addr(), SocketAddr::from(([127, 0, 0, 1], 1080)));
         assert_eq!(DaemonConfig::default_dns_addr(), SocketAddr::from(([127, 0, 0, 1], 5353)));
-    }
-
-    #[tokio::test]
-    async fn daemon_start_no_dns() {
-        let config = DaemonConfig {
-            cluster_ticket: "test-ticket".to_string(),
-            token: "test-token".to_string(),
-            socks5_addr: DaemonConfig::default_socks5_addr(),
-            dns_addr: DaemonConfig::default_dns_addr(),
-            dns_enabled: false,
-            auto_publish: vec![],
-            tags: vec![],
-        };
-
-        let mut daemon = NetDaemon::start(config).await.unwrap();
-        assert!(daemon.is_running());
-
-        daemon.shutdown().await;
-        assert!(!daemon.is_running());
-    }
-
-    #[tokio::test]
-    async fn daemon_shutdown_idempotent() {
-        let config = DaemonConfig {
-            cluster_ticket: "test-ticket".to_string(),
-            token: "test-token".to_string(),
-            socks5_addr: DaemonConfig::default_socks5_addr(),
-            dns_addr: DaemonConfig::default_dns_addr(),
-            dns_enabled: false,
-            auto_publish: vec![],
-            tags: vec![],
-        };
-
-        let mut daemon = NetDaemon::start(config).await.unwrap();
-        daemon.shutdown().await;
-        daemon.shutdown().await; // second call is a no-op
-        assert!(!daemon.is_running());
     }
 }
