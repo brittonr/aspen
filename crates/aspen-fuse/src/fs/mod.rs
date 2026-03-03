@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 use std::path::Component;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -41,6 +42,7 @@ use crate::inode::InodeManager;
 use crate::locking::LockManager;
 use crate::metadata::FileMetadata;
 use crate::prefetch::Prefetcher;
+use crate::writeback::FlushTimer;
 use crate::writeback::WriteBuffer;
 
 // POSIX access mode bits
@@ -70,6 +72,20 @@ enum KvBackend {
     InMemory(SharedInMemoryStore),
 }
 
+impl KvBackend {
+    /// Clone the backend for sharing with the background flush timer.
+    ///
+    /// All variants use Arc-wrapped types, so this is a cheap reference-count
+    /// increment — no data is copied.
+    fn clone_arc(&self) -> Self {
+        match self {
+            KvBackend::Client(c) => KvBackend::Client(Arc::clone(c)),
+            KvBackend::InMemory(s) => KvBackend::InMemory(Arc::clone(s)),
+            KvBackend::None => KvBackend::None,
+        }
+    }
+}
+
 /// Aspen FUSE filesystem.
 ///
 /// Provides a filesystem view of an Aspen KV cluster.
@@ -89,11 +105,17 @@ pub struct AspenFs {
     /// Read cache for reducing network round-trips.
     pub(crate) cache: ReadCache,
     /// Write-ahead buffer for batching small writes.
-    pub(crate) write_buffer: WriteBuffer,
+    ///
+    /// Wrapped in Arc so the background flush timer can share it.
+    pub(crate) write_buffer: Arc<WriteBuffer>,
     /// Prefetch engine for speculative readahead.
     pub(crate) prefetcher: Prefetcher,
     /// POSIX file lock manager.
     pub(crate) lock_manager: LockManager,
+    /// Background flush timer handle. Started in `init()`, stopped in `destroy()`.
+    ///
+    /// Uses Mutex for interior mutability since FUSE's `init`/`destroy` take `&self`.
+    flush_timer: Mutex<Option<FlushTimer>>,
 }
 
 impl AspenFs {
@@ -106,9 +128,10 @@ impl AspenFs {
             backend: KvBackend::Client(client),
             key_prefix: String::new(),
             cache: ReadCache::new(),
-            write_buffer: WriteBuffer::new(),
+            write_buffer: Arc::new(WriteBuffer::new()),
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
+            flush_timer: Mutex::new(None),
         }
     }
 
@@ -125,9 +148,10 @@ impl AspenFs {
             backend: KvBackend::Client(client),
             key_prefix: prefix,
             cache: ReadCache::new(),
-            write_buffer: WriteBuffer::new(),
+            write_buffer: Arc::new(WriteBuffer::new()),
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
+            flush_timer: Mutex::new(None),
         }
     }
 
@@ -141,9 +165,10 @@ impl AspenFs {
             backend: KvBackend::None,
             key_prefix: String::new(),
             cache: ReadCache::new(),
-            write_buffer: WriteBuffer::new(),
+            write_buffer: Arc::new(WriteBuffer::new()),
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
+            flush_timer: Mutex::new(None),
         }
     }
 
@@ -158,9 +183,10 @@ impl AspenFs {
             backend: KvBackend::InMemory(Arc::new(std::sync::RwLock::new(BTreeMap::new()))),
             key_prefix: String::new(),
             cache: ReadCache::new(),
-            write_buffer: WriteBuffer::new(),
+            write_buffer: Arc::new(WriteBuffer::new()),
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
+            flush_timer: Mutex::new(None),
         }
     }
 
@@ -178,9 +204,10 @@ impl AspenFs {
             backend: KvBackend::InMemory(Arc::clone(&store)),
             key_prefix: String::new(),
             cache: ReadCache::new(),
-            write_buffer: WriteBuffer::new(),
+            write_buffer: Arc::new(WriteBuffer::new()),
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
+            flush_timer: Mutex::new(None),
         };
         (fs, store)
     }
@@ -196,9 +223,33 @@ impl AspenFs {
             backend: KvBackend::InMemory(store),
             key_prefix: String::new(),
             cache: ReadCache::new(),
-            write_buffer: WriteBuffer::new(),
+            write_buffer: Arc::new(WriteBuffer::new()),
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
+            flush_timer: Mutex::new(None),
+        }
+    }
+
+    /// Create a lightweight clone for KV access only.
+    ///
+    /// Shares the same underlying KV connection (via Arc) but gets fresh
+    /// cache, buffer, and prefetcher instances. Used by the background
+    /// flush timer to write flushed data without holding a reference to
+    /// the primary AspenFs.
+    ///
+    /// The clone has no flush timer (it's a passive KV accessor).
+    fn clone_for_kv_access(&self) -> Self {
+        Self {
+            inodes: InodeManager::new(),
+            uid: self.uid,
+            gid: self.gid,
+            backend: self.backend.clone_arc(),
+            key_prefix: self.key_prefix.clone(),
+            cache: ReadCache::new(),
+            write_buffer: Arc::new(WriteBuffer::new()),
+            prefetcher: Prefetcher::new(),
+            lock_manager: LockManager::new(),
+            flush_timer: Mutex::new(None),
         }
     }
 

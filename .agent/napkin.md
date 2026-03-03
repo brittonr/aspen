@@ -85,6 +85,8 @@
 | 2026-02-27 | self | Rust 2024: explicit `ref` in pattern bindings not allowed when implicitly borrowing | Don't use `Some(ref x)` in Rust 2024 — use `Some(x)` instead. The borrow is implicit. |
 | 2026-02-27 | self | Adding field to `FederationSettings` breaks 3 constructor methods (`disabled()`, `public()`, `allowlist()`) | When adding fields to structs with constructor methods, update ALL constructors immediately. Use `#[serde(default)]` for backwards-compatible deserialization. |
 
+| 2026-03-03 | self | Background flush timer needs `AspenFs` for KV access but `AspenFs` is moved into `Server<AspenFs>` — can't hold `&AspenFs` in the timer thread | Use `clone_for_kv_access()` to create a lightweight KV-only clone that shares the `Arc`-wrapped backend. Share the `WriteBuffer` via `Arc<WriteBuffer>`. Timer thread holds its own `AspenFs` clone for writes. |
+
 ## Patterns That Work
 
 **Workspace Architecture (consolidated — formerly 48 sibling repos):**

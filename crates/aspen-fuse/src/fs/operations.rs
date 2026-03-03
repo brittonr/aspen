@@ -41,12 +41,33 @@ impl FileSystem for AspenFs {
     type Handle = u64;
 
     fn init(&self, _capable: FsOptions) -> std::io::Result<FsOptions> {
+        // Start the background flush timer.
+        // The timer periodically flushes expired write buffers even when
+        // there is no FUSE activity, ensuring durability.
+        let timer = crate::writeback::FlushTimer::start(self.write_buffer.clone(), self.clone_for_kv_access());
+        if let Ok(mut guard) = self.flush_timer.lock() {
+            *guard = Some(timer);
+        }
+
         // Return capabilities we support
         Ok(FsOptions::empty())
     }
 
     fn destroy(&self) {
-        // Cleanup (close connections, etc.)
+        // Stop the background flush timer
+        if let Ok(mut guard) = self.flush_timer.lock()
+            && let Some(mut timer) = guard.take()
+        {
+            timer.stop();
+        }
+
+        // Flush all remaining buffered writes before shutdown.
+        // Uses a lightweight KV-access clone since we can't pass &self
+        // to our own write_buffer (it's already borrowed as &self.write_buffer).
+        let kv_fs = self.clone_for_kv_access();
+        if let Err(e) = self.write_buffer.flush_all(&kv_fs) {
+            tracing::error!(error = %e, "failed to flush write buffer on destroy");
+        }
     }
 
     fn lookup(&self, ctx: &Context, parent: u64, name: &CStr) -> std::io::Result<Entry> {

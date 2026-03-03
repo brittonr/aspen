@@ -40,10 +40,17 @@
 
 use std::collections::HashMap;
 use std::io;
+use std::sync::Arc;
 use std::sync::RwLock;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::thread;
 use std::time::Instant;
+
+use tracing::debug;
+use tracing::error;
+use tracing::info;
 
 use crate::chunking::chunked_write_range;
 use crate::constants::WRITEBACK_FLUSH_INTERVAL;
@@ -439,6 +446,122 @@ pub struct BufferStats {
     pub total_bytes: usize,
 }
 
+// ============================================================================
+// Background Flush Timer
+// ============================================================================
+
+/// Background flush timer that periodically flushes expired write buffers.
+///
+/// Spawns a dedicated OS thread (not tokio — FUSE uses `std::sync`) that
+/// wakes every `WRITEBACK_FLUSH_INTERVAL` and calls `flush_expired()`.
+/// This ensures dirty buffers are flushed even during FUSE idle periods.
+///
+/// # Lifecycle
+///
+/// - Created via [`FlushTimer::start`] with a shared `WriteBuffer` and a KV-access-only `AspenFs`
+///   clone.
+/// - Runs until [`FlushTimer::stop`] is called or the stop flag is set.
+/// - `stop()` signals the thread and joins it (bounded by one interval).
+///
+/// # Tiger Style
+///
+/// - Bounded: thread exits on stop signal, no unbounded loops.
+/// - Fail-safe: flush errors are logged but don't crash the thread.
+/// - Resource-clean: thread handle is joined on stop.
+pub(crate) struct FlushTimer {
+    /// Signal to stop the background thread.
+    stop_flag: Arc<AtomicBool>,
+    /// Background thread handle.
+    thread: Option<thread::JoinHandle<()>>,
+}
+
+impl FlushTimer {
+    /// Start the background flush timer.
+    ///
+    /// # Arguments
+    ///
+    /// * `write_buffer` - Shared write buffer (same Arc held by AspenFs)
+    /// * `kv_fs` - Lightweight AspenFs clone with KV access only (no timer, empty buffer)
+    pub(crate) fn start(write_buffer: Arc<WriteBuffer>, kv_fs: AspenFs) -> Self {
+        let stop_flag = Arc::new(AtomicBool::new(false));
+        let stop_flag_thread = stop_flag.clone();
+        let interval = WRITEBACK_FLUSH_INTERVAL;
+
+        let thread = thread::Builder::new()
+            .name("aspen-flush-timer".to_string())
+            .spawn(move || {
+                info!(interval_ms = interval.as_millis() as u64, "flush timer started");
+
+                loop {
+                    thread::sleep(interval);
+
+                    if stop_flag_thread.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    let stats = write_buffer.stats();
+                    if stats.file_count == 0 {
+                        continue;
+                    }
+
+                    match write_buffer.flush_expired(&kv_fs) {
+                        Ok(()) => {
+                            let after = write_buffer.stats();
+                            let flushed = stats.file_count.saturating_sub(after.file_count);
+                            if flushed > 0 {
+                                debug!(
+                                    flushed_files = flushed,
+                                    remaining_files = after.file_count,
+                                    remaining_bytes = after.total_bytes,
+                                    "flush timer: flushed expired buffers"
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            // Log but don't crash — next tick will retry
+                            error!(
+                                error = %e,
+                                "flush timer: error flushing expired buffers"
+                            );
+                        }
+                    }
+                }
+
+                info!("flush timer stopped");
+            })
+            .expect("failed to spawn flush timer thread");
+
+        Self {
+            stop_flag,
+            thread: Some(thread),
+        }
+    }
+
+    /// Stop the background flush timer and join the thread.
+    ///
+    /// Signals the thread to exit and waits for it to finish.
+    /// Safe to call multiple times (subsequent calls are no-ops).
+    pub(crate) fn stop(&mut self) {
+        self.stop_flag.store(true, Ordering::Relaxed);
+
+        if let Some(thread) = self.thread.take()
+            && let Err(e) = thread.join()
+        {
+            error!("flush timer thread panicked: {e:?}");
+        }
+    }
+}
+
+impl Drop for FlushTimer {
+    fn drop(&mut self) {
+        // Ensure the thread is stopped even if stop() wasn't called explicitly
+        self.stop_flag.store(true, Ordering::Relaxed);
+        // Don't join on drop — the thread will exit on its next tick
+        // when it observes the stop flag. Joining here could block the
+        // drop path for up to WRITEBACK_FLUSH_INTERVAL.
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -760,5 +883,106 @@ mod tests {
         // Read non-overlapping region [0, 10)
         let data = buffer.read_buffered(key, 0, 10);
         assert!(data.is_none());
+    }
+
+    // ========================================================================
+    // FlushTimer tests
+    // ========================================================================
+
+    #[test]
+    fn test_flush_timer_flushes_expired_entries() {
+        use std::thread;
+        use std::time::Duration;
+
+        // Create shared write buffer and in-memory filesystem for KV access
+        let write_buffer = Arc::new(WriteBuffer::new());
+        let kv_fs = AspenFs::new_in_memory(1000, 1000);
+
+        // Buffer a write
+        write_buffer.buffer_write("timer/file1", 0, b"hello from timer").unwrap();
+        assert!(write_buffer.has_pending("timer/file1"));
+
+        // Wait for the write to expire (WRITEBACK_FLUSH_INTERVAL = 500ms)
+        thread::sleep(WRITEBACK_FLUSH_INTERVAL + Duration::from_millis(100));
+
+        // Start the flush timer with the shared buffer
+        let mut timer = FlushTimer::start(write_buffer.clone(), kv_fs);
+
+        // Wait one timer tick for the flush to happen
+        thread::sleep(WRITEBACK_FLUSH_INTERVAL + Duration::from_millis(200));
+
+        // Buffer should be empty (timer flushed it)
+        assert!(!write_buffer.has_pending("timer/file1"), "expected timer to flush expired entry");
+
+        // Stop the timer cleanly
+        timer.stop();
+    }
+
+    #[test]
+    fn test_flush_timer_leaves_fresh_entries() {
+        use std::thread;
+        use std::time::Duration;
+
+        let write_buffer = Arc::new(WriteBuffer::new());
+        let kv_fs = AspenFs::new_in_memory(1000, 1000);
+
+        // Start the timer first
+        let mut timer = FlushTimer::start(write_buffer.clone(), kv_fs);
+
+        // Buffer a write AFTER the timer starts (it's fresh, not expired)
+        write_buffer.buffer_write("timer/fresh", 0, b"fresh data").unwrap();
+
+        // Wait less than the flush interval — entry should stay
+        thread::sleep(Duration::from_millis(200));
+        assert!(write_buffer.has_pending("timer/fresh"), "fresh entry should not be flushed yet");
+
+        // Stop the timer
+        timer.stop();
+    }
+
+    #[test]
+    fn test_flush_timer_stop_is_idempotent() {
+        let write_buffer = Arc::new(WriteBuffer::new());
+        let kv_fs = AspenFs::new_in_memory(1000, 1000);
+
+        let mut timer = FlushTimer::start(write_buffer, kv_fs);
+
+        // Calling stop multiple times should not panic
+        timer.stop();
+        timer.stop();
+    }
+
+    #[test]
+    fn test_flush_timer_writes_to_kv() {
+        use std::thread;
+        use std::time::Duration;
+
+        // Use shared in-memory store so we can inspect KV after flush
+        let (kv_fs, store) = AspenFs::new_in_memory_shared(1000, 1000);
+        let write_buffer = Arc::new(WriteBuffer::new());
+
+        // Buffer a write
+        write_buffer.buffer_write("timer/kv_test", 0, b"persisted data").unwrap();
+
+        // Wait for it to expire
+        thread::sleep(WRITEBACK_FLUSH_INTERVAL + Duration::from_millis(100));
+
+        // Start flush timer — it should flush the expired entry to KV
+        let mut timer = FlushTimer::start(write_buffer.clone(), kv_fs);
+
+        // Wait for a timer tick
+        thread::sleep(WRITEBACK_FLUSH_INTERVAL + Duration::from_millis(200));
+
+        // Verify data landed in the KV store
+        let store_guard = store.read().unwrap();
+        let value = store_guard.get("timer/kv_test");
+        assert!(value.is_some(), "expected data to be flushed to KV store");
+        assert_eq!(value.unwrap(), b"persisted data");
+        drop(store_guard);
+
+        // Buffer should be empty
+        assert!(!write_buffer.has_pending("timer/kv_test"));
+
+        timer.stop();
     }
 }
