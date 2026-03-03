@@ -38,16 +38,16 @@
 ## 5. Daemon Cluster Wiring
 
 - [x] 5.1 Added `aspen-client` and `aspen-transport` as dependencies in `crates/aspen-net/Cargo.toml`
-- [ ] 5.2 In `NetDaemon::start()`: parse `cluster_ticket` (extract peer addresses from the ticket format used by aspen-client)
-- [ ] 5.3 Create an `iroh::Endpoint` (discovery disabled for daemon — addresses come from ticket)
-- [ ] 5.4 Create `ClientKvAdapter` from the endpoint and peer addresses
-- [ ] 5.5 Create `ServiceRegistry` and `NameResolver` from the adapter
-- [ ] 5.6 Create `NetAuthenticator` (permissive for now — allows all `.aspen` domains)
-- [ ] 5.7 Create `Socks5Server` with the endpoint, resolver, and authenticator
-- [ ] 5.8 Bind `TcpListener` on `socks5_addr`, spawn `socks5_server.run(listener)` as background task
-- [ ] 5.9 Optionally register `TunnelAcceptor` on the daemon's iroh endpoint (so daemon can also receive tunnels)
-- [ ] 5.10 Wire auto-publish: parse `--publish` specs, call `registry.publish()` for each
-- [ ] 5.11 Add daemon integration test: start daemon with mock cluster, verify SOCKS5 listener binds
+- [x] 5.2 Daemon connects via `AspenClient::connect()` which parses the ticket and creates an iroh endpoint
+- [x] 5.3 Endpoint created by AspenClient (discovery via ticket bootstrap peers)
+- [x] 5.4 `ClientKvAdapter::new(client)` wraps the AspenClient for KV access
+- [x] 5.5 `ServiceRegistry::new(kv_adapter)` and `NameResolver::new(registry)` built from the adapter
+- [x] 5.6 `NetAuthenticator::permissive()` creates a self-signed NetAdmin token for trusted environments
+- [x] 5.7 `Socks5Server::new(resolver, auth, endpoint, cancel)` with real iroh endpoint
+- [x] 5.8 `TcpListener::bind(socks5_addr)` + spawn `socks5.run(listener)` as background task
+- [x] 5.9 `TunnelAcceptor` registered via `Router::builder(endpoint).accept(NET_TUNNEL_ALPN, ...)`
+- [x] 5.10 Auto-publish loop parses `--publish` specs, builds `ServiceEntry` with endpoint_id, calls `registry.publish()`
+- [x] 5.11 Updated daemon test: invalid ticket returns ClusterConnect error (verifies real connection path)
 
 ## 6. TunnelAcceptor in Node
 

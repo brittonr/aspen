@@ -26,8 +26,8 @@ enum Commands {
         #[arg(long)]
         ticket: String,
 
-        /// Capability token (base64).
-        #[arg(long)]
+        /// Capability token (base64). Omit for permissive mode.
+        #[arg(long, default_value = "")]
         token: String,
 
         /// SOCKS5 proxy port.
