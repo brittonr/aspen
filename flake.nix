@@ -2008,6 +2008,14 @@
                 inherit pkgs microvm;
                 inherit (self.packages.${system}) aspen-node-vm-test;
               };
+
+              # 3-node Raft cluster + AspenFs VirtioFS + nginx microVM.
+              # The ultimate integration test: Raft consensus → VirtioFS → CH → nginx → HTTP
+              # Build: nix build .#checks.x86_64-linux.microvm-cluster-test
+              microvm-cluster-test = import ./nix/tests/microvm-cluster.nix {
+                inherit pkgs microvm;
+                inherit (self.packages.${system}) aspen-node-vm-test aspen-fuse-vm-test;
+              };
             };
 
           # Base apps available on all systems
@@ -3062,6 +3070,12 @@
                   aspen-node-vm-test = pureBin {
                     name = "aspen-node-vm-test";
                     cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets";
+                  };
+
+                  # aspen-fuse with VirtioFS for VM integration tests
+                  aspen-fuse-vm-test = pureBin {
+                    name = "aspen-fuse-vm-test";
+                    cargoExtraArgs = "--package aspen-fuse --bin aspen-fuse --features virtiofs";
                   };
                 })
                 // {
