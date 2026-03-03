@@ -14,6 +14,7 @@
 //! - **Daemon**: Orchestrates all components
 
 pub mod auth;
+pub mod client_kv;
 pub mod constants;
 pub mod daemon;
 pub mod dns;
@@ -22,5 +23,6 @@ pub mod handler;
 pub mod registry;
 pub mod resolver;
 pub mod socks5;
+pub mod tunnel;
 pub mod types;
 pub mod verified;

@@ -43,6 +43,12 @@ pub use aspen_constants::network::CLIENT_ALPN;
 /// Re-export LOG_SUBSCRIBER_ALPN for convenience.
 pub use crate::log_subscriber::LOG_SUBSCRIBER_ALPN;
 
+/// ALPN protocol identifier for net service mesh tunnels.
+///
+/// Used by the SOCKS5 proxy (client side) and TunnelAcceptor (server side)
+/// to establish bidirectional TCP tunnels through iroh QUIC.
+pub const NET_TUNNEL_ALPN: &[u8] = b"/aspen/net-tunnel/0";
+
 /// ALPN protocol identifier for Nix binary cache HTTP/3 gateway.
 ///
 /// Uses the standard h3-iroh ALPN to enable HTTP/3 semantics over Iroh QUIC.

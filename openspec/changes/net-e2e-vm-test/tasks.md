@@ -1,22 +1,22 @@
 ## 1. Transport Constant and Tunnel Protocol
 
-- [ ] 1.1 Add `NET_TUNNEL_ALPN = b"/aspen/net-tunnel/0"` to `crates/aspen-transport/src/lib.rs`
-- [ ] 1.2 Create `crates/aspen-net/src/tunnel.rs` with `TunnelAcceptor` struct: holds `CancellationToken`, `Arc<AtomicU32>` active count, max connections
-- [ ] 1.3 Implement `TunnelAcceptor::accept_stream()`: read `u16` port from QUIC stream, connect `TcpStream` to `127.0.0.1:{port}`, `tokio::io::copy_bidirectional`, decrement active count on completion
-- [ ] 1.4 Implement `TunnelAcceptor` as iroh `ProtocolHandler`: accept incoming connections on `NET_TUNNEL_ALPN`, spawn `accept_stream` tasks up to `MAX_SOCKS5_CONNECTIONS`
-- [ ] 1.5 Add tunnel unit test: mock QUIC stream sends port + data, verify TunnelAcceptor connects to local TCP server and copies bytes
-- [ ] 1.6 Add `pub mod tunnel;` to `crates/aspen-net/src/lib.rs`
+- [x] 1.1 Add `NET_TUNNEL_ALPN = b"/aspen/net-tunnel/0"` to `crates/aspen-transport/src/constants.rs`
+- [x] 1.2 Create `crates/aspen-net/src/tunnel.rs` with `TunnelAcceptor` struct: holds `CancellationToken`, `Arc<AtomicU32>` active count, max connections
+- [x] 1.3 Implement `TunnelAcceptor::handle_stream()`: read `u16` port from QUIC stream, connect `TcpStream` to `127.0.0.1:{port}`, `tokio::io::copy` bidirectional, decrement active count on completion
+- [x] 1.4 Implement `TunnelAcceptor` as iroh `ProtocolHandler`: accept incoming connections on `NET_TUNNEL_ALPN`, spawn tasks up to `MAX_SOCKS5_CONNECTIONS`
+- [x] 1.5 Add tunnel unit tests + `open_tunnel()` client-side function
+- [x] 1.6 Add `pub mod tunnel;` to `crates/aspen-net/src/lib.rs`
 
 ## 2. ClientKvAdapter
 
-- [ ] 2.1 Create `crates/aspen-net/src/client_kv.rs` with `ClientKvAdapter` struct holding an iroh `Endpoint` and cluster ticket info (bootstrap peer addresses)
-- [ ] 2.2 Implement `KeyValueStore::read()`: send `KvGet` RPC via client protocol, parse `ReadResultResponse`
-- [ ] 2.3 Implement `KeyValueStore::write()`: send `KvSet` RPC, parse `WriteResultResponse`
-- [ ] 2.4 Implement `KeyValueStore::delete()`: send `KvDelete` RPC, parse `DeleteResult`
-- [ ] 2.5 Implement `KeyValueStore::scan()`: send `KvScan` RPC, parse `ScanResultResponse`
-- [ ] 2.6 Add `aspen-client-api` (already present), `aspen-transport`, and `postcard` to `crates/aspen-net/Cargo.toml` dependencies
-- [ ] 2.7 Add unit test: verify adapter translates read/write/scan calls to correct RPC request types
-- [ ] 2.8 Add `pub mod client_kv;` to `crates/aspen-net/src/lib.rs`
+- [x] 2.1 Create `crates/aspen-net/src/client_kv.rs` with `ClientKvAdapter` struct wrapping `Arc<AspenClient>`
+- [x] 2.2 Implement `KeyValueStore::read()`: send `ReadKey` RPC, parse `ReadResultResponse`
+- [x] 2.3 Implement `KeyValueStore::write()`: send `WriteKey` RPC, parse `WriteResultResponse`
+- [x] 2.4 Implement `KeyValueStore::delete()`: send `DeleteKey` RPC, parse `DeleteResultResponse`
+- [x] 2.5 Implement `KeyValueStore::scan()`: send `ScanKeys` RPC, parse `ScanResultResponse`
+- [x] 2.6 Add `aspen-client`, `aspen-transport`, `async-trait` to `crates/aspen-net/Cargo.toml`
+- [x] 2.7 Add unit tests: verify RPC request construction for write, read, scan
+- [x] 2.8 Add `pub mod client_kv;` to `crates/aspen-net/src/lib.rs`
 
 ## 3. SOCKS5 Tunnel Completion
 
