@@ -7,6 +7,7 @@ The node startup sequence in `aspen_node/main.rs` is: config → bootstrap → e
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Every Raft node runs an embedded iroh relay server
 - Cluster members auto-discover each other's relay URLs via Raft membership state
 - Access control restricts relaying to known cluster endpoints only
@@ -15,6 +16,7 @@ The node startup sequence in `aspen_node/main.rs` is: config → bootstrap → e
 - Feature-gated behind `relay-server` so it's opt-in
 
 **Non-Goals:**
+
 - Public relay service (not open to arbitrary internet users)
 - Relay server as a standalone binary (it's embedded in aspen-node)
 - Automatic TLS provisioning via Let's Encrypt in the initial implementation (manual certs or plain HTTP first, ACME later)

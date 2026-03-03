@@ -15,9 +15,11 @@ Aspen currently depends on n0's public relay infrastructure for NAT traversal an
 ## Capabilities
 
 ### New Capabilities
+
 - `relay-server`: Embedded iroh relay server running on each Raft node with cluster-aware access control, dynamic relay map from membership, and TLS support
 
 ### Modified Capabilities
+
 - `transport`: Relay configuration gains a new mode where nodes use the cluster's own relays instead of external infrastructure. Discovery mechanisms propagate relay URLs.
 
 ## Impact
