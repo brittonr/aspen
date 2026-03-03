@@ -29,6 +29,7 @@ pub mod hooks;
 pub mod jobs;
 pub mod kv;
 pub mod lease;
+pub mod net;
 pub mod observability;
 pub mod secrets;
 pub mod sql;
@@ -3180,6 +3181,41 @@ pub enum ClientRpcRequest {
     IndexList,
 
     // =========================================================================
+    // Net service mesh operations
+    // =========================================================================
+    /// Publish a service to the mesh registry.
+    NetPublish {
+        /// Service name.
+        name: String,
+        /// Endpoint ID of the publishing node.
+        endpoint_id: String,
+        /// Port the service listens on.
+        port: u16,
+        /// Protocol (e.g., "tcp").
+        proto: String,
+        /// Tags for filtering.
+        tags: Vec<String>,
+    },
+
+    /// Unpublish a service from the mesh registry.
+    NetUnpublish {
+        /// Service name to remove.
+        name: String,
+    },
+
+    /// Look up a service by name.
+    NetLookup {
+        /// Service name to look up.
+        name: String,
+    },
+
+    /// List services, optionally filtered by tag.
+    NetList {
+        /// Optional tag filter.
+        tag_filter: Option<String>,
+    },
+
+    // =========================================================================
     // Plugin management operations
     // =========================================================================
     /// Reload WASM plugins.
@@ -3496,6 +3532,10 @@ impl ClientRpcRequest {
             Self::IndexDrop { .. } => "IndexDrop",
             Self::IndexScan { .. } => "IndexScan",
             Self::IndexList => "IndexList",
+            Self::NetPublish { .. } => "NetPublish",
+            Self::NetUnpublish { .. } => "NetUnpublish",
+            Self::NetLookup { .. } => "NetLookup",
+            Self::NetList { .. } => "NetList",
             Self::PluginReload { .. } => "PluginReload",
         }
     }
@@ -3780,6 +3820,11 @@ impl ClientRpcRequest {
             | Self::SecretsNixCacheRotateKey { .. }
             | Self::SecretsNixCacheDeleteKey { .. }
             | Self::SecretsNixCacheListKeys { .. } => Some("secrets"),
+
+            // Net service mesh operations
+            Self::NetPublish { .. } | Self::NetUnpublish { .. } | Self::NetLookup { .. } | Self::NetList { .. } => {
+                Some("net")
+            }
 
             // SNIX and Cache operations
             Self::CacheQuery { .. }
@@ -4487,6 +4532,21 @@ pub enum ClientRpcResponse {
     /// after `#[cfg(feature)]` variants, its postcard discriminant would shift
     /// when features are toggled, breaking wire compatibility.
     PluginReloadResult(PluginReloadResultResponse),
+
+    // -------------------------------------------------------------------------
+    // Net service mesh responses
+    // -------------------------------------------------------------------------
+    /// Net publish result.
+    NetPublishResult(net::NetPublishResponse),
+
+    /// Net unpublish result.
+    NetUnpublishResult(net::NetUnpublishResponse),
+
+    /// Net lookup result.
+    NetLookupResult(net::NetLookupResponse),
+
+    /// Net list result.
+    NetListResult(net::NetListResponse),
 
     // =========================================================================
     // FEATURE-GATED VARIANTS (must be at end for postcard discriminant stability)

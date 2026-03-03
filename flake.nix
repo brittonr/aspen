@@ -634,6 +634,18 @@
           cp -r ${wasmPluginRepo} "$out/aspen-wasm-plugin"
           # External git dep: iroh-proxy-utils (used by aspen-proxy)
           cp -r ${irohProxyUtilsSrc} "$out/iroh-proxy-utils"
+
+          # Stub aspen-dns (optional dep of aspen-net, dns feature disabled)
+          # Path from crates/aspen-net/: ../../../aspen-dns/crates/aspen-dns → $out/aspen-dns/crates/aspen-dns
+          mkdir -p "$out/aspen-dns/crates/aspen-dns/src"
+          cat > "$out/aspen-dns/crates/aspen-dns/Cargo.toml" << 'EOF'
+          [package]
+          name = "aspen-dns"
+          version = "0.1.0"
+          edition = "2024"
+          EOF
+          echo '// stub' > "$out/aspen-dns/crates/aspen-dns/src/lib.rs"
+
           chmod -R u+w $out
 
           # Use the workspace Cargo.lock directly (git deps are stubbed above)
@@ -3001,6 +3013,17 @@
                     hooks = []
                     EOF
                     echo '// stub' > "$out/aspen-wasm-plugin/crates/aspen-wasm-plugin/src/lib.rs"
+
+                    # Stub aspen-dns (optional dep of aspen-net, dns feature disabled)
+                    # Path from crates/aspen-net/: ../../../aspen-dns/crates/aspen-dns → $out/aspen-dns/crates/aspen-dns
+                    mkdir -p "$out/aspen-dns/crates/aspen-dns/src"
+                    cat > "$out/aspen-dns/crates/aspen-dns/Cargo.toml" << 'EOF'
+                    [package]
+                    name = "aspen-dns"
+                    version = "0.1.0"
+                    edition = "2024"
+                    EOF
+                    echo '// stub' > "$out/aspen-dns/crates/aspen-dns/src/lib.rs"
 
                     # Stub iroh-proxy-utils (referenced by aspen-proxy)
                     mkdir -p "$out/iroh-proxy-utils/src"

@@ -674,6 +674,10 @@ fn format_capability(cap: &Capability) -> String {
         Capability::PkiManage => "pki-manage".to_string(),
         // Secrets admin
         Capability::SecretsAdmin => "secrets-admin".to_string(),
+        // Net service mesh capabilities
+        Capability::NetConnect { service_prefix } => format!("net-connect:{}", service_prefix),
+        Capability::NetPublish { service_prefix } => format!("net-publish:{}", service_prefix),
+        Capability::NetAdmin => "net-admin".to_string(),
     }
 }
 

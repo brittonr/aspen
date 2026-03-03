@@ -13,15 +13,17 @@ All Raft KV operations use the existing `KeyValueStore` trait — the same patte
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Named service registry backed by Raft consensus
 - SOCKS5 proxy that resolves `*.aspen` names and tunnels through iroh
 - TCP port forwarding from local port to named remote service
 - Authorization via existing UCAN capability tokens (no new ACL system)
-- MagicDNS for `*.aspen` domains
+- DNS via existing `aspen-dns` crate for `*.aspen` domain resolution
 - Daemon mode orchestrating all components
 - CLI UX comparable to `tailscale up` / `wg-quick`
 
 **Non-Goals:**
+
 - TUN/TAP virtual network interfaces (no kernel involvement)
 - IP address allocation (iroh endpoint IDs are the identity)
 - UDP proxying (TCP-only in initial implementation; QUIC datagrams later)
@@ -69,6 +71,7 @@ All Raft KV operations use the existing `KeyValueStore` trait — the same patte
 **Rationale**: Consistent with every other Aspen subsystem. Raft replication ensures all nodes see the same service registry. Authorization is decoupled from KV — tokens are verified locally using cryptographic signatures.
 
 **KV Schema:**
+
 ```
 /_sys/net/svc/{name}              → ServiceEntry (JSON)
 /_sys/net/node/{endpoint_id_hex}  → NodeEntry (JSON)
@@ -82,6 +85,7 @@ Note: No `/_sys/net/acl/` prefix — authorization is handled by capability toke
 **Decision**: Use Aspen's existing UCAN-inspired capability tokens (`aspen-auth`) for authorization. Add new `Capability` variants (`NetConnect`, `NetPublish`, `NetAdmin`) and corresponding `Operation` variants. The daemon holds a capability token provided at startup and verifies it locally at connect/publish time.
 
 **Rationale**: Aspen already has a complete capability token system with Ed25519 signing, delegation chains, prefix-based scoping, revocation, and offline verification. Building a separate ACL system would:
+
 - Duplicate the authorization infrastructure
 - Require Raft reads for every connection (ACL rules in KV)
 - Miss the killer feature: delegation chains (admin → team → CI with attenuated access)
@@ -90,6 +94,7 @@ Note: No `/_sys/net/acl/` prefix — authorization is handled by capability toke
 Capability tokens are verified locally with zero I/O — pure cryptographic verification. This is critical for a proxy that may handle hundreds of connections per second.
 
 **New Capability Variants:**
+
 ```rust
 /// Connect to named services through the mesh.
 NetConnect { service_prefix: String }
@@ -102,6 +107,7 @@ NetAdmin
 ```
 
 **Delegation example:**
+
 ```
 Root token: [NetAdmin + NetConnect { "*" } + Delegate]
   → Team token: [NetConnect { "prod/" } + NetPublish { "prod/" } + Delegate]
@@ -116,6 +122,7 @@ Root token: [NetAdmin + NetConnect { "*" } + Delegate]
 **Decision**: Use the existing `aspen-dns` sibling repo (`../aspen-dns/`) for all DNS functionality. When a service is published, auto-create DNS records (A, SRV) in the `aspen` zone via `DnsStore`. The existing `DnsProtocolServer` (hickory-server, UDP/TCP :5353) serves queries. The `AspenDnsClient` syncs records to local cache via iroh-docs P2P replication.
 
 **Rationale**: `aspen-dns` is a fully built DNS system with:
+
 - `DnsStore` trait + `AspenDnsStore` (Raft KV-backed CRUD for dns:* keys)
 - `DnsProtocolServer` (hickory-server with zone-based authority, upstream forwarding)
 - `AspenDnsClient` (iroh-docs sync → local cache → instant lookups)
@@ -126,6 +133,7 @@ Root token: [NetAdmin + NetConnect { "*" } + Delegate]
 Building a separate MagicDNS stub resolver would duplicate this. Instead, service mesh publishes create real DNS records in the `aspen` zone, and the existing DNS infrastructure serves them.
 
 **Integration flow:**
+
 ```
 aspen net publish mydb --port 5432
   → Write /_sys/net/svc/mydb (service registry)
@@ -151,12 +159,12 @@ aspen net publish mydb --port 5432
 │                        aspen-net daemon                          │
 │                                                                  │
 │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐    │
-│  │ SOCKS5 proxy │  │ MagicDNS     │  │ Service publisher  │    │
+│  │ SOCKS5 proxy │  │ aspen-dns    │  │ Service publisher  │    │
 │  │ :1080        │  │ :5353        │  │ (auto-register     │    │
-│  │              │  │              │  │  local services)   │    │
-│  │ Resolves     │  │ *.aspen →    │  │                    │    │
-│  │ names via    │  │ 127.0.0.x   │  │ Watches Raft KV    │    │
-│  │ registry     │  │              │  │ for peer changes   │    │
+│  │              │  │ DnsProtocol- │  │  local services)   │    │
+│  │ Resolves     │  │ Server +     │  │                    │    │
+│  │ names via    │  │ AspenDns-    │  │ Watches Raft KV    │    │
+│  │ registry     │  │ Client       │  │ for peer changes   │    │
 │  └──────┬───────┘  └──────────────┘  └────────────────────┘    │
 │         │                                                       │
 │  ┌──────┴──────────────────────────────────────────────────┐    │
@@ -186,6 +194,7 @@ aspen net publish mydb --port 5432
 ```
 
 **Data flow — SOCKS5 connection:**
+
 ```
 App → SOCKS5 handshake ("connect mydb.aspen:5432")
   → Resolve "mydb" from registry → endpoint_id + port
@@ -198,6 +207,7 @@ App → SOCKS5 handshake ("connect mydb.aspen:5432")
 ```
 
 **Data flow — port forwarding:**
+
 ```
 $ aspen net forward 5432:mydb --token <token>
   → Resolve "mydb" → endpoint_id + port
@@ -212,7 +222,7 @@ $ aspen net forward 5432:mydb --token <token>
 
 - **[TCP only]** No UDP support in initial implementation. DNS queries, game servers, and VoIP won't work through the mesh. → Mitigation: Add QUIC datagram tunneling in a future phase. Most service-to-service communication is TCP.
 
-- **[SOCKS5 app support varies]** Not all applications support SOCKS5 natively. → Mitigation: Port forwarding works universally. MagicDNS + transparent proxy covers most remaining cases. `proxychains` wraps arbitrary apps.
+- **[SOCKS5 app support varies]** Not all applications support SOCKS5 natively. → Mitigation: Port forwarding works universally. DNS resolution + transparent proxy covers most remaining cases. `proxychains` wraps arbitrary apps.
 
 - **[DNS resolver needs privileges on port 53]** Standard DNS port requires root. → Mitigation: Default to port 5353 (mDNS port, often unprivileged). Users can configure port 53 with CAP_NET_BIND_SERVICE or run through systemd socket activation.
 

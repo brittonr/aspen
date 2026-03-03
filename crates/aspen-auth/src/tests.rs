@@ -1114,3 +1114,138 @@ fn test_concurrent_parent_registration() {
     // Clearing should work after concurrent registration
     verifier.clear_parent_cache().expect("should clear cache");
 }
+
+// ==========================================================================
+// Net Service Mesh Capability Tests
+// ==========================================================================
+
+#[test]
+fn net_connect_authorizes_matching_prefix() {
+    let cap = Capability::NetConnect {
+        service_prefix: "prod/".into(),
+    };
+    assert!(cap.authorizes(&Operation::NetConnect {
+        service: "prod/mydb".into(),
+        port: 5432,
+    }));
+    assert!(cap.authorizes(&Operation::NetConnect {
+        service: "prod/web".into(),
+        port: 8080,
+    }));
+}
+
+#[test]
+fn net_connect_denies_wrong_prefix() {
+    let cap = Capability::NetConnect {
+        service_prefix: "prod/".into(),
+    };
+    assert!(!cap.authorizes(&Operation::NetConnect {
+        service: "staging/mydb".into(),
+        port: 5432,
+    }));
+}
+
+#[test]
+fn net_connect_wildcard_prefix() {
+    let cap = Capability::NetConnect {
+        service_prefix: String::new(),
+    };
+    assert!(cap.authorizes(&Operation::NetConnect {
+        service: "anything".into(),
+        port: 5432,
+    }));
+}
+
+#[test]
+fn net_publish_authorizes_matching_prefix() {
+    let cap = Capability::NetPublish {
+        service_prefix: "myapp-".into(),
+    };
+    assert!(cap.authorizes(&Operation::NetPublish {
+        service: "myapp-web".into(),
+    }));
+    assert!(cap.authorizes(&Operation::NetUnpublish {
+        service: "myapp-api".into(),
+    }));
+}
+
+#[test]
+fn net_publish_denies_wrong_prefix() {
+    let cap = Capability::NetPublish {
+        service_prefix: "myapp-".into(),
+    };
+    assert!(!cap.authorizes(&Operation::NetPublish {
+        service: "other-web".into(),
+    }));
+}
+
+#[test]
+fn net_admin_authorizes_all_net_ops() {
+    let cap = Capability::NetAdmin;
+    assert!(cap.authorizes(&Operation::NetConnect {
+        service: "anything".into(),
+        port: 5432,
+    }));
+    assert!(cap.authorizes(&Operation::NetPublish {
+        service: "anything".into(),
+    }));
+    assert!(cap.authorizes(&Operation::NetUnpublish {
+        service: "anything".into(),
+    }));
+    assert!(cap.authorizes(&Operation::NetAdmin {
+        action: "manage".into(),
+    }));
+}
+
+#[test]
+fn net_connect_does_not_authorize_publish() {
+    let cap = Capability::NetConnect {
+        service_prefix: String::new(),
+    };
+    assert!(!cap.authorizes(&Operation::NetPublish { service: "mydb".into() }));
+}
+
+#[test]
+fn net_connect_delegation_narrower_prefix() {
+    let parent = Capability::NetConnect {
+        service_prefix: "prod/".into(),
+    };
+    let child = Capability::NetConnect {
+        service_prefix: "prod/db-".into(),
+    };
+    assert!(parent.contains(&child));
+}
+
+#[test]
+fn net_connect_delegation_wider_prefix_rejected() {
+    let parent = Capability::NetConnect {
+        service_prefix: "prod/".into(),
+    };
+    let child = Capability::NetConnect {
+        service_prefix: String::new(),
+    };
+    assert!(!parent.contains(&child));
+}
+
+#[test]
+fn net_admin_contains_all_net_caps() {
+    let admin = Capability::NetAdmin;
+    assert!(admin.contains(&Capability::NetConnect {
+        service_prefix: "anything".into(),
+    }));
+    assert!(admin.contains(&Capability::NetPublish {
+        service_prefix: "anything".into(),
+    }));
+    assert!(admin.contains(&Capability::NetAdmin));
+}
+
+#[test]
+fn net_connect_does_not_contain_publish() {
+    let connect = Capability::NetConnect {
+        service_prefix: String::new(),
+    };
+    let publish = Capability::NetPublish {
+        service_prefix: String::new(),
+    };
+    assert!(!connect.contains(&publish));
+}

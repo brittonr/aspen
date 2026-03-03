@@ -205,6 +205,22 @@ pub enum Capability {
     /// Full admin access to all secrets engines.
     /// Includes creating/deleting mounts, configuring engines, etc.
     SecretsAdmin,
+
+    // ==========================================================================
+    // Net Service Mesh Capabilities
+    // ==========================================================================
+    /// Connect to named services through the mesh.
+    NetConnect {
+        /// Service name prefix (e.g., "prod/" matches "prod/mydb").
+        service_prefix: String,
+    },
+    /// Publish/unpublish services in the registry.
+    NetPublish {
+        /// Service name prefix.
+        service_prefix: String,
+    },
+    /// Full net admin access (registry, DNS overrides, all net operations).
+    NetAdmin,
 }
 
 impl Capability {
@@ -362,6 +378,25 @@ impl Capability {
             (Capability::PkiManage, Operation::PkiRevoke) => true,
             (Capability::PkiManage, Operation::PkiReadCa) => true,
 
+            // ==========================================================================
+            // Net Service Mesh authorization
+            // ==========================================================================
+            (Capability::NetAdmin, Operation::NetConnect { .. }) => true,
+            (Capability::NetAdmin, Operation::NetPublish { .. }) => true,
+            (Capability::NetAdmin, Operation::NetUnpublish { .. }) => true,
+            (Capability::NetAdmin, Operation::NetAdmin { .. }) => true,
+
+            (Capability::NetConnect { service_prefix }, Operation::NetConnect { service, .. }) => {
+                service.starts_with(service_prefix)
+            }
+
+            (Capability::NetPublish { service_prefix }, Operation::NetPublish { service }) => {
+                service.starts_with(service_prefix)
+            }
+            (Capability::NetPublish { service_prefix }, Operation::NetUnpublish { service }) => {
+                service.starts_with(service_prefix)
+            }
+
             // No match
             _ => false,
         }
@@ -518,6 +553,21 @@ impl Capability {
             (Capability::PkiRevoke, Capability::PkiRevoke) => true,
             (Capability::PkiReadCa, Capability::PkiReadCa) => true,
 
+            // ==========================================================================
+            // Net Service Mesh capability containment
+            // ==========================================================================
+            (Capability::NetAdmin, Capability::NetAdmin) => true,
+            (Capability::NetAdmin, Capability::NetConnect { .. }) => true,
+            (Capability::NetAdmin, Capability::NetPublish { .. }) => true,
+
+            (Capability::NetConnect { service_prefix: p1 }, Capability::NetConnect { service_prefix: p2 }) => {
+                p2.starts_with(p1)
+            }
+
+            (Capability::NetPublish { service_prefix: p1 }, Capability::NetPublish { service_prefix: p2 }) => {
+                p2.starts_with(p1)
+            }
+
             _ => false,
         }
     }
@@ -647,6 +697,32 @@ pub enum Operation {
         /// Description of admin action.
         action: String,
     },
+
+    // ==========================================================================
+    // Net Service Mesh Operations
+    // ==========================================================================
+    /// Connect to a named service through the mesh.
+    NetConnect {
+        /// Service name.
+        service: String,
+        /// Target port.
+        port: u16,
+    },
+    /// Publish a service to the mesh registry.
+    NetPublish {
+        /// Service name.
+        service: String,
+    },
+    /// Unpublish a service from the mesh registry.
+    NetUnpublish {
+        /// Service name.
+        service: String,
+    },
+    /// Net admin operation.
+    NetAdmin {
+        /// Description of admin action.
+        action: String,
+    },
 }
 
 impl std::fmt::Display for Operation {
@@ -678,6 +754,11 @@ impl std::fmt::Display for Operation {
             Operation::PkiManage => write!(f, "PkiManage"),
             // Secrets admin
             Operation::SecretsAdmin { action } => write!(f, "SecretsAdmin({})", action),
+            // Net operations
+            Operation::NetConnect { service, port } => write!(f, "NetConnect({service}:{port})"),
+            Operation::NetPublish { service } => write!(f, "NetPublish({service})"),
+            Operation::NetUnpublish { service } => write!(f, "NetUnpublish({service})"),
+            Operation::NetAdmin { action } => write!(f, "NetAdmin({action})"),
         }
     }
 }

@@ -1,0 +1,53 @@
+[package]
+name = "aspen-net"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Service mesh control plane for Aspen over iroh QUIC"
+
+[dependencies]
+# Aspen core
+aspen-core = { path = "../aspen-core" }
+aspen-constants = { path = "../aspen-constants" }
+aspen-client-api = { path = "../aspen-client-api" }
+aspen-proxy = { path = "../aspen-proxy" }
+aspen-auth = { path = "../aspen-auth" }
+aspen-traits = { path = "../aspen-traits" }
+aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-rpc-core = { path = "../aspen-rpc-core" }
+aspen-dns = { path = "../../../aspen-dns/crates/aspen-dns", optional = true }
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+async-trait = "0.1"
+
+# Iroh networking
+iroh = { version = "0.95.1" }
+iroh-proxy-utils = { git = "https://github.com/n0-computer/iroh-proxy-utils" }
+
+# Async
+tokio = { version = "1.48.0", features = ["rt", "sync", "time", "net"] }
+tokio-util = "0.7"
+n0-future = "0.3.2"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+snafu = "0.8.9"
+
+# Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+aspen-testing-core = { path = "../aspen-testing-core" }
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "test-util"] }
+
+[[bin]]
+name = "aspen-net"
+path = "bin/aspen-net.rs"
+
+[features]
+default = []
+dns = ["dep:aspen-dns"]
