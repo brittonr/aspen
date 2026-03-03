@@ -2024,6 +2024,12 @@
                 inherit pkgs microvm;
                 inherit (self.packages.${system}) aspen-node-vm-test aspen-cluster-virtiofs-server;
               };
+
+              # Build: nix build .#checks.x86_64-linux.microvm-virtiofs-stress-test
+              microvm-virtiofs-stress-test = import ./nix/tests/microvm-virtiofs-stress.nix {
+                inherit pkgs microvm;
+                inherit (self.packages.${system}) aspen-virtiofs-test-server;
+              };
             };
 
           # Base apps available on all systems
