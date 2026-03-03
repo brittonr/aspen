@@ -185,46 +185,6 @@ const _: () = assert!(!CHUNK_MANIFEST_MAGIC.is_empty());
 const _: () = assert!(!CHUNK_KEY_SUFFIX.is_empty());
 
 // ============================================================================
-// File Locking
-// ============================================================================
-
-/// Maximum number of locks per inode.
-pub const MAX_LOCKS_PER_INODE: usize = 256;
-
-/// Maximum number of inodes with active locks.
-pub const MAX_LOCKED_INODES: usize = 8192;
-
-/// Timeout for blocking lock acquisition (setlkw).
-pub const LOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
-
-// File locking limits
-const _: () = assert!(MAX_LOCKS_PER_INODE > 0);
-const _: () = assert!(MAX_LOCKED_INODES > 0);
-const _: () = assert!(LOCK_WAIT_TIMEOUT.as_secs() > 0);
-
-// ============================================================================
-// Write-Ahead Buffer
-// ============================================================================
-
-/// Maximum bytes buffered per file before auto-flush (256 KB).
-pub const WRITEBACK_MAX_FILE_BYTES: usize = 256 * 1024;
-
-/// Maximum total bytes buffered across all files (8 MB).
-pub const WRITEBACK_MAX_TOTAL_BYTES: usize = 8 * 1024 * 1024;
-
-/// Maximum number of files with buffered writes.
-pub const WRITEBACK_MAX_FILES: usize = 1024;
-
-/// Flush interval for dirty data.
-pub const WRITEBACK_FLUSH_INTERVAL: Duration = Duration::from_millis(500);
-
-// Writeback limits
-const _: () = assert!(WRITEBACK_MAX_FILE_BYTES > 0);
-const _: () = assert!(WRITEBACK_MAX_TOTAL_BYTES > 0);
-const _: () = assert!(WRITEBACK_MAX_TOTAL_BYTES >= WRITEBACK_MAX_FILE_BYTES);
-const _: () = assert!(WRITEBACK_MAX_FILES > 0);
-
-// ============================================================================
 // Prefetch / Readahead
 // ============================================================================
 
@@ -243,13 +203,13 @@ pub const PREFETCH_MAX_TRACKED_FILES: usize = 4096;
 /// How far ahead to prefetch on sequential access (512 KB).
 pub const PREFETCH_LOOKAHEAD_BYTES: u32 = 512 * 1024;
 
-/// Access tracker entry TTL.
+/// Access tracker entry TTL (30 seconds).
 pub const PREFETCH_TRACKER_TTL: Duration = Duration::from_secs(30);
 
-// Prefetch limits
+// Prefetch constants assertions
 const _: () = assert!(PREFETCH_READAHEAD_BYTES > 0);
 const _: () = assert!(PREFETCH_SEQUENTIAL_THRESHOLD > 0);
 const _: () = assert!(PREFETCH_MAX_PENDING > 0);
 const _: () = assert!(PREFETCH_MAX_TRACKED_FILES > 0);
 const _: () = assert!(PREFETCH_LOOKAHEAD_BYTES > 0);
-const _: () = assert!(PREFETCH_LOOKAHEAD_BYTES >= PREFETCH_READAHEAD_BYTES);
+const _: () = assert!(PREFETCH_LOOKAHEAD_BYTES > PREFETCH_READAHEAD_BYTES);

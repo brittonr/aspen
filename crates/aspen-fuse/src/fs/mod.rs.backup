@@ -38,10 +38,7 @@ use crate::constants::META_SUFFIX;
 use crate::constants::ROOT_INODE;
 use crate::inode::EntryType;
 use crate::inode::InodeManager;
-use crate::locking::LockManager;
 use crate::metadata::FileMetadata;
-use crate::prefetch::Prefetcher;
-use crate::writeback::WriteBuffer;
 
 // POSIX access mode bits
 const R_OK: u32 = 4;
@@ -87,13 +84,7 @@ pub struct AspenFs {
     /// Prepended to all KV keys. Empty string means no prefix.
     key_prefix: String,
     /// Read cache for reducing network round-trips.
-    pub(crate) cache: ReadCache,
-    /// Write-ahead buffer for batching small writes.
-    pub(crate) write_buffer: WriteBuffer,
-    /// Prefetch engine for speculative readahead.
-    pub(crate) prefetcher: Prefetcher,
-    /// POSIX file lock manager.
-    pub(crate) lock_manager: LockManager,
+    cache: ReadCache,
 }
 
 impl AspenFs {
@@ -106,9 +97,6 @@ impl AspenFs {
             backend: KvBackend::Client(client),
             key_prefix: String::new(),
             cache: ReadCache::new(),
-            write_buffer: WriteBuffer::new(),
-            prefetcher: Prefetcher::new(),
-            lock_manager: LockManager::new(),
         }
     }
 
@@ -125,9 +113,6 @@ impl AspenFs {
             backend: KvBackend::Client(client),
             key_prefix: prefix,
             cache: ReadCache::new(),
-            write_buffer: WriteBuffer::new(),
-            prefetcher: Prefetcher::new(),
-            lock_manager: LockManager::new(),
         }
     }
 
@@ -141,9 +126,6 @@ impl AspenFs {
             backend: KvBackend::None,
             key_prefix: String::new(),
             cache: ReadCache::new(),
-            write_buffer: WriteBuffer::new(),
-            prefetcher: Prefetcher::new(),
-            lock_manager: LockManager::new(),
         }
     }
 
@@ -158,9 +140,6 @@ impl AspenFs {
             backend: KvBackend::InMemory(Arc::new(std::sync::RwLock::new(BTreeMap::new()))),
             key_prefix: String::new(),
             cache: ReadCache::new(),
-            write_buffer: WriteBuffer::new(),
-            prefetcher: Prefetcher::new(),
-            lock_manager: LockManager::new(),
         }
     }
 
@@ -178,9 +157,6 @@ impl AspenFs {
             backend: KvBackend::InMemory(Arc::clone(&store)),
             key_prefix: String::new(),
             cache: ReadCache::new(),
-            write_buffer: WriteBuffer::new(),
-            prefetcher: Prefetcher::new(),
-            lock_manager: LockManager::new(),
         };
         (fs, store)
     }
@@ -196,9 +172,6 @@ impl AspenFs {
             backend: KvBackend::InMemory(store),
             key_prefix: String::new(),
             cache: ReadCache::new(),
-            write_buffer: WriteBuffer::new(),
-            prefetcher: Prefetcher::new(),
-            lock_manager: LockManager::new(),
         }
     }
 
@@ -516,9 +489,7 @@ impl AspenFs {
         let key = Self::path_to_key(path)?;
         let (size, meta) = match entry_type {
             EntryType::File => {
-                let stored_sz = crate::chunking::chunked_size(self, &key)?.unwrap_or(0);
-                // Consider buffered writes that may extend the file
-                let sz = self.write_buffer.effective_size(&key, stored_sz);
+                let sz = crate::chunking::chunked_size(self, &key)?.unwrap_or(0);
                 let meta = self.read_metadata(&key)?;
                 (sz, meta)
             }

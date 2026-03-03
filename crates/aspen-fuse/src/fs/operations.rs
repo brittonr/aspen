@@ -11,6 +11,7 @@ use fuse_backend_rs::abi::fuse_abi::stat64;
 use fuse_backend_rs::api::filesystem::Context;
 use fuse_backend_rs::api::filesystem::DirEntry;
 use fuse_backend_rs::api::filesystem::Entry;
+use fuse_backend_rs::api::filesystem::FileLock;
 use fuse_backend_rs::api::filesystem::FileSystem;
 use fuse_backend_rs::api::filesystem::FsOptions;
 use fuse_backend_rs::api::filesystem::OpenOptions;
@@ -274,6 +275,9 @@ impl FileSystem for AspenFs {
             current_offset = 2;
         }
 
+        // Snapshot names for prefetch before the loop consumes children
+        let prefetch_names: Vec<String> = children.iter().cloned().collect();
+
         // Add child entries
         let mut entry_count = 0u32;
         for child_name in children {
@@ -314,6 +318,9 @@ impl FileSystem for AspenFs {
             entry_count += 1;
         }
 
+        // Queue prefetch for directory entries (metadata + small file data)
+        self.prefetcher.queue_dir_prefetch(&prefix, &prefetch_names);
+
         Ok(())
     }
 
@@ -343,6 +350,11 @@ impl FileSystem for AspenFs {
         let mode = self.mode_for_entry_type(entry.entry_type);
         self.check_access(ctx, mode, perm_mask)?;
 
+        // Prefetch start of file for read access
+        if let Ok(key) = Self::path_to_key(&entry.path) {
+            self.prefetcher.prefetch_file_start(self, &key);
+        }
+
         // No handle needed for stateless operations
         Ok((None, OpenOptions::empty(), None))
     }
@@ -368,10 +380,44 @@ impl FileSystem for AspenFs {
 
         let key = Self::path_to_key(&entry.path)?;
 
+        // Execute any pending prefetch requests (populates cache)
+        self.prefetcher.execute_pending(self);
+
         // Use chunked read — only fetches the chunks that overlap with the range
-        let data = crate::chunking::chunked_read_range(self, &key, offset, size)?;
+        let mut data = crate::chunking::chunked_read_range(self, &key, offset, size)?;
+
+        // Apply buffered writes on top for read-your-writes consistency
+        let buffered = self.write_buffer.read_buffered(&key, offset, size);
+        if let Some(overlaps) = buffered {
+            for (buf_offset, buf_data) in overlaps {
+                let start_in_data = buf_offset.saturating_sub(offset) as usize;
+                let end_in_data = start_in_data.saturating_add(buf_data.len()).min(data.len());
+                if start_in_data < data.len() {
+                    let copy_len = end_in_data.saturating_sub(start_in_data).min(buf_data.len());
+                    data[start_in_data..start_in_data + copy_len].copy_from_slice(&buf_data[..copy_len]);
+                }
+            }
+        }
+
         if data.is_empty() {
             return Ok(0);
+        }
+
+        // Track access pattern for sequential readahead
+        if let Some(req) = self.prefetcher.record_read(&key, offset, size) {
+            // Execute readahead prefetch inline
+            match req {
+                crate::prefetch::PrefetchRequest::FileData {
+                    key: k,
+                    offset: o,
+                    size: s,
+                } => {
+                    let _ = crate::chunking::chunked_read_range(self, &k, o, s);
+                }
+                crate::prefetch::PrefetchRequest::DirMeta { .. } => {
+                    // Dir prefetch handled by execute_pending
+                }
+            }
         }
 
         w.write_all(&data)?;
@@ -405,8 +451,13 @@ impl FileSystem for AspenFs {
         let mut buf = vec![0u8; size as usize];
         r.read_exact(&mut buf)?;
 
-        // Use chunked write — only updates affected chunks
-        crate::chunking::chunked_write_range(self, &key, offset, &buf)?;
+        // Buffer the write — may trigger auto-flush
+        let should_flush = self.write_buffer.buffer_write(&key, offset, &buf).unwrap_or(false);
+
+        if should_flush {
+            // Auto-flush: per-file or global limit exceeded
+            self.write_buffer.flush_file(self, &key)?;
+        }
 
         // Update timestamps: both mtime and ctime change on write
         let meta = self.read_metadata(&key)?.unwrap_or_else(FileMetadata::now).touch();
@@ -419,14 +470,25 @@ impl FileSystem for AspenFs {
     fn release(
         &self,
         _ctx: &Context,
-        _inode: u64,
+        inode: u64,
         _flags: u32,
         _handle: u64,
         _flush: bool,
-        _flock_release: bool,
-        _lock_owner: Option<u64>,
+        flock_release: bool,
+        lock_owner: Option<u64>,
     ) -> std::io::Result<()> {
-        // Nothing to release for stateless operations
+        // Flush any buffered writes for this file
+        if let Ok(Some(entry)) = self.inodes.get_path(inode)
+            && let Ok(key) = Self::path_to_key(&entry.path)
+        {
+            let _ = self.write_buffer.flush_file(self, &key);
+        }
+
+        // Release locks held by this owner
+        if flock_release && let Some(owner) = lock_owner {
+            self.lock_manager.release_owner(inode, owner);
+        }
+
         Ok(())
     }
 
@@ -493,6 +555,14 @@ impl FileSystem for AspenFs {
         };
 
         let key = Self::path_to_key(&child_path)?;
+
+        // Discard any buffered writes (file is being deleted)
+        let _ = self.write_buffer.discard_file(&key);
+
+        // Release all locks on this inode before removing it
+        if let Ok(Some(child_inode)) = self.inodes.get_inode(&child_path) {
+            self.lock_manager.release_inode(child_inode);
+        }
 
         // Delete from KV (data + all chunks + metadata)
         crate::chunking::chunked_delete(self, &key)?;
@@ -573,13 +643,23 @@ impl FileSystem for AspenFs {
         Ok(())
     }
 
-    fn fsync(&self, _ctx: &Context, _inode: u64, _datasync: bool, _handle: u64) -> std::io::Result<()> {
-        // Writes are already synchronous through Raft consensus
+    fn fsync(&self, _ctx: &Context, inode: u64, _datasync: bool, _handle: u64) -> std::io::Result<()> {
+        // Flush buffered writes to KV store (then Raft consensus makes them durable)
+        if let Ok(Some(entry)) = self.inodes.get_path(inode)
+            && let Ok(key) = Self::path_to_key(&entry.path)
+        {
+            self.write_buffer.flush_file(self, &key)?;
+        }
         Ok(())
     }
 
-    fn flush(&self, _ctx: &Context, _inode: u64, _handle: u64, _lock_owner: u64) -> std::io::Result<()> {
-        // No buffering, nothing to flush
+    fn flush(&self, _ctx: &Context, inode: u64, _handle: u64, _lock_owner: u64) -> std::io::Result<()> {
+        // Flush buffered writes on close
+        if let Ok(Some(entry)) = self.inodes.get_path(inode)
+            && let Ok(key) = Self::path_to_key(&entry.path)
+        {
+            self.write_buffer.flush_file(self, &key)?;
+        }
         Ok(())
     }
 
@@ -919,8 +999,53 @@ impl FileSystem for AspenFs {
     }
 
     fn fsyncdir(&self, _ctx: &Context, _inode: u64, _datasync: bool, _handle: u64) -> std::io::Result<()> {
-        // Writes are already synchronous through Raft consensus
+        // Flush expired write buffers opportunistically
+        let _ = self.write_buffer.flush_expired(self);
+        // Clean up expired prefetch trackers
+        self.prefetcher.cleanup_expired();
         Ok(())
+    }
+
+    fn getlk(
+        &self,
+        _ctx: &Context,
+        inode: u64,
+        _handle: u64,
+        owner: u64,
+        lock: FileLock,
+        _flags: u32,
+    ) -> std::io::Result<FileLock> {
+        let result = self.lock_manager.get_lock(inode, owner, lock.lock_type, lock.start, lock.end);
+        Ok(FileLock {
+            start: result.start,
+            end: result.end,
+            lock_type: result.lock_type,
+            pid: result.pid,
+        })
+    }
+
+    fn setlk(
+        &self,
+        _ctx: &Context,
+        inode: u64,
+        _handle: u64,
+        owner: u64,
+        lock: FileLock,
+        _flags: u32,
+    ) -> std::io::Result<()> {
+        self.lock_manager.set_lock(inode, owner, lock.pid, lock.lock_type, lock.start, lock.end)
+    }
+
+    fn setlkw(
+        &self,
+        _ctx: &Context,
+        inode: u64,
+        _handle: u64,
+        owner: u64,
+        lock: FileLock,
+        _flags: u32,
+    ) -> std::io::Result<()> {
+        self.lock_manager.set_lock_wait(inode, owner, lock.pid, lock.lock_type, lock.start, lock.end)
     }
 }
 

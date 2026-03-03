@@ -38,10 +38,8 @@ pub mod client;
 pub mod constants;
 pub mod fs;
 pub mod inode;
-pub mod locking;
 pub mod metadata;
 pub mod prefetch;
-pub mod writeback;
 
 #[cfg(feature = "virtiofs")]
 pub mod virtiofs;
@@ -54,8 +52,9 @@ pub use fs::AspenFs;
 pub use fs::SharedInMemoryStore;
 pub use inode::EntryType;
 pub use inode::InodeManager;
-pub use locking::FileLockResult;
-pub use locking::LockManager;
+pub use prefetch::PrefetchRequest;
+pub use prefetch::PrefetchStats;
+pub use prefetch::Prefetcher;
 #[cfg(feature = "virtiofs")]
 pub use virtiofs::AspenVirtioFsHandler;
 #[cfg(feature = "virtiofs")]
