@@ -26,3 +26,50 @@ pub mod socks5;
 pub mod tunnel;
 pub mod types;
 pub mod verified;
+
+// =============================================================================
+// Handler Factory Registration
+// =============================================================================
+
+use std::sync::Arc;
+
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::HandlerFactory;
+use aspen_rpc_core::RequestHandler;
+
+/// Factory for creating `NetHandler` instances.
+///
+/// Priority 250 (service handler range: 200-499).
+/// Creates a `ServiceRegistry` wrapping the node's KV store and passes it
+/// to `NetHandler` for dispatching net publish/lookup/list/unpublish RPCs.
+pub struct NetHandlerFactory;
+
+impl Default for NetHandlerFactory {
+    fn default() -> Self {
+        Self
+    }
+}
+
+impl NetHandlerFactory {
+    /// Create a new factory instance.
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+impl HandlerFactory for NetHandlerFactory {
+    fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
+        let registry = Arc::new(registry::ServiceRegistry::new(ctx.kv_store.clone()));
+        Some(Arc::new(handler::NetHandler::new(registry)))
+    }
+
+    fn name(&self) -> &'static str {
+        "NetHandler"
+    }
+
+    fn priority(&self) -> u32 {
+        250
+    }
+}
+
+aspen_rpc_core::submit_handler_factory!(NetHandlerFactory);

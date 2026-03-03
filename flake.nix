@@ -1529,7 +1529,7 @@
             // lib.optionalAttrs hasExternalRepos {
               full-aspen-node = fullBin {
                 name = "aspen-node";
-                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets"];
+                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "net"];
               };
               full-aspen-node-proxy = fullBin {
                 name = "aspen-node";
@@ -1540,7 +1540,7 @@
                 fullPluginsCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob";
+                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net";
                   doCheck = false;
                 }
               );

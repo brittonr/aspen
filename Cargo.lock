@@ -1990,6 +1990,7 @@ dependencies = [
  "aspen-hooks-types",
  "aspen-job-handler",
  "aspen-jobs",
+ "aspen-net",
  "aspen-nix-handler",
  "aspen-raft",
  "aspen-rpc-core",

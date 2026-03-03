@@ -20,13 +20,13 @@
 
 ## 3. SOCKS5 Tunnel Completion
 
-- [ ] 3.1 Add `iroh::Endpoint` field to `Socks5Server` struct (shared via `Arc`)
-- [ ] 3.2 Replace the tunnel placeholder in `handle_connection()`: parse `endpoint_id` string to `iroh::EndpointId`, build `EndpointAddr`, call `endpoint.connect(addr, NET_TUNNEL_ALPN)`
-- [ ] 3.3 After QUIC connect: send `u16` port (big-endian) on the QUIC stream, then `send_reply(REPLY_SUCCESS)`
-- [ ] 3.4 After success reply: `tokio::io::copy_bidirectional` between the TCP `stream` and QUIC `SendStream`/`RecvStream` (adapt to `AsyncRead`/`AsyncWrite`)
-- [ ] 3.5 Handle connect errors: map iroh connection errors to SOCKS5 reply codes (`HOST_UNREACHABLE`, `CONNECTION_REFUSED`)
-- [ ] 3.6 Update `Socks5Server::new()` to take an `Arc<iroh::Endpoint>` parameter
-- [ ] 3.7 Update existing SOCKS5 integration tests to pass a mock/stub endpoint
+- [x] 3.1 Add `iroh::Endpoint` field to `Socks5Server` struct (shared via `Arc`)
+- [x] 3.2 Replace the tunnel placeholder in `handle_connection()`: parse `endpoint_id` to `EndpointId`, build `EndpointAddr`, call `open_tunnel()`
+- [x] 3.3 After QUIC connect: `open_tunnel` sends `u16` port, then `send_reply(REPLY_SUCCESS)` in handle_connection
+- [x] 3.4 After success reply: `tokio::io::copy` bidirectional between TCP stream and QUIC streams
+- [x] 3.5 Handle connect errors: invalid endpoint_id → HOST_UNREACHABLE, tunnel failure → HOST_UNREACHABLE
+- [x] 3.6 Update `Socks5Server::new()` to take an `Arc<iroh::Endpoint>` parameter
+- [x] 3.7 Update existing SOCKS5 integration tests to pass test endpoint, adjust assertions for tunnel-aware behavior
 
 ## 4. NetHandler Registration in Node
 
