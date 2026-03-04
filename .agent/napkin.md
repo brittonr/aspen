@@ -66,6 +66,13 @@
 | 2026-02-28 | self | `PluginHostContext::new()` defaults to `PluginPermissions::default()` (all denied) — host `kv_get` silently returned error tag `\x03` | Test host contexts need `.with_permissions(PluginPermissions::all())` or explicit per-capability grants. Default is least-privilege (all denied). |
 | 2026-02-28 | self | Echo plugin didn't exist — integration tests referenced `aspen_echo_plugin.wasm` that was never built | Created `aspen-echo-plugin` crate in aspen-plugins repo. Handles Ping→Pong, ReadKey→kv_get, else→UNHANDLED error. |
 
+| 2026-03-03 | self | `host.succeed("socat ... &")` hangs — background `&` keeps shell alive in NixOS test `succeed()` | Use `systemd-run --unit=name command` for background processes in NixOS VM tests. Never use `&` in `succeed()`. |
+| 2026-03-03 | self | `cluster status` endpoint_id field is full `EndpointAddr { id: PublicKey(hex), addrs: {...} }` debug string — can't pass to CLI as `--endpoint-id` (shell chokes on `{` and `(`) | Extract hex public key with `re.search(r'PublicKey\(([0-9a-f]+)\)', raw_eid)` before passing to CLI. |
+| 2026-03-03 | self | `aspen-node-vm-test` is built with `ci,docs,hooks,shell-worker,automerge,secrets` but NOT `net` — NetHandler not compiled in, `net publish` silently fails | Use `full-aspen-node-plugins` for tests that need `net` feature. Always check which features are compiled into the node package. |
+| 2026-03-03 | self | WASM KV plugin install fails in nested KVM (hyperlight sandbox inside QEMU) — `plugin list` returns 0 plugins after reload | Native handlers (net, blob, cluster) work without plugins. Only use WASM plugins in tests when the feature actually requires them. `inmemory` storage backend doesn't need KV plugin. |
+| 2026-03-03 | self | `fullBin { name = "aspen-net"; }` uses root Cargo.toml pname and `--bin aspen-net` — fails with "no bin target named aspen-net in default-run packages" | For bins in subcrates, use explicit `craneLib.buildPackage` with `--package aspen-net --bin aspen-net` instead of `fullBin`. |
+| 2026-03-03 | self | `echo ''` in nix test string triggers alejandra parse error ('' is multiline string delimiter) | Avoid `''` in nix `''...''` strings. Use `echo empty` or `echo ""` (double-quoted) instead. |
+
 ## User Preferences
 
 - Improve plugin system iteratively
