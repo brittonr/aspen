@@ -2030,6 +2030,30 @@
                 aspenCliPackage = bins.full-aspen-cli;
                 aspenNetPackage = bins.full-aspen-net-daemon;
               };
+
+              # VirtioFS + Service Mesh combined: Guest A serves files from Raft KV via
+              # VirtioFS mount, published to the mesh. Guest B reaches it through SOCKS5.
+              # Proves: KV → VirtioFS → nginx → socat → TunnelAcceptor → iroh → SOCKS5 → curl
+              # Build: nix build .#checks.x86_64-linux.microvm-virtiofs-net-test --impure
+              microvm-virtiofs-net-test = import ./nix/tests/microvm-virtiofs-net.nix {
+                inherit pkgs microvm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli;
+                aspenNetPackage = bins.full-aspen-net-daemon;
+                aspenClusterVirtiofsServer = self.packages.${system}.aspen-cluster-virtiofs-server;
+              };
+
+              # Multi-host service mesh: Two QEMU hosts, each with a CH microVM.
+              # Guest A on Host A publishes HTTP service. Guest B on Host B reaches it
+              # through SOCKS5 → iroh QUIC tunnel across QEMU virtual bridge.
+              # Proves: cross-host iroh tunnel routing with real network separation.
+              # Build: nix build .#checks.x86_64-linux.multihost-microvm-mesh-test --impure
+              multihost-microvm-mesh-test = import ./nix/tests/multihost-microvm-mesh.nix {
+                inherit pkgs microvm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli;
+                aspenNetPackage = bins.full-aspen-net-daemon;
+              };
             }
             // lib.optionalAttrs (system == "x86_64-linux") {
               # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.
