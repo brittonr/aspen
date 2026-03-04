@@ -144,7 +144,12 @@ members = [
 
     # PIM (Personal Information Management)
     "crates/aspen-contacts",
+    "crates/aspen-contacts-handler",
     "crates/aspen-calendar",
+    "crates/aspen-calendar-handler",
+
+    # SOPS backend
+    "crates/aspen-sops",
 
     # RPC handlers (feature-gated)
     "crates/aspen-blob-handler",
@@ -451,6 +456,8 @@ jobs = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance", "aspen-rpc-handle
 docs = ["dep:aspen-docs", "dep:iroh-docs", "dep:iroh-blobs", "blob", "aspen-rpc-handlers/docs", "aspen-cluster/docs"]
 proxy = ["dep:aspen-proxy", "aspen-cluster/proxy"]
 net = ["dep:aspen-net", "proxy", "aspen-rpc-handlers/net"]
+contacts = ["aspen-rpc-handlers/contacts"]
+calendar = ["aspen-rpc-handlers/calendar"]
 federation = ["aspen-cluster/federation"]
 relay-server = ["aspen-cluster/relay-server"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]

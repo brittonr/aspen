@@ -1,0 +1,78 @@
+[package]
+name = "aspen-sops"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "SOPS backend using Aspen Transit for key management"
+
+[[bin]]
+name = "aspen-sops"
+path = "src/main.rs"
+
+[dependencies]
+# Aspen client for Transit RPC
+aspen-client = { path = "../aspen-client" }
+aspen-client-api = { path = "../aspen-client-api", features = ["secrets"] }
+aspen-transport = { path = "../aspen-transport" }
+
+# SOPS-compatible encryption (AES-256-GCM for value encryption)
+aes-gcm = "0.10"
+
+# SOPS MAC computation (HMAC-SHA256)
+hmac = "0.12"
+sha2 = "0.10"
+
+# Key material safety — zeroize plaintext data keys on drop
+zeroize = { version = "1.8", features = ["derive"] }
+
+# File format support
+toml = "0.8"
+toml_edit = "0.22"
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Iroh networking (for connection types)
+iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+base64 = "0.22"
+
+# Age support (for hybrid encryption with age fallback)
+age = { version = "0.11", features = ["armor"], optional = true }
+
+# gRPC key service bridge (optional)
+tonic = { version = "0.12", optional = true }
+prost = { version = "0.13", optional = true }
+tokio-stream = { version = "0.1", optional = true }
+
+# Error handling
+snafu = "0.8.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Async
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "fs", "sync", "time", "process"] }
+
+# Crypto utilities
+rand = "0.9"
+subtle = "2.6"  # Constant-time comparison for MAC verification
+hex = "0.4"
+blake3 = "1.5"  # File hashing for edit change detection
+regex = "1"
+
+# Time formatting for SOPS lastmodified
+chrono = "0.4"
+
+[dev-dependencies]
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time"] }
+tempfile = "3.10"
+aspen-secrets = { path = "../aspen-secrets" }
+
+[features]
+default = ["age-fallback"]
+keyservice = ["dep:tonic", "dep:prost", "dep:tokio-stream"]
+age-fallback = ["dep:age"]
+full = ["keyservice", "age-fallback"]

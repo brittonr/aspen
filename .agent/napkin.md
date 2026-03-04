@@ -72,6 +72,9 @@
 | 2026-03-03 | self | WASM KV plugin install fails in nested KVM (hyperlight sandbox inside QEMU) — `plugin list` returns 0 plugins after reload | Native handlers (net, blob, cluster) work without plugins. Only use WASM plugins in tests when the feature actually requires them. `inmemory` storage backend doesn't need KV plugin. |
 | 2026-03-03 | self | `fullBin { name = "aspen-net"; }` uses root Cargo.toml pname and `--bin aspen-net` — fails with "no bin target named aspen-net in default-run packages" | For bins in subcrates, use explicit `craneLib.buildPackage` with `--package aspen-net --bin aspen-net` instead of `fullBin`. |
 | 2026-03-03 | self | `echo ''` in nix test string triggers alejandra parse error ('' is multiline string delimiter) | Avoid `''` in nix `''...''` strings. Use `echo empty` or `echo ""` (double-quoted) instead. |
+| 2026-03-03 | self | Git worktree for aspen has path collision: relative path deps in sibling crates (e.g., `aspen-dns = { path = "../../../aspen-dns/crates/..." }`) resolve differently, causing lockfile package collisions | Don't use git worktrees for development in aspen — the workspace has external sibling-repo path deps that break in worktrees. Work directly in the main repo. |
+| 2026-03-03 | self | Rust 2024 edition: `tokio::fs::write(path, &string)` fails type inference — needs explicit `string.as_bytes()` | In closures and async chains, use `.as_bytes()` for `tokio::fs::write` with String data. Also: `map_err(\|e: toml_edit::TomlError\|` needs explicit error type in closures. |
+| 2026-03-03 | self | `age::Encryptor::with_recipients()` takes `impl Iterator<Item = &dyn Recipient>`, not `Vec<Box<Recipient>>` | Create vec of `Box<dyn Recipient>`, then pass `recipients.iter().map(\|r\| r.as_ref() as &dyn age::Recipient)` |
 
 ## User Preferences
 
