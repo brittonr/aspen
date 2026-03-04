@@ -16,9 +16,9 @@ pub use super::common::encrypt_sops_value as encrypt_value;
 use super::common::is_sops_encrypted;
 pub use super::common::is_sops_encrypted as is_encrypted;
 use super::common::validate_key_path;
-use crate::error::Result;
-use crate::error::SopsError;
-use crate::metadata::SopsFileMetadata;
+use crate::sops::metadata::SopsFileMetadata;
+use crate::sops::sops_error::Result;
+use crate::sops::sops_error::SopsError;
 
 /// Encrypt all leaf values in a TOML document.
 ///
@@ -132,7 +132,7 @@ pub fn extract_metadata_from_contents(
         path: input_path.to_path_buf(),
         reason: e.to_string(),
     })?;
-    crate::metadata::extract_metadata_from_toml(&parsed)
+    crate::sops::metadata::extract_metadata_from_toml(&parsed)
 }
 
 /// Inject SOPS metadata into a TOML document.

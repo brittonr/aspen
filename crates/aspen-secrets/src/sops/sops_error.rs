@@ -6,7 +6,7 @@ use snafu::Snafu;
 
 /// Errors that can occur during SOPS operations.
 #[derive(Debug, Snafu)]
-#[snafu(visibility(pub(crate)))]
+#[snafu(visibility(pub))]
 pub enum SopsError {
     /// Failed to connect to Aspen Transit.
     #[snafu(display(
@@ -112,7 +112,6 @@ pub enum SopsError {
     KeyPathTooLong { length: u32, max: u32 },
 
     /// Age encryption/decryption error.
-    #[cfg(feature = "age-fallback")]
     #[snafu(display("age error: {reason}"))]
     AgeError { reason: String },
 

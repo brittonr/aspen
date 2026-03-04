@@ -6,7 +6,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::constants::SOPS_VERSION;
+use super::sops_constants::SOPS_VERSION;
 
 /// Aspen Transit recipient in SOPS metadata.
 ///
@@ -148,7 +148,7 @@ impl Default for SopsFileMetadata {
 /// Extract SOPS metadata from a parsed TOML value.
 ///
 /// Returns `None` if the `[sops]` table is not present.
-pub fn extract_metadata_from_toml(value: &toml::Value) -> crate::error::Result<Option<SopsFileMetadata>> {
+pub fn extract_metadata_from_toml(value: &toml::Value) -> super::sops_error::Result<Option<SopsFileMetadata>> {
     let table = match value.as_table() {
         Some(t) => t,
         None => return Ok(None),
@@ -168,11 +168,11 @@ pub fn extract_metadata_from_toml(value: &toml::Value) -> crate::error::Result<O
 }
 
 /// Legacy alias for `extract_metadata_from_toml`.
-pub fn extract_metadata(value: &toml::Value) -> crate::error::Result<Option<SopsFileMetadata>> {
+pub fn extract_metadata(value: &toml::Value) -> super::sops_error::Result<Option<SopsFileMetadata>> {
     extract_metadata_from_toml(value)
 }
 
-use crate::error::SopsError;
+use super::sops_error::SopsError;
 
 #[cfg(test)]
 mod tests {

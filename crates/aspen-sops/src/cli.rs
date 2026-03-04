@@ -3,9 +3,9 @@
 use std::path::PathBuf;
 
 #[cfg(feature = "keyservice")]
-use aspen_sops::constants::DEFAULT_SOCKET_PATH;
-use aspen_sops::constants::DEFAULT_TRANSIT_KEY;
-use aspen_sops::constants::DEFAULT_TRANSIT_MOUNT;
+use aspen_secrets::sops::sops_constants::DEFAULT_SOCKET_PATH;
+use aspen_secrets::sops::sops_constants::DEFAULT_TRANSIT_KEY;
+use aspen_secrets::sops::sops_constants::DEFAULT_TRANSIT_MOUNT;
 use clap::Parser;
 use clap::Subcommand;
 
@@ -74,7 +74,6 @@ pub enum Commands {
         extract: Option<String>,
 
         /// Age identity file for fallback decryption.
-        #[cfg(feature = "age-fallback")]
         #[arg(long)]
         age_identity: Option<PathBuf>,
     },

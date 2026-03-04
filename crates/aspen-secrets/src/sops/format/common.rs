@@ -10,12 +10,12 @@ use aes_gcm::aead::generic_array::GenericArray;
 use base64::Engine;
 use rand::RngCore;
 
-use crate::constants::AES_GCM_NONCE_SIZE;
-use crate::constants::AES_GCM_TAG_SIZE;
-use crate::constants::MAX_KEY_PATH_LENGTH;
-use crate::constants::MAX_VALUE_COUNT;
-use crate::error::Result;
-use crate::error::SopsError;
+use crate::sops::sops_constants::AES_GCM_NONCE_SIZE;
+use crate::sops::sops_constants::AES_GCM_TAG_SIZE;
+use crate::sops::sops_constants::MAX_KEY_PATH_LENGTH;
+use crate::sops::sops_constants::MAX_VALUE_COUNT;
+use crate::sops::sops_error::Result;
+use crate::sops::sops_error::SopsError;
 
 /// Check if a string is SOPS-encrypted.
 pub fn is_sops_encrypted(s: &str) -> bool {

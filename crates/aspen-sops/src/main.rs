@@ -14,7 +14,7 @@ async fn main() {
 
     // Initialize tracing
     let filter = if cli.verbose {
-        EnvFilter::new("aspen_sops=debug,info")
+        EnvFilter::new("aspen_sops=debug,aspen_secrets=debug,info")
     } else {
         EnvFilter::new("aspen_sops=info,warn")
     };
@@ -49,7 +49,7 @@ async fn run(command: Commands) -> aspen_sops::Result<()> {
                 encrypted_regex,
                 in_place,
             };
-            let output = aspen_sops::encrypt_file(&config).await?;
+            let output = aspen_sops::encrypt::encrypt_file(&config).await?;
             if !config.in_place {
                 print!("{output}");
             }
@@ -60,7 +60,6 @@ async fn run(command: Commands) -> aspen_sops::Result<()> {
             cluster_ticket,
             output,
             extract,
-            #[cfg(feature = "age-fallback")]
             age_identity,
         } => {
             let config = aspen_sops::DecryptConfig {
@@ -68,10 +67,9 @@ async fn run(command: Commands) -> aspen_sops::Result<()> {
                 cluster_ticket,
                 output_path: output,
                 extract_path: extract,
-                #[cfg(feature = "age-fallback")]
                 age_identity,
             };
-            let decrypted = aspen_sops::decrypt_file(&config).await?;
+            let decrypted = aspen_sops::decrypt::decrypt_file(&config).await?;
             if config.output_path.is_none() {
                 print!("{decrypted}");
             }

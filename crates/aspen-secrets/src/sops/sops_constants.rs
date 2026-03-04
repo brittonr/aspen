@@ -37,3 +37,15 @@ pub const DATA_KEY_BYTES: usize = 32;
 
 /// Environment variable for cluster ticket.
 pub const ENV_CLUSTER_TICKET: &str = "ASPEN_CLUSTER_TICKET";
+
+// ============================================================================
+// Compile-Time Constant Assertions (Tiger Style)
+// ============================================================================
+
+const _: () = assert!(MAX_SOPS_FILE_SIZE > 0);
+const _: () = assert!(MAX_VALUE_COUNT > 0);
+const _: () = assert!(MAX_KEY_PATH_LENGTH > 0);
+const _: () = assert!(AES_GCM_NONCE_SIZE == 12);
+const _: () = assert!(AES_GCM_TAG_SIZE == 16);
+const _: () = assert!(DATA_KEY_BITS == 256);
+const _: () = assert!(DATA_KEY_BYTES == 32);

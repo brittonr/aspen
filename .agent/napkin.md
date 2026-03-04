@@ -76,6 +76,11 @@
 | 2026-03-03 | self | Rust 2024 edition: `tokio::fs::write(path, &string)` fails type inference — needs explicit `string.as_bytes()` | In closures and async chains, use `.as_bytes()` for `tokio::fs::write` with String data. Also: `map_err(\|e: toml_edit::TomlError\|` needs explicit error type in closures. |
 | 2026-03-03 | self | `age::Encryptor::with_recipients()` takes `impl Iterator<Item = &dyn Recipient>`, not `Vec<Box<Recipient>>` | Create vec of `Box<dyn Recipient>`, then pass `recipients.iter().map(\|r\| r.as_ref() as &dyn age::Recipient)` |
 
+| 2026-03-04 | self | `aspen-sops` format/common.rs and `aspen-secrets` decryptor.rs both have `decrypt_sops_value()` and `is_sops_encrypted()` — but they use different error types (SopsError vs SecretsError) and the decryptor.rs version must work without the `sops` feature | Dedup requires unifying error types or extracting a common inner function that returns a generic error. For now, both versions stay — they're stable and tested. Unify when error types are consolidated. |
+| 2026-03-04 | self | `TransitStore` in aspen-secrets is a trait (not generic over backend). `DefaultTransitStore` is the concrete impl. | Use `Arc<dyn TransitStore>` for consumers that need Transit operations without knowing the backend type. Don't parameterize over `S: SecretsBackend` when you just need Transit operations. |
+| 2026-03-04 | self | Moving code between crates: `super::super::` paths are fragile in deeply nested modules | Use `crate::sops::sops_error::` (absolute crate paths) instead of relative `super::super::` for cross-module imports. Absolute paths survive refactors better. |
+| 2026-03-04 | self | Feature gates from source crate don't auto-transfer when moving code | `#[cfg(feature = "age-fallback")]` in aspen-sops needs to become unconditional in aspen-secrets (where age is always a dep). Remove feature gates that don't apply in the new crate. |
+
 ## User Preferences
 
 - Improve plugin system iteratively

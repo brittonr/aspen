@@ -55,6 +55,34 @@ iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-p
 # Logging
 tracing = "0.1"
 
+# SOPS native encrypt/decrypt (feature-gated)
+aspen-client = { path = "../aspen-client", optional = true }
+aspen-client-api = { path = "../aspen-client-api", features = ["secrets"], optional = true }
+aspen-transport = { path = "../aspen-transport", optional = true }
+toml_edit = { version = "0.22", optional = true }
+serde_yaml = { version = "0.9", optional = true }
+chrono = { version = "0.4", optional = true }
+regex = { version = "1", optional = true }
+subtle = { version = "2.6", optional = true }
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+
+[features]
+default = []
+sops = [
+    "dep:aspen-client",
+    "dep:aspen-client-api",
+    "dep:aspen-transport",
+    "dep:toml_edit",
+    "dep:serde_yaml",
+    "dep:chrono",
+    "dep:regex",
+    "dep:subtle",
+    "dep:hmac",
+    "dep:sha2",
+]
+full = ["sops"]
+
 [dev-dependencies]
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time"] }
 tempfile = "3.10"

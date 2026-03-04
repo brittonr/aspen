@@ -7,11 +7,11 @@ use std::path::PathBuf;
 
 use tracing::info;
 
-use crate::client::TransitClient;
-use crate::constants::MAX_SOPS_FILE_SIZE;
-use crate::error::Result;
-use crate::error::SopsError;
-use crate::format;
+use super::client::TransitClient;
+use super::format;
+use super::sops_constants::MAX_SOPS_FILE_SIZE;
+use super::sops_error::Result;
+use super::sops_error::SopsError;
 
 /// Configuration for rotating a file's data key wrapping.
 #[derive(Debug, Clone)]

@@ -5,10 +5,10 @@
 
 use subtle::ConstantTimeEq;
 
-use crate::error::Result;
-use crate::error::SopsError;
-use crate::format::common::decrypt_sops_value;
-use crate::format::common::encrypt_sops_value;
+use super::format::common::decrypt_sops_value;
+use super::format::common::encrypt_sops_value;
+use super::sops_error::Result;
+use super::sops_error::SopsError;
 use crate::verified::mac::compute_sops_mac;
 
 /// Verify a SOPS MAC against the file's plaintext values.

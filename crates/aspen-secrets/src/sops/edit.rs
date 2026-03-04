@@ -4,13 +4,13 @@ use std::path::PathBuf;
 
 use tracing::info;
 
-use crate::decrypt::DecryptConfig;
-use crate::decrypt::decrypt_file;
-use crate::encrypt::EncryptConfig;
-use crate::encrypt::encrypt_file;
-use crate::error::Result;
-use crate::error::SopsError;
-use crate::format;
+use super::decrypt::DecryptConfig;
+use super::decrypt::decrypt_file;
+use super::encrypt::EncryptConfig;
+use super::encrypt::encrypt_file;
+use super::format;
+use super::sops_error::Result;
+use super::sops_error::SopsError;
 
 /// Configuration for the edit operation.
 #[derive(Debug, Clone)]
@@ -44,7 +44,6 @@ pub async fn edit_file(config: &EditConfig) -> Result<()> {
         cluster_ticket: Some(config.cluster_ticket.clone()),
         output_path: None,
         extract_path: None,
-        #[cfg(feature = "age-fallback")]
         age_identity: None,
     };
 

@@ -10,16 +10,16 @@ use std::path::PathBuf;
 
 use tracing::info;
 
-use crate::client::TransitClient;
-use crate::constants::DEFAULT_TRANSIT_KEY;
-use crate::constants::DEFAULT_TRANSIT_MOUNT;
-use crate::constants::MAX_SOPS_FILE_SIZE;
-use crate::error::Result;
-use crate::error::SopsError;
-use crate::format;
-use crate::mac::encrypt_mac;
-use crate::metadata::AspenTransitRecipient;
-use crate::metadata::SopsFileMetadata;
+use super::client::TransitClient;
+use super::format;
+use super::mac::encrypt_mac;
+use super::metadata::AspenTransitRecipient;
+use super::metadata::SopsFileMetadata;
+use super::sops_constants::DEFAULT_TRANSIT_KEY;
+use super::sops_constants::DEFAULT_TRANSIT_MOUNT;
+use super::sops_constants::MAX_SOPS_FILE_SIZE;
+use super::sops_error::Result;
+use super::sops_error::SopsError;
 
 /// Configuration for encrypting a file.
 #[derive(Debug, Clone)]
@@ -97,10 +97,9 @@ pub async fn encrypt_file(config: &EncryptConfig) -> Result<String> {
     });
 
     // Encrypt data key for age recipients if configured
-    #[cfg(feature = "age-fallback")]
     for age_recipient in &config.age_recipients {
         let age_enc = encrypt_data_key_for_age(age_recipient, &data_key)?;
-        metadata.add_age_recipient(crate::metadata::AgeRecipient {
+        metadata.add_age_recipient(super::metadata::AgeRecipient {
             recipient: age_recipient.clone(),
             enc: Some(age_enc),
         });
@@ -159,7 +158,6 @@ fn to_key_array(key: &[u8]) -> Result<[u8; 32]> {
 }
 
 /// Encrypt a data key for an age recipient (public for updatekeys).
-#[cfg(feature = "age-fallback")]
 pub fn encrypt_data_key_for_age(recipient_str: &str, data_key: &[u8]) -> Result<String> {
     use std::io::Write;
 

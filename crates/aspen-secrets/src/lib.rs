@@ -1,20 +1,36 @@
-//! SOPS-based secrets management and Vault-like secrets engine for Aspen.
+//! Unified secrets management and cryptographic primitives for Aspen.
 //!
-//! This crate provides comprehensive secrets management:
+//! This crate is the single owner of all secrets lifecycle, crypto operations,
+//! and key management in Aspen. It consolidates functionality that was previously
+//! scattered across `aspen-sops`, `aspen-auth`, `aspen-cluster`, and others.
 //!
-//! ## SOPS Integration (Bootstrap Secrets)
+//! ## Modules
 //!
-//! Load encrypted secrets from SOPS-formatted config files at node startup:
-//! - Trusted root keys for token verification
-//! - Token signing keys
-//! - Pre-built capability tokens
-//! - Bootstrap secrets (API keys, certificates, etc.)
+//! ### SOPS Integration (`sops`)
 //!
-//! ## Vault-like Secrets Engines (Runtime)
+//! - **Bootstrap**: Load encrypted secrets from SOPS-formatted config files at node startup using
+//!   age decryption (`sops::decryptor`)
+//! - **Native SOPS** (feature `sops`): Full encrypt/decrypt/edit/rotate using Aspen Transit as key
+//!   backend — replaces the Go `sops` binary
+//! - **Multi-format**: TOML, YAML, JSON file support (`sops::format`)
 //!
-//! - **KV**: Versioned key-value secrets with soft/hard delete
-//! - **Transit**: Encryption as a service (encrypt, decrypt, sign, verify)
-//! - **PKI**: Certificate authority with role-based policies
+//! ### Vault-like Secrets Engines (Runtime)
+//!
+//! - **KV** (`kv`): Versioned key-value secrets with soft/hard delete
+//! - **Transit** (`transit`): Encryption as a service (encrypt, decrypt, sign, verify)
+//! - **PKI** (`pki`): Certificate authority with role-based policies
+//!
+//! ### Cluster Security Primitives
+//!
+//! - **Cookie** (`cookie`): Cluster cookie validation and HMAC key derivation
+//! - **Identity** (`identity`): Node identity key lifecycle (generate, load, derive)
+//! - **Nix Cache** (`nix_cache`): Signing key management for Nix binary caches
+//!
+//! ## Feature Flags
+//!
+//! - `sops`: Native SOPS encrypt/decrypt/edit/rotate using Transit (pulls in `aspen-client`,
+//!   `toml_edit`, `serde_yaml`, etc.)
+//! - `full`: All features enabled
 //!
 //! ## Quick Start
 //!
@@ -46,12 +62,16 @@
 
 pub mod backend;
 pub mod constants;
+pub mod cookie;
 pub mod error;
+pub mod identity;
 pub mod kv;
 pub mod mount_registry;
+pub mod nix_cache;
 pub mod pki;
 pub mod sops;
 pub mod transit;
+pub mod verified;
 
 // Re-export main types
 // Re-export backend types

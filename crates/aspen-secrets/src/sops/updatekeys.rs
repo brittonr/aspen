@@ -8,13 +8,13 @@ use std::path::PathBuf;
 use tracing::info;
 use zeroize::Zeroizing;
 
-use crate::client::TransitClient;
-use crate::constants::MAX_SOPS_FILE_SIZE;
-use crate::error::Result;
-use crate::error::SopsError;
-use crate::format;
-use crate::metadata::AspenTransitRecipient;
-use crate::metadata::SopsFileMetadata;
+use super::client::TransitClient;
+use super::format;
+use super::metadata::AspenTransitRecipient;
+use super::metadata::SopsFileMetadata;
+use super::sops_constants::MAX_SOPS_FILE_SIZE;
+use super::sops_error::Result;
+use super::sops_error::SopsError;
 
 /// Configuration for updating key groups.
 #[derive(Debug, Clone)]
@@ -74,7 +74,7 @@ pub async fn update_keys(config: &UpdateKeysConfig) -> Result<String> {
 
     // Add new Transit recipient
     if let Some(ref ticket) = config.cluster_ticket {
-        let key_name = config.transit_key.as_deref().unwrap_or(crate::constants::DEFAULT_TRANSIT_KEY);
+        let key_name = config.transit_key.as_deref().unwrap_or(super::sops_constants::DEFAULT_TRANSIT_KEY);
 
         let client = TransitClient::connect(ticket, Some(&config.transit_mount)).await?;
         let (enc, key_version) = client.encrypt_data(key_name, &data_key).await?;
@@ -90,10 +90,9 @@ pub async fn update_keys(config: &UpdateKeysConfig) -> Result<String> {
     }
 
     // Add age recipients
-    #[cfg(feature = "age-fallback")]
     for age_recipient in &config.add_age {
-        let enc = crate::encrypt::encrypt_data_key_for_age(age_recipient, &data_key)?;
-        metadata.add_age_recipient(crate::metadata::AgeRecipient {
+        let enc = super::encrypt::encrypt_data_key_for_age(age_recipient, &data_key)?;
+        metadata.add_age_recipient(super::metadata::AgeRecipient {
             recipient: age_recipient.clone(),
             enc: Some(enc),
         });

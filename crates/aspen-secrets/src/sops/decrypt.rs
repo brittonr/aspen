@@ -14,13 +14,13 @@ use tracing::info;
 use tracing::warn;
 use zeroize::Zeroizing;
 
-use crate::client::TransitClient;
-use crate::constants::MAX_SOPS_FILE_SIZE;
-use crate::error::Result;
-use crate::error::SopsError;
-use crate::format;
-use crate::mac::verify_mac;
-use crate::metadata::SopsFileMetadata;
+use super::client::TransitClient;
+use super::format;
+use super::mac::verify_mac;
+use super::metadata::SopsFileMetadata;
+use super::sops_constants::MAX_SOPS_FILE_SIZE;
+use super::sops_error::Result;
+use super::sops_error::SopsError;
 
 /// Configuration for decrypting a file.
 #[derive(Debug, Clone)]
@@ -34,7 +34,6 @@ pub struct DecryptConfig {
     /// Extract a single value by dotted path.
     pub extract_path: Option<String>,
     /// Path to age identity file for fallback decryption.
-    #[cfg(feature = "age-fallback")]
     pub age_identity: Option<PathBuf>,
 }
 
@@ -45,7 +44,6 @@ impl Default for DecryptConfig {
             cluster_ticket: None,
             output_path: None,
             extract_path: None,
-            #[cfg(feature = "age-fallback")]
             age_identity: None,
         }
     }
@@ -139,7 +137,6 @@ async fn decrypt_data_key(config: &DecryptConfig, metadata: &SopsFileMetadata) -
     }
 
     // Try age fallback
-    #[cfg(feature = "age-fallback")]
     if metadata.has_age()
         && let Some(ref identity_path) = config.age_identity
     {
@@ -169,7 +166,6 @@ async fn try_transit_decrypt(
 }
 
 /// Try to decrypt the data key using age.
-#[cfg(feature = "age-fallback")]
 async fn try_age_decrypt(identity_path: &std::path::Path, metadata: &SopsFileMetadata) -> Result<Zeroizing<Vec<u8>>> {
     let identity_contents = tokio::fs::read_to_string(identity_path).await.map_err(|e| SopsError::AgeError {
         reason: format!("failed to read age identity: {e}"),
@@ -195,7 +191,6 @@ async fn try_age_decrypt(identity_path: &std::path::Path, metadata: &SopsFileMet
 }
 
 /// Parse an age identity from file contents.
-#[cfg(feature = "age-fallback")]
 fn parse_age_identity(contents: &str) -> Result<age::x25519::Identity> {
     for line in contents.lines() {
         let line = line.trim();
@@ -214,7 +209,6 @@ fn parse_age_identity(contents: &str) -> Result<age::x25519::Identity> {
 }
 
 /// Decrypt age armored ciphertext.
-#[cfg(feature = "age-fallback")]
 fn decrypt_age_ciphertext(ciphertext: &str, identity: &age::x25519::Identity) -> Result<Vec<u8>> {
     use std::io::Read;
 

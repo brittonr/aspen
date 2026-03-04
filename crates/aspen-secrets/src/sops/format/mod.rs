@@ -15,8 +15,8 @@ pub use common::decrypt_sops_value;
 pub use common::encrypt_sops_value;
 pub use common::is_sops_encrypted;
 
-use crate::error::Result;
-use crate::metadata::SopsFileMetadata;
+use crate::sops::metadata::SopsFileMetadata;
+use crate::sops::sops_error::Result;
 
 /// Supported SOPS file formats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,10 +46,10 @@ pub fn detect_format(path: &Path) -> Result<SopsFormat> {
         Some("toml") => Ok(SopsFormat::Toml),
         Some("yaml" | "yml") => Ok(SopsFormat::Yaml),
         Some("json") => Ok(SopsFormat::Json),
-        Some(ext) => Err(crate::error::SopsError::InvalidFormat {
+        Some(ext) => Err(crate::sops::sops_error::SopsError::InvalidFormat {
             reason: format!("unknown file extension: .{ext}"),
         }),
-        None => Err(crate::error::SopsError::InvalidFormat {
+        None => Err(crate::sops::sops_error::SopsError::InvalidFormat {
             reason: "file has no extension; specify format explicitly".into(),
         }),
     }

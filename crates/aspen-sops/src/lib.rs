@@ -1,60 +1,39 @@
-//! SOPS backend using Aspen Transit for key management.
+//! SOPS CLI using Aspen Transit for key management.
 //!
-//! This crate provides two modes of operation:
+//! All SOPS library code (encrypt, decrypt, edit, rotate, MAC, format handling)
+//! now lives in `aspen_secrets::sops`. This crate provides:
 //!
-//! ## Native Mode
+//! 1. The `aspen-sops` CLI binary
+//! 2. The gRPC key service bridge (feature-gated behind `keyservice`)
 //!
-//! Full Rust implementation of SOPS encrypt/decrypt that talks directly to
-//! Aspen Transit via Iroh QUIC. No dependency on the Go `sops` binary.
-//! Supports TOML, JSON, and YAML file formats.
-//!
-//! ```rust,ignore
-//! use aspen_sops::{encrypt_file, EncryptConfig};
-//!
-//! // Works with .toml, .json, .yaml, and .yml files
-//! let config = EncryptConfig {
-//!     input_path: "secrets.yaml".into(),
-//!     cluster_ticket: "aspen1q...".into(),
-//!     transit_key: "sops-data-key".into(),
-//!     ..Default::default()
-//! };
-//! let encrypted = encrypt_file(&config).await?;
-//! ```
-//!
-//! ## Bridge Mode
-//!
-//! gRPC key service that bridges SOPS ↔ Aspen Transit. The Go `sops` binary
-//! connects via `--keyservice unix:///path/to/socket`.
+//! ## Usage
 //!
 //! ```bash
-//! aspen-sops keyservice --cluster-ticket aspen1q... --transit-key sops-data-key
-//! sops --keyservice unix:///tmp/aspen-sops.sock decrypt secrets.sops.yaml
+//! aspen-sops encrypt secrets.toml --cluster-ticket aspen1q...
+//! aspen-sops decrypt secrets.sops.toml
+//! aspen-sops edit secrets.sops.toml --cluster-ticket aspen1q...
 //! ```
 
-pub mod client;
-pub mod constants;
-pub mod decrypt;
-pub mod edit;
-pub mod encrypt;
-pub mod error;
-pub mod format;
-pub mod mac;
-pub mod metadata;
-pub mod rotate;
-pub mod updatekeys;
-pub mod verified;
+// Re-export everything from aspen-secrets::sops for backward compatibility
+// Re-export main types
+pub use aspen_secrets::sops::DecryptConfig;
+pub use aspen_secrets::sops::EncryptConfig;
+pub use aspen_secrets::sops::SopsError;
+pub use aspen_secrets::sops::SopsFileMetadata;
+pub use aspen_secrets::sops::SopsResult as Result;
+pub use aspen_secrets::sops::TransitClient;
+pub use aspen_secrets::sops::client;
+pub use aspen_secrets::sops::decrypt;
+pub use aspen_secrets::sops::edit;
+pub use aspen_secrets::sops::encrypt;
+pub use aspen_secrets::sops::format;
+pub use aspen_secrets::sops::mac;
+pub use aspen_secrets::sops::metadata;
+pub use aspen_secrets::sops::rotate;
+pub use aspen_secrets::sops::sops_constants as constants;
+pub use aspen_secrets::sops::sops_error as error;
+pub use aspen_secrets::sops::updatekeys;
+pub use aspen_secrets::verified;
 
 #[cfg(feature = "keyservice")]
 pub mod keyservice;
-
-// Re-export main types
-pub use client::TransitClient;
-pub use constants::*;
-pub use decrypt::DecryptConfig;
-pub use decrypt::decrypt_file;
-pub use encrypt::EncryptConfig;
-pub use encrypt::encrypt_file;
-pub use error::Result;
-pub use error::SopsError;
-pub use metadata::AspenTransitRecipient;
-pub use metadata::SopsFileMetadata;
