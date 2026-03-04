@@ -1,18 +1,20 @@
 [package]
-name = "aspen-contacts"
+name = "aspen-calendar-handler"
 version = "0.1.0"
 edition = "2024"
-description = "Contacts domain logic for Aspen distributed cluster"
+description = "Calendar RPC handler for Aspen distributed cluster"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
-aspen-client-api = { path = "../aspen-client-api" }
-aspen-core = { path = "../aspen-core" }
+aspen-rpc-core = { path = "../aspen-rpc-core" }
+aspen-client-api = { workspace = true }
+aspen-calendar = { path = "../aspen-calendar" }
 aspen-kv-types = { path = "../aspen-kv-types" }
 aspen-traits = { path = "../aspen-traits" }
-serde = { workspace = true }
+
+anyhow = "1.0"
+async-trait = "0.1"
 serde_json = { workspace = true }
-snafu = "0.8"
 tracing = { workspace = true }
 
 [dev-dependencies]

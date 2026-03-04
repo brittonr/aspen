@@ -8,10 +8,13 @@ license = "AGPL-3.0-or-later"
 [dependencies]
 aspen-client-api = { path = "../aspen-client-api" }
 aspen-core = { path = "../aspen-core" }
+aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-traits = { path = "../aspen-traits" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 snafu = "0.8"
 tracing = { workspace = true }
 
 [dev-dependencies]
+aspen-testing-core = { path = "../aspen-testing-core" }
 tokio = { version = "1.0", features = ["full", "test-util"] }

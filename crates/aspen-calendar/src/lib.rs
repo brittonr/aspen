@@ -12,6 +12,7 @@
 
 pub mod error;
 pub mod ical;
+pub mod store;
 pub mod types;
 
 pub use error::CalendarError;
@@ -21,6 +22,7 @@ pub use ical::parse_vcalendar;
 pub use ical::parse_vevent;
 pub use ical::serialize_vcalendar;
 pub use ical::serialize_vevent;
+pub use store::CalendarStore;
 pub use types::AlarmAction;
 pub use types::AttendeeRole;
 pub use types::AttendeeStatus;

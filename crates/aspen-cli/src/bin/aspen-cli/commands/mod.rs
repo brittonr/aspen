@@ -10,9 +10,11 @@ pub mod blob;
 pub mod branch;
 #[cfg(feature = "ci")]
 pub mod cache;
+pub mod calendar;
 #[cfg(feature = "ci")]
 pub mod ci;
 pub mod cluster;
+pub mod contacts;
 pub mod counter;
 pub mod docs;
 pub mod federation;

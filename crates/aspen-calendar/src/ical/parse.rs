@@ -60,7 +60,6 @@ pub fn parse_vevent(input: &str) -> Result<CalendarEvent, CalendarError> {
             // Flush any pending alarm
             if in_alarm {
                 flush_alarm(&mut event, alarm_trigger.take(), &alarm_action, alarm_desc.take(), &mut alarm_count);
-                in_alarm = false;
             }
             break;
         }

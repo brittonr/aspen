@@ -11,10 +11,12 @@
 //! namespaced key prefixes (`contacts:book:`, `contacts:entry:`, `contacts:group:`).
 
 pub mod error;
+pub mod store;
 pub mod types;
 pub mod vcard;
 
 pub use error::ContactsError;
+pub use store::ContactStore;
 pub use types::Contact;
 pub use types::ContactAddress;
 pub use types::ContactBook;

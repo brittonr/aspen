@@ -217,15 +217,15 @@ fn find_value_colon(line: &str) -> Option<usize> {
 /// Parse structured N property: Family;Given;Additional;Prefix;Suffix
 fn parse_structured_name(contact: &mut Contact, value: &str) {
     let parts: Vec<&str> = value.split(';').collect();
-    if let Some(family) = parts.first() {
-        if !family.is_empty() {
-            contact.family_name = Some(family.to_string());
-        }
+    if let Some(family) = parts.first()
+        && !family.is_empty()
+    {
+        contact.family_name = Some(family.to_string());
     }
-    if let Some(given) = parts.get(1) {
-        if !given.is_empty() {
-            contact.given_name = Some(given.to_string());
-        }
+    if let Some(given) = parts.get(1)
+        && !given.is_empty()
+    {
+        contact.given_name = Some(given.to_string());
     }
 }
 

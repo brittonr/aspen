@@ -20,9 +20,11 @@ use crate::commands::blob::BlobCommand;
 use crate::commands::branch::BranchCommand;
 #[cfg(feature = "ci")]
 use crate::commands::cache::CacheCommand;
+use crate::commands::calendar::CalendarCommand;
 #[cfg(feature = "ci")]
 use crate::commands::ci::CiCommand;
 use crate::commands::cluster::ClusterCommand;
+use crate::commands::contacts::ContactsCommand;
 use crate::commands::counter::CounterCommand;
 use crate::commands::docs::DocsCommand;
 use crate::commands::federation::FederationCommand;
@@ -134,6 +136,13 @@ pub enum Commands {
     #[command(subcommand)]
     Branch(BranchCommand),
 
+    /// Calendar and event management.
+    ///
+    /// Manage calendars, events, recurring events, free/busy queries,
+    /// and iCalendar import/export.
+    #[command(subcommand)]
+    Calendar(CalendarCommand),
+
     /// Nix binary cache operations.
     ///
     /// Query and download from the distributed Nix binary cache.
@@ -151,6 +160,12 @@ pub enum Commands {
     /// Cluster management commands.
     #[command(subcommand)]
     Cluster(ClusterCommand),
+
+    /// Contact management with vCard support.
+    ///
+    /// Manage address books, contacts, groups, and vCard import/export.
+    #[command(subcommand)]
+    Contacts(ContactsCommand),
 
     /// Atomic counter operations.
     #[command(subcommand)]
@@ -367,11 +382,13 @@ impl Cli {
             Commands::Barrier(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Blob(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Branch(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Calendar(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "ci")]
             Commands::Cache(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "ci")]
             Commands::Ci(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Cluster(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Contacts(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Counter(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Docs(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Federation(cmd) => cmd.run(&client, self.global.is_json).await,
@@ -1277,5 +1294,237 @@ mod tests {
         // clap propagated globals work after the subcommand too
         let cli = Cli::try_parse_from(["aspen-cli", "verify", "all", "--json"]).expect("json after subcommand");
         assert!(cli.global.is_json);
+    }
+
+    // =========================================================================
+    // Contacts command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_contacts_create_book_requires_name() {
+        let r = Cli::try_parse_from(["aspen-cli", "contacts", "create-book"]);
+        assert!(r.is_err(), "contacts create-book without name must fail");
+    }
+
+    #[test]
+    fn test_contacts_create_book_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "contacts", "create-book", "Personal"]);
+        assert!(r.is_ok(), "contacts create-book must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_contacts_create_book_with_description_parses() {
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "contacts",
+            "create-book",
+            "Work",
+            "--description",
+            "Work contacts",
+        ]);
+        assert!(r.is_ok(), "contacts create-book with --description must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_contacts_list_books_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "contacts", "list-books"]);
+        assert!(r.is_ok(), "contacts list-books must parse");
+    }
+
+    #[test]
+    fn test_contacts_add_requires_book_and_name() {
+        let r = Cli::try_parse_from(["aspen-cli", "contacts", "add"]);
+        assert!(r.is_err(), "contacts add without --book must fail");
+    }
+
+    #[test]
+    fn test_contacts_add_parses() {
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "contacts",
+            "add",
+            "--book",
+            "b1",
+            "--name",
+            "John Doe",
+            "--email",
+            "john@example.com",
+        ]);
+        assert!(r.is_ok(), "contacts add must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_contacts_get_requires_id() {
+        let r = Cli::try_parse_from(["aspen-cli", "contacts", "get"]);
+        assert!(r.is_err(), "contacts get without id must fail");
+    }
+
+    #[test]
+    fn test_contacts_list_requires_book() {
+        let r = Cli::try_parse_from(["aspen-cli", "contacts", "list"]);
+        assert!(r.is_err(), "contacts list without --book must fail");
+    }
+
+    #[test]
+    fn test_contacts_search_requires_query() {
+        let r = Cli::try_parse_from(["aspen-cli", "contacts", "search"]);
+        assert!(r.is_err(), "contacts search without query must fail");
+    }
+
+    #[test]
+    fn test_contacts_search_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "contacts", "search", "john"]);
+        assert!(r.is_ok(), "contacts search must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_contacts_import_requires_book_and_file() {
+        let r = Cli::try_parse_from(["aspen-cli", "contacts", "import"]);
+        assert!(r.is_err(), "contacts import without --book must fail");
+    }
+
+    #[test]
+    fn test_contacts_export_requires_book() {
+        let r = Cli::try_parse_from(["aspen-cli", "contacts", "export"]);
+        assert!(r.is_err(), "contacts export without --book must fail");
+    }
+
+    #[test]
+    fn test_contacts_create_group_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "contacts", "create-group", "--book", "b1", "Friends"]);
+        assert!(r.is_ok(), "contacts create-group must parse: {:?}", r.err());
+    }
+
+    // =========================================================================
+    // Calendar command parsing
+    // =========================================================================
+
+    #[test]
+    fn test_calendar_create_requires_name() {
+        let r = Cli::try_parse_from(["aspen-cli", "calendar", "create"]);
+        assert!(r.is_err(), "calendar create without name must fail");
+    }
+
+    #[test]
+    fn test_calendar_create_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "calendar", "create", "Work"]);
+        assert!(r.is_ok(), "calendar create must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_calendar_create_with_options_parses() {
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "calendar",
+            "create",
+            "Work",
+            "--color",
+            "#4285f4",
+            "--timezone",
+            "America/New_York",
+        ]);
+        assert!(r.is_ok(), "calendar create with options must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_calendar_list_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "calendar", "list"]);
+        assert!(r.is_ok(), "calendar list must parse");
+    }
+
+    #[test]
+    fn test_calendar_add_event_requires_calendar_and_summary_and_start() {
+        let r = Cli::try_parse_from(["aspen-cli", "calendar", "add-event"]);
+        assert!(r.is_err(), "calendar add-event without args must fail");
+    }
+
+    #[test]
+    fn test_calendar_add_event_parses() {
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "calendar",
+            "add-event",
+            "--calendar",
+            "c1",
+            "--summary",
+            "Meeting",
+            "--start",
+            "2026-03-15T10:00",
+        ]);
+        assert!(r.is_ok(), "calendar add-event must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_calendar_get_event_requires_id() {
+        let r = Cli::try_parse_from(["aspen-cli", "calendar", "get-event"]);
+        assert!(r.is_err(), "calendar get-event without id must fail");
+    }
+
+    #[test]
+    fn test_calendar_list_events_requires_calendar() {
+        let r = Cli::try_parse_from(["aspen-cli", "calendar", "list-events"]);
+        assert!(r.is_err(), "calendar list-events without --calendar must fail");
+    }
+
+    #[test]
+    fn test_calendar_list_events_parses() {
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "calendar",
+            "list-events",
+            "--calendar",
+            "c1",
+            "--start",
+            "1000",
+            "--end",
+            "2000",
+        ]);
+        assert!(r.is_ok(), "calendar list-events must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_calendar_search_requires_query() {
+        let r = Cli::try_parse_from(["aspen-cli", "calendar", "search"]);
+        assert!(r.is_err(), "calendar search without query must fail");
+    }
+
+    #[test]
+    fn test_calendar_search_parses() {
+        let r = Cli::try_parse_from(["aspen-cli", "calendar", "search", "meeting"]);
+        assert!(r.is_ok(), "calendar search must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_calendar_free_busy_requires_all_args() {
+        let r = Cli::try_parse_from(["aspen-cli", "calendar", "free-busy"]);
+        assert!(r.is_err(), "calendar free-busy without args must fail");
+    }
+
+    #[test]
+    fn test_calendar_free_busy_parses() {
+        let r = Cli::try_parse_from([
+            "aspen-cli",
+            "calendar",
+            "free-busy",
+            "--calendar",
+            "c1",
+            "--start",
+            "1000",
+            "--end",
+            "2000",
+        ]);
+        assert!(r.is_ok(), "calendar free-busy must parse: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_calendar_import_requires_calendar_and_file() {
+        let r = Cli::try_parse_from(["aspen-cli", "calendar", "import"]);
+        assert!(r.is_err(), "calendar import without args must fail");
+    }
+
+    #[test]
+    fn test_calendar_export_requires_calendar() {
+        let r = Cli::try_parse_from(["aspen-cli", "calendar", "export"]);
+        assert!(r.is_err(), "calendar export without --calendar must fail");
     }
 }
