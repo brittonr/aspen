@@ -954,6 +954,12 @@ fn merge_secrets_config(target: &mut aspen_secrets::SecretsConfig, other: aspen_
     if other.cache_ttl_secs != 300 {
         target.cache_ttl_secs = other.cache_ttl_secs;
     }
+    if other.transit_cluster_ticket.is_some() {
+        target.transit_cluster_ticket = other.transit_cluster_ticket;
+    }
+    if other.transit_key_name.is_some() {
+        target.transit_key_name = other.transit_key_name;
+    }
 }
 
 /// Merge CI/CD pipeline configuration.
@@ -1229,6 +1235,8 @@ fn from_env_secrets() -> aspen_secrets::SecretsConfig {
         kv_secrets_prefix: parse_env("ASPEN_SECRETS_KV_PREFIX").unwrap_or_else(|| "_system:secrets:".into()),
         cache_enabled: parse_env("ASPEN_SECRETS_CACHE_ENABLED").unwrap_or(true),
         cache_ttl_secs: parse_env("ASPEN_SECRETS_CACHE_TTL_SECS").unwrap_or(300),
+        transit_cluster_ticket: parse_env("ASPEN_SOPS_TRANSIT_TICKET"),
+        transit_key_name: parse_env("ASPEN_SOPS_TRANSIT_KEY_NAME"),
     }
 }
 

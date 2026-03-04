@@ -70,6 +70,22 @@ pub struct SecretsConfig {
     /// Default: 300 (5 minutes)
     #[serde(default = "default_cache_ttl_secs")]
     pub cache_ttl_secs: u64,
+
+    /// Aspen cluster ticket for Transit-based SOPS decryption.
+    ///
+    /// When set, the node can decrypt SOPS files that use Aspen Transit
+    /// as a key group (in addition to age). The Transit engine must have
+    /// the data key encryption key available.
+    #[serde(default)]
+    pub transit_cluster_ticket: Option<String>,
+
+    /// Transit key name for SOPS data key decryption.
+    ///
+    /// Used with `transit_cluster_ticket` to identify which Transit key
+    /// was used to encrypt the SOPS data key.
+    /// Default: "sops-data-key"
+    #[serde(default)]
+    pub transit_key_name: Option<String>,
 }
 
 fn default_age_identity_env() -> String {
@@ -98,6 +114,8 @@ impl Default for SecretsConfig {
             kv_secrets_prefix: default_kv_secrets_prefix(),
             cache_enabled: default_cache_enabled(),
             cache_ttl_secs: default_cache_ttl_secs(),
+            transit_cluster_ticket: None,
+            transit_key_name: None,
         }
     }
 }
@@ -121,6 +139,18 @@ impl SecretsConfig {
     /// Set the age identity environment variable name.
     pub fn with_age_identity_env(mut self, env_var: impl Into<String>) -> Self {
         self.age_identity_env = env_var.into();
+        self
+    }
+
+    /// Set the Aspen Transit cluster ticket for SOPS decryption.
+    pub fn with_transit_cluster_ticket(mut self, ticket: impl Into<String>) -> Self {
+        self.transit_cluster_ticket = Some(ticket.into());
+        self
+    }
+
+    /// Set the Transit key name for SOPS data key decryption.
+    pub fn with_transit_key_name(mut self, name: impl Into<String>) -> Self {
+        self.transit_key_name = Some(name.into());
         self
     }
 

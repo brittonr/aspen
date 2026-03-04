@@ -6,12 +6,14 @@
 
 #![cfg(feature = "sops")]
 
+use aspen_secrets::sops::encrypt::encrypt_data_key_for_age;
 use aspen_secrets::sops::format;
 use aspen_secrets::sops::format::common::decrypt_sops_value;
 use aspen_secrets::sops::format::common::encrypt_sops_value;
 use aspen_secrets::sops::format::common::is_sops_encrypted;
 use aspen_secrets::sops::mac::encrypt_mac;
 use aspen_secrets::sops::mac::verify_mac;
+use aspen_secrets::sops::metadata::AgeRecipient;
 use aspen_secrets::sops::metadata::AspenTransitRecipient;
 use aspen_secrets::sops::metadata::SopsFileMetadata;
 
@@ -305,4 +307,71 @@ api_token = "tok-abcde"
     // secret_key and api_token should be encrypted
     assert!(!output.contains("sk-12345"), "matching value should be encrypted");
     assert!(!output.contains("tok-abcde"), "matching value should be encrypted");
+}
+
+// ============================================================================
+// Multi-key-group (age + Transit)
+// ============================================================================
+
+#[test]
+fn test_multi_key_group_age_and_transit() {
+    let key = test_data_key();
+
+    // Generate an age keypair for testing
+    let age_identity = age::x25519::Identity::generate();
+    let age_recipient = age_identity.to_public().to_string();
+
+    // Encrypt the data key for age
+    let age_enc = encrypt_data_key_for_age(&age_recipient, &key).unwrap();
+
+    // Build metadata with both key groups
+    let mut meta = SopsFileMetadata::new();
+    meta.add_aspen_recipient(AspenTransitRecipient {
+        cluster_ticket: "aspen1test".to_string(),
+        mount: "transit".to_string(),
+        name: "sops-data-key".to_string(),
+        enc: "aspen:v1:dGVzdA==".to_string(),
+        key_version: 1,
+    });
+    meta.add_age_recipient(AgeRecipient {
+        recipient: age_recipient.clone(),
+        enc: Some(age_enc),
+    });
+
+    let input = r#"
+[secrets]
+api_key = "sk-live-abc123"
+"#;
+
+    let (output, _values) =
+        format::encrypt_document(format::SopsFormat::Toml, input, &key, None, &meta, std::path::Path::new("test.toml"))
+            .unwrap();
+
+    // Both key groups should be present in metadata
+    assert!(output.contains("cluster_ticket"), "should have Transit key group:\n{output}");
+    assert!(output.contains(&age_recipient), "should have age key group:\n{output}");
+    assert!(output.contains("ENC[AES256_GCM,"), "values should be encrypted");
+    assert!(!output.contains("sk-live-abc123"), "plaintext should not appear");
+}
+
+#[test]
+fn test_age_data_key_encrypt_decrypt_roundtrip() {
+    // Verify we can encrypt a data key for age and decrypt it back
+    let age_identity = age::x25519::Identity::generate();
+    let age_recipient = age_identity.to_public().to_string();
+
+    let original_key = test_data_key();
+    let age_enc = encrypt_data_key_for_age(&age_recipient, &original_key).unwrap();
+
+    // Decrypt using the age identity
+    assert!(age_enc.contains("BEGIN AGE ENCRYPTED FILE"));
+
+    // Use age to decrypt
+    use std::io::Read;
+    let decryptor = age::Decryptor::new_buffered(age::armor::ArmoredReader::new(age_enc.as_bytes())).unwrap();
+    let mut reader = decryptor.decrypt(std::iter::once(&age_identity as &dyn age::Identity)).unwrap();
+    let mut decrypted = Vec::new();
+    reader.read_to_end(&mut decrypted).unwrap();
+
+    assert_eq!(decrypted, original_key.to_vec());
 }

@@ -41,7 +41,7 @@
 - [x] 5.2 Add `EncryptConfig` struct: `input_path: PathBuf`, `cluster_ticket: String`, `transit_key: String`, `transit_mount: String`, `age_recipients: Vec<String>`, `encrypted_regex: Option<String>`, `in_place: bool`
 - [x] 5.3 Implement age recipient support: if `age_recipients` is non-empty, also encrypt data key for each age recipient (using `age::Encryptor`) and add `[[sops.age]]` entries
 - [x] 5.4 Write integration test: encrypt a sample TOML file, verify output has `[sops]` section with `aspen_transit` metadata, verify all values are `ENC[...]` format
-- [ ] 5.5 Write integration test: encrypt with both Aspen Transit and age recipients, verify both key groups in metadata
+- [x] 5.5Write integration test: encrypt with both Aspen Transit and age recipients, verify both key groups in metadata
 
 ## 6. Decrypt Operation
 
@@ -85,7 +85,7 @@
 ## 11. Integration with aspen-secrets
 
 - [ ] 11.1 Add `AspenTransitIdentity` variant to `aspen-secrets/src/sops/decryptor.rs` `decrypt_data_key()` function — try Aspen Transit alongside age
-- [ ] 11.2 Extend `SecretsConfig` with optional `transit_cluster_ticket: Option<String>` and `transit_key_name: Option<String>` fields for Transit-based SOPS decryption at node startup
+- [x] 11.2Extend `SecretsConfig` with optional `transit_cluster_ticket: Option<String>` and `transit_key_name: Option<String>` fields for Transit-based SOPS decryption at node startup
 - [ ] 11.3 Write test: `decrypt_secrets_file()` with Aspen Transit metadata succeeds when Transit client is available
 - [ ] 11.4 Write test: `decrypt_secrets_file()` falls back to age when Transit is unavailable
 
@@ -96,13 +96,13 @@
 - [ ] 12.3 Create test: encrypt with `aspen-sops`, decrypt with Go SOPS (via key service bridge) — full roundtrip interop
 - [ ] 12.4 Create test: multi-key-group file (age + aspen_transit) — Go SOPS can decrypt with age, `aspen-sops` can decrypt with Transit
 - [x] 12.5 Create test: `encrypted_regex` — only matched values encrypted, others plaintext
-- [ ] 12.6 Verify `cargo nextest run -p aspen-sops` — all tests pass
+- [x] 12.6Verify `cargo nextest run -p aspen-sops` — all tests pass
 
 ## 13. Documentation & Feature Flag Wiring
 
 - [ ] 13.1 Add `sops` feature flag to workspace `Cargo.toml` and `aspen-rpc-handlers` that pulls in `aspen-sops`
 - [ ] 13.2 Add `aspen-sops` to the `full` feature set
-- [ ] 13.3 Write `crates/aspen-sops/README.md`: usage examples for encrypt/decrypt/edit/rotate/keyservice, configuration, multi-key-group setup, CI integration example
-- [ ] 13.4 Add `docs/sops.md` design document explaining the architecture, security model, and operational guide
-- [ ] 13.5 Verify `cargo clippy -p aspen-sops --all-targets -- --deny warnings` passes
-- [ ] 13.6 Verify `nix run .#rustfmt` passes
+- [x] 13.3Write `crates/aspen-sops/README.md`: usage examples for encrypt/decrypt/edit/rotate/keyservice, configuration, multi-key-group setup, CI integration example
+- [x] 13.4Add `docs/sops.md` design document explaining the architecture, security model, and operational guide
+- [x] 13.5Verify `cargo clippy -p aspen-sops --all-targets -- --deny warnings` passes
+- [x] 13.6Verify `nix run .#rustfmt` passes
