@@ -49,21 +49,21 @@
 - [x] 6.2 Add `DecryptConfig` struct: `input_path: PathBuf`, `cluster_ticket: Option<String>`, `output_path: Option<PathBuf>`, `extract_path: Option<String>`, `age_identity: Option<PathBuf>`
 - [x] 6.3 Implement `--extract` support: parse dotted path (e.g., `secrets.strings.api_key`), return only that value
 - [x] 6.4 Write integration test: encrypt then decrypt roundtrip, verify output matches original
-- [ ] 6.5 Write integration test: decrypt with age fallback when Transit is unavailable
+- [x] 6.5Write integration test: decrypt with age fallback when Transit is unavailable
 - [x] 6.6 Write integration test: MAC verification failure on tampered file (modify an encrypted value, verify decrypt fails)
 
 ## 7. Rotate & UpdateKeys Operations
 
 - [x] 7.1 Create `src/rotate.rs` with `rotate_file(config: &RotateConfig) -> Result<String>`
 - [x] 7.2 Create `src/updatekeys.rs` with `update_keys(config: &UpdateKeysConfig) -> Result<String>`
-- [ ] 7.3 Write test: rotate after Transit key rotation — verify `key_version` incremented, values unchanged
-- [ ] 7.4 Write test: updatekeys — add age recipient to Transit-only file, verify both key groups present
+- [x] 7.3Write test: rotate after Transit key rotation — verify `key_version` incremented, values unchanged
+- [x] 7.4Write test: updatekeys — add age recipient to Transit-only file, verify both key groups present
 
 ## 8. Edit Operation
 
 - [x] 8.1 Create `src/edit.rs` with `edit_file(config: &EditConfig) -> Result<()>`
-- [ ] 8.2 Write test: mock editor that modifies a value, verify re-encrypted output reflects change
-- [ ] 8.3 Write test: mock editor that makes no changes, verify file is unchanged
+- [x] 8.2Write test: mock editor that modifies a value, verify re-encrypted output reflects change
+- [x] 8.3Write test: mock editor that makes no changes, verify file is unchanged
 
 ## 9. CLI Binary
 
@@ -80,14 +80,14 @@
 - [x] 10.3Create `src/keyservice/mod.rs` with `start_keyservice(config: &KeyserviceConfig) -> Result<()>`: bind Unix socket, serve gRPC
 - [x] 10.4Create `src/keyservice/bridge.rs` with `AspenKeyServiceBridge` implementing SOPS `KeyService` trait: `encrypt()` → `transit_client.encrypt_data()`, `decrypt()` → `transit_client.decrypt_data_key()`
 - [x] 10.5Write integration test: start key service on Unix socket, send gRPC encrypt/decrypt requests, verify roundtrip
-- [ ] 10.6 Write test: key service graceful shutdown on SIGTERM
+- [x] 10.6Write test: key service graceful shutdown on SIGTERM
 
 ## 11. Integration with aspen-secrets
 
-- [ ] 11.1 Add `AspenTransitIdentity` variant to `aspen-secrets/src/sops/decryptor.rs` `decrypt_data_key()` function — try Aspen Transit alongside age
+- [x] 11.1Add `AspenTransitIdentity` variant to `aspen-secrets/src/sops/decryptor.rs` `decrypt_data_key()` function — try Aspen Transit alongside age
 - [x] 11.2Extend `SecretsConfig` with optional `transit_cluster_ticket: Option<String>` and `transit_key_name: Option<String>` fields for Transit-based SOPS decryption at node startup
-- [ ] 11.3 Write test: `decrypt_secrets_file()` with Aspen Transit metadata succeeds when Transit client is available
-- [ ] 11.4 Write test: `decrypt_secrets_file()` falls back to age when Transit is unavailable
+- [x] 11.3Write test: `decrypt_secrets_file()` with Aspen Transit metadata succeeds when Transit client is available
+- [x] 11.4Write test: `decrypt_secrets_file()` falls back to age when Transit is unavailable
 
 ## 12. SOPS Compatibility Tests
 

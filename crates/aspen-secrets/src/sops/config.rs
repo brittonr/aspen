@@ -248,6 +248,11 @@ pub struct SopsMetadata {
     #[serde(default)]
     pub age: Vec<AgeRecipient>,
 
+    /// Aspen Transit recipients.
+    #[cfg(feature = "sops")]
+    #[serde(default)]
+    pub aspen_transit: Vec<crate::sops::metadata::AspenTransitRecipient>,
+
     /// Last modified timestamp.
     #[serde(default)]
     pub lastmodified: Option<String>,

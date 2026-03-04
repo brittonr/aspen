@@ -11,7 +11,7 @@ use super::sops_constants::SOPS_VERSION;
 /// Aspen Transit recipient in SOPS metadata.
 ///
 /// Stored as `[[sops.aspen_transit]]` in the encrypted file.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, schemars::JsonSchema)]
 pub struct AspenTransitRecipient {
     /// Aspen cluster ticket for connecting to the Transit engine.
     pub cluster_ticket: String,

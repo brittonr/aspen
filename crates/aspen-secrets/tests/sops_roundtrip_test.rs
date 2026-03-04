@@ -352,6 +352,45 @@ fn test_decrypt_standard_sops_enc_format() {
     assert_eq!(decrypted, "hello");
 }
 
+#[tokio::test]
+async fn test_transit_fallback_to_age() {
+    // When no cluster ticket is provided, decrypt_secrets_string_with_transit
+    // should fall back to age decryption and work the same as the sync version.
+    use std::path::Path;
+
+    use aspen_secrets::sops::decrypt_secrets_string_with_transit;
+
+    // Encrypt a file with age key group
+    let key = test_data_key();
+    let identity = age::x25519::Identity::generate();
+    let recipient = identity.to_public();
+
+    let input = r#"
+[secrets]
+
+[secrets.strings]
+api_key = "sk-test-123"
+"#;
+
+    let mut meta = test_metadata();
+    let values = vec![("secrets.strings.api_key".to_string(), "sk-test-123".to_string())];
+    meta.mac = encrypt_mac(&key, &values).unwrap();
+
+    // Add age recipient
+    let encrypted_dk = encrypt_data_key_for_age(&recipient.to_string(), &key).unwrap();
+    meta.age.push(AgeRecipient {
+        recipient: recipient.to_string(),
+        enc: Some(encrypted_dk),
+    });
+
+    let (encrypted, _) =
+        format::encrypt_document(format::SopsFormat::Toml, input, &key, None, &meta, Path::new("test.toml")).unwrap();
+
+    // Decrypt with Transit=None — should fall back to age
+    let result = decrypt_secrets_string_with_transit(&encrypted, Path::new("test.toml"), &identity, None).await;
+    assert!(result.is_ok(), "age fallback should work: {:?}", result.err());
+}
+
 #[test]
 fn test_encrypted_file_has_correct_sops_structure() {
     // Verify the overall file structure matches what Go SOPS produces

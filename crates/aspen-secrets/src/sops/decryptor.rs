@@ -1,10 +1,12 @@
-//! SOPS file decryption using age.
+//! SOPS file decryption using age and/or Aspen Transit.
 //!
 //! SOPS encrypts individual values while keeping keys in plaintext.
 //! The encrypted values have the format:
 //! `ENC[AES256_GCM,data:base64...,iv:base64...,tag:base64...,type:str]`
 //!
-//! SOPS uses a data key (encrypted with age) to encrypt values with AES-256-GCM.
+//! SOPS uses a data key (encrypted with age or Transit) to encrypt values
+//! with AES-256-GCM. When both age and Transit key groups are present,
+//! Transit is tried first (fast network call), falling back to age (local).
 
 use std::collections::HashMap;
 use std::io::Read;
@@ -12,11 +14,15 @@ use std::path::Path;
 
 use tracing::debug;
 use tracing::trace;
+#[cfg(feature = "sops")]
+use tracing::warn;
 
 use crate::constants::MAX_DECRYPTED_AGE_SIZE;
 use crate::constants::MAX_SECRETS_FILE_SIZE;
 use crate::error::Result;
 use crate::error::SecretsError;
+#[cfg(feature = "sops")]
+use crate::sops::client::TransitClient;
 use crate::sops::config::SecretsFile;
 use crate::sops::config::SopsMetadata;
 
@@ -46,6 +52,160 @@ pub async fn decrypt_secrets_file(path: &Path, identity: &age::x25519::Identity)
     }
 
     decrypt_secrets_string(&contents, path, identity)
+}
+
+#[cfg(feature = "sops")]
+/// Load and decrypt a SOPS-encrypted secrets file, trying Transit first.
+///
+/// Attempts to decrypt the data key in this order:
+/// 1. **Aspen Transit** (if `cluster_ticket` is provided and `[[sops.aspen_transit]]` exists)
+/// 2. **Age** (local identity fallback)
+///
+/// # Arguments
+///
+/// * `path` - Path to the SOPS-encrypted file
+/// * `identity` - Age identity for decryption (fallback)
+/// * `cluster_ticket` - Optional Aspen cluster ticket for Transit decryption
+pub async fn decrypt_secrets_file_with_transit(
+    path: &Path,
+    identity: &age::x25519::Identity,
+    cluster_ticket: Option<&str>,
+) -> Result<SecretsFile> {
+    let contents = tokio::fs::read_to_string(path).await.map_err(|e| SecretsError::ReadFile {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+
+    if contents.len() > MAX_SECRETS_FILE_SIZE {
+        return Err(SecretsError::FileTooLarge {
+            path: path.to_path_buf(),
+            size_bytes: contents.len() as u64,
+            max_bytes: MAX_SECRETS_FILE_SIZE as u64,
+        });
+    }
+
+    decrypt_secrets_string_with_transit(&contents, path, identity, cluster_ticket).await
+}
+
+#[cfg(feature = "sops")]
+/// Decrypt a SOPS-encrypted TOML string, trying Transit first.
+///
+/// See [`decrypt_secrets_file_with_transit`] for the decryption order.
+pub async fn decrypt_secrets_string_with_transit(
+    contents: &str,
+    path: &Path,
+    identity: &age::x25519::Identity,
+    cluster_ticket: Option<&str>,
+) -> Result<SecretsFile> {
+    let raw_value: toml::Value = toml::from_str(contents).map_err(|e| SecretsError::ParseFile {
+        path: path.to_path_buf(),
+        reason: e.to_string(),
+    })?;
+
+    let sops_metadata = extract_sops_metadata(&raw_value)?;
+
+    let Some(sops) = sops_metadata else {
+        debug!("No SOPS metadata found, treating as plaintext");
+        let secrets: SecretsFile = toml::from_str(contents).map_err(|e| SecretsError::ParseFile {
+            path: path.to_path_buf(),
+            reason: e.to_string(),
+        })?;
+        return Ok(secrets);
+    };
+
+    debug!(
+        version = ?sops.version,
+        age_recipients = sops.age.len(),
+        transit_recipients = sops.aspen_transit.len(),
+        "Decrypting SOPS file (Transit + age)"
+    );
+
+    // Try Transit first, then fall back to age
+    let data_key = decrypt_data_key_with_transit(&sops, identity, cluster_ticket).await?;
+
+    let decrypted_value = decrypt_toml_value(&raw_value, &data_key)?;
+
+    let secrets: SecretsFile = decrypted_value.try_into().map_err(|e: toml::de::Error| SecretsError::ParseFile {
+        path: path.to_path_buf(),
+        reason: e.to_string(),
+    })?;
+
+    Ok(secrets)
+}
+
+#[cfg(feature = "sops")]
+/// Decrypt the SOPS data key, trying Transit first then age.
+async fn decrypt_data_key_with_transit(
+    sops: &SopsMetadata,
+    identity: &age::x25519::Identity,
+    cluster_ticket: Option<&str>,
+) -> Result<[u8; 32]> {
+    // Try Aspen Transit first (if ticket provided and transit recipients exist)
+    if let Some(ticket) = cluster_ticket {
+        for recipient in &sops.aspen_transit {
+            debug!(
+                key = %recipient.name,
+                mount = %recipient.mount,
+                version = recipient.key_version,
+                "Trying Aspen Transit recipient"
+            );
+
+            match try_transit_decrypt(ticket, recipient).await {
+                Ok(data_key) => {
+                    debug!(key = %recipient.name, "Decrypted data key via Transit");
+                    return Ok(data_key);
+                }
+                Err(e) => {
+                    warn!(
+                        key = %recipient.name,
+                        error = %e,
+                        "Transit decryption failed, will try next recipient"
+                    );
+                    continue;
+                }
+            }
+        }
+    } else if !sops.aspen_transit.is_empty() {
+        debug!(
+            transit_recipients = sops.aspen_transit.len(),
+            "Skipping Transit recipients (no cluster ticket provided)"
+        );
+    }
+
+    // Fall back to age
+    decrypt_data_key(sops, identity)
+}
+
+#[cfg(feature = "sops")]
+/// Try to decrypt the data key via a single Transit recipient.
+async fn try_transit_decrypt(
+    cluster_ticket: &str,
+    recipient: &crate::sops::metadata::AspenTransitRecipient,
+) -> Result<[u8; 32]> {
+    let client =
+        TransitClient::connect(cluster_ticket, Some(&recipient.mount))
+            .await
+            .map_err(|e| SecretsError::Decryption {
+                reason: format!("Transit connect failed: {e}"),
+            })?;
+
+    let plaintext =
+        client
+            .decrypt_data_key(&recipient.name, &recipient.enc)
+            .await
+            .map_err(|e| SecretsError::Decryption {
+                reason: format!("Transit decrypt failed: {e}"),
+            })?;
+
+    if plaintext.len() != 32 {
+        return Err(SecretsError::Decryption {
+            reason: format!("Transit data key has wrong length: {} (expected 32)", plaintext.len()),
+        });
+    }
+
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&plaintext);
+    Ok(key)
 }
 
 /// Decrypt a SOPS-encrypted TOML string.

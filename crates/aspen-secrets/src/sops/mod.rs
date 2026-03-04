@@ -50,6 +50,10 @@ pub use decrypt::DecryptConfig;
 #[cfg(feature = "sops")]
 pub use decrypt::decrypt_file;
 pub use decryptor::decrypt_secrets_file;
+#[cfg(feature = "sops")]
+pub use decryptor::decrypt_secrets_file_with_transit;
+#[cfg(feature = "sops")]
+pub use decryptor::decrypt_secrets_string_with_transit;
 pub use decryptor::load_age_identity;
 #[cfg(feature = "sops")]
 pub use encrypt::EncryptConfig;
