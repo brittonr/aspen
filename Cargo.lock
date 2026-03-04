@@ -775,6 +775,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-calendar"
+version = "0.1.0"
+dependencies = [
+ "aspen-client-api",
+ "aspen-core",
+ "serde",
+ "serde_json",
+ "snafu",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "aspen-ci"
 version = "0.1.0"
 dependencies = [
@@ -1171,6 +1184,19 @@ dependencies = [
 [[package]]
 name = "aspen-constants"
 version = "0.1.0"
+
+[[package]]
+name = "aspen-contacts"
+version = "0.1.0"
+dependencies = [
+ "aspen-client-api",
+ "aspen-core",
+ "serde",
+ "serde_json",
+ "snafu",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "aspen-coordination"

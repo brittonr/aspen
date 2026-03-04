@@ -291,42 +291,19 @@ in
           status = host.succeed(f"systemctl is-active aspen-node-{i}.service || echo dead").strip()
           assert status == "active", f"Node {i} not active: {status}"
 
-      # Initialize the cluster
-      host.succeed(
-          f"{CLI} --ticket '{ticket}' cluster init >/dev/null 2>&1 || true"
-      )
-      time.sleep(2)
       host.log("=== Phase 1 PASSED: 3-node Raft cluster running ===")
 
       # ════════════════════════════════════════════════════════════
-      # Phase 2: Seed KV data for VirtioFS
+      # Phase 2: Start VirtioFS daemon (it initializes the cluster and seeds data)
       # ════════════════════════════════════════════════════════════
 
-      host.log("=== Phase 2: Seeding KV data ===")
+      host.log("=== Phase 2: Starting VirtioFS daemon ===")
 
-      host.succeed(
-          f"{CLI} --ticket '{ticket}' kv set /www/index.html 'hello from virtiofs-net mesh' "
-          f">/dev/null 2>&1"
-      )
-      host.succeed(
-          f"{CLI} --ticket '{ticket}' kv set /www/status.json "
-          f"'{{\"source\":\"virtiofs-net\",\"ok\":true}}' "
-          f">/dev/null 2>&1"
-      )
-
-      # Verify data is readable
-      result = host.succeed(
-          f"{CLI} --ticket '{ticket}' kv get /www/index.html 2>/dev/null"
-      ).strip()
-      assert "hello from virtiofs-net mesh" in result, f"KV read failed: {result!r}"
-      host.log("=== Phase 2 PASSED: KV data seeded ===")
-
-      # ════════════════════════════════════════════════════════════
-      # Phase 3: Start VirtioFS daemon (Raft-backed)
-      # ════════════════════════════════════════════════════════════
-
-      host.log("=== Phase 3: Starting VirtioFS daemon ===")
-
+      # The aspen-cluster-virtiofs-server binary:
+      # 1. Connects to the cluster via ticket
+      # 2. Calls init_cluster() — must happen BEFORE any other init
+      # 3. Seeds test data (index.html, status.json) into the KV store
+      # 4. Starts VirtioFS daemon serving from the cluster
       host.succeed(
           f"systemd-run --unit=aspenfs-virtiofs "
           f"bash -c 'export RUST_LOG=info PATH=/run/current-system/sw/bin; "
@@ -335,21 +312,22 @@ in
           f"--ticket {ticket}'"
       )
 
-      host.wait_until_succeeds("test -S ${virtiofsSocket}", timeout=30)
-      host.log("VirtioFS socket ready")
-
-      # Give the daemon time to connect to cluster
+      # Wait for data seeding to complete
       host.wait_until_succeeds(
-          "journalctl -u aspenfs-virtiofs --no-pager 2>/dev/null | grep -qi 'connected\\|ready\\|serving'",
+          "journalctl -u aspenfs-virtiofs --no-pager 2>/dev/null | grep -q 'test data seeded'",
           timeout=30,
       )
-      host.log("=== Phase 3 PASSED: VirtioFS daemon connected to Raft cluster ===")
+      host.log("Test data seeded into Raft cluster")
+
+      host.wait_until_succeeds("test -S ${virtiofsSocket}", timeout=10)
+      host.log("VirtioFS socket ready")
+      host.log("=== Phase 2 PASSED: VirtioFS daemon connected to Raft cluster ===")
 
       # ════════════════════════════════════════════════════════════
-      # Phase 4: Start aspen-net daemon (SOCKS5 + TunnelAcceptor)
+      # Phase 3: Start aspen-net daemon (SOCKS5 + TunnelAcceptor)
       # ════════════════════════════════════════════════════════════
 
-      host.log("=== Phase 4: Starting aspen-net daemon ===")
+      host.log("=== Phase 3: Starting aspen-net daemon ===")
 
       host.succeed(
           f"systemd-run --unit=aspen-net-daemon "
@@ -366,13 +344,13 @@ in
           "journalctl -u aspen-net-daemon --no-pager 2>/dev/null | grep -q 'connected to cluster'",
           timeout=30,
       )
-      host.log("=== Phase 4 PASSED: aspen-net daemon running ===")
+      host.log("=== Phase 3 PASSED: aspen-net daemon running ===")
 
       # ════════════════════════════════════════════════════════════
-      # Phase 5: Launch Guest A (VirtioFS + nginx + TAP)
+      # Phase 4: Launch Guest A (VirtioFS + nginx + TAP)
       # ════════════════════════════════════════════════════════════
 
-      host.log("=== Phase 5: Launching Guest A (VirtioFS + nginx) ===")
+      host.log("=== Phase 4: Launching Guest A (VirtioFS + nginx) ===")
 
       # Create TAP for Guest A
       host.succeed("ip tuntap add ${svcTap} mode tap")
@@ -396,17 +374,18 @@ in
       )
 
       # Verify content comes from Raft KV via VirtioFS
+      # The aspen-cluster-virtiofs-server seeds: "hello from aspen raft cluster"
       output = host.succeed("curl -sf http://${svcGuestIp}:80/index.html")
-      assert "hello from virtiofs-net mesh" in output, f"wrong VirtioFS content: {output!r}"
+      assert "hello from aspen raft cluster" in output, f"wrong VirtioFS content: {output!r}"
       host.log(f"Guest A nginx serving from VirtioFS: {output.strip()}")
 
-      host.log("=== Phase 5 PASSED: Guest A running with VirtioFS + nginx ===")
+      host.log("=== Phase 4 PASSED: Guest A running with VirtioFS + nginx ===")
 
       # ════════════════════════════════════════════════════════════
-      # Phase 6: Publish service via mesh
+      # Phase 5: Publish service via mesh
       # ════════════════════════════════════════════════════════════
 
-      host.log("=== Phase 6: Publishing service to mesh ===")
+      host.log("=== Phase 5: Publishing service to mesh ===")
 
       # socat bridges localhost:9080 → Guest A:80 (nginx default port)
       host.succeed(
@@ -452,13 +431,13 @@ in
       names = [s.get("name", "") for s in svc_list]
       assert "web-svc" in names, f"web-svc not in services: {svc_list}"
 
-      host.log("=== Phase 6 PASSED: Service published to mesh ===")
+      host.log("=== Phase 5 PASSED: Service published to mesh ===")
 
       # ════════════════════════════════════════════════════════════
-      # Phase 7: Launch Guest B and route through mesh
+      # Phase 6: Launch Guest B and route through mesh
       # ════════════════════════════════════════════════════════════
 
-      host.log("=== Phase 7: Launching Guest B and routing through mesh ===")
+      host.log("=== Phase 6: Launching Guest B and routing through mesh ===")
 
       # Create TAP for Guest B
       host.succeed("ip tuntap add ${clientTap} mode tap")
@@ -484,7 +463,7 @@ in
           "curl -sf --socks5-hostname 127.0.0.1:1080 "
           "http://web-svc.aspen:9080/index.html"
       )
-      assert "hello from virtiofs-net mesh" in result, f"mesh routing failed: {result!r}"
+      assert "hello from aspen raft cluster" in result, f"mesh routing failed: {result!r}"
       host.log(f"Mesh routing verified: {result.strip()}")
 
       # Verify status.json through the mesh
@@ -492,7 +471,7 @@ in
           "curl -sf --socks5-hostname 127.0.0.1:1080 "
           "http://web-svc.aspen:9080/status.json"
       )
-      assert '"source":"virtiofs-net"' in result, f"wrong status.json: {result!r}"
+      assert '"source":"aspen-raft"' in result, f"wrong status.json: {result!r}"
       host.log(f"status.json via mesh: {result.strip()}")
 
       # Second request for stability
@@ -500,10 +479,10 @@ in
           "curl -sf --socks5-hostname 127.0.0.1:1080 "
           "http://web-svc.aspen:9080/index.html"
       )
-      assert "hello from virtiofs-net mesh" in result, f"second request failed: {result!r}"
+      assert "hello from aspen raft cluster" in result, f"second request failed: {result!r}"
       host.log("Second request through mesh succeeded (connection stability OK)")
 
-      host.log("=== Phase 7 PASSED: Full VirtioFS + mesh path verified ===")
+      host.log("=== Phase 6 PASSED: Full VirtioFS + mesh path verified ===")
 
       # ════════════════════════════════════════════════════════════
       # Cleanup
@@ -520,11 +499,10 @@ in
 
       host.log("=== ALL PHASES PASSED ===")
       host.log("  Phase 1: 3-node Raft cluster bootstrapped")
-      host.log("  Phase 2: KV data seeded (index.html, status.json)")
-      host.log("  Phase 3: VirtioFS daemon connected to Raft cluster")
-      host.log("  Phase 4: aspen-net daemon with SOCKS5 proxy running")
-      host.log("  Phase 5: Guest A booted with VirtioFS mount + nginx serving from Raft KV")
-      host.log("  Phase 6: Service published to mesh via CLI")
-      host.log("  Phase 7: Traffic routed through mesh — content from Raft KV -> VirtioFS -> nginx -> SOCKS5 -> iroh -> curl")
+      host.log("  Phase 2: VirtioFS daemon connected, data seeded via Raft consensus")
+      host.log("  Phase 3: aspen-net daemon with SOCKS5 proxy running")
+      host.log("  Phase 4: Guest A booted with VirtioFS mount + nginx serving from Raft KV")
+      host.log("  Phase 5: Service published to mesh via CLI")
+      host.log("  Phase 6: Traffic routed through mesh — content from Raft KV -> VirtioFS -> nginx -> SOCKS5 -> iroh -> curl")
     '';
   }

@@ -19,8 +19,10 @@
 pub mod automerge;
 pub mod batch;
 pub mod blob;
+pub mod calendar;
 pub mod ci;
 pub mod cluster;
+pub mod contacts;
 pub mod coordination;
 pub mod docs;
 pub mod federation;
@@ -87,6 +89,18 @@ pub use blob::ProtectBlobResultResponse;
 pub use blob::RunBlobRepairCycleResultResponse;
 pub use blob::TriggerBlobReplicationResultResponse;
 pub use blob::UnprotectBlobResultResponse;
+pub use calendar::BusyPeriod;
+pub use calendar::CalendarEventResponse;
+pub use calendar::CalendarExpandResponse;
+pub use calendar::CalendarExportResponse;
+pub use calendar::CalendarFreeBusyResponse;
+pub use calendar::CalendarInfo;
+pub use calendar::CalendarListEventsResponse;
+pub use calendar::CalendarListResponse;
+pub use calendar::CalendarResponse;
+pub use calendar::CalendarSearchResponse;
+pub use calendar::EventInstance;
+pub use calendar::EventSummary;
 pub use ci::CacheDownloadResultResponse;
 pub use ci::CacheEntryResponse;
 #[cfg(feature = "ci")]
@@ -144,6 +158,17 @@ pub use cluster::ReplicationProgress;
 pub use cluster::SnapshotResultResponse;
 pub use cluster::TopologyResultResponse;
 pub use cluster::WriteResultResponse;
+pub use contacts::ContactSummary;
+pub use contacts::ContactsBookInfo;
+pub use contacts::ContactsBookListResponse;
+pub use contacts::ContactsBookResponse;
+pub use contacts::ContactsExportResponse;
+pub use contacts::ContactsGroupInfo;
+pub use contacts::ContactsGroupListResponse;
+pub use contacts::ContactsGroupResponse;
+pub use contacts::ContactsListResponse;
+pub use contacts::ContactsResponse;
+pub use contacts::ContactsSearchResponse;
 pub use coordination::BarrierResultResponse;
 pub use coordination::CoordinationRequest;
 pub use coordination::CounterResultResponse;
@@ -3216,6 +3241,244 @@ pub enum ClientRpcRequest {
     },
 
     // =========================================================================
+    // Contacts operations
+    // =========================================================================
+    /// Create an address book.
+    ContactsCreateBook {
+        /// Address book name.
+        name: String,
+        /// Optional description.
+        description: Option<String>,
+    },
+
+    /// Delete an address book.
+    ContactsDeleteBook {
+        /// Address book ID.
+        book_id: String,
+    },
+
+    /// List address books.
+    ContactsListBooks {
+        /// Maximum results (default 100, max 1000).
+        limit: Option<u32>,
+    },
+
+    /// Create a contact from vCard data.
+    ContactsCreateContact {
+        /// Address book ID.
+        book_id: String,
+        /// vCard 4.0 formatted data.
+        vcard_data: String,
+    },
+
+    /// Get a contact with full vCard data.
+    ContactsGetContact {
+        /// Contact ID.
+        contact_id: String,
+    },
+
+    /// Update a contact with new vCard data.
+    ContactsUpdateContact {
+        /// Contact ID.
+        contact_id: String,
+        /// Updated vCard 4.0 data.
+        vcard_data: String,
+    },
+
+    /// Delete a contact.
+    ContactsDeleteContact {
+        /// Contact ID.
+        contact_id: String,
+    },
+
+    /// List contacts in an address book.
+    ContactsListContacts {
+        /// Address book ID.
+        book_id: String,
+        /// Maximum results (default 100, max 1000).
+        limit: Option<u32>,
+        /// Continuation token from previous list call.
+        continuation_token: Option<String>,
+    },
+
+    /// Search contacts by name, email, or phone.
+    ContactsSearchContacts {
+        /// Search query (substring match).
+        query: String,
+        /// Optional address book ID filter.
+        book_id: Option<String>,
+        /// Maximum results (default 50, max 500).
+        limit: Option<u32>,
+    },
+
+    /// Import multiple contacts from vCard data (bulk).
+    ContactsImportVcard {
+        /// Address book ID.
+        book_id: String,
+        /// vCard data (may contain multiple vCards).
+        vcard_data: String,
+    },
+
+    /// Export all contacts in an address book as vCard.
+    ContactsExportVcard {
+        /// Address book ID.
+        book_id: String,
+    },
+
+    /// Create a contact group.
+    ContactsCreateGroup {
+        /// Address book ID.
+        book_id: String,
+        /// Group name.
+        name: String,
+        /// Initial member contact IDs.
+        member_ids: Vec<String>,
+    },
+
+    /// Delete a contact group.
+    ContactsDeleteGroup {
+        /// Group ID.
+        group_id: String,
+    },
+
+    /// List contact groups in an address book.
+    ContactsListGroups {
+        /// Address book ID.
+        book_id: String,
+    },
+
+    /// Add a contact to a group.
+    ContactsAddToGroup {
+        /// Group ID.
+        group_id: String,
+        /// Contact ID to add.
+        contact_id: String,
+    },
+
+    /// Remove a contact from a group.
+    ContactsRemoveFromGroup {
+        /// Group ID.
+        group_id: String,
+        /// Contact ID to remove.
+        contact_id: String,
+    },
+
+    // =========================================================================
+    // Calendar operations
+    // =========================================================================
+    /// Create a calendar.
+    CalendarCreate {
+        /// Calendar name.
+        name: String,
+        /// Display color (hex format, e.g. "#4285f4").
+        color: Option<String>,
+        /// IANA timezone (e.g. "America/New_York").
+        timezone: Option<String>,
+        /// Optional description.
+        description: Option<String>,
+    },
+
+    /// Delete a calendar and all its events.
+    CalendarDelete {
+        /// Calendar ID.
+        calendar_id: String,
+    },
+
+    /// List calendars.
+    CalendarList {
+        /// Maximum results (default 100, max 1000).
+        limit: Option<u32>,
+    },
+
+    /// Get a calendar event with full iCalendar data.
+    CalendarGetEvent {
+        /// Event ID.
+        event_id: String,
+    },
+
+    /// Create an event from iCalendar data.
+    CalendarCreateEvent {
+        /// Calendar ID.
+        calendar_id: String,
+        /// iCalendar (VEVENT) formatted data.
+        ical_data: String,
+    },
+
+    /// Update an event with new iCalendar data.
+    CalendarUpdateEvent {
+        /// Event ID.
+        event_id: String,
+        /// Updated iCalendar data.
+        ical_data: String,
+    },
+
+    /// Delete a calendar event.
+    CalendarDeleteEvent {
+        /// Event ID.
+        event_id: String,
+    },
+
+    /// List events in a calendar within a time range.
+    CalendarListEvents {
+        /// Calendar ID.
+        calendar_id: String,
+        /// Start of time range (Unix ms, inclusive).
+        start_ms: Option<u64>,
+        /// End of time range (Unix ms, exclusive).
+        end_ms: Option<u64>,
+        /// Maximum results (default 100, max 1000).
+        limit: Option<u32>,
+        /// Continuation token from previous list call.
+        continuation_token: Option<String>,
+    },
+
+    /// Search events by summary or description.
+    CalendarSearchEvents {
+        /// Search query (substring match).
+        query: String,
+        /// Optional calendar ID filter.
+        calendar_id: Option<String>,
+        /// Maximum results (default 50, max 500).
+        limit: Option<u32>,
+    },
+
+    /// Import events from iCalendar data (bulk).
+    CalendarImportIcal {
+        /// Calendar ID.
+        calendar_id: String,
+        /// iCalendar data (VCALENDAR with multiple VEVENTs).
+        ical_data: String,
+    },
+
+    /// Export all events in a calendar as iCalendar.
+    CalendarExportIcal {
+        /// Calendar ID.
+        calendar_id: String,
+    },
+
+    /// Query free/busy periods in a time range.
+    CalendarFreeBusy {
+        /// Calendar ID.
+        calendar_id: String,
+        /// Start of time range (Unix ms).
+        start_ms: u64,
+        /// End of time range (Unix ms).
+        end_ms: u64,
+    },
+
+    /// Expand recurring event instances in a time range.
+    CalendarExpandRecurrence {
+        /// Event ID (must have RRULE).
+        event_id: String,
+        /// Start of expansion range (Unix ms).
+        start_ms: u64,
+        /// End of expansion range (Unix ms).
+        end_ms: u64,
+        /// Maximum instances to return (default 100, max 1000).
+        max_instances: Option<u32>,
+    },
+
+    // =========================================================================
     // Plugin management operations
     // =========================================================================
     /// Reload WASM plugins.
@@ -3293,6 +3556,19 @@ impl ClientRpcRequest {
             Self::CacheMigrationValidate { .. } => "CacheMigrationValidate",
             Self::CacheQuery { .. } => "CacheQuery",
             Self::CacheStats => "CacheStats",
+            Self::CalendarCreate { .. } => "CalendarCreate",
+            Self::CalendarCreateEvent { .. } => "CalendarCreateEvent",
+            Self::CalendarDelete { .. } => "CalendarDelete",
+            Self::CalendarDeleteEvent { .. } => "CalendarDeleteEvent",
+            Self::CalendarExpandRecurrence { .. } => "CalendarExpandRecurrence",
+            Self::CalendarExportIcal { .. } => "CalendarExportIcal",
+            Self::CalendarFreeBusy { .. } => "CalendarFreeBusy",
+            Self::CalendarGetEvent { .. } => "CalendarGetEvent",
+            Self::CalendarImportIcal { .. } => "CalendarImportIcal",
+            Self::CalendarList { .. } => "CalendarList",
+            Self::CalendarListEvents { .. } => "CalendarListEvents",
+            Self::CalendarSearchEvents { .. } => "CalendarSearchEvents",
+            Self::CalendarUpdateEvent { .. } => "CalendarUpdateEvent",
             Self::ChangeMembership { .. } => "ChangeMembership",
             Self::CheckpointWal => "CheckpointWal",
             Self::CiCancelRun { .. } => "CiCancelRun",
@@ -3306,6 +3582,22 @@ impl ClientRpcRequest {
             Self::CiTriggerPipeline { .. } => "CiTriggerPipeline",
             Self::CiUnwatchRepo { .. } => "CiUnwatchRepo",
             Self::CiWatchRepo { .. } => "CiWatchRepo",
+            Self::ContactsAddToGroup { .. } => "ContactsAddToGroup",
+            Self::ContactsCreateBook { .. } => "ContactsCreateBook",
+            Self::ContactsCreateContact { .. } => "ContactsCreateContact",
+            Self::ContactsCreateGroup { .. } => "ContactsCreateGroup",
+            Self::ContactsDeleteBook { .. } => "ContactsDeleteBook",
+            Self::ContactsDeleteContact { .. } => "ContactsDeleteContact",
+            Self::ContactsDeleteGroup { .. } => "ContactsDeleteGroup",
+            Self::ContactsExportVcard { .. } => "ContactsExportVcard",
+            Self::ContactsGetContact { .. } => "ContactsGetContact",
+            Self::ContactsImportVcard { .. } => "ContactsImportVcard",
+            Self::ContactsListBooks { .. } => "ContactsListBooks",
+            Self::ContactsListContacts { .. } => "ContactsListContacts",
+            Self::ContactsListGroups { .. } => "ContactsListGroups",
+            Self::ContactsRemoveFromGroup { .. } => "ContactsRemoveFromGroup",
+            Self::ContactsSearchContacts { .. } => "ContactsSearchContacts",
+            Self::ContactsUpdateContact { .. } => "ContactsUpdateContact",
             Self::CompareAndDeleteKey { .. } => "CompareAndDeleteKey",
             Self::CompareAndSwapKey { .. } => "CompareAndSwapKey",
             Self::ConditionalBatchWrite { .. } => "ConditionalBatchWrite",
@@ -3826,6 +4118,39 @@ impl ClientRpcRequest {
                 Some("net")
             }
 
+            // Contacts operations
+            Self::ContactsCreateBook { .. }
+            | Self::ContactsDeleteBook { .. }
+            | Self::ContactsListBooks { .. }
+            | Self::ContactsCreateContact { .. }
+            | Self::ContactsGetContact { .. }
+            | Self::ContactsUpdateContact { .. }
+            | Self::ContactsDeleteContact { .. }
+            | Self::ContactsListContacts { .. }
+            | Self::ContactsSearchContacts { .. }
+            | Self::ContactsImportVcard { .. }
+            | Self::ContactsExportVcard { .. }
+            | Self::ContactsCreateGroup { .. }
+            | Self::ContactsDeleteGroup { .. }
+            | Self::ContactsListGroups { .. }
+            | Self::ContactsAddToGroup { .. }
+            | Self::ContactsRemoveFromGroup { .. } => Some("contacts"),
+
+            // Calendar operations
+            Self::CalendarCreate { .. }
+            | Self::CalendarDelete { .. }
+            | Self::CalendarList { .. }
+            | Self::CalendarGetEvent { .. }
+            | Self::CalendarCreateEvent { .. }
+            | Self::CalendarUpdateEvent { .. }
+            | Self::CalendarDeleteEvent { .. }
+            | Self::CalendarListEvents { .. }
+            | Self::CalendarSearchEvents { .. }
+            | Self::CalendarImportIcal { .. }
+            | Self::CalendarExportIcal { .. }
+            | Self::CalendarFreeBusy { .. }
+            | Self::CalendarExpandRecurrence { .. } => Some("calendar"),
+
             // SNIX and Cache operations
             Self::CacheQuery { .. }
             | Self::CacheStats
@@ -3855,6 +4180,11 @@ impl ClientRpcRequest {
             | Self::AutomergeExists { .. }
             | Self::AutomergeGenerateSyncMessage { .. }
             | Self::AutomergeReceiveSyncMessage { .. } => Some("automerge"),
+
+            // Catch-all for any variants not covered when features are disabled.
+            // This ensures the match is exhaustive regardless of feature flags.
+            #[allow(unreachable_patterns)]
+            _ => None,
         }
     }
 }
@@ -4547,6 +4877,46 @@ pub enum ClientRpcResponse {
 
     /// Net list result.
     NetListResult(net::NetListResponse),
+
+    // =========================================================================
+    // Contacts responses
+    // =========================================================================
+    /// Contacts address book result.
+    ContactsBookResult(ContactsBookResponse),
+    /// Contacts book list result.
+    ContactsBookListResult(ContactsBookListResponse),
+    /// Contacts operation result.
+    ContactsResult(ContactsResponse),
+    /// Contacts list result.
+    ContactsListResult(ContactsListResponse),
+    /// Contacts search result.
+    ContactsSearchResult(ContactsSearchResponse),
+    /// Contacts group result.
+    ContactsGroupResult(ContactsGroupResponse),
+    /// Contacts group list result.
+    ContactsGroupListResult(ContactsGroupListResponse),
+    /// Contacts export result.
+    ContactsExportResult(ContactsExportResponse),
+
+    // =========================================================================
+    // Calendar responses
+    // =========================================================================
+    /// Calendar operation result.
+    CalendarResult(CalendarResponse),
+    /// Calendar list result.
+    CalendarListResult(CalendarListResponse),
+    /// Calendar event result.
+    CalendarEventResult(CalendarEventResponse),
+    /// Calendar list events result.
+    CalendarListEventsResult(CalendarListEventsResponse),
+    /// Calendar search result.
+    CalendarSearchResult(CalendarSearchResponse),
+    /// Calendar free/busy result.
+    CalendarFreeBusyResult(CalendarFreeBusyResponse),
+    /// Calendar recurrence expansion result.
+    CalendarExpandResult(CalendarExpandResponse),
+    /// Calendar export result.
+    CalendarExportResult(CalendarExportResponse),
 
     // =========================================================================
     // FEATURE-GATED VARIANTS (must be at end for postcard discriminant stability)

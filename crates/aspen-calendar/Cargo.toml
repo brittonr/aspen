@@ -1,0 +1,17 @@
+[package]
+name = "aspen-calendar"
+version = "0.1.0"
+edition = "2024"
+description = "Calendar domain logic for Aspen distributed cluster"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+aspen-client-api = { path = "../aspen-client-api" }
+aspen-core = { path = "../aspen-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+snafu = "0.8"
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full", "test-util"] }

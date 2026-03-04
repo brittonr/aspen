@@ -142,6 +142,10 @@ members = [
 
     "crates/aspen-nix-handler",
 
+    # PIM (Personal Information Management)
+    "crates/aspen-contacts",
+    "crates/aspen-calendar",
+
     # RPC handlers (feature-gated)
     "crates/aspen-blob-handler",
     "crates/aspen-forge-handler",
