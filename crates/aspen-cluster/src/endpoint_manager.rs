@@ -372,10 +372,7 @@ impl IrohEndpointManager {
 
     /// Generate a new random secret key.
     fn generate_secret_key() -> SecretKey {
-        use rand::RngCore;
-        let mut bytes = [0u8; 32];
-        rand::rng().fill_bytes(&mut bytes);
-        SecretKey::from(bytes)
+        aspen_crypto::identity::NodeIdentityProvider::generate().into_secret_key()
     }
 
     /// Persist secret key to file if path is configured.
@@ -409,10 +406,7 @@ impl IrohEndpointManager {
     /// Load a secret key from a hex-encoded file.
     ///
     /// File format: 64 hex characters (32 bytes) with optional trailing newline.
-    ///
-    /// See also: `aspen_secrets::identity::NodeIdentityProvider` for the canonical
-    /// key lifecycle (generate, from_hex, load_or_generate) when `aspen-secrets`
-    /// is available as a dependency.
+    /// Delegates parsing to [`aspen_crypto::identity::NodeIdentityProvider::from_hex`].
     fn load_secret_key_from_file(path: &std::path::Path) -> Result<SecretKey> {
         // Tiger Style: path must exist for loading
         debug_assert!(path.exists(), "ENDPOINT: secret key path must exist for loading");
@@ -420,23 +414,10 @@ impl IrohEndpointManager {
         let contents = std::fs::read_to_string(path)
             .with_context(|| format!("failed to read secret key file: {}", path.display()))?;
 
-        let hex_str = contents.trim();
+        let provider = aspen_crypto::identity::NodeIdentityProvider::from_hex(&contents)
+            .with_context(|| format!("invalid secret key in file: {}", path.display()))?;
 
-        // Validate length (64 hex chars = 32 bytes)
-        if hex_str.len() != 64 {
-            anyhow::bail!("invalid secret key file: expected 64 hex characters, got {}", hex_str.len());
-        }
-
-        let bytes = hex::decode(hex_str).with_context(|| "failed to decode secret key hex")?;
-
-        // Tiger Style: decoded bytes must be exactly 32 bytes for Ed25519
-        debug_assert!(bytes.len() == 32, "ENDPOINT: decoded secret key must be 32 bytes");
-
-        let bytes_array: [u8; 32] = bytes
-            .try_into()
-            .map_err(|e: Vec<u8>| anyhow::anyhow!("invalid secret key length: expected 32 bytes, got {}", e.len()))?;
-
-        Ok(SecretKey::from(bytes_array))
+        Ok(provider.into_secret_key())
     }
 
     /// Save a secret key to a hex-encoded file with restrictive permissions.

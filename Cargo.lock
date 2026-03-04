@@ -678,6 +678,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-core",
+ "aspen-crypto",
  "async-trait",
  "base64 0.22.1",
  "blake3",
@@ -1078,6 +1079,7 @@ dependencies = [
  "aspen-cluster-bridges",
  "aspen-coordination",
  "aspen-core",
+ "aspen-crypto",
  "aspen-dht-discovery",
  "aspen-disk",
  "aspen-docs",
@@ -1287,6 +1289,19 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "aspen-crypto"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "hex",
+ "iroh 0.95.1",
+ "rand 0.9.2",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]
@@ -2061,6 +2076,7 @@ dependencies = [
  "aspen-client",
  "aspen-client-api",
  "aspen-core",
+ "aspen-crypto",
  "aspen-transport",
  "async-trait",
  "base64 0.22.1",

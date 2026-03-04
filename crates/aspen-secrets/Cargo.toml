@@ -9,6 +9,7 @@ description = "SOPS-based secrets management and Vault-like secrets engine for A
 # Core Aspen crates
 aspen-core = { path = "../aspen-core" }
 aspen-auth = { path = "../aspen-auth" }
+aspen-crypto = { path = "../aspen-crypto" }
 
 # Age encryption (SOPS-compatible)
 age = { version = "0.11", features = ["armor"] }

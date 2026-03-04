@@ -125,8 +125,7 @@ pub const fn calculate_challenge_age_ms(challenge_timestamp_ms: u64, current_tim
 /// ```
 #[inline]
 pub fn derive_hmac_key(cookie: &str) -> [u8; 32] {
-    let hash = blake3::hash(cookie.as_bytes());
-    *hash.as_bytes()
+    aspen_crypto::cookie::derive_cookie_hmac_key(cookie)
 }
 
 #[cfg(test)]

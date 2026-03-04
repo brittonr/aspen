@@ -70,7 +70,9 @@ pub enum ValidationError {
 }
 
 /// Required length for Iroh secret key in hex characters.
-pub const SECRET_KEY_HEX_LENGTH: usize = 64;
+///
+/// See also: [`aspen_crypto::identity::SECRET_KEY_HEX_LENGTH`].
+pub const SECRET_KEY_HEX_LENGTH: usize = aspen_crypto::identity::SECRET_KEY_HEX_LENGTH;
 
 // ============================================================================
 // Core Validation Functions
@@ -91,42 +93,28 @@ pub fn validate_node_id(node_id: u64) -> Result<(), ValidationError> {
 
 /// The unsafe default cookie marker that indicates no custom cookie was set.
 /// When this is detected, validation should warn the user.
-///
-/// Note: The canonical cookie validation and key derivation functions live in
-/// `aspen_secrets::cookie`. This module keeps its own copy because `aspen-cluster`
-/// cannot take `aspen-secrets` as a required dependency (too heavy).
-pub const UNSAFE_DEFAULT_COOKIE: &str = "aspen-cookie-UNSAFE-CHANGE-ME";
+pub const UNSAFE_DEFAULT_COOKIE: &str = aspen_crypto::cookie::UNSAFE_DEFAULT_COOKIE;
 
 /// Validate that cluster cookie is non-empty.
 ///
 /// The cookie is used for cluster authentication and gossip topic derivation.
-///
-/// See also: `aspen_secrets::cookie::validate_cookie` for the canonical implementation
-/// with additional length bounds checking.
+/// Delegates to [`aspen_crypto::cookie::validate_cookie`].
 #[inline]
 pub fn validate_cookie(cookie: &str) -> Result<(), ValidationError> {
-    if cookie.is_empty() {
-        return Err(ValidationError::CookieEmpty);
-    }
-    Ok(())
+    aspen_crypto::cookie::validate_cookie(cookie).map_err(|_| ValidationError::CookieEmpty)
 }
 
 /// Check if the cluster cookie is the unsafe default.
 ///
 /// When using the default cookie, all clusters share the same gossip topic,
 /// which is a security vulnerability.
-///
-/// See also: `aspen_secrets::cookie::validate_cookie_safety` for the canonical implementation.
+/// Delegates to [`aspen_crypto::cookie::validate_cookie_safety`].
 ///
 /// # Tiger Style
 ///
 /// Security-critical: Fail hard on unsafe defaults, don't allow startup.
 pub fn validate_cookie_safety(cookie: &str) -> Result<(), ValidationError> {
-    if cookie == UNSAFE_DEFAULT_COOKIE {
-        Err(ValidationError::CookieUnsafeDefault)
-    } else {
-        Ok(())
-    }
+    aspen_crypto::cookie::validate_cookie_safety(cookie).map_err(|_| ValidationError::CookieUnsafeDefault)
 }
 
 /// Validate Raft timing configuration.

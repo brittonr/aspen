@@ -110,6 +110,7 @@ members = [
     "crates/aspen-forge",
     "crates/aspen-docs",
     "crates/aspen-hooks",
+    "crates/aspen-crypto",
     "crates/aspen-secrets",
     "crates/aspen-automerge",
     "crates/aspen-federation",
@@ -265,6 +266,7 @@ aspen-jobs-worker-replication = { path = "crates/aspen-jobs-worker-replication" 
 aspen-jobs-worker-sql = { path = "crates/aspen-jobs-worker-sql" }
 aspen-jobs-worker-maintenance = { path = "crates/aspen-jobs-worker-maintenance" }
 aspen-jobs-worker-shell = { path = "crates/aspen-jobs-worker-shell" }
+aspen-crypto = { path = "crates/aspen-crypto" }
 aspen-secrets = { path = "crates/aspen-secrets" }
 aspen-automerge = { path = "crates/aspen-automerge" }
 aspen-nickel = { path = "crates/aspen-nickel" }

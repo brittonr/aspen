@@ -8,6 +8,7 @@ description = "Capability-based authorization for Aspen distributed systems"
 [dependencies]
 # Core types and traits
 aspen-core = { path = "../aspen-core" }
+aspen-crypto = { path = "../aspen-crypto" }
 
 # Async traits
 async-trait = "0.1"
