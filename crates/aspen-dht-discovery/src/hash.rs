@@ -34,6 +34,9 @@ fn format_to_byte(format: BlobFormat) -> u8 {
 ///
 /// Iroh uses the same ed25519 curve, so this is a direct byte copy.
 /// We use mainline's re-exported SigningKey to avoid version conflicts.
+///
+/// See also: `aspen_secrets::identity::NodeIdentityProvider` for centralized
+/// node identity key management.
 #[cfg(feature = "global-discovery")]
 pub(crate) fn iroh_secret_to_signing_key(secret_key: &iroh::SecretKey) -> mainline::SigningKey {
     let secret_bytes: [u8; 32] = secret_key.to_bytes();

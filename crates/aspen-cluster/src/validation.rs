@@ -91,11 +91,18 @@ pub fn validate_node_id(node_id: u64) -> Result<(), ValidationError> {
 
 /// The unsafe default cookie marker that indicates no custom cookie was set.
 /// When this is detected, validation should warn the user.
+///
+/// Note: The canonical cookie validation and key derivation functions live in
+/// `aspen_secrets::cookie`. This module keeps its own copy because `aspen-cluster`
+/// cannot take `aspen-secrets` as a required dependency (too heavy).
 pub const UNSAFE_DEFAULT_COOKIE: &str = "aspen-cookie-UNSAFE-CHANGE-ME";
 
 /// Validate that cluster cookie is non-empty.
 ///
 /// The cookie is used for cluster authentication and gossip topic derivation.
+///
+/// See also: `aspen_secrets::cookie::validate_cookie` for the canonical implementation
+/// with additional length bounds checking.
 #[inline]
 pub fn validate_cookie(cookie: &str) -> Result<(), ValidationError> {
     if cookie.is_empty() {
@@ -108,6 +115,8 @@ pub fn validate_cookie(cookie: &str) -> Result<(), ValidationError> {
 ///
 /// When using the default cookie, all clusters share the same gossip topic,
 /// which is a security vulnerability.
+///
+/// See also: `aspen_secrets::cookie::validate_cookie_safety` for the canonical implementation.
 ///
 /// # Tiger Style
 ///

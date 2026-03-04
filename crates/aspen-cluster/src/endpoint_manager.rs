@@ -409,6 +409,10 @@ impl IrohEndpointManager {
     /// Load a secret key from a hex-encoded file.
     ///
     /// File format: 64 hex characters (32 bytes) with optional trailing newline.
+    ///
+    /// See also: `aspen_secrets::identity::NodeIdentityProvider` for the canonical
+    /// key lifecycle (generate, from_hex, load_or_generate) when `aspen-secrets`
+    /// is available as a dependency.
     fn load_secret_key_from_file(path: &std::path::Path) -> Result<SecretKey> {
         // Tiger Style: path must exist for loading
         debug_assert!(path.exists(), "ENDPOINT: secret key path must exist for loading");
