@@ -1961,6 +1961,16 @@
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
               };
 
+              # SOPS Transit integration test: Transit data key generation,
+              # encrypt/decrypt round-trip, key rotation, rewrap, envelope flow.
+              # Build: nix build .#checks.x86_64-linux.sops-transit-test --impure
+              sops-transit-test = import ./nix/tests/sops-transit.nix {
+                inherit pkgs secretsPluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-secrets;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+              };
+
               # CI pipeline and Nix binary cache test: CI lifecycle
               # (run, status, list, cancel, watch, unwatch, output) and
               # cache operations (stats, query, download).
