@@ -1562,6 +1562,16 @@
                 name = "git-remote-aspen";
                 features = ["git-bridge"];
               };
+              # aspen-sops CLI with keyservice bridge for Go SOPS interop
+              full-aspen-sops = craneLib.buildPackage (
+                fullCommonArgs
+                // {
+                  pname = "aspen-sops";
+                  version = "0.1.0";
+                  cargoExtraArgs = "-p aspen-sops --bin aspen-sops --features keyservice";
+                  doCheck = false;
+                }
+              );
             };
         in
           bins
@@ -1969,6 +1979,7 @@
                 aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-secrets;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
+                aspenSopsPackage = bins.full-aspen-sops;
               };
 
               # CI pipeline and Nix binary cache test: CI lifecycle

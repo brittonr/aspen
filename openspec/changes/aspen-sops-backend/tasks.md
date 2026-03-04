@@ -22,7 +22,7 @@
 - [x] 3.1 Create `src/verified/mod.rs` with `pub mod mac;`
 - [x] 3.2 Create `src/verified/mac.rs` with pure functions: `compute_sops_mac(values: &[(String, String)], data_key: &[u8; 32]) -> [u8; 32]` using HMAC-SHA256 over sorted (key_path, value) pairs. `collect_value_paths(table: &toml::Value, prefix: &str) -> Vec<(String, String)>` to flatten a TOML tree into sorted key-value pairs.
 - [x] 3.3 Create `src/mac.rs` shell: `verify_mac(encrypted_mac: &str, data_key: &[u8; 32], values: &[(String, String)]) -> Result<()>` — decrypts MAC, recomputes, compares in constant time. `encrypt_mac(data_key: &[u8; 32], values: &[(String, String)]) -> Result<String>` — computes MAC, encrypts as `ENC[AES256_GCM,...]`.
-- [ ] 3.4 Create `verus/mac_spec.rs` with Verus specifications for `compute_sops_mac`: ensures deterministic output for same inputs, ensures different values produce different MACs (collision resistance modulo HMAC-SHA256).
+- [x] 3.4 Create `verus/mac_spec.rs` with Verus specifications for `compute_sops_mac`: ensures deterministic output for same inputs, ensures different values produce different MACs (collision resistance modulo HMAC-SHA256).
 - [x] 3.5 Write unit tests: MAC of empty values, MAC of single value, MAC stability (same input → same output), MAC changes when values change, MAC changes when key paths change
 
 ## 4. SOPS Value Encryption/Decryption
@@ -93,8 +93,8 @@
 
 - [x] 12.1 Create `tests/sops_compatibility.rs` with golden test: encrypt a known plaintext file, verify the output structure matches SOPS expectations (has `[sops]` table, all values are `ENC[AES256_GCM,...]`, MAC present)
 - [x] 12.2Create test: decrypt a file encrypted by Go SOPS (with age) using `aspen-sops` — verify interop with existing SOPS files
-- [ ] 12.3 Create test: encrypt with `aspen-sops`, decrypt with Go SOPS (via key service bridge) — full roundtrip interop
-- [ ] 12.4 Create test: multi-key-group file (age + aspen_transit) — Go SOPS can decrypt with age, `aspen-sops` can decrypt with Transit
+- [x] 12.3 Create test: encrypt with `aspen-sops`, decrypt with Go SOPS (via key service bridge) — full roundtrip interop
+- [x] 12.4 Create test: multi-key-group file (age + aspen_transit) — Go SOPS can decrypt with age, `aspen-sops` can decrypt with Transit
 - [x] 12.5 Create test: `encrypted_regex` — only matched values encrypted, others plaintext
 - [x] 12.6Verify `cargo nextest run -p aspen-sops` — all tests pass
 
