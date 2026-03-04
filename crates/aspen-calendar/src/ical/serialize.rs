@@ -123,7 +123,7 @@ fn unix_ms_to_ical(ms: u64, is_all_day: bool) -> String {
 ///
 /// Simplified Gregorian calendar. Accurate for 1970–2099.
 fn unix_secs_to_date(secs: i64) -> (i64, u32, u32, u32, u32, u32) {
-    let sec_of_day = ((secs % 86400) + 86400) % 86400;
+    let sec_of_day = secs.rem_euclid(86400);
     let hour = (sec_of_day / 3600) as u32;
     let min = ((sec_of_day % 3600) / 60) as u32;
     let sec = (sec_of_day % 60) as u32;

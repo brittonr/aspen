@@ -87,16 +87,14 @@ pub fn expand_rrule(
         if current_ms > range_end_ms {
             break;
         }
-        if let Some(until) = parsed.until_ms {
-            if current_ms > until {
+        if let Some(until) = parsed.until_ms
+            && current_ms > until {
                 break;
             }
-        }
-        if let Some(max_count) = parsed.count {
-            if count >= max_count {
+        if let Some(max_count) = parsed.count
+            && count >= max_count {
                 break;
             }
-        }
         if instances.len() as u32 >= max {
             break;
         }
@@ -114,11 +112,10 @@ pub fn expand_rrule(
             if *candidate_ms > range_end_ms {
                 continue;
             }
-            if let Some(until) = parsed.until_ms {
-                if *candidate_ms > until {
+            if let Some(until) = parsed.until_ms
+                && *candidate_ms > until {
                     continue;
                 }
-            }
 
             count = count.saturating_add(1);
 
@@ -144,11 +141,10 @@ pub fn expand_rrule(
                 }
             }
 
-            if let Some(max_count) = parsed.count {
-                if count >= max_count {
+            if let Some(max_count) = parsed.count
+                && count >= max_count {
                     return Ok(instances);
                 }
-            }
         }
 
         // Advance to next period
@@ -215,11 +211,10 @@ fn parse_rrule(rrule: &str) -> Result<ParsedRrule, CalendarError> {
             }
             "BYMONTHDAY" => {
                 for d in value.split(',') {
-                    if let Ok(day) = d.trim().parse::<u32>() {
-                        if day >= 1 && day <= 31 {
+                    if let Ok(day) = d.trim().parse::<u32>()
+                        && (1..=31).contains(&day) {
                             bymonthday.push(day);
                         }
-                    }
                 }
             }
             _ => {} // Ignore unsupported parts
@@ -350,7 +345,7 @@ fn date_to_unix_ms(year: i64, month: u32, day: u32, hour: u32, min: u32, sec: u3
 }
 
 fn unix_secs_to_date(secs: i64) -> (i64, u32, u32, u32, u32, u32) {
-    let sec_of_day = ((secs % 86400) + 86400) % 86400;
+    let sec_of_day = secs.rem_euclid(86400);
     let hour = (sec_of_day / 3600) as u32;
     let min = ((sec_of_day % 3600) / 60) as u32;
     let sec = (sec_of_day % 60) as u32;

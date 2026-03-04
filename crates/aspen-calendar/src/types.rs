@@ -66,20 +66,15 @@ pub struct CalendarEvent {
 }
 
 /// Event status.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum EventStatus {
     /// Confirmed event.
+    #[default]
     Confirmed,
     /// Tentative event.
     Tentative,
     /// Cancelled event.
     Cancelled,
-}
-
-impl Default for EventStatus {
-    fn default() -> Self {
-        Self::Confirmed
-    }
 }
 
 /// Event attendee.
@@ -96,9 +91,10 @@ pub struct EventAttendee {
 }
 
 /// Attendee role.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum AttendeeRole {
     /// Required participant.
+    #[default]
     Required,
     /// Optional participant.
     Optional,
@@ -106,16 +102,11 @@ pub enum AttendeeRole {
     Chair,
 }
 
-impl Default for AttendeeRole {
-    fn default() -> Self {
-        Self::Required
-    }
-}
-
 /// Attendee participation status.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum AttendeeStatus {
     /// Needs to respond.
+    #[default]
     NeedsAction,
     /// Accepted.
     Accepted,
@@ -123,12 +114,6 @@ pub enum AttendeeStatus {
     Declined,
     /// Tentatively accepted.
     Tentative,
-}
-
-impl Default for AttendeeStatus {
-    fn default() -> Self {
-        Self::NeedsAction
-    }
 }
 
 /// Event alarm/reminder.
@@ -145,16 +130,11 @@ pub struct EventAlarm {
 }
 
 /// Alarm action type.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum AlarmAction {
     /// Display a notification.
+    #[default]
     Display,
     /// Send an email.
     Email,
-}
-
-impl Default for AlarmAction {
-    fn default() -> Self {
-        Self::Display
-    }
 }

@@ -570,16 +570,14 @@ fn event_matches_query(event: &CalendarEvent, query_lower: &str) -> bool {
     if event.summary.to_lowercase().contains(query_lower) {
         return true;
     }
-    if let Some(desc) = &event.description {
-        if desc.to_lowercase().contains(query_lower) {
+    if let Some(desc) = &event.description
+        && desc.to_lowercase().contains(query_lower) {
             return true;
         }
-    }
-    if let Some(loc) = &event.location {
-        if loc.to_lowercase().contains(query_lower) {
+    if let Some(loc) = &event.location
+        && loc.to_lowercase().contains(query_lower) {
             return true;
         }
-    }
     false
 }
 
