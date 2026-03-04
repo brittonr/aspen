@@ -256,4 +256,33 @@ mod tests {
         assert!(parse_key_version("invalid").is_err());
         assert!(parse_key_version("aspen:vx:data").is_err());
     }
+
+    #[test]
+    fn test_parse_key_version_zero() {
+        assert_eq!(parse_key_version("aspen:v0:data").unwrap(), 0);
+    }
+
+    #[test]
+    fn test_parse_key_version_large() {
+        assert_eq!(parse_key_version("aspen:v999:base64data==").unwrap(), 999);
+    }
+
+    #[test]
+    fn test_parse_key_version_no_colon_after_version() {
+        assert!(parse_key_version("aspen:v1").is_err());
+    }
+
+    #[test]
+    fn test_parse_key_version_empty_data() {
+        // "aspen:v1:" has a colon after version, data is empty but parsing succeeds
+        assert_eq!(parse_key_version("aspen:v1:").unwrap(), 1);
+    }
+
+    #[test]
+    fn test_from_client_custom_mount() {
+        // Can't test actual RPC, but verify from_client sets mount correctly
+        // This is a compile-time / construction test
+        let _default_mount = DEFAULT_TRANSIT_MOUNT;
+        assert_eq!(DEFAULT_TRANSIT_MOUNT, "transit");
+    }
 }

@@ -137,14 +137,22 @@ pub fn extract_metadata_from_contents(
 
 /// Inject SOPS metadata into a TOML document.
 pub fn inject_metadata(doc: &mut DocumentMut, metadata: &SopsFileMetadata) -> Result<()> {
+    // Serialize metadata to a toml::Value, then convert to a string representation
+    // of a full document where the metadata is under a [sops] key. This avoids the
+    // TOML parsing issue where [[aspen_transit]] array-of-tables headers at root level
+    // are not nested under [sops] when we just prefix with "[sops]\n".
     let sops_value = toml::Value::try_from(metadata).map_err(|e| SopsError::Serialization {
         reason: format!("failed to serialize SOPS metadata: {e}"),
     })?;
 
-    let sops_toml_str = toml::to_string_pretty(&sops_value).map_err(|e| SopsError::Serialization {
-        reason: format!("failed to format SOPS metadata: {e}"),
+    // Wrap in a top-level table with "sops" key so array-of-tables serialize correctly
+    let mut wrapper = toml::map::Map::new();
+    wrapper.insert("sops".to_string(), sops_value);
+    let wrapper_str = toml::to_string_pretty(&wrapper).map_err(|e| SopsError::Serialization {
+        reason: format!("failed to format SOPS metadata wrapper: {e}"),
     })?;
-    let sops_doc: DocumentMut = format!("[sops]\n{sops_toml_str}").parse().map_err(|e| SopsError::Serialization {
+
+    let sops_doc: DocumentMut = wrapper_str.parse().map_err(|e| SopsError::Serialization {
         reason: format!("failed to parse SOPS metadata back: {e}"),
     })?;
 

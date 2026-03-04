@@ -80,6 +80,7 @@
 | 2026-03-04 | self | `TransitStore` in aspen-secrets is a trait (not generic over backend). `DefaultTransitStore` is the concrete impl. | Use `Arc<dyn TransitStore>` for consumers that need Transit operations without knowing the backend type. Don't parameterize over `S: SecretsBackend` when you just need Transit operations. |
 | 2026-03-04 | self | Moving code between crates: `super::super::` paths are fragile in deeply nested modules | Use `crate::sops::sops_error::` (absolute crate paths) instead of relative `super::super::` for cross-module imports. Absolute paths survive refactors better. |
 | 2026-03-04 | self | Feature gates from source crate don't auto-transfer when moving code | `#[cfg(feature = "age-fallback")]` in aspen-sops needs to become unconditional in aspen-secrets (where age is always a dep). Remove feature gates that don't apply in the new crate. |
+| 2026-03-04 | self | **BUG FOUND**: `inject_metadata` in `sops/format/toml.rs` used `format!("[sops]\n{sops_toml_str}")` which broke `[[aspen_transit]]` array-of-tables — TOML parser interprets them as root-level, not nested under [sops] | Fixed by wrapping in a `toml::map::Map` with "sops" key first, then serializing the whole wrapper. This produces correct `[[sops.aspen_transit]]` headers. |
 
 ## User Preferences
 

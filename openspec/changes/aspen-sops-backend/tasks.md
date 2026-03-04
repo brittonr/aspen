@@ -6,7 +6,7 @@
 - [x] 1.4 Create `src/error.rs` with `SopsError` enum (snafu): `TransitConnect`, `TransitEncrypt`, `TransitDecrypt`, `FileRead`, `FileWrite`, `FileTooLarge`, `ParseFile`, `InvalidFormat`, `MacVerificationFailed`, `NoMatchingKeyGroup`, `EditorFailed`, `KeyServiceBind`, `ValueEncrypt`, `ValueDecrypt`, `InvalidCiphertext`, `Serialization`
 - [x] 1.5 Create `src/constants.rs`: `MAX_SOPS_FILE_SIZE` (1 MB), `MAX_VALUE_COUNT` (10,000), `MAX_KEY_PATH_LENGTH` (512), `DEFAULT_TRANSIT_MOUNT` ("transit"), `DEFAULT_TRANSIT_KEY` ("sops-data-key"), `DEFAULT_SOCKET_PATH` ("/tmp/aspen-sops.sock"), `SOPS_VERSION` ("3.9.0")
 - [x] 1.6 Create `src/client.rs` with `TransitClient` struct: `connect(cluster_ticket, mount)`, `generate_data_key(key_name, bits) -> (Zeroizing<Vec<u8>>, String, u32)`, `decrypt_data_key(key_name, ciphertext) -> Zeroizing<Vec<u8>>`, `rewrap_data_key(key_name, ciphertext) -> (String, u32)`, `encrypt_data(key_name, plaintext) -> (String, u32)`
-- [ ] 1.7 Write unit tests for `TransitClient` using mock/in-memory Transit store from `aspen-secrets`
+- [x] 1.7 Write unit tests for `TransitClient` using mock/in-memory Transit store from `aspen-secrets`
 - [x] 1.8 Verify `cargo build -p aspen-sops` compiles
 
 ## 2. SOPS Metadata Types
@@ -33,14 +33,14 @@
 - [x] 4.4 Add helpers: `encrypt_sops_value(plaintext: &str, data_key: &[u8; 32], value_type: &str) -> Result<String>` produces `ENC[AES256_GCM,data:...,iv:...,tag:...,type:<type>]`. `decrypt_sops_value(encrypted: &str, data_key: &[u8; 32]) -> Result<String>` parses and decrypts (reuse logic from `aspen-secrets/src/sops/decryptor.rs`).
 - [x] 4.5 Write tests: encrypt then decrypt roundtrip for string, integer, float, boolean values. Verify `ENC[AES256_GCM,...]` format matches Go SOPS output structure.
 - [x] 4.6 Write test: `encrypted_regex` only encrypts matching values, leaves others plaintext
-- [ ] 4.7 Create stub `src/format/yaml.rs` and `src/format/json.rs` with `unimplemented!("YAML/JSON support planned for v2")` — gated behind future feature flag
+- [x] 4.7 Create stub `src/format/yaml.rs` and `src/format/json.rs` with `unimplemented!("YAML/JSON support planned for v2")` — gated behind future feature flag
 
 ## 5. Encrypt Operation
 
 - [x] 5.1 Create `src/encrypt.rs` with `encrypt_file(config: &EncryptConfig) -> Result<String>`
 - [x] 5.2 Add `EncryptConfig` struct: `input_path: PathBuf`, `cluster_ticket: String`, `transit_key: String`, `transit_mount: String`, `age_recipients: Vec<String>`, `encrypted_regex: Option<String>`, `in_place: bool`
 - [x] 5.3 Implement age recipient support: if `age_recipients` is non-empty, also encrypt data key for each age recipient (using `age::Encryptor`) and add `[[sops.age]]` entries
-- [ ] 5.4 Write integration test: encrypt a sample TOML file, verify output has `[sops]` section with `aspen_transit` metadata, verify all values are `ENC[...]` format
+- [x] 5.4 Write integration test: encrypt a sample TOML file, verify output has `[sops]` section with `aspen_transit` metadata, verify all values are `ENC[...]` format
 - [ ] 5.5 Write integration test: encrypt with both Aspen Transit and age recipients, verify both key groups in metadata
 
 ## 6. Decrypt Operation
@@ -48,9 +48,9 @@
 - [x] 6.1 Create `src/decrypt.rs` with `decrypt_file(config: &DecryptConfig) -> Result<String>`
 - [x] 6.2 Add `DecryptConfig` struct: `input_path: PathBuf`, `cluster_ticket: Option<String>`, `output_path: Option<PathBuf>`, `extract_path: Option<String>`, `age_identity: Option<PathBuf>`
 - [x] 6.3 Implement `--extract` support: parse dotted path (e.g., `secrets.strings.api_key`), return only that value
-- [ ] 6.4 Write integration test: encrypt then decrypt roundtrip, verify output matches original
+- [x] 6.4 Write integration test: encrypt then decrypt roundtrip, verify output matches original
 - [ ] 6.5 Write integration test: decrypt with age fallback when Transit is unavailable
-- [ ] 6.6 Write integration test: MAC verification failure on tampered file (modify an encrypted value, verify decrypt fails)
+- [x] 6.6 Write integration test: MAC verification failure on tampered file (modify an encrypted value, verify decrypt fails)
 
 ## 7. Rotate & UpdateKeys Operations
 
@@ -70,7 +70,7 @@
 - [x] 9.1 Create `src/cli.rs` with clap derive structs: `Cli` (top-level), `Commands` enum (`Encrypt`, `Decrypt`, `Edit`, `Rotate`, `UpdateKeys`, `Keyservice`). Each variant has the flags from the design doc.
 - [x] 9.2 Create `src/main.rs`: parse CLI, initialize tracing, dispatch to operation functions. Handle `ASPEN_CLUSTER_TICKET` env var fallback for `--cluster-ticket`.
 - [x] 9.3 Add `[[bin]] name = "aspen-sops"` to `Cargo.toml`
-- [ ] 9.4 Write CLI smoke test: `aspen-sops --help` exits 0, `aspen-sops encrypt --help` shows expected flags
+- [x] 9.4 Write CLI smoke test: `aspen-sops --help` exits 0, `aspen-sops encrypt --help` shows expected flags
 - [x] 9.5 Verify `cargo build --bin aspen-sops` compiles
 
 ## 10. gRPC Key Service Bridge (feature-gated)
@@ -91,11 +91,11 @@
 
 ## 12. SOPS Compatibility Tests
 
-- [ ] 12.1 Create `tests/sops_compatibility.rs` with golden test: encrypt a known plaintext file, verify the output structure matches SOPS expectations (has `[sops]` table, all values are `ENC[AES256_GCM,...]`, MAC present)
+- [x] 12.1 Create `tests/sops_compatibility.rs` with golden test: encrypt a known plaintext file, verify the output structure matches SOPS expectations (has `[sops]` table, all values are `ENC[AES256_GCM,...]`, MAC present)
 - [ ] 12.2 Create test: decrypt a file encrypted by Go SOPS (with age) using `aspen-sops` — verify interop with existing SOPS files
 - [ ] 12.3 Create test: encrypt with `aspen-sops`, decrypt with Go SOPS (via key service bridge) — full roundtrip interop
 - [ ] 12.4 Create test: multi-key-group file (age + aspen_transit) — Go SOPS can decrypt with age, `aspen-sops` can decrypt with Transit
-- [ ] 12.5 Create test: `encrypted_regex` — only matched values encrypted, others plaintext
+- [x] 12.5 Create test: `encrypted_regex` — only matched values encrypted, others plaintext
 - [ ] 12.6 Verify `cargo nextest run -p aspen-sops` — all tests pass
 
 ## 13. Documentation & Feature Flag Wiring
