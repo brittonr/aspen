@@ -2020,6 +2020,16 @@
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
                 aspenNetPackage = bins.full-aspen-net-daemon;
               };
+
+              # Service mesh routing across Cloud Hypervisor microVMs.
+              # Proves: Raft cluster → aspen-net SOCKS5 → iroh QUIC tunnel → socat → guest A HTTP
+              # Build: nix build .#checks.x86_64-linux.microvm-net-mesh-test --impure
+              microvm-net-mesh-test = import ./nix/tests/microvm-net-mesh.nix {
+                inherit pkgs microvm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli;
+                aspenNetPackage = bins.full-aspen-net-daemon;
+              };
             }
             // lib.optionalAttrs (system == "x86_64-linux") {
               # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.
@@ -2060,16 +2070,6 @@
               microvm-virtiofs-stress-test = import ./nix/tests/microvm-virtiofs-stress.nix {
                 inherit pkgs microvm;
                 inherit (self.packages.${system}) aspen-virtiofs-test-server;
-              };
-
-              # Service mesh routing across Cloud Hypervisor microVMs.
-              # Proves: Raft cluster → aspen-net SOCKS5 → iroh QUIC tunnel → socat → guest A HTTP
-              # Build: nix build .#checks.x86_64-linux.microvm-net-mesh-test --impure
-              microvm-net-mesh-test = import ./nix/tests/microvm-net-mesh.nix {
-                inherit pkgs microvm;
-                aspenNodePackage = bins.full-aspen-node-plugins;
-                aspenCliPackage = bins.full-aspen-cli;
-                aspenNetPackage = bins.full-aspen-net-daemon;
               };
 
               # CI workspace pipeline: Raft cluster → AspenFs::with_prefix → VirtioFS → CH guest
