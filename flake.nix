@@ -1544,10 +1544,14 @@
                   doCheck = false;
                 }
               );
-              full-aspen-net-daemon = fullBin {
-                name = "aspen-net";
-                features = ["net"];
-              };
+              full-aspen-net-daemon = craneLib.buildPackage (
+                fullCommonArgs
+                // {
+                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                  cargoExtraArgs = "--package aspen-net --bin aspen-net";
+                  doCheck = false;
+                }
+              );
               full-aspen-cli = fullCliBin [];
               full-aspen-cli-forge = fullCliBin ["forge"];
               full-aspen-cli-plugins = fullCliBin ["plugins-rpc" "ci" "automerge"];
@@ -2056,6 +2060,16 @@
               microvm-virtiofs-stress-test = import ./nix/tests/microvm-virtiofs-stress.nix {
                 inherit pkgs microvm;
                 inherit (self.packages.${system}) aspen-virtiofs-test-server;
+              };
+
+              # Service mesh routing across Cloud Hypervisor microVMs.
+              # Proves: Raft cluster → aspen-net SOCKS5 → iroh QUIC tunnel → socat → guest A HTTP
+              # Build: nix build .#checks.x86_64-linux.microvm-net-mesh-test --impure
+              microvm-net-mesh-test = import ./nix/tests/microvm-net-mesh.nix {
+                inherit pkgs microvm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli;
+                aspenNetPackage = bins.full-aspen-net-daemon;
               };
 
               # CI workspace pipeline: Raft cluster → AspenFs::with_prefix → VirtioFS → CH guest

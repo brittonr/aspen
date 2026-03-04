@@ -179,7 +179,7 @@ in
           node1.succeed(
               f"${aspenNetPackage}/bin/aspen-net up "
               f"--ticket '{ticket}' "
-              f"--socks5-port 1080 --no-dns "
+              f"--socks5-addr 127.0.0.1:1080 --no-dns "
               f">/tmp/aspen-net.log 2>&1 &"
           )
           # Wait for SOCKS5 to be listening

@@ -30,9 +30,9 @@ enum Commands {
         #[arg(long, default_value = "")]
         token: String,
 
-        /// SOCKS5 proxy port.
-        #[arg(long, default_value = "1080")]
-        socks5_port: u16,
+        /// SOCKS5 proxy bind address (ip:port or just port).
+        #[arg(long, default_value = "127.0.0.1:1080")]
+        socks5_addr: String,
 
         /// DNS resolver port.
         #[arg(long, default_value = "5353")]
@@ -88,16 +88,25 @@ fn main() {
             Commands::Up {
                 ticket,
                 token,
-                socks5_port,
+                socks5_addr,
                 dns_port,
                 no_dns,
                 publish,
                 tags,
             } => {
+                // Parse socks5_addr: accept "ip:port" or just "port"
+                let socks5_addr: SocketAddr = socks5_addr.parse().unwrap_or_else(|_| {
+                    let port: u16 = socks5_addr.parse().unwrap_or_else(|_| {
+                        eprintln!("invalid SOCKS5 address: {socks5_addr}");
+                        std::process::exit(1);
+                    });
+                    SocketAddr::from(([127, 0, 0, 1], port))
+                });
+
                 let config = DaemonConfig {
                     cluster_ticket: ticket,
                     token,
-                    socks5_addr: SocketAddr::from(([127, 0, 0, 1], socks5_port)),
+                    socks5_addr,
                     dns_addr: SocketAddr::from(([127, 0, 0, 1], dns_port)),
                     dns_enabled: !no_dns,
                     auto_publish: publish,
