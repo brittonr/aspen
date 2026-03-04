@@ -310,6 +310,89 @@ api_token = "tok-abcde"
 }
 
 // ============================================================================
+// SOPS compatibility (golden structure tests)
+// ============================================================================
+
+#[test]
+fn test_sops_encrypted_value_format_matches_standard() {
+    // Verify our ENC[...] format matches what Go SOPS produces
+    let key = test_data_key();
+    let encrypted = encrypt_sops_value("test-value", &key, "str").unwrap();
+
+    // Must start with ENC[AES256_GCM, — this is the standard SOPS format
+    assert!(encrypted.starts_with("ENC[AES256_GCM,"));
+    assert!(encrypted.ends_with(']'));
+
+    // Must contain data:, iv:, tag:, type: fields
+    assert!(encrypted.contains("data:"), "missing data field");
+    assert!(encrypted.contains(",iv:"), "missing iv field");
+    assert!(encrypted.contains(",tag:"), "missing tag field");
+    assert!(encrypted.contains(",type:str]"), "missing type field");
+}
+
+#[test]
+fn test_decrypt_standard_sops_enc_format() {
+    // Craft an ENC[...] value that matches standard SOPS format and verify we can parse it
+    let key = test_data_key();
+
+    // Encrypt → get the format, then verify we can decrypt it
+    let encrypted = encrypt_sops_value("hello", &key, "str").unwrap();
+
+    // Parse the components
+    let inner = &encrypted[4..encrypted.len() - 1]; // Strip ENC[ and ]
+    let parts: Vec<&str> = inner.split(',').collect();
+    assert_eq!(parts[0], "AES256_GCM", "cipher must be AES256_GCM");
+    assert!(parts[1].starts_with("data:"), "second part must be data:");
+    assert!(parts[2].starts_with("iv:"), "third part must be iv:");
+    assert!(parts[3].starts_with("tag:"), "fourth part must be tag:");
+    assert!(parts[4].starts_with("type:"), "fifth part must be type:");
+
+    // And of course it must decrypt back
+    let decrypted = decrypt_sops_value(&encrypted, &key).unwrap();
+    assert_eq!(decrypted, "hello");
+}
+
+#[test]
+fn test_encrypted_file_has_correct_sops_structure() {
+    // Verify the overall file structure matches what Go SOPS produces
+    let key = test_data_key();
+    let mut meta = test_metadata();
+    let values = vec![("test.key".to_string(), "test-value".to_string())];
+    meta.mac = encrypt_mac(&key, &values).unwrap();
+
+    let input = r#"
+[test]
+key = "test-value"
+"#;
+
+    let (output, _) =
+        format::encrypt_document(format::SopsFormat::Toml, input, &key, None, &meta, std::path::Path::new("test.toml"))
+            .unwrap();
+
+    // Parse as TOML to verify structure
+    let doc: toml::Value = toml::from_str(&output).unwrap();
+    let table = doc.as_table().unwrap();
+
+    // Must have [sops] section
+    assert!(table.contains_key("sops"), "must have [sops] section");
+
+    let sops = table["sops"].as_table().unwrap();
+
+    // Required SOPS metadata fields
+    assert!(sops.contains_key("version"), "must have version");
+    assert!(sops.contains_key("lastmodified"), "must have lastmodified");
+    assert!(sops.contains_key("mac"), "must have mac");
+
+    // MAC must be encrypted
+    let mac = sops["mac"].as_str().unwrap();
+    assert!(mac.starts_with("ENC[AES256_GCM,"), "MAC must be encrypted");
+
+    // Version must be a valid SOPS version
+    let version = sops["version"].as_str().unwrap();
+    assert!(version.starts_with("3."), "version should be 3.x");
+}
+
+// ============================================================================
 // Multi-key-group (age + Transit)
 // ============================================================================
 

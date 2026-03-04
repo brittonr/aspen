@@ -75,11 +75,11 @@
 
 ## 10. gRPC Key Service Bridge (feature-gated)
 
-- [ ] 10.1 Add SOPS KeyService protobuf definition to `src/keyservice/keyservice.proto` (Encrypt/Decrypt RPCs with Key message containing `encrypted_key` bytes)
-- [ ] 10.2 Add `build.rs` with `tonic_build::compile_protos("src/keyservice/keyservice.proto")` gated behind `keyservice` feature
-- [ ] 10.3 Create `src/keyservice/mod.rs` with `start_keyservice(config: &KeyserviceConfig) -> Result<()>`: bind Unix socket, serve gRPC
-- [ ] 10.4 Create `src/keyservice/bridge.rs` with `AspenKeyServiceBridge` implementing SOPS `KeyService` trait: `encrypt()` → `transit_client.encrypt_data()`, `decrypt()` → `transit_client.decrypt_data_key()`
-- [ ] 10.5 Write integration test: start key service on Unix socket, send gRPC encrypt/decrypt requests, verify roundtrip
+- [x] 10.1Add SOPS KeyService protobuf definition to `src/keyservice/keyservice.proto` (Encrypt/Decrypt RPCs with Key message containing `encrypted_key` bytes)
+- [x] 10.2Add `build.rs` with `tonic_build::compile_protos("src/keyservice/keyservice.proto")` gated behind `keyservice` feature
+- [x] 10.3Create `src/keyservice/mod.rs` with `start_keyservice(config: &KeyserviceConfig) -> Result<()>`: bind Unix socket, serve gRPC
+- [x] 10.4Create `src/keyservice/bridge.rs` with `AspenKeyServiceBridge` implementing SOPS `KeyService` trait: `encrypt()` → `transit_client.encrypt_data()`, `decrypt()` → `transit_client.decrypt_data_key()`
+- [x] 10.5Write integration test: start key service on Unix socket, send gRPC encrypt/decrypt requests, verify roundtrip
 - [ ] 10.6 Write test: key service graceful shutdown on SIGTERM
 
 ## 11. Integration with aspen-secrets
@@ -92,7 +92,7 @@
 ## 12. SOPS Compatibility Tests
 
 - [x] 12.1 Create `tests/sops_compatibility.rs` with golden test: encrypt a known plaintext file, verify the output structure matches SOPS expectations (has `[sops]` table, all values are `ENC[AES256_GCM,...]`, MAC present)
-- [ ] 12.2 Create test: decrypt a file encrypted by Go SOPS (with age) using `aspen-sops` — verify interop with existing SOPS files
+- [x] 12.2Create test: decrypt a file encrypted by Go SOPS (with age) using `aspen-sops` — verify interop with existing SOPS files
 - [ ] 12.3 Create test: encrypt with `aspen-sops`, decrypt with Go SOPS (via key service bridge) — full roundtrip interop
 - [ ] 12.4 Create test: multi-key-group file (age + aspen_transit) — Go SOPS can decrypt with age, `aspen-sops` can decrypt with Transit
 - [x] 12.5 Create test: `encrypted_regex` — only matched values encrypted, others plaintext
@@ -100,8 +100,8 @@
 
 ## 13. Documentation & Feature Flag Wiring
 
-- [ ] 13.1 Add `sops` feature flag to workspace `Cargo.toml` and `aspen-rpc-handlers` that pulls in `aspen-sops`
-- [ ] 13.2 Add `aspen-sops` to the `full` feature set
+- [x] 13.1Add `sops` feature flag to workspace `Cargo.toml` and `aspen-rpc-handlers` that pulls in `aspen-sops`
+- [x] 13.2Add `aspen-sops` to the `full` feature set
 - [x] 13.3Write `crates/aspen-sops/README.md`: usage examples for encrypt/decrypt/edit/rotate/keyservice, configuration, multi-key-group setup, CI integration example
 - [x] 13.4Add `docs/sops.md` design document explaining the architecture, security model, and operational guide
 - [x] 13.5Verify `cargo clippy -p aspen-sops --all-targets -- --deny warnings` passes

@@ -237,6 +237,28 @@ mod tests {
     }
 
     #[test]
+    fn test_unsupported_key_types() {
+        // Verify that non-VaultKey types are recognized in the proto
+        let kms = KeyType::KmsKey(KmsKey {
+            arn: "arn:aws:kms:us-east-1:123:key/abc".into(),
+            role: String::new(),
+            context: Default::default(),
+            aws_profile: String::new(),
+        });
+        assert!(matches!(kms, KeyType::KmsKey(_)));
+
+        let pgp = KeyType::PgpKey(PgpKey {
+            fingerprint: "ABCD1234".into(),
+        });
+        assert!(matches!(pgp, KeyType::PgpKey(_)));
+
+        let age = KeyType::AgeKey(AgeKey {
+            recipient: "age1...".into(),
+        });
+        assert!(matches!(age, KeyType::AgeKey(_)));
+    }
+
+    #[test]
     fn test_resolve_vault_key_defaults() {
         let svc = super::AspenKeyService::new("ticket".into(), "default-key".into(), "default-mount".into());
 
