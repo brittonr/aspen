@@ -4,14 +4,13 @@ use std::path::PathBuf;
 
 use tracing::info;
 
-use crate::constants::MAX_SOPS_FILE_SIZE;
 use crate::decrypt::DecryptConfig;
 use crate::decrypt::decrypt_file;
 use crate::encrypt::EncryptConfig;
 use crate::encrypt::encrypt_file;
 use crate::error::Result;
 use crate::error::SopsError;
-use crate::metadata::extract_metadata;
+use crate::format;
 
 /// Configuration for the edit operation.
 #[derive(Debug, Clone)]
@@ -36,6 +35,9 @@ pub struct EditConfig {
 /// 4. If unchanged: no-op
 /// 5. Securely delete temp file
 pub async fn edit_file(config: &EditConfig) -> Result<()> {
+    // Detect format for proper temp file extension
+    let fmt = format::detect_format(&config.input_path)?;
+
     // Decrypt
     let decrypt_config = DecryptConfig {
         input_path: config.input_path.clone(),
@@ -48,12 +50,12 @@ pub async fn edit_file(config: &EditConfig) -> Result<()> {
 
     let decrypted = decrypt_file(&decrypt_config).await?;
 
-    // Write to temp file with restricted permissions
+    // Write to temp file with restricted permissions (use correct extension)
     let tmp_dir = std::env::var("TMPDIR")
         .or_else(|_| std::env::var("XDG_RUNTIME_DIR"))
         .unwrap_or_else(|_| "/tmp".into());
 
-    let tmp_path = PathBuf::from(&tmp_dir).join(format!(".aspen-sops-edit-{}.toml", std::process::id()));
+    let tmp_path = PathBuf::from(&tmp_dir).join(format!(".aspen-sops-edit-{}.{}", std::process::id(), fmt.extension()));
 
     // Write with 0600 permissions
     tokio::fs::write(&tmp_path, &decrypted).await.map_err(|e| SopsError::FileWrite {
@@ -133,7 +135,7 @@ pub async fn edit_file(config: &EditConfig) -> Result<()> {
 
     encrypt_file(&encrypt_config).await?;
 
-    info!(path = %config.input_path.display(), "Re-encrypted edited file");
+    info!(path = %config.input_path.display(), format = ?fmt, "Re-encrypted edited file");
 
     // Secure cleanup
     secure_delete(&tmp_path).await;

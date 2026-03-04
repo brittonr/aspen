@@ -1,6 +1,6 @@
 //! SOPS file encryption using Aspen Transit.
 //!
-//! Encrypts a plaintext TOML file:
+//! Encrypts a plaintext file (TOML, JSON, or YAML):
 //! 1. Generate data key via Transit
 //! 2. Encrypt all values with the data key (AES-256-GCM)
 //! 3. Compute and encrypt MAC
@@ -8,9 +8,7 @@
 
 use std::path::PathBuf;
 
-use toml_edit::DocumentMut;
 use tracing::info;
-use zeroize::Zeroizing;
 
 use crate::client::TransitClient;
 use crate::constants::DEFAULT_TRANSIT_KEY;
@@ -60,8 +58,8 @@ impl Default for EncryptConfig {
 ///
 /// Returns the encrypted file contents as a string.
 pub async fn encrypt_file(config: &EncryptConfig) -> Result<String> {
-    // Validate format
-    format::detect_format(&config.input_path)?;
+    // Detect format
+    let fmt = format::detect_format(&config.input_path)?;
 
     // Read file
     let contents = tokio::fs::read_to_string(&config.input_path).await.map_err(|e| SopsError::FileRead {
@@ -77,12 +75,6 @@ pub async fn encrypt_file(config: &EncryptConfig) -> Result<String> {
         });
     }
 
-    // Parse TOML (preserving structure)
-    let mut doc: DocumentMut = contents.parse().map_err(|e: toml_edit::TomlError| SopsError::ParseFile {
-        path: config.input_path.clone(),
-        reason: e.to_string(),
-    })?;
-
     // Connect to Transit
     let client = TransitClient::connect(&config.cluster_ticket, Some(&config.transit_mount)).await?;
 
@@ -92,16 +84,8 @@ pub async fn encrypt_file(config: &EncryptConfig) -> Result<String> {
     // Ensure data key is 32 bytes
     let data_key_array = to_key_array(&data_key)?;
 
-    // Encrypt all values
-    let values =
-        crate::format::toml::encrypt_toml_values(&mut doc, &data_key_array, config.encrypted_regex.as_deref())?;
-
-    // Compute and encrypt MAC
-    let encrypted_mac = encrypt_mac(&data_key_array, &values)?;
-
     // Build metadata
     let mut metadata = SopsFileMetadata::new();
-    metadata.mac = encrypted_mac;
     metadata.encrypted_regex = config.encrypted_regex.clone();
 
     metadata.add_aspen_recipient(AspenTransitRecipient {
@@ -122,27 +106,32 @@ pub async fn encrypt_file(config: &EncryptConfig) -> Result<String> {
         });
     }
 
-    // Inject [sops] metadata into the document
-    let sops_value = toml::Value::try_from(&metadata).map_err(|e| SopsError::Serialization {
-        reason: format!("failed to serialize SOPS metadata: {e}"),
-    })?;
+    // Encrypt values and inject metadata (format-agnostic dispatch)
+    let (_output_before_mac, values) = format::encrypt_document(
+        fmt,
+        &contents,
+        &data_key_array,
+        config.encrypted_regex.as_deref(),
+        &metadata,
+        &config.input_path,
+    )?;
 
-    // Convert toml::Value to toml_edit::Item for insertion
-    let sops_toml_str = toml::to_string_pretty(&sops_value).map_err(|e| SopsError::Serialization {
-        reason: format!("failed to format SOPS metadata: {e}"),
-    })?;
-    let sops_doc: DocumentMut = format!("[sops]\n{sops_toml_str}").parse().map_err(|e| SopsError::Serialization {
-        reason: format!("failed to parse SOPS metadata back: {e}"),
-    })?;
+    // Compute and encrypt MAC
+    let encrypted_mac = encrypt_mac(&data_key_array, &values)?;
+    metadata.mac = encrypted_mac;
 
-    if let Some(sops_item) = sops_doc.get("sops") {
-        doc["sops"] = sops_item.clone();
-    }
+    // Re-render with final metadata (includes MAC)
+    let (output, _) = format::encrypt_document(
+        fmt,
+        &contents,
+        &data_key_array,
+        config.encrypted_regex.as_deref(),
+        &metadata,
+        &config.input_path,
+    )?;
 
     // Data key is automatically zeroized here (Zeroizing<Vec<u8>> dropped)
     drop(data_key);
-
-    let output = doc.to_string();
 
     // Write in place if requested
     if config.in_place {
@@ -150,7 +139,7 @@ pub async fn encrypt_file(config: &EncryptConfig) -> Result<String> {
             path: config.input_path.clone(),
             source: e,
         })?;
-        info!(path = %config.input_path.display(), "Encrypted file in place");
+        info!(path = %config.input_path.display(), format = ?fmt, "Encrypted file in place");
     }
 
     Ok(output)

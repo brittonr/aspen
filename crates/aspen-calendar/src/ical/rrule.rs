@@ -88,13 +88,15 @@ pub fn expand_rrule(
             break;
         }
         if let Some(until) = parsed.until_ms
-            && current_ms > until {
-                break;
-            }
+            && current_ms > until
+        {
+            break;
+        }
         if let Some(max_count) = parsed.count
-            && count >= max_count {
-                break;
-            }
+            && count >= max_count
+        {
+            break;
+        }
         if instances.len() as u32 >= max {
             break;
         }
@@ -113,9 +115,10 @@ pub fn expand_rrule(
                 continue;
             }
             if let Some(until) = parsed.until_ms
-                && *candidate_ms > until {
-                    continue;
-                }
+                && *candidate_ms > until
+            {
+                continue;
+            }
 
             count = count.saturating_add(1);
 
@@ -142,9 +145,10 @@ pub fn expand_rrule(
             }
 
             if let Some(max_count) = parsed.count
-                && count >= max_count {
-                    return Ok(instances);
-                }
+                && count >= max_count
+            {
+                return Ok(instances);
+            }
         }
 
         // Advance to next period
@@ -212,9 +216,10 @@ fn parse_rrule(rrule: &str) -> Result<ParsedRrule, CalendarError> {
             "BYMONTHDAY" => {
                 for d in value.split(',') {
                     if let Ok(day) = d.trim().parse::<u32>()
-                        && (1..=31).contains(&day) {
-                            bymonthday.push(day);
-                        }
+                        && (1..=31).contains(&day)
+                    {
+                        bymonthday.push(day);
+                    }
                 }
             }
             _ => {} // Ignore unsupported parts

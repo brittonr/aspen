@@ -1,6 +1,6 @@
 //! SOPS file decryption using Aspen Transit (with age fallback).
 //!
-//! Decrypts a SOPS-encrypted TOML file:
+//! Decrypts a SOPS-encrypted file (TOML, JSON, or YAML):
 //! 1. Extract SOPS metadata
 //! 2. Decrypt data key via Transit (or age fallback)
 //! 3. Verify MAC
@@ -9,7 +9,6 @@
 
 use std::path::PathBuf;
 
-use toml_edit::DocumentMut;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -22,7 +21,6 @@ use crate::error::SopsError;
 use crate::format;
 use crate::mac::verify_mac;
 use crate::metadata::SopsFileMetadata;
-use crate::metadata::extract_metadata;
 
 /// Configuration for decrypting a file.
 #[derive(Debug, Clone)]
@@ -57,8 +55,8 @@ impl Default for DecryptConfig {
 ///
 /// Returns the decrypted file contents as a string.
 pub async fn decrypt_file(config: &DecryptConfig) -> Result<String> {
-    // Validate format
-    format::detect_format(&config.input_path)?;
+    // Detect format
+    let fmt = format::detect_format(&config.input_path)?;
 
     // Read file
     let contents = tokio::fs::read_to_string(&config.input_path).await.map_err(|e| SopsError::FileRead {
@@ -74,28 +72,17 @@ pub async fn decrypt_file(config: &DecryptConfig) -> Result<String> {
         });
     }
 
-    // Parse to extract metadata
-    let parsed: toml::Value = toml::from_str(&contents).map_err(|e| SopsError::ParseFile {
-        path: config.input_path.clone(),
-        reason: e.to_string(),
-    })?;
-
-    let metadata = extract_metadata(&parsed)?.ok_or(SopsError::InvalidMetadata {
-        reason: "no [sops] section found — file may not be encrypted".into(),
+    // Extract metadata (format-agnostic)
+    let metadata = format::extract_metadata(fmt, &contents, &config.input_path)?.ok_or(SopsError::InvalidMetadata {
+        reason: "no sops section found — file may not be encrypted".into(),
     })?;
 
     // Decrypt the data key
     let data_key = decrypt_data_key(config, &metadata).await?;
     let data_key_array = to_key_array(&data_key)?;
 
-    // Parse with toml_edit for structure-preserving editing
-    let mut doc: DocumentMut = contents.parse().map_err(|e: toml_edit::TomlError| SopsError::ParseFile {
-        path: config.input_path.clone(),
-        reason: e.to_string(),
-    })?;
-
-    // Decrypt all values
-    let values = crate::format::toml::decrypt_toml_values(&mut doc, &data_key_array)?;
+    // Decrypt all values and remove metadata (format-agnostic)
+    let (output, values) = format::decrypt_document(fmt, &contents, &data_key_array, &config.input_path)?;
 
     // Verify MAC
     if !metadata.mac.is_empty() {
@@ -105,17 +92,12 @@ pub async fn decrypt_file(config: &DecryptConfig) -> Result<String> {
         warn!("No MAC found in SOPS metadata — skipping verification");
     }
 
-    // Remove [sops] section from output
-    doc.remove("sops");
-
     // Data key zeroized on drop
     drop(data_key);
 
-    let output = doc.to_string();
-
     // Handle --extract
     if let Some(ref extract_path) = config.extract_path {
-        return extract_value(&output, extract_path);
+        return format::extract_value(fmt, &output, extract_path);
     }
 
     // Write to file if requested
@@ -124,7 +106,7 @@ pub async fn decrypt_file(config: &DecryptConfig) -> Result<String> {
             path: output_path.clone(),
             source: e,
         })?;
-        info!(path = %output_path.display(), "Decrypted file written");
+        info!(path = %output_path.display(), format = ?fmt, "Decrypted file written");
     }
 
     Ok(output)
@@ -158,16 +140,16 @@ async fn decrypt_data_key(config: &DecryptConfig, metadata: &SopsFileMetadata) -
 
     // Try age fallback
     #[cfg(feature = "age-fallback")]
-    if metadata.has_age() {
-        if let Some(ref identity_path) = config.age_identity {
-            match try_age_decrypt(identity_path, metadata).await {
-                Ok(key) => {
-                    debug!("Decrypted data key via age fallback");
-                    return Ok(key);
-                }
-                Err(e) => {
-                    warn!(error = %e, "Age fallback decrypt failed");
-                }
+    if metadata.has_age()
+        && let Some(ref identity_path) = config.age_identity
+    {
+        match try_age_decrypt(identity_path, metadata).await {
+            Ok(key) => {
+                debug!("Decrypted data key via age fallback");
+                return Ok(key);
+            }
+            Err(e) => {
+                warn!(error = %e, "Age fallback decrypt failed");
             }
         }
     }
@@ -189,8 +171,6 @@ async fn try_transit_decrypt(
 /// Try to decrypt the data key using age.
 #[cfg(feature = "age-fallback")]
 async fn try_age_decrypt(identity_path: &std::path::Path, metadata: &SopsFileMetadata) -> Result<Zeroizing<Vec<u8>>> {
-    use std::io::Read;
-
     let identity_contents = tokio::fs::read_to_string(identity_path).await.map_err(|e| SopsError::AgeError {
         reason: format!("failed to read age identity: {e}"),
     })?;
@@ -264,27 +244,6 @@ fn decrypt_age_ciphertext(ciphertext: &str, identity: &age::x25519::Identity) ->
     })?;
 
     Ok(plaintext)
-}
-
-/// Extract a single value from decrypted TOML by dotted path.
-fn extract_value(toml_str: &str, path: &str) -> Result<String> {
-    let value: toml::Value = toml::from_str(toml_str).map_err(|e| SopsError::ParseFile {
-        path: PathBuf::from("<decrypted>"),
-        reason: e.to_string(),
-    })?;
-
-    let mut current = &value;
-    for segment in path.split('.') {
-        current = current.get(segment).ok_or_else(|| SopsError::ParseFile {
-            path: PathBuf::from("<decrypted>"),
-            reason: format!("key path '{path}' not found at segment '{segment}'"),
-        })?;
-    }
-
-    match current {
-        toml::Value::String(s) => Ok(s.clone()),
-        other => Ok(other.to_string()),
-    }
 }
 
 /// Convert a data key Vec to a fixed-size array.

@@ -44,8 +44,8 @@ aspen-nix-handler = { path = "../aspen-nix-handler", optional = true }
 aspen-job-handler = { path = "../aspen-job-handler", optional = true }
 # aspen-nix-cache-gateway removed: h3-iroh requires iroh 0.96+ (we use 0.95.1)
 aspen-net = { path = "../aspen-net", optional = true }
-aspen-contacts-handler = { path = "../aspen-contacts-handler", optional = true }
-aspen-calendar-handler = { path = "../aspen-calendar-handler", optional = true }
+# aspen-contacts-handler removed — replaced by WASM plugin (aspen-contacts-plugin)
+# aspen-calendar-handler removed — replaced by WASM plugin (aspen-calendar-plugin)
 aspen-wasm-plugin = { path = "../../../aspen-wasm-plugin/crates/aspen-wasm-plugin", optional = true }
 
 # Atomic pointer swap for hot-reload of plugin handlers
@@ -86,8 +86,6 @@ hooks = ["dep:aspen-hooks", "aspen-rpc-core/hooks", "aspen-wasm-plugin?/hooks"]
 jobs = ["dep:aspen-jobs", "dep:aspen-job-handler", "aspen-rpc-core/jobs", "aspen-rpc-core/worker"]
 docs = ["dep:aspen-docs", "dep:aspen-docs-handler", "aspen-cluster-handler/docs"]
 net = ["dep:aspen-net"]
-contacts = ["dep:aspen-contacts-handler"]
-calendar = ["dep:aspen-calendar-handler"]
 plugins-rpc = ["dep:aspen-wasm-plugin", "blob"]
 testing = []
 

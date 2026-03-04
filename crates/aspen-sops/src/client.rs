@@ -11,13 +11,9 @@ use aspen_client_api::ClientRpcResponse;
 use tracing::debug;
 use zeroize::Zeroizing;
 
-use crate::constants::DATA_KEY_BITS;
 use crate::constants::DEFAULT_TRANSIT_MOUNT;
 use crate::error::Result;
 use crate::error::SopsError;
-
-/// Connection timeout for Transit client.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// RPC timeout for Transit operations.
 const RPC_TIMEOUT: Duration = Duration::from_secs(30);

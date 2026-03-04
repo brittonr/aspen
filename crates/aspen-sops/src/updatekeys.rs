@@ -5,7 +5,6 @@
 
 use std::path::PathBuf;
 
-use toml_edit::DocumentMut;
 use tracing::info;
 use zeroize::Zeroizing;
 
@@ -13,9 +12,9 @@ use crate::client::TransitClient;
 use crate::constants::MAX_SOPS_FILE_SIZE;
 use crate::error::Result;
 use crate::error::SopsError;
+use crate::format;
 use crate::metadata::AspenTransitRecipient;
 use crate::metadata::SopsFileMetadata;
-use crate::metadata::extract_metadata;
 
 /// Configuration for updating key groups.
 #[derive(Debug, Clone)]
@@ -44,6 +43,8 @@ pub struct UpdateKeysConfig {
 ///
 /// Returns the updated file contents.
 pub async fn update_keys(config: &UpdateKeysConfig) -> Result<String> {
+    let fmt = format::detect_format(&config.input_path)?;
+
     let contents = tokio::fs::read_to_string(&config.input_path).await.map_err(|e| SopsError::FileRead {
         path: config.input_path.clone(),
         source: e,
@@ -57,14 +58,10 @@ pub async fn update_keys(config: &UpdateKeysConfig) -> Result<String> {
         });
     }
 
-    let parsed: toml::Value = toml::from_str(&contents).map_err(|e| SopsError::ParseFile {
-        path: config.input_path.clone(),
-        reason: e.to_string(),
-    })?;
-
-    let mut metadata = extract_metadata(&parsed)?.ok_or(SopsError::InvalidMetadata {
-        reason: "no [sops] section found".into(),
-    })?;
+    let mut metadata =
+        format::extract_metadata(fmt, &contents, &config.input_path)?.ok_or(SopsError::InvalidMetadata {
+            reason: "no sops section found".into(),
+        })?;
 
     // Decrypt the data key using any available key group
     let data_key = decrypt_data_key_from_any(&metadata, config).await?;
@@ -105,35 +102,18 @@ pub async fn update_keys(config: &UpdateKeysConfig) -> Result<String> {
 
     metadata.touch();
 
-    // Rebuild document with updated metadata
-    let mut doc: DocumentMut = contents.parse().map_err(|e: toml_edit::TomlError| SopsError::ParseFile {
-        path: config.input_path.clone(),
-        reason: e.to_string(),
-    })?;
-
-    let sops_value = toml::Value::try_from(&metadata)
-        .map_err(|e: toml::ser::Error| SopsError::Serialization { reason: e.to_string() })?;
-    let sops_str = toml::to_string_pretty(&sops_value)
-        .map_err(|e: toml::ser::Error| SopsError::Serialization { reason: e.to_string() })?;
-    let sops_doc: DocumentMut = format!("[sops]\n{sops_str}")
-        .parse()
-        .map_err(|e: toml_edit::TomlError| SopsError::Serialization { reason: e.to_string() })?;
-
-    if let Some(sops_item) = sops_doc.get("sops") {
-        doc["sops"] = sops_item.clone();
-    }
-
     // Zeroize data key
     drop(data_key);
 
-    let output = doc.to_string();
+    // Update metadata in the document (format-agnostic)
+    let output = format::update_metadata(fmt, &contents, &metadata, &config.input_path)?;
 
     if config.in_place {
         tokio::fs::write(&config.input_path, output.as_bytes()).await.map_err(|e| SopsError::FileWrite {
             path: config.input_path.clone(),
             source: e,
         })?;
-        info!(path = %config.input_path.display(), "Updated keys in place");
+        info!(path = %config.input_path.display(), format = ?fmt, "Updated keys in place");
     }
 
     Ok(output)

@@ -3,22 +3,22 @@
 //! Uses `toml_edit` to preserve document structure (comments, formatting)
 //! while encrypting/decrypting leaf values in-place.
 
-use aes_gcm::Aes256Gcm;
-use aes_gcm::aead::Aead;
-use aes_gcm::aead::KeyInit;
-use aes_gcm::aead::generic_array::GenericArray;
-use base64::Engine;
-use rand::RngCore;
 use toml_edit::DocumentMut;
 use toml_edit::Item;
 use toml_edit::Value;
 
-use crate::constants::AES_GCM_NONCE_SIZE;
-use crate::constants::AES_GCM_TAG_SIZE;
-use crate::constants::MAX_KEY_PATH_LENGTH;
-use crate::constants::MAX_VALUE_COUNT;
+use super::common::check_value_count;
+// Re-export common functions for backwards compatibility
+pub use super::common::decrypt_sops_value;
+use super::common::decrypt_sops_value_with_type;
+use super::common::encrypt_sops_value;
+pub use super::common::encrypt_sops_value as encrypt_value;
+use super::common::is_sops_encrypted;
+pub use super::common::is_sops_encrypted as is_encrypted;
+use super::common::validate_key_path;
 use crate::error::Result;
 use crate::error::SopsError;
+use crate::metadata::SopsFileMetadata;
 
 /// Encrypt all leaf values in a TOML document.
 ///
@@ -83,6 +83,113 @@ pub fn decrypt_toml_values(doc: &mut DocumentMut, data_key: &[u8; 32]) -> Result
     Ok(values)
 }
 
+/// Parse a TOML string, encrypt values, inject metadata, and serialize.
+///
+/// Returns `(encrypted_output, value_pairs_for_mac)`.
+pub fn encrypt_document(
+    contents: &str,
+    data_key: &[u8; 32],
+    encrypted_regex: Option<&str>,
+    metadata: &SopsFileMetadata,
+    input_path: &std::path::Path,
+) -> Result<(String, Vec<(String, String)>)> {
+    let mut doc: DocumentMut = contents.parse().map_err(|e: toml_edit::TomlError| SopsError::ParseFile {
+        path: input_path.to_path_buf(),
+        reason: e.to_string(),
+    })?;
+
+    let values = encrypt_toml_values(&mut doc, data_key, encrypted_regex)?;
+    inject_metadata(&mut doc, metadata)?;
+
+    Ok((doc.to_string(), values))
+}
+
+/// Parse a TOML string, extract metadata, decrypt values, and serialize.
+///
+/// Returns `(decrypted_output, metadata, value_pairs_for_mac)`.
+pub fn decrypt_document(
+    contents: &str,
+    data_key: &[u8; 32],
+    input_path: &std::path::Path,
+) -> Result<(String, Vec<(String, String)>)> {
+    let mut doc: DocumentMut = contents.parse().map_err(|e: toml_edit::TomlError| SopsError::ParseFile {
+        path: input_path.to_path_buf(),
+        reason: e.to_string(),
+    })?;
+
+    let values = decrypt_toml_values(&mut doc, data_key)?;
+    doc.remove("sops");
+
+    Ok((doc.to_string(), values))
+}
+
+/// Extract SOPS metadata from TOML contents.
+pub fn extract_metadata_from_contents(
+    contents: &str,
+    input_path: &std::path::Path,
+) -> Result<Option<SopsFileMetadata>> {
+    let parsed: toml::Value = toml::from_str(contents).map_err(|e| SopsError::ParseFile {
+        path: input_path.to_path_buf(),
+        reason: e.to_string(),
+    })?;
+    crate::metadata::extract_metadata_from_toml(&parsed)
+}
+
+/// Inject SOPS metadata into a TOML document.
+pub fn inject_metadata(doc: &mut DocumentMut, metadata: &SopsFileMetadata) -> Result<()> {
+    let sops_value = toml::Value::try_from(metadata).map_err(|e| SopsError::Serialization {
+        reason: format!("failed to serialize SOPS metadata: {e}"),
+    })?;
+
+    let sops_toml_str = toml::to_string_pretty(&sops_value).map_err(|e| SopsError::Serialization {
+        reason: format!("failed to format SOPS metadata: {e}"),
+    })?;
+    let sops_doc: DocumentMut = format!("[sops]\n{sops_toml_str}").parse().map_err(|e| SopsError::Serialization {
+        reason: format!("failed to parse SOPS metadata back: {e}"),
+    })?;
+
+    if let Some(sops_item) = sops_doc.get("sops") {
+        doc["sops"] = sops_item.clone();
+    }
+    Ok(())
+}
+
+/// Update metadata in an existing TOML document (for rotate/updatekeys).
+pub fn update_metadata_in_document(
+    contents: &str,
+    metadata: &SopsFileMetadata,
+    input_path: &std::path::Path,
+) -> Result<String> {
+    let mut doc: DocumentMut = contents.parse().map_err(|e: toml_edit::TomlError| SopsError::ParseFile {
+        path: input_path.to_path_buf(),
+        reason: e.to_string(),
+    })?;
+
+    inject_metadata(&mut doc, metadata)?;
+    Ok(doc.to_string())
+}
+
+/// Extract a single value from decrypted TOML by dotted path.
+pub fn extract_value(toml_str: &str, path: &str) -> Result<String> {
+    let value: toml::Value = toml::from_str(toml_str).map_err(|e| SopsError::ParseFile {
+        path: std::path::PathBuf::from("<decrypted>"),
+        reason: e.to_string(),
+    })?;
+
+    let mut current = &value;
+    for segment in path.split('.') {
+        current = current.get(segment).ok_or_else(|| SopsError::ParseFile {
+            path: std::path::PathBuf::from("<decrypted>"),
+            reason: format!("key path '{path}' not found at segment '{segment}'"),
+        })?;
+    }
+
+    match current {
+        toml::Value::String(s) => Ok(s.clone()),
+        other => Ok(other.to_string()),
+    }
+}
+
 fn encrypt_item(
     item: &mut Item,
     path: &str,
@@ -101,16 +208,7 @@ fn encrypt_item(
                 let should_encrypt = regex.as_ref().is_none_or(|re| re.is_match(path));
 
                 values.push((path.to_string(), plaintext.clone()));
-                *count = count.checked_add(1).ok_or(SopsError::TooManyValues {
-                    count: u32::MAX,
-                    max: MAX_VALUE_COUNT,
-                })?;
-                if *count > MAX_VALUE_COUNT {
-                    return Err(SopsError::TooManyValues {
-                        count: *count,
-                        max: MAX_VALUE_COUNT,
-                    });
-                }
+                check_value_count(count)?;
 
                 if should_encrypt {
                     let encrypted = encrypt_sops_value(&plaintext, data_key, value_type)?;
@@ -212,142 +310,6 @@ fn restore_typed_value(plaintext: &str, value_type: &str) -> Value {
         "bool" => plaintext.parse::<bool>().map(Value::from).unwrap_or_else(|_| Value::from(plaintext)),
         _ => Value::from(plaintext),
     }
-}
-
-/// Check if a string is SOPS-encrypted.
-pub fn is_sops_encrypted(s: &str) -> bool {
-    s.starts_with("ENC[") && s.ends_with(']')
-}
-
-/// Encrypt a single plaintext value to SOPS format.
-///
-/// Produces: `ENC[AES256_GCM,data:<base64>,iv:<base64>,tag:<base64>,type:<type>]`
-pub fn encrypt_sops_value(plaintext: &str, data_key: &[u8; 32], value_type: &str) -> Result<String> {
-    let cipher = Aes256Gcm::new(GenericArray::from_slice(data_key));
-
-    let mut nonce_bytes = [0u8; AES_GCM_NONCE_SIZE];
-    rand::rng().fill_bytes(&mut nonce_bytes);
-    let nonce = GenericArray::from_slice(&nonce_bytes);
-
-    let ciphertext_with_tag = cipher.encrypt(nonce, plaintext.as_bytes()).map_err(|e| SopsError::ValueEncrypt {
-        key_path: String::new(),
-        reason: format!("AES-GCM encryption failed: {e}"),
-    })?;
-
-    // AES-GCM appends 16-byte tag to ciphertext
-    if ciphertext_with_tag.len() < AES_GCM_TAG_SIZE {
-        return Err(SopsError::ValueEncrypt {
-            key_path: String::new(),
-            reason: "ciphertext too short".into(),
-        });
-    }
-
-    let ct_len = ciphertext_with_tag.len() - AES_GCM_TAG_SIZE;
-    let (ct_data, tag_data) = ciphertext_with_tag.split_at(ct_len);
-
-    let b64 = base64::engine::general_purpose::STANDARD;
-    let data_b64 = b64.encode(ct_data);
-    let iv_b64 = b64.encode(nonce_bytes);
-    let tag_b64 = b64.encode(tag_data);
-
-    Ok(format!("ENC[AES256_GCM,data:{data_b64},iv:{iv_b64},tag:{tag_b64},type:{value_type}]"))
-}
-
-/// Decrypt a single SOPS-encrypted value, returning plaintext.
-pub fn decrypt_sops_value(encrypted: &str, data_key: &[u8; 32]) -> Result<String> {
-    let (plaintext, _type) = decrypt_sops_value_with_type(encrypted, data_key)?;
-    Ok(plaintext)
-}
-
-/// Decrypt a SOPS value, returning both plaintext and the type tag.
-fn decrypt_sops_value_with_type(encrypted: &str, data_key: &[u8; 32]) -> Result<(String, String)> {
-    let inner = encrypted.strip_prefix("ENC[").and_then(|s| s.strip_suffix(']')).ok_or_else(|| {
-        SopsError::InvalidCiphertext {
-            reason: "not in ENC[...] format".into(),
-        }
-    })?;
-
-    let parts: std::collections::HashMap<&str, &str> = inner
-        .split(',')
-        .filter_map(|part| {
-            let mut kv = part.splitn(2, ':');
-            Some((kv.next()?, kv.next()?))
-        })
-        .collect();
-
-    // Verify cipher type
-    let first_part = inner.split(',').next().unwrap_or("");
-    if !first_part.starts_with("AES256_GCM") {
-        return Err(SopsError::InvalidCiphertext {
-            reason: format!("unsupported cipher: {first_part}"),
-        });
-    }
-
-    let b64 = base64::engine::general_purpose::STANDARD;
-
-    let data = b64
-        .decode(parts.get("data").ok_or_else(|| SopsError::InvalidCiphertext {
-            reason: "missing 'data'".into(),
-        })?)
-        .map_err(|e| SopsError::InvalidCiphertext {
-            reason: format!("invalid base64 in data: {e}"),
-        })?;
-
-    let iv = b64
-        .decode(parts.get("iv").ok_or_else(|| SopsError::InvalidCiphertext {
-            reason: "missing 'iv'".into(),
-        })?)
-        .map_err(|e| SopsError::InvalidCiphertext {
-            reason: format!("invalid base64 in iv: {e}"),
-        })?;
-
-    let tag = b64
-        .decode(parts.get("tag").ok_or_else(|| SopsError::InvalidCiphertext {
-            reason: "missing 'tag'".into(),
-        })?)
-        .map_err(|e| SopsError::InvalidCiphertext {
-            reason: format!("invalid base64 in tag: {e}"),
-        })?;
-
-    let value_type = parts.get("type").unwrap_or(&"str").to_string();
-
-    if iv.len() != AES_GCM_NONCE_SIZE {
-        return Err(SopsError::InvalidCiphertext {
-            reason: format!("invalid IV length: {} (expected {})", iv.len(), AES_GCM_NONCE_SIZE),
-        });
-    }
-    if tag.len() != AES_GCM_TAG_SIZE {
-        return Err(SopsError::InvalidCiphertext {
-            reason: format!("invalid tag length: {} (expected {})", tag.len(), AES_GCM_TAG_SIZE),
-        });
-    }
-
-    let cipher = Aes256Gcm::new(GenericArray::from_slice(data_key));
-    let nonce = GenericArray::from_slice(&iv);
-
-    // Combine ciphertext + tag (AEAD expects tag appended)
-    let mut combined = data;
-    combined.extend_from_slice(&tag);
-
-    let plaintext = cipher.decrypt(nonce, combined.as_ref()).map_err(|e| SopsError::InvalidCiphertext {
-        reason: format!("AES-GCM decryption failed: {e}"),
-    })?;
-
-    let plaintext_str = String::from_utf8(plaintext).map_err(|e| SopsError::InvalidCiphertext {
-        reason: format!("decrypted value is not valid UTF-8: {e}"),
-    })?;
-
-    Ok((plaintext_str, value_type))
-}
-
-fn validate_key_path(path: &str) -> Result<()> {
-    if path.len() as u32 > MAX_KEY_PATH_LENGTH {
-        return Err(SopsError::KeyPathTooLong {
-            length: path.len() as u32,
-            max: MAX_KEY_PATH_LENGTH,
-        });
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -456,7 +418,6 @@ password = "also secret"
         let mut doc: DocumentMut = toml_str.parse().unwrap();
         let _values = encrypt_toml_values(&mut doc, &key, Some("key|password")).unwrap();
 
-        let result = doc.to_string();
         // api_key and password should be encrypted
         assert!(doc["api_key"].as_str().unwrap().starts_with("ENC["));
         assert!(doc["password"].as_str().unwrap().starts_with("ENC["));

@@ -5,15 +5,13 @@
 
 use std::path::PathBuf;
 
-use toml_edit::DocumentMut;
 use tracing::info;
 
 use crate::client::TransitClient;
 use crate::constants::MAX_SOPS_FILE_SIZE;
 use crate::error::Result;
 use crate::error::SopsError;
-use crate::metadata::SopsFileMetadata;
-use crate::metadata::extract_metadata;
+use crate::format;
 
 /// Configuration for rotating a file's data key wrapping.
 #[derive(Debug, Clone)]
@@ -34,6 +32,8 @@ pub struct RotateConfig {
 ///
 /// Returns the updated file contents.
 pub async fn rotate_file(config: &RotateConfig) -> Result<String> {
+    let fmt = format::detect_format(&config.input_path)?;
+
     let contents = tokio::fs::read_to_string(&config.input_path).await.map_err(|e| SopsError::FileRead {
         path: config.input_path.clone(),
         source: e,
@@ -47,14 +47,10 @@ pub async fn rotate_file(config: &RotateConfig) -> Result<String> {
         });
     }
 
-    let parsed: toml::Value = toml::from_str(&contents).map_err(|e| SopsError::ParseFile {
-        path: config.input_path.clone(),
-        reason: e.to_string(),
-    })?;
-
-    let mut metadata = extract_metadata(&parsed)?.ok_or(SopsError::InvalidMetadata {
-        reason: "no [sops] section found".into(),
-    })?;
+    let mut metadata =
+        format::extract_metadata(fmt, &contents, &config.input_path)?.ok_or(SopsError::InvalidMetadata {
+            reason: "no sops section found".into(),
+        })?;
 
     // Rewrap data key for each Transit recipient
     for recipient in &mut metadata.aspen_transit {
@@ -76,32 +72,15 @@ pub async fn rotate_file(config: &RotateConfig) -> Result<String> {
 
     metadata.touch();
 
-    // Rebuild the document with updated metadata
-    let mut doc: DocumentMut = contents.parse().map_err(|e: toml_edit::TomlError| SopsError::ParseFile {
-        path: config.input_path.clone(),
-        reason: e.to_string(),
-    })?;
-
-    let sops_value = toml::Value::try_from(&metadata)
-        .map_err(|e: toml::ser::Error| SopsError::Serialization { reason: e.to_string() })?;
-    let sops_str = toml::to_string_pretty(&sops_value)
-        .map_err(|e: toml::ser::Error| SopsError::Serialization { reason: e.to_string() })?;
-    let sops_doc: DocumentMut = format!("[sops]\n{sops_str}")
-        .parse()
-        .map_err(|e: toml_edit::TomlError| SopsError::Serialization { reason: e.to_string() })?;
-
-    if let Some(sops_item) = sops_doc.get("sops") {
-        doc["sops"] = sops_item.clone();
-    }
-
-    let output = doc.to_string();
+    // Update metadata in the document (format-agnostic)
+    let output = format::update_metadata(fmt, &contents, &metadata, &config.input_path)?;
 
     if config.in_place {
         tokio::fs::write(&config.input_path, output.as_bytes()).await.map_err(|e| SopsError::FileWrite {
             path: config.input_path.clone(),
             source: e,
         })?;
-        info!(path = %config.input_path.display(), "Rotated file in place");
+        info!(path = %config.input_path.display(), format = ?fmt, "Rotated file in place");
     }
 
     Ok(output)

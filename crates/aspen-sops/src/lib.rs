@@ -6,12 +6,14 @@
 //!
 //! Full Rust implementation of SOPS encrypt/decrypt that talks directly to
 //! Aspen Transit via Iroh QUIC. No dependency on the Go `sops` binary.
+//! Supports TOML, JSON, and YAML file formats.
 //!
 //! ```rust,ignore
 //! use aspen_sops::{encrypt_file, EncryptConfig};
 //!
+//! // Works with .toml, .json, .yaml, and .yml files
 //! let config = EncryptConfig {
-//!     input_path: "secrets.toml".into(),
+//!     input_path: "secrets.yaml".into(),
 //!     cluster_ticket: "aspen1q...".into(),
 //!     transit_key: "sops-data-key".into(),
 //!     ..Default::default()
@@ -26,7 +28,7 @@
 //!
 //! ```bash
 //! aspen-sops keyservice --cluster-ticket aspen1q... --transit-key sops-data-key
-//! sops --keyservice unix:///tmp/aspen-sops.sock decrypt secrets.sops.toml
+//! sops --keyservice unix:///tmp/aspen-sops.sock decrypt secrets.sops.yaml
 //! ```
 
 pub mod client;

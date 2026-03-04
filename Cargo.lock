@@ -791,23 +791,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-calendar-handler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-calendar",
- "aspen-client-api",
- "aspen-kv-types",
- "aspen-rpc-core",
- "aspen-testing-core",
- "aspen-traits",
- "async-trait",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "aspen-ci"
 version = "0.1.0"
 dependencies = [
@@ -1217,23 +1200,6 @@ dependencies = [
  "serde",
  "serde_json",
  "snafu",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "aspen-contacts-handler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-client-api",
- "aspen-contacts",
- "aspen-kv-types",
- "aspen-rpc-core",
- "aspen-testing-core",
- "aspen-traits",
- "async-trait",
- "serde_json",
  "tokio",
  "tracing",
 ]
@@ -2040,14 +2006,12 @@ dependencies = [
  "aspen-auth",
  "aspen-blob",
  "aspen-blob-handler",
- "aspen-calendar-handler",
  "aspen-ci",
  "aspen-ci-handler",
  "aspen-client",
  "aspen-client-api",
  "aspen-cluster",
  "aspen-cluster-handler",
- "aspen-contacts-handler",
  "aspen-coordination",
  "aspen-core",
  "aspen-core-essentials-handler",
@@ -2212,6 +2176,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "serde_yaml",
  "sha2 0.10.9",
  "snafu",
  "subtle",
@@ -2221,6 +2186,7 @@ dependencies = [
  "toml 0.8.23",
  "toml_edit 0.22.27",
  "tonic 0.12.3",
+ "tonic-build 0.12.3",
  "tracing",
  "tracing-subscriber",
  "zeroize",
@@ -14566,6 +14532,20 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "tonic-build"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9557ce109ea773b399c9b9e5dca39294110b74f1f342cb347a80d1fce8c26a11"
+dependencies = [
+ "prettyplease",
+ "proc-macro2",
+ "prost-build 0.13.5",
+ "prost-types 0.13.5",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]

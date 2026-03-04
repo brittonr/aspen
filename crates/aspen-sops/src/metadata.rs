@@ -148,7 +148,7 @@ impl Default for SopsFileMetadata {
 /// Extract SOPS metadata from a parsed TOML value.
 ///
 /// Returns `None` if the `[sops]` table is not present.
-pub fn extract_metadata(value: &toml::Value) -> crate::error::Result<Option<SopsFileMetadata>> {
+pub fn extract_metadata_from_toml(value: &toml::Value) -> crate::error::Result<Option<SopsFileMetadata>> {
     let table = match value.as_table() {
         Some(t) => t,
         None => return Ok(None),
@@ -165,6 +165,11 @@ pub fn extract_metadata(value: &toml::Value) -> crate::error::Result<Option<Sops
         .map_err(|e: toml::de::Error| SopsError::InvalidMetadata { reason: e.to_string() })?;
 
     Ok(Some(metadata))
+}
+
+/// Legacy alias for `extract_metadata_from_toml`.
+pub fn extract_metadata(value: &toml::Value) -> crate::error::Result<Option<SopsFileMetadata>> {
+    extract_metadata_from_toml(value)
 }
 
 use crate::error::SopsError;

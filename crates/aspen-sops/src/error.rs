@@ -53,8 +53,7 @@ pub enum SopsError {
     /// Unsupported or invalid file format.
     #[snafu(display(
         "unsupported file format: {reason}\n\
-         Hint: Only TOML files are supported in v1. \
-         YAML/JSON support is planned."
+         Hint: Supported formats: TOML (.toml), JSON (.json), YAML (.yaml, .yml)"
     ))]
     InvalidFormat { reason: String },
 

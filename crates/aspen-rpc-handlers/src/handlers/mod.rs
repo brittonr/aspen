@@ -20,13 +20,9 @@
 // Re-export handlers
 #[cfg(feature = "blob")]
 pub use aspen_blob_handler::BlobServiceExecutor;
-#[cfg(feature = "calendar")]
-pub use aspen_calendar_handler::CalendarServiceExecutor;
 #[cfg(feature = "ci")]
 pub use aspen_ci_handler::CiServiceExecutor;
 pub use aspen_cluster_handler::ClusterHandler;
-#[cfg(feature = "contacts")]
-pub use aspen_contacts_handler::ContactsServiceExecutor;
 pub use aspen_core_essentials_handler::CoreHandler;
 pub use aspen_core_essentials_handler::LeaseHandler;
 pub use aspen_core_essentials_handler::WatchHandler;
