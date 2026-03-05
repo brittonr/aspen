@@ -166,4 +166,96 @@ mod tests {
         assert!(FileMetadata::from_bytes(&[0u8; 16]).is_none());
         assert!(FileMetadata::from_bytes(&[]).is_none());
     }
+
+    #[test]
+    fn from_bytes_accepts_extra_bytes() {
+        let meta = FileMetadata {
+            mtime_secs: 42,
+            mtime_nsecs: 0,
+            ctime_secs: 42,
+            ctime_nsecs: 0,
+        };
+        let mut bytes = meta.to_bytes();
+        // Append extra bytes — should be ignored
+        bytes.extend_from_slice(&[0xFF; 16]);
+        assert_eq!(bytes.len(), 48);
+
+        let restored = FileMetadata::from_bytes(&bytes).unwrap();
+        assert_eq!(meta, restored);
+    }
+
+    #[test]
+    fn with_mtime_sets_mtime_and_current_ctime() {
+        let meta = FileMetadata::with_mtime(1234, 5678);
+        assert_eq!(meta.mtime_secs, 1234);
+        assert_eq!(meta.mtime_nsecs, 5678);
+        // ctime should be current time (much larger than our custom mtime)
+        assert!(meta.ctime_secs > 1000000000, "ctime_secs should be a recent epoch: {}", meta.ctime_secs);
+    }
+
+    #[test]
+    fn to_bytes_always_32_bytes() {
+        // Zero values
+        let zero = FileMetadata {
+            mtime_secs: 0,
+            mtime_nsecs: 0,
+            ctime_secs: 0,
+            ctime_nsecs: 0,
+        };
+        assert_eq!(zero.to_bytes().len(), 32);
+
+        // Negative values
+        let negative = FileMetadata {
+            mtime_secs: -1,
+            mtime_nsecs: -999999999,
+            ctime_secs: -1,
+            ctime_nsecs: -999999999,
+        };
+        assert_eq!(negative.to_bytes().len(), 32);
+
+        // Max values
+        let max = FileMetadata {
+            mtime_secs: i64::MAX,
+            mtime_nsecs: i64::MAX,
+            ctime_secs: i64::MAX,
+            ctime_nsecs: i64::MAX,
+        };
+        assert_eq!(max.to_bytes().len(), 32);
+    }
+
+    #[test]
+    fn round_trip_extreme_values() {
+        let extremes = [
+            FileMetadata {
+                mtime_secs: i64::MAX,
+                mtime_nsecs: i64::MAX,
+                ctime_secs: i64::MAX,
+                ctime_nsecs: i64::MAX,
+            },
+            FileMetadata {
+                mtime_secs: i64::MIN,
+                mtime_nsecs: i64::MIN,
+                ctime_secs: i64::MIN,
+                ctime_nsecs: i64::MIN,
+            },
+            FileMetadata {
+                mtime_secs: 0,
+                mtime_nsecs: 0,
+                ctime_secs: 0,
+                ctime_nsecs: 0,
+            },
+            FileMetadata {
+                mtime_secs: i64::MAX,
+                mtime_nsecs: i64::MIN,
+                ctime_secs: 0,
+                ctime_nsecs: -1,
+            },
+        ];
+
+        for meta in &extremes {
+            let bytes = meta.to_bytes();
+            let restored = FileMetadata::from_bytes(&bytes).unwrap();
+            assert_eq!(*meta, restored, "round-trip failed for {meta:?}");
+        }
+    }
 }

@@ -50,7 +50,9 @@ use aspen_hooks::pubsub::Publisher;
 use aspen_hooks::pubsub::RaftPublisher;
 use aspen_hooks::pubsub::Topic;
 use aspen_hooks::pubsub::TopicPattern;
-// TODO: Add EventStream tests that use StreamExt
+// EventStream tests using StreamExt are deferred until the Subscriber trait
+// (which returns impl Stream<Item=Event>) is wired through RPC. The ephemeral
+// pub/sub system already provides streaming via QUIC bi-streams.
 #[allow(unused_imports)]
 use n0_future::StreamExt;
 use tempfile::TempDir;
@@ -230,11 +232,26 @@ async fn test_pubsub_single_node_publish() -> Result<()> {
     // Cursor will be BEGINNING (0) if header_revision was not returned.
     assert!(!cursor.is_latest(), "cursor should not be LATEST");
 
-    // The event was published through Raft consensus.
-    // Scanning for the event is complex because the keys use Tuple encoding.
-    // For now, we just verify that publish completed successfully.
-    // TODO: Add proper scan verification once we understand the encoded key format better.
-    info!("publish completed successfully, skipping scan verification for now");
+    // Verify the event is stored in KV by scanning with the topic prefix.
+    // Key format: __pubsub/events/{topic_segments}/{cursor_be_hex}
+    let scan_prefix = aspen_hooks::pubsub::build_topic_prefix(&topic);
+    let scan_result = node
+        .raft_node()
+        .scan(ScanRequest {
+            prefix: scan_prefix.clone(),
+            limit_results: Some(10),
+            continuation_token: None,
+        })
+        .await
+        .context("scan after publish failed")?;
+
+    info!(prefix = scan_prefix, count = scan_result.entries.len(), "scan results for published topic");
+    assert!(
+        !scan_result.entries.is_empty(),
+        "expected at least one event in KV for topic '{}', scan prefix '{}'",
+        topic,
+        scan_prefix
+    );
 
     node.shutdown().await?;
     Ok(())
@@ -723,25 +740,12 @@ async fn test_pubsub_rapid_publish_stress() -> Result<()> {
 // CLI Integration Tests (Placeholder for future CLI pub/sub commands)
 // ============================================================================
 
-// TODO: When pub/sub CLI commands are added, include tests here that:
-// 1. Start a cluster using RealClusterTester
-// 2. Use aspen-cli to publish events
-// 3. Verify events via KV scan or pub/sub subscribe
+// CLI pub/sub commands do not exist yet. Raft-backed pub/sub uses the Publisher
+// trait directly (no RPC variants in ClientRpcRequest/ClientRpcResponse).
+// Ephemeral pub/sub uses a separate QUIC ALPN protocol, not the RPC layer.
 //
-// Example structure:
-//
-// #[tokio::test]
-// #[ignore = "requires network access"]
-// async fn test_cli_pubsub_publish() -> Result<()> {
-//     let cluster = RealClusterTester::new(RealClusterConfig::default()).await?;
-//     let ticket = cluster.ticket().to_string();
-//
-//     // Run CLI command
-//     let output = Command::new("cargo")
-//         .args(["run", "--bin", "aspen-cli", "--", "--ticket", &ticket, "pubsub", "publish", ...])
-//         .output()
-//         .await?;
-//
-//     assert!(output.status.success());
-//     Ok(())
-// }
+// When CLI commands are added:
+// 1. Add PubSubPublish/PubSubSubscribe variants to ClientRpcRequest/ClientRpcResponse
+// 2. Add `pubsub` subcommand to aspen-cli
+// 3. Add CLI integration tests here using RealClusterTester
+// 4. Add VM test in nix/tests/ephemeral-pubsub.nix

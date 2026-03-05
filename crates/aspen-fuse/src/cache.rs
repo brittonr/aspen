@@ -376,4 +376,99 @@ mod tests {
         let count = cache.data.read().unwrap().len();
         assert!(count <= CACHE_MAX_DATA_ENTRIES);
     }
+
+    #[test]
+    fn invalidate_all_scans_preserves_data_and_meta() {
+        let cache = ReadCache::new();
+        cache.put_data("key1".into(), b"value1".to_vec());
+        cache.put_meta("path/file".into(), CachedMeta {
+            entry_type: EntryType::File,
+            size: 10,
+            mtime_secs: 100,
+            mtime_nsecs: 0,
+            ctime_secs: 100,
+            ctime_nsecs: 0,
+        });
+        cache.put_scan("prefix/".into(), vec!["prefix/a".into()]);
+
+        cache.invalidate_all_scans();
+
+        // Scan should be cleared
+        assert!(cache.get_scan("prefix/").is_none());
+        // Data and meta should remain
+        assert!(cache.get_data("key1").is_some());
+        assert!(cache.get_meta("path/file").is_some());
+    }
+
+    #[test]
+    fn expired_data_returns_none() {
+        let cache = ReadCache::new();
+        // Insert an entry with an already-expired instant by manipulating directly
+        {
+            let mut data = cache.data.write().unwrap();
+            data.insert("expired".into(), CacheEntry {
+                value: b"old".to_vec(),
+                expires_at: Instant::now() - Duration::from_secs(1),
+            });
+        }
+        // Should return None because it's expired
+        assert!(cache.get_data("expired").is_none());
+    }
+
+    #[test]
+    fn data_cache_respects_byte_limit() {
+        let cache = ReadCache::new();
+        // Each entry is 1MB, limit is 64MB → should hold at most 64 entries
+        let entry_size = 1024 * 1024;
+        for i in 0..80 {
+            cache.put_data(format!("big{i}"), vec![0u8; entry_size]);
+        }
+        let total = *cache.data_bytes.read().unwrap();
+        assert!(total <= CACHE_MAX_DATA_BYTES, "total bytes {total} exceeds limit {CACHE_MAX_DATA_BYTES}");
+    }
+
+    #[test]
+    fn meta_cache_respects_entry_limit() {
+        let cache = ReadCache::new();
+        for i in 0..CACHE_MAX_META_ENTRIES + 10 {
+            cache.put_meta(format!("path/{i}"), CachedMeta {
+                entry_type: EntryType::File,
+                size: 1,
+                mtime_secs: 0,
+                mtime_nsecs: 0,
+                ctime_secs: 0,
+                ctime_nsecs: 0,
+            });
+        }
+        let count = cache.meta.read().unwrap().len();
+        assert!(count <= CACHE_MAX_META_ENTRIES, "meta count {count} exceeds limit {CACHE_MAX_META_ENTRIES}");
+    }
+
+    #[test]
+    fn scan_cache_respects_entry_limit() {
+        let cache = ReadCache::new();
+        for i in 0..CACHE_MAX_SCAN_ENTRIES + 10 {
+            cache.put_scan(format!("prefix{i}/"), vec![format!("prefix{i}/a")]);
+        }
+        let count = cache.scan.read().unwrap().len();
+        assert!(count <= CACHE_MAX_SCAN_ENTRIES, "scan count {count} exceeds limit {CACHE_MAX_SCAN_ENTRIES}");
+    }
+
+    #[test]
+    fn put_data_overwrite_updates_byte_tracking() {
+        let cache = ReadCache::new();
+        cache.put_data("key1".into(), vec![0u8; 100]);
+        let bytes_after_first = *cache.data_bytes.read().unwrap();
+
+        // Overwrite with a smaller value
+        cache.put_data("key1".into(), vec![0u8; 10]);
+        let bytes_after_second = *cache.data_bytes.read().unwrap();
+
+        // Total bytes should reflect the new (smaller) value, not accumulate
+        assert!(
+            bytes_after_second < bytes_after_first,
+            "expected {bytes_after_second} < {bytes_after_first} after overwriting with smaller value"
+        );
+        assert_eq!(cache.get_data("key1").unwrap().len(), 10);
+    }
 }

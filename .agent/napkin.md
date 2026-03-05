@@ -82,6 +82,10 @@
 | 2026-03-04 | self | Feature gates from source crate don't auto-transfer when moving code | `#[cfg(feature = "age-fallback")]` in aspen-sops needs to become unconditional in aspen-secrets (where age is always a dep). Remove feature gates that don't apply in the new crate. |
 | 2026-03-04 | self | **BUG FOUND**: `inject_metadata` in `sops/format/toml.rs` used `format!("[sops]\n{sops_toml_str}")` which broke `[[aspen_transit]]` array-of-tables — TOML parser interprets them as root-level, not nested under [sops] | Fixed by wrapping in a `toml::map::Map` with "sops" key first, then serializing the whole wrapper. This produces correct `[[sops.aspen_transit]]` headers. |
 
+| 2026-03-05 | self | `age::x25519::Identity::to_string()` returns `SecretBox<str>`, not `String` — need `use age::secrecy::ExposeSecret` + `.expose_secret()` to get `&str` | Always use `age::secrecy::ExposeSecret` trait and `.expose_secret()` when accessing age identity strings. The secrecy crate is re-exported through `age::secrecy`, not standalone. |
+| 2026-03-05 | self | Test compiles fine with `-p aspen-secrets` but fails with `--workspace` because workspace feature unification activates `sops` feature which changes `age` types | Always test with `--workspace` for final verification — feature unification can change type signatures across the entire build. |
+| 2026-03-05 | self | FUSE cache, metadata, and SOPS decrypt/encrypt/edit already had `#[cfg(test)] mod tests` scaffolding with 0 tests — the empty test modules were created during initial development | When checking test coverage, look inside `#[cfg(test)]` blocks for actual test functions, not just the presence of the module. |
+
 ## User Preferences
 
 - Improve plugin system iteratively

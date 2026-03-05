@@ -1882,6 +1882,15 @@
                 aspenCliPackage = bins.full-aspen-cli;
               };
 
+              # FUSE mount test: write, read, mkdir, delete, large file (100KB).
+              # Build: nix build .#checks.x86_64-linux.fuse-operations-test
+              fuse-operations-test = import ./nix/tests/fuse-operations.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
+                inherit (bins) aspen-fuse-vm-test;
+              };
+
               # Blob operations test: add, get, has, list, protect/unprotect,
               # status, replication-status, delete, repair-cycle.
               # Build: nix build .#checks.x86_64-linux.blob-operations-test

@@ -397,4 +397,94 @@ mod tests {
         let result = broker.subscribe(pattern, 10).await;
         assert!(matches!(result, Err(PubSubError::SubscriptionRejected { .. })));
     }
+
+    #[tokio::test]
+    async fn test_multi_topic_isolation() {
+        let broker = EphemeralBroker::new();
+
+        // Subscribe to different patterns
+        let pat_orders = TopicPattern::new("orders.*").unwrap();
+        let pat_users = TopicPattern::new("users.*").unwrap();
+
+        let (_id1, mut rx_orders) = broker.subscribe(pat_orders, 10).await.unwrap();
+        let (_id2, mut rx_users) = broker.subscribe(pat_users, 10).await.unwrap();
+
+        // Publish to orders
+        let topic_orders = Topic::new("orders.created").unwrap();
+        let order_event = Event {
+            topic: topic_orders.clone(),
+            cursor: Cursor::EPHEMERAL,
+            timestamp_ms: 1000,
+            payload: b"order-1".to_vec(),
+            headers: vec![],
+        };
+        broker.publish(&topic_orders, order_event).await;
+
+        // Publish to users
+        let topic_users = Topic::new("users.signup").unwrap();
+        let user_event = Event {
+            topic: topic_users.clone(),
+            cursor: Cursor::EPHEMERAL,
+            timestamp_ms: 1001,
+            payload: b"user-1".to_vec(),
+            headers: vec![],
+        };
+        broker.publish(&topic_users, user_event).await;
+
+        // Orders subscriber should only get order events
+        let received = rx_orders.recv().await.unwrap();
+        assert_eq!(received.payload, b"order-1");
+        let timeout = tokio::time::timeout(std::time::Duration::from_millis(50), rx_orders.recv()).await;
+        assert!(timeout.is_err(), "orders subscriber should not receive user events");
+
+        // Users subscriber should only get user events
+        let received = rx_users.recv().await.unwrap();
+        assert_eq!(received.payload, b"user-1");
+        let timeout = tokio::time::timeout(std::time::Duration::from_millis(50), rx_users.recv()).await;
+        assert!(timeout.is_err(), "users subscriber should not receive order events");
+    }
+
+    #[tokio::test]
+    async fn test_disconnect_cleanup_no_leak() {
+        let broker = EphemeralBroker::new();
+        let pattern = TopicPattern::new("test.*").unwrap();
+
+        // Subscribe and immediately drop the receiver (simulating disconnect)
+        let (id, rx) = broker.subscribe(pattern.clone(), 10).await.unwrap();
+        assert_eq!(broker.subscription_count().await, 1);
+
+        // Drop the receiver
+        drop(rx);
+
+        // Unsubscribe explicitly (as the handler would on disconnect)
+        broker.unsubscribe(id).await;
+        assert_eq!(broker.subscription_count().await, 0);
+
+        // Publish should not panic/hang with no subscribers
+        let topic = Topic::new("test.thing").unwrap();
+        let event = Event {
+            topic: topic.clone(),
+            cursor: Cursor::EPHEMERAL,
+            timestamp_ms: 999,
+            payload: b"orphan".to_vec(),
+            headers: vec![],
+        };
+        broker.publish(&topic, event).await;
+
+        // Second subscriber should still work fine
+        let (_id2, mut rx2) = broker.subscribe(pattern, 10).await.unwrap();
+        assert_eq!(broker.subscription_count().await, 1);
+
+        let event2 = Event {
+            topic: topic.clone(),
+            cursor: Cursor::EPHEMERAL,
+            timestamp_ms: 1000,
+            payload: b"new".to_vec(),
+            headers: vec![],
+        };
+        broker.publish(&topic, event2).await;
+
+        let received = rx2.recv().await.unwrap();
+        assert_eq!(received.payload, b"new");
+    }
 }

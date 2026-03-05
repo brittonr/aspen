@@ -195,3 +195,54 @@ pub fn encrypt_data_key_for_age(recipient_str: &str, data_key: &[u8]) -> Result<
         reason: format!("armored output is not UTF-8: {e}"),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::sops_constants::DEFAULT_TRANSIT_KEY;
+    use super::super::sops_constants::DEFAULT_TRANSIT_MOUNT;
+    use super::*;
+
+    #[test]
+    fn to_key_array_accepts_32_bytes() {
+        let key = [0xCDu8; 32];
+        let arr = to_key_array(&key).unwrap();
+        assert_eq!(arr, key);
+    }
+
+    #[test]
+    fn to_key_array_rejects_wrong_lengths() {
+        assert!(to_key_array(&[]).is_err());
+        assert!(to_key_array(&[0u8; 31]).is_err());
+        assert!(to_key_array(&[0u8; 33]).is_err());
+        assert!(to_key_array(&[0u8; 64]).is_err());
+    }
+
+    #[test]
+    fn encrypt_data_key_for_age_round_trip() {
+        let identity = age::x25519::Identity::generate();
+        let data_key = [0x55u8; 32];
+        let encrypted = encrypt_data_key_for_age(&identity.to_public().to_string(), &data_key).unwrap();
+
+        // Should be ASCII-armored
+        assert!(encrypted.contains("-----BEGIN AGE ENCRYPTED FILE-----"));
+        assert!(encrypted.contains("-----END AGE ENCRYPTED FILE-----"));
+    }
+
+    #[test]
+    fn encrypt_data_key_for_age_invalid_recipient() {
+        let result = encrypt_data_key_for_age("not-a-valid-age-recipient", &[0u8; 32]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn encrypt_config_defaults() {
+        let cfg = EncryptConfig::default();
+        assert_eq!(cfg.input_path, PathBuf::new());
+        assert!(cfg.cluster_ticket.is_empty());
+        assert_eq!(cfg.transit_key, DEFAULT_TRANSIT_KEY);
+        assert_eq!(cfg.transit_mount, DEFAULT_TRANSIT_MOUNT);
+        assert!(cfg.age_recipients.is_empty());
+        assert!(cfg.encrypted_regex.is_none());
+        assert!(!cfg.in_place);
+    }
+}

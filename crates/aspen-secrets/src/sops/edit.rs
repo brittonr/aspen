@@ -151,3 +151,26 @@ async fn secure_delete(path: &PathBuf) {
     }
     let _ = tokio::fs::remove_file(path).await;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn secure_delete_removes_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secret.txt");
+        tokio::fs::write(&path, b"sensitive data").await.unwrap();
+        assert!(path.exists());
+
+        secure_delete(&path).await;
+        assert!(!path.exists());
+    }
+
+    #[tokio::test]
+    async fn secure_delete_nonexistent_file_is_no_op() {
+        let path = PathBuf::from("/tmp/aspen-test-nonexistent-file-12345");
+        // Should not panic on missing file
+        secure_delete(&path).await;
+    }
+}

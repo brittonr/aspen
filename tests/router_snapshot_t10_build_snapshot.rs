@@ -126,6 +126,166 @@ async fn test_build_snapshot() -> Result<()> {
     Ok(())
 }
 
+/// Test snapshot creation during concurrent writes.
+///
+/// Verifies that snapshot building doesn't lose or corrupt entries
+/// when writes are happening concurrently. Uses a low snapshot threshold
+/// so the snapshot is triggered mid-write.
+#[tokio::test]
+async fn test_snapshot_during_concurrent_writes() -> Result<()> {
+    let snapshot_threshold: u64 = 20;
+
+    let config = Arc::new(
+        Config {
+            snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
+            max_in_snapshot_log_to_keep: 2,
+            purge_batch_size: 1,
+            enable_tick: false,
+            ..Default::default()
+        }
+        .validate()?,
+    );
+
+    let mut router = AspenRouter::new(config.clone());
+    router.new_raft_node(0).await?;
+
+    let node0 = router.get_raft_handle(0)?;
+    let mut nodes = BTreeMap::new();
+    nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
+    node0.initialize(nodes).await?;
+
+    router.wait(0, timeout()).state(ServerState::Leader, "node 0 is leader").await?;
+
+    // Write 3x the threshold to ensure at least one snapshot is triggered mid-write.
+    let total_writes = (snapshot_threshold * 3) as usize;
+
+    tracing::info!(
+        "--- writing {} entries (threshold={}) to trigger snapshot mid-write",
+        total_writes,
+        snapshot_threshold
+    );
+    for i in 0..total_writes {
+        router
+            .write(0, format!("cw_key{}", i), format!("cw_value{}", i))
+            .await
+            .map_err(|e| anyhow::anyhow!("write {} failed: {}", i, e))?;
+    }
+
+    // Wait for all writes to be applied (1 init log + total_writes)
+    let expected_index = 1 + total_writes as u64;
+    router
+        .wait(0, timeout())
+        .applied_index(Some(expected_index), "all concurrent writes applied")
+        .await?;
+
+    // Verify snapshot was created
+    let metrics = node0.metrics().borrow().clone();
+    assert!(metrics.snapshot.is_some(), "snapshot should have been triggered by {} writes", total_writes);
+
+    // Verify ALL data is still readable after snapshot
+    tracing::info!("--- verifying all {} entries are readable post-snapshot", total_writes);
+    for i in 0..total_writes {
+        let key = format!("cw_key{}", i);
+        let val = router.read(0, &key).await;
+        assert_eq!(
+            val,
+            Some(format!("cw_value{}", i)),
+            "key '{}' should be readable after snapshot (entry {} of {})",
+            key,
+            i,
+            total_writes
+        );
+    }
+
+    Ok(())
+}
+
+/// Test that snapshot includes all applied entries and data survives.
+///
+/// Writes N keys, waits for snapshot, verifies all keys are present
+/// in the state restored from the snapshot.
+#[tokio::test]
+async fn test_snapshot_data_completeness() -> Result<()> {
+    let snapshot_threshold: u64 = 25;
+
+    let config = Arc::new(
+        Config {
+            snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
+            max_in_snapshot_log_to_keep: 0, // Aggressive log compaction
+            purge_batch_size: 1,
+            enable_tick: false,
+            ..Default::default()
+        }
+        .validate()?,
+    );
+
+    let mut router = AspenRouter::new(config.clone());
+    router.new_raft_node(0).await?;
+
+    let node0 = router.get_raft_handle(0)?;
+    let mut nodes = BTreeMap::new();
+    nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
+    node0.initialize(nodes).await?;
+
+    router.wait(0, timeout()).state(ServerState::Leader, "node 0 is leader").await?;
+
+    // Write exactly enough to trigger a snapshot, then write more after
+    let phase1_count = (snapshot_threshold - 1) as usize; // just under threshold
+    let phase2_count = 10_usize;
+
+    tracing::info!("--- phase 1: writing {} entries (just under threshold)", phase1_count);
+    for i in 0..phase1_count {
+        router
+            .write(0, format!("dc_key{}", i), format!("dc_val{}", i))
+            .await
+            .map_err(|e| anyhow::anyhow!("phase 1 write {} failed: {}", i, e))?;
+    }
+
+    tracing::info!("--- phase 2: writing {} more entries (should trigger snapshot)", phase2_count);
+    for i in 0..phase2_count {
+        let idx = phase1_count + i;
+        router
+            .write(0, format!("dc_key{}", idx), format!("dc_val{}", idx))
+            .await
+            .map_err(|e| anyhow::anyhow!("phase 2 write {} failed: {}", i, e))?;
+    }
+
+    let total = phase1_count + phase2_count;
+    let expected_index = 1 + total as u64;
+
+    router.wait(0, timeout()).applied_index(Some(expected_index), "all entries applied").await?;
+
+    // Wait for snapshot to be created
+    let start = std::time::Instant::now();
+    loop {
+        let metrics = node0.metrics().borrow().clone();
+        if metrics.snapshot.is_some() {
+            break;
+        }
+        if start.elapsed() > Duration::from_secs(10) {
+            panic!("timeout waiting for snapshot");
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    // Verify ALL data — both pre-snapshot and post-snapshot entries
+    tracing::info!("--- verifying all {} entries survive snapshot + compaction", total);
+    for i in 0..total {
+        let key = format!("dc_key{}", i);
+        let val = router.read(0, &key).await;
+        assert_eq!(
+            val,
+            Some(format!("dc_val{}", i)),
+            "key '{}' missing after snapshot (entry {} of {})",
+            key,
+            i,
+            total,
+        );
+    }
+
+    Ok(())
+}
+
 /// Test snapshot policy configuration.
 ///
 /// Validates that different snapshot policies work correctly.

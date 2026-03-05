@@ -203,6 +203,33 @@ mod tests {
         assert_eq!(provider.public_key(), loaded.public_key());
     }
 
+    #[test]
+    fn test_from_hex_rejects_empty() {
+        let result = NodeIdentityProvider::from_hex("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_hex_rejects_63_chars() {
+        // 63 hex chars (one short of the required 64)
+        let result = NodeIdentityProvider::from_hex(&"a".repeat(63));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_hex_rejects_65_chars() {
+        // 65 hex chars (one over the required 64)
+        let result = NodeIdentityProvider::from_hex(&"a".repeat(65));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_generate_produces_unique_keys() {
+        let p1 = NodeIdentityProvider::generate();
+        let p2 = NodeIdentityProvider::generate();
+        assert_ne!(p1.public_key(), p2.public_key());
+    }
+
     #[tokio::test]
     async fn test_load_or_generate_creates_file() {
         let dir = tempfile::tempdir().unwrap();
