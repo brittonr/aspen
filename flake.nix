@@ -2012,10 +2012,6 @@
                 aspenCliPackage = bins.full-aspen-cli;
               };
 
-              # Pijul version control test: repository management
-              # (init, list, info), channels (create, list, fork, delete,
-              # info), working directory (init, add, status, record),
-              # and checkout.
               # HTTP proxy test: TCP tunnel and HTTP forward proxy over
               # iroh QUIC. Two nodes — server (aspen-node with proxy) and
               # client (aspen-cli proxy commands). Tests tunnel creation,
@@ -2097,6 +2093,18 @@
               };
             }
             // lib.optionalAttrs (system == "x86_64-linux") {
+              # SNIX microVM boot test: verifies the full snix boot chain
+              # (snix-store virtiofs daemon → cloud-hypervisor → kernel +
+              # initrd → snix-init → VirtioFS mount). Requires nested KVM.
+              # Build: nix build .#checks.x86_64-linux.snix-boot-test --impure
+              snix-boot-test = import ./nix/tests/snix-boot.nix {
+                inherit pkgs;
+                snixBoot = import ./nix/snix-boot {
+                  inherit lib pkgs snix-src crane;
+                  rust-overlay = rust-overlay;
+                };
+              };
+
               # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.
               # MicroVM + AspenFs VirtioFS integration test: nginx in a Cloud
               # Hypervisor guest serving files from AspenFs in-memory KV store.
