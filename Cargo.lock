@@ -792,6 +792,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-castore"
+version = "0.1.0"
+dependencies = [
+ "aspen-blob",
+ "async-stream",
+ "async-trait",
+ "futures",
+ "hex",
+ "iroh 0.95.1",
+ "irpc",
+ "n0-error",
+ "n0-future",
+ "nix-compat",
+ "postcard",
+ "prost 0.13.5",
+ "serde",
+ "sha2 0.10.9",
+ "snafu",
+ "snix-castore",
+ "snix-store",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
 name = "aspen-ci"
 version = "0.1.0"
 dependencies = [

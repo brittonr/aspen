@@ -149,6 +149,9 @@ members = [
     "crates/aspen-calendar",
     # aspen-calendar-handler removed — now WASM plugin
 
+    # Nix castore over irpc
+    "crates/aspen-castore",
+
     # SOPS backend
     "crates/aspen-sops",
 

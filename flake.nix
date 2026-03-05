@@ -1992,6 +1992,17 @@
                 aspenCliPackage = bins.full-aspen-cli-ci;
               };
 
+              # SNIX store test: full SNIX storage stack end-to-end.
+              # Blob storage, directory metadata (snix:dir:), path info
+              # (snix:pathinfo:), Nix binary cache (query, stats, download),
+              # namespace isolation, and simulated CI build artifact flow.
+              # Build: nix build .#checks.x86_64-linux.snix-store-test
+              snix-store-test = import ./nix/tests/snix-store.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
+              };
+
               # Pijul version control test: repository management
               # (init, list, info), channels (create, list, fork, delete,
               # info), working directory (init, add, status, record),

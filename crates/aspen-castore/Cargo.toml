@@ -1,0 +1,55 @@
+[package]
+name = "aspen-castore"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Nix content-addressed store using snix traits, iroh-blobs backend, and irpc transport"
+
+[dependencies]
+# snix castore traits
+snix-castore = { workspace = true }
+
+# Aspen blob backend
+aspen-blob = { workspace = true }
+
+# irpc for RPC over QUIC
+irpc = { workspace = true }
+
+# iroh for P2P networking
+iroh = { version = "0.95.1", features = ["discovery-local-network"] }
+
+# Async
+tokio = { workspace = true, features = ["rt", "sync", "io-util"] }
+n0-future = { workspace = true }
+
+# Serialization (postcard via irpc)
+serde = { workspace = true }
+
+# Encoding
+prost = { workspace = true }
+postcard = { workspace = true }
+hex = "0.4"
+
+# Async helpers
+async-trait = "0.1"
+async-stream = { workspace = true }
+futures = { workspace = true }
+
+# Error handling
+snafu = "0.8"
+n0-error = "0.1"
+
+# Logging
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util"] }
+aspen-blob = { workspace = true }
+tempfile = "3.10"
+futures = { workspace = true }
+
+# For NAR ingestion tests
+snix-store = { workspace = true }
+nix-compat = { workspace = true }
+sha2 = "0.10"
+tokio-stream = "0.1"
