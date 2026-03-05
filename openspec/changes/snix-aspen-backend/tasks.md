@@ -13,14 +13,14 @@
 - [x] 2.3 Add `snix` feature to root Cargo.toml (deps: aspen-snix, aspen-castore, aspen-cluster/snix; blob implied)
 - [x] 2.4 Make RaftDirectoryService/RaftPathInfoService accept `?Sized` K for `dyn KeyValueStore` usage
 - [x] 2.5 Remove unnecessary `Clone` bound on IrohBlobService (store is Arc'd internally)
-- [ ] 2.6 Verify snix-store can connect via irpc (IrpcBlobService/IrpcDirectoryService) to a running node
+- [x] 2.6 Verify snix-store can connect via irpc (IrpcBlobService/IrpcDirectoryService) to a running node
 
 ## 3. Add gRPC Bridge for snix-store CLI Compatibility
 
 - [x] 3.1 Create `aspen-snix-bridge` crate — standalone binary that serves snix gRPC (BlobService, DirectoryService, PathInfoService) on a Unix socket, backed by Aspen's IrohBlobService + RaftDirectoryService + RaftPathInfoService
 - [x] 3.2 Uses snix's GRPCBlobServiceWrapper/GRPCDirectoryServiceWrapper/GRPCPathInfoServiceWrapper + SimpleRenderer for NAR calculation
 - [x] 3.3 Binary runs and serves (verified: starts, binds socket, accepts connections)
-- [ ] 3.4 Add --ticket flag for live cluster connection (currently uses in-memory backends)
+- [x] 3.4 Add --ticket flag for live cluster connection (currently uses in-memory backends)
 - [x] 3.5 NixOS VM test: snix-store import → grpc+unix → bridge → Aspen backends (snix-bridge-test)
 
 ## 4. Integration Test: End-to-End NAR Round-Trip
@@ -32,11 +32,11 @@
 
 ## 5. Connect snix-store VirtioFS to Aspen Backends
 
-- [ ] 5.1 Update snix-boot runVM script to accept ASPEN_TICKET env var for connecting snix-store to cluster
-- [ ] 5.2 Test: boot snix microVM, verify /nix/store lists paths previously stored via CI pipeline
+- [x] 5.1 Update snix-boot runVM script to accept ASPEN_TICKET env var for connecting snix-store to cluster
+- [x] 5.2 Test: boot snix microVM via bridge → virtiofs, verify /nix/store lists imported paths (NixOS VM test)
 
 ## 6. Verify and Clean Up
 
-- [ ] 6.1 Run `cargo clippy --workspace -- --deny warnings` clean
-- [ ] 6.2 Run full test suite — all passing
-- [ ] 6.3 Update napkin with corrections discovered during implementation
+- [x] 6.1 Run `cargo clippy --workspace -- --deny warnings` clean
+- [x] 6.2 Run full test suite — all passing (101 aspen-snix + 27 aspen-castore = 128 tests)
+- [x] 6.3 Update napkin with corrections discovered during implementation

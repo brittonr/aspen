@@ -2214,9 +2214,14 @@ name = "aspen-snix-bridge"
 version = "0.1.0"
 dependencies = [
  "aspen-blob",
+ "aspen-client",
+ "aspen-client-api",
  "aspen-core",
+ "aspen-kv-types",
  "aspen-snix",
  "aspen-testing",
+ "aspen-traits",
+ "async-trait",
  "clap",
  "snix-castore",
  "snix-store",

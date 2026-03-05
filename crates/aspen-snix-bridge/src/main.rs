@@ -2,25 +2,33 @@
 //!
 //! Runs a local gRPC server on a Unix socket that translates snix's
 //! BlobService/DirectoryService/PathInfoService gRPC protocol to Aspen-backed
-//! implementations. This lets `snix-store virtiofs` (or `snix-store daemon`)
-//! use Aspen's distributed storage:
+//! implementations.
 //!
+//! Two modes:
+//!
+//! **Standalone (in-memory)** — for local testing without a cluster:
 //! ```bash
-//! # Start the bridge
 //! aspen-snix-bridge --socket /tmp/aspen-castore.sock
+//! ```
 //!
-//! # Point snix-store at the bridge
+//! **Cluster-connected** — connects to a live Aspen cluster via ticket:
+//! ```bash
+//! aspen-snix-bridge --socket /tmp/aspen-castore.sock --ticket <cluster-ticket>
+//! ```
+//!
+//! Then point snix-store at the bridge:
+//! ```bash
 //! BLOB_SERVICE_ADDR=grpc+unix:///tmp/aspen-castore.sock \
 //! DIRECTORY_SERVICE_ADDR=grpc+unix:///tmp/aspen-castore.sock \
 //! PATH_INFO_SERVICE_ADDR=grpc+unix:///tmp/aspen-castore.sock \
 //!   snix-store virtiofs /tmp/snix.sock
 //! ```
-//!
-//! Currently uses in-memory backends for standalone testing.
-//! Future: connect to a live Aspen cluster via ticket.
+
+mod client_kv;
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use aspen_snix::IrohBlobService;
 use aspen_snix::RaftDirectoryService;
@@ -45,7 +53,15 @@ struct Args {
     /// Unix socket path for gRPC server.
     #[arg(long, default_value = "/tmp/aspen-castore.sock")]
     socket: PathBuf,
-    // Future: --ticket <cluster-ticket> for connecting to a live cluster
+
+    /// Aspen cluster ticket for connecting to a live cluster.
+    /// When omitted, uses in-memory backends for standalone testing.
+    #[arg(long)]
+    ticket: Option<String>,
+
+    /// RPC timeout in seconds for cluster communication.
+    #[arg(long, default_value_t = 10)]
+    timeout_secs: u64,
 }
 
 #[tokio::main]
@@ -67,19 +83,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::fs::create_dir_all(parent).await?;
     }
 
-    // Create Aspen-backed snix services.
-    // Currently uses in-memory backends for standalone testing.
-    // TODO: Accept --ticket and connect to a live cluster (IrpcBlobService etc.)
+    // Build snix services — either cluster-backed or in-memory
     use snix_castore::blobservice::BlobService;
     use snix_castore::directoryservice::DirectoryService;
     use snix_store::pathinfoservice::PathInfoService;
 
-    let blob_store = aspen_blob::InMemoryBlobStore::new();
-    let blob_svc: Arc<dyn BlobService> = Arc::new(IrohBlobService::new(blob_store));
-
-    let kv = Arc::new(aspen_testing::DeterministicKeyValueStore::new()) as Arc<dyn aspen_core::KeyValueStore>;
-    let dir_svc: Arc<dyn DirectoryService> = Arc::new(RaftDirectoryService::from_arc(kv.clone()));
-    let pathinfo_svc: Arc<dyn PathInfoService> = Arc::new(RaftPathInfoService::from_arc(kv));
+    let (blob_svc, dir_svc, pathinfo_svc): (Arc<dyn BlobService>, Arc<dyn DirectoryService>, Arc<dyn PathInfoService>) =
+        if let Some(ticket) = &args.ticket {
+            build_cluster_services(ticket, args.timeout_secs).await?
+        } else {
+            info!("no --ticket provided, using in-memory backends");
+            build_inmemory_services()
+        };
 
     // Create NAR calculation service (renders NARs from blob+dir data)
     let nar_calc = Box::new(SimpleRenderer::new(blob_svc.clone(), dir_svc.clone()));
@@ -112,4 +127,61 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = tokio::fs::remove_file(&args.socket).await;
 
     Ok(())
+}
+
+/// Build snix services backed by a live Aspen cluster via ticket.
+///
+/// - BlobService: `RpcBlobStore` → `IrohBlobService` (blob ops via cluster RPC)
+/// - DirectoryService: `ClientKvAdapter` → `RaftDirectoryService` (KV via cluster RPC)
+/// - PathInfoService: `ClientKvAdapter` → `RaftPathInfoService` (KV via cluster RPC)
+async fn build_cluster_services(
+    ticket: &str,
+    timeout_secs: u64,
+) -> Result<
+    (
+        Arc<dyn snix_castore::blobservice::BlobService>,
+        Arc<dyn snix_castore::directoryservice::DirectoryService>,
+        Arc<dyn snix_store::pathinfoservice::PathInfoService>,
+    ),
+    Box<dyn std::error::Error>,
+> {
+    let timeout = Duration::from_secs(timeout_secs);
+
+    // Create two clients: one for blob ops, one for KV ops.
+    // AspenClient doesn't impl Clone, so we connect twice.
+    let blob_client = aspen_client::AspenClient::connect(ticket, timeout, None).await?;
+    let kv_client = aspen_client::AspenClient::connect(ticket, timeout, None).await?;
+
+    info!("connected to Aspen cluster");
+
+    // BlobService: RpcBlobStore wraps AspenClient for remote blob operations
+    let rpc_blob_store = aspen_client::RpcBlobStore::new(blob_client);
+    let blob_svc: Arc<dyn snix_castore::blobservice::BlobService> = Arc::new(IrohBlobService::new(rpc_blob_store));
+
+    // DirectoryService + PathInfoService: ClientKvAdapter wraps AspenClient for KV
+    let kv = Arc::new(client_kv::ClientKvAdapter::new(Arc::new(kv_client))) as Arc<dyn aspen_core::KeyValueStore>;
+    let dir_svc: Arc<dyn snix_castore::directoryservice::DirectoryService> =
+        Arc::new(RaftDirectoryService::from_arc(kv.clone()));
+    let pathinfo_svc: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
+        Arc::new(RaftPathInfoService::from_arc(kv));
+
+    Ok((blob_svc, dir_svc, pathinfo_svc))
+}
+
+/// Build snix services with in-memory backends for standalone testing.
+fn build_inmemory_services() -> (
+    Arc<dyn snix_castore::blobservice::BlobService>,
+    Arc<dyn snix_castore::directoryservice::DirectoryService>,
+    Arc<dyn snix_store::pathinfoservice::PathInfoService>,
+) {
+    let blob_store = aspen_blob::InMemoryBlobStore::new();
+    let blob_svc: Arc<dyn snix_castore::blobservice::BlobService> = Arc::new(IrohBlobService::new(blob_store));
+
+    let kv = Arc::new(aspen_testing::DeterministicKeyValueStore::new()) as Arc<dyn aspen_core::KeyValueStore>;
+    let dir_svc: Arc<dyn snix_castore::directoryservice::DirectoryService> =
+        Arc::new(RaftDirectoryService::from_arc(kv.clone()));
+    let pathinfo_svc: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
+        Arc::new(RaftPathInfoService::from_arc(kv));
+
+    (blob_svc, dir_svc, pathinfo_svc)
 }

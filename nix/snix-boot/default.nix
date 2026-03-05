@@ -16,6 +16,7 @@
   snix-src,
   crane,
   rust-overlay ? null,
+  aspen-snix-bridge ? null,
 }: let
   # ── snix-store binary ─────────────────────────────────────────────
   # Build the snix-store CLI from the snix workspace source.
@@ -157,13 +158,20 @@
   #   CH_NUM_CPUS=2      - number of vCPUs
   #   CH_MEM_SIZE=512M   - memory size
   #   CH_CMDLINE=""      - kernel cmdline (snix.find, snix.shell, snix.run=..., init=...)
+  #   ASPEN_TICKET=""    - Aspen cluster ticket for distributed storage
+  #                        (when set, starts aspen-snix-bridge and points
+  #                         snix-store at it via gRPC Unix socket)
   runVM = pkgs.writers.writeBashBin "run-snix-vm" ''
     set -euo pipefail
 
     tempdir=$(mktemp -d)
+    bridge_pid=""
 
     cleanup() {
       kill $virtiofsd_pid 2>/dev/null || true
+      if [[ -n "''${bridge_pid-}" ]]; then
+        kill $bridge_pid 2>/dev/null || true
+      fi
       if [[ -n "''${tempdir-}" ]]; then
         chmod -R u+rw "$tempdir" 2>/dev/null || true
         rm -rf "$tempdir"
@@ -174,11 +182,48 @@
     CH_NUM_CPUS="''${CH_NUM_CPUS:-2}"
     CH_MEM_SIZE="''${CH_MEM_SIZE:-512M}"
     CH_CMDLINE="''${CH_CMDLINE:-snix.find}"
+    ASPEN_TICKET="''${ASPEN_TICKET:-}"
 
-    # If store backend env vars aren't set, use in-memory defaults
-    export BLOB_SERVICE_ADDR="''${BLOB_SERVICE_ADDR:-memory:}"
-    export DIRECTORY_SERVICE_ADDR="''${DIRECTORY_SERVICE_ADDR:-redb+memory:}"
-    export PATH_INFO_SERVICE_ADDR="''${PATH_INFO_SERVICE_ADDR:-redb+memory:}"
+    if [[ -n "$ASPEN_TICKET" ]]; then
+      ${
+      if aspen-snix-bridge != null
+      then ''
+        # Start the gRPC bridge connecting to the Aspen cluster
+        echo "Starting aspen-snix-bridge (cluster-connected mode)..."
+        ${aspen-snix-bridge}/bin/aspen-snix-bridge \
+          --socket "$tempdir/bridge.sock" \
+          --ticket "$ASPEN_TICKET" &
+        bridge_pid=$!
+
+        # Wait for bridge socket
+        for i in $(seq 1 50); do
+          [ -e "$tempdir/bridge.sock" ] && break
+          sleep 0.1
+        done
+
+        if [ ! -e "$tempdir/bridge.sock" ]; then
+          echo "ERROR: aspen-snix-bridge socket did not appear"
+          exit 1
+        fi
+        echo "aspen-snix-bridge ready"
+
+        # Point snix-store at the bridge
+        export BLOB_SERVICE_ADDR="grpc+unix://$tempdir/bridge.sock"
+        export DIRECTORY_SERVICE_ADDR="grpc+unix://$tempdir/bridge.sock"
+        export PATH_INFO_SERVICE_ADDR="grpc+unix://$tempdir/bridge.sock"
+      ''
+      else ''
+        echo "ERROR: ASPEN_TICKET set but aspen-snix-bridge not available"
+        echo "Pass aspen-snix-bridge to snix-boot to enable cluster mode"
+        exit 1
+      ''
+    }
+    else
+      # No ticket — use in-memory defaults or caller-provided env vars
+      export BLOB_SERVICE_ADDR="''${BLOB_SERVICE_ADDR:-memory:}"
+      export DIRECTORY_SERVICE_ADDR="''${DIRECTORY_SERVICE_ADDR:-redb+memory:}"
+      export PATH_INFO_SERVICE_ADDR="''${PATH_INFO_SERVICE_ADDR:-redb+memory:}"
+    fi
 
     # Spin up the virtiofs daemon
     ${snix-store}/bin/snix-store virtiofs $tempdir/snix.sock &
@@ -216,4 +261,7 @@ in {
 
   # For use in VM tests
   inherit uroot;
+
+  # Pass-through so callers can check availability
+  inherit aspen-snix-bridge;
 }

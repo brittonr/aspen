@@ -16,6 +16,13 @@ aspen-blob = { workspace = true }
 aspen-core = { workspace = true }
 aspen-testing = { workspace = true }
 
+# Aspen client (for --ticket cluster connection)
+aspen-client = { workspace = true, features = ["blob-store"] }
+aspen-client-api = { workspace = true }
+aspen-kv-types = { workspace = true }
+aspen-traits = { workspace = true }
+async-trait = "0.1"
+
 # SNIX proto wrappers (gRPC server-side)
 snix-castore = { workspace = true }
 snix-store = { workspace = true }

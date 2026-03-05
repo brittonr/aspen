@@ -2128,6 +2128,20 @@
                   rust-overlay = rust-overlay;
                 };
               };
+            }
+            // lib.optionalAttrs (system == "x86_64-linux" && hasExternalRepos) {
+              # SNIX bridge + virtiofs round-trip: import a file via the bridge,
+              # then boot a microVM that reads it back from /nix/store.
+              # Requires nested KVM + external repos (snix-src).
+              # Build: nix build .#checks.x86_64-linux.snix-bridge-virtiofs-test --impure
+              snix-bridge-virtiofs-test = import ./nix/tests/snix-bridge-virtiofs.nix {
+                inherit pkgs;
+                snixBridgePackage = bins.full-aspen-snix-bridge;
+                snixBoot = import ./nix/snix-boot {
+                  inherit lib pkgs snix-src crane;
+                  rust-overlay = rust-overlay;
+                };
+              };
 
               # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.
               # MicroVM + AspenFs VirtioFS integration test: nginx in a Cloud
