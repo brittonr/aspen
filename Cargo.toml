@@ -140,6 +140,7 @@ members = [
     # Nix integration
     "crates/aspen-cache",
     "crates/aspen-snix",
+    "crates/aspen-snix-bridge",
 
     "crates/aspen-nix-handler",
 

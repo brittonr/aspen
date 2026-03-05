@@ -17,9 +17,11 @@
 
 ## 3. Add gRPC Bridge for snix-store CLI Compatibility
 
-- [ ] 3.1 Add a gRPC listener to the node (or a sidecar binary) that translates snix's gRPC protocol to irpc/Raft KV calls — this lets `snix-store virtiofs --blob-service-addr grpc+unix:...` connect to Aspen
-- [ ] 3.2 Alternatively: register Aspen backends directly in snix's composition registry with a custom URL scheme (e.g., `aspen+irpc://`)
-- [ ] 3.3 Test: `snix-store virtiofs` connects to the bridge and serves /nix/store paths from Aspen
+- [x] 3.1 Create `aspen-snix-bridge` crate — standalone binary that serves snix gRPC (BlobService, DirectoryService, PathInfoService) on a Unix socket, backed by Aspen's IrohBlobService + RaftDirectoryService + RaftPathInfoService
+- [x] 3.2 Uses snix's GRPCBlobServiceWrapper/GRPCDirectoryServiceWrapper/GRPCPathInfoServiceWrapper + SimpleRenderer for NAR calculation
+- [x] 3.3 Binary runs and serves (verified: starts, binds socket, accepts connections)
+- [ ] 3.4 Add --ticket flag for live cluster connection (currently uses in-memory backends)
+- [ ] 3.5 Test: `snix-store virtiofs` connects to bridge via `grpc+unix:///path/to/sock`
 
 ## 4. Integration Test: End-to-End NAR Round-Trip
 

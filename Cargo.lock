@@ -2210,6 +2210,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-snix-bridge"
+version = "0.1.0"
+dependencies = [
+ "aspen-blob",
+ "aspen-core",
+ "aspen-snix",
+ "aspen-testing",
+ "clap",
+ "snix-castore",
+ "snix-store",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.13.1",
+ "tonic-health",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "aspen-sops"
 version = "0.1.0"
 dependencies = [
