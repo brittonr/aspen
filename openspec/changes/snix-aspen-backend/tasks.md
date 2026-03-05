@@ -21,7 +21,7 @@
 - [x] 3.2 Uses snix's GRPCBlobServiceWrapper/GRPCDirectoryServiceWrapper/GRPCPathInfoServiceWrapper + SimpleRenderer for NAR calculation
 - [x] 3.3 Binary runs and serves (verified: starts, binds socket, accepts connections)
 - [ ] 3.4 Add --ticket flag for live cluster connection (currently uses in-memory backends)
-- [ ] 3.5 Test: `snix-store virtiofs` connects to bridge via `grpc+unix:///path/to/sock`
+- [x] 3.5 NixOS VM test: snix-store import → grpc+unix → bridge → Aspen backends (snix-bridge-test)
 
 ## 4. Integration Test: End-to-End NAR Round-Trip
 
