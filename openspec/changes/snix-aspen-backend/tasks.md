@@ -23,9 +23,10 @@
 
 ## 4. Integration Test: End-to-End NAR Round-Trip
 
-- [ ] 4.1 Write a test that stores a NAR via ingest_nar_and_hash through the Aspen backends and retrieves it via PathInfoService
-- [ ] 4.2 Write a test that verifies BlobService round-trip (write blob, read back, verify BLAKE3 digest)
-- [ ] 4.3 Write a test that verifies DirectoryService round-trip (put directory tree, get_recursive, verify structure)
+- [x] 4.1 Write NAR round-trip test: ingest_nar_and_hash → BlobService + DirectoryService → PathInfoService put/get
+- [x] 4.2 Test helloworld NAR (single file), complicated NAR (directory tree), symlink NAR
+- [x] 4.3 Test idempotent ingestion (same NAR twice produces same results)
+- [x] 4.4 Test PathInfo list after multiple puts
 
 ## 5. Connect snix-store VirtioFS to Aspen Backends
 
