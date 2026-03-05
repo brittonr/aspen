@@ -363,6 +363,7 @@ impl NodeBuilder {
             federation_identity: None,
             federation_trust_manager: None,
             federation_resource_settings: None,
+            ephemeral_broker: None,
         })
     }
 }
@@ -391,6 +392,9 @@ pub struct Node {
     /// Federation resource settings (if federation is enabled).
     /// Uses tokio::sync::RwLock for async compatibility with FederationResourceResolver.
     federation_resource_settings: Option<Arc<tokio::sync::RwLock<HashMap<FederatedId, FederationSettings>>>>,
+    /// Ephemeral pub/sub broker for fire-and-forget event streaming.
+    /// Created during router spawn, shared with EphemeralProtocolHandler.
+    ephemeral_broker: Option<Arc<aspen_hooks::pubsub::EphemeralBroker>>,
 }
 
 #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
@@ -434,6 +438,15 @@ impl Node {
     /// Access the KeyValueStore interface for key-value operations.
     pub fn kv_store(&self) -> &dyn KeyValueStore {
         self.handle.storage.raft_node.as_ref()
+    }
+
+    /// Get the ephemeral pub/sub broker.
+    ///
+    /// Available after `spawn_router()` or `spawn_router_with_blobs()` is called.
+    /// Use this to publish ephemeral events that are streamed to connected subscribers
+    /// without Raft consensus.
+    pub fn ephemeral_broker(&self) -> Option<&Arc<aspen_hooks::pubsub::EphemeralBroker>> {
+        self.ephemeral_broker.as_ref()
     }
 
     /// Get the federation cluster identity (if federation is enabled).
@@ -623,6 +636,19 @@ impl Node {
         builder = builder.accept(CLIENT_ALPN, client_handler);
         tracing::info!("registered Client RPC protocol handler (ALPN: aspen-client)");
 
+        // Add ephemeral pub/sub protocol handler
+        // Enables fire-and-forget event streaming without Raft consensus
+        {
+            use aspen_hooks::pubsub::ephemeral::handler::EPHEMERAL_ALPN;
+            use aspen_hooks::pubsub::ephemeral::handler::EphemeralProtocolHandler;
+
+            let broker = Arc::new(aspen_hooks::pubsub::EphemeralBroker::new());
+            let ephemeral_handler = EphemeralProtocolHandler::new(Arc::clone(&broker));
+            builder = builder.accept(EPHEMERAL_ALPN, ephemeral_handler);
+            self.ephemeral_broker = Some(broker);
+            tracing::info!("registered ephemeral pub/sub protocol handler (ALPN: aspen-ephemeral/0)");
+        }
+
         // Add federation handler if enabled
         if self.handle.config.federation.is_enabled {
             let fed_config = &self.handle.config.federation;
@@ -785,6 +811,18 @@ impl Node {
         let client_handler = ClientProtocolHandler::new(client_context);
         builder = builder.accept(CLIENT_ALPN, client_handler);
         tracing::info!("registered Client RPC protocol handler (ALPN: aspen-client)");
+
+        // Add ephemeral pub/sub protocol handler
+        {
+            use aspen_hooks::pubsub::ephemeral::handler::EPHEMERAL_ALPN;
+            use aspen_hooks::pubsub::ephemeral::handler::EphemeralProtocolHandler;
+
+            let broker = Arc::new(aspen_hooks::pubsub::EphemeralBroker::new());
+            let ephemeral_handler = EphemeralProtocolHandler::new(Arc::clone(&broker));
+            builder = builder.accept(EPHEMERAL_ALPN, ephemeral_handler);
+            self.ephemeral_broker = Some(broker);
+            tracing::info!("registered ephemeral pub/sub protocol handler (ALPN: aspen-ephemeral/0)");
+        }
 
         // Register the blobs protocol handler
         builder = builder.accept(iroh_blobs::ALPN, blobs_handler);

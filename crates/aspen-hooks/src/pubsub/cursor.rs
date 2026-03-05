@@ -43,6 +43,13 @@ impl Cursor {
     /// events and only receive new ones as they are published.
     pub const LATEST: Cursor = Cursor(u64::MAX);
 
+    /// Cursor for ephemeral (non-persistent) events.
+    ///
+    /// Ephemeral events are not stored in Raft and have no log index.
+    /// This sentinel value indicates the event was delivered via
+    /// in-memory channels without durability guarantees.
+    pub const EPHEMERAL: Cursor = Cursor(u64::MAX - 1);
+
     /// Create a cursor from a specific Raft log index.
     ///
     /// Use this to resume from a previously saved cursor position.
