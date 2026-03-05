@@ -1572,6 +1572,16 @@
                   doCheck = false;
                 }
               );
+              # gRPC bridge: snix-store CLI ↔ Aspen distributed storage
+              full-aspen-snix-bridge = craneLib.buildPackage (
+                fullCommonArgs
+                // {
+                  pname = "aspen-snix-bridge";
+                  version = "0.1.0";
+                  cargoExtraArgs = "-p aspen-snix-bridge --bin aspen-snix-bridge";
+                  doCheck = false;
+                }
+              );
             };
         in
           bins
@@ -2103,6 +2113,19 @@
                   inherit lib pkgs snix-src crane;
                   rust-overlay = rust-overlay;
                 };
+              };
+
+              # snix gRPC bridge test: import files via snix-store → bridge → Aspen backends
+              # Build: nix build .#checks.x86_64-linux.snix-bridge-test
+              snix-bridge-test = import ./nix/tests/snix-bridge.nix {
+                inherit pkgs;
+                snixBridgePackage = bins.full-aspen-snix-bridge;
+                snixStorePackage =
+                  (import ./nix/snix-boot {
+                    inherit lib pkgs snix-src crane;
+                    rust-overlay = rust-overlay;
+                  })
+                  .snix-store;
               };
 
               # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.
