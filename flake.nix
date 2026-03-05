@@ -2102,19 +2102,7 @@
                 aspenNetPackage = bins.full-aspen-net-daemon;
               };
             }
-            // lib.optionalAttrs (system == "x86_64-linux") {
-              # SNIX microVM boot test: verifies the full snix boot chain
-              # (snix-store virtiofs daemon → cloud-hypervisor → kernel +
-              # initrd → snix-init → VirtioFS mount). Requires nested KVM.
-              # Build: nix build .#checks.x86_64-linux.snix-boot-test --impure
-              snix-boot-test = import ./nix/tests/snix-boot.nix {
-                inherit pkgs;
-                snixBoot = import ./nix/snix-boot {
-                  inherit lib pkgs snix-src crane;
-                  rust-overlay = rust-overlay;
-                };
-              };
-
+            // lib.optionalAttrs (system == "x86_64-linux" && hasExternalRepos) {
               # snix gRPC bridge test: import files via snix-store → bridge → Aspen backends
               # Build: nix build .#checks.x86_64-linux.snix-bridge-test
               snix-bridge-test = import ./nix/tests/snix-bridge.nix {
@@ -2126,6 +2114,19 @@
                     rust-overlay = rust-overlay;
                   })
                   .snix-store;
+              };
+            }
+            // lib.optionalAttrs (system == "x86_64-linux") {
+              # SNIX microVM boot test: verifies the full snix boot chain
+              # (snix-store virtiofs daemon → cloud-hypervisor → kernel +
+              # initrd → snix-init → VirtioFS mount). Requires nested KVM.
+              # Build: nix build .#checks.x86_64-linux.snix-boot-test --impure
+              snix-boot-test = import ./nix/tests/snix-boot.nix {
+                inherit pkgs;
+                snixBoot = import ./nix/snix-boot {
+                  inherit lib pkgs snix-src crane;
+                  rust-overlay = rust-overlay;
+                };
               };
 
               # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.
