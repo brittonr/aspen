@@ -25,7 +25,7 @@
     # SNIX - Nix store implementation in Rust
     # Used for content-addressed storage and Nix binary cache integration
     snix-src = {
-      url = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559";
+      url = "git+https://git.snix.dev/snix/snix.git?rev=16ce7fb4b807f03a5a6f751fed54a2fba60f970a";
       flake = false;
     };
 
@@ -251,7 +251,7 @@
           allRefs = true;
         };
 
-        snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559"'';
+        snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=16ce7fb4b807f03a5a6f751fed54a2fba60f970a#16ce7fb4b807f03a5a6f751fed54a2fba60f970a"'';
         src = pkgs.runCommand "aspen-src-patched" {} ''
           cp -r ${rawSrc} $out
           chmod -R u+w $out
@@ -3243,6 +3243,21 @@
                   in
                     nginxVm.config.microvm.runner.cloud-hypervisor;
                 }
+                // (let
+                  snixBoot = import ./nix/snix-boot {
+                    inherit lib pkgs snix-src crane;
+                    rust-overlay = rust-overlay;
+                  };
+                in {
+                  # ── SNIX Boot Components ──────────────────────────────
+                  # Build: nix build .#snix-store
+                  # Build: nix build .#snix-boot-runVM
+                  # Run:   CH_CMDLINE=snix.find ./result/bin/run-snix-vm
+                  snix-store = snixBoot.snix-store;
+                  snix-boot-kernel = snixBoot.kernel;
+                  snix-boot-initrd = snixBoot.initrd;
+                  snix-boot-runVM = snixBoot.runVM;
+                })
             );
         }
         // {
