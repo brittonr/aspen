@@ -41,9 +41,17 @@ use crate::constants::STORE_PATH_DIGEST_LENGTH;
 /// Stores PathInfo metadata as protobuf-encoded values, keyed by the 20-byte
 /// Nix store path digest. Provides linearizable access to store path metadata
 /// across the cluster.
-#[derive(Clone)]
-pub struct RaftPathInfoService<K> {
+pub struct RaftPathInfoService<K: ?Sized> {
     kv: Arc<K>,
+}
+
+// Manual Clone: Arc is always cloneable regardless of K
+impl<K: ?Sized> Clone for RaftPathInfoService<K> {
+    fn clone(&self) -> Self {
+        Self {
+            kv: Arc::clone(&self.kv),
+        }
+    }
 }
 
 impl<K> RaftPathInfoService<K> {
@@ -51,7 +59,9 @@ impl<K> RaftPathInfoService<K> {
     pub fn new(kv: K) -> Self {
         Self { kv: Arc::new(kv) }
     }
+}
 
+impl<K: ?Sized> RaftPathInfoService<K> {
     /// Create a new RaftPathInfoService from an Arc'd KV store.
     pub fn from_arc(kv: Arc<K>) -> Self {
         Self { kv }
@@ -67,7 +77,7 @@ impl<K> RaftPathInfoService<K> {
 
 #[async_trait]
 impl<K> PathInfoService for RaftPathInfoService<K>
-where K: aspen_core::KeyValueStore + Send + Sync + 'static
+where K: aspen_core::KeyValueStore + Send + Sync + 'static + ?Sized
 {
     #[instrument(skip(self), fields(digest = hex::encode(digest)))]
     async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, Error> {

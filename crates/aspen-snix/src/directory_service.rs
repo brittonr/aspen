@@ -41,12 +41,12 @@ use crate::constants::MAX_RECURSIVE_BUFFER;
 ///
 /// Stores directory metadata as protobuf-encoded values, keyed by BLAKE3 digest.
 /// Provides linearizable access to directory structures across the cluster.
-pub struct RaftDirectoryService<K> {
+pub struct RaftDirectoryService<K: ?Sized> {
     kv: Arc<K>,
 }
 
 // Manual Clone impl: Arc is always cloneable regardless of K
-impl<K> Clone for RaftDirectoryService<K> {
+impl<K: ?Sized> Clone for RaftDirectoryService<K> {
     fn clone(&self) -> Self {
         Self {
             kv: Arc::clone(&self.kv),
@@ -59,7 +59,9 @@ impl<K> RaftDirectoryService<K> {
     pub fn new(kv: K) -> Self {
         Self { kv: Arc::new(kv) }
     }
+}
 
+impl<K: ?Sized> RaftDirectoryService<K> {
     /// Create a new RaftDirectoryService from an Arc'd KV store.
     pub fn from_arc(kv: Arc<K>) -> Self {
         Self { kv }
@@ -73,7 +75,7 @@ impl<K> RaftDirectoryService<K> {
 
 #[async_trait]
 impl<K> DirectoryService for RaftDirectoryService<K>
-where K: aspen_core::KeyValueStore + Send + Sync + 'static
+where K: aspen_core::KeyValueStore + Send + Sync + 'static + ?Sized
 {
     #[instrument(skip(self), fields(digest = %digest))]
     async fn get(&self, digest: &B3Digest) -> Result<Option<Directory>, Error> {
@@ -206,12 +208,12 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static
 /// Directories are written in leaves-to-root order by the caller.
 /// We store each directory as it comes in and track the last digest
 /// as the root.
-pub struct RaftDirectoryPutter<K> {
+pub struct RaftDirectoryPutter<K: ?Sized> {
     kv: Arc<K>,
     last_digest: Option<B3Digest>,
 }
 
-impl<K> RaftDirectoryPutter<K> {
+impl<K: ?Sized> RaftDirectoryPutter<K> {
     fn new(kv: Arc<K>) -> Self {
         Self { kv, last_digest: None }
     }
@@ -219,7 +221,7 @@ impl<K> RaftDirectoryPutter<K> {
 
 #[async_trait]
 impl<K> DirectoryPutter for RaftDirectoryPutter<K>
-where K: aspen_core::KeyValueStore + Send + Sync + 'static
+where K: aspen_core::KeyValueStore + Send + Sync + 'static + ?Sized
 {
     async fn put(&mut self, directory: Directory) -> Result<(), Error> {
         // Convert to protobuf and compute digest

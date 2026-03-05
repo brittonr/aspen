@@ -124,6 +124,19 @@ impl RouterBuilder {
         self
     }
 
+    /// Register the SNIX castore protocol handler (optional).
+    ///
+    /// Serves snix BlobService and DirectoryService over irpc/QUIC,
+    /// enabling remote snix tooling to use the cluster as a content-addressed store.
+    ///
+    /// ALPN: `aspen-castore/0`
+    #[cfg(feature = "snix")]
+    pub fn castore<C: iroh::protocol::ProtocolHandler>(mut self, handler: C) -> Self {
+        self.builder = self.builder.accept(aspen_castore::CASTORE_ALPN, handler);
+        tracing::info!("registered SNIX castore protocol handler (ALPN: aspen-castore/0)");
+        self
+    }
+
     /// Finalize the router configuration and spawn it.
     ///
     /// Automatically registers gossip if enabled on the endpoint.

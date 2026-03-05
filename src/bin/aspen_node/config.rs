@@ -8,6 +8,7 @@ use aspen::cluster::bootstrap::load_config;
 use aspen::cluster::config::IrohConfig;
 use aspen::cluster::config::NodeConfig;
 use clap::Parser;
+#[allow(unused_imports)]
 use tracing::info;
 
 use crate::args::Args;

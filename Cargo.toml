@@ -279,6 +279,7 @@ aspen-ci-executor-shell = { path = "crates/aspen-ci-executor-shell" }
 aspen-ci-executor-nix = { path = "crates/aspen-ci-executor-nix" }
 aspen-ci-executor-vm = { path = "crates/aspen-ci-executor-vm" }
 aspen-cache = { path = "crates/aspen-cache" }
+aspen-castore = { path = "crates/aspen-castore" }
 aspen-snix = { path = "crates/aspen-snix" }
 
 aspen-nix-handler = { path = "crates/aspen-nix-handler" }
@@ -345,6 +346,7 @@ aspen-automerge = { workspace = true, optional = true }
 aspen-ci = { workspace = true, optional = true }
 aspen-cache = { workspace = true, optional = true }
 aspen-snix = { workspace = true, optional = true }
+aspen-castore = { workspace = true, optional = true }
 snix-castore = { workspace = true, optional = true }
 snix-store = { workspace = true, optional = true }
 
@@ -433,7 +435,7 @@ cloud-hypervisor-client = "0.3"
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
 default = []
 
-full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server"]
+full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix"]
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
@@ -464,6 +466,7 @@ net = ["dep:aspen-net", "proxy", "aspen-rpc-handlers/net"]
 # contacts and calendar are now WASM plugins (aspen-plugins repo)
 federation = ["aspen-cluster/federation"]
 relay-server = ["aspen-cluster/relay-server"]
+snix = ["dep:aspen-snix", "dep:aspen-castore", "blob", "aspen-cluster/snix"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]

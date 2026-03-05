@@ -85,6 +85,7 @@ pub(super) fn build_iroh_config_from_node_config(config: &NodeConfig) -> Result<
 /// When the `relay-server` feature is enabled and relay server config is present,
 /// spawns an embedded relay server and configures the endpoint to use it.
 pub(super) async fn initialize_iroh_endpoint(config: &NodeConfig) -> Result<Arc<IrohEndpointManager>> {
+    #[allow(unused_mut)]
     let mut iroh_config =
         build_iroh_config_from_node_config(config).context("failed to build Iroh config from NodeConfig")?;
 

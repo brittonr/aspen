@@ -74,7 +74,7 @@ fn iroh_hash_to_b3_digest(hash: &iroh_blobs::Hash) -> B3Digest {
 
 #[async_trait]
 impl<S> BlobService for IrohBlobService<S>
-where S: aspen_blob::BlobStore + Clone + 'static
+where S: aspen_blob::BlobStore + 'static
 {
     #[instrument(skip(self), fields(digest = %digest))]
     async fn has(&self, digest: &B3Digest) -> io::Result<bool> {

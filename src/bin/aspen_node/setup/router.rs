@@ -89,6 +89,24 @@ pub fn setup_router(
         let blobs_handler = blob_store.protocol_handler();
         builder = builder.accept(iroh_blobs::ALPN, blobs_handler);
         info!("Blobs protocol handler registered");
+
+        // Add SNIX castore protocol handler (blob + directory services over irpc)
+        // This enables snix tooling (e.g. IrpcBlobService/IrpcDirectoryService) to
+        // use the cluster as a content-addressed store via QUIC.
+        #[cfg(feature = "snix")]
+        {
+            use aspen_castore::CASTORE_ALPN;
+            use aspen_castore::CastoreServer;
+            use aspen_snix::IrohBlobService;
+            use aspen_snix::RaftDirectoryService;
+
+            let snix_blob = IrohBlobService::from_arc(blob_store.clone());
+            let snix_dir = RaftDirectoryService::from_arc(kv_store.clone());
+            let castore_server = CastoreServer::new(snix_blob, snix_dir);
+            let castore_handler = castore_server.into_protocol_handler();
+            builder = builder.accept(CASTORE_ALPN, castore_handler);
+            info!("SNIX castore protocol handler registered (ALPN: aspen-castore/0)");
+        }
     }
 
     // Add docs sync protocol handler if docs sync is enabled

@@ -33,6 +33,7 @@ aspen-hooks = { path = "../aspen-hooks", optional = true }
 aspen-cluster-bridges = { path = "../aspen-cluster-bridges", optional = true }
 aspen-nickel = { path = "../aspen-nickel", optional = true }
 aspen-secrets = { path = "../aspen-secrets", optional = true }
+aspen-castore = { path = "../aspen-castore", optional = true }
 
 # Networking and P2P
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
@@ -105,3 +106,4 @@ hooks = ["dep:aspen-hooks", "dep:aspen-cluster-bridges", "aspen-cluster-bridges?
 nickel = ["dep:aspen-nickel"]
 proxy = ["dep:aspen-proxy"]
 relay-server = ["dep:iroh-relay"]
+snix = ["dep:aspen-castore", "blob"]

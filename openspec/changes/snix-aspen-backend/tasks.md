@@ -8,9 +8,12 @@
 
 ## 2. Wire CastoreServer into Iroh Router
 
-- [ ] 2.1 Add `castore()` method to RouterBuilder in aspen-cluster for CASTORE_ALPN registration
-- [ ] 2.2 Construct CastoreServer in endpoint_manager using node's blob store + a directory store and register on router
-- [ ] 2.3 Verify snix-store can connect via irpc (IrpcBlobService/IrpcDirectoryService) to a running node
+- [x] 2.1 Add `castore()` method to RouterBuilder in aspen-cluster for CASTORE_ALPN registration
+- [x] 2.2 Wire CastoreServer in setup_router (aspen-node binary) with IrohBlobService + RaftDirectoryService, gated on `snix` feature
+- [x] 2.3 Add `snix` feature to root Cargo.toml (deps: aspen-snix, aspen-castore, aspen-cluster/snix; blob implied)
+- [x] 2.4 Make RaftDirectoryService/RaftPathInfoService accept `?Sized` K for `dyn KeyValueStore` usage
+- [x] 2.5 Remove unnecessary `Clone` bound on IrohBlobService (store is Arc'd internally)
+- [ ] 2.6 Verify snix-store can connect via irpc (IrpcBlobService/IrpcDirectoryService) to a running node
 
 ## 3. Add gRPC Bridge for snix-store CLI Compatibility
 
