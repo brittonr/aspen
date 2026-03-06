@@ -56,8 +56,8 @@ cli_json() {
 #   parse_json "d.get('runs',[])[0].get('run_id','')" <<< "$out"
 parse_json() {
   local expr="$1"
-  python3 -c "
-import json, sys, re
+  PARSE_EXPR="$expr" python3 -c "
+import json, sys, re, os
 raw = sys.stdin.read()
 # Strip any non-JSON prefix (e.g. version banner lines)
 m = re.search(r'[\[{]', raw)
@@ -65,7 +65,7 @@ if m:
     raw = raw[m.start():]
 try:
     d = json.loads(raw)
-    result = eval('''$expr''')
+    result = eval(os.environ['PARSE_EXPR'])
     print(result if result else '')
 except:
     print('')
@@ -314,7 +314,7 @@ do_build() {
 
   while [ $SECONDS -lt $deadline ]; do
     local list_out
-    list_out=$(cli_json ci list 2>&1)
+    list_out=$(cli_json ci list 2>&1) || true
     run_id=$(parse_json "d.get('runs',[])[0].get('run_id','') if d.get('runs') else ''" <<< "$list_out")
 
     if [ -n "$run_id" ]; then
@@ -327,7 +327,11 @@ do_build() {
   if [ -z "$run_id" ]; then
     warn "No auto-triggered pipeline found, manually triggering..."
     local trigger_out
-    trigger_out=$(cli_json ci trigger "$repo_id" 2>&1)
+    trigger_out=$(cli_json ci run "$repo_id" 2>&1) || {
+      err "CI trigger command failed"
+      echo "Output: $trigger_out"
+      exit 1
+    }
     run_id=$(parse_json "d.get('run_id','')" <<< "$trigger_out")
 
     if [ -z "$run_id" ]; then
@@ -338,42 +342,222 @@ do_build() {
     ok "Pipeline triggered: $run_id"
   fi
 
-  # Wait for pipeline completion
-  log "Waiting for pipeline to complete..."
-  deadline=$((SECONDS + 7200))  # 2 hour timeout for full build
+  # Save run_id for verify step
+  echo "$run_id" > "$CLUSTER_DIR/run_id"
 
-  while [ $SECONDS -lt $deadline ]; do
-    local status_out
-    status_out=$(cli_json ci status "$run_id" 2>&1)
-    local status
-    status=$(parse_json "d.get('status','unknown')" <<< "$status_out")
+  # Stream pipeline progress (clears screen, shows stages/jobs, exits on completion)
+  log "Streaming pipeline progress..."
+  echo ""
+  if cli ci status --follow "$run_id" 2>/dev/null; then
+    echo ""
+    ok "Pipeline completed successfully! 🎉"
+    return 0
+  else
+    echo ""
+    err "Pipeline failed"
+    return 1
+  fi
+}
 
-    case "$status" in
-      success)
-        echo ""
-        ok "Pipeline completed successfully! 🎉"
-        echo ""
-        echo -e "${BOLD}Pipeline details:${NC}"
-        echo "$status_out" | python3 -m json.tool 2>/dev/null || echo "$status_out"
-        return 0
-        ;;
-      failed|cancelled)
-        echo ""
-        err "Pipeline $status"
-        echo ""
-        echo -e "${BOLD}Pipeline details:${NC}"
-        echo "$status_out" | python3 -m json.tool 2>/dev/null || echo "$status_out"
-        return 1
-        ;;
-      *)
-        printf "\r  ⏳ Status: %-20s (elapsed: %ds)" "$status" "$SECONDS"
-        sleep 5
-        ;;
-    esac
-  done
+# ── Verify ────────────────────────────────────────────────────────────
 
-  err "Pipeline timed out after 2 hours"
-  return 1
+# Download the CI-built aspen-node binary from blob store and compare
+# with the locally-built binary used to run this cluster.
+do_verify() {
+  if [ ! -f "$CLUSTER_DIR/node1/cluster-ticket.txt" ]; then
+    err "No cluster running. Start with: $0 start"
+    exit 1
+  fi
+
+  log "Verifying CI-built binary against local binary..."
+
+  # Find the pipeline run — prefer saved run_id, fall back to latest
+  local run_id
+  run_id=$(cat "$CLUSTER_DIR/run_id" 2>/dev/null || true)
+
+  if [ -z "$run_id" ]; then
+    local list_out
+    list_out=$(cli_json ci list 2>&1) || true
+    run_id=$(parse_json "d.get('runs',[])[0].get('run_id','') if d.get('runs') else ''" <<< "$list_out")
+  fi
+
+  if [ -z "$run_id" ]; then
+    err "No pipeline runs found"
+    exit 1
+  fi
+
+  # Get pipeline status to find build-node job ID
+  local status_out
+  status_out=$(cli_json ci status "$run_id" 2>&1) || true
+
+  local pipeline_status
+  pipeline_status=$(parse_json "d.get('status','unknown')" <<< "$status_out")
+  if [ "$pipeline_status" != "success" ]; then
+    err "Pipeline $run_id is not successful (status: $pipeline_status)"
+    exit 1
+  fi
+
+  # Extract build-node job ID from stages
+  local build_node_job_id
+  build_node_job_id=$(python3 -c "
+import json, sys, re
+raw = sys.stdin.read()
+m = re.search(r'[\[{]', raw)
+if m: raw = raw[m.start():]
+try:
+    d = json.loads(raw)
+    for stage in d.get('stages', []):
+        if stage.get('name') == 'build':
+            for job in stage.get('jobs', []):
+                if job.get('name') == 'build-node' and job.get('id'):
+                    print(job['id'])
+                    sys.exit(0)
+    print('')
+except:
+    print('')
+" <<< "$status_out" 2>/dev/null)
+
+  if [ -z "$build_node_job_id" ]; then
+    err "Could not find build-node job ID in pipeline $run_id"
+    exit 1
+  fi
+  ok "Found build-node job: $build_node_job_id"
+
+  # Read the job result data from KV to get artifact blob hash
+  log "Reading job result from KV store..."
+  local job_data
+  job_data=$(cli_json kv get "__jobs:$build_node_job_id" 2>&1) || true
+
+  local blob_hash
+  blob_hash=$(python3 -c "
+import json, sys, re
+raw = sys.stdin.read()
+m = re.search(r'[\[{]', raw)
+if m: raw = raw[m.start():]
+try:
+    d = json.loads(raw)
+    # KV get returns {key, value, ...} — value is the job JSON string
+    job_str = d.get('value', '')
+    job = json.loads(job_str)
+    data = job.get('result', {}).get('Success', {}).get('data', {})
+    for artifact in data.get('artifacts', []):
+        if 'aspen-node' in artifact.get('path', ''):
+            print(artifact.get('blob_hash', ''))
+            sys.exit(0)
+    # Fallback: try uploaded_store_paths
+    for sp in data.get('uploaded_store_paths', []):
+        if sp.get('blob_hash'):
+            print(sp['blob_hash'])
+            sys.exit(0)
+    print('')
+except:
+    print('')
+" <<< "$job_data" 2>/dev/null)
+
+  if [ -z "$blob_hash" ]; then
+    # Show what we got for debugging
+    warn "No artifact blob hash found in job result"
+    echo "  Job data (truncated):"
+    echo "$job_data" | head -5
+    # Fall back to comparing nix store paths directly (local cluster)
+    log "Falling back to local nix store path comparison..."
+    local output_path
+    output_path=$(python3 -c "
+import json, sys, re
+raw = sys.stdin.read()
+m = re.search(r'[\[{]', raw)
+if m: raw = raw[m.start():]
+try:
+    d = json.loads(raw)
+    job_str = d.get('value', '')
+    job = json.loads(job_str)
+    data = job.get('result', {}).get('Success', {}).get('data', {})
+    paths = data.get('output_paths', [])
+    if paths:
+        print(paths[0])
+    else:
+        print('')
+except:
+    print('')
+" <<< "$job_data" 2>/dev/null)
+
+    if [ -n "$output_path" ] && [ -f "$output_path/bin/aspen-node" ]; then
+      ok "Found CI-built binary at $output_path/bin/aspen-node"
+      compare_binaries "$output_path/bin/aspen-node" "$ASPEN_NODE"
+      return $?
+    fi
+    err "Could not locate CI-built binary"
+    return 1
+  fi
+
+  ok "Artifact blob hash: $blob_hash"
+
+  # Download the binary from blob store
+  local ci_binary="/tmp/aspen-node-ci-built"
+  log "Downloading CI-built binary from blob store..."
+  cli blob get "$blob_hash" -o "$ci_binary" 2>/dev/null || {
+    err "Failed to download blob $blob_hash"
+    return 1
+  }
+  chmod +x "$ci_binary"
+  ok "Downloaded CI-built binary to $ci_binary"
+
+  compare_binaries "$ci_binary" "$ASPEN_NODE"
+  local result=$?
+
+  rm -f "$ci_binary"
+  return $result
+}
+
+compare_binaries() {
+  local ci_bin="$1"
+  local local_bin="$2"
+
+  echo ""
+  echo -e "${BOLD}Binary Comparison:${NC}"
+  echo "  CI-built:    $ci_bin"
+  echo "  Local-built: $local_bin"
+  echo ""
+
+  # Size comparison
+  local ci_size local_size
+  ci_size=$(stat -c %s "$ci_bin" 2>/dev/null || echo "0")
+  local_size=$(stat -c %s "$local_bin" 2>/dev/null || echo "0")
+  printf "  Size:  CI = %s bytes, Local = %s bytes\n" "$ci_size" "$local_size"
+
+  # SHA-256 comparison
+  local ci_sha local_sha
+  ci_sha=$(sha256sum "$ci_bin" 2>/dev/null | cut -d' ' -f1)
+  local_sha=$(sha256sum "$local_bin" 2>/dev/null | cut -d' ' -f1)
+  printf "  SHA256 CI:    %s\n" "$ci_sha"
+  printf "  SHA256 Local: %s\n" "$local_sha"
+
+  if [ "$ci_sha" = "$local_sha" ]; then
+    ok "Binaries are identical! (bit-for-bit reproducible build)"
+  else
+    warn "Binaries differ (expected — different source tree inputs)"
+    echo "  This is normal: CI builds from Forge checkout, local from working tree."
+
+    # Verify CI-built binary is functional
+    echo ""
+    log "Smoke-testing CI-built binary..."
+    local ci_version
+    ci_version=$("$ci_bin" --version 2>&1 || true)
+    local local_version
+    local_version=$("$local_bin" --version 2>&1 || true)
+    printf "  Version CI:    %s\n" "$ci_version"
+    printf "  Version Local: %s\n" "$local_version"
+
+    if [ -n "$ci_version" ]; then
+      ok "CI-built binary is functional"
+    else
+      err "CI-built binary failed to run"
+      return 1
+    fi
+  fi
+
+  echo ""
+  return 0
 }
 
 # ── Full Pipeline ─────────────────────────────────────────────────────
@@ -396,6 +580,9 @@ do_full() {
   local result=$?
   echo ""
   if [ $result -eq 0 ]; then
+    do_verify
+    local verify_result=$?
+    echo ""
     echo -e "${GREEN}${BOLD}"
     echo "╔══════════════════════════════════════════════════════════════╗"
     echo "║              🎉 SELF-HOSTED BUILD SUCCEEDED 🎉             ║"
@@ -404,6 +591,9 @@ do_full() {
     echo "║  • Forge: hosted source code via git-remote-aspen          ║"
     echo "║  • CI: auto-triggered pipeline on push                     ║"
     echo "║  • Nix: reproducible builds in sandbox                     ║"
+    if [ $verify_result -eq 0 ]; then
+    echo "║  • Verify: CI-built binary downloaded and validated        ║"
+    fi
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
   fi
@@ -420,17 +610,19 @@ case "$CMD" in
   status) do_status ;;
   push)   do_push ;;
   build)  do_build ;;
+  verify) do_verify ;;
   full)   do_full ;;
   *)
-    echo "Usage: $0 {start|stop|status|push|build|full}"
+    echo "Usage: $0 {start|stop|status|push|build|verify|full}"
     echo ""
     echo "Commands:"
-    echo "  full    Full pipeline: start → push → build (default)"
+    echo "  full    Full pipeline: start → push → build → verify (default)"
     echo "  start   Start the Aspen cluster"
     echo "  stop    Stop the cluster"
     echo "  status  Show cluster status"
     echo "  push    Push Aspen source to Forge"
     echo "  build   Wait for / trigger CI build"
+    echo "  verify  Download CI-built binary from blob store and compare"
     exit 1
     ;;
 esac

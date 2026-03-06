@@ -65,6 +65,7 @@
           flake_url = ".",
           flake_attr = "packages.x86_64-linux.aspen-node",
           publish_to_cache = true,
+          artifacts = ["bin/aspen-node"],
           timeout_secs = 3600,
         },
         {
