@@ -1392,6 +1392,18 @@
                 GIT_HASH = self.shortRev or self.dirtyShortRev or "nix";
                 BUILD_TIME = "1970-01-01 00:00:00 UTC";
               };
+              # Crates whose descriptions contain embedded double quotes, which break
+              # buildRustCrate's `export CARGO_PKG_DESCRIPTION="..."` in bash.
+              # The `"` inside closes the shell string → parse error.
+              # Fix: replace double quotes with single quotes in descriptions.
+              base16ct = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+              base64ct = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+              cobs = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+              leb128 = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+              openssl-probe = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+              ssh-key = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+              syn-mid = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+              zerocopy = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
               # ring: needs cc + LLVM for assembly. stdenv.cc is provided by buildRustCrate.
               ring = attrs: {
                 # ring's build.rs uses the cc crate; buildRustCrate's stdenv handles this.
