@@ -54,6 +54,9 @@ fn to_operation_cache_snix(request: &ClientRpcRequest) -> Option<Option<Operatio
         ClientRpcRequest::CacheStats => Some(Some(Operation::Read {
             key: "_cache:stats".to_string(),
         })),
+        ClientRpcRequest::NixCacheGetPublicKey => Some(Some(Operation::Read {
+            key: "_sys:nix-cache:public-key".to_string(),
+        })),
 
         #[cfg(feature = "ci")]
         ClientRpcRequest::CacheMigrationStart { .. } | ClientRpcRequest::CacheMigrationCancel => {

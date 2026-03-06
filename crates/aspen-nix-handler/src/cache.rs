@@ -4,6 +4,8 @@
 //! for the distributed Nix binary cache.
 
 use aspen_blob::prelude::*;
+use aspen_cache::CACHE_NAME_KV;
+use aspen_cache::CACHE_PUBLIC_KEY_KV;
 use aspen_cache::CacheEntry;
 use aspen_cache::CacheIndex;
 use aspen_cache::KvCacheIndex;
@@ -13,6 +15,8 @@ use aspen_client_api::CacheQueryResultResponse;
 use aspen_client_api::CacheStatsResultResponse;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::NixCachePublicKeyResultResponse;
+use aspen_kv_types::ReadRequest;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;
 use async_trait::async_trait;
@@ -36,7 +40,10 @@ impl RequestHandler for CacheHandler {
     fn can_handle(&self, request: &ClientRpcRequest) -> bool {
         matches!(
             request,
-            ClientRpcRequest::CacheQuery { .. } | ClientRpcRequest::CacheStats | ClientRpcRequest::CacheDownload { .. }
+            ClientRpcRequest::CacheQuery { .. }
+                | ClientRpcRequest::CacheStats
+                | ClientRpcRequest::CacheDownload { .. }
+                | ClientRpcRequest::NixCacheGetPublicKey
         )
     }
 
@@ -49,6 +56,7 @@ impl RequestHandler for CacheHandler {
             ClientRpcRequest::CacheQuery { store_hash } => handle_cache_query(ctx, store_hash).await,
             ClientRpcRequest::CacheStats => handle_cache_stats(ctx).await,
             ClientRpcRequest::CacheDownload { store_hash } => handle_cache_download(ctx, store_hash).await,
+            ClientRpcRequest::NixCacheGetPublicKey => handle_nix_cache_get_public_key(ctx).await,
             _ => Err(anyhow::anyhow!("request not handled by CacheHandler")),
         }
     }
@@ -225,6 +233,34 @@ async fn handle_cache_download(ctx: &ClientProtocolContext, store_hash: String) 
             error: Some(format!("Failed to generate ticket: {}", e)),
         })),
     }
+}
+
+/// Handle NixCacheGetPublicKey request.
+///
+/// Returns the cache's public signing key from KV store.
+async fn handle_nix_cache_get_public_key(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
+    debug!("fetching nix cache public key");
+
+    let public_key = match ctx.kv_store.read(ReadRequest::new(CACHE_PUBLIC_KEY_KV)).await {
+        Ok(result) => result.kv.map(|kv| kv.value),
+        Err(e) => {
+            warn!(error = %e, "failed to read cache public key");
+            None
+        }
+    };
+
+    let cache_name = match ctx.kv_store.read(ReadRequest::new(CACHE_NAME_KV)).await {
+        Ok(result) => result.kv.map(|kv| kv.value),
+        Err(e) => {
+            warn!(error = %e, "failed to read cache name");
+            None
+        }
+    };
+
+    Ok(ClientRpcResponse::NixCachePublicKeyResult(NixCachePublicKeyResultResponse {
+        public_key,
+        cache_name,
+    }))
 }
 
 // ============================================================================

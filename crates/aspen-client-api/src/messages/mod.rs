@@ -132,6 +132,7 @@ pub use ci::CiSubscribeLogsResponse;
 pub use ci::CiTriggerPipelineResponse;
 pub use ci::CiUnwatchRepoResponse;
 pub use ci::CiWatchRepoResponse;
+pub use ci::NixCachePublicKeyResultResponse;
 pub use ci::SnixDirectoryGetResultResponse;
 pub use ci::SnixDirectoryPutResultResponse;
 pub use ci::SnixPathInfoGetResultResponse;
@@ -2909,6 +2910,11 @@ pub enum ClientRpcRequest {
         store_hash: String,
     },
 
+    /// Get the Nix cache public signing key.
+    ///
+    /// Returns the public key in Nix format for configuring substituters.
+    NixCacheGetPublicKey,
+
     // =========================================================================
     // Cache Migration operations (SNIX storage migration)
     // =========================================================================
@@ -3556,6 +3562,7 @@ impl ClientRpcRequest {
             Self::CacheMigrationValidate { .. } => "CacheMigrationValidate",
             Self::CacheQuery { .. } => "CacheQuery",
             Self::CacheStats => "CacheStats",
+            Self::NixCacheGetPublicKey => "NixCacheGetPublicKey",
             Self::CalendarCreate { .. } => "CalendarCreate",
             Self::CalendarCreateEvent { .. } => "CalendarCreateEvent",
             Self::CalendarDelete { .. } => "CalendarDelete",
@@ -4155,6 +4162,7 @@ impl ClientRpcRequest {
             Self::CacheQuery { .. }
             | Self::CacheStats
             | Self::CacheDownload { .. }
+            | Self::NixCacheGetPublicKey
             | Self::SnixDirectoryGet { .. }
             | Self::SnixDirectoryPut { .. }
             | Self::SnixPathInfoGet { .. }
@@ -4720,6 +4728,8 @@ pub enum ClientRpcResponse {
     CacheStatsResult(CacheStatsResultResponse),
     /// Cache download result (blob ticket).
     CacheDownloadResult(CacheDownloadResultResponse),
+    /// Nix cache public key result (for substituter configuration).
+    NixCachePublicKeyResult(NixCachePublicKeyResultResponse),
 
     // =========================================================================
     // Cache Migration responses (SNIX storage migration)

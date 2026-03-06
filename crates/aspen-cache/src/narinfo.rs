@@ -151,6 +151,62 @@ impl CacheEntry {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         serde_json::from_slice(bytes).map_err(|e| CacheError::Deserialization { message: e.to_string() })
     }
+
+    /// Compute the Nix narinfo fingerprint used for signing.
+    ///
+    /// Format: `1;{store_path};{nar_hash};{nar_size};{sorted_refs}`
+    /// where refs are comma-separated, sorted store paths.
+    pub fn fingerprint(&self) -> String {
+        let mut sorted_refs = self.references.clone();
+        sorted_refs.sort();
+        let refs_str = sorted_refs.join(",");
+        format!("1;{};{};{};{}", self.store_path, self.nar_hash, self.nar_size, refs_str)
+    }
+
+    /// Render this cache entry as a Nix narinfo text document.
+    ///
+    /// The narinfo format is the standard Nix binary cache metadata format.
+    /// If a signature is provided, it's included as the `Sig:` field.
+    ///
+    /// URL points to `/nar/{blob_hash}.nar` for the gateway to serve.
+    pub fn to_narinfo(&self, signature: Option<&str>) -> String {
+        let mut lines = Vec::with_capacity(10);
+
+        lines.push(format!("StorePath: {}", self.store_path));
+        lines.push(format!("URL: nar/{}.nar", self.blob_hash));
+        lines.push("Compression: none".to_string());
+        lines.push(format!("NarHash: {}", self.nar_hash));
+        lines.push(format!("NarSize: {}", self.nar_size));
+
+        // References: just the package name portion (after /nix/store/hash-)
+        // Nix expects basenames, not full store paths
+        let ref_basenames: Vec<&str> = self.references.iter().filter_map(|r| r.strip_prefix("/nix/store/")).collect();
+        lines.push(format!("References: {}", ref_basenames.join(" ")));
+
+        if let Some(ref deriver) = self.deriver {
+            // Deriver is also a basename
+            if let Some(basename) = deriver.strip_prefix("/nix/store/") {
+                lines.push(format!("Deriver: {basename}"));
+            } else {
+                lines.push(format!("Deriver: {deriver}"));
+            }
+        }
+
+        if let Some(file_size) = self.file_size {
+            lines.push(format!("FileSize: {file_size}"));
+        } else {
+            // FileSize equals NarSize when Compression is none
+            lines.push(format!("FileSize: {}", self.nar_size));
+        }
+
+        if let Some(sig) = signature {
+            lines.push(format!("Sig: {sig}"));
+        }
+
+        let mut result = lines.join("\n");
+        result.push('\n');
+        result
+    }
 }
 
 /// Cache statistics.
@@ -270,6 +326,156 @@ mod tests {
         let too_many: Vec<String> = (0..MAX_REFERENCES + 1).map(|i| format!("ref{i}")).collect();
         let result = entry.with_references(too_many);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_narinfo_complete_entry() {
+        let entry = CacheEntry::new(
+            "/nix/store/abc123-hello-2.10".to_string(),
+            "abc123".to_string(),
+            "b3hashvalue".to_string(),
+            2048,
+            "sha256:deadbeefcafe".to_string(),
+            1234567890,
+            1,
+        )
+        .with_references(vec![
+            "/nix/store/xyz789-glibc-2.38".to_string(),
+            "/nix/store/def456-gcc-13".to_string(),
+        ])
+        .unwrap()
+        .with_deriver(Some("/nix/store/drv111-hello-2.10.drv".to_string()))
+        .unwrap();
+
+        let narinfo = entry.to_narinfo(Some("aspen-cache:c2lnbmF0dXJl"));
+
+        assert!(narinfo.contains("StorePath: /nix/store/abc123-hello-2.10"));
+        assert!(narinfo.contains("URL: nar/b3hashvalue.nar"));
+        assert!(narinfo.contains("Compression: none"));
+        assert!(narinfo.contains("NarHash: sha256:deadbeefcafe"));
+        assert!(narinfo.contains("NarSize: 2048"));
+        // References are basenames
+        assert!(narinfo.contains("References: xyz789-glibc-2.38 def456-gcc-13"));
+        assert!(narinfo.contains("Deriver: drv111-hello-2.10.drv"));
+        assert!(narinfo.contains("FileSize: 2048"));
+        assert!(narinfo.contains("Sig: aspen-cache:c2lnbmF0dXJl"));
+        assert!(narinfo.ends_with('\n'));
+    }
+
+    #[test]
+    fn test_narinfo_minimal_entry() {
+        let entry = CacheEntry::new(
+            "/nix/store/abc123-hello".to_string(),
+            "abc123".to_string(),
+            "b3hash".to_string(),
+            512,
+            "sha256:aabbccdd".to_string(),
+            1000,
+            1,
+        );
+
+        let narinfo = entry.to_narinfo(None);
+
+        assert!(narinfo.contains("StorePath: /nix/store/abc123-hello"));
+        assert!(narinfo.contains("References: "));
+        assert!(!narinfo.contains("Deriver:"));
+        assert!(!narinfo.contains("Sig:"));
+    }
+
+    #[test]
+    fn test_narinfo_with_signature() {
+        let entry = CacheEntry::new(
+            "/nix/store/abc123-hello".to_string(),
+            "abc123".to_string(),
+            "b3hash".to_string(),
+            1024,
+            "sha256:aabb".to_string(),
+            1000,
+            1,
+        );
+
+        let without_sig = entry.to_narinfo(None);
+        assert!(!without_sig.contains("Sig:"));
+
+        let with_sig = entry.to_narinfo(Some("my-cache:base64sig"));
+        assert!(with_sig.contains("Sig: my-cache:base64sig"));
+    }
+
+    #[test]
+    fn test_fingerprint_basic() {
+        let entry = CacheEntry::new(
+            "/nix/store/abc123-hello".to_string(),
+            "abc123".to_string(),
+            "b3hash".to_string(),
+            1024,
+            "sha256:deadbeef".to_string(),
+            1000,
+            1,
+        );
+
+        assert_eq!(entry.fingerprint(), "1;/nix/store/abc123-hello;sha256:deadbeef;1024;");
+    }
+
+    #[test]
+    fn test_fingerprint_with_sorted_refs() {
+        let entry = CacheEntry::new(
+            "/nix/store/abc123-hello".to_string(),
+            "abc123".to_string(),
+            "b3hash".to_string(),
+            2048,
+            "sha256:cafe".to_string(),
+            1000,
+            1,
+        )
+        .with_references(vec![
+            "/nix/store/zzz-last".to_string(),
+            "/nix/store/aaa-first".to_string(),
+            "/nix/store/mmm-middle".to_string(),
+        ])
+        .unwrap();
+
+        let fp = entry.fingerprint();
+        // References should be sorted
+        assert_eq!(
+            fp,
+            "1;/nix/store/abc123-hello;sha256:cafe;2048;/nix/store/aaa-first,/nix/store/mmm-middle,/nix/store/zzz-last"
+        );
+    }
+
+    #[test]
+    fn test_narinfo_roundtrip_parseable() {
+        // Create a realistic cache entry
+        let entry = CacheEntry::new(
+            "/nix/store/w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb-hello-2.12.1".to_string(),
+            "w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb".to_string(),
+            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2".to_string(),
+            226552,
+            "sha256:1b0ri7q2g18vi4ql05z4ni5g098drmi2w3sswgjyqqwdrbig0w08".to_string(),
+            1709000000,
+            1,
+        )
+        .with_references(vec!["/nix/store/7gx4kiv5m0i7d7qkixq2cwzbr10lvxwc-glibc-2.38-27".to_string()])
+        .unwrap()
+        .with_deriver(Some("/nix/store/dh3yb2m5p1s8dxaqzarq2kq8f1y7sz2m-hello-2.12.1.drv".to_string()))
+        .unwrap();
+
+        let narinfo = entry.to_narinfo(Some("aspen-cache:fakebase64sig"));
+
+        // Verify all required fields present
+        assert!(narinfo.contains("StorePath:"));
+        assert!(narinfo.contains("URL: nar/"));
+        assert!(narinfo.contains("Compression: none"));
+        assert!(narinfo.contains("NarHash: sha256:"));
+        assert!(narinfo.contains("NarSize: 226552"));
+        assert!(narinfo.contains("References:"));
+        assert!(narinfo.contains("Deriver:"));
+        assert!(narinfo.contains("FileSize:"));
+        assert!(narinfo.contains("Sig:"));
+
+        // Verify Nix-parseable format: each line is "Key: Value"
+        for line in narinfo.trim().lines() {
+            assert!(line.contains(": "), "narinfo line should be 'Key: Value', got: {line}");
+        }
     }
 
     #[test]

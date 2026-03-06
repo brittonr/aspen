@@ -25,6 +25,9 @@ pub enum CacheCommand {
 
     /// Get download ticket for a store path.
     Download(DownloadArgs),
+
+    /// Get the cache public signing key (for configuring substituters).
+    PublicKey,
 }
 
 #[derive(Args)]
@@ -216,6 +219,7 @@ impl CacheCommand {
             CacheCommand::Query(args) => cache_query(client, args, json).await,
             CacheCommand::Stats => cache_stats(client, json).await,
             CacheCommand::Download(args) => cache_download(client, args, json).await,
+            CacheCommand::PublicKey => cache_public_key(client, json).await,
         }
     }
 }
@@ -296,6 +300,30 @@ async fn cache_download(client: &AspenClient, args: DownloadArgs, json: bool) ->
             };
             print_output(&output, json);
             if !result.was_found {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn cache_public_key(client: &AspenClient, json: bool) -> Result<()> {
+    let response = client.send(ClientRpcRequest::NixCacheGetPublicKey).await?;
+
+    match response {
+        ClientRpcResponse::NixCachePublicKeyResult(result) => {
+            if json {
+                let output = json!({
+                    "public_key": result.public_key,
+                    "cache_name": result.cache_name,
+                });
+                println!("{}", serde_json::to_string_pretty(&output)?);
+            } else if let Some(key) = result.public_key {
+                println!("{key}");
+            } else {
+                eprintln!("No cache signing key configured. Start the cache gateway to generate one.");
                 std::process::exit(1);
             }
             Ok(())

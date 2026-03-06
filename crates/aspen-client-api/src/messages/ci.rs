@@ -56,6 +56,8 @@ pub enum CiRequest {
     CacheStats,
     /// Get a blob ticket for downloading a NAR.
     CacheDownload { store_hash: String },
+    /// Get the cache's public signing key (for configuring substituters).
+    NixCacheGetPublicKey,
 
     // SNIX operations (for remote workers)
     /// Get a directory from SNIX DirectoryService.
@@ -140,6 +142,9 @@ impl CiRequest {
             }),
             Self::CacheStats => Some(Operation::Read {
                 key: "_cache:stats".to_string(),
+            }),
+            Self::NixCacheGetPublicKey => Some(Operation::Read {
+                key: "_sys:nix-cache:public-key".to_string(),
             }),
 
             Self::SnixDirectoryGet { digest } => Some(Operation::Read {
@@ -463,6 +468,15 @@ pub struct CacheDownloadResultResponse {
     pub nar_size: Option<u64>,
     /// Error message if the operation failed.
     pub error: Option<String>,
+}
+
+/// Nix cache public key result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NixCachePublicKeyResultResponse {
+    /// The public key in Nix format (`cache-name:base64(key)`), or None if no cache is initialized.
+    pub public_key: Option<String>,
+    /// The cache name (e.g., "aspen-cache").
+    pub cache_name: Option<String>,
 }
 
 // =============================================================================

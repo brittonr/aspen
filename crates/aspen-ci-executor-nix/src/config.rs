@@ -81,6 +81,11 @@ pub struct NixBuildWorkerConfig {
     /// Trusted public key for the cache (e.g., "aspen-cache:base64key").
     /// Required when `use_cluster_cache` is true to verify signed narinfo.
     pub cache_public_key: Option<String>,
+
+    /// URL of a running `aspen-nix-cache-gateway` HTTP server.
+    /// When set (with `cache_public_key`), Nix builds use this as a substituter
+    /// without needing the H3 proxy. Example: `http://127.0.0.1:8380`.
+    pub gateway_url: Option<String>,
 }
 
 impl Default for NixBuildWorkerConfig {
@@ -101,6 +106,7 @@ impl Default for NixBuildWorkerConfig {
             iroh_endpoint: None,
             gateway_node: None,
             cache_public_key: None,
+            gateway_url: None,
         }
     }
 }
@@ -189,11 +195,35 @@ impl NixBuildWorkerConfig {
         all_services_available
     }
 
-    /// Check if cache proxy can be started.
+    /// Check if cache proxy can be started (H3-based, requires iroh endpoint).
     pub fn can_use_cache_proxy(&self) -> bool {
         self.use_cluster_cache
             && self.iroh_endpoint.is_some()
             && self.gateway_node.is_some()
             && self.cache_public_key.is_some()
+    }
+
+    /// Check if a gateway URL substituter is available.
+    ///
+    /// This is the simpler path: point at a pre-running `aspen-nix-cache-gateway`
+    /// HTTP server. No H3 proxy needed.
+    pub fn can_use_gateway(&self) -> bool {
+        self.gateway_url.is_some() && self.cache_public_key.is_some()
+    }
+
+    /// Get extra args to inject into `nix build` for cache substitution.
+    ///
+    /// Returns `None` if no cache is configured.
+    pub fn substituter_args(&self) -> Option<Vec<String>> {
+        if let (Some(url), Some(key)) = (&self.gateway_url, &self.cache_public_key) {
+            Some(vec![
+                "--extra-substituters".to_string(),
+                url.clone(),
+                "--trusted-public-keys".to_string(),
+                key.clone(),
+            ])
+        } else {
+            None
+        }
     }
 }

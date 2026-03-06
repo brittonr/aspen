@@ -28,6 +28,7 @@ snix-store = { workspace = true, optional = true }
 # Cache handler dependencies (optional)
 aspen-cache = { workspace = true, optional = true }
 aspen-blob = { workspace = true, optional = true }
+aspen-kv-types = { workspace = true, optional = true }
 iroh-blobs = { version = "0.97", optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { version = "1.0", optional = true }
@@ -35,7 +36,7 @@ serde_json = { version = "1.0", optional = true }
 [features]
 default = []
 snix = ["dep:base64", "dep:hex", "dep:prost", "dep:snix-castore", "dep:snix-store"]
-cache = ["dep:aspen-cache", "dep:aspen-blob", "dep:iroh-blobs", "dep:serde", "dep:serde_json", "aspen-rpc-core/blob", "aspen-client-api/ci"]
+cache = ["dep:aspen-cache", "dep:aspen-blob", "dep:aspen-kv-types", "dep:iroh-blobs", "dep:serde", "dep:serde_json", "aspen-rpc-core/blob", "aspen-client-api/ci"]
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full", "test-util"] }

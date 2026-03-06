@@ -154,6 +154,14 @@ impl NixBuildWorker {
             cmd.arg("--no-sandbox");
         }
 
+        // Inject gateway-based substituter if configured
+        if let Some(sub_args) = self.config.substituter_args() {
+            for arg in &sub_args {
+                cmd.arg(arg);
+            }
+            debug!("injected gateway substituter args into nix build");
+        }
+
         if self.config.is_verbose {
             cmd.arg("-L");
         }

@@ -8,6 +8,7 @@ description = "Distributed Nix binary cache for Aspen using iroh-blobs storage"
 [dependencies]
 # Core types and traits
 aspen-core = { workspace = true }
+aspen-kv-types = { workspace = true }
 
 # Blob storage
 aspen-blob = { workspace = true }
@@ -28,6 +29,11 @@ tracing = { workspace = true }
 
 # Encoding
 hex = "0.4"
+
+# Narinfo signing
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
+rand_core_06 = { package = "rand_core", version = "0.6", features = ["getrandom"] }
+base64 = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

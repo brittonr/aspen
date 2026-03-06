@@ -7,7 +7,7 @@
 //!
 //! Note: These are unit/config tests that don't require actual Nix builds.
 
-#![cfg(feature = "snix")]
+#![cfg(feature = "nix-executor")]
 
 use aspen_ci::workers::NixBuildWorkerConfig;
 
@@ -143,4 +143,57 @@ fn test_config_logic_with_cache_fields() {
     };
 
     assert!(!disabled_config.can_use_cache_proxy());
+}
+
+// =========================================================================
+// Gateway URL substituter tests
+// =========================================================================
+
+/// Test that gateway URL substituter is disabled by default.
+#[test]
+fn test_gateway_disabled_by_default() {
+    let config = NixBuildWorkerConfig::default();
+    assert!(!config.can_use_gateway());
+    assert!(config.substituter_args().is_none());
+}
+
+/// Test that gateway requires both URL and public key.
+#[test]
+fn test_gateway_requires_both_url_and_key() {
+    // URL only — not enough
+    let url_only = NixBuildWorkerConfig {
+        gateway_url: Some("http://127.0.0.1:8380".to_string()),
+        cache_public_key: None,
+        ..Default::default()
+    };
+    assert!(!url_only.can_use_gateway());
+    assert!(url_only.substituter_args().is_none());
+
+    // Key only — not enough
+    let key_only = NixBuildWorkerConfig {
+        gateway_url: None,
+        cache_public_key: Some("aspen-cache:key123".to_string()),
+        ..Default::default()
+    };
+    assert!(!key_only.can_use_gateway());
+    assert!(key_only.substituter_args().is_none());
+}
+
+/// Test that gateway returns correct substituter args when fully configured.
+#[test]
+fn test_gateway_substituter_args() {
+    let config = NixBuildWorkerConfig {
+        gateway_url: Some("http://127.0.0.1:8380".to_string()),
+        cache_public_key: Some("aspen-cache:AAAA".to_string()),
+        ..Default::default()
+    };
+
+    assert!(config.can_use_gateway());
+
+    let args = config.substituter_args().expect("should have args");
+    assert_eq!(args.len(), 4);
+    assert_eq!(args[0], "--extra-substituters");
+    assert_eq!(args[1], "http://127.0.0.1:8380");
+    assert_eq!(args[2], "--trusted-public-keys");
+    assert_eq!(args[3], "aspen-cache:AAAA");
 }

@@ -142,6 +142,7 @@ members = [
     "crates/aspen-snix",
     "crates/aspen-snix-bridge",
 
+    "crates/aspen-nix-cache-gateway",
     "crates/aspen-nix-handler",
 
     # PIM (Personal Information Management)

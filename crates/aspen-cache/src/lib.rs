@@ -59,6 +59,7 @@
 pub mod error;
 pub mod index;
 pub mod narinfo;
+pub mod signing;
 
 pub use error::CacheError;
 pub use error::Result;
@@ -71,3 +72,9 @@ pub use narinfo::CacheEntry;
 pub use narinfo::CacheStats;
 pub use narinfo::MAX_DERIVER_LENGTH;
 pub use narinfo::MAX_REFERENCES;
+pub use signing::CACHE_NAME_KV;
+pub use signing::CACHE_PUBLIC_KEY_KV;
+pub use signing::CACHE_SIGNING_KEY_KV;
+pub use signing::CacheSigningKey;
+pub use signing::CacheVerifyingKey;
+pub use signing::DEFAULT_CACHE_NAME;
