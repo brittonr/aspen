@@ -116,10 +116,10 @@ impl ReplicationWorker {
             };
 
             // Skip expired entries
-            if let Some(expires_at) = kv.expires_at_ms {
-                if now_ms > expires_at {
-                    continue;
-                }
+            if let Some(expires_at) = kv.expires_at_ms
+                && now_ms > expires_at
+            {
+                continue;
             }
 
             bytes_transferred += key_bytes.len() as u64 + kv.value.len() as u64;
@@ -190,10 +190,10 @@ impl ReplicationWorker {
             };
 
             // Skip expired entries
-            if let Some(expires_at) = kv.expires_at_ms {
-                if now_ms > expires_at {
-                    continue;
-                }
+            if let Some(expires_at) = kv.expires_at_ms
+                && now_ms > expires_at
+            {
+                continue;
             }
 
             total_keys += 1;
@@ -271,10 +271,10 @@ impl ReplicationWorker {
             };
 
             // Skip expired entries
-            if let Some(expires_at) = kv.expires_at_ms {
-                if now_ms > expires_at {
-                    continue;
-                }
+            if let Some(expires_at) = kv.expires_at_ms
+                && now_ms > expires_at
+            {
+                continue;
             }
 
             key_count += 1;
@@ -375,10 +375,10 @@ impl ReplicationWorker {
             };
 
             // Skip expired entries
-            if let Some(expires_at) = kv.expires_at_ms {
-                if now_ms > expires_at {
-                    continue;
-                }
+            if let Some(expires_at) = kv.expires_at_ms
+                && now_ms > expires_at
+            {
+                continue;
             }
 
             // Only include entries modified since last backup
@@ -494,14 +494,12 @@ impl ReplicationWorker {
             }
 
             // Skip entries after restore point if specified
-            if let Some(rp) = restore_point {
-                if let Some(mr) = entry["mr"].as_i64() {
-                    if let Ok(rp_rev) = rp.parse::<i64>() {
-                        if mr > rp_rev {
-                            continue;
-                        }
-                    }
-                }
+            if let Some(rp) = restore_point
+                && let Some(mr) = entry["mr"].as_i64()
+                && let Ok(rp_rev) = rp.parse::<i64>()
+                && mr > rp_rev
+            {
+                continue;
             }
 
             // Write to KV store

@@ -40,6 +40,28 @@ path = "junit.xml"
 store-success-output = false
 store-failure-output = true
 
+# ============================================================================
+# CI Nix Profile - For running tests inside the Nix build sandbox
+# ============================================================================
+# Usage: cargo nextest run -P ci-nix
+# Excludes tests that need abundant disk space (Nix sandbox uses tmpfs)
+# and slow tests excluded by the quick profile.
+
+[profile.ci-nix]
+test-threads = 1
+fail-fast = true
+# Same exclusions as quick profile, plus disk-heavy integration tests.
+# Tests that create redb databases fail in the Nix sandbox because tmpfs
+# disk usage exceeds the 95% threshold. Exclude any test with "test_redb"
+# in its name (catches both top-level and nested module test functions).
+default-filter = "not test(/proptest/) and not test(/chaos/) and not test(/madsim_multi/) and not test(/multiple_crash/) and not test(/buggify/) and not test(/real_crash/) and not test(/job_integration/) and not test(/failure_cascade/) and not test(/wasm_plugin/) and not test(/test_redb/) and not binary(/madsim_ci_pipeline/) and not binary(/madsim_snapshot/) and not binary(/madsim_membership_failure/)"
+slow-timeout = { period = "60s", terminate-after = 1 }
+
+[profile.ci-nix.junit]
+path = "junit.xml"
+store-success-output = false
+store-failure-output = true
+
 # Specific overrides for known long-running tests
 [[profile.default.overrides]]
 filter = "test(test_proptest_linearizability) | test(test_proptest_fault_recovery) | test(test_proptest_leader_safety)"

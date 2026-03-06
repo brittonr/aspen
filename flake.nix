@@ -698,6 +698,150 @@
             {} \;
         '';
 
+        # ── CI Source Assembly ─────────────────────────────────────
+        # Like fullSrc but stubs aspen-wasm-plugin instead of copying the real
+        # repo. This means it works in pure evaluation (no --impure, no
+        # hasExternalRepos check) while still including all workspace crates.
+        # Trades plugins-rpc support for pure reproducibility.
+        ciSrc = pkgs.runCommand "aspen-ci-src" {} ''
+          mkdir -p $out/aspen
+
+          # Copy main workspace (with all crates) into aspen/ subdirectory
+          cp -r ${fullRawSrc}/. $out/aspen/
+          chmod -R u+w $out/aspen
+
+          # Remove [patch.*] sections from cargo config for Nix builds
+          if [ -f $out/aspen/.cargo/config.toml ]; then
+            ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/aspen/.cargo/config.toml
+          fi
+
+          # Stub aspen-wasm-plugin (optional dep, only for plugins-rpc feature)
+          # Path from root Cargo.toml: ../aspen-wasm-plugin/crates/aspen-wasm-plugin
+          mkdir -p "$out/aspen-wasm-plugin/crates/aspen-wasm-plugin/src"
+          cat > "$out/aspen-wasm-plugin/crates/aspen-wasm-plugin/Cargo.toml" << 'EOF'
+          [package]
+          name = "aspen-wasm-plugin"
+          version = "0.1.0"
+          edition = "2024"
+          [features]
+          default = []
+          testing = []
+          sql = []
+          hooks = []
+          EOF
+          echo '// stub for CI builds' > "$out/aspen-wasm-plugin/crates/aspen-wasm-plugin/src/lib.rs"
+
+          # External git dep: iroh-proxy-utils (used by aspen-proxy)
+          cp -r ${irohProxyUtilsSrc} "$out/iroh-proxy-utils"
+
+          # Stub aspen-dns (optional dep of aspen-net, dns feature disabled)
+          mkdir -p "$out/aspen-dns/crates/aspen-dns/src"
+          cat > "$out/aspen-dns/crates/aspen-dns/Cargo.toml" << 'EOF'
+          [package]
+          name = "aspen-dns"
+          version = "0.1.0"
+          edition = "2024"
+          EOF
+          echo '// stub' > "$out/aspen-dns/crates/aspen-dns/src/lib.rs"
+
+          chmod -R u+w $out
+
+          # Replace ALL git deps with local stubs (same as fullSrc).
+          stub() {
+            local name="$1"; shift
+            local dir="$out/aspen/.nix-stubs/$name"
+            mkdir -p "$dir/src"
+            {
+              echo '[package]'
+              echo "name = \"$name\""
+              echo 'version = "0.1.0"'
+              echo 'edition = "2024"'
+              echo '[features]'
+              for feat in "$@"; do echo "$feat = []"; done
+            } > "$dir/Cargo.toml"
+            echo '// stub' > "$dir/src/lib.rs"
+          }
+          stub mad-turmoil
+          stub snix-castore
+          stub snix-store
+          stub nix-compat async serde
+          stub nix-compat-derive
+          stub h3-iroh
+
+          # Rewrite git deps to path stubs in root Cargo.toml
+          ${pkgs.gnused}/bin/sed -i \
+            -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
+            -e 's|snix-castore = { git = "[^"]*"[^}]*}|snix-castore = { path = ".nix-stubs/snix-castore" }|' \
+            -e 's|snix-store = { git = "[^"]*"[^}]*}|snix-store = { path = ".nix-stubs/snix-store" }|' \
+            -e 's|nix-compat = { git = "[^"]*"[^}]*}|nix-compat = { path = ".nix-stubs/nix-compat", features = ["async", "serde"] }|' \
+            -e 's|h3-iroh = { git = "[^"]*"[^}]*}|h3-iroh = { path = ".nix-stubs/h3-iroh" }|' \
+            $out/aspen/Cargo.toml
+          ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
+
+          # Strip git source lines from Cargo.lock for deps converted to path
+          ${pkgs.gnused}/bin/sed -i '/^source = "git+https:\/\/github.com\/n0-computer\/iroh-proxy-utils/d' $out/aspen/Cargo.lock
+
+          # Rewrite git deps in all subcrates too
+          find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
+            -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
+            -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../../iroh-proxy-utils" }|' \
+            -e 's|bolero = { version = "0.11"|bolero = { version = "0.13"|g' \
+            -e 's|bolero-generator = { version = "0.11"|bolero-generator = { version = "0.13"|g' \
+            -e 's|bolero = "0.11"|bolero = "0.13"|g' \
+            -e 's|bolero-generator = "0.11"|bolero-generator = "0.13"|g' \
+            {} \;
+        '';
+
+        # ── CI Build Args ─────────────────────────────────────────────
+        # Cargo args for CI checks (nextest, clippy) that work without
+        # external repos. Uses ciSrc with stubbed aspen-wasm-plugin.
+        ciBasicArgs =
+          basicArgs
+          // {
+            src = ciSrc;
+            postUnpack = ''sourceRoot="$sourceRoot/aspen"'';
+            cargoToml = ./Cargo.toml;
+            cargoExtraArgs = "";
+          };
+
+        ciCargoVendorDir = patchVendorForHyperlight (craneLib.vendorCargoDeps {
+          src = ciSrc + "/aspen";
+          overrideVendorGitCheckout = _ps: drv:
+            ensureGitCheckoutLock drv;
+        });
+
+        ciCargoArtifacts = craneLib.buildDepsOnly (
+          ciBasicArgs
+          // {
+            cargoVendorDir = ciCargoVendorDir;
+            HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+            pnameSuffix = "-ci-deps";
+            cargoExtraArgs = "--features ci,docs,hooks,shell-worker,automerge,secrets,proxy";
+          }
+        );
+
+        ciCommonArgs =
+          ciBasicArgs
+          // {
+            cargoArtifacts = ciCargoArtifacts;
+            cargoVendorDir = ciCargoVendorDir;
+            HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+
+            nativeBuildInputs =
+              basicArgs.nativeBuildInputs
+              ++ (with pkgs; [
+                autoPatchelfHook
+              ]);
+
+            buildInputs =
+              basicArgs.buildInputs
+              ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
+                with pkgs; [
+                  darwin.apple_sdk.frameworks.Security
+                ]
+              ));
+          };
+
         # Full source with real snix dependencies (not stubs).
         # Required for builds that enable the snix feature.
         # Reverts snix from path stubs back to git deps so the cargo vendor
@@ -1704,21 +1848,36 @@
           # Set of checks that are run: `nix flake check`
           checks =
             {
-              # NOTE: clippy and doc checks disabled — they compile the full
-              # workspace which depends on extracted sibling repos (aspen-layer,
-              # aspen-coordination, etc.) that are stubs in the Nix sandbox.
-              # Run locally: cargo clippy --workspace -- -D warnings
-              clippy = pkgs.runCommand "aspen-clippy-stub" {} ''
-                echo "SKIPPED: clippy requires extracted sibling repo sources"
-                echo "Run locally: cargo clippy --workspace -- -D warnings"
-                touch $out
-              '';
+              # Clippy and doc checks using ciCommonArgs (stubbed aspen-wasm-plugin).
+              # Works in pure evaluation without external repos.
+              clippy = craneLib.cargoClippy (
+                ciCommonArgs
+                // {
+                  # Exclude crates that can't compile with stubbed snix/h3-iroh:
+                  # - aspen-nix-cache-gateway: h3-iroh 0.96 vs iroh 0.95.1 mismatch
+                  # - aspen-castore, aspen-snix, aspen-snix-bridge: unconditional snix deps
+                  cargoClippyExtraArgs = "--workspace --exclude aspen-nix-cache-gateway --exclude aspen-castore --exclude aspen-snix --exclude aspen-snix-bridge -- -D warnings";
+                }
+              );
 
-              doc = pkgs.runCommand "aspen-doc-stub" {} ''
-                echo "SKIPPED: doc check requires extracted sibling repo sources"
-                echo "Run locally: cargo doc --workspace --no-deps"
-                touch $out
-              '';
+              doc = let
+                mainCrates = [
+                  "aspen"
+                  "aspen-auth"
+                  "aspen-blob"
+                  "aspen-client"
+                  "aspen-cluster"
+                  "aspen-core"
+                ];
+                pkgArgs = lib.concatMapStringsSep " " (c: "-p ${c}") mainCrates;
+              in
+                craneLib.cargoDoc (
+                  ciCommonArgs
+                  // {
+                    cargoDocExtraArgs = "${pkgArgs} --no-deps";
+                    RUSTDOCFLAGS = "-D warnings";
+                  }
+                );
 
               # Custom fmt check using nightly rustfmt to support unstable features
               # in rustfmt.toml (imports_granularity, overflow_delimited_expr, etc.)
@@ -1799,20 +1958,31 @@
             }
             // {
               # Run quick tests with cargo-nextest (for CI)
-              # NOTE: nextest checks disabled — they compile the full workspace
-              # which depends on extracted sibling repos that are stubs in Nix.
-              # Run locally: cargo nextest run -P quick
-              nextest-quick = pkgs.runCommand "aspen-nextest-quick-stub" {} ''
-                echo "SKIPPED: nextest requires extracted sibling repo sources"
-                echo "Run locally: cargo nextest run -P quick"
-                touch $out
-              '';
+              # Uses ciCommonArgs (stubbed aspen-wasm-plugin) — works in pure
+              # evaluation without external repos. All workspace crates are real.
+              # Uses ci-nix profile which excludes disk-heavy tests that fail in
+              # the Nix sandbox (tmpfs has limited space).
+              nextest-quick = craneLib.cargoNextest (
+                ciCommonArgs
+                // {
+                  cargoNextestExtraArgs = "-P ci-nix";
+                  nativeBuildInputs =
+                    ciCommonArgs.nativeBuildInputs
+                    ++ [pkgs.cargo-nextest];
+                }
+              );
 
-              nextest = pkgs.runCommand "aspen-nextest-stub" {} ''
-                echo "SKIPPED: nextest requires extracted sibling repo sources"
-                echo "Run locally: cargo nextest run"
-                touch $out
-              '';
+              nextest = craneLib.cargoNextest (
+                ciCommonArgs
+                // {
+                  # Full test run in Nix sandbox — uses ci-nix profile to skip
+                  # disk-heavy corruption tests that fail on tmpfs.
+                  cargoNextestExtraArgs = "-P ci-nix";
+                  nativeBuildInputs =
+                    ciCommonArgs.nativeBuildInputs
+                    ++ [pkgs.cargo-nextest];
+                }
+              );
             }
             # ── Real checks (override stubs when aspen-wasm-plugin available) ──
             // lib.optionalAttrs hasExternalRepos {

@@ -1,14 +1,14 @@
 # Aspen CI Pipeline Configuration — Self-Hosted
 #
 # Stages:
-# 1. Check: format validation (shell) + clippy lint (nix, all 59 crates)
+# 1. Check: format validation (shell) + clippy lint (nix check)
 # 2. Build: aspen-node + aspen-cli via unit2nix (parallel nix jobs)
-# 3. Test: Quick test suite via nextest (~5min)
+# 3. Test: Quick test suite via nextest (nix check, ci-nix profile)
 #
-# Both check and build stages use `type = 'nix` which runs `nix build`
-# directly on the CI worker via NixBuildWorker. The unit2nix build
-# system compiles each crate as a separate Nix derivation, giving
-# fine-grained caching — changing one crate only rebuilds its dependents.
+# All stages use `type = 'nix` which runs `nix build` directly on the
+# CI worker via NixBuildWorker. Cargo deps are vendored inside the Nix
+# sandbox — no network access needed. The unit2nix build system compiles
+# each crate as a separate Nix derivation for fine-grained caching.
 #
 # Build outputs are automatically published to the Aspen nix binary cache
 # when `publish_to_cache = true`.
@@ -46,7 +46,7 @@
           name = "clippy",
           type = 'nix,
           flake_url = ".",
-          flake_attr = "packages.x86_64-linux.clippy",
+          flake_attr = "checks.x86_64-linux.clippy",
           timeout_secs = 1800,
         },
       ],
@@ -78,16 +78,19 @@
       ],
     },
 
-    # Stage 3: Run quick test suite
+    # Stage 3: Run quick test suite via Nix
+    # Uses the nextest-quick check from flake.nix which includes
+    # vendored deps, the ci-nix profile, and all workspace crates.
     {
       name = "test",
       depends_on = ["build"],
       jobs = [
         {
           name = "nextest-quick",
-          type = 'shell,
-          command = "cargo nextest run -P quick",
-          timeout_secs = 600,
+          type = 'nix,
+          flake_url = ".",
+          flake_attr = "checks.x86_64-linux.nextest-quick",
+          timeout_secs = 1800,
         },
       ],
     },

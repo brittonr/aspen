@@ -249,21 +249,21 @@ impl BlobProcessorWorker {
                 metadata.insert("char_count".to_string(), json!(text.chars().count()));
 
                 // For JSON, try to parse and get structure info
-                if content_type == "application/json" {
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text) {
-                        metadata.insert("json_valid".to_string(), json!(true));
-                        match &parsed {
-                            serde_json::Value::Object(obj) => {
-                                metadata.insert("json_type".to_string(), json!("object"));
-                                metadata.insert("json_keys".to_string(), json!(obj.len()));
-                            }
-                            serde_json::Value::Array(arr) => {
-                                metadata.insert("json_type".to_string(), json!("array"));
-                                metadata.insert("json_length".to_string(), json!(arr.len()));
-                            }
-                            _ => {
-                                metadata.insert("json_type".to_string(), json!("primitive"));
-                            }
+                if content_type == "application/json"
+                    && let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text)
+                {
+                    metadata.insert("json_valid".to_string(), json!(true));
+                    match &parsed {
+                        serde_json::Value::Object(obj) => {
+                            metadata.insert("json_type".to_string(), json!("object"));
+                            metadata.insert("json_keys".to_string(), json!(obj.len()));
+                        }
+                        serde_json::Value::Array(arr) => {
+                            metadata.insert("json_type".to_string(), json!("array"));
+                            metadata.insert("json_length".to_string(), json!(arr.len()));
+                        }
+                        _ => {
+                            metadata.insert("json_type".to_string(), json!("primitive"));
                         }
                     }
                 }
@@ -273,11 +273,11 @@ impl BlobProcessorWorker {
         }
 
         // For images, extract basic info
-        if content_type.starts_with("image/") {
-            if let Some((width, height)) = extract_image_dimensions(&bytes) {
-                metadata.insert("width".to_string(), json!(width));
-                metadata.insert("height".to_string(), json!(height));
-            }
+        if content_type.starts_with("image/")
+            && let Some((width, height)) = extract_image_dimensions(&bytes)
+        {
+            metadata.insert("width".to_string(), json!(width));
+            metadata.insert("height".to_string(), json!(height));
         }
 
         let extraction_time_ms = start.elapsed().as_millis() as u64;

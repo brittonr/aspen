@@ -271,10 +271,10 @@ async fn delete_calendar(client: &AspenClient, args: DeleteCalArgs, json: bool) 
 
 async fn add_event(client: &AspenClient, args: AddEventArgs, json: bool) -> Result<()> {
     // Build a minimal VEVENT from CLI args.
-    let dtstart = args.start.replace('-', "").replace(':', "").replace('T', "T");
+    let dtstart = args.start.replace(['-', ':'], "");
     let mut ical = format!("BEGIN:VEVENT\r\nSUMMARY:{}\r\nDTSTART:{dtstart}\r\n", args.summary);
     if let Some(end) = &args.end {
-        let dtend = end.replace('-', "").replace(':', "").replace('T', "T");
+        let dtend = end.replace(['-', ':'], "");
         ical.push_str(&format!("DTEND:{dtend}\r\n"));
     }
     if let Some(loc) = &args.location {

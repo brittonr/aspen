@@ -120,10 +120,10 @@ impl SqlQueryWorker {
                 Err(_) => continue,
             };
 
-            if let Some(expires_at) = kv.expires_at_ms {
-                if now_ms > expires_at {
-                    continue;
-                }
+            if let Some(expires_at) = kv.expires_at_ms
+                && now_ms > expires_at
+            {
+                continue;
             }
 
             count += 1;
@@ -161,13 +161,13 @@ impl SqlQueryWorker {
             let key_bytes = key_guard.value();
 
             // Apply prefix filter if present
-            if let Some(ref p) = prefix {
-                if !key_bytes.starts_with(p.as_bytes()) {
-                    if key_bytes > p.as_bytes() {
-                        break; // Past prefix range
-                    }
-                    continue;
+            if let Some(ref p) = prefix
+                && !key_bytes.starts_with(p.as_bytes())
+            {
+                if key_bytes > p.as_bytes() {
+                    break; // Past prefix range
                 }
+                continue;
             }
 
             let key_str = match std::str::from_utf8(key_bytes) {
@@ -182,10 +182,10 @@ impl SqlQueryWorker {
             };
 
             // Check expiration
-            if let Some(expires_at) = kv.expires_at_ms {
-                if now_ms > expires_at {
-                    continue;
-                }
+            if let Some(expires_at) = kv.expires_at_ms
+                && now_ms > expires_at
+            {
+                continue;
             }
 
             // Build row with all columns
@@ -266,11 +266,11 @@ impl SqlQueryWorker {
             };
 
             // Check expiration
-            if let Some(expires_at) = kv.expires_at_ms {
-                if now_ms > expires_at {
-                    expired_count += 1;
-                    continue;
-                }
+            if let Some(expires_at) = kv.expires_at_ms
+                && now_ms > expires_at
+            {
+                expired_count += 1;
+                continue;
             }
 
             row_count += 1;
@@ -416,10 +416,10 @@ impl SqlQueryWorker {
             };
 
             // Check expiration
-            if let Some(expires_at) = kv.expires_at_ms {
-                if now_ms > expires_at {
-                    continue;
-                }
+            if let Some(expires_at) = kv.expires_at_ms
+                && now_ms > expires_at
+            {
+                continue;
             }
 
             // Get the value for the target column
