@@ -167,15 +167,15 @@ async fn handle_narinfo(state: &GatewayState, hash: &str) -> anyhow::Result<Resp
         entry.created_at_ms,
         entry.created_by_node,
     );
-    if !entry.references.is_empty() {
-        if let Ok(e) = cache_entry.clone().with_references(entry.references) {
-            cache_entry = e;
-        }
+    if !entry.references.is_empty()
+        && let Ok(e) = cache_entry.clone().with_references(entry.references)
+    {
+        cache_entry = e;
     }
-    if let Some(deriver) = entry.deriver {
-        if let Ok(e) = cache_entry.clone().with_deriver(Some(deriver)) {
-            cache_entry = e;
-        }
+    if let Some(deriver) = entry.deriver
+        && let Ok(e) = cache_entry.clone().with_deriver(Some(deriver))
+    {
+        cache_entry = e;
     }
 
     // Sign the narinfo
