@@ -253,7 +253,13 @@ impl StageConfig {
 }
 
 /// Trigger configuration for automatic pipeline execution.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+///
+/// NOTE: `Default` is implemented manually (not derived) so that
+/// `refs` defaults to `["refs/heads/main"]` even when the entire
+/// `TriggerConfig` is constructed via `Default::default()` — e.g.
+/// when `PipelineConfig.triggers` is absent and serde falls back
+/// to `#[serde(default)]`.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct TriggerConfig {
     /// Ref patterns to trigger on.
     #[serde(default = "default_refs")]
@@ -266,6 +272,16 @@ pub struct TriggerConfig {
     /// Path patterns to watch (if set, only these trigger).
     #[serde(default)]
     pub only_paths: Vec<String>,
+}
+
+impl Default for TriggerConfig {
+    fn default() -> Self {
+        Self {
+            refs: default_refs(),
+            ignore_paths: Vec::new(),
+            only_paths: Vec::new(),
+        }
+    }
 }
 
 fn default_refs() -> Vec<String> {

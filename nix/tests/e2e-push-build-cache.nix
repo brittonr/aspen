@@ -1,12 +1,13 @@
 # End-to-end NixOS VM integration test: git push → CI build → Nix cache.
 #
-# Exercises the full self-hosting pipeline:
+# Exercises the full self-hosting pipeline with auto-trigger:
 #   1. Create a Forge repository (via WASM plugin)
-#   2. Push code containing `.aspen/ci.ncl` via git-remote-aspen
-#   3. Trigger CI pipeline via `ci run`
-#   4. Wait for shell build stage to complete
-#   5. Verify pipeline status and ref-status tracking
-#   6. Start the cache gateway and verify it serves
+#   2. Watch the repo for CI triggers (`ci watch`)
+#   3. Push code containing `.aspen/ci.ncl` via git-remote-aspen
+#   4. Verify pipeline auto-triggers via forge gossip (no manual `ci run`)
+#   5. Wait for shell build stage to complete
+#   6. Verify pipeline status and ref-status tracking
+#   7. Start the cache gateway and verify it serves
 #
 # This is the integration test that proves Aspen can orchestrate
 # builds through its own infrastructure end-to-end.
@@ -225,7 +226,22 @@ in
           assert repo_id, f"no repo_id in response: {out}"
           node1.log(f"Created repo: {repo_id}")
 
-      # ── phase 2: prepare and push repo content ──────────────────────
+      # ── phase 2: watch repo for auto-trigger ────────────────────────
+      # Register the repo with CI trigger service BEFORE pushing.
+      # This enables the gossip-driven auto-trigger flow:
+      #   git push → forge gossip RefUpdate → CiTriggerHandler → pipeline
+
+      with subtest("ci watch enables auto-trigger"):
+          result = cli(f"ci watch {repo_id}")
+          node1.log(f"CI watch: {result}")
+          assert isinstance(result, dict), f"expected dict: {result}"
+          assert result.get("is_success"), f"ci watch failed: {result}"
+          node1.log("Repository is now watched for CI triggers")
+
+      # ── phase 3: prepare and push repo content ──────────────────────
+      # The push triggers a forge gossip RefUpdate announcement.
+      # Since we're watching this repo, the CiTriggerHandler will
+      # automatically start a pipeline — no manual `ci run` needed.
 
       with subtest("push code to forge via git"):
           ticket = get_ticket()
@@ -272,36 +288,27 @@ in
           out = cli(f"branch list -r {repo_id}", check=False)
           node1.log(f"Branch list after push: {out}")
 
-      # ── phase 3: trigger CI pipeline ────────────────────────────────
+      # ── phase 4: wait for auto-triggered pipeline ───────────────────
+      # The push should have triggered a pipeline via forge gossip.
+      # Poll `ci list` until a run appears (auto-triggered, no manual ci run).
 
-      with subtest("trigger CI pipeline"):
-          result = cli(f"ci run {repo_id} --ref-name refs/heads/main", check=False)
-          node1.log(f"CI trigger: {result}")
-
-          err = node1.succeed("cat /tmp/_cli_err.txt 2>/dev/null || true").strip()
-          if err:
-              node1.log(f"CI trigger stderr: {err}")
-
-          if isinstance(result, dict) and result.get("is_success"):
-              run_id = result.get("run_id")
-              assert run_id, f"no run_id: {result}"
-              node1.log(f"Pipeline started: {run_id}")
-          else:
-              # CI trigger may fail if config not found yet — that's diagnostic
-              node1.log(f"CI trigger result (may indicate config issue): {result}")
-              # Try listing runs to see if anything was queued
+      with subtest("auto-triggered pipeline appears"):
+          deadline = time.time() + 60
+          run_id = None
+          while time.time() < deadline:
               list_out = cli("ci list", check=False)
-              node1.log(f"CI list: {list_out}")
-              runs = list_out.get("runs", []) if isinstance(list_out, dict) else []
-              if runs:
-                  run_id = runs[0].get("run_id")
-                  node1.log(f"Found run from list: {run_id}")
-              else:
-                  raise Exception(f"CI pipeline trigger failed and no runs found: {result}")
+              if isinstance(list_out, dict):
+                  runs = list_out.get("runs", [])
+                  if runs:
+                      run_id = runs[0].get("run_id")
+                      node1.log(f"Auto-triggered pipeline found: {run_id}")
+                      break
+              time.sleep(2)
+          assert run_id, "No auto-triggered pipeline appeared within 60s"
 
-      # ── phase 4: wait for pipeline completion ───────────────────────
+      # ── phase 5: wait for pipeline completion ───────────────────────
 
-      with subtest("wait for pipeline completion"):
+      with subtest("wait for auto-triggered pipeline completion"):
           final_status = wait_for_pipeline(run_id, timeout=180)
           node1.log(f"Pipeline final: {json.dumps(final_status, indent=2)}")
           pipeline_status = final_status.get("status")
@@ -313,7 +320,7 @@ in
           else:
               node1.log(f"Pipeline failed (may be expected if config issue): {final_status}")
 
-      # ── phase 5: verify CI list shows the run ───────────────────────
+      # ── phase 6: verify CI list shows the run ───────────────────────
 
       with subtest("ci list shows completed run"):
           result = cli("ci list", check=False)
@@ -323,7 +330,7 @@ in
               found = any(r.get("run_id") == run_id for r in runs)
               assert found, f"run {run_id} not in list: {runs}"
 
-      # ── phase 6: verify ref-status ──────────────────────────────────
+      # ── phase 7: verify ref-status ──────────────────────────────────
 
       with subtest("ci ref-status tracks pipeline"):
           result = cli(f"ci ref-status {repo_id} refs/heads/main", check=False)
@@ -333,7 +340,7 @@ in
           else:
               node1.log("Ref status not found (may not be indexed yet)")
 
-      # ── phase 7: start cache gateway and verify ─────────────────────
+      # ── phase 8: start cache gateway and verify ─────────────────────
 
       with subtest("start nix cache gateway"):
           ticket = get_ticket()
