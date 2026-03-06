@@ -7,8 +7,11 @@ use aspen_blob::prelude::*;
 use aspen_cache::CacheIndex;
 use iroh::Endpoint;
 use iroh::PublicKey;
+#[cfg(feature = "snix")]
 use snix_castore::blobservice::BlobService;
+#[cfg(feature = "snix")]
 use snix_castore::directoryservice::DirectoryService;
+#[cfg(feature = "snix")]
 use snix_store::pathinfoservice::PathInfoService;
 use tracing::info;
 use tracing::warn;
@@ -49,10 +52,13 @@ pub struct NixBuildWorkerConfig {
     /// SNIX blob service for decomposed content-addressed storage.
     /// When set along with directory and pathinfo services, built store paths
     /// are ingested as NAR archives directly into the SNIX storage layer.
+    #[cfg(feature = "snix")]
     pub snix_blob_service: Option<Arc<dyn BlobService>>,
     /// SNIX directory service for storing directory metadata.
+    #[cfg(feature = "snix")]
     pub snix_directory_service: Option<Arc<dyn DirectoryService>>,
     /// SNIX path info service for storing Nix store path metadata.
+    #[cfg(feature = "snix")]
     pub snix_pathinfo_service: Option<Arc<dyn PathInfoService>>,
 
     /// Directory for build outputs.
@@ -95,8 +101,11 @@ impl Default for NixBuildWorkerConfig {
             cluster_id: String::new(),
             blob_store: None,
             cache_index: None,
+            #[cfg(feature = "snix")]
             snix_blob_service: None,
+            #[cfg(feature = "snix")]
             snix_directory_service: None,
+            #[cfg(feature = "snix")]
             snix_pathinfo_service: None,
             output_dir: PathBuf::from("/tmp/aspen-ci/builds"),
             nix_binary: "nix".to_string(),
@@ -143,23 +152,26 @@ impl NixBuildWorkerConfig {
         }
 
         // Check SNIX services (all three must be present for SNIX storage)
-        let has_snix = self.snix_blob_service.is_some()
-            && self.snix_directory_service.is_some()
-            && self.snix_pathinfo_service.is_some();
-
-        // Partial SNIX config is a misconfiguration (missing SNIX entirely is fine)
-        if !has_snix
-            && (self.snix_blob_service.is_some()
-                || self.snix_directory_service.is_some()
-                || self.snix_pathinfo_service.is_some())
+        #[cfg(feature = "snix")]
         {
-            warn!(
-                node_id = self.node_id,
-                has_blob_service = self.snix_blob_service.is_some(),
-                has_directory_service = self.snix_directory_service.is_some(),
-                has_pathinfo_service = self.snix_pathinfo_service.is_some(),
-                "NixBuildWorkerConfig: partial SNIX services configured - all three services required for SNIX storage"
-            );
+            let has_snix = self.snix_blob_service.is_some()
+                && self.snix_directory_service.is_some()
+                && self.snix_pathinfo_service.is_some();
+
+            // Partial SNIX config is a misconfiguration (missing SNIX entirely is fine)
+            if !has_snix
+                && (self.snix_blob_service.is_some()
+                    || self.snix_directory_service.is_some()
+                    || self.snix_pathinfo_service.is_some())
+            {
+                warn!(
+                    node_id = self.node_id,
+                    has_blob_service = self.snix_blob_service.is_some(),
+                    has_directory_service = self.snix_directory_service.is_some(),
+                    has_pathinfo_service = self.snix_pathinfo_service.is_some(),
+                    "NixBuildWorkerConfig: partial SNIX services configured - all three services required for SNIX storage"
+                );
+            }
         }
 
         // Check cache proxy config (all three must be present if enabled)

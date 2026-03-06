@@ -629,16 +629,16 @@ async fn initialize_job_system(
                 } else {
                     (None, None, None)
                 };
-                #[cfg(not(feature = "snix"))]
-                let (snix_blob_svc, snix_dir_svc, snix_pathinfo_svc) = (None, None, None);
-
                 let nix_config = NixBuildWorkerConfig {
                     node_id: config.node_id,
                     cluster_id: config.cookie.clone(),
                     blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
                     cache_index: cache_index.clone(),
+                    #[cfg(feature = "snix")]
                     snix_blob_service: snix_blob_svc,
+                    #[cfg(feature = "snix")]
                     snix_directory_service: snix_dir_svc,
+                    #[cfg(feature = "snix")]
                     snix_pathinfo_service: snix_pathinfo_svc,
                     output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
                     nix_binary: "nix".to_string(),

@@ -42,6 +42,7 @@ impl Worker for NixBuildWorker {
         };
 
         // Upload store paths to SNIX distributed cache if requested
+        #[cfg(feature = "snix")]
         let uploaded_store_paths_snix = if payload.publish_to_cache {
             // Filter outputs if cache_outputs is specified
             let paths_to_publish = if payload.cache_outputs.is_empty() {
@@ -63,6 +64,8 @@ impl Worker for NixBuildWorker {
         } else {
             vec![]
         };
+        #[cfg(not(feature = "snix"))]
+        let uploaded_store_paths_snix: Vec<serde_json::Value> = vec![];
 
         // Collect artifacts
         let artifacts = match self.collect_artifacts(&build_output.output_paths, &payload.artifacts).await {

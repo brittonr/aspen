@@ -86,6 +86,8 @@ shell-executor = ["dep:aspen-ci-executor-shell"]
 plugins-vm = ["dep:aspen-ci-executor-vm", "aspen-jobs/plugins-vm"]
 # Nix build executor for Nix flake builds
 nix-executor = ["dep:aspen-ci-executor-nix"]
+# Nix executor with SNIX integration for decomposed cache uploads
+nix-executor-snix = ["nix-executor", "aspen-ci-executor-nix/snix"]
 # SNIX storage (forwarded to executor crates)
 # HTTP/3 cache proxy for Nix binary cache substitution
 nix-cache-proxy = ["aspen-ci-executor-shell?/nix-cache-proxy"]

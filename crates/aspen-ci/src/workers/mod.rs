@@ -29,7 +29,7 @@ pub use aspen_ci_executor_nix::NixBuildWorker;
 pub use aspen_ci_executor_nix::NixBuildWorkerConfig;
 #[cfg(feature = "nix-executor")]
 pub use aspen_ci_executor_nix::UploadedStorePath;
-#[cfg(feature = "nix-executor")]
+#[cfg(feature = "nix-executor-snix")]
 pub use aspen_ci_executor_nix::UploadedStorePathSnix;
 #[cfg(feature = "shell-executor")]
 pub use aspen_ci_executor_shell::ArtifactCollectionResult;

@@ -469,7 +469,7 @@ net = ["dep:aspen-net", "proxy", "aspen-rpc-handlers/net"]
 # contacts and calendar are now WASM plugins (aspen-plugins repo)
 federation = ["aspen-cluster/federation"]
 relay-server = ["aspen-cluster/relay-server"]
-snix = ["dep:aspen-snix", "dep:aspen-castore", "dep:snix-castore", "dep:snix-store", "blob", "aspen-cluster/snix"]
+snix = ["dep:aspen-snix", "dep:aspen-castore", "dep:snix-castore", "dep:snix-store", "blob", "aspen-cluster/snix", "aspen-ci?/nix-executor-snix"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]

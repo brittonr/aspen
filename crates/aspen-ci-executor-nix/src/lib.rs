@@ -33,6 +33,7 @@ mod cache;
 mod config;
 mod executor;
 mod payload;
+#[cfg(feature = "snix")]
 mod snix;
 mod worker;
 
@@ -40,6 +41,7 @@ pub use cache::UploadedStorePath;
 pub use config::NixBuildWorkerConfig;
 pub use executor::NixBuildWorker;
 pub use payload::NixBuildPayload;
+#[cfg(feature = "snix")]
 pub use snix::UploadedStorePathSnix;
 
 #[cfg(test)]
