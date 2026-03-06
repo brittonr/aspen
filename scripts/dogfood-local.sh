@@ -48,6 +48,30 @@ cli_json() {
   "$ASPEN_CLI" --ticket "$ticket" --json "$@"
 }
 
+# Extract a JSON field from CLI output that may have a version banner prefix.
+# Usage: parse_json <python_expr> <<< "$output"
+#   python_expr receives the parsed dict as 'd' and should print the result.
+# Examples:
+#   parse_json "d.get('id','')" <<< "$out"
+#   parse_json "d.get('runs',[])[0].get('run_id','')" <<< "$out"
+parse_json() {
+  local expr="$1"
+  python3 -c "
+import json, sys, re
+raw = sys.stdin.read()
+# Strip any non-JSON prefix (e.g. version banner lines)
+m = re.search(r'[\[{]', raw)
+if m:
+    raw = raw[m.start():]
+try:
+    d = json.loads(raw)
+    result = eval('''$expr''')
+    print(result if result else '')
+except:
+    print('')
+" 2>/dev/null
+}
+
 # ── Stop ──────────────────────────────────────────────────────────────
 
 do_stop() {
@@ -215,32 +239,14 @@ do_push() {
   log "Creating Forge repository..."
   local create_out
   create_out=$(cli_json git init aspen 2>&1)
-  repo_id=$(echo "$create_out" | python3 -c "
-import json, sys
-try:
-    d = json.loads(sys.stdin.read())
-    print(d.get('id') or d.get('repo_id', ''))
-except:
-    print('')
-" 2>/dev/null)
+  repo_id=$(parse_json "d.get('id') or d.get('repo_id','')" <<< "$create_out")
 
   if [ -z "$repo_id" ]; then
     # Maybe repo already exists, try listing
     log "Repo may already exist, checking..."
     local list_out
     list_out=$(cli_json git list 2>&1)
-    repo_id=$(echo "$list_out" | python3 -c "
-import json, sys
-try:
-    d = json.loads(sys.stdin.read())
-    repos = d.get('repos') or d.get('repositories') or []
-    for r in repos:
-        if r.get('name') == 'aspen':
-            print(r.get('id') or r.get('repo_id', ''))
-            break
-except:
-    print('')
-" 2>/dev/null)
+    repo_id=$(parse_json "next((r.get('id') or r.get('repo_id','') for r in (d.get('repos') or d.get('repositories') or []) if r.get('name')=='aspen'), '')" <<< "$list_out")
   fi
 
   if [ -z "$repo_id" ]; then
@@ -309,16 +315,7 @@ do_build() {
   while [ $SECONDS -lt $deadline ]; do
     local list_out
     list_out=$(cli_json ci list 2>&1)
-    run_id=$(echo "$list_out" | python3 -c "
-import json, sys
-try:
-    d = json.loads(sys.stdin.read())
-    runs = d.get('runs', [])
-    if runs:
-        print(runs[0].get('run_id', ''))
-except:
-    print('')
-" 2>/dev/null)
+    run_id=$(parse_json "d.get('runs',[])[0].get('run_id','') if d.get('runs') else ''" <<< "$list_out")
 
     if [ -n "$run_id" ]; then
       ok "Pipeline found: $run_id"
@@ -331,14 +328,7 @@ except:
     warn "No auto-triggered pipeline found, manually triggering..."
     local trigger_out
     trigger_out=$(cli_json ci trigger "$repo_id" 2>&1)
-    run_id=$(echo "$trigger_out" | python3 -c "
-import json, sys
-try:
-    d = json.loads(sys.stdin.read())
-    print(d.get('run_id', ''))
-except:
-    print('')
-" 2>/dev/null)
+    run_id=$(parse_json "d.get('run_id','')" <<< "$trigger_out")
 
     if [ -z "$run_id" ]; then
       err "Failed to trigger pipeline"
@@ -356,15 +346,7 @@ except:
     local status_out
     status_out=$(cli_json ci status "$run_id" 2>&1)
     local status
-    status=$(echo "$status_out" | python3 -c "
-import json, sys
-try:
-    d = json.loads(sys.stdin.read())
-    status = d.get('status', 'unknown')
-    print(status)
-except:
-    print('unknown')
-" 2>/dev/null)
+    status=$(parse_json "d.get('status','unknown')" <<< "$status_out")
 
     case "$status" in
       success)
