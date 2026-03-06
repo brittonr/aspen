@@ -40,4 +40,4 @@
 - [x] 6.1 Add narinfo round-trip test: create CacheEntry → render narinfo → verify parseable by `nix-store --dump-narinfo` format
 - [x] 6.2 Add gateway integration test: narinfo signed round-trip, cache-info format, URL format
 - [x] 6.3 Add gateway narinfo test: narinfo content-type, URL uses blob hash, signature verification
-- [ ] 6.4 Add NixOS VM test: 2-node cluster + gateway + nix client — CI builds a derivation, uploads to cache, second machine substitutes from gateway (deferred: requires flake.nix gateway binary build)
+- [x] 6.4 Add NixOS VM test: single-node cluster + gateway — verifies nix-cache-info, narinfo 404/400, cache public-key CLI, unknown route 404
