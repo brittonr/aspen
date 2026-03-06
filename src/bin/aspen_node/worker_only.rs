@@ -386,6 +386,39 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                     }
                                 };
 
+                                // For ci_nix_build jobs, transform NixBuildPayload → LocalExecutorPayload.
+                                // The pipeline creates NixBuildPayload (flake_url, attribute, run_id)
+                                // but LocalExecutorWorker expects LocalExecutorPayload (command, args).
+                                let mut job_spec = job_spec;
+                                let run_id_for_logs: Option<String> = if job_info.job_type == "ci_nix_build" {
+                                    match transform_nix_payload(&mut job_spec) {
+                                        Ok(run_id) => run_id,
+                                        Err(e) => {
+                                            error!(
+                                                job_id = %job_info.job_id,
+                                                error = %e,
+                                                "failed to transform nix payload"
+                                            );
+                                            let complete_request = ClientRpcRequest::WorkerCompleteJob {
+                                                worker_id: worker_id_clone.clone(),
+                                                job_id: job_info.job_id.clone(),
+                                                receipt_handle: job_info.receipt_handle.clone(),
+                                                execution_token: job_info.execution_token.clone(),
+                                                is_success: false,
+                                                error_message: Some(format!("Nix payload transform failed: {}", e)),
+                                                output_data: None,
+                                                processing_time_ms: 0,
+                                            };
+                                            let _ = rpc_for_poll.send(complete_request).await;
+                                            active_jobs.retain(|id| id != &job_info.job_id);
+                                            total_failed += 1;
+                                            continue;
+                                        }
+                                    }
+                                } else {
+                                    None
+                                };
+
                                 let job = aspen_jobs::Job {
                                     id: aspen_jobs::JobId::parse(&job_info.job_id).unwrap_or_else(|_| aspen_jobs::JobId::new()),
                                     spec: job_spec,
@@ -414,6 +447,18 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                 let start_time = std::time::Instant::now();
                                 let job_result = worker_for_executor.execute(job).await;
                                 let processing_time_ms = start_time.elapsed().as_millis() as u64;
+
+                                // Stream logs to cluster KV so `ci logs --follow` can see them.
+                                // The host NixBuildWorker writes chunks during execution, but VM
+                                // workers only have the final output. Write it as log chunks via RPC.
+                                if let Some(ref rid) = run_id_for_logs {
+                                    write_job_logs_to_cluster(
+                                        &rpc_for_poll,
+                                        rid,
+                                        &job_info.job_id,
+                                        &job_result,
+                                    ).await;
+                                }
 
                                 let (is_success, error_message, output_data) = match &job_result {
                                     aspen_jobs::JobResult::Success(output) => {
@@ -557,4 +602,196 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
     drop(iroh_manager);
 
     Ok(())
+}
+
+#[cfg(feature = "ci")]
+/// Transform a NixBuildPayload into LocalExecutorPayload format in-place.
+///
+/// The CI pipeline creates `NixBuildPayload` (with flake_url, attribute, run_id)
+/// for `ci_nix_build` jobs, but VM workers use `LocalExecutorWorker` which expects
+/// `LocalExecutorPayload` (with command, args). This function converts between them.
+///
+/// Returns the `run_id` from the nix payload (used for log streaming).
+fn transform_nix_payload(job_spec: &mut aspen_jobs::JobSpec) -> std::result::Result<Option<String>, String> {
+    // Parse the payload as NixBuildPayload
+    let nix_payload: serde_json::Value = job_spec.payload.clone();
+
+    let flake_url = nix_payload.get("flake_url").and_then(|v| v.as_str()).unwrap_or(".");
+    let attribute = nix_payload.get("attribute").and_then(|v| v.as_str()).unwrap_or("");
+    let run_id = nix_payload.get("run_id").and_then(|v| v.as_str()).map(String::from);
+    let working_dir = nix_payload.get("working_dir").and_then(|v| v.as_str()).map(String::from);
+    let timeout_secs = nix_payload.get("timeout_secs").and_then(|v| v.as_u64()).unwrap_or(3600);
+    let extra_args: Vec<String> = nix_payload
+        .get("extra_args")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    let artifacts: Vec<String> = nix_payload
+        .get("artifacts")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    let job_name = nix_payload.get("job_name").and_then(|v| v.as_str()).map(String::from);
+
+    // Build the flake reference: "flake_url#attribute" or just "flake_url"
+    let flake_ref = if attribute.is_empty() {
+        flake_url.to_string()
+    } else if attribute.starts_with('#') || flake_url.contains('#') {
+        format!("{}{}", flake_url, attribute)
+    } else {
+        format!("{}#{}", flake_url, attribute)
+    };
+
+    // Build nix build args
+    let mut args = vec![
+        "build".to_string(),
+        flake_ref,
+        "--out-link".to_string(),
+        "result".to_string(),
+        "--print-out-paths".to_string(),
+        "-L".to_string(),
+    ];
+    args.extend(extra_args);
+
+    // Build env from nix payload env vars
+    let env: std::collections::HashMap<String, String> =
+        nix_payload.get("env").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
+
+    // Build LocalExecutorPayload
+    let local_payload = serde_json::json!({
+        "job_name": job_name,
+        "command": "nix",
+        "args": args,
+        "working_dir": working_dir.unwrap_or_else(|| ".".to_string()),
+        "env": env,
+        "timeout_secs": timeout_secs,
+        "artifacts": artifacts,
+    });
+
+    job_spec.payload = local_payload;
+    info!(
+        run_id = ?run_id,
+        "transformed NixBuildPayload → LocalExecutorPayload for VM execution"
+    );
+
+    Ok(run_id)
+}
+
+#[cfg(feature = "ci")]
+/// Write job output as log chunks to the cluster KV via RPC.
+///
+/// This enables `ci logs --follow` to show output from VM-executed jobs.
+/// The host's NixBuildWorker streams logs in real-time via direct KV writes,
+/// but VM workers only have the final output. We write it as log chunks
+/// matching the same KV schema so the CLI can read them.
+async fn write_job_logs_to_cluster(
+    rpc_client: &aspen_client::AspenClient,
+    run_id: &str,
+    job_id: &str,
+    job_result: &aspen_jobs::JobResult,
+) {
+    use aspen_client_api::BatchWriteOperation;
+    use aspen_client_api::ClientRpcRequest;
+
+    // KV prefix matching NixBuildWorker's log_bridge
+    const CI_LOG_KV_PREFIX: &str = "_ci:logs:";
+    const CI_LOG_COMPLETE_MARKER: &str = "__complete__";
+    const MAX_CHUNK_SIZE: usize = 8 * 1024;
+
+    // Extract log content from the result
+    let log_content = match job_result {
+        aspen_jobs::JobResult::Success(output) => {
+            // Try build_log metadata first (NixBuildWorker style), then stderr, then stdout
+            output
+                .metadata
+                .get("build_log")
+                .cloned()
+                .or_else(|| {
+                    output.data.get("stderr").and_then(|v| {
+                        // Handle OutputRef format
+                        v.get("content").and_then(|c| c.as_str()).or_else(|| v.as_str()).map(String::from)
+                    })
+                })
+                .or_else(|| {
+                    output.data.get("stdout").and_then(|v| {
+                        v.get("content").and_then(|c| c.as_str()).or_else(|| v.as_str()).map(String::from)
+                    })
+                })
+                .unwrap_or_default()
+        }
+        aspen_jobs::JobResult::Failure(failure) => failure.reason.clone(),
+        aspen_jobs::JobResult::Cancelled => "Job cancelled".to_string(),
+    };
+
+    if log_content.is_empty() {
+        debug!(run_id, job_id, "no log content to write");
+        return;
+    }
+
+    let now_ms =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+
+    // Split into chunks and write via BatchWrite RPC
+    let mut chunk_index: u32 = 0;
+    let mut operations = Vec::new();
+
+    for chunk_text in log_content.as_bytes().chunks(MAX_CHUNK_SIZE) {
+        let content = String::from_utf8_lossy(chunk_text).to_string();
+        let key = format!("{CI_LOG_KV_PREFIX}{run_id}:{job_id}:{chunk_index:010}");
+        let chunk_json = serde_json::json!({
+            "index": chunk_index,
+            "content": content,
+            "timestamp_ms": now_ms,
+        });
+        if let Ok(value) = serde_json::to_string(&chunk_json) {
+            operations.push(BatchWriteOperation::Set {
+                key,
+                value: value.into_bytes(),
+            });
+        }
+        chunk_index += 1;
+    }
+
+    // Add completion marker
+    let marker_key = format!("{CI_LOG_KV_PREFIX}{run_id}:{job_id}:{CI_LOG_COMPLETE_MARKER}");
+    let marker_json = serde_json::json!({
+        "total_chunks": chunk_index,
+        "timestamp_ms": now_ms,
+        "status": "done",
+    });
+    if let Ok(value) = serde_json::to_string(&marker_json) {
+        operations.push(BatchWriteOperation::Set {
+            key: marker_key,
+            value: value.into_bytes(),
+        });
+    }
+
+    // Send all chunks in a single BatchWrite (up to 100 operations)
+    // For very large logs, split into multiple batches
+    for batch in operations.chunks(100) {
+        let write_request = ClientRpcRequest::BatchWrite {
+            operations: batch.to_vec(),
+        };
+        match rpc_client.send(write_request).await {
+            Ok(_) => {
+                debug!(run_id, job_id, chunks = batch.len(), "wrote log chunks to cluster KV");
+            }
+            Err(e) => {
+                warn!(
+                    run_id,
+                    job_id,
+                    error = %e,
+                    "failed to write log chunks to cluster KV"
+                );
+            }
+        }
+    }
+
+    info!(
+        run_id,
+        job_id,
+        total_chunks = chunk_index,
+        total_bytes = log_content.len(),
+        "VM job logs written to cluster KV"
+    );
 }

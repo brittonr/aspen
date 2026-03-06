@@ -2,6 +2,11 @@
 
 ## Corrections
 
+| 2026-03-06 | self | VM workers polled for `ci_vm` jobs but CI pipeline submitted `ci_nix_build` — VMs sat idle consuming 48GB RAM while host handled all builds | Job types must match: VMs now poll `ci_nix_build` + `ci_vm` + `shell_command`. When `ASPEN_CI_KERNEL_PATH` is set, host skips local NixBuildWorker registration so VMs get the jobs. |
+| 2026-03-06 | self | Dogfood smoke test checked `[ -n "$ci_version" ]` but `$ci_version` contained error message from unsupported `--version` flag — non-empty error = "functional" | Check exit code (`if "$ci_bin" --help >/dev/null 2>&1`), not output emptiness. Error messages are non-empty strings. Added `#[command(version)]` to clap derive so `--version` actually works. |
+| 2026-03-06 | self | `stream_pid: unbound variable` — `trap cleanup_stream EXIT` set inside `stream_pipeline()` persists after function returns, but local `stream_pid` goes out of scope | Add `trap - EXIT` after `cleanup_stream` before returning from the function to clear the trap. |
+| 2026-03-06 | self | delegate_task workers reported success for VM CI routing fix but no file changes persisted (again, 6th documented incident) | **CONFIRMED: delegate_task NEVER persists file edits.** Always make edits directly. Only use for read-only information gathering. |
+
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
 | 2026-03-06 | self | `aspen-ci-handler` forge+blob features never propagated — `aspen-rpc-handlers/ci` enabled the dep but not `aspen-ci-handler/forge` or `aspen-ci-handler/blob`. Server returned CI_FEATURE_UNAVAILABLE for trigger, list, artifacts | When a feature on crate A enables `dep:crate-B`, also propagate sub-features: `ci = ["dep:aspen-ci-handler", "aspen-ci-handler/forge", "aspen-ci-handler/blob"]`. Check feature propagation chains for optional deps with their own feature flags. |
