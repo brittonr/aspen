@@ -231,10 +231,23 @@
 
 - **Full pipeline**: git push → forge gossip → CI auto-trigger → nix build → success
 - **VM test**: `ci-nix-build-test` — pushes a flake to Forge, NixBuildWorker runs `nix build`, verifies success
+- **VM test**: `ci-dogfood-test` — pushes ALL 80+ Aspen crates to Forge, CI auto-triggers 3-stage pipeline (validate → build 2 crates parallel → run tests)
 - **Feature chain for nix executor**: root `ci` → `ci-basic` → `nix-executor` (marker) + `aspen-ci/nix-executor`
 - **Feature chain for snix upload**: root `snix` → `aspen-ci/nix-executor-snix` → `aspen-ci-executor-nix/snix`
 - `.aspen/ci.ncl` is the real CI config for Aspen — uses `type = 'nix` for builds, `type = 'shell` for format checks
 - `.aspen/` is gitignored except `.aspen/ci.ncl` (via `!.aspen/ci.ncl` override)
+
+**unit2nix Build System (all three binaries via per-crate Nix builds):**
+
+- `nix build .#aspen-node` → 63MB (658 crates, features: ci,docs,hooks,shell-worker,automerge,secrets,git-bridge)
+- `nix build .#aspen-cli` → 21MB (472 crates, features: forge,ci,secrets,automerge)
+- `nix build .#git-remote-aspen` → 20MB (474 crates, features: git-bridge)
+- Three separate build plans: `build-plan.json`, `build-plan-cli.json`, `build-plan-git-remote.json`
+- Regenerate: `nix run .#generate-build-plan`, `nix run .#generate-build-plan-cli`, `nix run .#generate-build-plan-git-remote`
+- Shared `u2nCrateOverrides` for all three plans (description quoting, build.rs env vars, ring)
+- unit2nix input changed from local path to `github:brittonr/unit2nix` for portability
+- Crane builds preserved as `crane-{aspen-node,aspen-cli,git-remote-aspen}` for VM tests
+- Per-crate test via unit2nix NOT YET WORKING — `--include-dev` only captures root crate dev-deps
 
 **Pre-Existing Issues (not blockers):**
 
@@ -294,3 +307,5 @@
 | 2026-03-05 | self | `CiJobInfo` struct uses `id` field not `job_id`, and requires `started_at_ms`/`ended_at_ms`/`error` fields | Always check the actual struct definition before constructing it. Copy the field pattern from existing code nearby (e.g., `handle_get_status`). |
 | 2026-03-06 | self | `nix build .#aspen-node` (unit2nix/buildRustCrate) fails when crate description contains embedded double quotes — `export CARGO_PKG_DESCRIPTION="...\"best effort\"..."` breaks bash | Add `defaultCrateOverrides` entries to replace `"` with `'` in descriptions: `crateName = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};`. Affected crates: base16ct, base64ct, cobs, leb128, openssl-probe, ssh-key, syn-mid, zerocopy. |
 | 2026-03-06 | self | `build-plan.json` (unit2nix) was stale — missing `aspen-crypto` and other workspace crates added since last regen | Always run `nix run .#generate-build-plan` after adding workspace members or changing features. The build plan is NOT auto-updated. |
+| 2026-03-06 | self | unit2nix `--include-dev` with `--bin aspen-node` only captures dev-deps for the ROOT crate, not workspace members — `aspen-hlc` tests failed with missing `bincode` | Per-crate test support requires separate build plans per crate (or `--workspace` mode). Don't use `--include-dev` with `--bin`. |
+| 2026-03-06 | self | unit2nix `--members` flag requires the member name to exist in the unit graph — `aspen-cli` wasn't in `--bin aspen-node` graph since it's a separate package | Use separate build plans for binaries in different packages. Each `--bin`/`-p` invocation creates its own unit graph. Can't merge. |
