@@ -93,6 +93,11 @@
 | 2026-03-05 | self | snix-src is `flake = false` + pinned to specific rev — `nix flake lock --update-input` won't change it unless the rev in `flake.nix` is also changed | Edit the `url = "git+...?rev=..."` in flake.nix first, then run lock update. |
 | 2026-03-05 | self | FUSE cache, metadata, and SOPS decrypt/encrypt/edit already had `#[cfg(test)] mod tests` scaffolding with 0 tests — the empty test modules were created during initial development | When checking test coverage, look inside `#[cfg(test)]` blocks for actual test functions, not just the presence of the module. |
 
+| 2026-03-06 | self | `nix-executor` feature referenced in `#[cfg(feature = "nix-executor")]` in node binary but never defined in root Cargo.toml — NixBuildWorker was dead code | When adding `#[cfg(feature = "...")]` guards, verify the feature is actually defined in the crate's `[features]` table AND propagated from parent crates. Use `grep feature_name Cargo.toml` to verify. |
+| 2026-03-06 | self | EchoWorker's `excluded_types` (ci_nix_build, ci_vm) collected globally via union — ALL worker goroutines excluded these types from dequeue, preventing NixBuildWorker from ever picking up nix build jobs | `excluded_types` should filter out types that have NO registered handler. Changed `run_worker_collect_excluded_types` to check if a dedicated handler exists before excluding a type. |
+| 2026-03-06 | self | `snix-castore`, `snix-store`, `nix-compat` were unconditional deps of `aspen-ci-executor-nix` — broke Nix builds that use stub snix crates (the normal `full-aspen-node-plugins` build) | Make external git deps optional behind feature flags. The snix functionality in the nix executor is an add-on, not a requirement. Feature chain: root `snix` → `aspen-ci/nix-executor-snix` → `aspen-ci-executor-nix/snix`. |
+| 2026-03-06 | self | `NixBuildWorkerConfig` had `gateway_url` field added but not propagated to the node binary constructor — missing field compiler error | When adding fields to config structs, grep ALL construction sites: `rg 'NixBuildWorkerConfig {' src/` |
+
 ## User Preferences
 
 - Improve plugin system iteratively
@@ -221,6 +226,15 @@
 - `MetricQuery` supports aggregation (avg/sum/min/max/count/last) + time-bucketed downsampling via `step_us`
 - Metric TTL: default 24h (`METRIC_DEFAULT_TTL_SECONDS`), max 7d (`METRIC_MAX_TTL_SECONDS`)
 - No periodic alert evaluation yet — on-demand only via `AlertEvaluate` RPC
+
+**Self-Hosting Pipeline (proven end-to-end 2026-03-06):**
+
+- **Full pipeline**: git push → forge gossip → CI auto-trigger → nix build → success
+- **VM test**: `ci-nix-build-test` — pushes a flake to Forge, NixBuildWorker runs `nix build`, verifies success
+- **Feature chain for nix executor**: root `ci` → `ci-basic` → `nix-executor` (marker) + `aspen-ci/nix-executor`
+- **Feature chain for snix upload**: root `snix` → `aspen-ci/nix-executor-snix` → `aspen-ci-executor-nix/snix`
+- `.aspen/ci.ncl` is the real CI config for Aspen — uses `type = 'nix` for builds, `type = 'shell` for format checks
+- `.aspen/` is gitignored except `.aspen/ci.ncl` (via `!.aspen/ci.ncl` override)
 
 **Pre-Existing Issues (not blockers):**
 
