@@ -345,18 +345,122 @@ do_build() {
   # Save run_id for verify step
   echo "$run_id" > "$CLUSTER_DIR/run_id"
 
-  # Stream pipeline progress (clears screen, shows stages/jobs, exits on completion)
+  # Stream build progress with live logs
   log "Streaming pipeline progress..."
   echo ""
-  if cli ci status --follow "$run_id" 2>/dev/null; then
-    echo ""
-    ok "Pipeline completed successfully! 🎉"
-    return 0
-  else
-    echo ""
-    err "Pipeline failed"
-    return 1
-  fi
+  stream_pipeline "$run_id"
+}
+
+# Stream pipeline progress: poll status, tail logs for each running job.
+stream_pipeline() {
+  local run_id="$1"
+  local streaming_job=""      # job currently being tailed
+  local stream_pid=""         # PID of background log tail
+  local seen_jobs=""          # jobs we've already streamed (space-separated)
+
+  cleanup_stream() {
+    if [ -n "$stream_pid" ] && kill -0 "$stream_pid" 2>/dev/null; then
+      kill "$stream_pid" 2>/dev/null || true
+      wait "$stream_pid" 2>/dev/null || true
+    fi
+  }
+  trap cleanup_stream EXIT
+
+  while true; do
+    local status_out
+    status_out=$(cli_json ci status "$run_id" 2>&1) || true
+    local pipeline_status
+    pipeline_status=$(parse_json "d.get('status','unknown')" <<< "$status_out")
+
+    # Find the currently running job (first one with status=running)
+    local active_job_id active_job_name
+    read -r active_job_id active_job_name < <(python3 -c "
+import json, sys, re, os
+raw = sys.stdin.read()
+m = re.search(r'[\[{]', raw)
+if m: raw = raw[m.start():]
+try:
+    d = json.loads(raw)
+    for stage in d.get('stages', []):
+        for job in stage.get('jobs', []):
+            if job.get('status') == 'running' and job.get('id'):
+                print(job['id'], job.get('name', ''))
+                sys.exit(0)
+    print(' ')
+except:
+    print(' ')
+" <<< "$status_out" 2>/dev/null)
+
+    # If a new job started running, switch log stream to it
+    if [ -n "$active_job_id" ] && [ "$active_job_id" != "$streaming_job" ]; then
+      # Check we haven't already streamed this job
+      case " $seen_jobs " in
+        *" $active_job_id "*) ;;
+        *)
+          # Stop previous stream
+          cleanup_stream
+          stream_pid=""
+
+          # Print header for new job
+          echo ""
+          echo -e "${BOLD}━━━ ${active_job_name:-$active_job_id} ━━━${NC}"
+          echo ""
+
+          # Start tailing logs for this job in background
+          cli ci logs --follow "$run_id" "$active_job_id" 2>/dev/null &
+          stream_pid=$!
+          streaming_job="$active_job_id"
+          seen_jobs="$seen_jobs $active_job_id"
+          ;;
+      esac
+    fi
+
+    # Check terminal state
+    case "$pipeline_status" in
+      success)
+        cleanup_stream
+        stream_pid=""
+        # Print final status summary
+        echo ""
+        print_pipeline_summary "$status_out"
+        ok "Pipeline completed successfully! 🎉"
+        return 0
+        ;;
+      failed|cancelled)
+        cleanup_stream
+        stream_pid=""
+        echo ""
+        print_pipeline_summary "$status_out"
+        err "Pipeline $pipeline_status"
+        return 1
+        ;;
+    esac
+
+    sleep 2
+  done
+}
+
+# Print a compact summary of all stages and jobs.
+print_pipeline_summary() {
+  local status_out="$1"
+  python3 -c "
+import json, sys, re
+raw = sys.stdin.read()
+m = re.search(r'[\[{]', raw)
+if m: raw = raw[m.start():]
+try:
+    d = json.loads(raw)
+    icons = {'success': '✅', 'failed': '❌', 'cancelled': '⏹️', 'running': '🔄', 'pending': '⏳'}
+    for stage in d.get('stages', []):
+        si = icons.get(stage.get('status', ''), '❓')
+        print(f'  {si} {stage[\"name\"]}')
+        for job in stage.get('jobs', []):
+            ji = icons.get(job.get('status', ''), '❓')
+            print(f'      {ji} {job[\"name\"]}')
+except:
+    pass
+" <<< "$status_out" 2>/dev/null
+  echo ""
 }
 
 # ── Verify ────────────────────────────────────────────────────────────
@@ -492,21 +596,50 @@ except:
 
   ok "Artifact blob hash: $blob_hash"
 
-  # Download the binary from blob store
+  # Try downloading the binary from blob store.
+  # Large binaries (>~30MB) may exceed the RPC response size limit,
+  # in which case we fall back to the local nix store path.
   local ci_binary="/tmp/aspen-node-ci-built"
   log "Downloading CI-built binary from blob store..."
-  cli blob get "$blob_hash" -o "$ci_binary" 2>/dev/null || {
-    err "Failed to download blob $blob_hash"
-    return 1
-  }
-  chmod +x "$ci_binary"
-  ok "Downloaded CI-built binary to $ci_binary"
+  if cli blob get "$blob_hash" -o "$ci_binary" 2>/dev/null; then
+    chmod +x "$ci_binary"
+    ok "Downloaded CI-built binary to $ci_binary"
+    compare_binaries "$ci_binary" "$ASPEN_NODE"
+    local result=$?
+    rm -f "$ci_binary"
+    return $result
+  fi
 
-  compare_binaries "$ci_binary" "$ASPEN_NODE"
-  local result=$?
+  # Blob too large for RPC — fall back to local nix store path
+  warn "Blob download failed (binary too large for RPC), using local store path"
+  local output_path
+  output_path=$(python3 -c "
+import json, sys, re
+raw = sys.stdin.read()
+m = re.search(r'[\[{]', raw)
+if m: raw = raw[m.start():]
+try:
+    d = json.loads(raw)
+    job_str = d.get('value', '')
+    job = json.loads(job_str)
+    data = job.get('result', {}).get('Success', {}).get('data', {})
+    paths = data.get('output_paths', [])
+    if paths:
+        print(paths[0])
+    else:
+        print('')
+except:
+    print('')
+" <<< "$job_data" 2>/dev/null)
 
-  rm -f "$ci_binary"
-  return $result
+  if [ -n "$output_path" ] && [ -f "$output_path/bin/aspen-node" ]; then
+    ok "Found CI-built binary at $output_path/bin/aspen-node"
+    compare_binaries "$output_path/bin/aspen-node" "$ASPEN_NODE"
+    return $?
+  fi
+
+  err "Could not locate CI-built binary"
+  return 1
 }
 
 compare_binaries() {

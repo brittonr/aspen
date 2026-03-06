@@ -607,6 +607,7 @@ pub fn test_pipeline_context(repo_name: &str) -> PipelineContext {
         commit_hash: [1u8; 32],
         ref_name: "refs/heads/main".to_string(),
         triggered_by: "test".to_string(),
+        run_id: String::new(),
         env: HashMap::new(),
         checkout_dir: None,
         source_hash: None,

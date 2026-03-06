@@ -280,6 +280,7 @@ fn build_nix_payload(job: &JobConfig, context: &PipelineContext) -> Result<serde
 
     let nix_payload = NixBuildPayload {
         job_name: Some(job.name.clone()),
+        run_id: Some(context.run_id.clone()),
         flake_url,
         attribute,
         extra_args: job.args.clone(),
@@ -375,6 +376,7 @@ mod tests {
             ref_name: "refs/heads/main".to_string(),
             commit_hash: [0u8; 32],
             triggered_by: "test".to_string(),
+            run_id: "test-run-id".to_string(),
             env: std::collections::HashMap::new(),
             checkout_dir: Some(std::path::PathBuf::from("/tmp/ci-test")),
             source_hash: None,

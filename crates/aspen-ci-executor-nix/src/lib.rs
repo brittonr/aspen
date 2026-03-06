@@ -51,6 +51,7 @@ mod tests {
     #[test]
     fn test_payload_validation() {
         let valid = NixBuildPayload {
+            run_id: None,
             job_name: None,
             flake_url: ".".to_string(),
             attribute: "packages.x86_64-linux.default".to_string(),
@@ -71,6 +72,7 @@ mod tests {
     #[test]
     fn test_payload_validation_empty_url() {
         let invalid = NixBuildPayload {
+            run_id: None,
             job_name: None,
             flake_url: "".to_string(),
             attribute: "default".to_string(),
@@ -91,6 +93,7 @@ mod tests {
     #[test]
     fn test_payload_validation_timeout_too_long() {
         let invalid = NixBuildPayload {
+            run_id: None,
             job_name: None,
             flake_url: ".".to_string(),
             attribute: "default".to_string(),
@@ -111,6 +114,7 @@ mod tests {
     #[test]
     fn test_flake_ref() {
         let payload = NixBuildPayload {
+            run_id: None,
             job_name: None,
             flake_url: "github:owner/repo".to_string(),
             attribute: "packages.x86_64-linux.default".to_string(),
@@ -131,6 +135,7 @@ mod tests {
     #[test]
     fn test_flake_ref_no_attribute() {
         let payload = NixBuildPayload {
+            run_id: None,
             job_name: None,
             flake_url: ".".to_string(),
             attribute: "".to_string(),

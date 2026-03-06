@@ -283,6 +283,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
             commit_hash: event.commit_hash,
             ref_name: event.ref_name.clone(),
             triggered_by: event.pusher.to_string(),
+            run_id: String::new(), // Set by orchestrator after run ID generation
             env,
             checkout_dir: None,
             source_hash: None,
@@ -386,6 +387,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
             commit_hash: event.commit_hash,
             ref_name: event.ref_name.clone(),
             triggered_by: event.pusher.to_string(),
+            run_id: String::new(), // Set by orchestrator after run ID generation
             env,
             checkout_dir: Some(checkout_dir.to_path_buf()),
             source_hash,

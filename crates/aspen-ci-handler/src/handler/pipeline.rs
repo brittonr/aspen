@@ -226,6 +226,7 @@ pub async fn handle_trigger_pipeline(
         commit_hash,
         ref_name: ref_name.clone(),
         triggered_by: "rpc".to_string(), // Could be enhanced with auth info
+        run_id: String::new(),           // Set by orchestrator after run ID generation
         env,
         checkout_dir: Some(checkout_dir),
         source_hash: None, // VM jobs may fail without source_hash

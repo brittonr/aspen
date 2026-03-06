@@ -35,6 +35,9 @@ pub enum CiCommand {
     /// Stop watching a repository.
     Unwatch(UnwatchArgs),
 
+    /// Stream build logs for a running or completed job.
+    Logs(LogsArgs),
+
     /// Get the full output (stdout/stderr) for a completed job.
     Output(OutputArgs),
 
@@ -101,6 +104,19 @@ pub struct WatchArgs {
 pub struct UnwatchArgs {
     /// Repository ID to stop watching.
     pub repo_id: String,
+}
+
+#[derive(Args)]
+pub struct LogsArgs {
+    /// Pipeline run ID.
+    pub run_id: String,
+
+    /// Job ID within the pipeline.
+    pub job_id: String,
+
+    /// Follow logs in real-time (tail -f style). Polls until the job completes.
+    #[arg(short, long)]
+    pub follow: bool,
 }
 
 #[derive(Args)]
@@ -423,6 +439,7 @@ impl CiCommand {
             CiCommand::Cancel(args) => ci_cancel(client, args, json).await,
             CiCommand::Watch(args) => ci_watch(client, args, json).await,
             CiCommand::Unwatch(args) => ci_unwatch(client, args, json).await,
+            CiCommand::Logs(args) => ci_logs(client, args, json).await,
             CiCommand::Output(args) => ci_output(client, args, json).await,
             CiCommand::RefStatus(args) => ci_ref_status(client, args, json).await,
         }
@@ -653,6 +670,87 @@ async fn ci_unwatch(client: &AspenClient, args: UnwatchArgs, json: bool) -> Resu
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn ci_logs(client: &AspenClient, args: LogsArgs, json: bool) -> Result<()> {
+    let mut start_index: u32 = 0;
+    let chunk_limit: u32 = 100;
+
+    loop {
+        let response = client
+            .send(ClientRpcRequest::CiGetJobLogs {
+                run_id: args.run_id.clone(),
+                job_id: args.job_id.clone(),
+                start_index,
+                limit: Some(chunk_limit),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::CiGetJobLogsResult(result) => {
+                if !result.was_found && start_index == 0 {
+                    if json {
+                        println!(
+                            "{}",
+                            serde_json::to_string(&json!({
+                                "error": result.error.as_deref().unwrap_or("Job logs not found"),
+                                "was_found": false
+                            }))?
+                        );
+                    } else {
+                        eprintln!(
+                            "No logs found for job {}{}",
+                            args.job_id,
+                            result.error.as_ref().map(|e| format!(": {}", e)).unwrap_or_default()
+                        );
+                    }
+                    std::process::exit(1);
+                }
+
+                if json {
+                    for chunk in &result.chunks {
+                        println!(
+                            "{}",
+                            serde_json::to_string(&json!({
+                                "index": chunk.index,
+                                "content": chunk.content,
+                                "timestamp_ms": chunk.timestamp_ms
+                            }))?
+                        );
+                    }
+                } else {
+                    for chunk in &result.chunks {
+                        print!("{}", chunk.content);
+                    }
+                }
+
+                // Advance past what we've read
+                if result.last_index >= start_index {
+                    start_index = result.last_index + 1;
+                }
+
+                if result.is_complete {
+                    return Ok(());
+                }
+
+                if !args.follow {
+                    // Not following — print what we have and exit
+                    if result.has_more {
+                        // More historical chunks available, keep fetching
+                        continue;
+                    }
+                    return Ok(());
+                }
+
+                // Following — if no new chunks, wait before polling again
+                if result.chunks.is_empty() {
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
+            }
+            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
     }
 }
 

@@ -633,6 +633,7 @@ async fn initialize_job_system(
                     node_id: config.node_id,
                     cluster_id: config.cookie.clone(),
                     blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
+                    kv_store: Some(kv_store.clone()),
                     cache_index: cache_index.clone(),
                     #[cfg(feature = "snix")]
                     snix_blob_service: snix_blob_svc,

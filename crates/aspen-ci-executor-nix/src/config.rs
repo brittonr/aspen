@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use aspen_blob::prelude::*;
 use aspen_cache::CacheIndex;
+use aspen_core::KeyValueStore;
 use iroh::Endpoint;
 use iroh::PublicKey;
 #[cfg(feature = "snix")]
@@ -43,6 +44,11 @@ pub struct NixBuildWorkerConfig {
 
     /// Optional blob store for artifact storage.
     pub blob_store: Option<Arc<dyn BlobStore>>,
+
+    /// Optional KV store for streaming build logs.
+    /// When set, build stderr is streamed to KV as log chunks in real-time,
+    /// readable via `CiGetJobLogs` RPC.
+    pub kv_store: Option<Arc<dyn KeyValueStore>>,
 
     /// Optional cache index for registering built store paths.
     /// When set, built store paths are automatically registered in the
@@ -100,6 +106,7 @@ impl Default for NixBuildWorkerConfig {
             node_id: 0,
             cluster_id: String::new(),
             blob_store: None,
+            kv_store: None,
             cache_index: None,
             #[cfg(feature = "snix")]
             snix_blob_service: None,

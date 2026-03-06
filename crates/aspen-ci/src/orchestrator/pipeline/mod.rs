@@ -127,6 +127,9 @@ pub struct PipelineContext {
     pub ref_name: String,
     /// Who triggered the build.
     pub triggered_by: String,
+    /// Pipeline run ID (set after run is created).
+    #[serde(default)]
+    pub run_id: String,
     /// Environment variables to inject.
     pub env: HashMap<String, String>,
     /// Working directory for jobs (checkout directory).
@@ -355,7 +358,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     }
 
     /// Execute a pipeline with the given configuration and context.
-    pub async fn execute(&self, pipeline_config: PipelineConfig, context: PipelineContext) -> Result<PipelineRun> {
+    pub async fn execute(&self, pipeline_config: PipelineConfig, mut context: PipelineContext) -> Result<PipelineRun> {
         // Validate job count
         let total_jobs: usize = pipeline_config.stages.iter().map(|s| s.jobs.len()).sum();
         if total_jobs as u32 > MAX_JOBS_PER_PIPELINE {
@@ -369,8 +372,10 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             reason: format!("run limit check failed for repo {}: {}", context.repo_id.to_hex(), e),
         })?;
 
-        // Create pipeline run
+        // Create pipeline run (context.run_id set after ID generation)
         let mut run = PipelineRun::new(pipeline_config.name.clone(), context.clone());
+        run.context.run_id = run.id.clone();
+        context.run_id = run.id.clone();
 
         // Initialize stage statuses
         init_stage_statuses(&mut run, &pipeline_config);
@@ -660,8 +665,9 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             reason: format!("run limit check failed for repo {}: {}", context.repo_id.to_hex(), e),
         })?;
 
-        // Create the run in Initializing state
-        let run = PipelineRun::new(pipeline_name, context);
+        // Create the run in Initializing state (context.run_id set after ID generation)
+        let mut run = PipelineRun::new(pipeline_name, context);
+        run.context.run_id = run.id.clone();
 
         // Persist immediately so it's queryable
         self.track_run(&run).await;
@@ -916,6 +922,7 @@ mod tests {
             commit_hash: [1u8; 32],
             ref_name: "refs/heads/main".to_string(),
             triggered_by: "test".to_string(),
+            run_id: String::new(),
             env: HashMap::new(),
             checkout_dir: None,
             source_hash: None,
@@ -954,6 +961,7 @@ mod tests {
             ],
             ref_name: "refs/heads/main".to_string(),
             triggered_by: "test".to_string(),
+            run_id: String::new(),
             env: HashMap::new(),
             checkout_dir: None,
             source_hash: None,

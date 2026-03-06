@@ -27,6 +27,10 @@ pub struct NixBuildPayload {
     #[serde(default)]
     pub job_name: Option<String>,
 
+    /// Pipeline run ID for log streaming.
+    #[serde(default)]
+    pub run_id: Option<String>,
+
     /// Flake URL (e.g., ".", "github:owner/repo", "path:/some/path").
     pub flake_url: String,
 

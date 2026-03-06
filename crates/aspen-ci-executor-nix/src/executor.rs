@@ -67,7 +67,14 @@ impl NixBuildWorker {
     }
 
     /// Execute a Nix build.
-    pub(crate) async fn execute_build(&self, payload: &NixBuildPayload) -> Result<NixBuildOutput> {
+    ///
+    /// If `log_sender` is provided, stderr lines are also forwarded to it
+    /// in real-time for streaming to the CI log infrastructure.
+    pub(crate) async fn execute_build(
+        &self,
+        payload: &NixBuildPayload,
+        log_sender: Option<mpsc::Sender<String>>,
+    ) -> Result<NixBuildOutput> {
         payload.validate()?;
 
         let flake_ref = payload.flake_ref();
@@ -82,7 +89,7 @@ impl NixBuildWorker {
         let cache_proxy = self.start_cache_proxy(&flake_ref).await?;
 
         let mut child = self.spawn_nix_build(payload, &flake_ref)?;
-        let readers = Self::spawn_output_readers(&mut child, &flake_ref, self.config.is_verbose)?;
+        let readers = Self::spawn_output_readers(&mut child, &flake_ref, self.config.is_verbose, log_sender)?;
         let (output_paths, log, log_size) = Self::collect_output(readers).await?;
         Self::wait_for_build_completion(&mut child, payload.timeout_secs, &flake_ref, &log).await?;
 
@@ -209,7 +216,12 @@ impl NixBuildWorker {
     ///
     /// Returns reader handles and channels for collecting output. Stdout is
     /// filtered for `/nix/store/` paths; stderr is forwarded as build log lines.
-    fn spawn_output_readers(child: &mut Child, flake_ref: &str, verbose: bool) -> Result<OutputReaders> {
+    fn spawn_output_readers(
+        child: &mut Child,
+        flake_ref: &str,
+        verbose: bool,
+        log_sender: Option<mpsc::Sender<String>>,
+    ) -> Result<OutputReaders> {
         let stdout = child.stdout.take().ok_or_else(|| CiCoreError::NixBuildFailed {
             flake: flake_ref.to_string(),
             reason: "stdout pipe not available".to_string(),
@@ -223,8 +235,13 @@ impl NixBuildWorker {
         let (stderr_tx, stderr_rx) = mpsc::channel::<String>(1000);
 
         let stdout_task = tokio::spawn(read_stdout_paths(BufReader::new(stdout), stdout_tx, flake_ref.to_string()));
-        let stderr_task =
-            tokio::spawn(read_stderr_log(BufReader::new(stderr), stderr_tx, flake_ref.to_string(), verbose));
+        let stderr_task = tokio::spawn(read_stderr_log(
+            BufReader::new(stderr),
+            stderr_tx,
+            log_sender,
+            flake_ref.to_string(),
+            verbose,
+        ));
 
         Ok(OutputReaders {
             stdout_task,
@@ -331,9 +348,11 @@ async fn read_stdout_paths(
 }
 
 /// Read stderr lines as build log output, optionally logging each line.
+/// When `log_sender` is provided, lines are also forwarded for real-time streaming.
 async fn read_stderr_log(
     mut reader: BufReader<tokio::process::ChildStderr>,
     tx: mpsc::Sender<String>,
+    log_sender: Option<mpsc::Sender<String>>,
     flake_ref: String,
     verbose: bool,
 ) -> std::result::Result<(), CiCoreError> {
@@ -344,6 +363,9 @@ async fn read_stderr_log(
             Ok(_) => {
                 if verbose {
                     debug!(line = %line.trim(), "nix build");
+                }
+                if let Some(ref log_tx) = log_sender {
+                    let _ = log_tx.send(line.clone()).await;
                 }
                 let _ = tx.send(line.clone()).await;
                 line.clear();
