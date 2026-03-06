@@ -2123,6 +2123,19 @@
                 gitRemoteAspenPackage = bins.full-git-remote-aspen;
               };
 
+              # Dogfood test: push Aspen's own source to Forge and run CI.
+              # Pushes the full 80-crate workspace, auto-triggers CI pipeline,
+              # validates checkout integrity. The self-hosting litmus test.
+              # Build: nix build .#checks.x86_64-linux.ci-dogfood-test --impure
+              ci-dogfood-test = import ./nix/tests/ci-dogfood.nix {
+                inherit pkgs lib kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+                aspenSource = fullRawSrc;
+              };
+
               # HTTP proxy test: TCP tunnel and HTTP forward proxy over
               # iroh QUIC. Two nodes — server (aspen-node with proxy) and
               # client (aspen-cli proxy commands). Tests tunnel creation,
