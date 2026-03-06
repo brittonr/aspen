@@ -31,7 +31,7 @@
   },
 
   stages = [
-    # Stage 1: Quick format check (shell, no Nix overhead)
+    # Stage 1: Lint checks (format + clippy)
     {
       name = "check",
       jobs = [
@@ -40,6 +40,13 @@
           type = 'shell,
           command = "nix fmt . -- --check",
           timeout_secs = 300,
+        },
+        {
+          name = "clippy",
+          type = 'nix,
+          flake_url = ".",
+          flake_attr = "packages.x86_64-linux.clippy",
+          timeout_secs = 1800,
         },
       ],
     },

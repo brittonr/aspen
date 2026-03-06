@@ -3254,6 +3254,9 @@
               aspen-cli = aspenCli;
               git-remote-aspen = aspenGitRemote;
 
+              # ── Clippy (per-crate, only workspace members recompiled) ──
+              clippy = u2nWorkspace.clippy.allWorkspaceMembers;
+
               # ── Crane builds (kept for specialized variants + VM tests)
               crane-aspen-node = bins.aspen-node;
               crane-aspen-cli = bins.aspen-cli;
