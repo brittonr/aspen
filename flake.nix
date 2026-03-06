@@ -1358,11 +1358,12 @@
         # derivations. Changing one crate only rebuilds its dependents,
         # not the entire 648-crate workspace.
         #
-        # Regenerate build-plan.json whenever Cargo.lock changes:
-        #   nix run .#generate-build-plan
+        # Regenerate build plans whenever Cargo.lock changes:
+        #   nix run .#generate-build-plan       # aspen-node (build-plan.json)
+        #   nix run .#generate-build-plan-cli   # aspen-cli  (build-plan-cli.json)
         #
-        # The build plan is generated from the real workspace (not stubs),
-        # so it captures the exact dependency graph Cargo resolves.
+        # The build plans are generated from the real workspace (not stubs),
+        # so they capture the exact dependency graph Cargo resolves.
         u2nSrc = lib.fileset.toSource {
           root = ./.;
           fileset = lib.fileset.unions [
@@ -1375,42 +1376,58 @@
           ];
         };
 
-        # Short alias used throughout the flake
-        aspenNode = u2nWorkspace.workspaceMembers."aspen".build;
+        # Shared crate overrides for unit2nix builds.
+        # Both aspen-node and aspen-cli share the same overrides since they
+        # pull from the same workspace and share many dependencies.
+        u2nCrateOverrides =
+          pkgs.defaultCrateOverrides
+          // {
+            # Root aspen crate: build.rs needs git + date
+            aspen = attrs: {
+              nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [pkgs.git];
+              GIT_HASH = self.shortRev or self.dirtyShortRev or "nix";
+              BUILD_TIME = "1970-01-01 00:00:00 UTC";
+            };
+            # aspen-cli: build.rs also needs git + date (same pattern)
+            aspen-cli = attrs: {
+              nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [pkgs.git];
+              GIT_HASH = self.shortRev or self.dirtyShortRev or "nix";
+              BUILD_TIME = "1970-01-01 00:00:00 UTC";
+            };
+            # Crates whose descriptions contain embedded double quotes, which break
+            # buildRustCrate's `export CARGO_PKG_DESCRIPTION="..."` in bash.
+            base16ct = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+            base64ct = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+            cobs = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+            leb128 = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+            openssl-probe = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+            ssh-key = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+            syn-mid = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+            zerocopy = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
+            # ring: needs cc + LLVM for assembly.
+            ring = attrs: {
+              RING_CORE_PREFIX = "";
+            };
+          };
 
+        # Short aliases used throughout the flake
+        aspenNode = u2nWorkspace.workspaceMembers."aspen".build;
+        aspenCli = u2nCliWorkspace.workspaceMembers."aspen-cli".build;
+
+        # Build plan for aspen-node (646 crates, features: ci,docs,hooks,shell-worker,automerge,secrets)
         u2nWorkspace = unit2nix.lib.${system}.buildFromUnitGraph {
           inherit pkgs;
           src = u2nSrc;
           resolvedJson = ./build-plan.json;
-          defaultCrateOverrides =
-            pkgs.defaultCrateOverrides
-            // {
-              # Root aspen crate: build.rs needs git + date
-              aspen = attrs: {
-                nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [pkgs.git];
-                # In Nix sandbox, git rev-parse fails. Set env vars directly.
-                GIT_HASH = self.shortRev or self.dirtyShortRev or "nix";
-                BUILD_TIME = "1970-01-01 00:00:00 UTC";
-              };
-              # Crates whose descriptions contain embedded double quotes, which break
-              # buildRustCrate's `export CARGO_PKG_DESCRIPTION="..."` in bash.
-              # The `"` inside closes the shell string → parse error.
-              # Fix: replace double quotes with single quotes in descriptions.
-              base16ct = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
-              base64ct = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
-              cobs = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
-              leb128 = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
-              openssl-probe = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
-              ssh-key = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
-              syn-mid = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
-              zerocopy = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};
-              # ring: needs cc + LLVM for assembly. stdenv.cc is provided by buildRustCrate.
-              ring = attrs: {
-                # ring's build.rs uses the cc crate; buildRustCrate's stdenv handles this.
-                # But ring's assembly files need the target env var set correctly.
-                RING_CORE_PREFIX = "";
-              };
-            };
+          defaultCrateOverrides = u2nCrateOverrides;
+        };
+
+        # Build plan for aspen-cli (472 crates, features: forge,ci,secrets,automerge)
+        u2nCliWorkspace = unit2nix.lib.${system}.buildFromUnitGraph {
+          inherit pkgs;
+          src = u2nSrc;
+          resolvedJson = ./build-plan-cli.json;
+          defaultCrateOverrides = u2nCrateOverrides;
         };
 
         bins = let
@@ -1551,21 +1568,16 @@
             )
             // {
               # aspen-tui extracted to ~/git/aspen-tui
-              aspen-cli = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
-              aspen-cli-forge = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
-              aspen-cli-plugins = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
-              aspen-cli-secrets = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
-              aspen-cli-full = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
-              aspen-cli-ci = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
-              aspen-cli-proxy = pkgs.writeShellScriptBin "aspen-cli" "exit 1";
-              # aspen-cli extracted to ~/git/aspen-cli - all variants commented out
-              # aspen-cli = aspen-cli-crate;
-              # aspen-cli-forge = aspen-cli-forge-crate;
-              # aspen-cli-plugins = aspen-cli-plugins-crate;
-              # aspen-cli-secrets = aspen-cli-secrets-crate;
-              # aspen-cli-full = aspen-cli-full-crate;
-              # aspen-cli-ci = aspen-cli-ci-crate;  # Extracted
-              # aspen-cli-proxy = aspen-cli-proxy-crate;  # Extracted
+              # aspen-cli: unit2nix build (features: forge,ci,secrets,automerge)
+              # All variants point to the same binary since the build plan
+              # includes all commonly-needed features.
+              aspen-cli = aspenCli;
+              aspen-cli-forge = aspenCli;
+              aspen-cli-plugins = aspenCli; # plugins-rpc feature not in unit2nix plan; use full- variant for plugin mgmt
+              aspen-cli-secrets = aspenCli;
+              aspen-cli-full = aspenCli;
+              aspen-cli-ci = aspenCli;
+              aspen-cli-proxy = aspenCli; # proxy feature not in unit2nix plan; use full- variant for proxy
               inherit aspen-node-proxy aspen-node-plugins;
               # aspen-ci-agent extracted to ~/git/aspen-ci
               inherit hyperlight-wasm-runtime;
@@ -3190,6 +3202,20 @@
                 echo "Done! Commit build-plan.json to the repo."
               ''}";
             };
+            # Usage: nix run .#generate-build-plan-cli
+            generate-build-plan-cli = {
+              type = "app";
+              program = "${pkgs.writeShellScript "generate-build-plan-cli" ''
+                set -e
+                echo "Generating build-plan-cli.json from Cargo's unit graph..."
+                ${unit2nix.packages.${system}.default}/bin/unit2nix \
+                  --manifest-path ./Cargo.toml \
+                  -p aspen-cli \
+                  --features forge,ci,secrets,automerge \
+                  -o build-plan-cli.json
+                echo "Done! Commit build-plan-cli.json to the repo."
+              ''}";
+            };
           };
         }
         // {
@@ -3199,11 +3225,11 @@
               # ── Primary builds (unit2nix: per-crate, incremental) ─────
               default = aspenNode;
               aspen-node = aspenNode;
+              aspen-cli = aspenCli;
 
               # ── Crane builds (kept for specialized variants + VM tests)
               crane-aspen-node = bins.aspen-node;
-              # aspen-tui extracted to ~/git/aspen-tui
-              aspen-cli = bins.aspen-cli;
+              crane-aspen-cli = bins.aspen-cli;
               aspen-cli-forge = bins.aspen-cli-forge;
               # aspen-ci-agent extracted to ~/git/aspen-ci
               git-remote-aspen = bins.git-remote-aspen;
