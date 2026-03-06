@@ -282,7 +282,11 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
     // Register worker with the cluster
     let register_request = ClientRpcRequest::WorkerRegister {
         worker_id: worker_id.clone(),
-        capabilities: vec!["ci_vm".to_string()],
+        capabilities: vec![
+            "ci_nix_build".to_string(),
+            "ci_vm".to_string(),
+            "shell_command".to_string(),
+        ],
         capacity_jobs: 1,
     };
 
@@ -323,7 +327,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
 
                     let poll_request = ClientRpcRequest::WorkerPollJobs {
                         worker_id: worker_id_clone.clone(),
-                        job_types: vec!["ci_vm".to_string()],
+                        job_types: vec!["ci_nix_build".to_string(), "ci_vm".to_string(), "shell_command".to_string()],
                         max_jobs: 1,
                         visibility_timeout_secs: 300,
                     };

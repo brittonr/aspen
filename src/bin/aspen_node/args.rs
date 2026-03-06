@@ -8,7 +8,7 @@ use aspen::cluster::config::ControlBackend;
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(name = "aspen-node")]
+#[command(name = "aspen-node", version)]
 pub struct Args {
     /// Path to TOML configuration file.
     #[arg(long)]

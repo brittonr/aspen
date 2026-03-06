@@ -606,70 +606,96 @@ async fn initialize_job_system(
 
             #[cfg(feature = "nix-executor")]
             {
-                use aspen_ci::NixBuildWorker;
-                use aspen_ci::NixBuildWorkerConfig;
-
-                // Construct SNIX services when available for decomposed
-                // content-addressed cache uploads.
-                #[cfg(feature = "snix")]
-                let (snix_blob_svc, snix_dir_svc, snix_pathinfo_svc) = if config.snix.is_enabled {
-                    if let Some(blob_store) = node_mode.blob_store() {
-                        let blob_svc: Arc<dyn snix_castore::blobservice::BlobService> =
-                            Arc::new(aspen_snix::IrohBlobService::from_arc(blob_store.clone()));
-                        let dir_svc: Arc<dyn snix_castore::directoryservice::DirectoryService> =
-                            Arc::new(aspen_snix::RaftDirectoryService::from_arc(kv_store.clone()));
-                        let pathinfo_svc: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
-                            Arc::new(aspen_snix::RaftPathInfoService::from_arc(kv_store.clone()));
-                        info!("SNIX services constructed for NixBuildWorker cache uploads");
-                        (Some(blob_svc), Some(dir_svc), Some(pathinfo_svc))
-                    } else {
-                        warn!("SNIX enabled but blob store not available — SNIX cache uploads disabled");
-                        (None, None, None)
+                // When Cloud Hypervisor VMs are available, skip local NixBuildWorker.
+                // VMs handle ci_nix_build jobs inside their isolated environment, so
+                // the host should not compete for these jobs.
+                let has_vm_executor = {
+                    #[cfg(all(feature = "ci-vm-executor", target_os = "linux"))]
+                    {
+                        let use_local_executor = std::env::var("ASPEN_CI_LOCAL_EXECUTOR")
+                            .map(|v| v == "1" || v.to_lowercase() == "true")
+                            .unwrap_or(false);
+                        let has_kernel = std::env::var("ASPEN_CI_KERNEL_PATH").map(|p| !p.is_empty()).unwrap_or(false);
+                        !use_local_executor && has_kernel
                     }
-                } else {
-                    (None, None, None)
-                };
-                let nix_config = NixBuildWorkerConfig {
-                    node_id: config.node_id,
-                    cluster_id: config.cookie.clone(),
-                    blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
-                    kv_store: Some(kv_store.clone()),
-                    cache_index: cache_index.clone(),
-                    #[cfg(feature = "snix")]
-                    snix_blob_service: snix_blob_svc,
-                    #[cfg(feature = "snix")]
-                    snix_directory_service: snix_dir_svc,
-                    #[cfg(feature = "snix")]
-                    snix_pathinfo_service: snix_pathinfo_svc,
-                    output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
-                    nix_binary: "nix".to_string(),
-                    is_verbose: false,
-                    use_cluster_cache,
-                    iroh_endpoint: iroh_endpoint.clone(),
-                    gateway_node,
-                    cache_public_key: cache_public_key.clone(),
-                    gateway_url: None,
+                    #[cfg(not(all(feature = "ci-vm-executor", target_os = "linux")))]
+                    {
+                        false
+                    }
                 };
 
-                let all_services_available = nix_config.validate();
-                if !all_services_available {
-                    warn!(
+                if has_vm_executor {
+                    info!(
+                        cluster_id = %config.cookie,
                         node_id = config.node_id,
-                        "NixBuildWorker will operate with reduced functionality due to missing services"
+                        "Skipping local NixBuildWorker — Cloud Hypervisor VMs will handle ci_nix_build jobs"
+                    );
+                } else {
+                    use aspen_ci::NixBuildWorker;
+                    use aspen_ci::NixBuildWorkerConfig;
+
+                    // Construct SNIX services when available for decomposed
+                    // content-addressed cache uploads.
+                    #[cfg(feature = "snix")]
+                    let (snix_blob_svc, snix_dir_svc, snix_pathinfo_svc) = if config.snix.is_enabled {
+                        if let Some(blob_store) = node_mode.blob_store() {
+                            let blob_svc: Arc<dyn snix_castore::blobservice::BlobService> =
+                                Arc::new(aspen_snix::IrohBlobService::from_arc(blob_store.clone()));
+                            let dir_svc: Arc<dyn snix_castore::directoryservice::DirectoryService> =
+                                Arc::new(aspen_snix::RaftDirectoryService::from_arc(kv_store.clone()));
+                            let pathinfo_svc: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
+                                Arc::new(aspen_snix::RaftPathInfoService::from_arc(kv_store.clone()));
+                            info!("SNIX services constructed for NixBuildWorker cache uploads");
+                            (Some(blob_svc), Some(dir_svc), Some(pathinfo_svc))
+                        } else {
+                            warn!("SNIX enabled but blob store not available — SNIX cache uploads disabled");
+                            (None, None, None)
+                        }
+                    } else {
+                        (None, None, None)
+                    };
+                    let nix_config = NixBuildWorkerConfig {
+                        node_id: config.node_id,
+                        cluster_id: config.cookie.clone(),
+                        blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
+                        kv_store: Some(kv_store.clone()),
+                        cache_index: cache_index.clone(),
+                        #[cfg(feature = "snix")]
+                        snix_blob_service: snix_blob_svc,
+                        #[cfg(feature = "snix")]
+                        snix_directory_service: snix_dir_svc,
+                        #[cfg(feature = "snix")]
+                        snix_pathinfo_service: snix_pathinfo_svc,
+                        output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
+                        nix_binary: "nix".to_string(),
+                        is_verbose: false,
+                        use_cluster_cache,
+                        iroh_endpoint: iroh_endpoint.clone(),
+                        gateway_node,
+                        cache_public_key: cache_public_key.clone(),
+                        gateway_url: None,
+                    };
+
+                    let all_services_available = nix_config.validate();
+                    if !all_services_available {
+                        warn!(
+                            node_id = config.node_id,
+                            "NixBuildWorker will operate with reduced functionality due to missing services"
+                        );
+                    }
+
+                    let nix_worker = NixBuildWorker::new(nix_config);
+                    worker_service
+                        .register_handler("ci_nix_build", nix_worker)
+                        .await
+                        .context("failed to register Nix build worker")?;
+                    info!(
+                        cluster_id = %config.cookie,
+                        node_id = config.node_id,
+                        snix_enabled = config.snix.is_enabled,
+                        "Nix build worker registered for CI/CD flake builds"
                     );
                 }
-
-                let nix_worker = NixBuildWorker::new(nix_config);
-                worker_service
-                    .register_handler("ci_nix_build", nix_worker)
-                    .await
-                    .context("failed to register Nix build worker")?;
-                info!(
-                    cluster_id = %config.cookie,
-                    node_id = config.node_id,
-                    snix_enabled = config.snix.is_enabled,
-                    "Nix build worker registered for CI/CD flake builds"
-                );
             }
 
             #[cfg(target_os = "linux")]
@@ -821,7 +847,7 @@ async fn initialize_job_system(
                                 host_iroh_port = ?ch_config.host_iroh_port,
                                 bridge_addr = ?ch_config.bridge_socket_addr(),
                                 network_mode = ?ch_config.network_mode,
-                                "Cloud Hypervisor VM pool manager initialized (VMs will poll for ci_vm jobs)"
+                                "Cloud Hypervisor VM pool manager initialized (VMs handle ci_nix_build + ci_vm jobs)"
                             );
                         }
                         Err(e) => {

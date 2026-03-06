@@ -564,6 +564,7 @@ except:
     case "$pipeline_status" in
       success)
         cleanup_stream; stream_pid=""
+        trap - EXIT
         echo ""
         print_pipeline_summary "$status_out"
         ok "Pipeline completed successfully! 🎉"
@@ -571,6 +572,7 @@ except:
         ;;
       failed|cancelled)
         cleanup_stream; stream_pid=""
+        trap - EXIT
         echo ""
         print_pipeline_summary "$status_out"
         err "Pipeline $pipeline_status"
@@ -775,21 +777,24 @@ compare_binaries() {
   if [ "$ci_sha" = "$local_sha" ]; then
     ok "Binaries are identical! (bit-for-bit reproducible build)"
   else
-    warn "Binaries differ (expected — different build inputs)"
+    warn "Binaries differ (expected — different build inputs/optimization)"
     log "Smoke-testing CI-built binary..."
-    local ci_version
-    ci_version=$("$ci_bin" --version 2>&1 || true)
-    local local_version
-    local_version=$("$local_bin" --version 2>&1 || true)
-    printf "  Version CI:    %s\n" "$ci_version"
-    printf "  Version Local: %s\n" "$local_version"
 
-    if [ -n "$ci_version" ]; then
-      ok "CI-built binary is functional"
+    # Test with --help (always works) and check exit code, not output content.
+    # --version also works now, but --help is more reliable for smoke testing.
+    if "$ci_bin" --help >/dev/null 2>&1; then
+      ok "CI-built binary is functional (--help exits 0)"
     else
-      err "CI-built binary failed to run"
+      err "CI-built binary failed to run (--help returned non-zero)"
       return 1
     fi
+
+    # Show versions if available
+    local ci_version local_version
+    ci_version=$("$ci_bin" --version 2>/dev/null || echo "unknown")
+    local_version=$("$local_bin" --version 2>/dev/null || echo "unknown")
+    printf "  Version CI:    %s\n" "$ci_version"
+    printf "  Version Local: %s\n" "$local_version"
   fi
 
   echo ""
