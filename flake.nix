@@ -25,7 +25,7 @@
     # SNIX - Nix store implementation in Rust
     # Used for content-addressed storage and Nix binary cache integration
     snix-src = {
-      url = "git+https://git.snix.dev/snix/snix.git?rev=16ce7fb4b807f03a5a6f751fed54a2fba60f970a";
+      url = "git+https://git.snix.dev/snix/snix.git?rev=180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac";
       flake = false;
     };
 
@@ -251,7 +251,7 @@
           allRefs = true;
         };
 
-        snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=16ce7fb4b807f03a5a6f751fed54a2fba60f970a#16ce7fb4b807f03a5a6f751fed54a2fba60f970a"'';
+        snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac#180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac"'';
         src = pkgs.runCommand "aspen-src-patched" {} ''
           cp -r ${rawSrc} $out
           chmod -R u+w $out
@@ -696,6 +696,40 @@
             -e 's|bolero = "0.11"|bolero = "0.13"|g' \
             -e 's|bolero-generator = "0.11"|bolero-generator = "0.13"|g' \
             {} \;
+        '';
+
+        # Full source with real snix dependencies (not stubs).
+        # Required for builds that enable the snix feature.
+        # Reverts snix from path stubs back to git deps so the cargo vendor
+        # directory (which has the correct snix source) is used.
+        fullSrcWithSnix = pkgs.runCommand "aspen-full-src-snix" {} ''
+          cp -r ${fullSrc} $out
+          chmod -R u+w $out
+
+          # Rewrite snix path stubs back to git deps in root Cargo.toml
+          ${pkgs.gnused}/bin/sed -i \
+            -e 's|snix-castore = { path = ".nix-stubs/snix-castore" }|snix-castore = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }|' \
+            -e 's|snix-store = { path = ".nix-stubs/snix-store" }|snix-store = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }|' \
+            -e 's|nix-compat = { path = ".nix-stubs/nix-compat", features = \["async", "serde"\] }|nix-compat = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac", features = ["async", "serde"] }|' \
+            $out/aspen/Cargo.toml
+
+          # Re-add source lines for snix crates in Cargo.lock
+          ${pkgs.gawk}/bin/awk -v src='source = "git+https://git.snix.dev/snix/snix.git?rev=180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac#180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac"' '
+            /^name = "/ && ($0 ~ "\"nix-compat\"" || $0 ~ "\"nix-compat-derive\"" || $0 ~ "\"snix-castore\"" || $0 ~ "\"snix-store\"" || $0 ~ "\"snix-cli\"" || $0 ~ "\"snix-tracing\"") { found=1 }
+            found && /^version = "0.1.0"$/ {
+              print
+              if ((getline nextline) > 0) {
+                if (nextline !~ /^source = /) {
+                  print src
+                }
+                print nextline
+              }
+              found=0
+              next
+            }
+            { print }
+          ' $out/aspen/Cargo.lock > $out/aspen/Cargo.lock.tmp
+          mv $out/aspen/Cargo.lock.tmp $out/aspen/Cargo.lock
         '';
 
         fullBasicArgs =
@@ -1535,6 +1569,17 @@
                 name = "aspen-node";
                 features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "proxy"];
               };
+              # Node with forge, CI, snix, and blob for e2e push→build→cache testing.
+              # Uses fullSrcWithSnix because the snix feature needs real snix source (not stubs).
+              full-aspen-node-e2e = craneLib.buildPackage (
+                fullCommonArgs
+                // {
+                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                  src = fullSrcWithSnix;
+                  cargoExtraArgs = "--bin aspen-node --features ci,forge,git-bridge,blob,docs,hooks,shell-worker,automerge,jobs,snix";
+                  doCheck = false;
+                }
+              );
               # Node with WASM plugin runtime (hyperlight). Uses patched vendor dir.
               full-aspen-node-plugins = craneLib.buildPackage (
                 fullPluginsCommonArgs
@@ -1556,6 +1601,7 @@
               full-aspen-cli-forge = fullCliBin ["forge"];
               full-aspen-cli-plugins = fullCliBin ["plugins-rpc" "ci" "automerge"];
               full-aspen-cli-ci = fullCliBin ["ci"];
+              full-aspen-cli-e2e = fullCliBin ["ci" "forge"];
               full-aspen-cli-secrets = fullCliBin ["secrets" "ci"];
               full-aspen-cli-proxy = fullCliBin ["proxy"];
               full-git-remote-aspen = fullBin {
@@ -2050,6 +2096,20 @@
                 aspenNodePackage = bins.full-aspen-node;
                 aspenCliPackage = bins.full-aspen-cli-ci;
                 gatewayPackage = bins.full-aspen-nix-cache-gateway;
+              };
+
+              # End-to-end push→build→cache test: full self-hosting pipeline.
+              # Creates forge repo, pushes code with CI config via git-remote-aspen,
+              # triggers CI pipeline (shell stage), waits for completion,
+              # then verifies cache gateway serves the cache info endpoint.
+              # Build: nix build .#checks.x86_64-linux.e2e-push-build-cache-test --impure
+              e2e-push-build-cache-test = import ./nix/tests/e2e-push-build-cache.nix {
+                inherit pkgs kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gatewayPackage = bins.full-aspen-nix-cache-gateway;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
               };
 
               # HTTP proxy test: TCP tunnel and HTTP forward proxy over

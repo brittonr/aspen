@@ -203,7 +203,7 @@ pub async fn handle_trigger_pipeline(
     }
 
     // Prepare checkout for CI build (removes path patches from .cargo/config.toml)
-    if let Err(e) = prepare_for_ci_build(&checkout_dir).await {
+    if let Err(e) = prepare_for_ci_build(&checkout_dir, &commit_hash).await {
         // Clean up failed checkout directory
         let _ = cleanup_checkout(&checkout_dir).await;
         return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {

@@ -169,7 +169,7 @@ impl ServiceExecutor for CiServiceExecutor {
             }
             #[cfg(feature = "blob")]
             ClientRpcRequest::CiGetArtifact { blob_hash } => {
-                handle_get_artifact(self.kv_store.as_ref(), self.blob_store.as_deref(), blob_hash).await
+                handle_get_artifact(self.kv_store.as_ref(), self.blob_store.as_ref(), blob_hash).await
             }
             #[cfg(not(feature = "blob"))]
             ClientRpcRequest::CiGetArtifact { .. } => {
@@ -190,7 +190,7 @@ impl ServiceExecutor for CiServiceExecutor {
             } => handle_subscribe_logs(self.kv_store.as_ref(), run_id, job_id, from_index).await,
             #[cfg(feature = "blob")]
             ClientRpcRequest::CiGetJobOutput { run_id, job_id } => {
-                handle_get_job_output(self.kv_store.as_ref(), self.blob_store.as_deref(), run_id, job_id).await
+                handle_get_job_output(self.kv_store.as_ref(), self.blob_store.as_ref(), run_id, job_id).await
             }
             #[cfg(not(feature = "blob"))]
             ClientRpcRequest::CiGetJobOutput { .. } => {
