@@ -2123,12 +2123,13 @@
                 gitRemoteAspenPackage = bins.full-git-remote-aspen;
               };
 
-              # Dogfood test: push Aspen's own source to Forge and run CI.
+              # Dogfood test: push Aspen's own source to Forge and BUILD it.
               # Pushes the full 80-crate workspace, auto-triggers CI pipeline,
-              # validates checkout integrity. The self-hosting litmus test.
+              # validates checkout integrity, then compiles aspen-constants
+              # (2,602 lines of Rust) with rustc. The self-hosting litmus test.
               # Build: nix build .#checks.x86_64-linux.ci-dogfood-test --impure
               ci-dogfood-test = import ./nix/tests/ci-dogfood.nix {
-                inherit pkgs lib kvPluginWasm forgePluginWasm;
+                inherit pkgs lib kvPluginWasm forgePluginWasm rustToolChain;
                 aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-e2e;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
