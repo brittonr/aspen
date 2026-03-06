@@ -1737,6 +1737,18 @@
               inherit aspen-node-proxy aspen-node-plugins;
               # aspen-ci-agent extracted to ~/git/aspen-ci
               inherit hyperlight-wasm-runtime;
+
+              # Node with VM CI executor (Cloud Hypervisor) — pure eval build.
+              # Uses ciSrc (stubbed aspen-wasm-plugin) so no --impure required.
+              # Used by nix run .#dogfood-local-vmci.
+              aspen-node-vmci = craneLib.buildPackage (
+                ciCommonArgs
+                // {
+                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,git-bridge";
+                  doCheck = false;
+                }
+              );
             }
             # Full-source builds for VM integration tests.
             # Node/CLI only need aspen-wasm-plugin as external dep (--impure).
@@ -1748,6 +1760,12 @@
               full-aspen-node-proxy = fullBin {
                 name = "aspen-node";
                 features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "proxy"];
+              };
+              # Node with VM CI executor (Cloud Hypervisor). Used by dogfood-local-vmci.
+              # NOTE: Also built without hasExternalRepos below (as aspen-node-vmci)
+              full-aspen-node-vmci = fullBin {
+                name = "aspen-node";
+                features = ["ci" "ci-vm-executor" "docs" "hooks" "shell-worker" "automerge" "secrets" "git-bridge"];
               };
               # Node with forge, CI, snix, and blob for e2e push→build→cache testing.
               # Uses fullSrcWithSnix because the snix feature needs real snix source (not stubs).
@@ -3305,12 +3323,33 @@
             # Local nodes with VM-isolated CI
             # Usage: nix run .#dogfood-local-vmci
             # Runs nodes as local processes, CI jobs in Cloud Hypervisor VMs
+            # Prerequisites: sudo nix run .#setup-ci-network (network bridge + NAT)
             dogfood-local-vmci = let
               scriptsDir = pkgs.runCommand "aspen-scripts-vmci" {} ''
                 mkdir -p $out
                 cp -r ${./scripts}/* $out/
                 chmod -R +w $out
               '';
+
+              # Build the CI worker VM image (kernel + initrd + NixOS toplevel)
+              ciVmConfig = nixpkgs.lib.nixosSystem {
+                system = "x86_64-linux";
+                modules = [
+                  microvm.nixosModules.microvm
+                  (import ./nix/vms/ci-worker-node.nix {
+                    inherit pkgs;
+                    lib = nixpkgs.lib;
+                    vmId = "aspen-ci-vm";
+                    aspenNodePackage = bins.aspen-node-vmci;
+                  })
+                ];
+              };
+              ciKernel = ciVmConfig.config.microvm.kernel;
+              ciInitrd = ciVmConfig.config.system.build.initialRamdisk;
+              ciToplevel = ciVmConfig.config.system.build.toplevel;
+
+              # Use the vmci-capable node (has ci-vm-executor feature)
+              vmciNode = bins.aspen-node-vmci;
             in {
               type = "app";
               program = "${pkgs.writeShellScript "dogfood-local-vmci" ''
@@ -3318,7 +3357,7 @@
 
                 export PATH="${
                   pkgs.lib.makeBinPath [
-                    aspenNode
+                    vmciNode
                     bins.aspen-cli
                     bins.git-remote-aspen
                     pkgs.bash
@@ -3329,14 +3368,22 @@
                     pkgs.nix
                     pkgs.cloud-hypervisor
                     pkgs.virtiofsd
+                    pkgs.iproute2
+                    pkgs.python3
                   ]
                 }:$PATH"
 
-                export ASPEN_NODE_BIN="${aspenNode}/bin/aspen-node"
+                export ASPEN_NODE_BIN="${vmciNode}/bin/aspen-node"
                 export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
                 export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
                 export CLOUD_HYPERVISOR_BIN="${pkgs.cloud-hypervisor}/bin/cloud-hypervisor"
                 export VIRTIOFSD_BIN="${pkgs.virtiofsd}/bin/virtiofsd"
+
+                # CI worker VM image paths
+                export ASPEN_CI_KERNEL_PATH="${ciKernel}/bzImage"
+                export ASPEN_CI_INITRD_PATH="${ciInitrd}/initrd"
+                export ASPEN_CI_TOPLEVEL_PATH="${ciToplevel}"
+
                 export PROJECT_DIR="$PWD"
 
                 exec ${scriptsDir}/dogfood-local-vmci.sh "$@"
