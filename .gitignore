@@ -82,7 +82,8 @@ result*
 # Project-specific
 docs/simulations/*.json
 kameo/
-data/
+/data/
+!openraft/openraft/src/docs/data/
 *.redb
 *.sock
 *.sock.pid

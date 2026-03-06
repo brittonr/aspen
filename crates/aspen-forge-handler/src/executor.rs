@@ -37,6 +37,8 @@ pub struct ForgeServiceExecutor {
 impl ForgeServiceExecutor {
     /// Variant names handled by this executor (for testing without constructing).
     pub const HANDLES: &'static [&'static str] = &[
+        "ForgeCreateRepo",
+        "ForgeListRepos",
         "ForgeGetDelegateKey",
         "GetFederationStatus",
         "ListDiscoveredClusters",
@@ -160,6 +162,80 @@ impl ServiceExecutor for ForgeServiceExecutor {
         use crate::handler::handlers::federation::*;
 
         match request {
+            // Repository operations (previously WASM-only, now native for self-hosting)
+            ClientRpcRequest::ForgeCreateRepo {
+                name,
+                description,
+                default_branch: _,
+            } => {
+                use aspen_client_api::ForgeRepoInfo;
+                use aspen_client_api::ForgeRepoResultResponse;
+
+                // Use the node's own public key as the default delegate
+                let delegates = vec![self.forge_node.public_key()];
+                match self.forge_node.create_repo(&name, delegates, 1).await {
+                    Ok(identity) => {
+                        let repo_info = ForgeRepoInfo {
+                            id: identity.repo_id().to_hex(),
+                            name: name.clone(),
+                            description,
+                            default_branch: "main".to_string(),
+                            delegates: identity.delegates.iter().map(|d| d.to_string()).collect(),
+                            threshold_delegates: identity.threshold,
+                            created_at_ms: identity.created_at_ms,
+                        };
+                        Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                            is_success: true,
+                            repo: Some(repo_info),
+                            error: None,
+                        }))
+                    }
+                    Err(e) => Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                        is_success: false,
+                        repo: None,
+                        error: Some(format!("{}", e)),
+                    })),
+                }
+            }
+            ClientRpcRequest::ForgeListRepos { limit, offset } => {
+                use aspen_client_api::ForgeRepoInfo;
+                use aspen_client_api::ForgeRepoListResultResponse;
+
+                let limit = limit.unwrap_or(100).min(1000) as usize;
+                let offset = offset.unwrap_or(0) as usize;
+                match self.forge_node.list_repos().await {
+                    Ok(repos) => {
+                        let count = repos.len() as u32;
+                        let repos: Vec<ForgeRepoInfo> = repos
+                            .into_iter()
+                            .skip(offset)
+                            .take(limit)
+                            .map(|identity| ForgeRepoInfo {
+                                id: identity.repo_id().to_hex(),
+                                name: identity.name.clone(),
+                                description: None,
+                                default_branch: "main".to_string(),
+                                delegates: identity.delegates.iter().map(|d| d.to_string()).collect(),
+                                threshold_delegates: identity.threshold,
+                                created_at_ms: identity.created_at_ms,
+                            })
+                            .collect();
+                        Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
+                            is_success: true,
+                            repos,
+                            count,
+                            error: None,
+                        }))
+                    }
+                    Err(e) => Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
+                        is_success: false,
+                        repos: vec![],
+                        count: 0,
+                        error: Some(format!("{}", e)),
+                    })),
+                }
+            }
+
             // Federation operations
             ClientRpcRequest::ForgeGetDelegateKey { repo_id } => {
                 handle_get_delegate_key(&self.forge_node, repo_id).await

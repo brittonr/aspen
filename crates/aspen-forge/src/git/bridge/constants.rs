@@ -38,17 +38,17 @@ pub const MAX_HASH_MAPPING_BATCH_SIZE: usize = 1_000;
 /// Maximum objects to process in a single import batch.
 ///
 /// Tiger Style: Prevents memory exhaustion during large imports.
-/// The chunked push protocol (`GitBridgePushStart/Chunk/Complete`) breaks
-/// large pushes into chunks of ≤2,000 objects client-side, so this limit
-/// only guards against malformed single-batch requests.
-pub const MAX_IMPORT_BATCH_SIZE: usize = 10_000;
+/// The chunked push protocol splits objects into chunks, but tree objects
+/// may arrive in a single batch due to interdependencies. 50K supports
+/// repositories with ~12K+ trees (e.g., Aspen's 72-crate workspace).
+pub const MAX_IMPORT_BATCH_SIZE: usize = 50_000;
 
 /// Maximum objects to include in a single push/export.
 ///
 /// Tiger Style: Limits packfile size and memory usage.
-/// With chunked push, each chunk carries ≤2,000 objects so this limit
-/// applies to the legacy single-batch `GitBridgePush` path.
-pub const MAX_PUSH_OBJECTS: usize = 10_000;
+/// With chunked push, each chunk carries batches of objects. Tree objects
+/// may all arrive in one chunk to preserve dependency ordering.
+pub const MAX_PUSH_OBJECTS: usize = 50_000;
 
 /// Maximum depth for commit DAG traversal during export.
 ///

@@ -381,7 +381,7 @@ pub use watch::WatchStatusResultResponse;
 /// Tiger Style: Bounded to prevent memory exhaustion attacks.
 /// Reduced from 256MB to 4MB after implementing chunked transfer for git bridge
 /// operations. Large git pushes now use GitBridgePushStart/Chunk/Complete protocol.
-pub const MAX_CLIENT_MESSAGE_SIZE: usize = 4 * 1024 * 1024;
+pub const MAX_CLIENT_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
 
 /// Maximum number of nodes in cluster state response.
 ///

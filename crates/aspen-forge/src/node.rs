@@ -335,6 +335,35 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         }
     }
 
+    /// List all repositories on this node.
+    ///
+    /// Scans the KV store for repo identity entries. Returns up to 1000 repos.
+    pub async fn list_repos(&self) -> ForgeResult<Vec<RepoIdentity>> {
+        let scan_result = self
+            .kv
+            .scan(aspen_core::ScanRequest {
+                prefix: KV_PREFIX_REPO_NAMES.to_string(),
+                limit_results: Some(1000),
+                continuation_token: None,
+            })
+            .await
+            .map_err(ForgeError::from)?;
+
+        let mut repos = Vec::new();
+        for kv in scan_result.entries {
+            // The name index stores repo_id hex as the value
+            let repo_id_hex = kv.value;
+            if let Ok(repo_id) = RepoId::from_hex(&repo_id_hex) {
+                match self.get_repo(&repo_id).await {
+                    Ok(identity) => repos.push(identity),
+                    Err(ForgeError::RepoNotFound { .. }) => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+        Ok(repos)
+    }
+
     /// Check if a repository exists.
     pub async fn repo_exists(&self, repo_id: &RepoId) -> ForgeResult<bool> {
         let key = format!("{}{}:identity", KV_PREFIX_REPOS, repo_id.to_hex());

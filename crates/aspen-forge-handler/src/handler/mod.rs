@@ -22,8 +22,8 @@ mod tests {
     #[test]
     fn test_executor_handles_count() {
         let handles = crate::ForgeServiceExecutor::HANDLES;
-        // 9 federation + 7 git bridge = 16
-        assert_eq!(handles.len(), 16);
+        // 2 repo ops + 9 federation + 7 git bridge = 18
+        assert_eq!(handles.len(), 18);
     }
 
     #[test]
@@ -53,10 +53,16 @@ mod tests {
     }
 
     #[test]
+    fn test_executor_handles_repo_ops() {
+        let handles = crate::ForgeServiceExecutor::HANDLES;
+        // Repo CRUD ops moved to native handler for self-hosting
+        assert!(handles.contains(&"ForgeCreateRepo"));
+        assert!(handles.contains(&"ForgeListRepos"));
+    }
+
     fn test_executor_does_not_handle_migrated_ops() {
         let handles = crate::ForgeServiceExecutor::HANDLES;
-        // These are handled by WASM forge plugin
-        assert!(!handles.contains(&"ForgeCreateRepo"));
+        // These are still handled by WASM forge plugin
         assert!(!handles.contains(&"ForgeGetRef"));
         assert!(!handles.contains(&"ForgeCreateIssue"));
         assert!(!handles.contains(&"ForgeCreatePatch"));

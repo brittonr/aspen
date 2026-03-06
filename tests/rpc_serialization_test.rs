@@ -509,7 +509,7 @@ mod unit_tests {
 
     #[test]
     fn test_max_tui_message_size_constant() {
-        assert_eq!(MAX_CLIENT_MESSAGE_SIZE, 4 * 1024 * 1024); // 4 MB
+        assert_eq!(MAX_CLIENT_MESSAGE_SIZE, 16 * 1024 * 1024); // 16 MB
     }
 
     #[test]

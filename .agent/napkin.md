@@ -227,9 +227,17 @@
 - Metric TTL: default 24h (`METRIC_DEFAULT_TTL_SECONDS`), max 7d (`METRIC_MAX_TTL_SECONDS`)
 - No periodic alert evaluation yet — on-demand only via `AlertEvaluate` RPC
 
-**Self-Hosting Pipeline (proven end-to-end 2026-03-06):**
+**Self-Hosting Pipeline (FULLY WORKING 2026-03-06):**
 
 - **Full pipeline**: git push → forge gossip → CI auto-trigger → nix build → success
+- **Real dogfood run**: 3-stage pipeline, 5 jobs, ALL pass in 8m48s:
+  - Stage 1 (check): format-check ✅, clippy ✅
+  - Stage 2 (build): build-node ✅, build-cli ✅ (parallel)
+  - Stage 3 (test): nextest-quick ✅ (519/671 tests, 142 skipped by ci-nix profile)
+- **Dogfood script**: `scripts/dogfood-local.sh` (start/stop/push/build/full)
+  - `nix run .#dogfood-local` runs the complete pipeline
+  - Needs: `--enable-workers --enable-ci --ci-auto-trigger`
+- **Native forge ops**: ForgeCreateRepo/ListRepos now native (no WASM needed)
 - **VM test**: `ci-nix-build-test` — pushes a flake to Forge, NixBuildWorker runs `nix build`, verifies success
 - **VM test**: `ci-dogfood-test` — pushes ALL 80+ Aspen crates to Forge, CI auto-triggers 3-stage pipeline (validate → build 2 crates parallel → run tests)
 - **Feature chain for nix executor**: root `ci` → `ci-basic` → `nix-executor` (marker) + `aspen-ci/nix-executor`
