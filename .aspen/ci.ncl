@@ -1,13 +1,14 @@
-# Aspen CI Pipeline Configuration
+# Aspen CI Pipeline Configuration — Self-Hosted
 #
 # Stages:
-# 1. Format check: shell job (~5s)
-# 2. Build: Nix flake build via NixBuildWorker (~2-5min with cache)
-# 3. Test: Quick test suite via shell (~5min)
+# 1. Check: format validation (shell) + clippy lint (nix, all 59 crates)
+# 2. Build: aspen-node + aspen-cli via unit2nix (parallel nix jobs)
+# 3. Test: Quick test suite via nextest (~5min)
 #
-# The build stage uses `type = 'nix` which runs `nix build` directly
-# on the CI worker. For stronger isolation, switch to `type = 'vm`
-# (requires Cloud Hypervisor and kernel images).
+# Both check and build stages use `type = 'nix` which runs `nix build`
+# directly on the CI worker via NixBuildWorker. The unit2nix build
+# system compiles each crate as a separate Nix derivation, giving
+# fine-grained caching — changing one crate only rebuilds its dependents.
 #
 # Build outputs are automatically published to the Aspen nix binary cache
 # when `publish_to_cache = true`.
