@@ -1582,6 +1582,16 @@
                   doCheck = false;
                 }
               );
+              # HTTP gateway: Nix binary cache protocol ↔ Aspen cluster RPC
+              full-aspen-nix-cache-gateway = craneLib.buildPackage (
+                fullCommonArgs
+                // {
+                  pname = "aspen-nix-cache-gateway";
+                  version = "0.1.0";
+                  cargoExtraArgs = "-p aspen-nix-cache-gateway --bin aspen-nix-cache-gateway";
+                  doCheck = false;
+                }
+              );
             };
         in
           bins
@@ -2020,6 +2030,17 @@
                 inherit pkgs;
                 aspenNodePackage = bins.full-aspen-node;
                 aspenCliPackage = bins.full-aspen-cli;
+              };
+
+              # Nix cache gateway test: HTTP binary cache protocol bridge.
+              # Starts cluster + gateway, verifies nix-cache-info, narinfo
+              # signing, 404/400 error handling, and CLI public-key command.
+              # Build: nix build .#checks.x86_64-linux.nix-cache-gateway-test
+              nix-cache-gateway-test = import ./nix/tests/nix-cache-gateway.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli-ci;
+                gatewayPackage = bins.full-aspen-nix-cache-gateway;
               };
 
               # HTTP proxy test: TCP tunnel and HTTP forward proxy over
