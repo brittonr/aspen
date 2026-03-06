@@ -176,6 +176,8 @@ fn create_test_payload(flake_url: &str, attribute: Option<&str>) -> NixBuildPayl
         extra_args: vec![],
         working_dir: None,
         cache_key: None,
+        publish_to_cache: true,
+        cache_outputs: vec![],
     }
 }
 

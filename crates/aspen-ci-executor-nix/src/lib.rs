@@ -59,6 +59,8 @@ mod tests {
             cache_key: None,
             artifacts: vec![],
             should_upload_result: true,
+            publish_to_cache: true,
+            cache_outputs: vec![],
         };
 
         assert!(valid.validate().is_ok());
@@ -77,6 +79,8 @@ mod tests {
             cache_key: None,
             artifacts: vec![],
             should_upload_result: true,
+            publish_to_cache: true,
+            cache_outputs: vec![],
         };
 
         assert!(invalid.validate().is_err());
@@ -95,6 +99,8 @@ mod tests {
             cache_key: None,
             artifacts: vec![],
             should_upload_result: true,
+            publish_to_cache: true,
+            cache_outputs: vec![],
         };
 
         assert!(invalid.validate().is_err());
@@ -113,6 +119,8 @@ mod tests {
             cache_key: None,
             artifacts: vec![],
             should_upload_result: true,
+            publish_to_cache: true,
+            cache_outputs: vec![],
         };
 
         assert_eq!(payload.flake_ref(), "github:owner/repo#packages.x86_64-linux.default");
@@ -131,6 +139,8 @@ mod tests {
             cache_key: None,
             artifacts: vec![],
             should_upload_result: true,
+            publish_to_cache: true,
+            cache_outputs: vec![],
         };
 
         assert_eq!(payload.flake_ref(), ".");
