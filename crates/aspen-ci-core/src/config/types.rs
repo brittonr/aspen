@@ -137,6 +137,13 @@ pub struct JobConfig {
     /// Defaults to true.
     #[serde(default = "default_true")]
     pub should_upload_result: bool,
+
+    /// Whether to publish build outputs to the Nix binary cache (for nix jobs).
+    /// When true, built store paths are uploaded to the SNIX cache so they're
+    /// available as substituters for future builds.
+    /// Defaults to true.
+    #[serde(default = "default_true")]
+    pub publish_to_cache: bool,
 }
 
 fn default_job_timeout() -> u64 {

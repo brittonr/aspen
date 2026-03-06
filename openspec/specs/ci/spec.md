@@ -102,3 +102,81 @@ The system SHALL store CI artifacts (build outputs, logs, test results) as conte
 - WHEN the job completes successfully
 - THEN the artifact SHALL be stored as an iroh-blob
 - AND the blob hash SHALL be recorded in the pipeline results
+
+<!-- Merged from forge-ci-integration -->
+### Requirement: Pipeline Execution
+
+The system SHALL execute pipeline stages in dependency order, parallelizing independent jobs. Execution SHALL be distributed across available worker nodes. When a cluster cache is available, Nix builds SHALL automatically use it as a substituter. Pipeline runs SHALL be indexed by repository and ref for efficient status queries.
+
+#### Scenario: Sequential stages
+
+- **WHEN** stages `build → test → deploy` with dependencies
+- **THEN** `test` SHALL NOT start until `build` completes successfully
+- **AND** `deploy` SHALL NOT start until `test` completes successfully
+
+#### Scenario: Parallel jobs within a stage
+
+- **WHEN** a `test` stage with jobs `[unit-tests, lint, clippy]` with no inter-dependencies
+- **THEN** all three jobs MAY run in parallel on different workers
+
+#### Scenario: Nix build with cache substituter
+
+- **WHEN** a CI job that runs `nix build` and `use_cluster_cache` is enabled
+- **THEN** it SHALL inject `--substituters http://127.0.0.1:{proxy_port}` and `--trusted-public-keys {cache_public_key}` into the Nix invocation
+- **AND** the cache proxy SHALL translate HTTP requests to aspen client RPC
+
+#### Scenario: Nix build without cache
+
+- **WHEN** a CI job that runs `nix build` and `use_cluster_cache` is disabled
+- **THEN** it SHALL NOT modify the Nix invocation's substituter configuration
+
+#### Scenario: Job failure propagation
+
+- **WHEN** `build` fails in a `build → test → deploy` pipeline
+- **THEN** `test` and `deploy` SHALL be skipped
+- **AND** the pipeline SHALL be marked as failed
+
+#### Scenario: Pipeline status indexed by ref
+
+- **WHEN** a pipeline run starts for repo `R` on ref `refs/heads/main`
+- **THEN** the latest run ID SHALL be written to `_ci:ref-status:{repo_hex}:refs/heads/main`
+- **AND** querying `ci status R main` SHALL return the latest pipeline run status
+
+#### Scenario: Pipeline status updated on completion
+
+- **WHEN** a pipeline run completes (success or failure)
+- **THEN** the ref-status index SHALL be updated with final status
+- **AND** the run record at `_ci:runs:{run_id}` SHALL reflect the terminal state
+
+<!-- Merged from ci-nix-flake-checkout -->
+### Requirement: SNIX cache upload from CI builds
+
+The NixBuildWorker SHALL use SNIX services (BlobService, DirectoryService, PathInfoService) for cache uploads when available, in addition to the legacy blob store path.
+
+#### Scenario: SNIX services wired in node binary
+
+- **WHEN** the node binary starts with `snix` feature enabled and `config.snix.is_enabled` is true
+- **THEN** `NixBuildWorkerConfig` SHALL receive non-None SNIX service references
+- **AND** `upload_store_paths_snix()` SHALL be invoked for store path uploads
+
+#### Scenario: SNIX services unavailable
+
+- **WHEN** the node binary starts without `snix` feature or with SNIX disabled
+- **THEN** `NixBuildWorkerConfig` SHALL have `snix_*_service: None`
+- **AND** the legacy `upload_store_paths()` path SHALL be used as fallback
+
+## ADDED Requirements
+
+### Requirement: Pipeline config SHALL support publish_to_cache
+
+The Nickel CI config schema and `JobConfig` struct SHALL include a `publish_to_cache` boolean field that controls whether build outputs are uploaded to the Nix binary cache.
+
+#### Scenario: Default publish_to_cache
+
+- **WHEN** a job config does not specify `publish_to_cache`
+- **THEN** it SHALL default to `true`
+
+#### Scenario: Disable cache publishing
+
+- **WHEN** a job config sets `publish_to_cache = false`
+- **THEN** the NixBuildWorker SHALL skip store path uploads for that job

@@ -248,7 +248,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
         );
 
         self.start_pipeline_perform_checkout(&run_id, &event.commit_hash, &checkout_dir).await?;
-        self.start_pipeline_prepare_for_build(&run_id, &checkout_dir).await?;
+        self.start_pipeline_prepare_for_build(&run_id, &event.commit_hash, &checkout_dir).await?;
 
         let source_hash = self.start_pipeline_create_source_archive(&run_id, &checkout_dir).await;
         let updated_context = self.start_pipeline_build_updated_context(&event, &checkout_dir, source_hash);
@@ -311,8 +311,13 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
     }
 
     /// Prepare checkout directory for CI build.
-    async fn start_pipeline_prepare_for_build(&self, run_id: &str, checkout_dir: &std::path::Path) -> Result<()> {
-        if let Err(e) = crate::checkout::prepare_for_ci_build(checkout_dir).await {
+    async fn start_pipeline_prepare_for_build(
+        &self,
+        run_id: &str,
+        commit_hash: &[u8; 32],
+        checkout_dir: &std::path::Path,
+    ) -> Result<()> {
+        if let Err(e) = crate::checkout::prepare_for_ci_build(checkout_dir, commit_hash).await {
             let error_msg = format!("CI build preparation failed: {}", e);
             warn!(run_id = %run_id, error = %error_msg, "CI build preparation failed");
 

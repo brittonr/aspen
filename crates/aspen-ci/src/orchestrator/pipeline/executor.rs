@@ -289,6 +289,8 @@ fn build_nix_payload(job: &JobConfig, context: &PipelineContext) -> Result<serde
         cache_key: job.cache_key.clone(),
         artifacts: job.artifacts.clone(),
         should_upload_result: job.should_upload_result,
+        publish_to_cache: job.publish_to_cache,
+        cache_outputs: Vec::new(),
     };
 
     serde_json::to_value(&nix_payload).map_err(|e| CiError::InvalidConfig {
@@ -336,4 +338,82 @@ fn build_vm_payload(
     serde_json::to_value(&vm_payload).map_err(|e| CiError::InvalidConfig {
         reason: format!("Failed to serialize VM payload: {}", e),
     })
+}
+
+#[cfg(all(test, feature = "nix-executor"))]
+mod tests {
+    use super::*;
+    use crate::config::types::JobType;
+
+    fn test_job_config() -> JobConfig {
+        JobConfig {
+            name: "build".to_string(),
+            job_type: JobType::Nix,
+            command: None,
+            args: vec![],
+            env: std::collections::HashMap::new(),
+            working_dir: None,
+            flake_url: Some(".".to_string()),
+            flake_attr: Some("packages.x86_64-linux.default".to_string()),
+            binary_hash: None,
+            timeout_secs: 3600,
+            isolation: crate::config::types::IsolationMode::NixSandbox,
+            cache_key: None,
+            artifacts: vec![],
+            depends_on: vec![],
+            retry_count: 0,
+            allow_failure: false,
+            tags: vec![],
+            should_upload_result: true,
+            publish_to_cache: true,
+        }
+    }
+
+    fn test_context() -> PipelineContext {
+        PipelineContext {
+            repo_id: aspen_forge::identity::RepoId::from_hash(blake3::Hash::from_bytes([0u8; 32])),
+            ref_name: "refs/heads/main".to_string(),
+            commit_hash: [0u8; 32],
+            triggered_by: "test".to_string(),
+            env: std::collections::HashMap::new(),
+            checkout_dir: Some(std::path::PathBuf::from("/tmp/ci-test")),
+            source_hash: None,
+        }
+    }
+
+    #[test]
+    fn test_build_nix_payload_publish_to_cache_true() {
+        let job = test_job_config();
+        let context = test_context();
+
+        let value = build_nix_payload(&job, &context).unwrap();
+        let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
+
+        assert!(payload.publish_to_cache);
+        assert!(payload.should_upload_result);
+    }
+
+    #[test]
+    fn test_build_nix_payload_publish_to_cache_false() {
+        let mut job = test_job_config();
+        job.publish_to_cache = false;
+        let context = test_context();
+
+        let value = build_nix_payload(&job, &context).unwrap();
+        let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
+
+        assert!(!payload.publish_to_cache);
+    }
+
+    #[test]
+    fn test_build_nix_payload_preserves_flake_fields() {
+        let job = test_job_config();
+        let context = test_context();
+
+        let value = build_nix_payload(&job, &context).unwrap();
+        let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
+
+        assert_eq!(payload.flake_url, ".");
+        assert_eq!(payload.attribute, "packages.x86_64-linux.default");
+    }
 }

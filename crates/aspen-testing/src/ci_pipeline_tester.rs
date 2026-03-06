@@ -576,6 +576,7 @@ fn test_job(name: &str, command: &str) -> JobConfig {
         allow_failure: false,
         tags: vec![],
         should_upload_result: true,
+        publish_to_cache: true,
     }
 }
 

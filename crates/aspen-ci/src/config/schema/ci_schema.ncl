@@ -84,6 +84,12 @@ let JobConfig = {
 
   # Tags for worker affinity
   tags | Array String | default = [],
+
+  # Whether to upload build results to blob store (nix jobs)
+  should_upload_result | Bool | default = true,
+
+  # Whether to publish outputs to the Nix binary cache (nix jobs)
+  publish_to_cache | Bool | default = true,
 } in
 
 # === Stage Configuration ===

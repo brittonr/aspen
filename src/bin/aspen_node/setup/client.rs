@@ -609,14 +609,37 @@ async fn initialize_job_system(
                 use aspen_ci::NixBuildWorker;
                 use aspen_ci::NixBuildWorkerConfig;
 
+                // Construct SNIX services when available for decomposed
+                // content-addressed cache uploads.
+                #[cfg(feature = "snix")]
+                let (snix_blob_svc, snix_dir_svc, snix_pathinfo_svc) = if config.snix.is_enabled {
+                    if let Some(blob_store) = node_mode.blob_store() {
+                        let blob_svc: Arc<dyn snix_castore::blobservice::BlobService> =
+                            Arc::new(aspen_snix::IrohBlobService::from_arc(blob_store.clone()));
+                        let dir_svc: Arc<dyn snix_castore::directoryservice::DirectoryService> =
+                            Arc::new(aspen_snix::RaftDirectoryService::from_arc(kv_store.clone()));
+                        let pathinfo_svc: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
+                            Arc::new(aspen_snix::RaftPathInfoService::from_arc(kv_store.clone()));
+                        info!("SNIX services constructed for NixBuildWorker cache uploads");
+                        (Some(blob_svc), Some(dir_svc), Some(pathinfo_svc))
+                    } else {
+                        warn!("SNIX enabled but blob store not available — SNIX cache uploads disabled");
+                        (None, None, None)
+                    }
+                } else {
+                    (None, None, None)
+                };
+                #[cfg(not(feature = "snix"))]
+                let (snix_blob_svc, snix_dir_svc, snix_pathinfo_svc) = (None, None, None);
+
                 let nix_config = NixBuildWorkerConfig {
                     node_id: config.node_id,
                     cluster_id: config.cookie.clone(),
                     blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
                     cache_index: cache_index.clone(),
-                    snix_blob_service: None,
-                    snix_directory_service: None,
-                    snix_pathinfo_service: None,
+                    snix_blob_service: snix_blob_svc,
+                    snix_directory_service: snix_dir_svc,
+                    snix_pathinfo_service: snix_pathinfo_svc,
                     output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
                     nix_binary: "nix".to_string(),
                     is_verbose: false,

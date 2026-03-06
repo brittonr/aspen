@@ -372,27 +372,136 @@ const SNIX_PACKAGES: &[&str] = &[
 
 /// Post-process checkout to remove development-only configurations.
 ///
-/// This performs two operations:
+/// This performs three operations:
 /// 1. Removes `[patch]` sections from `.cargo/config.toml` that reference local path dependencies.
 /// 2. Adds git source lines to Cargo.lock for snix packages.
+/// 3. Initializes a git repository so Nix flakes can evaluate.
 ///
-/// Both operations are necessary for Nix sandbox builds where:
+/// Operations 1-2 are necessary for Nix sandbox builds where:
 /// - External paths (like `../snix/snix/*`) are not available
 /// - Cargo.lock needs source entries for Crane to vendor git dependencies
+///
+/// Operation 3 is necessary because Nix flakes require git context (`nix build .#pkg`
+/// fails without `.git/`). The checkout directory is a bare file extraction from Forge
+/// git objects with no git metadata.
 ///
 /// # Arguments
 ///
 /// * `checkout_dir` - The checkout directory to prepare
+/// * `commit_hash` - The original Forge commit hash (embedded in git commit message for
+///   traceability)
 ///
 /// # Returns
 ///
 /// Ok(()) on success, or an error if files cannot be processed.
-pub async fn prepare_for_ci_build(checkout_dir: &Path) -> Result<()> {
+pub async fn prepare_for_ci_build(checkout_dir: &Path, commit_hash: &[u8; 32]) -> Result<()> {
     // Step 1: Remove [patch.*] sections from .cargo/config.toml
     remove_cargo_patches(checkout_dir).await?;
 
     // Step 2: Add git source lines to Cargo.lock for snix packages
     add_snix_git_sources(checkout_dir).await?;
+
+    // Step 3: Initialize git repo for Nix flake compatibility
+    init_git_for_flake(checkout_dir, commit_hash).await?;
+
+    Ok(())
+}
+
+/// Initialize a minimal git repository in the checkout directory for Nix flake compatibility.
+///
+/// Nix flakes require git context to evaluate (`nix build .#pkg` fails without `.git/`).
+/// This creates a single-commit repo containing all checkout files, with the original
+/// Forge commit hash in the commit message for traceability.
+///
+/// # Arguments
+///
+/// * `checkout_dir` - The checkout directory to initialize
+/// * `commit_hash` - The original Forge commit hash (hex-encoded in commit message)
+///
+/// # Errors
+///
+/// Returns `CiError::Checkout` if git is not available or git commands fail.
+pub async fn init_git_for_flake(checkout_dir: &Path, commit_hash: &[u8; 32]) -> Result<()> {
+    use tokio::process::Command;
+
+    let commit_hex = hex::encode(commit_hash);
+
+    // Pre-flight: verify git is available
+    let git_check = Command::new("git").arg("--version").output().await.map_err(|e| CiError::Checkout {
+        reason: format!(
+            "git binary not found (required for Nix flake builds): {}. \
+             Ensure git is installed in the CI execution environment.",
+            e
+        ),
+    })?;
+
+    if !git_check.status.success() {
+        return Err(CiError::Checkout {
+            reason: format!("git --version failed: {}", String::from_utf8_lossy(&git_check.stderr)),
+        });
+    }
+
+    debug!(
+        checkout_dir = %checkout_dir.display(),
+        commit = %commit_hex,
+        "Initializing git repo for Nix flake compatibility"
+    );
+
+    // git init
+    let init_output = Command::new("git")
+        .args(["init", "--initial-branch=main"])
+        .current_dir(checkout_dir)
+        .output()
+        .await
+        .map_err(|e| CiError::Checkout {
+            reason: format!("git init failed: {}", e),
+        })?;
+
+    if !init_output.status.success() {
+        return Err(CiError::Checkout {
+            reason: format!("git init failed: {}", String::from_utf8_lossy(&init_output.stderr)),
+        });
+    }
+
+    // git add -A
+    let add_output = Command::new("git").args(["add", "-A"]).current_dir(checkout_dir).output().await.map_err(|e| {
+        CiError::Checkout {
+            reason: format!("git add failed: {}", e),
+        }
+    })?;
+
+    if !add_output.status.success() {
+        return Err(CiError::Checkout {
+            reason: format!("git add failed: {}", String::from_utf8_lossy(&add_output.stderr)),
+        });
+    }
+
+    // git commit with Forge commit hash for traceability
+    let commit_msg = format!("CI checkout of Forge commit {}", commit_hex);
+    let commit_output = Command::new("git")
+        .args(["commit", "--allow-empty", "-m", &commit_msg])
+        .env("GIT_AUTHOR_NAME", "Aspen CI")
+        .env("GIT_AUTHOR_EMAIL", "ci@aspen")
+        .env("GIT_COMMITTER_NAME", "Aspen CI")
+        .env("GIT_COMMITTER_EMAIL", "ci@aspen")
+        .current_dir(checkout_dir)
+        .output()
+        .await
+        .map_err(|e| CiError::Checkout {
+            reason: format!("git commit failed: {}", e),
+        })?;
+
+    if !commit_output.status.success() {
+        return Err(CiError::Checkout {
+            reason: format!("git commit failed: {}", String::from_utf8_lossy(&commit_output.stderr)),
+        });
+    }
+
+    info!(
+        checkout_dir = %checkout_dir.display(),
+        commit = %commit_hex,
+        "Git repo initialized for Nix flake compatibility"
+    );
 
     Ok(())
 }
@@ -660,5 +769,78 @@ dependencies = []
         let result = std::fs::read_to_string(&cargo_lock_path).unwrap();
         let source_count = result.matches("source = ").count();
         assert_eq!(source_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_init_git_for_flake_creates_git_dir() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("flake.nix");
+        std::fs::write(&test_file, "{ outputs = { self }: {}; }").unwrap();
+
+        let commit_hash = [0xab_u8; 32];
+        init_git_for_flake(temp_dir.path(), &commit_hash).await.unwrap();
+
+        // .git directory should exist
+        assert!(temp_dir.path().join(".git").exists());
+    }
+
+    #[tokio::test]
+    async fn test_init_git_for_flake_commit_contains_hash() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        std::fs::write(temp_dir.path().join("README.md"), "hello").unwrap();
+
+        let commit_hash = [0xde_u8; 32];
+        init_git_for_flake(temp_dir.path(), &commit_hash).await.unwrap();
+
+        // Verify commit message contains the hex hash
+        let output = tokio::process::Command::new("git")
+            .args(["log", "--oneline", "-1"])
+            .current_dir(temp_dir.path())
+            .output()
+            .await
+            .unwrap();
+        let log = String::from_utf8_lossy(&output.stdout);
+        assert!(log.contains(&hex::encode(commit_hash)));
+    }
+
+    #[tokio::test]
+    async fn test_init_git_for_flake_files_are_tracked() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        std::fs::write(temp_dir.path().join("flake.nix"), "{}").unwrap();
+        std::fs::create_dir_all(temp_dir.path().join("src")).unwrap();
+        std::fs::write(temp_dir.path().join("src/main.rs"), "fn main() {}").unwrap();
+
+        let commit_hash = [0x01_u8; 32];
+        init_git_for_flake(temp_dir.path(), &commit_hash).await.unwrap();
+
+        // Verify files are committed (not just staged)
+        let output = tokio::process::Command::new("git")
+            .args(["status", "--porcelain"])
+            .current_dir(temp_dir.path())
+            .output()
+            .await
+            .unwrap();
+        let status = String::from_utf8_lossy(&output.stdout);
+        assert!(status.trim().is_empty(), "Expected clean working tree, got: {}", status);
+    }
+
+    #[tokio::test]
+    async fn test_prepare_for_ci_build_creates_git_repo() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        std::fs::write(temp_dir.path().join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+
+        let commit_hash = [0xff_u8; 32];
+        prepare_for_ci_build(temp_dir.path(), &commit_hash).await.unwrap();
+
+        // Git repo should exist after full prepare
+        assert!(temp_dir.path().join(".git").exists());
     }
 }
