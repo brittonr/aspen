@@ -347,13 +347,29 @@ async fn run_worker_record_failure(worker_info: &RwLock<HashMap<String, WorkerIn
 }
 
 /// Collect excluded job types from all registered handlers.
+/// Collect job types that should be excluded from dequeue.
+///
+/// A type is excluded only if it appears in some worker's excluded_types list
+/// AND no registered handler can actually handle it. This prevents the
+/// EchoWorker's exclusion list from blocking jobs that have a dedicated handler.
 async fn run_worker_collect_excluded_types(workers: &RwLock<HashMap<String, Arc<dyn Worker>>>) -> Vec<String> {
     let workers_guard = workers.read().await;
-    workers_guard
-        .values()
-        .flat_map(|w| w.excluded_types())
-        .collect::<std::collections::HashSet<_>>()
+    let all_excluded: std::collections::HashSet<String> =
+        workers_guard.values().flat_map(|w| w.excluded_types()).collect();
+
+    // Filter: only exclude types that have NO dedicated handler registered.
+    // If a handler is registered by key name or via job_types(), keep it.
+    all_excluded
         .into_iter()
+        .filter(|job_type| {
+            // Check if there's a dedicated handler for this type
+            let has_handler = workers_guard.contains_key(job_type.as_str())
+                || workers_guard.values().any(|w| {
+                    let types = w.job_types();
+                    !types.is_empty() && types.iter().any(|t| t == job_type)
+                });
+            !has_handler
+        })
         .collect()
 }
 
