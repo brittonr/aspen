@@ -1,14 +1,16 @@
-# Dogfood NixOS VM test: push Aspen's own source to its Forge, build it.
+# Dogfood NixOS VM test: push Aspen's own source to its Forge, build + test it.
 #
 # This is the self-hosting litmus test. It:
 #   1. Creates a Forge repository
-#   2. Pushes Aspen's ACTUAL source tree (80 crates, ~23MB) via git-remote-aspen
-#   3. CI auto-triggers and validates the source tree structure
-#   4. CI compiles aspen-constants (2,602 lines, zero-dep Rust crate) with rustc
-#   5. Verifies pipeline completion with build output
+#   2. Pushes Aspen's ACTUAL source tree (80+ crates, ~23MB) via git-remote-aspen
+#   3. CI auto-triggers with 3-stage pipeline:
+#      a. Validate: check source tree structure (80+ crates, Cargo.toml)
+#      b. Build: compile aspen-constants + aspen-time in parallel
+#      c. Test: run aspen-constants tests
+#   4. Verifies pipeline completion with all stages passing
 #
-# This proves Aspen can host its own source code AND compile its own
-# Rust code through its own CI infrastructure.
+# This proves Aspen can host its own source code, compile its own
+# Rust code, AND run its own tests through its own CI infrastructure.
 #
 # Run:
 #   nix build .#checks.x86_64-linux.ci-dogfood-test --impure
@@ -34,14 +36,14 @@
   cookie = "ci-dogfood-test";
 
   # Override CI config for the dogfood test.
-  # Two stages:
+  # Three stages:
   #   1. Validate source tree structure (quick sanity check)
-  #   2. Actually compile aspen-constants (zero-dep crate, 2,602 lines of Rust)
+  #   2. Build aspen-constants + aspen-time (zero-dep crates, parallel)
+  #   3. Run aspen-constants tests (Rust 2024 edition, assertions)
   #
-  # Stage 2 proves Aspen can build its own code through its own CI.
-  # aspen-constants has no external dependencies, so cargo only needs rustc
-  # (no vendoring/network). The Rust nightly toolchain is pre-staged in the
-  # VM's nix store.
+  # All crates are zero-dependency (no vendoring/network needed), so only
+  # the Rust toolchain is required. Both are Tier 0 foundation crates that
+  # every other aspen crate depends on.
   dogfoodCiConfig = pkgs.writeText "ci.ncl" ''
     {
       name = "aspen-dogfood-build",
@@ -65,7 +67,25 @@
             {
               name = "compile-aspen-constants",
               type = 'shell,
-              command = "sh -c 'export PATH=${rustToolChain}/bin:$PATH && export CARGO_HOME=/tmp/cargo-home && mkdir -p $CARGO_HOME && echo \"rustc version: $(rustc --version)\" && echo \"cargo version: $(cargo --version)\" && echo \"Compiling aspen-constants (2,602 lines, zero deps)...\" && cp -r crates/aspen-constants /tmp/aspen-constants-build && cd /tmp/aspen-constants-build && cargo build 2>&1 && echo \"Build output:\" && ls -la target/debug/libaspen_constants.rlib && echo \"Aspen built its own code through its own CI.\"'",
+              command = "sh -c 'export PATH=${rustToolChain}/bin:$PATH && export CARGO_HOME=/tmp/cargo-home && mkdir -p $CARGO_HOME && echo \"Compiling aspen-constants (2,602 lines)...\" && cp -r crates/aspen-constants /tmp/aspen-constants-build && cd /tmp/aspen-constants-build && cargo build 2>&1 && ls -la target/debug/libaspen_constants.rlib && echo \"aspen-constants: OK\"'",
+              timeout_secs = 120,
+            },
+            {
+              name = "compile-aspen-time",
+              type = 'shell,
+              command = "sh -c 'export PATH=${rustToolChain}/bin:$PATH && export CARGO_HOME=/tmp/cargo-home && mkdir -p $CARGO_HOME && echo \"Compiling aspen-time...\" && cp -r crates/aspen-time /tmp/aspen-time-build && cd /tmp/aspen-time-build && cargo build 2>&1 && ls -la target/debug/libaspen_time.rlib && echo \"aspen-time: OK\"'",
+              timeout_secs = 120,
+            },
+          ],
+        },
+        {
+          name = "test",
+          depends_on = ["build"],
+          jobs = [
+            {
+              name = "test-aspen-constants",
+              type = 'shell,
+              command = "sh -c 'export PATH=${rustToolChain}/bin:$PATH && export CARGO_HOME=/tmp/cargo-home && mkdir -p $CARGO_HOME && cd /tmp/aspen-constants-build && cargo test 2>&1 && echo \"Tests passed\"'",
               timeout_secs = 120,
             },
           ],
@@ -330,8 +350,8 @@ in
       # ── phase 5: wait for pipeline completion ───────────────────────
 
       with subtest("dogfood pipeline completes successfully"):
-          # Two stages: validate (quick) + build (rustc compile ~30s)
-          final_status = wait_for_pipeline(run_id, timeout=180)
+          # Three stages: validate (quick) + build (2 parallel compiles) + test
+          final_status = wait_for_pipeline(run_id, timeout=300)
           node1.log(f"Pipeline final: {json.dumps(final_status, indent=2)}")
           pipeline_status = final_status.get("status")
 
