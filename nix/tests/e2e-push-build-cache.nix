@@ -33,6 +33,26 @@
   # Shared cluster cookie.
   cookie = "e2e-push-build-cache-test";
 
+  # CI config (Nickel) — written as a Nix file to avoid quoting issues.
+  ciConfig = pkgs.writeText "ci.ncl" ''
+    {
+      name = "e2e-test-pipeline",
+      stages = [
+        {
+          name = "check",
+          jobs = [
+            {
+              name = "hello",
+              type = 'shell,
+              command = "echo hello from aspen ci",
+              timeout_secs = 60,
+            },
+          ],
+        },
+      ],
+    }
+  '';
+
   # WASM plugin helpers (KV + Forge handlers are WASM-only)
   pluginHelpers = import ./lib/wasm-plugins.nix {
     inherit pkgs aspenCliPlugins;
@@ -216,49 +236,37 @@ in
           # Write a simple README
           node1.succeed("echo '# E2E Test Repo' > /tmp/test-repo/README.md")
 
-          # Write CI config with a shell job
-          node1.succeed("""
-              cat > /tmp/test-repo/.aspen/ci.ncl << 'NCL_EOF'
-              {
-                name = "e2e-test-pipeline",
-                stages = [
-                  {
-                    name = "check",
-                    jobs = [
-                      {
-                        name = "hello",
-                        type = 'shell,
-                        command = "echo hello from aspen ci && date",
-                        timeout_secs = 60,
-                      },
-                    ],
-                  },
-                ],
-              }
-              NCL_EOF
-          """)
+          # Copy CI config from Nix store (avoids heredoc quoting issues)
+          node1.succeed("cp ${ciConfig} /tmp/test-repo/.aspen/ci.ncl")
 
           # Initialize git and commit
           node1.succeed(
               "cd /tmp/test-repo && "
-              "git init && "
+              "git init --initial-branch=main && "
               "git config user.email 'test@aspen.local' && "
               "git config user.name 'E2E Test' && "
               "git add -A && "
               "git commit -m 'initial: ci config'"
           )
 
-          # Add forge remote and push
+          # Add forge remote (format: aspen://{ticket}/{repo_id})
+          remote_url = f"aspen://{ticket}/{repo_id}"
           node1.succeed(
               f"cd /tmp/test-repo && "
-              f"git remote add aspen 'aspen://{repo_id}?ticket={ticket}'"
+              f"git remote add aspen '{remote_url}'"
           )
 
           exit_code, push_out = node1.execute(
               "cd /tmp/test-repo && "
-              "git push aspen main 2>&1"
+              "RUST_LOG=warn git push aspen main "
+              ">/tmp/git-push-stdout.txt 2>/tmp/git-push-stderr.txt"
           )
-          node1.log(f"Push exit={exit_code}, output: {push_out}")
+          push_stdout = node1.succeed("cat /tmp/git-push-stdout.txt 2>/dev/null || true")
+          push_stderr = node1.succeed("cat /tmp/git-push-stderr.txt 2>/dev/null || true")
+          node1.log(f"Push exit={exit_code}")
+          node1.log(f"Push stdout: {push_stdout}")
+          node1.log(f"Push stderr: {push_stderr}")
+          assert exit_code == 0, f"git push failed (exit {exit_code}): {push_stderr}"
 
           # Verify the ref exists
           out = cli(f"branch list -r {repo_id}", check=False)
