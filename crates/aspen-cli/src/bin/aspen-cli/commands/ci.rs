@@ -690,6 +690,12 @@ async fn ci_logs(client: &AspenClient, args: LogsArgs, json: bool) -> Result<()>
         match response {
             ClientRpcResponse::CiGetJobLogsResult(result) => {
                 if !result.was_found && start_index == 0 {
+                    if args.follow {
+                        // In follow mode, the job may not have produced logs yet.
+                        // Wait and retry instead of exiting immediately.
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        continue;
+                    }
                     if json {
                         println!(
                             "{}",

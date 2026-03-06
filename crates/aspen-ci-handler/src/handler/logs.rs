@@ -37,15 +37,25 @@ pub async fn handle_get_job_logs(
     // Key format: _ci:logs:{run_id}:{job_id}:{chunk_index:010}
     let prefix = format!("{}{}:{}:", CI_LOG_KV_PREFIX, run_id, job_id);
 
-    // Build the start key with zero-padded index
-    let start_key = format!("{}{:010}", prefix, start_index);
+    // Use continuation_token to skip past already-read chunks.
+    // The scan uses the base prefix to match ALL chunks, then
+    // continuation_token (exclusive) skips to the desired start_index.
+    // Previously start_key was used as prefix, which only matched one
+    // chunk per request since "0000000001" is not a prefix of "0000000002".
+    let continuation_token = if start_index > 0 {
+        // continuation_token is exclusive (key > token), so use the key
+        // just before start_index to include start_index in results.
+        Some(format!("{}{:010}", prefix, start_index - 1))
+    } else {
+        None
+    };
 
     // Scan for log chunks starting from the requested index
     let scan_result = kv_store
         .scan(ScanRequest {
-            prefix: start_key,
+            prefix,
             limit_results: Some(limit),
-            continuation_token: None,
+            continuation_token,
         })
         .await;
 

@@ -25,6 +25,10 @@ const CI_LOG_KV_PREFIX: &str = "_ci:logs:";
 const CI_LOG_COMPLETE_MARKER: &str = "__complete__";
 /// Maximum bytes buffered before flushing a chunk.
 const FLUSH_THRESHOLD: usize = 8 * 1024;
+/// Periodic flush interval in milliseconds.
+/// Ensures partial buffers are written to KV for real-time streaming,
+/// even when output is sparse and doesn't fill a full chunk.
+const FLUSH_INTERVAL_MS: u64 = 500;
 
 #[async_trait]
 impl Worker for NixBuildWorker {
@@ -157,17 +161,47 @@ impl Worker for NixBuildWorker {
 }
 
 /// Bridge task: reads stderr lines from a channel, buffers them, and writes
-/// log chunks to KV. Completes when the sender is dropped (build finished).
+/// log chunks to KV. Flushes on size threshold OR periodic timer to ensure
+/// real-time streaming even with sparse output.
 async fn log_bridge(mut rx: mpsc::Receiver<String>, kv_store: Arc<dyn KeyValueStore>, run_id: String, job_id: String) {
+    use std::time::Duration;
+
+    use tokio::time::interval;
+
     let mut chunk_index: u32 = 0;
     let mut buffer = String::new();
+    let mut flush_interval = interval(Duration::from_millis(FLUSH_INTERVAL_MS));
 
-    while let Some(line) = rx.recv().await {
-        buffer.push_str(&line);
+    // Skip the immediate first tick
+    flush_interval.tick().await;
 
-        // Flush when buffer exceeds threshold
-        if buffer.len() >= FLUSH_THRESHOLD {
-            flush_chunk(&kv_store, &run_id, &job_id, &mut chunk_index, &mut buffer).await;
+    loop {
+        tokio::select! {
+            biased;
+
+            msg = rx.recv() => {
+                match msg {
+                    Some(line) => {
+                        buffer.push_str(&line);
+
+                        // Flush when buffer exceeds threshold
+                        if buffer.len() >= FLUSH_THRESHOLD {
+                            flush_chunk(&kv_store, &run_id, &job_id, &mut chunk_index, &mut buffer).await;
+                        }
+                    }
+                    None => {
+                        // Channel closed — build finished
+                        break;
+                    }
+                }
+            }
+            _ = flush_interval.tick() => {
+                // Periodic flush: write partial buffer to KV so streaming
+                // clients see output in real-time, not just at 8KB boundaries.
+                if !buffer.is_empty() {
+                    flush_chunk(&kv_store, &run_id, &job_id, &mut chunk_index, &mut buffer).await;
+                }
+            }
         }
     }
 
