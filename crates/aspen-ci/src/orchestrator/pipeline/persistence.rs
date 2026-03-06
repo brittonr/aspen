@@ -9,15 +9,33 @@ use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
 use aspen_forge::identity::RepoId;
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::debug;
 use tracing::warn;
 
+use super::KV_PREFIX_CI_REF_STATUS;
 use super::KV_PREFIX_CI_RUNS;
 use super::KV_PREFIX_CI_RUNS_BY_REPO;
 use super::PipelineOrchestrator;
 use super::PipelineRun;
+use super::PipelineStatus;
 use crate::error::CiError;
 use crate::error::Result;
+
+/// Ref status stored in KV at `_ci:ref-status:{repo_hex}:{ref_name}`.
+///
+/// Tracks the latest pipeline run for a given ref, enabling fast
+/// `ci status <repo> <ref>` lookups without scanning all runs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RefStatus {
+    /// Latest run ID for this ref.
+    pub run_id: String,
+    /// Current pipeline status.
+    pub status: PipelineStatus,
+    /// Pipeline name.
+    pub pipeline_name: String,
+}
 
 impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     /// Check and enforce run limits.
@@ -73,11 +91,27 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         let index_key =
             format!("{}{}:{}:{}", KV_PREFIX_CI_RUNS_BY_REPO, run.context.repo_id.to_hex(), created_at_ms, run.id);
 
-        // Write both keys atomically using SetMulti
+        // Build ref-status index entry
+        let ref_status = RefStatus {
+            run_id: run.id.clone(),
+            status: run.status,
+            pipeline_name: run.pipeline_name.clone(),
+        };
+        let ref_status_key =
+            format!("{}{}:{}", KV_PREFIX_CI_REF_STATUS, run.context.repo_id.to_hex(), run.context.ref_name);
+        let ref_status_json = serde_json::to_string(&ref_status).map_err(|e| CiError::InvalidConfig {
+            reason: format!("Failed to serialize ref status: {}", e),
+        })?;
+
+        // Write all keys atomically using SetMulti
         // Values are String in the KV store
         let write_request = WriteRequest {
             command: WriteCommand::SetMulti {
-                pairs: vec![(run_key.clone(), run_json), (index_key.clone(), run.id.clone())],
+                pairs: vec![
+                    (run_key.clone(), run_json),
+                    (index_key.clone(), run.id.clone()),
+                    (ref_status_key, ref_status_json),
+                ],
             },
         };
 
@@ -93,6 +127,56 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         );
 
         Ok(())
+    }
+
+    /// Get the latest pipeline run for a ref.
+    ///
+    /// Looks up the ref-status index to find the latest run ID,
+    /// then loads the full run from KV.
+    pub async fn get_latest_run_for_ref(&self, repo_id: &RepoId, ref_name: &str) -> Option<PipelineRun> {
+        let key = format!("{}{}:{}", KV_PREFIX_CI_REF_STATUS, repo_id.to_hex(), ref_name);
+
+        let read_request = ReadRequest {
+            key: key.clone(),
+            consistency: ReadConsistency::Linearizable,
+        };
+
+        let ref_status: RefStatus = match self.kv_store.read(read_request).await {
+            Ok(result) => match result.kv {
+                Some(kv_entry) => match serde_json::from_str(&kv_entry.value) {
+                    Ok(status) => status,
+                    Err(e) => {
+                        debug!(key = %key, error = %e, "Failed to parse ref status from KV store");
+                        return None;
+                    }
+                },
+                None => return None,
+            },
+            Err(e) => {
+                debug!(key = %key, error = %e, "Failed to read ref status from KV store");
+                return None;
+            }
+        };
+
+        // Load the full run
+        self.load_run_from_kv(&ref_status.run_id).await
+    }
+
+    /// Get the ref status (without loading the full run).
+    ///
+    /// Returns the latest run ID and status for a ref.
+    pub async fn get_ref_status(&self, repo_id: &RepoId, ref_name: &str) -> Option<RefStatus> {
+        let key = format!("{}{}:{}", KV_PREFIX_CI_REF_STATUS, repo_id.to_hex(), ref_name);
+
+        let read_request = ReadRequest {
+            key,
+            consistency: ReadConsistency::Linearizable,
+        };
+
+        match self.kv_store.read(read_request).await {
+            Ok(result) => result.kv.and_then(|kv| serde_json::from_str(&kv.value).ok()),
+            Err(_) => None,
+        }
     }
 
     /// Load a pipeline run from the KV store.

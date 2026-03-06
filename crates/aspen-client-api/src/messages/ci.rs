@@ -49,6 +49,9 @@ pub enum CiRequest {
     /// Get full job output (stdout/stderr).
     CiGetJobOutput { run_id: String, job_id: String },
 
+    /// Get the latest pipeline status for a ref.
+    CiGetRefStatus { repo_id: String, ref_name: String },
+
     // Nix Binary Cache operations
     /// Query the Nix binary cache for a store path.
     CacheQuery { store_hash: String },

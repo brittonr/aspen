@@ -23,6 +23,8 @@
 
 mod executor;
 mod persistence;
+
+pub use persistence::RefStatus;
 mod status;
 
 use std::collections::HashMap;
@@ -72,6 +74,11 @@ const KV_PREFIX_CI_RUNS: &str = "_ci:runs:";
 /// Key format: `{KV_PREFIX_CI_RUNS_BY_REPO}{repo_id_hex}:{created_at_ms}:{run_id}`
 /// Value: run_id string (for efficient repo-based listing)
 const KV_PREFIX_CI_RUNS_BY_REPO: &str = "_ci:runs:by-repo:";
+
+/// KV key prefix for latest run per ref.
+/// Key format: `{KV_PREFIX_CI_REF_STATUS}{repo_id_hex}:{ref_name}`
+/// Value: JSON-serialized `RefStatus` (run_id + status)
+const KV_PREFIX_CI_REF_STATUS: &str = "_ci:ref-status:";
 
 /// Configuration for the PipelineOrchestrator.
 #[derive(Debug, Clone)]

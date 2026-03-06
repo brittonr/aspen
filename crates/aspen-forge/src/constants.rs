@@ -235,6 +235,15 @@ pub const MAX_CONCURRENT_PUSH_SESSIONS: usize = 64;
 pub const PUSH_SESSION_TIMEOUT: Duration = Duration::from_secs(300);
 
 // ============================================================================
+// CI Configuration Limits
+// ============================================================================
+
+/// Maximum size of a CI configuration file.
+///
+/// Tiger Style: Prevents memory exhaustion from malicious or oversized configs.
+pub const MAX_CI_CONFIG_SIZE_BYTES: u64 = 1024 * 1024; // 1 MB
+
+// ============================================================================
 // Compile-Time Constant Assertions
 // ============================================================================
 
@@ -285,3 +294,6 @@ const _: () = assert!(FORGE_GOSSIP_GLOBAL_BURST >= FORGE_GOSSIP_PER_PEER_BURST);
 
 // Push session limits must be positive
 const _: () = assert!(MAX_CONCURRENT_PUSH_SESSIONS > 0);
+
+// CI config limits must be positive
+const _: () = assert!(MAX_CI_CONFIG_SIZE_BYTES > 0);

@@ -11,6 +11,9 @@ fn to_operation_ci_pipeline(request: &ClientRpcRequest) -> Option<Option<Operati
         ClientRpcRequest::CiGetStatus { run_id } => Some(Some(Operation::Read {
             key: format!("_ci:runs:{}", run_id),
         })),
+        ClientRpcRequest::CiGetRefStatus { repo_id, ref_name } => Some(Some(Operation::Read {
+            key: format!("_ci:ref-status:{}:{}", repo_id, ref_name),
+        })),
         ClientRpcRequest::CiListRuns { repo_id, .. } => Some(Some(Operation::Read {
             key: format!("_ci:runs:{}", repo_id.as_deref().unwrap_or("")),
         })),

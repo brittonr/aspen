@@ -61,6 +61,17 @@ pub struct NixBuildPayload {
     /// Defaults to true when a blob store is configured.
     #[serde(default = "default_true")]
     pub should_upload_result: bool,
+
+    /// Whether to publish output store paths to the distributed Nix cache.
+    /// Defaults to true. When enabled, build outputs are registered in the
+    /// snix PathInfoService so they're available via the cache gateway.
+    #[serde(default = "default_true")]
+    pub publish_to_cache: bool,
+
+    /// Specific outputs to publish to cache (e.g., ["out", "dev"]).
+    /// If empty, all outputs are published. Only used when `publish_to_cache` is true.
+    #[serde(default)]
+    pub cache_outputs: Vec<String>,
 }
 
 impl NixBuildPayload {

@@ -333,6 +333,113 @@ pub async fn handle_get_status(
     }))
 }
 
+/// Handle CiGetRefStatus request.
+///
+/// Returns the latest pipeline run for a repository ref.
+#[cfg(feature = "forge")]
+pub async fn handle_get_ref_status(
+    orchestrator: Option<&Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+    repo_id: String,
+    ref_name: String,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_forge::identity::RepoId;
+
+    let Some(orchestrator) = orchestrator else {
+        return Ok(ClientRpcResponse::CiGetRefStatusResult(CiGetStatusResponse {
+            was_found: false,
+            run_id: None,
+            repo_id: None,
+            ref_name: None,
+            commit_hash: None,
+            status: None,
+            stages: vec![],
+            created_at_ms: None,
+            completed_at_ms: None,
+            error: Some("CI orchestrator not available".to_string()),
+        }));
+    };
+
+    let repo_id_parsed = match RepoId::from_hex(&repo_id) {
+        Ok(id) => id,
+        Err(e) => {
+            return Ok(ClientRpcResponse::CiGetRefStatusResult(CiGetStatusResponse {
+                was_found: false,
+                run_id: None,
+                repo_id: Some(repo_id),
+                ref_name: Some(ref_name),
+                commit_hash: None,
+                status: None,
+                stages: vec![],
+                created_at_ms: None,
+                completed_at_ms: None,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
+        }
+    };
+
+    debug!(repo_id = %repo_id, ref_name = %ref_name, "getting CI ref status");
+
+    match orchestrator.get_latest_run_for_ref(&repo_id_parsed, &ref_name).await {
+        Some(run) => {
+            let stages: Vec<CiStageInfo> = run
+                .stages
+                .iter()
+                .map(|s| CiStageInfo {
+                    name: s.name.clone(),
+                    status: pipeline_status_to_string(&s.status),
+                    jobs: s
+                        .jobs
+                        .iter()
+                        .map(|(name, job)| CiJobInfo {
+                            id: job.job_id.as_ref().map(|id| id.to_string()).unwrap_or_default(),
+                            name: name.clone(),
+                            status: pipeline_status_to_string(&job.status),
+                            started_at_ms: job.started_at.map(|t| t.timestamp_millis() as u64),
+                            ended_at_ms: job.completed_at.map(|t| t.timestamp_millis() as u64),
+                            error: job.error.clone(),
+                        })
+                        .collect(),
+                })
+                .collect();
+
+            Ok(ClientRpcResponse::CiGetRefStatusResult(CiGetStatusResponse {
+                was_found: true,
+                run_id: Some(run.id.clone()),
+                repo_id: Some(run.context.repo_id.to_hex()),
+                ref_name: Some(run.context.ref_name.clone()),
+                commit_hash: Some(hex::encode(run.context.commit_hash)),
+                status: Some(pipeline_status_to_string(&run.status)),
+                stages,
+                created_at_ms: Some(run.created_at.timestamp_millis() as u64),
+                completed_at_ms: run.completed_at.map(|t| t.timestamp_millis() as u64),
+                error: run.error_message.clone(),
+            }))
+        }
+        None => Ok(ClientRpcResponse::CiGetRefStatusResult(CiGetStatusResponse {
+            was_found: false,
+            run_id: None,
+            repo_id: Some(repo_id),
+            ref_name: Some(ref_name),
+            commit_hash: None,
+            status: None,
+            stages: vec![],
+            created_at_ms: None,
+            completed_at_ms: None,
+            error: None,
+        })),
+    }
+}
+
+/// Handle CiGetRefStatus when forge feature is not enabled.
+#[cfg(not(feature = "forge"))]
+pub async fn handle_get_ref_status(
+    _orchestrator: Option<&Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+    _repo_id: String,
+    _ref_name: String,
+) -> anyhow::Result<ClientRpcResponse> {
+    Ok(ClientRpcResponse::error("CI_FEATURE_UNAVAILABLE", "CI ref status requires forge feature"))
+}
+
 /// Handle CiListRuns request.
 ///
 /// Lists pipeline runs with optional filtering.

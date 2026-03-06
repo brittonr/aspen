@@ -41,9 +41,25 @@ impl Worker for NixBuildWorker {
             vec![]
         };
 
-        // Upload store paths to SNIX storage if requested and configured
-        let uploaded_store_paths_snix = if payload.should_upload_result {
-            self.upload_store_paths_snix(&build_output.output_paths).await
+        // Upload store paths to SNIX distributed cache if requested
+        let uploaded_store_paths_snix = if payload.publish_to_cache {
+            // Filter outputs if cache_outputs is specified
+            let paths_to_publish = if payload.cache_outputs.is_empty() {
+                build_output.output_paths.clone()
+            } else {
+                build_output
+                    .output_paths
+                    .iter()
+                    .filter(|p| {
+                        payload.cache_outputs.iter().any(|output_name| {
+                            // Match output name against store path (e.g., "out" matches "/nix/store/...-name")
+                            p.contains(output_name)
+                        })
+                    })
+                    .cloned()
+                    .collect()
+            };
+            self.upload_store_paths_snix(&paths_to_publish).await
         } else {
             vec![]
         };

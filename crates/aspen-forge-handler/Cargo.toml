@@ -16,10 +16,16 @@ aspen-blob = { path = "../aspen-blob" }
 aspen-forge = { path = "../aspen-forge" }
 aspen-cluster = { path = "../aspen-cluster", features = ["federation"] }
 
+# Hook system for push event emission
+aspen-hooks = { path = "../aspen-hooks", optional = true }
+aspen-hooks-types = { path = "../aspen-hooks-types", optional = true }
+
 # Core dependencies
 tracing = "0.1"
 anyhow = "1.0"
 async-trait = "0.1"
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["rt"] }
 
 # Iroh dependencies
 iroh = { version = "0.95.1" }
@@ -33,6 +39,7 @@ uuid = { version = "1.0", features = ["v4"] }
 default = []
 git-bridge = ["aspen-forge/git-bridge"]
 global-discovery = ["aspen-rpc-core/global-discovery", "aspen-core/global-discovery"]
+hooks = ["dep:aspen-hooks", "dep:aspen-hooks-types", "aspen-rpc-core/hooks"]
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full", "test-util"] }

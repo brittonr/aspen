@@ -1524,6 +1524,8 @@ dependencies = [
  "aspen-cluster",
  "aspen-core",
  "aspen-forge",
+ "aspen-hooks",
+ "aspen-hooks-types",
  "aspen-rpc-core",
  "async-trait",
  "blake3",

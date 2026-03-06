@@ -26,6 +26,12 @@ pub struct ForgeServiceExecutor {
     federation_discovery: Option<Arc<aspen_cluster::federation::FederationDiscoveryService>>,
     federation_identity: Option<Arc<aspen_cluster::federation::SignedClusterIdentity>>,
     federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
+    /// Optional hook service for emitting forge events.
+    #[cfg(feature = "hooks")]
+    hook_service: Option<Arc<aspen_hooks::HookService>>,
+    /// Node ID for hook event metadata.
+    #[cfg_attr(not(feature = "hooks"), allow(dead_code))]
+    node_id: u64,
 }
 
 impl ForgeServiceExecutor {
@@ -54,6 +60,7 @@ impl ForgeServiceExecutor {
     pub const APP_ID: Option<&'static str> = Some("forge");
 
     /// Create a new forge service executor with captured dependencies.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         forge_node: ForgeNodeRef,
         #[cfg(feature = "global-discovery")] content_discovery: Option<Arc<dyn aspen_core::ContentDiscovery>>,
@@ -62,6 +69,8 @@ impl ForgeServiceExecutor {
         >,
         federation_identity: Option<Arc<aspen_cluster::federation::SignedClusterIdentity>>,
         federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
+        #[cfg(feature = "hooks")] hook_service: Option<Arc<aspen_hooks::HookService>>,
+        node_id: u64,
     ) -> Self {
         Self {
             forge_node,
@@ -71,6 +80,60 @@ impl ForgeServiceExecutor {
             federation_discovery,
             federation_identity,
             federation_trust_manager,
+            #[cfg(feature = "hooks")]
+            hook_service,
+            node_id,
+        }
+    }
+}
+
+impl ForgeServiceExecutor {
+    /// Emit a ForgePushCompleted hook event for successful ref updates.
+    ///
+    /// This is fire-and-forget — hook dispatch failures are logged but don't
+    /// affect the push response.
+    #[cfg(feature = "hooks")]
+    fn emit_push_hook(&self, repo_id: &str, ref_results: &[aspen_client_api::GitBridgeRefResult]) {
+        use aspen_hooks_types::event::ForgePushCompletedPayload;
+        use aspen_hooks_types::event::HookEvent;
+        use aspen_hooks_types::event::HookEventType;
+
+        let hook_service = match &self.hook_service {
+            Some(s) => s.clone(),
+            None => return,
+        };
+
+        // Emit one hook per successful ref update
+        for ref_result in ref_results {
+            if !ref_result.is_success {
+                continue;
+            }
+
+            let payload = ForgePushCompletedPayload {
+                repo_id: repo_id.to_string(),
+                ref_name: ref_result.ref_name.clone(),
+                new_hash: String::new(), // Hash details available in gossip announcements
+                old_hash: None,
+                pusher: String::new(),
+            };
+
+            let event = HookEvent::new(
+                HookEventType::ForgePushCompleted,
+                self.node_id,
+                serde_json::to_value(&payload).unwrap_or_default(),
+            );
+
+            let service = hook_service.clone();
+            let ref_name = ref_result.ref_name.clone();
+            tokio::spawn(async move {
+                if let Err(e) = service.dispatch(&event).await {
+                    tracing::warn!(
+                        error = %e,
+                        ref_name = %ref_name,
+                        "failed to dispatch forge push hook event"
+                    );
+                }
+            });
         }
     }
 }
@@ -164,8 +227,21 @@ impl ServiceExecutor for ForgeServiceExecutor {
             }
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::GitBridgePush { repo_id, objects, refs } => {
-                crate::handler::handlers::git_bridge::handle_git_bridge_push(&self.forge_node, repo_id, objects, refs)
-                    .await
+                let resp = crate::handler::handlers::git_bridge::handle_git_bridge_push(
+                    &self.forge_node,
+                    repo_id.clone(),
+                    objects,
+                    refs,
+                )
+                .await?;
+                // Emit hook events for successful pushes
+                #[cfg(feature = "hooks")]
+                if let ClientRpcResponse::GitBridgePush(ref push_resp) = resp {
+                    if push_resp.is_success {
+                        self.emit_push_hook(&repo_id, &push_resp.ref_results);
+                    }
+                }
+                Ok(resp)
             }
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::GitBridgePushStart {
@@ -208,12 +284,20 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 session_id,
                 content_hash,
             } => {
-                crate::handler::handlers::git_bridge::handle_git_bridge_push_complete(
+                let resp = crate::handler::handlers::git_bridge::handle_git_bridge_push_complete(
                     &self.forge_node,
                     session_id,
                     content_hash,
                 )
-                .await
+                .await?;
+                // Emit hook events for successful chunked pushes
+                #[cfg(feature = "hooks")]
+                if let ClientRpcResponse::GitBridgePushComplete(ref push_resp) = resp {
+                    if push_resp.is_success {
+                        self.emit_push_hook("", &push_resp.ref_results);
+                    }
+                }
+                Ok(resp)
             }
 
             #[cfg(feature = "git-bridge")]

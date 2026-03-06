@@ -17,6 +17,7 @@ pub use pipeline::PipelineOrchestrator;
 pub use pipeline::PipelineOrchestratorConfig;
 pub use pipeline::PipelineRun;
 pub use pipeline::PipelineStatus;
+pub use pipeline::RefStatus;
 pub use pipeline::StageStatus;
 pub use recovery::OrphanedPipelineRecovery;
 pub use recovery::RecoveryAction;

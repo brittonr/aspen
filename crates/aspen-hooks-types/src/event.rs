@@ -47,6 +47,10 @@ pub enum HookEventType {
     /// Blob unprotected (GC protection tag removed).
     BlobUnprotected,
 
+    // Forge events
+    /// Forge push completed — refs updated on a repository.
+    ForgePushCompleted,
+
     // Docs events
     /// Docs sync session started with peer cluster.
     DocsSyncStarted,
@@ -74,6 +78,8 @@ impl HookEventType {
             HookEventType::SnapshotInstalled => "system.snapshot_installed",
             HookEventType::HealthChanged => "system.health_changed",
             HookEventType::TtlExpired => "kv.ttl_expired",
+            // Forge events
+            HookEventType::ForgePushCompleted => "forge.push_completed",
             // Blob events
             HookEventType::BlobAdded => "blob.blob_added",
             HookEventType::BlobDeleted => "blob.blob_deleted",
@@ -104,6 +110,7 @@ impl HookEventType {
             HookEventType::SnapshotCreated | HookEventType::SnapshotInstalled | HookEventType::HealthChanged => {
                 "system"
             }
+            HookEventType::ForgePushCompleted => "forge",
             HookEventType::BlobAdded
             | HookEventType::BlobDeleted
             | HookEventType::BlobDownloaded
@@ -355,6 +362,26 @@ pub struct BlobUnprotectedPayload {
 }
 
 // ============================================================================
+// Forge Event Payloads
+// ============================================================================
+
+/// Payload for forge push completed events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgePushCompletedPayload {
+    /// Repository ID (hex-encoded).
+    pub repo_id: String,
+    /// Ref that was updated (e.g., "refs/heads/main").
+    pub ref_name: String,
+    /// New commit hash (hex-encoded BLAKE3).
+    pub new_hash: String,
+    /// Previous commit hash (hex-encoded BLAKE3), if the ref existed before.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old_hash: Option<String>,
+    /// Public key of the pusher (hex-encoded).
+    pub pusher: String,
+}
+
+// ============================================================================
 // Docs Event Payloads
 // ============================================================================
 
@@ -544,6 +571,29 @@ mod tests {
         let json = serde_json::to_value(&blob_downloaded).unwrap();
         assert_eq!(json["provider_id"], "peer123");
         assert_eq!(json["duration_ms"], 150);
+    }
+
+    #[test]
+    fn test_forge_push_completed_event() {
+        assert_eq!(HookEventType::ForgePushCompleted.topic(), "hooks.forge.push_completed");
+        assert_eq!(HookEventType::ForgePushCompleted.category(), "forge");
+    }
+
+    #[test]
+    fn test_forge_push_completed_payload() {
+        let payload = ForgePushCompletedPayload {
+            repo_id: "abc123".to_string(),
+            ref_name: "refs/heads/main".to_string(),
+            new_hash: "def456".to_string(),
+            old_hash: Some("789abc".to_string()),
+            pusher: "pubkey123".to_string(),
+        };
+        let json = serde_json::to_value(&payload).unwrap();
+        assert_eq!(json["repo_id"], "abc123");
+        assert_eq!(json["ref_name"], "refs/heads/main");
+        assert_eq!(json["new_hash"], "def456");
+        assert_eq!(json["old_hash"], "789abc");
+        assert_eq!(json["pusher"], "pubkey123");
     }
 
     #[test]

@@ -4,6 +4,8 @@
 //! specifically RefUpdate announcements from iroh-gossip.
 //!
 //! This module requires the `nickel` feature for loading Nickel configuration files.
+//! Concrete implementations of `ConfigFetcher` and `PipelineStarter` live in
+//! the `adapters` module (re-exported from `aspen_ci::ForgeConfigFetcher` etc.).
 
 #[cfg(feature = "nickel")]
 mod service;

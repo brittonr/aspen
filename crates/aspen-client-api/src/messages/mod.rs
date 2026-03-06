@@ -2281,6 +2281,17 @@ pub enum ClientRpcRequest {
         run_id: String,
     },
 
+    /// Get the latest pipeline status for a ref.
+    ///
+    /// Returns the most recent pipeline run for a repository ref
+    /// (e.g., "refs/heads/main").
+    CiGetRefStatus {
+        /// Repository ID (hex-encoded).
+        repo_id: String,
+        /// Ref name (e.g., "refs/heads/main").
+        ref_name: String,
+    },
+
     /// List pipeline runs with optional filtering.
     ///
     /// Returns pipeline runs sorted by creation time (newest first).
@@ -3583,6 +3594,7 @@ impl ClientRpcRequest {
             Self::CiGetJobLogs { .. } => "CiGetJobLogs",
             Self::CiGetJobOutput { .. } => "CiGetJobOutput",
             Self::CiGetStatus { .. } => "CiGetStatus",
+            Self::CiGetRefStatus { .. } => "CiGetRefStatus",
             Self::CiListArtifacts { .. } => "CiListArtifacts",
             Self::CiListRuns { .. } => "CiListRuns",
             Self::CiSubscribeLogs { .. } => "CiSubscribeLogs",
@@ -4075,6 +4087,7 @@ impl ClientRpcRequest {
             // CI operations
             Self::CiTriggerPipeline { .. }
             | Self::CiGetStatus { .. }
+            | Self::CiGetRefStatus { .. }
             | Self::CiListRuns { .. }
             | Self::CiCancelRun { .. }
             | Self::CiWatchRepo { .. }
@@ -4700,6 +4713,8 @@ pub enum ClientRpcResponse {
     CiTriggerPipelineResult(CiTriggerPipelineResponse),
     /// CI get status result.
     CiGetStatusResult(CiGetStatusResponse),
+    /// CI get ref status result (latest pipeline for a ref).
+    CiGetRefStatusResult(CiGetStatusResponse),
     /// CI list runs result.
     CiListRunsResult(CiListRunsResponse),
     /// CI cancel run result.

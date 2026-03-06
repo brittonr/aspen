@@ -37,6 +37,9 @@ pub enum CiCommand {
 
     /// Get the full output (stdout/stderr) for a completed job.
     Output(OutputArgs),
+
+    /// Get the latest pipeline status for a repository ref.
+    RefStatus(RefStatusArgs),
 }
 
 #[derive(Args)]
@@ -115,6 +118,16 @@ pub struct OutputArgs {
     /// Show only stderr.
     #[arg(long, conflicts_with = "stdout")]
     pub stderr: bool,
+}
+
+#[derive(Args)]
+pub struct RefStatusArgs {
+    /// Repository ID (hex-encoded).
+    pub repo_id: String,
+
+    /// Ref name (e.g., "refs/heads/main"). Defaults to "refs/heads/main".
+    #[arg(default_value = "refs/heads/main")]
+    pub ref_name: String,
 }
 
 /// Pipeline trigger output.
@@ -411,6 +424,7 @@ impl CiCommand {
             CiCommand::Watch(args) => ci_watch(client, args, json).await,
             CiCommand::Unwatch(args) => ci_unwatch(client, args, json).await,
             CiCommand::Output(args) => ci_output(client, args, json).await,
+            CiCommand::RefStatus(args) => ci_ref_status(client, args, json).await,
         }
     }
 }
@@ -673,6 +687,44 @@ async fn ci_output(client: &AspenClient, args: OutputArgs, json: bool) -> Result
             };
             print_output(&output, json);
             if !result.was_found {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn ci_ref_status(client: &AspenClient, args: RefStatusArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::CiGetRefStatus {
+            repo_id: args.repo_id.clone(),
+            ref_name: args.ref_name.clone(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::CiGetRefStatusResult(result) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else if result.was_found {
+                println!("Run:       {}", result.run_id.as_deref().unwrap_or("-"));
+                println!("Repo:      {}", result.repo_id.as_deref().unwrap_or("-"));
+                println!("Ref:       {}", result.ref_name.as_deref().unwrap_or("-"));
+                println!("Commit:    {}", result.commit_hash.as_deref().unwrap_or("-"));
+                println!("Status:    {}", result.status.as_deref().unwrap_or("unknown"));
+                if !result.stages.is_empty() {
+                    println!("Stages:");
+                    for stage in &result.stages {
+                        println!("  {} — {}", stage.name, stage.status);
+                    }
+                }
+                if let Some(ref err) = result.error {
+                    println!("Error:     {}", err);
+                }
+            } else {
+                eprintln!("No pipeline run found for {} on {}", args.repo_id, args.ref_name);
                 std::process::exit(1);
             }
             Ok(())

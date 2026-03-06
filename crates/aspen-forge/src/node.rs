@@ -681,6 +681,84 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     // High-Level Operations
     // ========================================================================
 
+    /// Read a file from a specific commit.
+    ///
+    /// Walks commit → tree → blob to read file content at a specific path.
+    /// Supports nested paths by traversing subdirectory trees.
+    ///
+    /// # Arguments
+    ///
+    /// * `repo_id` - Repository containing the commit
+    /// * `commit_hash` - Commit to read from
+    /// * `path` - File path (e.g., "README.md" or "dir/subdir/file.txt")
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Some(bytes))` - File content
+    /// * `Ok(None)` - File not found at this path
+    /// * `Err(...)` - Git object fetch/parse error
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let content = forge.read_file_at_commit(&repo_id, &commit_hash, ".aspen/ci.ncl").await?;
+    /// if let Some(config_bytes) = content {
+    ///     // Parse CI config
+    /// }
+    /// ```
+    pub async fn read_file_at_commit(
+        &self,
+        _repo_id: &RepoId,
+        commit_hash: &blake3::Hash,
+        path: &str,
+    ) -> ForgeResult<Option<Vec<u8>>> {
+        // Get the commit
+        let commit = self.git.get_commit(commit_hash).await?;
+
+        // Get the root tree
+        let mut current_tree = self.git.get_tree(&commit.tree()).await?;
+
+        // Split path by '/' and walk through subdirectories
+        let components: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+
+        if components.is_empty() {
+            return Ok(None);
+        }
+
+        // Walk through all components except the last
+        for component in &components[..components.len() - 1] {
+            // Find matching directory entry
+            let entry = current_tree.entries.iter().find(|e| e.name == *component && e.is_directory());
+
+            match entry {
+                Some(dir_entry) => {
+                    // Recurse into subdirectory
+                    current_tree = self.git.get_tree(&dir_entry.hash()).await?;
+                }
+                None => {
+                    // Directory component not found
+                    return Ok(None);
+                }
+            }
+        }
+
+        // Handle the final component (the file name)
+        let file_name = components[components.len() - 1];
+        let file_entry = current_tree.entries.iter().find(|e| e.name == file_name && e.is_file());
+
+        match file_entry {
+            Some(entry) => {
+                // Read the blob content
+                let content = self.git.get_blob(&entry.hash()).await?;
+                Ok(Some(content))
+            }
+            None => {
+                // File not found
+                Ok(None)
+            }
+        }
+    }
+
     /// Initialize a repository with an initial commit.
     ///
     /// Creates an empty tree, initial commit, and sets heads/main.
@@ -926,5 +1004,129 @@ mod tests {
     async fn test_has_gossip_default_false() {
         let node = create_test_node().await;
         assert!(!node.has_gossip(), "gossip should be disabled by default");
+    }
+
+    // ========================================================================
+    // read_file_at_commit tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_read_file_at_commit_exists() {
+        let node = create_test_node().await;
+
+        // Store blob "hello world"
+        let content = b"hello world";
+        let blob_hash = node.git.store_blob(content.to_vec()).await.expect("should store blob");
+
+        // Create tree with entry
+        let tree_hash = node
+            .git
+            .create_tree(&[crate::git::TreeEntry::file("test.txt", blob_hash)])
+            .await
+            .expect("should create tree");
+
+        // Create commit
+        let commit_hash = node.git.commit(tree_hash, vec![], "Test commit").await.expect("should create commit");
+
+        // Create a fake repo_id for the test
+        let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+
+        // Read file from commit
+        let result = node.read_file_at_commit(&repo_id, &commit_hash, "test.txt").await.expect("should read file");
+
+        assert_eq!(result, Some(content.to_vec()));
+    }
+
+    #[tokio::test]
+    async fn test_read_file_at_commit_missing() {
+        let node = create_test_node().await;
+
+        // Store blob
+        let content = b"hello world";
+        let blob_hash = node.git.store_blob(content.to_vec()).await.expect("should store blob");
+
+        // Create tree with entry
+        let tree_hash = node
+            .git
+            .create_tree(&[crate::git::TreeEntry::file("test.txt", blob_hash)])
+            .await
+            .expect("should create tree");
+
+        // Create commit
+        let commit_hash = node.git.commit(tree_hash, vec![], "Test commit").await.expect("should create commit");
+
+        let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+
+        // Request a non-existent file
+        let result = node
+            .read_file_at_commit(&repo_id, &commit_hash, "nonexistent.txt")
+            .await
+            .expect("should return Ok(None)");
+
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn test_read_file_at_commit_nested_path() {
+        let node = create_test_node().await;
+
+        // Store blob for the deeply nested file
+        let content = b"nested content";
+        let blob_hash = node.git.store_blob(content.to_vec()).await.expect("should store blob");
+
+        // Create innermost tree (subdir/)
+        let subdir_tree_hash = node
+            .git
+            .create_tree(&[crate::git::TreeEntry::file("file.txt", blob_hash)])
+            .await
+            .expect("should create subdir tree");
+
+        // Create middle tree (dir/)
+        let dir_tree_hash = node
+            .git
+            .create_tree(&[crate::git::TreeEntry::directory("subdir", subdir_tree_hash)])
+            .await
+            .expect("should create dir tree");
+
+        // Create root tree
+        let root_tree_hash = node
+            .git
+            .create_tree(&[crate::git::TreeEntry::directory("dir", dir_tree_hash)])
+            .await
+            .expect("should create root tree");
+
+        // Create commit
+        let commit_hash = node.git.commit(root_tree_hash, vec![], "Nested commit").await.expect("should create commit");
+
+        let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+
+        // Read deeply nested file
+        let result = node
+            .read_file_at_commit(&repo_id, &commit_hash, "dir/subdir/file.txt")
+            .await
+            .expect("should read nested file");
+
+        assert_eq!(result, Some(content.to_vec()));
+    }
+
+    #[tokio::test]
+    async fn test_read_file_at_commit_empty_tree() {
+        let node = create_test_node().await;
+
+        // Create empty tree
+        let tree_hash = node.git.create_tree(&[]).await.expect("should create empty tree");
+
+        // Create commit with empty tree
+        let commit_hash = node.git.commit(tree_hash, vec![], "Empty commit").await.expect("should create commit");
+
+        let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+
+        // Try to read any file from empty tree
+        let result = node
+            .read_file_at_commit(&repo_id, &commit_hash, "any-file.txt")
+            .await
+            .expect("should return Ok(None)");
+
+        assert_eq!(result, None);
     }
 }
