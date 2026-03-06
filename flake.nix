@@ -45,7 +45,7 @@
 
     # unit2nix - Per-crate Nix builds from Cargo's unit graph
     unit2nix = {
-      url = "path:/home/brittonr/git/unit2nix";
+      url = "github:brittonr/unit2nix";
     };
   };
 
