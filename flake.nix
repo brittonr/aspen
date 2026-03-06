@@ -1430,6 +1430,15 @@
           defaultCrateOverrides = u2nCrateOverrides;
         };
 
+        # Build plan for git-remote-aspen (474 crates, features: git-bridge)
+        u2nGitRemoteWorkspace = unit2nix.lib.${system}.buildFromUnitGraph {
+          inherit pkgs;
+          src = u2nSrc;
+          resolvedJson = ./build-plan-git-remote.json;
+          defaultCrateOverrides = u2nCrateOverrides;
+        };
+        aspenGitRemote = u2nGitRemoteWorkspace.workspaceMembers."aspen".build;
+
         bins = let
           bin = {
             name,
@@ -1578,6 +1587,8 @@
               aspen-cli-full = aspenCli;
               aspen-cli-ci = aspenCli;
               aspen-cli-proxy = aspenCli; # proxy feature not in unit2nix plan; use full- variant for proxy
+              # git-remote-aspen: unit2nix build (features: git-bridge)
+              git-remote-aspen = aspenGitRemote;
               inherit aspen-node-proxy aspen-node-plugins;
               # aspen-ci-agent extracted to ~/git/aspen-ci
               inherit hyperlight-wasm-runtime;
@@ -3197,7 +3208,7 @@
                 ${unit2nix.packages.${system}.default}/bin/unit2nix \
                   --manifest-path ./Cargo.toml \
                   --bin aspen-node \
-                  --features ci,docs,hooks,shell-worker,automerge,secrets \
+                  --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge \
                   -o build-plan.json
                 echo "Done! Commit build-plan.json to the repo."
               ''}";
@@ -3216,6 +3227,20 @@
                 echo "Done! Commit build-plan-cli.json to the repo."
               ''}";
             };
+            # Usage: nix run .#generate-build-plan-git-remote
+            generate-build-plan-git-remote = {
+              type = "app";
+              program = "${pkgs.writeShellScript "generate-build-plan-git-remote" ''
+                set -e
+                echo "Generating build-plan-git-remote.json from Cargo's unit graph..."
+                ${unit2nix.packages.${system}.default}/bin/unit2nix \
+                  --manifest-path ./Cargo.toml \
+                  --bin git-remote-aspen \
+                  --features git-bridge \
+                  -o build-plan-git-remote.json
+                echo "Done! Commit build-plan-git-remote.json to the repo."
+              ''}";
+            };
           };
         }
         // {
@@ -3227,12 +3252,14 @@
               aspen-node = aspenNode;
               aspen-cli = aspenCli;
 
+              git-remote-aspen = aspenGitRemote;
+
               # ── Crane builds (kept for specialized variants + VM tests)
               crane-aspen-node = bins.aspen-node;
               crane-aspen-cli = bins.aspen-cli;
+              crane-git-remote-aspen = bins.git-remote-aspen;
               aspen-cli-forge = bins.aspen-cli-forge;
               # aspen-ci-agent extracted to ~/git/aspen-ci
-              git-remote-aspen = bins.git-remote-aspen;
               netwatch = netwatch;
               vm-test-setup = vm-test-setup;
               vm-test-run = vm-test-run;

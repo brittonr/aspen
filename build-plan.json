@@ -66,6 +66,7 @@
     "openraft-macros": "path+file:///home/brittonr/git/aspen/openraft/macros#openraft-macros@0.10.0"
   },
   "cargoLockHash": "a9c0480cc6460e273a1b8fac4351ec16995ee428688019ce6a9fdbc9f74bcff0",
+  "inputsHash": "1a234f56cf37dd000ad9de465a0550fcfbd558f653855a06bbc83afb24ff75ed",
   "crates": {
     "path+file:///home/brittonr/git/aspen#0.1.0": {
       "crateName": "aspen",
@@ -84,6 +85,7 @@
         "default",
         "docs",
         "forge",
+        "git-bridge",
         "hooks",
         "jobs",
         "nix-executor",
@@ -222,6 +224,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#env_logger@0.11.9",
           "externCrateName": "env_logger"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#flate2@1.1.9",
+          "externCrateName": "flate2"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#hex@0.4.3",
@@ -2782,7 +2788,8 @@
         "path": "crates/aspen-forge"
       },
       "features": [
-        "default"
+        "default",
+        "git-bridge"
       ],
       "dependencies": [
         {
@@ -2838,6 +2845,14 @@
           "externCrateName": "gix_object"
         },
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-odb@0.74.0",
+          "externCrateName": "gix_odb"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-pack@0.64.1",
+          "externCrateName": "gix_pack"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#hex@0.4.3",
           "externCrateName": "hex"
         },
@@ -2858,6 +2873,10 @@
           "externCrateName": "iroh_gossip"
         },
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#lru@0.16.3",
+          "externCrateName": "lru"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#n0-future@0.3.2",
           "externCrateName": "n0_future"
         },
@@ -2876,6 +2895,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
           "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#sha1@0.10.6",
+          "externCrateName": "sha1"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#snafu@0.8.9",
@@ -2925,7 +2948,8 @@
         "path": "crates/aspen-forge-handler"
       },
       "features": [
-        "default"
+        "default",
+        "git-bridge"
       ],
       "dependencies": [
         {
@@ -4395,6 +4419,7 @@
         "ci",
         "docs",
         "forge",
+        "git-bridge",
         "hooks",
         "jobs",
         "secrets"
@@ -5385,7 +5410,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Traits for Authenticated Encryption with Associated Data (AEAD) algorithms,\nsuch as AES-GCM as ChaCha20Poly1305, which provide a high-level API\n",
+      "description": "Traits for Authenticated Encryption with Associated Data (AEAD) algorithms, such as AES-GCM as ChaCha20Poly1305, which provide a high-level API ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/traits"
     },
@@ -5431,7 +5456,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Traits for Authenticated Encryption with Associated Data (AEAD) algorithms,\nsuch as AES-GCM as ChaCha20Poly1305, which provide a high-level API\n",
+      "description": "Traits for Authenticated Encryption with Associated Data (AEAD) algorithms, such as AES-GCM as ChaCha20Poly1305, which provide a high-level API ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/traits"
     },
@@ -5489,7 +5514,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of the AES-GCM (Galois/Counter Mode)\nAuthenticated Encryption with Associated Data (AEAD) Cipher\nwith optional architecture-specific hardware acceleration\n",
+      "description": "Pure Rust implementation of the AES-GCM (Galois/Counter Mode) Authenticated Encryption with Associated Data (AEAD) Cipher with optional architecture-specific hardware acceleration ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/AEADs"
     },
@@ -6778,7 +6803,7 @@
       "authors": [
         "The Rust Project Developers"
       ],
-      "description": "A library to acquire a stack trace (backtrace) at runtime in a Rust program.\n",
+      "description": "A library to acquire a stack trace (backtrace) at runtime in a Rust program. ",
       "homepage": "https://github.com/rust-lang/backtrace-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/backtrace-rs"
@@ -6884,7 +6909,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of Base16 a.k.a hexadecimal (RFC 4648) which avoids\nany usages of data-dependent branches/LUTs and thereby provides portable\n\"best effort\" constant-time operation and embedded-friendly no_std support\n",
+      "description": "Pure Rust implementation of Base16 a.k.a hexadecimal (RFC 4648) which avoids any usages of data-dependent branches/LUTs and thereby provides portable 'best effort' constant-time operation and embedded-friendly no_std support ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats/tree/master/base16ct"
     },
@@ -6911,7 +6936,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of Base16 a.k.a hexadecimal (RFC 4648) which avoids\nany usages of data-dependent branches/LUTs and thereby provides portable\n\"best effort\" constant-time operation and embedded-friendly no_std support\n",
+      "description": "Pure Rust implementation of Base16 a.k.a hexadecimal (RFC 4648) which avoids any usages of data-dependent branches/LUTs and thereby provides portable 'best effort' constant-time operation and embedded-friendly no_std support ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/base16ct",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -7034,7 +7059,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of Base64 (RFC 4648) which avoids any usages of\ndata-dependent branches/LUTs and thereby provides portable \"best effort\"\nconstant-time operation and embedded-friendly no_std support\n",
+      "description": "Pure Rust implementation of Base64 (RFC 4648) which avoids any usages of data-dependent branches/LUTs and thereby provides portable 'best effort' constant-time operation and embedded-friendly no_std support ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/base64ct",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -7280,7 +7305,7 @@
       "authors": [
         "The Rust Project Developers"
       ],
-      "description": "A macro to generate structures which behave like bitflags.\n",
+      "description": "A macro to generate structures which behave like bitflags. ",
       "homepage": "https://github.com/bitflags/bitflags",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/bitflags/bitflags"
@@ -7449,6 +7474,7 @@
       },
       "features": [
         "alloc",
+        "default",
         "std",
         "unicode"
       ],
@@ -7503,7 +7529,7 @@
       "authors": [
         "Jane Lusby <jlusby@yaah.dev>"
       ],
-      "description": "A minimal deserializer for inspecting `std::backtrace::Backtrace`'s Debug format.\n",
+      "description": "A minimal deserializer for inspecting `std::backtrace::Backtrace`'s Debug format. ",
       "homepage": "https://github.com/yaahc/btparse",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/yaahc/btparse"
@@ -7713,7 +7739,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "A build-time dependency for Cargo build scripts to assist in invoking the native\nC compiler to compile native C code into a static archive to be linked into Rust\ncode.\n",
+      "description": "A build-time dependency for Cargo build scripts to assist in invoking the native C compiler to compile native C code into a static archive to be linked into Rust code. ",
       "homepage": "https://github.com/rust-lang/cc-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/cc-rs"
@@ -7741,7 +7767,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "A macro to ergonomically define an item depending on a large number of #[cfg]\nparameters. Structured like an if-else chain, the first matching branch is the\nitem that gets emitted.\n",
+      "description": "A macro to ergonomically define an item depending on a large number of #[cfg] parameters. Structured like an if-else chain, the first matching branch is the item that gets emitted. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/cfg-if"
     },
@@ -7819,7 +7845,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "The ChaCha20 stream cipher (RFC 8439) implemented in pure Rust using traits\nfrom the RustCrypto `cipher` crate, with optional architecture-specific\nhardware acceleration (AVX2, SSE2). Additionally provides the ChaCha8, ChaCha12,\nXChaCha20, XChaCha12 and XChaCha8 stream ciphers, and also optional\nrand_core-compatible RNGs based on those ciphers.\n",
+      "description": "The ChaCha20 stream cipher (RFC 8439) implemented in pure Rust using traits from the RustCrypto `cipher` crate, with optional architecture-specific hardware acceleration (AVX2, SSE2). Additionally provides the ChaCha8, ChaCha12, XChaCha20, XChaCha12 and XChaCha8 stream ciphers, and also optional rand_core-compatible RNGs based on those ciphers. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/stream-ciphers"
     },
@@ -7861,7 +7887,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "The ChaCha20 stream cipher (RFC 8439) implemented in pure Rust using traits\nfrom the RustCrypto `cipher` crate, with optional architecture-specific\nhardware acceleration (AVX2, SSE2). Additionally provides the ChaCha8, ChaCha12,\nXChaCha20, XChaCha12 and XChaCha8 stream ciphers, and also optional\nrand_core-compatible RNGs based on those ciphers.\n",
+      "description": "The ChaCha20 stream cipher (RFC 8439) implemented in pure Rust using traits from the RustCrypto `cipher` crate, with optional architecture-specific hardware acceleration (AVX2, SSE2). Additionally provides the ChaCha8, ChaCha12, XChaCha20, XChaCha12 and XChaCha8 stream ciphers, and also optional rand_core-compatible RNGs based on those ciphers. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/stream-ciphers"
     },
@@ -7914,7 +7940,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of the ChaCha20Poly1305 Authenticated Encryption\nwith Additional Data Cipher (RFC 8439) with optional architecture-specific\nhardware acceleration. Also contains implementations of the XChaCha20Poly1305\nextended nonce variant of ChaCha20Poly1305, and the reduced-round\nChaCha8Poly1305 and ChaCha12Poly1305 lightweight variants.\n",
+      "description": "Pure Rust implementation of the ChaCha20Poly1305 Authenticated Encryption with Additional Data Cipher (RFC 8439) with optional architecture-specific hardware acceleration. Also contains implementations of the XChaCha20Poly1305 extended nonce variant of ChaCha20Poly1305, and the reduced-round ChaCha8Poly1305 and ChaCha12Poly1305 lightweight variants. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/AEADs/tree/master/chacha20poly1305"
     },
@@ -8248,7 +8274,7 @@
         "Allen Welkie <>",
         "James Munns <james@onevariable.com>"
       ],
-      "description": "    This is an implementation of the Consistent Overhead Byte Stuffing (COBS) algorithm.\n    COBS is an algorithm for transforming a message into an encoding where a specific value\n    (the \"sentinel\" value) is not used. This value can then be used to mark frame boundaries\n    in a serial communication channel. ",
+      "description": "    This is an implementation of the Consistent Overhead Byte Stuffing (COBS) algorithm.     COBS is an algorithm for transforming a message into an encoding where a specific value     (the 'sentinel' value) is not used. This value can then be used to mark frame boundaries     in a serial communication channel. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/jamesmunns/cobs.rs"
     },
@@ -8515,7 +8541,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Const-friendly implementation of the ISO/IEC Object Identifier (OID) standard\nas defined in ITU X.660, with support for BER/DER encoding/decoding as well as\nheapless no_std (i.e. embedded) support\n",
+      "description": "Const-friendly implementation of the ISO/IEC Object Identifier (OID) standard as defined in ITU X.660, with support for BER/DER encoding/decoding as well as heapless no_std (i.e. embedded) support ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/const-oid",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -8546,7 +8572,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Const-friendly implementation of the ISO/IEC Object Identifier (OID) standard\nas defined in ITU X.660, with support for BER/DER encoding/decoding as well as\nheapless no_std (i.e. embedded) support\n",
+      "description": "Const-friendly implementation of the ISO/IEC Object Identifier (OID) standard as defined in ITU X.660, with support for BER/DER encoding/decoding as well as heapless no_std (i.e. embedded) support ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats/tree/master/const-oid"
     },
@@ -8702,7 +8728,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Lightweight runtime CPU feature detection for aarch64, loongarch64, and x86/x86_64 targets, \nwith no_std support and support for mobile targets including Android and iOS\n",
+      "description": "Lightweight runtime CPU feature detection for aarch64, loongarch64, and x86/x86_64 targets,  with no_std support and support for mobile targets including Android and iOS ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/utils"
     },
@@ -9109,7 +9135,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of NaCl's crypto_box public-key authenticated\nencryption primitive which combines the X25519 Elliptic Curve Diffie-Hellman\nfunction and the XSalsa20Poly1305 authenticated encryption cipher\n",
+      "description": "Pure Rust implementation of NaCl's crypto_box public-key authenticated encryption primitive which combines the X25519 Elliptic Curve Diffie-Hellman function and the XSalsa20Poly1305 authenticated encryption cipher ",
       "homepage": "https://github.com/RustCrypto/nacl-compat/tree/master/crypto_box",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/nacl-compat"
@@ -9173,7 +9199,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of the XSalsa20Poly1305 (a.k.a. NaCl crypto_secretbox)\nauthenticated encryption cipher as well as the libsodium variant of\nXChaCha20Poly1305\n",
+      "description": "Pure Rust implementation of the XSalsa20Poly1305 (a.k.a. NaCl crypto_secretbox) authenticated encryption cipher as well as the libsodium variant of XChaCha20Poly1305 ",
       "homepage": "https://github.com/RustCrypto/nacl-compat/tree/master/crypto_secretbox",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/nacl-compat"
@@ -9528,7 +9554,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust embedded-friendly implementation of the Distinguished Encoding Rules\n(DER) for Abstract Syntax Notation One (ASN.1) as described in ITU X.690 with\nfull support for heapless no_std targets\n",
+      "description": "Pure Rust embedded-friendly implementation of the Distinguished Encoding Rules (DER) for Abstract Syntax Notation One (ASN.1) as described in ITU X.690 with full support for heapless no_std targets ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats/tree/master/der"
     },
@@ -9573,7 +9599,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust embedded-friendly implementation of the Distinguished Encoding Rules\n(DER) for Abstract Syntax Notation One (ASN.1) as described in ITU X.690 with\nfull support for heapless `no_std`/`no_alloc` targets\n",
+      "description": "Pure Rust embedded-friendly implementation of the Distinguished Encoding Rules (DER) for Abstract Syntax Notation One (ASN.1) as described in ITU X.690 with full support for heapless `no_std`/`no_alloc` targets ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/der",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -9873,7 +9899,7 @@
       "authors": [
         "Asynchronics and contributors"
       ],
-      "description": "An async, lock-free synchronization primitive for task wakeup.\n",
+      "description": "An async, lock-free synchronization primitive for task wakeup. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/asynchronics/diatomic-waker"
     },
@@ -10011,7 +10037,7 @@
       "authors": [
         "Jane Lusby <jlusby@yaah.dev>"
       ],
-      "description": "A derive macro for implementing the display Trait via a doc comment and string interpolation\n",
+      "description": "A derive macro for implementing the display Trait via a doc comment and string interpolation ",
       "homepage": "https://github.com/yaahc/displaydoc",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/yaahc/displaydoc"
@@ -10244,7 +10270,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Edwards Digital Signature Algorithm (EdDSA) over Curve25519 (as specified in RFC 8032)\nsupport library providing signature type definitions and PKCS#8 private key\ndecoding/encoding support\n",
+      "description": "Edwards Digital Signature Algorithm (EdDSA) over Curve25519 (as specified in RFC 8032) support library providing signature type definitions and PKCS#8 private key decoding/encoding support ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/signatures/tree/master/ed25519"
     },
@@ -10289,7 +10315,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Edwards Digital Signature Algorithm (EdDSA) over Curve25519 (as specified in RFC 8032)\nsupport library providing signature type definitions and PKCS#8 private key\ndecoding/encoding support\n",
+      "description": "Edwards Digital Signature Algorithm (EdDSA) over Curve25519 (as specified in RFC 8032) support library providing signature type definitions and PKCS#8 private key decoding/encoding support ",
       "homepage": "https://github.com/RustCrypto/signatures/tree/master/ed25519",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/signatures"
@@ -10320,7 +10346,7 @@
       "authors": [
         "bluss"
       ],
-      "description": "The enum `Either` with variants `Left` and `Right` is a general purpose sum type with two cases.\n",
+      "description": "The enum `Either` with variants `Left` and `Right` is a general purpose sum type with two cases. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rayon-rs/either"
     },
@@ -10397,7 +10423,7 @@
       "authors": [
         "Benjamin Fry <benjaminfry@me.com>"
       ],
-      "description": "A proc-macro for deriving inner field accessor functions on enums.\n",
+      "description": "A proc-macro for deriving inner field accessor functions on enums. ",
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/bluejekyll/enum-as-inner"
     },
@@ -10432,7 +10458,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Filter log events using environment variables\n",
+      "description": "Filter log events using environment variables ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-cli/env_logger"
     },
@@ -10483,7 +10509,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A logging implementation for `log` which is configured via an environment\nvariable.\n",
+      "description": "A logging implementation for `log` which is configured via an environment variable. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-cli/env_logger"
     },
@@ -10766,7 +10792,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "Platform-agnostic accessors of timestamps in File metadata\n",
+      "description": "Platform-agnostic accessors of timestamps in File metadata ",
       "homepage": "https://github.com/alexcrichton/filetime",
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/alexcrichton/filetime"
@@ -10799,7 +10825,7 @@
       "authors": [
         "Taiki Endo <te316e89@gmail.com>"
       ],
-      "description": "Find the crate name from the current Cargo.toml.\n",
+      "description": "Find the crate name from the current Cargo.toml. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/taiki-e/find-crate"
     },
@@ -10920,7 +10946,7 @@
         "Alex Crichton <alex@alexcrichton.com>",
         "Josh Triplett <josh@joshtriplett.org>"
       ],
-      "description": "DEFLATE compression and decompression exposed as Read/BufRead/Write streams.\nSupports miniz_oxide and multiple zlib implementations. Supports zlib, gzip,\nand raw deflate streams.\n",
+      "description": "DEFLATE compression and decompression exposed as Read/BufRead/Write streams. Supports miniz_oxide and multiple zlib implementations. Supports zlib, gzip, and raw deflate streams. ",
       "homepage": "https://github.com/rust-lang/flate2-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/flate2-rs"
@@ -10984,7 +11010,7 @@
         "Zibi Braniecki <zibi@unicode.org>",
         "Staś Małolepszy <stas@mozilla.com>"
       ],
-      "description": "A localization system designed to unleash the entire expressive power of\nnatural language translations.\n",
+      "description": "A localization system designed to unleash the entire expressive power of natural language translations. ",
       "homepage": "http://www.projectfluent.org",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/projectfluent/fluent-rs"
@@ -11019,7 +11045,7 @@
       "authors": [
         "Zibi Braniecki <gandalf@mozilla.com>"
       ],
-      "description": "A library for language and locale negotiation.\n",
+      "description": "A library for language and locale negotiation. ",
       "homepage": "http://projectfluent.org/",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/projectfluent/fluent-langneg-rs"
@@ -11055,7 +11081,7 @@
         "Zibi Braniecki <zibi@unicode.org>",
         "Staś Małolepszy <stas@mozilla.com>"
       ],
-      "description": "Parser/Serializer tools for Fluent Syntax.\n",
+      "description": "Parser/Serializer tools for Fluent Syntax. ",
       "homepage": "http://www.projectfluent.org",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/projectfluent/fluent-rs"
@@ -11093,7 +11119,7 @@
         "Zibi Braniecki <zibi@unicode.org>",
         "Staś Małolepszy <stas@mozilla.com>"
       ],
-      "description": "A localization system designed to unleash the entire expressive power of\nnatural language translations.\n",
+      "description": "A localization system designed to unleash the entire expressive power of natural language translations. ",
       "homepage": "http://www.projectfluent.org",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/projectfluent/fluent-rs"
@@ -11347,7 +11373,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Channels for asynchronous communication using futures-rs.\n",
+      "description": "Channels for asynchronous communication using futures-rs. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -11428,7 +11454,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "The core traits and types in for the `futures` library.\n",
+      "description": "The core traits and types in for the `futures` library. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -11468,7 +11494,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Executors for asynchronous tasks based on the futures-rs library.\n",
+      "description": "Executors for asynchronous tasks based on the futures-rs library. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -11496,7 +11522,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "The `AsyncRead`, `AsyncWrite`, `AsyncSeek`, and `AsyncBufRead` traits for the futures-rs library.\n",
+      "description": "The `AsyncRead`, `AsyncWrite`, `AsyncSeek`, and `AsyncBufRead` traits for the futures-rs library. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -11592,7 +11618,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "The futures-rs procedural macro implementations.\n",
+      "description": "The futures-rs procedural macro implementations. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -11621,7 +11647,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "The asynchronous `Sink` trait for the futures-rs library.\n",
+      "description": "The asynchronous `Sink` trait for the futures-rs library. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -11649,7 +11675,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Tools for working with tasks.\n",
+      "description": "Tools for working with tasks. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -11726,7 +11752,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Common utilities and extension traits for the futures-rs library.\n",
+      "description": "Common utilities and extension traits for the futures-rs library. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -11787,7 +11813,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "An implementation of futures and streams featuring zero allocations,\ncomposability, and iterator-like interfaces.\n",
+      "description": "An implementation of futures and streams featuring zero allocations, composability, and iterator-like interfaces. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -12104,7 +12130,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Universal hash over GF(2^128) useful for constructing a Message Authentication Code (MAC),\nas in the AES-GCM authenticated encryption cipher.\n",
+      "description": "Universal hash over GF(2^128) useful for constructing a Message Authentication Code (MAC), as in the AES-GCM authenticated encryption cipher. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/universal-hashes"
     },
@@ -12187,6 +12213,74 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/GitoxideLabs/gitoxide"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#gix-chunk@0.4.12": {
+      "crateName": "gix-chunk",
+      "version": "0.4.12",
+      "edition": "2021",
+      "sha256": "5c356b3825677cb6ff579551bb8311a81821e184453cbd105e2fc5311b288eeb",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "externCrateName": "thiserror"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-chunk-0.4.12/src/lib.rs",
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#gix-commitgraph@0.31.0": {
+      "crateName": "gix-commitgraph",
+      "version": "0.31.0",
+      "edition": "2021",
+      "sha256": "efdcba8048045baf15225daf949d597c3e6183d130245e22a7fbd27084abe63a",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bstr@1.12.1",
+          "externCrateName": "bstr"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-chunk@0.4.12",
+          "externCrateName": "gix_chunk"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-hash@0.21.2",
+          "externCrateName": "gix_hash"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memmap2@0.9.10",
+          "externCrateName": "memmap2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "externCrateName": "thiserror"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-commitgraph-0.31.0/src/lib.rs",
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
+    },
     "registry+https://github.com/rust-lang/crates.io-index#gix-date@0.12.1": {
       "crateName": "gix-date",
       "version": "0.12.1",
@@ -12234,6 +12328,44 @@
       "description": "A crate of the gitoxide project parsing dates the way git does",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/GitoxideLabs/gitoxide"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#gix-diff@0.57.1": {
+      "crateName": "gix-diff",
+      "version": "0.57.1",
+      "edition": "2021",
+      "sha256": "3506936e63ce14cd54b5f28ed06c8e43b92ef9f41c2238cc0bc271a9259b4e90",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bstr@1.12.1",
+          "externCrateName": "bstr"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-hash@0.21.2",
+          "externCrateName": "gix_hash"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-object@0.54.1",
+          "externCrateName": "gix_object"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "externCrateName": "thiserror"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-diff-0.57.1/src/lib.rs",
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
     },
     "registry+https://github.com/rust-lang/crates.io-index#gix-features@0.41.1": {
       "crateName": "gix-features",
@@ -12288,14 +12420,30 @@
         "type": "crates-io"
       },
       "features": [
+        "crc32",
         "default",
+        "fs-read-dir",
         "prodash",
-        "progress"
+        "progress",
+        "walkdir",
+        "zlib"
       ],
       "dependencies": [
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.0",
+          "externCrateName": "crc32fast"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-path@0.10.22",
+          "externCrateName": "gix_path"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-trace@0.1.18",
           "externCrateName": "gix_trace"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-utils@0.3.1",
+          "externCrateName": "gix_utils"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.182",
@@ -12304,6 +12452,18 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#prodash@30.0.1",
           "externCrateName": "prodash"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "externCrateName": "thiserror"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#walkdir@2.5.0",
+          "externCrateName": "walkdir"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zlib-rs@0.5.5",
+          "externCrateName": "zlib_rs"
         }
       ],
       "buildDependencies": [],
@@ -12322,6 +12482,52 @@
       "description": "A crate to integrate various capabilities using compile-time feature flags",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/GitoxideLabs/gitoxide"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#gix-fs@0.18.2": {
+      "crateName": "gix-fs",
+      "version": "0.18.2",
+      "edition": "2021",
+      "sha256": "785b9c499e46bc78d7b81c148c21b3fca18655379ee729a856ed19ce50d359ec",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bstr@1.12.1",
+          "externCrateName": "bstr"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#fastrand@2.3.0",
+          "externCrateName": "fastrand"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-features@0.45.2",
+          "externCrateName": "gix_features"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-path@0.10.22",
+          "externCrateName": "gix_path"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-utils@0.3.1",
+          "externCrateName": "gix_utils"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "externCrateName": "thiserror"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-fs-0.18.2/src/lib.rs",
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
     },
     "registry+https://github.com/rust-lang/crates.io-index#gix-hash@0.17.0": {
       "crateName": "gix-hash",
@@ -12534,6 +12740,158 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/GitoxideLabs/gitoxide"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#gix-odb@0.74.0": {
+      "crateName": "gix-odb",
+      "version": "0.74.0",
+      "edition": "2021",
+      "sha256": "165a907df369a12ed4330faf8baf7ae597aadb08cfacb4ed8649f93d90bcc0c5",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.8.2",
+          "externCrateName": "arc_swap"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-date@0.12.1",
+          "externCrateName": "gix_date"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-features@0.45.2",
+          "externCrateName": "gix_features"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-fs@0.18.2",
+          "externCrateName": "gix_fs"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-hash@0.21.2",
+          "externCrateName": "gix_hash"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-hashtable@0.11.0",
+          "externCrateName": "gix_hashtable"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-object@0.54.1",
+          "externCrateName": "gix_object"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-pack@0.64.1",
+          "externCrateName": "gix_pack"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-path@0.10.22",
+          "externCrateName": "gix_path"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-quote@0.6.2",
+          "externCrateName": "gix_quote"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.5",
+          "externCrateName": "parking_lot"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.26.0",
+          "externCrateName": "tempfile"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "externCrateName": "thiserror"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-odb-0.74.0/src/lib.rs",
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#gix-pack@0.64.1": {
+      "crateName": "gix-pack",
+      "version": "0.64.1",
+      "edition": "2021",
+      "sha256": "b04a73d5ab07ea0faae55e2c0ae6f24e36e365ac8ce140394dee3a2c89cd4366",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "generate",
+        "streaming-input"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-chunk@0.4.12",
+          "externCrateName": "gix_chunk"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-diff@0.57.1",
+          "externCrateName": "gix_diff"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-features@0.45.2",
+          "externCrateName": "gix_features"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-hash@0.21.2",
+          "externCrateName": "gix_hash"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-hashtable@0.11.0",
+          "externCrateName": "gix_hashtable"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-object@0.54.1",
+          "externCrateName": "gix_object"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-path@0.10.22",
+          "externCrateName": "gix_path"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-tempfile@20.0.1",
+          "externCrateName": "gix_tempfile"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-traverse@0.51.1",
+          "externCrateName": "gix_traverse"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memmap2@0.9.10",
+          "externCrateName": "memmap2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.5",
+          "externCrateName": "parking_lot"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.15.1",
+          "externCrateName": "smallvec"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "externCrateName": "thiserror"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-pack-0.64.1/src/lib.rs",
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
+    },
     "registry+https://github.com/rust-lang/crates.io-index#gix-path@0.10.22": {
       "crateName": "gix-path",
       "version": "0.10.22",
@@ -12578,6 +12936,128 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/GitoxideLabs/gitoxide"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#gix-quote@0.6.2": {
+      "crateName": "gix-quote",
+      "version": "0.6.2",
+      "edition": "2021",
+      "sha256": "96fc2ff2ec8cc0c92807f02eab1f00eb02619fc2810d13dc42679492fcc36757",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bstr@1.12.1",
+          "externCrateName": "bstr"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-utils@0.3.1",
+          "externCrateName": "gix_utils"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "externCrateName": "thiserror"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-quote-0.6.2/src/lib.rs",
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#gix-revwalk@0.25.0": {
+      "crateName": "gix-revwalk",
+      "version": "0.25.0",
+      "edition": "2021",
+      "sha256": "0d063699278485016863d0d2bb0db7609fd2e8ba9a89379717bf06fd96949eb2",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-commitgraph@0.31.0",
+          "externCrateName": "gix_commitgraph"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-date@0.12.1",
+          "externCrateName": "gix_date"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-hash@0.21.2",
+          "externCrateName": "gix_hash"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-hashtable@0.11.0",
+          "externCrateName": "gix_hashtable"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-object@0.54.1",
+          "externCrateName": "gix_object"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.15.1",
+          "externCrateName": "smallvec"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "externCrateName": "thiserror"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-revwalk-0.25.0/src/lib.rs",
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#gix-tempfile@20.0.1": {
+      "crateName": "gix-tempfile",
+      "version": "20.0.1",
+      "edition": "2021",
+      "sha256": "ad89218e74850f42d364ed3877c7291f0474c8533502df91bb877ecc5cb0dd40",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-fs@0.18.2",
+          "externCrateName": "gix_fs"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.182",
+          "externCrateName": "libc"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.5",
+          "externCrateName": "parking_lot"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.26.0",
+          "externCrateName": "tempfile"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-tempfile-20.0.1/src/lib.rs",
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
+    },
     "registry+https://github.com/rust-lang/crates.io-index#gix-trace@0.1.18": {
       "crateName": "gix-trace",
       "version": "0.1.18",
@@ -12606,6 +13086,64 @@
       "description": "A crate to provide minimal `tracing` support that can be turned off to zero cost",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/GitoxideLabs/gitoxide"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#gix-traverse@0.51.1": {
+      "crateName": "gix-traverse",
+      "version": "0.51.1",
+      "edition": "2021",
+      "sha256": "d052b83d1d1744be95ac6448ac02f95f370a8f6720e466be9ce57146e39f5280",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0",
+          "externCrateName": "bitflags"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-commitgraph@0.31.0",
+          "externCrateName": "gix_commitgraph"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-date@0.12.1",
+          "externCrateName": "gix_date"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-hash@0.21.2",
+          "externCrateName": "gix_hash"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-hashtable@0.11.0",
+          "externCrateName": "gix_hashtable"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-object@0.54.1",
+          "externCrateName": "gix_object"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gix-revwalk@0.25.0",
+          "externCrateName": "gix_revwalk"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.15.1",
+          "externCrateName": "smallvec"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "externCrateName": "thiserror"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-traverse-0.51.1/src/lib.rs",
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
     },
     "registry+https://github.com/rust-lang/crates.io-index#gix-utils@0.3.1": {
       "crateName": "gix-utils",
@@ -12702,7 +13240,7 @@
       "authors": [
         "The Rust Project Developers"
       ],
-      "description": "Support for matching file paths against Unix shell style patterns.\n",
+      "description": "Support for matching file paths against Unix shell style patterns. ",
       "homepage": "https://github.com/rust-lang/glob",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/glob"
@@ -13288,7 +13826,7 @@
       "authors": [
         "The contributors to Hickory DNS"
       ],
-      "description": "Hickory DNS is a safe and secure DNS library. This is the foundational DNS protocol library for all Hickory DNS projects.\n",
+      "description": "Hickory DNS is a safe and secure DNS library. This is the foundational DNS protocol library for all Hickory DNS projects. ",
       "homepage": "https://hickory-dns.org/",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/hickory-dns/hickory-dns"
@@ -13380,7 +13918,7 @@
       "authors": [
         "The contributors to Hickory DNS"
       ],
-      "description": "Hickory DNS is a safe and secure DNS library. This Resolver library uses the Client library to perform all DNS queries. The Resolver is intended to be a high-level library for any DNS record resolution. See Resolver for supported resolution types. The Client can be used for other queries.\n",
+      "description": "Hickory DNS is a safe and secure DNS library. This Resolver library uses the Client library to perform all DNS queries. The Resolver is intended to be a high-level library for any DNS record resolution. See Resolver for supported resolution types. The Client can be used for other queries. ",
       "homepage": "https://hickory-dns.org/",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/hickory-dns/hickory-dns"
@@ -13498,7 +14036,7 @@
         "Lucio Franco <luciofranco14@gmail.com>",
         "Sean McArthur <sean@seanmonstar.com>"
       ],
-      "description": "Combinators and adapters for HTTP request or response bodies.\n",
+      "description": "Combinators and adapters for HTTP request or response bodies. ",
       "license": "MIT",
       "repository": "https://github.com/hyperium/http-body"
     },
@@ -13536,7 +14074,7 @@
         "Lucio Franco <luciofranco14@gmail.com>",
         "Sean McArthur <sean@seanmonstar.com>"
       ],
-      "description": "Trait representing an asynchronous, streaming, HTTP request or response body.\n",
+      "description": "Trait representing an asynchronous, streaming, HTTP request or response body. ",
       "license": "MIT",
       "repository": "https://github.com/hyperium/http-body"
     },
@@ -13577,7 +14115,7 @@
         "Carl Lerche <me@carllerche.com>",
         "Sean McArthur <sean@seanmonstar.com>"
       ],
-      "description": "A set of types for representing HTTP requests and responses.\n",
+      "description": "A set of types for representing HTTP requests and responses. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/hyperium/http"
     },
@@ -13697,7 +14235,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Hybrid typenum-based and const generic array types designed to provide the\nflexibility of typenum-based expressions while also allowing interoperability\nand a transition path to const generics\n",
+      "description": "Hybrid typenum-based and const generic array types designed to provide the flexibility of typenum-based expressions while also allowing interoperability and a transition path to const generics ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/hybrid-array"
     },
@@ -14991,7 +15529,7 @@
         "Zibi Braniecki <zibi@unicode.org>",
         "Staś Małolepszy <stas@mozilla.com>"
       ],
-      "description": "A memoizer specifically tailored for storing lazy-initialized intl formatters for Project Fluent,\na localization system designed to unleash the entire expressive power of natural language translations.\n",
+      "description": "A memoizer specifically tailored for storing lazy-initialized intl formatters for Project Fluent, a localization system designed to unleash the entire expressive power of natural language translations. ",
       "homepage": "https://www.projectfluent.org",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/projectfluent/fluent-rs"
@@ -16722,7 +17260,7 @@
       "authors": [
         "Andrew Gallant <jamslam@gmail.com>"
       ],
-      "description": "A date-time library that encourages you to jump into the pit of success.\n\nThis library is heavily inspired by the Temporal project.\n",
+      "description": "A date-time library that encourages you to jump into the pit of success.  This library is heavily inspired by the Temporal project. ",
       "license": "Unlicense OR MIT",
       "repository": "https://github.com/BurntSushi/jiff"
     },
@@ -16754,7 +17292,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "An implementation of the GNU Make jobserver for Rust.\n",
+      "description": "An implementation of the GNU Make jobserver for Rust. ",
       "homepage": "https://github.com/rust-lang/jobserver-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/jobserver-rs"
@@ -16811,7 +17349,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of the Keccak sponge function including the keccak-f\nand keccak-p variants\n",
+      "description": "Pure Rust implementation of the Keccak sponge function including the keccak-f and keccak-p variants ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/sponges/tree/master/keccak"
     },
@@ -16997,7 +17535,7 @@
         "Nick Fitzgerald <fitzgen@gmail.com>",
         "Philip Craig <philipjcraig@gmail.com>"
       ],
-      "description": "Read and write DWARF's \"Little Endian Base 128\" (LEB128) variable length integer encoding.",
+      "description": "Read and write DWARF's 'Little Endian Base 128' (LEB128) variable length integer encoding.",
       "license": "Apache-2.0/MIT",
       "repository": "https://github.com/gimli-rs/leb128"
     },
@@ -17146,7 +17684,7 @@
       "authors": [
         "Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"
       ],
-      "description": "Parse and inspect Rust literals (i.e. tokens in the Rust programming language\nrepresenting fixed values). Particularly useful for proc macros, but can also\nbe used outside of a proc-macro context.\n",
+      "description": "Parse and inspect Rust literals (i.e. tokens in the Rust programming language representing fixed values). Particularly useful for proc macros, but can also be used outside of a proc-macro context. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/LukasKalbertodt/litrs"
     },
@@ -17210,7 +17748,7 @@
       "authors": [
         "The Rust Project Developers"
       ],
-      "description": "A lightweight logging facade for Rust\n",
+      "description": "A lightweight logging facade for Rust ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/log"
     },
@@ -17785,7 +18323,7 @@
       "authors": [
         "Eliza Weisman <eliza@buoyant.io>"
       ],
-      "description": "Regex matching on character and byte streams.\n",
+      "description": "Regex matching on character and byte streams. ",
       "homepage": "https://github.com/hawkw/matchers",
       "license": "MIT",
       "repository": "https://github.com/hawkw/matchers"
@@ -17857,10 +18395,36 @@
         "Andrew Gallant <jamslam@gmail.com>",
         "bluss"
       ],
-      "description": "Provides extremely fast (uses SIMD on x86_64, aarch64 and wasm32) routines for\n1, 2 or 3 byte search and single substring search.\n",
+      "description": "Provides extremely fast (uses SIMD on x86_64, aarch64 and wasm32) routines for 1, 2 or 3 byte search and single substring search. ",
       "homepage": "https://github.com/BurntSushi/memchr",
       "license": "Unlicense OR MIT",
       "repository": "https://github.com/BurntSushi/memchr"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#memmap2@0.9.10": {
+      "crateName": "memmap2",
+      "version": "0.9.10",
+      "edition": "2021",
+      "sha256": "714098028fe011992e1c3962653c96b2d578c4b4bce9036e15ff220319b1e0e3",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.182",
+          "externCrateName": "libc"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memmap2-0.9.10/src/lib.rs",
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
     },
     "registry+https://github.com/rust-lang/crates.io-index#memoffset@0.9.1": {
       "crateName": "memoffset",
@@ -19440,7 +20004,7 @@
       "authors": [
         "Jacob Pratt <jacob@jhpratt.dev>"
       ],
-      "description": "`num_conv` is a crate to convert between integer types without using `as` casts. This provides\nbetter certainty when refactoring, makes the exact behavior of code more explicit, and allows using\nturbofish syntax.\n",
+      "description": "`num_conv` is a crate to convert between integer types without using `as` casts. This provides better certainty when refactoring, makes the exact behavior of code more explicit, and allows using turbofish syntax. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/jhpratt/num-conv"
     },
@@ -19817,7 +20381,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "A library for helping to find system-wide trust anchor (\"root\") certificate\nlocations based on paths typically used by `openssl`.\n",
+      "description": "A library for helping to find system-wide trust anchor ('root') certificate locations based on paths typically used by `openssl`. ",
       "homepage": "https://github.com/rustls/openssl-probe",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rustls/openssl-probe"
@@ -20119,7 +20683,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "PEM Encoding (RFC 7468) for PKIX, PKCS, and CMS Structures, implementing a\nstrict subset of the original Privacy-Enhanced Mail encoding intended\nspecifically for use with cryptographic keys, certificates, and other messages.\nProvides a no_std-friendly, constant-time implementation suitable for use with\ncryptographic private keys.\n",
+      "description": "PEM Encoding (RFC 7468) for PKIX, PKCS, and CMS Structures, implementing a strict subset of the original Privacy-Enhanced Mail encoding intended specifically for use with cryptographic keys, certificates, and other messages. Provides a no_std-friendly, constant-time implementation suitable for use with cryptographic private keys. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats/tree/master/pem-rfc7468"
     },
@@ -20153,7 +20717,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "PEM Encoding (RFC 7468) for PKIX, PKCS, and CMS Structures, implementing a\nstrict subset of the original Privacy-Enhanced Mail encoding intended\nspecifically for use with cryptographic keys, certificates, and other messages.\nProvides a no_std-friendly, constant-time implementation suitable for use with\ncryptographic private keys.\n",
+      "description": "PEM Encoding (RFC 7468) for PKIX, PKCS, and CMS Structures, implementing a strict subset of the original Privacy-Enhanced Mail encoding intended specifically for use with cryptographic keys, certificates, and other messages. Provides a no_std-friendly, constant-time implementation suitable for use with cryptographic private keys. ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/pem-rfc7468",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -20357,7 +20921,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Implementation detail of the `pin-project` crate.\n",
+      "description": "Implementation detail of the `pin-project` crate. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/taiki-e/pin-project"
     },
@@ -20381,7 +20945,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A lightweight version of pin-project written with declarative macros.\n",
+      "description": "A lightweight version of pin-project written with declarative macros. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/taiki-e/pin-project-lite"
     },
@@ -20410,7 +20974,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A crate for safe and ergonomic pin-projection.\n",
+      "description": "A crate for safe and ergonomic pin-projection. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/taiki-e/pin-project"
     },
@@ -20437,7 +21001,7 @@
       "authors": [
         "Josef Brandl <mail@josefbrandl.de>"
       ],
-      "description": "Utilities for pinning\n",
+      "description": "Utilities for pinning ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang-nursery/pin-utils"
     },
@@ -20603,7 +21167,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of Public-Key Cryptography Standards (PKCS) #8:\nPrivate-Key Information Syntax Specification (RFC 5208), with additional\nsupport for PKCS#8v2 asymmetric key packages (RFC 5958)\n",
+      "description": "Pure Rust implementation of Public-Key Cryptography Standards (PKCS) #8: Private-Key Information Syntax Specification (RFC 5208), with additional support for PKCS#8v2 asymmetric key packages (RFC 5958) ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/pkcs8",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -20631,7 +21195,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "A library to run the pkg-config system tool at build time in order to be used in\nCargo build scripts.\n",
+      "description": "A library to run the pkg-config system tool at build time in order to be used in Cargo build scripts. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/pkg-config-rs"
     },
@@ -20751,7 +21315,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "POLYVAL is a GHASH-like universal hash over GF(2^128) useful for constructing\na Message Authentication Code (MAC)\n",
+      "description": "POLYVAL is a GHASH-like universal hash over GF(2^128) useful for constructing a Message Authentication Code (MAC) ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/universal-hashes"
     },
@@ -20778,7 +21342,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Portable atomic types including support for 128-bit atomics, atomic float, etc.\n",
+      "description": "Portable atomic types including support for 128-bit atomics, atomic float, etc. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/taiki-e/portable-atomic"
     },
@@ -21084,7 +21648,7 @@
       "authors": [
         "Jacob Pratt <jacob@jhpratt.dev>"
       ],
-      "description": "    `powerfmt` is a library that provides utilities for formatting values. This crate makes it\n    significantly easier to support filling to a minimum width with alignment, avoid heap\n    allocation, and avoid repetitive calculations.\n",
+      "description": "    `powerfmt` is a library that provides utilities for formatting values. This crate makes it     significantly easier to support filling to a minimum width with alignment, avoid heap     allocation, and avoid repetitive calculations. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/jhpratt/powerfmt"
     },
@@ -21220,7 +21784,7 @@
       "authors": [
         "Bastian Köcher <git@kchr.de>"
       ],
-      "description": "Replacement for crate (macro_rules keyword) in proc-macros\n",
+      "description": "Replacement for crate (macro_rules keyword) in proc-macros ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/bkchr/proc-macro-crate"
     },
@@ -21718,7 +22282,7 @@
         "The Rand Project Developers",
         "The Rust Project Developers"
       ],
-      "description": "Random number generators and other randomness functionality.\n",
+      "description": "Random number generators and other randomness functionality. ",
       "homepage": "https://rust-random.github.io/book",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/rand"
@@ -21764,7 +22328,7 @@
         "The Rand Project Developers",
         "The Rust Project Developers"
       ],
-      "description": "Random number generators and other randomness functionality.\n",
+      "description": "Random number generators and other randomness functionality. ",
       "homepage": "https://rust-random.github.io/book",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/rand"
@@ -21805,7 +22369,7 @@
         "The Rust Project Developers",
         "The CryptoCorrosion Contributors"
       ],
-      "description": "ChaCha random number generator\n",
+      "description": "ChaCha random number generator ",
       "homepage": "https://rust-random.github.io/book",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/rand"
@@ -21846,7 +22410,7 @@
         "The Rust Project Developers",
         "The CryptoCorrosion Contributors"
       ],
-      "description": "ChaCha random number generator\n",
+      "description": "ChaCha random number generator ",
       "homepage": "https://rust-random.github.io/book",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/rand"
@@ -21884,7 +22448,7 @@
         "The Rand Project Developers",
         "The Rust Project Developers"
       ],
-      "description": "Core random number generator traits and tools for implementation.\n",
+      "description": "Core random number generator traits and tools for implementation. ",
       "homepage": "https://rust-random.github.io/book",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/rand"
@@ -21921,7 +22485,7 @@
         "The Rand Project Developers",
         "The Rust Project Developers"
       ],
-      "description": "Core random number generator traits and tools for implementation.\n",
+      "description": "Core random number generator traits and tools for implementation. ",
       "homepage": "https://rust-random.github.io/book",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/rand"
@@ -22398,7 +22962,7 @@
         "The Rust Project Developers",
         "Andrew Gallant <jamslam@gmail.com>"
       ],
-      "description": "An implementation of regular expressions for Rust. This implementation uses\nfinite automata and guarantees linear time matching on all inputs.\n",
+      "description": "An implementation of regular expressions for Rust. This implementation uses finite automata and guarantees linear time matching on all inputs. ",
       "homepage": "https://github.com/rust-lang/regex",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/regex"
@@ -22873,7 +23437,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "Rust compiler symbol demangling.\n",
+      "description": "Rust compiler symbol demangling. ",
       "homepage": "https://github.com/rust-lang/rustc-demangle",
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/rust-lang/rustc-demangle"
@@ -23444,7 +24008,7 @@
       "authors": [
         "Andrew Gallant <jamslam@gmail.com>"
       ],
-      "description": "A simple crate for determining whether two file paths point to the same file.\n",
+      "description": "A simple crate for determining whether two file paths point to the same file. ",
       "homepage": "https://github.com/BurntSushi/same-file",
       "license": "Unlicense/MIT",
       "repository": "https://github.com/BurntSushi/same-file"
@@ -23604,7 +24168,7 @@
       "authors": [
         "bluss"
       ],
-      "description": "A RAII scope guard that will run a given closure when it goes out of scope,\neven if the code between panics (assuming unwinding panic).\n\nDefines the macros `defer!`, `defer_on_unwind!`, `defer_on_success!` as\nshorthands for guards with one of the implemented strategies.\n",
+      "description": "A RAII scope guard that will run a given closure when it goes out of scope, even if the code between panics (assuming unwinding panic).  Defines the macros `defer!`, `defer_on_unwind!`, `defer_on_success!` as shorthands for guards with one of the implemented strategies. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/bluss/scopeguard"
     },
@@ -23684,7 +24248,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of SEC1: Elliptic Curve Cryptography encoding formats\nincluding ASN.1 DER-serialized private keys as well as the\nElliptic-Curve-Point-to-Octet-String encoding\n",
+      "description": "Pure Rust implementation of SEC1: Elliptic Curve Cryptography encoding formats including ASN.1 DER-serialized private keys as well as the Elliptic-Curve-Point-to-Octet-String encoding ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats/tree/master/sec1"
     },
@@ -23716,7 +24280,7 @@
       "authors": [
         "Tony Arcieri <tony@iqlusion.io>"
       ],
-      "description": "Wrapper types and traits for secret management which help ensure\nthey aren't accidentally copied, logged, or otherwise exposed\n(as much as possible), and also ensure secrets are securely wiped\nfrom memory when dropped.\n",
+      "description": "Wrapper types and traits for secret management which help ensure they aren't accidentally copied, logged, or otherwise exposed (as much as possible), and also ensure secrets are securely wiped from memory when dropped. ",
       "homepage": "https://github.com/iqlusioninc/crates/",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/iqlusioninc/crates/tree/main/secrecy"
@@ -24315,7 +24879,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Constant-time serde serializer/deserializer helpers for data that potentially\ncontains secrets (e.g. cryptographic keys)\n",
+      "description": "Constant-time serde serializer/deserializer helpers for data that potentially contains secrets (e.g. cryptographic keys) ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/serdect",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -24408,7 +24972,9 @@
         "type": "crates-io"
       },
       "features": [
-        "compress"
+        "compress",
+        "default",
+        "std"
       ],
       "dependencies": [
         {
@@ -24551,7 +25117,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of the SHA-2 hash function family\nincluding SHA-224, SHA-256, SHA-384, and SHA-512.\n",
+      "description": "Pure Rust implementation of the SHA-2 hash function family including SHA-224, SHA-256, SHA-384, and SHA-512. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/hashes"
     },
@@ -24595,7 +25161,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of the SHA-2 hash function family\nincluding SHA-224, SHA-256, SHA-384, and SHA-512.\n",
+      "description": "Pure Rust implementation of the SHA-2 hash function family including SHA-224, SHA-256, SHA-384, and SHA-512. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/hashes"
     },
@@ -24631,7 +25197,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of SHA-3, a family of Keccak-based hash functions\nincluding the SHAKE family of eXtendable-Output Functions (XOFs), as well as\nthe accelerated variant TurboSHAKE\n",
+      "description": "Pure Rust implementation of SHA-3, a family of Keccak-based hash functions including the SHAKE family of eXtendable-Output Functions (XOFs), as well as the accelerated variant TurboSHAKE ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/hashes"
     },
@@ -24663,7 +25229,7 @@
       "authors": [
         "Eliza Weisman <eliza@buoyant.io>"
       ],
-      "description": "A lock-free concurrent slab.\n",
+      "description": "A lock-free concurrent slab. ",
       "homepage": "https://github.com/hawkw/sharded-slab",
       "license": "MIT",
       "repository": "https://github.com/hawkw/sharded-slab"
@@ -25211,7 +25777,7 @@
         "Alex Crichton <alex@alexcrichton.com>",
         "Thomas de Zeeuw <thomasdezeeuw@gmail.com>"
       ],
-      "description": "Utilities for handling networking sockets with a maximal amount of configuration\npossible intended.\n",
+      "description": "Utilities for handling networking sockets with a maximal amount of configuration possible intended. ",
       "homepage": "https://github.com/rust-lang/socket2",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/socket2"
@@ -25247,7 +25813,7 @@
         "Alex Crichton <alex@alexcrichton.com>",
         "Thomas de Zeeuw <thomasdezeeuw@gmail.com>"
       ],
-      "description": "Utilities for handling networking sockets with a maximal amount of configuration\npossible intended.\n",
+      "description": "Utilities for handling networking sockets with a maximal amount of configuration possible intended. ",
       "homepage": "https://github.com/rust-lang/socket2",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/socket2"
@@ -25400,7 +25966,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "X.509 Subject Public Key Info (RFC5280) describing public keys as well as their\nassociated AlgorithmIdentifiers (i.e. OIDs)\n",
+      "description": "X.509 Subject Public Key Info (RFC5280) describing public keys as well as their associated AlgorithmIdentifiers (i.e. OIDs) ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats/tree/master/spki"
     },
@@ -25435,7 +26001,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "X.509 Subject Public Key Info (RFC5280) describing public keys as well as their\nassociated AlgorithmIdentifiers (i.e. OIDs)\n",
+      "description": "X.509 Subject Public Key Info (RFC5280) describing public keys as well as their associated AlgorithmIdentifiers (i.e. OIDs) ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/spki",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -25472,7 +26038,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of SSH symmetric encryption including support for the\nmodern aes128-gcm@openssh.com/aes256-gcm@openssh.com and\nchacha20-poly1305@openssh.com algorithms as well as legacy support for older\nciphers. Built on the pure Rust cryptography implementations maintained by the\nRustCrypto organization.\n",
+      "description": "Pure Rust implementation of SSH symmetric encryption including support for the modern aes128-gcm@openssh.com/aes256-gcm@openssh.com and chacha20-poly1305@openssh.com algorithms as well as legacy support for older ciphers. Built on the pure Rust cryptography implementations maintained by the RustCrypto organization. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/SSH/tree/master/ssh-cipher"
     },
@@ -25518,7 +26084,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of SSH data type decoders/encoders as described\nin RFC4251\n",
+      "description": "Pure Rust implementation of SSH data type decoders/encoders as described in RFC4251 ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/SSH/tree/master/ssh-encoding"
     },
@@ -25589,7 +26155,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of SSH key file format decoders/encoders as described\nin RFC4251/RFC4253 and OpenSSH key formats, as well as \"sshsig\" signatures and\ncertificates (including certificate validation and certificate authority support),\nwith further support for the `authorized_keys` and `known_hosts` file formats.\n",
+      "description": "Pure Rust implementation of SSH key file format decoders/encoders as described in RFC4251/RFC4253 and OpenSSH key formats, as well as 'sshsig' signatures and certificates (including certificate validation and certificate authority support), with further support for the `authorized_keys` and `known_hosts` file formats. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/SSH/tree/master/ssh-key"
     },
@@ -25616,7 +26182,7 @@
       "authors": [
         "Robert Grosse <n210241048576@gmail.com>"
       ],
-      "description": "An unsafe marker trait for types like Box and Rc that dereference to a stable address even when moved, and hence can be used with libraries such as owning_ref and rental.\n",
+      "description": "An unsafe marker trait for types like Box and Rc that dereference to a stable address even when moved, and hence can be used with libraries such as owning_ref and rental. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/storyyeller/stable_deref_trait"
     },
@@ -25662,7 +26228,7 @@
         "Alex Crichton <alex@alexcrichton.com>",
         "Simonas Kazlauskas <stacker@kazlauskas.me>"
       ],
-      "description": "A stack growth library useful when implementing deeply recursive algorithms that\nmay accidentally blow the stack.\n",
+      "description": "A stack growth library useful when implementing deeply recursive algorithms that may accidentally blow the stack. ",
       "homepage": "https://github.com/rust-lang/stacker",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/stacker"
@@ -25796,7 +26362,7 @@
         "Danny Guo <danny@dannyguo.com>",
         "maxbachmann <oss@maxbachmann.de>"
       ],
-      "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein,\nOSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and Sørensen-Dice.\n",
+      "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein, OSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and Sørensen-Dice. ",
       "homepage": "https://github.com/rapidfuzz/strsim-rs",
       "license": "MIT",
       "repository": "https://github.com/rapidfuzz/strsim-rs"
@@ -26094,7 +26660,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Providing the features between \"full\" and \"derive\" of syn.\n",
+      "description": "Providing the features between 'full' and 'derive' of syn. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/taiki-e/syn-mid"
     },
@@ -26345,7 +26911,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "A Rust implementation of a TAR file reader and writer. This library does not\ncurrently handle compression, but it is abstract over all I/O readers and\nwriters. Additionally, great lengths are taken to ensure that the entire\ncontents are never required to be entirely resident in memory all at once.\n",
+      "description": "A Rust implementation of a TAR file reader and writer. This library does not currently handle compression, but it is abstract over all I/O readers and writers. Additionally, great lengths are taken to ensure that the entire contents are never required to be entirely resident in memory all at once. ",
       "homepage": "https://github.com/alexcrichton/tar-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/alexcrichton/tar-rs"
@@ -26427,7 +26993,7 @@
         "The Rust Project Developers",
         "Steven Allen"
       ],
-      "description": "A terminal formatting library\n",
+      "description": "A terminal formatting library ",
       "homepage": "https://github.com/Stebalien/term",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/Stebalien/term"
@@ -26455,7 +27021,7 @@
       "authors": [
         "Andrew Gallant <jamslam@gmail.com>"
       ],
-      "description": "A simple cross platform library for writing colored text to a terminal.\n",
+      "description": "A simple cross platform library for writing colored text to a terminal. ",
       "homepage": "https://github.com/BurntSushi/termcolor",
       "license": "Unlicense OR MIT",
       "repository": "https://github.com/BurntSushi/termcolor"
@@ -26703,7 +27269,7 @@
         "Jacob Pratt <open-source@jhpratt.dev>",
         "Time contributors"
       ],
-      "description": "    Procedural macros for the time crate.\n    This crate is an implementation detail and should not be relied upon directly.\n",
+      "description": "    Procedural macros for the time crate.     This crate is an implementation detail and should not be relied upon directly. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/time-rs/time"
     },
@@ -26907,7 +27473,7 @@
       "authors": [
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Tokio's proc macros.\n",
+      "description": "Tokio's proc macros. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tokio"
@@ -26996,7 +27562,7 @@
       "authors": [
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Utilities to work with `Stream` and `tokio`.\n",
+      "description": "Utilities to work with `Stream` and `tokio`. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tokio"
@@ -27062,7 +27628,7 @@
       "authors": [
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Additional utilities for working with Tokio.\n",
+      "description": "Additional utilities for working with Tokio. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tokio"
@@ -27276,7 +27842,7 @@
       "authors": [
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "An event-driven, non-blocking I/O platform for writing asynchronous I/O\nbacked applications.\n",
+      "description": "An event-driven, non-blocking I/O platform for writing asynchronous I/O backed applications. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tokio"
@@ -27311,7 +27877,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "A native Rust encoder and decoder of TOML-formatted files and streams. Provides\nimplementations of the standard Serialize/Deserialize traits for TOML data to\nfacilitate deserializing and serializing Rust structures.\n",
+      "description": "A native Rust encoder and decoder of TOML-formatted files and streams. Provides implementations of the standard Serialize/Deserialize traits for TOML data to facilitate deserializing and serializing Rust structures. ",
       "homepage": "https://github.com/toml-rs/toml",
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/toml-rs/toml"
@@ -27357,7 +27923,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A native Rust encoder and decoder of TOML-formatted files and streams. Provides\nimplementations of the standard Serialize/Deserialize traits for TOML data to\nfacilitate deserializing and serializing Rust structures.\n",
+      "description": "A native Rust encoder and decoder of TOML-formatted files and streams. Provides implementations of the standard Serialize/Deserialize traits for TOML data to facilitate deserializing and serializing Rust structures. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/toml-rs/toml"
     },
@@ -27412,7 +27978,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A native Rust encoder and decoder of TOML-formatted files and streams. Provides\nimplementations of the standard Serialize/Deserialize traits for TOML data to\nfacilitate deserializing and serializing Rust structures.\n",
+      "description": "A native Rust encoder and decoder of TOML-formatted files and streams. Provides implementations of the standard Serialize/Deserialize traits for TOML data to facilitate deserializing and serializing Rust structures. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/toml-rs/toml"
     },
@@ -27641,7 +28207,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A low-level interface for writing out TOML\n",
+      "description": "A low-level interface for writing out TOML ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/toml-rs/toml"
     },
@@ -27669,7 +28235,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A low-level interface for writing out TOML\n",
+      "description": "A low-level interface for writing out TOML ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/toml-rs/toml"
     },
@@ -27770,7 +28336,7 @@
       "authors": [
         "Tower Maintainers <team@tower-rs.com>"
       ],
-      "description": "Decorates a `Service` to allow easy composition between `Service`s.\n",
+      "description": "Decorates a `Service` to allow easy composition between `Service`s. ",
       "homepage": "https://github.com/tower-rs/tower",
       "license": "MIT",
       "repository": "https://github.com/tower-rs/tower"
@@ -27798,7 +28364,7 @@
       "authors": [
         "Tower Maintainers <team@tower-rs.com>"
       ],
-      "description": "Trait representing an asynchronous, request / response based, client or server.\n",
+      "description": "Trait representing an asynchronous, request / response based, client or server. ",
       "homepage": "https://github.com/tower-rs/tower",
       "license": "MIT",
       "repository": "https://github.com/tower-rs/tower"
@@ -27864,7 +28430,7 @@
       "authors": [
         "Tower Maintainers <team@tower-rs.com>"
       ],
-      "description": "Tower is a library of modular and reusable components for building robust\nclients and servers.\n",
+      "description": "Tower is a library of modular and reusable components for building robust clients and servers. ",
       "homepage": "https://github.com/tower-rs/tower",
       "license": "MIT",
       "repository": "https://github.com/tower-rs/tower"
@@ -27907,7 +28473,7 @@
         "Eliza Weisman <eliza@buoyant.io>",
         "David Barsky <dbarsky@amazon.com>"
       ],
-      "description": "Procedural macro attributes for automatically instrumenting functions.\n",
+      "description": "Procedural macro attributes for automatically instrumenting functions. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -27944,7 +28510,7 @@
       "authors": [
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Core primitives for application-level tracing.\n",
+      "description": "Core primitives for application-level tracing. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -27986,7 +28552,7 @@
         "Jane Lusby <jlusby@yaah.dev>",
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Utilities for enriching errors with `tracing`.\n",
+      "description": "Utilities for enriching errors with `tracing`. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -28029,7 +28595,7 @@
         "Eliza Weisman <eliza@buoyant.io>",
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Utilities for instrumenting `futures` with `tracing`.\n",
+      "description": "Utilities for instrumenting `futures` with `tracing`. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -28073,7 +28639,7 @@
       "authors": [
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Provides compatibility between `tracing` and the `log` crate.\n",
+      "description": "Provides compatibility between `tracing` and the `log` crate. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -28160,7 +28726,7 @@
         "David Barsky <me@davidbarsky.com>",
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Utilities for implementing and composing `tracing` subscribers.\n",
+      "description": "Utilities for implementing and composing `tracing` subscribers. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -28212,7 +28778,7 @@
         "Eliza Weisman <eliza@buoyant.io>",
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Application-level tracing for Rust.\n",
+      "description": "Application-level tracing for Rust. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -28333,7 +28899,7 @@
         "Paho Lurie-Gregg <paho@paholg.com>",
         "Andre Bogus <bogusandre@gmail.com>"
       ],
-      "description": "Typenum is a Rust library for type-level numbers evaluated at\n    compile time. It currently supports bits, unsigned integers, and signed\n    integers. It also provides a type-level array of type-level numbers, but its\n    implementation is incomplete.",
+      "description": "Typenum is a Rust library for type-level numbers evaluated at     compile time. It currently supports bits, unsigned integers, and signed     integers. It also provides a type-level array of type-level numbers, but its     implementation is incomplete.",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/paholg/typenum"
     },
@@ -28391,7 +28957,7 @@
       "authors": [
         "Julien Enoch <julien.enoch@adlinktech.com>"
       ],
-      "description": "A Unique Hybrid Logical Clock for Rust.\n",
+      "description": "A Unique Hybrid Logical Clock for Rust. ",
       "homepage": "https://crates.io/crates/uhlc",
       "license": "EPL-2.0 OR Apache-2.0",
       "repository": "https://github.com/atolab/uhlc-rs"
@@ -28525,7 +29091,7 @@
         "kwantam <kwantam@gmail.com>",
         "Manish Goregaokar <manishsmail@gmail.com>"
       ],
-      "description": "This crate provides functions for normalization of\nUnicode strings, including Canonical and Compatible\nDecomposition and Recomposition, as described in\nUnicode Standard Annex #15.\n",
+      "description": "This crate provides functions for normalization of Unicode strings, including Canonical and Compatible Decomposition and Recomposition, as described in Unicode Standard Annex #15. ",
       "homepage": "https://github.com/unicode-rs/unicode-normalization",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/unicode-rs/unicode-normalization"
@@ -28554,7 +29120,7 @@
         "kwantam <kwantam@gmail.com>",
         "Manish Goregaokar <manishsmail@gmail.com>"
       ],
-      "description": "This crate provides Grapheme Cluster, Word and Sentence boundaries\naccording to Unicode Standard Annex #29 rules.\n",
+      "description": "This crate provides Grapheme Cluster, Word and Sentence boundaries according to Unicode Standard Annex #29 rules. ",
       "homepage": "https://github.com/unicode-rs/unicode-segmentation",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/unicode-rs/unicode-segmentation"
@@ -28586,7 +29152,7 @@
         "kwantam <kwantam@gmail.com>",
         "Manish Goregaokar <manishsmail@gmail.com>"
       ],
-      "description": "Determine displayed width of `char` and `str` types\naccording to Unicode Standard Annex #11 rules.\n",
+      "description": "Determine displayed width of `char` and `str` types according to Unicode Standard Annex #11 rules. ",
       "homepage": "https://github.com/unicode-rs/unicode-width",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/unicode-rs/unicode-width"
@@ -28618,7 +29184,7 @@
         "kwantam <kwantam@gmail.com>",
         "Manish Goregaokar <manishsmail@gmail.com>"
       ],
-      "description": "Determine whether characters have the XID_Start\nor XID_Continue properties according to\nUnicode Standard Annex #31.\n",
+      "description": "Determine whether characters have the XID_Start or XID_Continue properties according to Unicode Standard Annex #31. ",
       "homepage": "https://github.com/unicode-rs/unicode-xid",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/unicode-rs/unicode-xid"
@@ -29350,7 +29916,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of the X.509 Public Key Infrastructure Certificate\nformat as described in RFC 5280\n",
+      "description": "Pure Rust implementation of the X.509 Public Key Infrastructure Certificate format as described in RFC 5280 ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats/tree/master/x509-cert"
     },
@@ -29732,7 +30298,7 @@
         "Joshua Liebow-Feeser <joshlf@google.com>",
         "Jack Wrenn <jswrenn@amazon.com>"
       ],
-      "description": "Zerocopy makes zero-cost memory manipulation effortless. We write \"unsafe\" so you don't have to.",
+      "description": "Zerocopy makes zero-cost memory manipulation effortless. We write 'unsafe' so you don't have to.",
       "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
       "repository": "https://github.com/google/zerocopy"
     },
@@ -29847,7 +30413,7 @@
       "authors": [
         "The RustCrypto Project Developers"
       ],
-      "description": "Securely clear secrets from memory with a simple trait built on\nstable Rust primitives which guarantee memory is zeroed using an\noperation will not be 'optimized away' by the compiler.\nUses a portable pure Rust implementation that works everywhere,\neven WASM!\n",
+      "description": "Securely clear secrets from memory with a simple trait built on stable Rust primitives which guarantee memory is zeroed using an operation will not be 'optimized away' by the compiler. Uses a portable pure Rust implementation that works everywhere, even WASM! ",
       "homepage": "https://github.com/RustCrypto/utils/tree/master/zeroize",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/utils"
@@ -30019,6 +30585,32 @@
       "description": "Zero-copy vector backed by a byte array",
       "license": "Unicode-3.0",
       "repository": "https://github.com/unicode-org/icu4x"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#zlib-rs@0.5.5": {
+      "crateName": "zlib-rs",
+      "version": "0.5.5",
+      "edition": "2021",
+      "sha256": "40990edd51aae2c2b6907af74ffb635029d5788228222c4bb811e9351c0caad3",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "c-allocator",
+        "default",
+        "rust-allocator",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zlib-rs-0.5.5/src/lib.rs",
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
     },
     "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.21": {
       "crateName": "zmij",
