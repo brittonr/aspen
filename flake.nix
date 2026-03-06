@@ -1414,7 +1414,8 @@
         aspenNode = u2nWorkspace.workspaceMembers."aspen".build;
         aspenCli = u2nCliWorkspace.workspaceMembers."aspen-cli".build;
 
-        # Build plan for aspen-node (646 crates, features: ci,docs,hooks,shell-worker,automerge,secrets)
+        # Build plan for aspen-node (658 crates,
+        # features: ci,docs,hooks,shell-worker,automerge,secrets,git-bridge)
         u2nWorkspace = unit2nix.lib.${system}.buildFromUnitGraph {
           inherit pkgs;
           src = u2nSrc;
@@ -3251,7 +3252,6 @@
               default = aspenNode;
               aspen-node = aspenNode;
               aspen-cli = aspenCli;
-
               git-remote-aspen = aspenGitRemote;
 
               # ── Crane builds (kept for specialized variants + VM tests)
