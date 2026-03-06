@@ -647,6 +647,7 @@ async fn initialize_job_system(
                     iroh_endpoint: iroh_endpoint.clone(),
                     gateway_node,
                     cache_public_key: cache_public_key.clone(),
+                    gateway_url: None,
                 };
 
                 let all_services_available = nix_config.validate();

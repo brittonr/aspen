@@ -2112,6 +2112,17 @@
                 gitRemoteAspenPackage = bins.full-git-remote-aspen;
               };
 
+              # CI Nix build test: push a Nix flake → CI triggers nix build → verify output.
+              # Proves NixBuildWorker can execute `nix build` on flake code pushed to Forge.
+              # Build: nix build .#checks.x86_64-linux.ci-nix-build-test --impure
+              ci-nix-build-test = import ./nix/tests/ci-nix-build.nix {
+                inherit pkgs kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+              };
+
               # HTTP proxy test: TCP tunnel and HTTP forward proxy over
               # iroh QUIC. Two nodes — server (aspen-node with proxy) and
               # client (aspen-cli proxy commands). Tests tunnel creation,

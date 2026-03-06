@@ -92,6 +92,7 @@ aspen-extracted/
 # Agent / tool state
 .claude/
 .aspen/
+!.aspen/ci.ncl
 .pi/
 .agent/
 .pre-commit-cache/
