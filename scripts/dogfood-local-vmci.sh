@@ -106,14 +106,18 @@ check_prerequisites() {
   fi
 
   # NAT rules (nftables masquerade for VM internet access)
-  # Don't trust the marker file alone — actually check for the nftables rule.
-  # The marker persists across reboots but nftables rules don't.
+  # Check actual rules if possible. nft/iptables need root to query rules,
+  # so fall back to the marker file if we can't check directly.
   if nft list table ip aspen-ci-nat &>/dev/null; then
-    ok "NAT configured (nftables rule active)"
+    ok "NAT configured (nftables rule verified)"
   elif iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o aspen-ci-br0 -j MASQUERADE &>/dev/null; then
-    ok "NAT configured (iptables rule active)"
+    ok "NAT configured (iptables rule verified)"
+  elif [ -f /tmp/aspen-ci-network-configured ]; then
+    # Can't query rules without root — trust the marker if present.
+    # The marker is set by setup-ci-network.sh which runs as root.
+    ok "NAT configured (marker present, run 'sudo nix run .#setup-ci-network' if VMs lack internet)"
   else
-    err "NAT masquerade rule missing — VMs cannot reach internet"
+    err "NAT not configured — VMs cannot reach internet"
     echo "    Run: sudo nix run .#setup-ci-network"
     ok=false
   fi
