@@ -61,15 +61,21 @@ parse_json() {
   PARSE_EXPR="$expr" python3 -c "
 import json, sys, re, os
 raw = sys.stdin.read()
-m = re.search(r'[\[{]', raw)
-if m:
-    raw = raw[m.start():]
-try:
-    d = json.loads(raw)
-    result = eval(os.environ['PARSE_EXPR'])
-    print(result if result else '')
-except:
-    print('')
+expr = os.environ['PARSE_EXPR']
+# Try each '{' or '[' position - log lines (e.g. 'Os { code: 101 }')
+# can contain braces before the real JSON, so skip invalid starts.
+for m in re.finditer(r'[\[{]', raw):
+    try:
+        d = json.loads(raw[m.start():])
+    except (json.JSONDecodeError, ValueError):
+        continue
+    try:
+        result = eval(expr)
+        print(result if result else '')
+    except:
+        print('')
+    sys.exit(0)
+print('')
 " 2>/dev/null
 }
 
