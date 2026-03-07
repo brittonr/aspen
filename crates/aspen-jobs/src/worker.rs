@@ -132,7 +132,7 @@ impl Default for WorkerConfig {
             shutdown_timeout: Duration::from_secs(60),
             poll_interval: Duration::from_millis(100),
             job_types: vec![],
-            visibility_timeout: Duration::from_secs(300), // 5 minutes
+            visibility_timeout: Duration::from_secs(3600), // 1 hour — nix builds can take 20-30+ minutes
         }
     }
 }

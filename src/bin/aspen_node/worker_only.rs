@@ -347,7 +347,12 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                         worker_id: worker_id_clone.clone(),
                         job_types: vec!["ci_nix_build".to_string(), "ci_vm".to_string(), "shell_command".to_string()],
                         max_jobs: 1,
-                        visibility_timeout_secs: 300,
+                        // 1 hour visibility timeout: nix builds (clippy, nextest) can take
+                        // 20-30+ minutes. With the default 5 minutes the queue reclaims
+                        // the job mid-build, and the completion fails with
+                        // "item not found or already processed".
+                        // We also spawn a background extender (see below) for safety.
+                        visibility_timeout_secs: 3600,
                     };
 
                     match rpc_for_poll.send(poll_request).await {
@@ -476,9 +481,58 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                         Some((rid.clone(), job_info.job_id.clone()));
                                 }
 
+                                // Spawn a background task to extend queue visibility every
+                                // 2 minutes during job execution. Without this, long nix builds
+                                // (20+ minutes for clippy) would exceed the visibility timeout
+                                // and the queue would reclaim the job mid-execution.
+                                let (extend_stop_tx, mut extend_stop_rx) = tokio::sync::watch::channel(false);
+                                let extend_rpc = rpc_for_poll.clone();
+                                let extend_receipt = job_info.receipt_handle.clone();
+                                let extend_queue = format!("__jobs::{}", job_info.priority);
+                                let extend_job_id = job_info.job_id.clone();
+                                let extend_handle = tokio::spawn(async move {
+                                    let mut interval = tokio::time::interval(Duration::from_secs(120));
+                                    interval.tick().await; // skip the immediate first tick
+                                    loop {
+                                        tokio::select! {
+                                            result = extend_stop_rx.changed() => {
+                                                if result.is_err() || *extend_stop_rx.borrow() {
+                                                    break;
+                                                }
+                                            }
+                                            _ = interval.tick() => {
+                                                let req = ClientRpcRequest::QueueExtendVisibility {
+                                                    queue_name: extend_queue.clone(),
+                                                    receipt_handle: extend_receipt.clone(),
+                                                    additional_timeout_ms: 600_000, // +10 minutes
+                                                };
+                                                match extend_rpc.send(req).await {
+                                                    Ok(_) => {
+                                                        debug!(
+                                                            job_id = %extend_job_id,
+                                                            "extended queue visibility by 10 minutes"
+                                                        );
+                                                    }
+                                                    Err(e) => {
+                                                        warn!(
+                                                            job_id = %extend_job_id,
+                                                            error = %e,
+                                                            "failed to extend visibility (job may time out)"
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+
                                 let start_time = std::time::Instant::now();
                                 let job_result = worker_for_executor.execute(job).await;
                                 let processing_time_ms = start_time.elapsed().as_millis() as u64;
+
+                                // Stop the visibility extension task
+                                let _ = extend_stop_tx.send(true);
+                                let _ = extend_handle.await;
 
                                 // Clear active job and give the log bridge a moment to
                                 // flush remaining buffered output before we report completion.
