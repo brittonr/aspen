@@ -60,7 +60,7 @@ const MAX_TOTAL_CONCURRENT_RUNS: u32 = 50;
 /// Maximum jobs per pipeline.
 const MAX_JOBS_PER_PIPELINE: u32 = 100;
 /// Default step timeout (30 minutes).
-const DEFAULT_STEP_TIMEOUT_SECS: u64 = 1800;
+const DEFAULT_STEP_TIMEOUT_SECS: u64 = 3600;
 /// Maximum number of runs to list from KV store.
 const MAX_LIST_RUNS: u32 = 500;
 
