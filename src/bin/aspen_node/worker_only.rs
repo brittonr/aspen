@@ -713,6 +713,10 @@ fn transform_nix_payload(job_spec: &mut aspen_jobs::JobSpec) -> std::result::Res
     let env: std::collections::HashMap<String, String> =
         nix_payload.get("env").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
 
+    // Source hash for VM workspace seeding — VMs cannot access the host's
+    // checkout_dir, so they download the checkout from blob store instead.
+    let source_hash = nix_payload.get("source_hash").and_then(|v| v.as_str()).map(String::from);
+
     // Build LocalExecutorPayload
     let local_payload = serde_json::json!({
         "job_name": job_name,
@@ -722,6 +726,7 @@ fn transform_nix_payload(job_spec: &mut aspen_jobs::JobSpec) -> std::result::Res
         "env": env,
         "timeout_secs": timeout_secs,
         "artifacts": artifacts,
+        "source_hash": source_hash,
     });
 
     job_spec.payload = local_payload;

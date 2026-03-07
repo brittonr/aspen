@@ -292,6 +292,9 @@ fn build_nix_payload(job: &JobConfig, context: &PipelineContext) -> Result<serde
         should_upload_result: job.should_upload_result,
         publish_to_cache: job.publish_to_cache,
         cache_outputs: Vec::new(),
+        // VM workers cannot access the host checkout_dir, so they need
+        // source_hash to download the checkout from blob store.
+        source_hash: context.source_hash.clone(),
     };
 
     serde_json::to_value(&nix_payload).map_err(|e| CiError::InvalidConfig {

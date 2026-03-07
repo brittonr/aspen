@@ -178,6 +178,7 @@ fn create_test_payload(flake_url: &str, attribute: Option<&str>) -> NixBuildPayl
         cache_key: None,
         publish_to_cache: true,
         cache_outputs: vec![],
+        source_hash: None,
     }
 }
 

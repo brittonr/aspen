@@ -76,6 +76,14 @@ pub struct NixBuildPayload {
     /// If empty, all outputs are published. Only used when `publish_to_cache` is true.
     #[serde(default)]
     pub cache_outputs: Vec<String>,
+
+    /// Source archive hash for workspace seeding in VM workers.
+    ///
+    /// When a `ci_nix_build` job is dispatched to a VM worker, the host's
+    /// `working_dir` is inaccessible. This hash lets the VM download the
+    /// checkout from the blob store instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_hash: Option<String>,
 }
 
 impl NixBuildPayload {
