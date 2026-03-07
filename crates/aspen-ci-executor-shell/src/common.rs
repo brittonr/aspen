@@ -443,10 +443,37 @@ pub async fn create_source_archive(source_dir: &Path, blob_store: &Arc<dyn BlobS
             let encoder = GzEncoder::new(&mut buffer, Compression::fast());
             let mut archive = tar::Builder::new(encoder);
 
-            // Add all files from source directory
-            archive.append_dir_all(".", &source_path).map_err(|e| WorkerUtilError::SourceArchive {
-                reason: format!("failed to add files to archive: {}", e),
-            })?;
+            // Add files from source directory, skipping directories that aren't
+            // needed for CI builds and cause problems on virtiofs mounts:
+            // - .git/: corrupted git index causes nix to fail
+            // - target/: cargo build artifacts with hard links
+            // - build-plan*.json: large cargo artifacts that cause I/O errors
+            for entry in walkdir::WalkDir::new(&source_path).into_iter().filter_entry(|e| {
+                let name = e.file_name().to_string_lossy();
+                // Skip .git and target directories entirely
+                !(name == ".git" || name == "target")
+            }) {
+                let entry = entry.map_err(|e| WorkerUtilError::SourceArchive {
+                    reason: format!("failed to walk source directory: {}", e),
+                })?;
+
+                let name = entry.file_name().to_string_lossy();
+                // Skip build-plan JSON files (cargo artifacts)
+                if name.starts_with("build-plan") && name.ends_with(".json") {
+                    continue;
+                }
+
+                let rel_path = entry.path().strip_prefix(&source_path).unwrap_or(entry.path());
+                // Skip the root directory entry itself
+                if rel_path == std::path::Path::new("") {
+                    continue;
+                }
+
+                let rel_str = format!("./{}", rel_path.display());
+                archive.append_path_with_name(entry.path(), &rel_str).map_err(|e| WorkerUtilError::SourceArchive {
+                    reason: format!("failed to add {} to archive: {}", rel_str, e),
+                })?;
+            }
 
             archive
                 .into_inner()
