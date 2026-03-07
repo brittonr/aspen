@@ -289,7 +289,8 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
         capabilities: vec![
             "ci_nix_build".to_string(),
             "ci_vm".to_string(),
-            "shell_command".to_string(),
+            // shell_command intentionally excluded: shell jobs use host checkout
+            // paths that VMs can't access. Local workers handle them.
         ],
         capacity_jobs: 1,
     };
@@ -345,7 +346,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
 
                     let poll_request = ClientRpcRequest::WorkerPollJobs {
                         worker_id: worker_id_clone.clone(),
-                        job_types: vec!["ci_nix_build".to_string(), "ci_vm".to_string(), "shell_command".to_string()],
+                        job_types: vec!["ci_nix_build".to_string(), "ci_vm".to_string()],
                         max_jobs: 1,
                         // 1 hour visibility timeout: nix builds (clippy, nextest) can take
                         // 20-30+ minutes. With the default 5 minutes the queue reclaims
