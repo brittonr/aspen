@@ -261,6 +261,7 @@ fn build_shell_payload(
     Ok(serde_json::json!({
         "type": "shell",
         "job_name": job.name,
+        "run_id": context.run_id,
         "command": final_command,
         "args": final_args,
         "env": env,

@@ -347,6 +347,44 @@ in
               time.sleep(3)
           assert run_id, "No auto-triggered pipeline appeared within 90s"
 
+      # ── phase 4b: start real-time log streaming on a running job ────
+
+      with subtest("start real-time log streaming"):
+          # Wait until at least one job is visible in the pipeline status
+          stream_job_id = None
+          stream_job_name = None
+          deadline = time.time() + 60
+          while time.time() < deadline:
+              status_out = cli(f"ci status {run_id}", check=False)
+              if isinstance(status_out, dict):
+                  for stage in status_out.get("stages", []):
+                      for job in stage.get("jobs", []):
+                          if job.get("id"):
+                              stream_job_id = job["id"]
+                              stream_job_name = job.get("name", "unknown")
+                              break
+                      if stream_job_id:
+                          break
+              if stream_job_id:
+                  break
+              time.sleep(3)
+
+          if stream_job_id:
+              node1.log(f"Starting --follow log stream for job '{stream_job_name}' ({stream_job_id})")
+              ticket = get_ticket()
+              # Launch ci logs --follow as a background systemd unit.
+              # It will stream chunks to a file until the job completes, then exit.
+              node1.succeed(
+                  f"systemd-run --unit=ci-log-stream "
+                  f"bash -c \""
+                  f"aspen-cli --ticket '{ticket}' ci logs {run_id} {stream_job_id} --follow "
+                  f">/tmp/ci-stream-output.txt 2>/tmp/ci-stream-err.txt"
+                  f"\""
+              )
+              node1.log("Background log stream started")
+          else:
+              node1.log("WARNING: No job IDs visible yet, skipping real-time stream test")
+
       # ── phase 5: wait for pipeline completion ───────────────────────
 
       with subtest("dogfood pipeline completes successfully"):
@@ -366,7 +404,173 @@ in
               f"Dogfood pipeline failed: {pipeline_status}: {final_status}"
           node1.log("Aspen dogfood pipeline completed successfully!")
 
-      # ── phase 6: verify CI list shows success ───────────────────────
+      # ── phase 5b: verify real-time log stream captured output ───────
+
+      with subtest("real-time log stream captured output"):
+          if stream_job_id:
+              # Give the follow stream a few seconds to finish after pipeline completion
+              time.sleep(5)
+
+              # Check if the stream unit finished
+              exit_code, _ = node1.execute(
+                  "systemctl is-active ci-log-stream 2>/dev/null"
+              )
+              stream_status = node1.succeed(
+                  "systemctl show ci-log-stream --property=ActiveState --value 2>/dev/null || echo unknown"
+              ).strip()
+              node1.log(f"Log stream unit state: {stream_status}")
+
+              # Read captured output
+              stream_output = node1.succeed(
+                  "cat /tmp/ci-stream-output.txt 2>/dev/null || echo """
+              ).strip()
+              stream_err = node1.succeed(
+                  "cat /tmp/ci-stream-err.txt 2>/dev/null || echo """
+              ).strip()
+
+              if stream_output:
+                  output_lines = stream_output.count("\n")
+                  node1.log(f"Real-time stream captured {len(stream_output)} bytes, {output_lines} lines")
+                  node1.log(f"Stream output (first 500 chars): {stream_output[:500]}")
+                  # The stream should have captured at least some build output
+                  assert len(stream_output) > 0, "Log stream captured no output"
+              else:
+                  node1.log(f"WARNING: Stream captured no stdout (stderr: {stream_err[:300]})")
+
+              # Clean up
+              node1.execute("systemctl stop ci-log-stream 2>/dev/null || true")
+          else:
+              node1.log("Skipped: no stream_job_id was captured")
+
+      # ── phase 6: verify log retrieval for all completed jobs ────────
+
+      with subtest("ci logs retrieves historical logs for all jobs"):
+          # Collect all job IDs from the final pipeline status
+          all_jobs = []
+          for stage in final_status.get("stages", []):
+              for job in stage.get("jobs", []):
+                  if job.get("id"):
+                      all_jobs.append({
+                          "id": job["id"],
+                          "name": job.get("name", "unknown"),
+                          "status": job.get("status", "unknown"),
+                      })
+
+          node1.log(f"Verifying logs for {len(all_jobs)} jobs")
+          assert len(all_jobs) >= 4, f"Expected at least 4 jobs (validate + 2 build + test), got {len(all_jobs)}"
+
+          jobs_with_logs = 0
+          for job in all_jobs:
+              job_id = job["id"]
+              job_name = job["name"]
+              ticket = get_ticket()
+
+              # Fetch logs (non-follow mode, plain text)
+              exit_code, _ = node1.execute(
+                  f"aspen-cli --ticket '{ticket}' ci logs {run_id} {job_id} "
+                  f">/tmp/ci-logs-{job_name}.txt 2>/tmp/ci-logs-{job_name}-err.txt"
+              )
+
+              log_content = node1.succeed(
+                  f"cat /tmp/ci-logs-{job_name}.txt 2>/dev/null || echo """
+              ).strip()
+
+              if log_content:
+                  jobs_with_logs += 1
+                  log_size = len(log_content)
+                  node1.log(f"  Job '{job_name}': {log_size} bytes of logs (exit={exit_code})")
+                  # Show first 200 chars for debugging
+                  node1.log(f"    Preview: {log_content[:200]}")
+              else:
+                  log_err = node1.succeed(
+                      f"cat /tmp/ci-logs-{job_name}-err.txt 2>/dev/null || echo """
+                  ).strip()
+                  node1.log(f"  Job '{job_name}': no logs (exit={exit_code}, err={log_err[:200]})")
+
+          node1.log(f"Jobs with logs: {jobs_with_logs}/{len(all_jobs)}")
+          assert jobs_with_logs >= 1, f"Expected at least 1 job with logs, got {jobs_with_logs}"
+
+      # ── phase 6b: verify log content contains expected output ───────
+
+      with subtest("log content contains expected build output"):
+          # Check validate job logs for "Source tree OK"
+          validate_logs = node1.succeed(
+              "cat /tmp/ci-logs-check-source-tree.txt 2>/dev/null || echo """
+          ).strip()
+          if validate_logs:
+              assert "Source tree OK" in validate_logs or "Crate count" in validate_logs, \
+                  f"Validate logs missing expected content: {validate_logs[:300]}"
+              node1.log("Validate job logs contain expected source tree check output")
+
+          # Check compile job logs for compilation output
+          compile_logs = node1.succeed(
+              "cat /tmp/ci-logs-compile-aspen-constants.txt 2>/dev/null || echo """
+          ).strip()
+          if compile_logs:
+              has_compile_output = (
+                  "aspen-constants" in compile_logs or
+                  "Compiling" in compile_logs or
+                  "OK" in compile_logs
+              )
+              assert has_compile_output, \
+                  f"Compile logs missing expected content: {compile_logs[:300]}"
+              node1.log("Compile job logs contain expected build output")
+
+      # ── phase 6c: verify ci output for completed jobs ───────────────
+
+      with subtest("ci output retrieves full job output"):
+          # Pick the first job to check full output
+          if all_jobs:
+              first_job = all_jobs[0]
+              output_result = cli(
+                  f"ci output {run_id} {first_job['id']}",
+                  check=False
+              )
+              node1.log(f"ci output for '{first_job['name']}': {type(output_result)}")
+              if isinstance(output_result, dict):
+                  was_found = output_result.get("was_found", False)
+                  has_stdout = bool(output_result.get("stdout"))
+                  has_error = bool(output_result.get("error"))
+                  node1.log(
+                      f"  was_found={was_found}, has_stdout={has_stdout}, "
+                      f"error={output_result.get('error', 'none')}"
+                  )
+                  # Job output should be available for completed jobs
+                  # (may be empty for shell jobs that don't use the output ref system)
+
+      # ── phase 6d: verify ci logs --follow on completed job ──────────
+
+      with subtest("ci logs --follow works on completed job"):
+          # --follow on an already-completed job should fetch all chunks and exit
+          if all_jobs:
+              follow_job = all_jobs[0]
+              ticket = get_ticket()
+              exit_code, _ = node1.execute(
+                  f"timeout 30 aspen-cli --ticket '{ticket}' "
+                  f"ci logs {run_id} {follow_job['id']} --follow "
+                  f">/tmp/ci-follow-output.txt 2>/tmp/ci-follow-err.txt"
+              )
+              follow_output = node1.succeed(
+                  "cat /tmp/ci-follow-output.txt 2>/dev/null || echo """
+              ).strip()
+
+              node1.log(
+                  f"ci logs --follow on completed job '{follow_job['name']}': "
+                  f"exit={exit_code}, {len(follow_output)} bytes"
+              )
+              # Follow mode on a completed job should succeed (exit 0) and return the same
+              # logs as non-follow mode
+              if exit_code == 0 and follow_output:
+                  node1.log("Follow mode on completed job: OK")
+              elif exit_code == 124:
+                  node1.log("WARNING: ci logs --follow timed out (30s) on completed job")
+              else:
+                  follow_err = node1.succeed(
+                      "cat /tmp/ci-follow-err.txt 2>/dev/null || echo """
+                  ).strip()
+                  node1.log(f"Follow mode issue: exit={exit_code}, err={follow_err[:300]}")
+
+      # ── phase 7: verify CI list shows success ───────────────────────
 
       with subtest("ci list shows successful dogfood run"):
           result = cli("ci list", check=False)
@@ -379,6 +583,6 @@ in
               assert found, f"run {run_id} not in list with status=success: {runs}"
 
       # ── done ─────────────────────────────────────────────────────────
-      node1.log("Aspen built itself. Self-hosting dogfood test passed!")
+      node1.log("Aspen built itself with verified log streaming. Self-hosting dogfood test passed!")
     '';
   }

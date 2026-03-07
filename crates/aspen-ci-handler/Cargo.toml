@@ -40,3 +40,6 @@ blob = ["dep:aspen-blob"]
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full", "test-util"] }
+aspen-testing-core = { path = "../aspen-testing-core" }
+aspen-ci = { path = "../aspen-ci" }
+aspen-client-api = { workspace = true }

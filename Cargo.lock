@@ -1003,6 +1003,7 @@ dependencies = [
  "aspen-jobs",
  "aspen-jobs-worker-shell",
  "aspen-rpc-core",
+ "aspen-testing-core",
  "async-trait",
  "blake3",
  "hex",

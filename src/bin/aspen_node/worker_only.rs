@@ -409,13 +409,21 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                     }
                                 };
 
+                                // Extract run_id for log streaming from any job type's payload.
+                                // All CI pipeline jobs include run_id (shell, nix, vm).
+                                let mut job_spec = job_spec;
+                                let run_id_for_logs: Option<String> = job_spec
+                                    .payload
+                                    .get("run_id")
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from);
+
                                 // For ci_nix_build jobs, transform NixBuildPayload → LocalExecutorPayload.
                                 // The pipeline creates NixBuildPayload (flake_url, attribute, run_id)
                                 // but LocalExecutorWorker expects LocalExecutorPayload (command, args).
-                                let mut job_spec = job_spec;
-                                let run_id_for_logs: Option<String> = if job_info.job_type == "ci_nix_build" {
+                                if job_info.job_type == "ci_nix_build" {
                                     match transform_nix_payload(&mut job_spec) {
-                                        Ok(run_id) => run_id,
+                                        Ok(_) => {}
                                         Err(e) => {
                                             error!(
                                                 job_id = %job_info.job_id,
@@ -438,9 +446,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                             continue;
                                         }
                                     }
-                                } else {
-                                    None
-                                };
+                                }
 
                                 // Rewrite working_dir for VM execution. The pipeline sets
                                 // working_dir to a host path (/tmp/ci-checkout-{run_id})
