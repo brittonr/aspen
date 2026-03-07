@@ -105,12 +105,17 @@ check_prerequisites() {
     ok=false
   fi
 
-  # NAT marker (created by setup-ci-network.sh)
-  if [ -f /tmp/aspen-ci-network-configured ]; then
-    ok "NAT configured"
+  # NAT rules (nftables masquerade for VM internet access)
+  # Don't trust the marker file alone — actually check for the nftables rule.
+  # The marker persists across reboots but nftables rules don't.
+  if nft list table ip aspen-ci-nat &>/dev/null; then
+    ok "NAT configured (nftables rule active)"
+  elif iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o aspen-ci-br0 -j MASQUERADE &>/dev/null; then
+    ok "NAT configured (iptables rule active)"
   else
-    warn "NAT marker not found (/tmp/aspen-ci-network-configured)"
-    echo "    VMs may not have internet access. Run: sudo nix run .#setup-ci-network"
+    err "NAT masquerade rule missing — VMs cannot reach internet"
+    echo "    Run: sudo nix run .#setup-ci-network"
+    ok=false
   fi
 
   # VM image
