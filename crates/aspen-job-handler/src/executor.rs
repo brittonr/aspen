@@ -721,6 +721,26 @@ impl JobServiceExecutor {
         output_data: Option<Vec<u8>>,
         _processing_time_ms: u64,
     ) -> Result<ClientRpcResponse> {
+        // Validate before calling ack_job to avoid panicking on empty strings.
+        // The poll handler may return empty execution_token when the job didn't
+        // have one set (unwrap_or_default), which would trigger an assert! in
+        // ack_job and kill the handler task — leaving the client with no response.
+        if receipt_handle.is_empty() || execution_token.is_empty() {
+            warn!(
+                worker_id,
+                job_id,
+                receipt_empty = receipt_handle.is_empty(),
+                token_empty = execution_token.is_empty(),
+                "job completion rejected: empty receipt_handle or execution_token"
+            );
+            return Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
+                is_success: false,
+                worker_id,
+                job_id,
+                error: Some("empty receipt_handle or execution_token".to_string()),
+            }));
+        }
+
         let jid = JobId::from_string(job_id.clone());
 
         let result = if is_success {
