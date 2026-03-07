@@ -95,6 +95,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                     &item_key,
                     &queue_state,
                     &pending_groups,
+                    &[],
                     visibility_timeout_ms,
                     now,
                 )
@@ -111,6 +112,79 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         Ok(dequeued)
     }
 
+    /// Dequeue items, skipping any whose `message_group_id` is in `excluded_groups`.
+    ///
+    /// Items with excluded groups are left in the queue untouched — they are never
+    /// claimed, so delivery_attempts is not incremented and they cannot be moved to
+    /// the DLQ by workers that cannot handle them.
+    pub async fn dequeue_excluding_groups(
+        &self,
+        name: &str,
+        consumer_id: &str,
+        max_items: u32,
+        visibility_timeout_ms: u64,
+        excluded_groups: &[String],
+    ) -> Result<Vec<DequeuedItem>> {
+        let max_items = max_items.min(MAX_QUEUE_BATCH_SIZE);
+        let visibility_timeout_ms = visibility_timeout_ms.min(MAX_QUEUE_VISIBILITY_TIMEOUT_MS);
+
+        self.cleanup_expired_pending(name).await?;
+
+        let queue_key = verified::queue_metadata_key(name);
+        let queue_state = match self.read_queue_state(&queue_key).await? {
+            Some(state) => state,
+            None => return Ok(vec![]),
+        };
+
+        let items_pref = verified::items_prefix(name);
+        let pending_groups = self.get_pending_message_groups(name).await?;
+
+        // Scan extra keys to compensate for items we will skip.
+        let scan_limit = max_items.saturating_mul(4).max(16);
+        let item_keys = self.scan_keys(&items_pref, scan_limit).await?;
+
+        info!(
+            name,
+            consumer_id,
+            items_prefix = items_pref,
+            items_found = item_keys.len(),
+            pending_groups = ?pending_groups,
+            excluded_groups = ?excluded_groups,
+            "dequeue_excluding_groups scanning for items"
+        );
+
+        let mut dequeued = Vec::new();
+        let now = now_unix_ms();
+
+        for item_key in item_keys {
+            if dequeued.len() >= max_items as usize {
+                break;
+            }
+
+            match self
+                .dequeue_process_item(
+                    name,
+                    consumer_id,
+                    &item_key,
+                    &queue_state,
+                    &pending_groups,
+                    excluded_groups,
+                    visibility_timeout_ms,
+                    now,
+                )
+                .await?
+            {
+                DequeueItemResult::Dequeued(item) => dequeued.push(item),
+                DequeueItemResult::Skip | DequeueItemResult::Conflict | DequeueItemResult::MovedToDlq => continue,
+            }
+        }
+
+        debug_assert!(dequeued.len() <= max_items as usize, "QUEUE: dequeued count must not exceed max_items");
+
+        debug!(name, consumer_id, count = dequeued.len(), "items dequeued (excluding groups)");
+        Ok(dequeued)
+    }
+
     /// Process a single item during dequeue operation.
     #[allow(clippy::too_many_arguments)]
     async fn dequeue_process_item(
@@ -120,6 +194,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         item_key: &str,
         queue_state: &super::QueueState,
         pending_groups: &[String],
+        excluded_groups: &[String],
         visibility_timeout_ms: u64,
         now: u64,
     ) -> Result<DequeueItemResult> {
@@ -140,6 +215,17 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             && pending_groups.contains(group)
         {
             debug!(name, item_id = item.item_id, group, "skipping item - message group is pending");
+            return Ok(DequeueItemResult::Skip);
+        }
+
+        // Skip items whose message group is excluded by the consumer.
+        // This lets workers avoid claiming jobs they can't handle, preventing
+        // delivery_attempts from incrementing and eventually DLQ'ing the item.
+        if let Some(ref group) = item.message_group_id
+            && !excluded_groups.is_empty()
+            && excluded_groups.contains(group)
+        {
+            debug!(name, item_id = item.item_id, group, "skipping item - message group excluded by consumer");
             return Ok(DequeueItemResult::Skip);
         }
 

@@ -6,7 +6,6 @@ use aspen_kv_types::WriteRequest;
 use aspen_traits::KeyValueStore;
 use chrono::Utc;
 use tracing::debug;
-use tracing::error;
 use tracing::info;
 use tracing::warn;
 
@@ -133,45 +132,6 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         self.dequeue_jobs_filtered(worker_id, max_jobs, visibility_timeout, &[]).await
     }
 
-    /// Release an excluded job back to the queue.
-    async fn dequeue_jobs_release_excluded(
-        queue_manager: &aspen_coordination::QueueManager<S>,
-        queue_name: &str,
-        worker_id: &str,
-        job_id: &JobId,
-        job_type: &str,
-        receipt_handle: &str,
-    ) {
-        info!(
-            worker_id,
-            job_id = %job_id,
-            job_type = %job_type,
-            receipt_handle = %receipt_handle,
-            "skipping excluded job type, releasing back to queue"
-        );
-        match queue_manager
-            .nack(
-                queue_name,
-                receipt_handle,
-                false, // Don't move to DLQ
-                Some(format!("job type {} excluded by worker filter", job_type)),
-            )
-            .await
-        {
-            Ok(()) => {
-                info!(worker_id, job_id = %job_id, "excluded job successfully released back to queue");
-            }
-            Err(e) => {
-                error!(
-                    worker_id,
-                    job_id = %job_id,
-                    error = %e,
-                    "CRITICAL: failed to release excluded job back to queue - job may be lost"
-                );
-            }
-        }
-    }
-
     /// Dequeue jobs for processing by workers, excluding certain job types.
     ///
     /// Returns up to `max_jobs` jobs from the highest priority queues first.
@@ -206,8 +166,21 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             };
 
             let items_to_dequeue = max_jobs - dequeued_jobs.len() as u32;
+
+            // Filter at the queue level: excluded job types are stored as
+            // message_group_id, so passing them as excluded_groups prevents
+            // the queue from ever claiming those items.  This avoids
+            // incrementing delivery_attempts on items the worker cannot
+            // handle, which previously caused them to hit max_delivery_attempts
+            // and get moved to the DLQ before a capable worker could claim them.
             let items = queue_manager
-                .dequeue(&queue_name, worker_id, items_to_dequeue, visibility_timeout_ms)
+                .dequeue_excluding_groups(
+                    &queue_name,
+                    worker_id,
+                    items_to_dequeue,
+                    visibility_timeout_ms,
+                    excluded_types,
+                )
                 .await
                 .map_err(|e| JobError::QueueError { source: e })?;
 
@@ -227,22 +200,6 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                     warn!(job_id = %job_id, "job not found in storage, skipping");
                     continue;
                 };
-
-                // Check if job type is excluded
-                let has_exclusions = !excluded_types.is_empty();
-                let is_excluded_type = excluded_types.contains(&job.spec.job_type);
-                if has_exclusions && is_excluded_type {
-                    Self::dequeue_jobs_release_excluded(
-                        queue_manager,
-                        &queue_name,
-                        worker_id,
-                        &job_id,
-                        &job.spec.job_type,
-                        &item.receipt_handle,
-                    )
-                    .await;
-                    continue;
-                }
 
                 dequeued_jobs.push((item, job));
             }
