@@ -437,6 +437,13 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                     None
                                 };
 
+                                // Rewrite working_dir for VM execution. The pipeline sets
+                                // working_dir to a host path (/tmp/ci-checkout-{run_id})
+                                // which doesn't exist inside the VM. Replace any absolute
+                                // path not under /workspace with "." so the executor
+                                // resolves it relative to the job workspace directory.
+                                rewrite_working_dir_for_vm(&mut job_spec);
+
                                 let job = aspen_jobs::Job {
                                     id: aspen_jobs::JobId::parse(&job_info.job_id).unwrap_or_else(|_| aspen_jobs::JobId::new()),
                                     spec: job_spec,
@@ -623,6 +630,34 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
     drop(iroh_manager);
 
     Ok(())
+}
+
+#[cfg(feature = "ci")]
+/// Rewrite `working_dir` in the job payload for VM execution.
+///
+/// The pipeline orchestrator sets `working_dir` to a host path like
+/// `/tmp/ci-checkout-{run_id}` which doesn't exist inside the VM.
+/// The VM's workspace is at `/workspace` — any absolute path not under
+/// it must be replaced with `"."` so the executor resolves it relative
+/// to the job's workspace directory.
+fn rewrite_working_dir_for_vm(job_spec: &mut aspen_jobs::JobSpec) {
+    let original = job_spec
+        .payload
+        .get("working_dir")
+        .and_then(|v| v.as_str())
+        .filter(|s| s.starts_with('/') && !s.starts_with("/workspace"))
+        .map(String::from);
+
+    if let Some(original_dir) = original {
+        if let Some(obj) = job_spec.payload.as_object_mut() {
+            obj.insert("working_dir".to_string(), serde_json::json!("."));
+        }
+        info!(
+            original_dir = %original_dir,
+            rewritten_to = ".",
+            "rewrote host working_dir for VM execution"
+        );
+    }
 }
 
 #[cfg(feature = "ci")]
