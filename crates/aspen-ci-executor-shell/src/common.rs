@@ -331,6 +331,12 @@ pub async fn seed_workspace_from_blob(
         let decoder = GzDecoder::new(cursor);
         let mut archive = tar::Archive::new(decoder);
 
+        // Don't try to preserve ownership or permissions — the workspace
+        // is on a virtiofs mount inside a VM where chown/chmod may fail.
+        archive.set_preserve_permissions(false);
+        archive.set_unpack_xattrs(false);
+        archive.set_preserve_mtime(false);
+
         archive.unpack(&workspace_path).map_err(|e| WorkerUtilError::WorkspaceSeed {
             reason: format!("failed to extract tar.gz archive: {}", e),
         })?;
