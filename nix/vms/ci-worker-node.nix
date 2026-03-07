@@ -323,8 +323,12 @@
       ASPEN_CLUSTER_TICKET_FILE = "/workspace/.aspen-cluster-ticket";
       # Job types this worker handles
       ASPEN_WORKER_JOB_TYPES = "ci_vm";
-      # Workspace directory for job execution
-      ASPEN_CI_WORKSPACE_DIR = "/workspace";
+      # Workspace directory for job execution - use tmpfs instead of virtiofs
+      # because nix's file import mechanism fails on virtiofs mounts (files
+      # disappear or return I/O errors). Tmpfs is backed by RAM which is fine
+      # for CI workspaces. The /workspace virtiofs mount is still used for the
+      # cluster ticket file (ASPEN_CLUSTER_TICKET_FILE).
+      ASPEN_CI_WORKSPACE_DIR = "/tmp/workspaces";
       # Debug logging for troubleshooting VM worker connections
       RUST_LOG = "info,aspen=debug,iroh=debug,iroh_net=debug";
     };
