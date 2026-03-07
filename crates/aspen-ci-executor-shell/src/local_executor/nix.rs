@@ -40,10 +40,11 @@ pub(crate) fn inject_nix_flags_with_flake_rewrite(
     if !nix_args.is_empty() {
         let mut insert_pos = 1;
 
-        if !nix_args.iter().any(|a| a == "--offline") {
-            nix_args.insert(insert_pos, "--offline".to_string());
-            insert_pos += 1;
-        }
+        // Note: --offline is NOT injected. VM CI workers have network access
+        // via TAP/bridge, and --offline causes "Truncated tar archive" errors
+        // when nix reads flake input tarballs through the virtiofs nix store
+        // overlay. Without --offline, nix can fetch inputs from the network
+        // as a fallback when cached tarballs are unreadable.
 
         if !nix_args.iter().any(|a| a.contains("experimental-features")) {
             nix_args.insert(insert_pos, "--extra-experimental-features".to_string());
