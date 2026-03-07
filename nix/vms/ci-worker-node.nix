@@ -129,8 +129,9 @@
     # boundary is at the hypervisor level rather than the guest firewall.
     firewall.enable = false;
 
-    # DNS for package downloads - write directly to /etc/resolv.conf
-    nameservers = ["8.8.8.8" "8.8.4.4"];
+    # DNS via local dnsmasq cache (see services.dnsmasq below).
+    # Upstream servers (8.8.8.8, 8.8.4.4, 1.1.1.1) configured in dnsmasq.
+    nameservers = ["127.0.0.1"];
   };
 
   # Configure eth0 via systemd-networkd.
@@ -151,7 +152,8 @@
       address = ["10.200.0.10/24"];
       networkConfig = {
         DHCP = "no";
-        DNS = ["8.8.8.8" "8.8.4.4"];
+        # DNS handled by local dnsmasq cache (127.0.0.1)
+        DNS = ["127.0.0.1"];
       };
       # Default route via host bridge
       routes = [
@@ -169,11 +171,45 @@
   # Disable systemd-resolved (too heavyweight for CI VM).
   services.resolved.enable = false;
 
-  # Explicitly write /etc/resolv.conf since networking.nameservers + useNetworkd
-  # may have race conditions. This ensures DNS is available immediately at boot.
+  # Local DNS cache via dnsmasq.
+  # Under heavy parallel load (dozens of FOD builds curling crate sources),
+  # outbound DNS queries through NAT can overwhelm conntrack and responses
+  # get dropped. A local cache ensures:
+  # 1. Repeated lookups hit cache instantly (static.crates.io, cache.nixos.org)
+  # 2. Fewer outbound DNS queries through NAT
+  # 3. Retries are handled locally with configurable timeouts
+  services.dnsmasq = {
+    enable = true;
+    settings = {
+      # Don't read /etc/resolv.conf (we manage upstream servers explicitly)
+      no-resolv = true;
+      # Upstream DNS servers (Google + Cloudflare for redundancy)
+      server = ["8.8.8.8" "8.8.4.4" "1.1.1.1"];
+      # Listen only on localhost
+      listen-address = "127.0.0.1";
+      bind-interfaces = true;
+      # Cache size — 1000 entries covers all crate/nix package names
+      cache-size = 1000;
+      # Don't forward plain names (no domain suffix)
+      domain-needed = true;
+      # Don't forward reverse lookups for private ranges
+      bogus-priv = true;
+      # Reduce logging noise
+      log-facility = "/dev/null";
+    };
+  };
+
+  # Ensure dnsmasq starts before the CI worker
+  systemd.services.dnsmasq = {
+    before = ["aspen-ci-worker.service"];
+    wantedBy = ["multi-user.target"];
+  };
+
+  # Point resolv.conf at the local dnsmasq cache.
+  # Also configure aggressive retry/timeout for resilience under load.
   environment.etc."resolv.conf".text = ''
-    nameserver 8.8.8.8
-    nameserver 8.8.4.4
+    nameserver 127.0.0.1
+    options timeout:2 attempts:5 rotate
   '';
 
   # Minimal NixOS configuration for fast boot
