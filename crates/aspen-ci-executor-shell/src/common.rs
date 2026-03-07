@@ -336,10 +336,50 @@ pub async fn seed_workspace_from_blob(
         archive.set_preserve_permissions(false);
         archive.set_unpack_xattrs(false);
         archive.set_preserve_mtime(false);
+        archive.set_overwrite(true);
 
-        archive.unpack(&workspace_path).map_err(|e| WorkerUtilError::WorkspaceSeed {
-            reason: format!("failed to extract tar.gz archive: {}", e),
-        })?;
+        // Extract entry-by-entry to handle errors gracefully.
+        // Some entries (device files, hard links across mounts) may fail
+        // on virtiofs — skip those and continue with the rest.
+        let mut extracted = 0u64;
+        let mut skipped = 0u64;
+        for entry_result in archive.entries().map_err(|e| WorkerUtilError::WorkspaceSeed {
+            reason: format!("failed to read tar entries: {}", e),
+        })? {
+            let mut entry = match entry_result {
+                Ok(e) => e,
+                Err(e) => {
+                    tracing::warn!(error = %e, "skipping unreadable tar entry");
+                    skipped += 1;
+                    continue;
+                }
+            };
+
+            let path = entry.path().map(|p| p.to_path_buf()).unwrap_or_default();
+
+            // Skip target/ directory — cargo build artifacts aren't needed
+            // and can contain hard links that fail on virtiofs.
+            if path.starts_with("target") || path.starts_with("./target") {
+                // Drain the entry so the reader advances
+                let _ = std::io::copy(&mut entry, &mut std::io::sink());
+                skipped += 1;
+                continue;
+            }
+
+            if let Err(e) = entry.unpack_in(&workspace_path) {
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %e,
+                    kind = ?e.kind(),
+                    "skipping tar entry that failed to extract"
+                );
+                skipped += 1;
+                continue;
+            }
+            extracted += 1;
+        }
+
+        tracing::info!(extracted, skipped, "tar extraction complete");
 
         Ok::<u64, WorkerUtilError>(content_len)
     })
