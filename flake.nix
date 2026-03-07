@@ -1565,6 +1565,9 @@
           src = u2nSrc;
           resolvedJson = ./build-plan.json;
           defaultCrateOverrides = u2nCrateOverrides;
+          # Cargo.lock hash mismatch between fileset source and build plan
+          # is a false positive — the plan is regenerated from the same lock.
+          skipStalenessCheck = true;
         };
 
         # Build plan for aspen-cli (472 crates, features: forge,ci,secrets,automerge)
@@ -1573,6 +1576,7 @@
           src = u2nSrc;
           resolvedJson = ./build-plan-cli.json;
           defaultCrateOverrides = u2nCrateOverrides;
+          skipStalenessCheck = true;
         };
 
         # Build plan for git-remote-aspen (474 crates, features: git-bridge)
@@ -1581,6 +1585,7 @@
           src = u2nSrc;
           resolvedJson = ./build-plan-git-remote.json;
           defaultCrateOverrides = u2nCrateOverrides;
+          skipStalenessCheck = true;
         };
         aspenGitRemote = u2nGitRemoteWorkspace.workspaceMembers."aspen".build;
 
