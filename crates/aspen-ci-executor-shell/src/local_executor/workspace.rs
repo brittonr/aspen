@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
@@ -43,6 +44,32 @@ impl LocalExecutorWorker {
         // Seed from blob store if source_hash provided
         if let Some(ref source_hash) = payload.source_hash {
             self.seed_workspace_from_source(job_id, source_hash, &job_workspace).await;
+
+            // Virtiofs mounts have I/O issues that cause nix to fail when importing
+            // the workspace to the nix store. If the workspace is on virtiofs (i.e.,
+            // under /workspace), copy the seeded files to a tmpfs-backed directory
+            // so nix can read them reliably.
+            if job_workspace.starts_with("/workspace") {
+                let tmpfs_workspace = PathBuf::from(format!("/tmp/ci-workspace-{}", job_id));
+                match Self::copy_to_tmpfs(job_id, &job_workspace, &tmpfs_workspace).await {
+                    Ok(()) => {
+                        info!(
+                            job_id = %job_id,
+                            from = %job_workspace.display(),
+                            to = %tmpfs_workspace.display(),
+                            "copied workspace from virtiofs to tmpfs for nix compatibility"
+                        );
+                        return Ok((tmpfs_workspace, flake_store_path));
+                    }
+                    Err(e) => {
+                        warn!(
+                            job_id = %job_id,
+                            error = %e,
+                            "failed to copy workspace to tmpfs, using virtiofs directly"
+                        );
+                    }
+                }
+            }
         }
 
         Ok((job_workspace, flake_store_path))
@@ -93,6 +120,32 @@ impl LocalExecutorWorker {
         }
 
         None
+    }
+
+    /// Copy workspace from virtiofs to a tmpfs-backed directory.
+    ///
+    /// Nix's file import mechanism fails on virtiofs mounts (files disappear
+    /// or return I/O errors when copied to the nix store). Moving the workspace
+    /// to tmpfs (/tmp) works around this by ensuring all reads come from a
+    /// standard filesystem.
+    async fn copy_to_tmpfs(
+        job_id: &str,
+        src: &std::path::Path,
+        dst: &std::path::Path,
+    ) -> std::result::Result<(), String> {
+        // Use cp -a for a reliable deep copy
+        let status = tokio::process::Command::new("cp")
+            .args(["-a", &src.display().to_string(), &dst.display().to_string()])
+            .status()
+            .await
+            .map_err(|e| format!("failed to spawn cp: {}", e))?;
+
+        if !status.success() {
+            return Err(format!("cp exited with status: {}", status));
+        }
+
+        debug!(job_id = %job_id, "workspace copied to tmpfs");
+        Ok(())
     }
 
     /// Seed workspace from blob store if available.
