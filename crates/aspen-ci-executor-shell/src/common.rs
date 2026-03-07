@@ -357,9 +357,14 @@ pub async fn seed_workspace_from_blob(
 
             let path = entry.path().map(|p| p.to_path_buf()).unwrap_or_default();
 
-            // Skip target/ directory — cargo build artifacts aren't needed
-            // and can contain hard links that fail on virtiofs.
-            if path.starts_with("target") || path.starts_with("./target") {
+            // Skip directories that aren't needed for the build and cause
+            // issues in VMs:
+            // - target/: cargo build artifacts with hard links that fail on virtiofs
+            // - .git/: nix tries `git ls-files` when .git exists, which can fail if the checkout from Forge has
+            //   an incomplete git repo. Without .git nix uses builtins.path which hashes the directory
+            //   directly.
+            let skip_prefixes: &[&str] = &["target", "./target", ".git", "./.git"];
+            if skip_prefixes.iter().any(|p| path.starts_with(p)) {
                 // Drain the entry so the reader advances
                 let _ = std::io::copy(&mut entry, &mut std::io::sink());
                 skipped += 1;
