@@ -678,26 +678,41 @@ impl JobServiceExecutor {
         let now_ms =
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
 
-        let jobs: Vec<WorkerJobInfo> = dequeued
-            .into_iter()
-            .map(|(dequeued_item, job)| {
-                let job_spec_json = serde_json::to_string(&job.spec).unwrap_or_else(|_| "{}".to_string());
-                let execution_token = job.execution_token.clone().unwrap_or_default();
-                let created_at_ms = job.created_at.timestamp_millis() as u64;
-                let visibility_timeout_ms = now_ms.saturating_add(visibility_timeout_secs.saturating_mul(1000));
-
-                WorkerJobInfo {
-                    job_id: job.id.to_string(),
-                    job_type: job.spec.job_type.clone(),
-                    job_spec_json,
-                    priority: format!("{:?}", job.spec.config.priority),
-                    created_at_ms,
-                    visibility_timeout_ms,
-                    receipt_handle: dequeued_item.receipt_handle.clone(),
-                    execution_token,
+        // Mark each dequeued job as started to generate an execution token.
+        // The in-process worker calls mark_started after dequeue (worker.rs),
+        // but VM workers poll via RPC so we must do it here before returning
+        // the job info — otherwise execution_token is None and the worker
+        // cannot complete the job.
+        let mut jobs: Vec<WorkerJobInfo> = Vec::with_capacity(dequeued.len());
+        for (dequeued_item, job) in dequeued {
+            let execution_token = match self.job_manager.mark_started(&job.id, worker_id.clone()).await {
+                Ok(token) => token,
+                Err(e) => {
+                    warn!(
+                        worker_id,
+                        job_id = %job.id,
+                        error = %e,
+                        "failed to mark_started for polled job, skipping"
+                    );
+                    continue;
                 }
-            })
-            .collect();
+            };
+
+            let job_spec_json = serde_json::to_string(&job.spec).unwrap_or_else(|_| "{}".to_string());
+            let created_at_ms = job.created_at.timestamp_millis() as u64;
+            let visibility_timeout_ms = now_ms.saturating_add(visibility_timeout_secs.saturating_mul(1000));
+
+            jobs.push(WorkerJobInfo {
+                job_id: job.id.to_string(),
+                job_type: job.spec.job_type.clone(),
+                job_spec_json,
+                priority: format!("{:?}", job.spec.config.priority),
+                created_at_ms,
+                visibility_timeout_ms,
+                receipt_handle: dequeued_item.receipt_handle.clone(),
+                execution_token,
+            });
+        }
 
         debug!(worker_id, jobs_count = jobs.len(), "poll_jobs returning jobs");
 
