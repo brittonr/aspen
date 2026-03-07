@@ -382,18 +382,19 @@ stream_pipeline() {
     read -r active_job_id active_job_name < <(python3 -c "
 import json, sys, re, os
 raw = sys.stdin.read()
-m = re.search(r'[\[{]', raw)
-if m: raw = raw[m.start():]
-try:
-    d = json.loads(raw)
+for m in re.finditer(r'[\[{]', raw):
+    try:
+        d = json.loads(raw[m.start():])
+    except (json.JSONDecodeError, ValueError):
+        continue
     for stage in d.get('stages', []):
         for job in stage.get('jobs', []):
             if job.get('status') == 'running' and job.get('id'):
                 print(job['id'], job.get('name', ''))
                 sys.exit(0)
     print(' ')
-except:
-    print(' ')
+    sys.exit(0)
+print(' ')
 " <<< "$status_out" 2>/dev/null)
 
     # If a new job started running, switch log stream to it
@@ -451,10 +452,11 @@ print_pipeline_summary() {
   python3 -c "
 import json, sys, re
 raw = sys.stdin.read()
-m = re.search(r'[\[{]', raw)
-if m: raw = raw[m.start():]
-try:
-    d = json.loads(raw)
+for m in re.finditer(r'[\[{]', raw):
+    try:
+        d = json.loads(raw[m.start():])
+    except (json.JSONDecodeError, ValueError):
+        continue
     icons = {'success': '✅', 'failed': '❌', 'cancelled': '⏹️', 'running': '🔄', 'pending': '⏳'}
     for stage in d.get('stages', []):
         si = icons.get(stage.get('status', ''), '❓')
@@ -462,8 +464,7 @@ try:
         for job in stage.get('jobs', []):
             ji = icons.get(job.get('status', ''), '❓')
             print(f'      {ji} {job[\"name\"]}')
-except:
-    pass
+    break
 " <<< "$status_out" 2>/dev/null
   echo ""
 }
@@ -511,10 +512,11 @@ do_verify() {
   build_node_job_id=$(python3 -c "
 import json, sys, re
 raw = sys.stdin.read()
-m = re.search(r'[\[{]', raw)
-if m: raw = raw[m.start():]
-try:
-    d = json.loads(raw)
+for m in re.finditer(r'[\[{]', raw):
+    try:
+        d = json.loads(raw[m.start():])
+    except (json.JSONDecodeError, ValueError):
+        continue
     for stage in d.get('stages', []):
         if stage.get('name') == 'build':
             for job in stage.get('jobs', []):
@@ -522,8 +524,8 @@ try:
                     print(job['id'])
                     sys.exit(0)
     print('')
-except:
-    print('')
+    sys.exit(0)
+print('')
 " <<< "$status_out" 2>/dev/null)
 
   if [ -z "$build_node_job_id" ]; then
@@ -541,26 +543,30 @@ except:
   blob_hash=$(python3 -c "
 import json, sys, re
 raw = sys.stdin.read()
-m = re.search(r'[\[{]', raw)
-if m: raw = raw[m.start():]
-try:
-    d = json.loads(raw)
-    # KV get returns {key, value, ...} — value is the job JSON string
-    job_str = d.get('value', '')
-    job = json.loads(job_str)
-    data = job.get('result', {}).get('Success', {}).get('data', {})
-    for artifact in data.get('artifacts', []):
-        if 'aspen-node' in artifact.get('path', ''):
-            print(artifact.get('blob_hash', ''))
-            sys.exit(0)
-    # Fallback: try uploaded_store_paths
-    for sp in data.get('uploaded_store_paths', []):
-        if sp.get('blob_hash'):
-            print(sp['blob_hash'])
-            sys.exit(0)
-    print('')
-except:
-    print('')
+for m in re.finditer(r'[\[{]', raw):
+    try:
+        d = json.loads(raw[m.start():])
+    except (json.JSONDecodeError, ValueError):
+        continue
+    try:
+        # KV get returns {key, value, ...} — value is the job JSON string
+        job_str = d.get('value', '')
+        job = json.loads(job_str)
+        data = job.get('result', {}).get('Success', {}).get('data', {})
+        for artifact in data.get('artifacts', []):
+            if 'aspen-node' in artifact.get('path', ''):
+                print(artifact.get('blob_hash', ''))
+                sys.exit(0)
+        # Fallback: try uploaded_store_paths
+        for sp in data.get('uploaded_store_paths', []):
+            if sp.get('blob_hash'):
+                print(sp['blob_hash'])
+                sys.exit(0)
+        print('')
+    except:
+        print('')
+    sys.exit(0)
+print('')
 " <<< "$job_data" 2>/dev/null)
 
   if [ -z "$blob_hash" ]; then
@@ -574,20 +580,24 @@ except:
     output_path=$(python3 -c "
 import json, sys, re
 raw = sys.stdin.read()
-m = re.search(r'[\[{]', raw)
-if m: raw = raw[m.start():]
-try:
-    d = json.loads(raw)
-    job_str = d.get('value', '')
-    job = json.loads(job_str)
-    data = job.get('result', {}).get('Success', {}).get('data', {})
-    paths = data.get('output_paths', [])
-    if paths:
-        print(paths[0])
-    else:
+for m in re.finditer(r'[\[{]', raw):
+    try:
+        d = json.loads(raw[m.start():])
+    except (json.JSONDecodeError, ValueError):
+        continue
+    try:
+        job_str = d.get('value', '')
+        job = json.loads(job_str)
+        data = job.get('result', {}).get('Success', {}).get('data', {})
+        paths = data.get('output_paths', [])
+        if paths:
+            print(paths[0])
+        else:
+            print('')
+    except:
         print('')
-except:
-    print('')
+    sys.exit(0)
+print('')
 " <<< "$job_data" 2>/dev/null)
 
     if [ -n "$output_path" ] && [ -f "$output_path/bin/aspen-node" ]; then
@@ -621,20 +631,24 @@ except:
   output_path=$(python3 -c "
 import json, sys, re
 raw = sys.stdin.read()
-m = re.search(r'[\[{]', raw)
-if m: raw = raw[m.start():]
-try:
-    d = json.loads(raw)
-    job_str = d.get('value', '')
-    job = json.loads(job_str)
-    data = job.get('result', {}).get('Success', {}).get('data', {})
-    paths = data.get('output_paths', [])
-    if paths:
-        print(paths[0])
-    else:
+for m in re.finditer(r'[\[{]', raw):
+    try:
+        d = json.loads(raw[m.start():])
+    except (json.JSONDecodeError, ValueError):
+        continue
+    try:
+        job_str = d.get('value', '')
+        job = json.loads(job_str)
+        data = job.get('result', {}).get('Success', {}).get('data', {})
+        paths = data.get('output_paths', [])
+        if paths:
+            print(paths[0])
+        else:
+            print('')
+    except:
         print('')
-except:
-    print('')
+    sys.exit(0)
+print('')
 " <<< "$job_data" 2>/dev/null)
 
   if [ -n "$output_path" ] && [ -f "$output_path/bin/aspen-node" ]; then
