@@ -271,12 +271,16 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
         cache_public_key,
     };
 
-    // Create worker with RPC blob store for workspace seeding
-    let _worker = LocalExecutorWorker::with_blob_store(worker_config, rpc_blob_store);
+    // Create worker with RPC blob store for workspace seeding.
+    // The log sink enables real-time streaming: log messages from execution
+    // are forwarded to a bridge task that writes chunks to cluster KV via RPC.
+    let (log_sink_tx, log_sink_rx) = tokio::sync::mpsc::channel::<aspen_ci::LogMessage>(2048);
+    let mut _worker = LocalExecutorWorker::with_blob_store(worker_config, rpc_blob_store);
+    _worker.set_log_sink(log_sink_tx);
 
     info!(
         workspace_dir = %workspace_dir.display(),
-        "LocalExecutorWorker created for CI job execution (with RPC blob store)"
+        "LocalExecutorWorker created for CI job execution (with RPC blob store + log streaming)"
     );
 
     // Register worker with the cluster
@@ -311,6 +315,20 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
     let worker_for_executor = _worker;
     let rpc_client_clone = Arc::new(rpc_client);
     let rpc_for_poll = rpc_client_clone.clone();
+
+    // Shared state for the log bridge: (run_id, job_id) of the active job.
+    // Set before execution, cleared after. The log bridge task reads this
+    // to know which KV prefix to write log chunks to.
+    let active_log_job: Arc<tokio::sync::Mutex<Option<(String, String)>>> = Arc::new(tokio::sync::Mutex::new(None));
+    let active_log_job_for_bridge = active_log_job.clone();
+    let rpc_for_logs = rpc_client_clone.clone();
+
+    // Spawn long-lived log bridge task: reads LogMessages from the sink,
+    // buffers them, and flushes to cluster KV via BatchWrite RPC.
+    // Mirrors NixBuildWorker's log_bridge with 500ms flush interval / 8KB threshold.
+    tokio::spawn(async move {
+        log_bridge_rpc(log_sink_rx, active_log_job_for_bridge, rpc_for_logs).await;
+    });
 
     let polling_task = tokio::spawn(async move {
         let mut poll_interval = tokio::time::interval(Duration::from_secs(5));
@@ -444,20 +462,23 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                     dependency_failure_policy: DependencyFailurePolicy::default(),
                                 };
 
+                                // Signal the log bridge with the active job's run_id + job_id
+                                // so it knows where to write log chunks in cluster KV.
+                                if let Some(ref rid) = run_id_for_logs {
+                                    *active_log_job.lock().await =
+                                        Some((rid.clone(), job_info.job_id.clone()));
+                                }
+
                                 let start_time = std::time::Instant::now();
                                 let job_result = worker_for_executor.execute(job).await;
                                 let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
-                                // Stream logs to cluster KV so `ci logs --follow` can see them.
-                                // The host NixBuildWorker writes chunks during execution, but VM
-                                // workers only have the final output. Write it as log chunks via RPC.
-                                if let Some(ref rid) = run_id_for_logs {
-                                    write_job_logs_to_cluster(
-                                        &rpc_for_poll,
-                                        rid,
-                                        &job_info.job_id,
-                                        &job_result,
-                                    ).await;
+                                // Clear active job and give the log bridge a moment to
+                                // flush remaining buffered output before we report completion.
+                                if run_id_for_logs.is_some() {
+                                    *active_log_job.lock().await = None;
+                                    // Brief yield to let the log bridge flush its buffer
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
                                 }
 
                                 let (is_success, error_message, output_data) = match &job_result {
@@ -678,120 +699,223 @@ fn transform_nix_payload(job_spec: &mut aspen_jobs::JobSpec) -> std::result::Res
 }
 
 #[cfg(feature = "ci")]
-/// Write job output as log chunks to the cluster KV via RPC.
+/// Real-time log bridge: reads LogMessages from the sink, buffers them,
+/// and flushes to cluster KV via BatchWrite RPC every 500ms or 8KB.
 ///
-/// This enables `ci logs --follow` to show output from VM-executed jobs.
-/// The host's NixBuildWorker streams logs in real-time via direct KV writes,
-/// but VM workers only have the final output. We write it as log chunks
-/// matching the same KV schema so the CLI can read them.
-async fn write_job_logs_to_cluster(
+/// Mirrors `NixBuildWorker::log_bridge` but uses RPC instead of direct KV.
+/// The `active_job` mutex tells the bridge which run_id/job_id to write to.
+/// When `None`, messages are discarded (no active job with log streaming).
+async fn log_bridge_rpc(
+    mut log_rx: tokio::sync::mpsc::Receiver<aspen_ci::LogMessage>,
+    active_job: Arc<tokio::sync::Mutex<Option<(String, String)>>>,
+    rpc_client: Arc<aspen_client::AspenClient>,
+) {
+    use std::time::Duration;
+
+    /// Flush when buffer exceeds this size.
+    const FLUSH_THRESHOLD: usize = 8 * 1024;
+    /// Flush interval for real-time streaming even with sparse output.
+    const FLUSH_INTERVAL_MS: u64 = 500;
+
+    let mut buffer = String::new();
+    let mut chunk_index: u32 = 0;
+    let mut current_job: Option<(String, String)> = None;
+    let mut flush_interval = tokio::time::interval(Duration::from_millis(FLUSH_INTERVAL_MS));
+    flush_interval.tick().await; // skip immediate first tick
+
+    loop {
+        tokio::select! {
+            biased;
+
+            msg = log_rx.recv() => {
+                match msg {
+                    Some(log_msg) => {
+                        // Check if we have an active job to stream for
+                        let job_info = active_job.lock().await.clone();
+                        if job_info.is_none() {
+                            continue;
+                        }
+                        let job_info = job_info.unwrap();
+
+                        // If the job changed, flush previous buffer and reset
+                        if current_job.as_ref() != Some(&job_info) {
+                            if !buffer.is_empty()
+                                && let Some(ref prev) = current_job
+                            {
+                                flush_log_chunk_rpc(
+                                    &rpc_client, &prev.0, &prev.1,
+                                    &mut chunk_index, &mut buffer,
+                                ).await;
+                                write_log_completion_marker_rpc(
+                                    &rpc_client, &prev.0, &prev.1, chunk_index,
+                                ).await;
+                            }
+                            current_job = Some(job_info.clone());
+                            chunk_index = 0;
+                            buffer.clear();
+                        }
+
+                        // Append to buffer
+                        match log_msg {
+                            aspen_ci::LogMessage::Stdout(data) |
+                            aspen_ci::LogMessage::Stderr(data) => {
+                                buffer.push_str(&data);
+                            }
+                            _ => {}
+                        }
+
+                        // Flush when buffer exceeds threshold
+                        if buffer.len() >= FLUSH_THRESHOLD {
+                            flush_log_chunk_rpc(
+                                &rpc_client, &job_info.0, &job_info.1,
+                                &mut chunk_index, &mut buffer,
+                            ).await;
+                        }
+                    }
+                    None => {
+                        // Channel closed — worker shutting down
+                        break;
+                    }
+                }
+            }
+            _ = flush_interval.tick() => {
+                // Periodic flush for real-time streaming
+                if !buffer.is_empty()
+                    && let Some(ref job) = current_job
+                {
+                    flush_log_chunk_rpc(
+                        &rpc_client, &job.0, &job.1,
+                        &mut chunk_index, &mut buffer,
+                    ).await;
+                }
+
+                // Check if the active job was cleared (execution finished).
+                // If so, flush remaining buffer and write completion marker.
+                let job_info = active_job.lock().await.clone();
+                if job_info.is_none() && current_job.is_some() {
+                    if !buffer.is_empty()
+                        && let Some(ref job) = current_job
+                    {
+                        flush_log_chunk_rpc(
+                            &rpc_client, &job.0, &job.1,
+                            &mut chunk_index, &mut buffer,
+                        ).await;
+                    }
+                    if let Some(ref job) = current_job {
+                        write_log_completion_marker_rpc(
+                            &rpc_client, &job.0, &job.1, chunk_index,
+                        ).await;
+                    }
+                    current_job = None;
+                    chunk_index = 0;
+                }
+            }
+        }
+    }
+
+    // Final flush on shutdown
+    if !buffer.is_empty()
+        && let Some(ref job) = current_job
+    {
+        flush_log_chunk_rpc(&rpc_client, &job.0, &job.1, &mut chunk_index, &mut buffer).await;
+        write_log_completion_marker_rpc(&rpc_client, &job.0, &job.1, chunk_index).await;
+    }
+}
+
+#[cfg(feature = "ci")]
+/// Flush a buffered log chunk to cluster KV via BatchWrite RPC.
+async fn flush_log_chunk_rpc(
     rpc_client: &aspen_client::AspenClient,
     run_id: &str,
     job_id: &str,
-    job_result: &aspen_jobs::JobResult,
+    chunk_index: &mut u32,
+    buffer: &mut String,
 ) {
     use aspen_client_api::BatchWriteOperation;
     use aspen_client_api::ClientRpcRequest;
 
-    // KV prefix matching NixBuildWorker's log_bridge
     const CI_LOG_KV_PREFIX: &str = "_ci:logs:";
-    const CI_LOG_COMPLETE_MARKER: &str = "__complete__";
-    const MAX_CHUNK_SIZE: usize = 8 * 1024;
-
-    // Extract log content from the result
-    let log_content = match job_result {
-        aspen_jobs::JobResult::Success(output) => {
-            // Try build_log metadata first (NixBuildWorker style), then stderr, then stdout
-            output
-                .metadata
-                .get("build_log")
-                .cloned()
-                .or_else(|| {
-                    output.data.get("stderr").and_then(|v| {
-                        // Handle OutputRef format
-                        v.get("content").and_then(|c| c.as_str()).or_else(|| v.as_str()).map(String::from)
-                    })
-                })
-                .or_else(|| {
-                    output.data.get("stdout").and_then(|v| {
-                        v.get("content").and_then(|c| c.as_str()).or_else(|| v.as_str()).map(String::from)
-                    })
-                })
-                .unwrap_or_default()
-        }
-        aspen_jobs::JobResult::Failure(failure) => failure.reason.clone(),
-        aspen_jobs::JobResult::Cancelled => "Job cancelled".to_string(),
-    };
-
-    if log_content.is_empty() {
-        debug!(run_id, job_id, "no log content to write");
-        return;
-    }
 
     let now_ms =
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
 
-    // Split into chunks and write via BatchWrite RPC
-    let mut chunk_index: u32 = 0;
-    let mut operations = Vec::new();
-
-    for chunk_text in log_content.as_bytes().chunks(MAX_CHUNK_SIZE) {
-        let content = String::from_utf8_lossy(chunk_text).to_string();
-        let key = format!("{CI_LOG_KV_PREFIX}{run_id}:{job_id}:{chunk_index:010}");
-        let chunk_json = serde_json::json!({
-            "index": chunk_index,
-            "content": content,
-            "timestamp_ms": now_ms,
-        });
-        if let Ok(value) = serde_json::to_string(&chunk_json) {
-            operations.push(BatchWriteOperation::Set {
-                key,
-                value: value.into_bytes(),
-            });
-        }
-        chunk_index += 1;
-    }
-
-    // Add completion marker
-    let marker_key = format!("{CI_LOG_KV_PREFIX}{run_id}:{job_id}:{CI_LOG_COMPLETE_MARKER}");
-    let marker_json = serde_json::json!({
-        "total_chunks": chunk_index,
+    let key = format!("{CI_LOG_KV_PREFIX}{run_id}:{job_id}:{:010}", *chunk_index);
+    let chunk_json = serde_json::json!({
+        "index": *chunk_index,
+        "content": buffer.as_str(),
         "timestamp_ms": now_ms,
-        "status": "done",
     });
-    if let Ok(value) = serde_json::to_string(&marker_json) {
-        operations.push(BatchWriteOperation::Set {
-            key: marker_key,
-            value: value.into_bytes(),
-        });
-    }
 
-    // Send all chunks in a single BatchWrite (up to 100 operations)
-    // For very large logs, split into multiple batches
-    for batch in operations.chunks(100) {
+    if let Ok(value) = serde_json::to_string(&chunk_json) {
         let write_request = ClientRpcRequest::BatchWrite {
-            operations: batch.to_vec(),
+            operations: vec![BatchWriteOperation::Set {
+                key: key.clone(),
+                value: value.into_bytes(),
+            }],
         };
         match rpc_client.send(write_request).await {
             Ok(_) => {
-                debug!(run_id, job_id, chunks = batch.len(), "wrote log chunks to cluster KV");
+                debug!(run_id, job_id, chunk = *chunk_index, bytes = buffer.len(), "flushed log chunk to cluster KV");
+            }
+            Err(e) => {
+                warn!(
+                    run_id,
+                    job_id,
+                    chunk = *chunk_index,
+                    error = %e,
+                    "failed to flush log chunk to cluster KV"
+                );
+            }
+        }
+    }
+
+    *chunk_index += 1;
+    buffer.clear();
+}
+
+#[cfg(feature = "ci")]
+/// Write the log completion marker to cluster KV.
+async fn write_log_completion_marker_rpc(
+    rpc_client: &aspen_client::AspenClient,
+    run_id: &str,
+    job_id: &str,
+    total_chunks: u32,
+) {
+    use aspen_client_api::BatchWriteOperation;
+    use aspen_client_api::ClientRpcRequest;
+
+    const CI_LOG_KV_PREFIX: &str = "_ci:logs:";
+    const CI_LOG_COMPLETE_MARKER: &str = "__complete__";
+
+    let now_ms =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+
+    let marker_key = format!("{CI_LOG_KV_PREFIX}{run_id}:{job_id}:{CI_LOG_COMPLETE_MARKER}");
+    let marker_json = serde_json::json!({
+        "total_chunks": total_chunks,
+        "timestamp_ms": now_ms,
+        "status": "done",
+    });
+
+    if let Ok(value) = serde_json::to_string(&marker_json) {
+        let write_request = ClientRpcRequest::BatchWrite {
+            operations: vec![BatchWriteOperation::Set {
+                key: marker_key,
+                value: value.into_bytes(),
+            }],
+        };
+        match rpc_client.send(write_request).await {
+            Ok(_) => {
+                info!(run_id, job_id, total_chunks, "wrote log completion marker to cluster KV");
             }
             Err(e) => {
                 warn!(
                     run_id,
                     job_id,
                     error = %e,
-                    "failed to write log chunks to cluster KV"
+                    "failed to write log completion marker"
                 );
             }
         }
     }
-
-    info!(
-        run_id,
-        job_id,
-        total_chunks = chunk_index,
-        total_bytes = log_content.len(),
-        "VM job logs written to cluster KV"
-    );
 }

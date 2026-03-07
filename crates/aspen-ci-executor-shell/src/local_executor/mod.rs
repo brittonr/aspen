@@ -36,10 +36,19 @@ use async_trait::async_trait;
 pub use config::LocalExecutorWorkerConfig;
 pub use output::OutputRef;
 pub use payload::LocalExecutorPayload;
+use tokio::sync::mpsc;
 use tracing::error;
 use tracing::info;
 
 use crate::agent::executor::Executor;
+use crate::agent::protocol::LogMessage;
+
+/// External log sink for real-time log streaming.
+///
+/// When set on `LocalExecutorWorker`, log messages (stdout/stderr chunks)
+/// are forwarded to this sender during execution. This enables VM workers
+/// to stream build output to the cluster in real-time.
+pub type LogSink = mpsc::Sender<LogMessage>;
 
 /// Local executor worker.
 ///
@@ -55,6 +64,13 @@ pub struct LocalExecutorWorker {
 
     /// Optional blob store for workspace seeding and artifact storage.
     pub(super) blob_store: Option<Arc<dyn BlobStore>>,
+
+    /// Optional external log sink for real-time streaming.
+    ///
+    /// When set, log messages are forwarded to this sender during execution,
+    /// in addition to the internal log consumer. This enables VM workers to
+    /// stream build output to the cluster KV in real-time via RPC.
+    pub(super) log_sink: Option<LogSink>,
 }
 
 impl LocalExecutorWorker {
@@ -65,6 +81,7 @@ impl LocalExecutorWorker {
             config,
             executor,
             blob_store: None,
+            log_sink: None,
         }
     }
 
@@ -75,7 +92,17 @@ impl LocalExecutorWorker {
             config,
             executor,
             blob_store: Some(blob_store),
+            log_sink: None,
         }
+    }
+
+    /// Set an external log sink for real-time log streaming.
+    ///
+    /// When set, all stdout/stderr log messages during job execution are
+    /// forwarded to this sender. Used by VM workers to stream build output
+    /// to the cluster KV store via RPC.
+    pub fn set_log_sink(&mut self, sink: LogSink) {
+        self.log_sink = Some(sink);
     }
 }
 

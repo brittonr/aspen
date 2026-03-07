@@ -11,7 +11,7 @@
 //!   CI         → aspen-ci-handler (CiServiceExecutor, 11 ops)
 //!   Docs       → aspen-docs-handler (DocsServiceExecutor, 13 ops)
 //!   Forge      → aspen-forge-handler (ForgeServiceExecutor, 15 ops)
-//!   Job/Worker → aspen-job-handler (JobServiceExecutor, 10 ops)
+//!   Job/Worker → aspen-job-handler (JobServiceExecutor, 12 ops)
 //!   Secrets    → aspen-secrets-handler (SecretsServiceExecutor, 15 ops)
 //!
 //! **WASM plugins** (third-party sandboxed):

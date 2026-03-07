@@ -3,9 +3,9 @@
 //! Provides `JobServiceExecutor` implementing the typed `ServiceExecutor`
 //! trait. Registered as a native handler via `submit_handler_factory!`.
 //!
-//! Handles 10 operations:
+//! Handles 12 operations:
 //! - Job lifecycle: Submit, Get, List, Cancel, UpdateProgress, QueueStats
-//! - Worker management: Status, Register, Heartbeat, Deregister
+//! - Worker management: Status, Register, Heartbeat, Deregister, PollJobs, CompleteJob
 
 mod executor;
 

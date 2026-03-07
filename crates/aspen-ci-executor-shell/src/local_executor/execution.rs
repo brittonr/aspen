@@ -333,7 +333,38 @@ impl LocalExecutorWorker {
             "executing job"
         );
 
-        let log_consumer = spawn_log_consumer(job_id.to_string(), log_rx);
+        // If an external log sink is set (e.g., VM worker streaming to cluster),
+        // interpose a forwarder that sends messages to both the internal consumer
+        // and the external sink.
+        let log_consumer = if let Some(ref sink) = self.log_sink {
+            let (fwd_tx, fwd_rx) = mpsc::channel::<LogMessage>(1024);
+            let sink_clone = sink.clone();
+            let fwd_job_id = job_id.to_string();
+
+            // Forwarder task: reads from log_rx, sends to both fwd_tx (internal) and sink (external)
+            tokio::spawn(async move {
+                let mut log_rx = log_rx;
+                while let Some(msg) = log_rx.recv().await {
+                    // Forward to external sink (best-effort, don't block execution)
+                    if let Err(e) = sink_clone.try_send(msg.clone()) {
+                        tracing::debug!(
+                            job_id = %fwd_job_id,
+                            error = %e,
+                            "log sink send failed (backpressure or closed)"
+                        );
+                    }
+                    // Forward to internal consumer
+                    if fwd_tx.send(msg).await.is_err() {
+                        break;
+                    }
+                }
+            });
+
+            spawn_log_consumer(job_id.to_string(), fwd_rx)
+        } else {
+            spawn_log_consumer(job_id.to_string(), log_rx)
+        };
+
         let exec_result = self.executor.execute(request, log_tx).await;
 
         // Log consumer task is non-critical; if it panics, empty logs are acceptable

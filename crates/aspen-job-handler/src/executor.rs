@@ -74,6 +74,8 @@ impl ServiceExecutor for JobServiceExecutor {
             "WorkerRegister",
             "WorkerHeartbeat",
             "WorkerDeregister",
+            "WorkerPollJobs",
+            "WorkerCompleteJob",
         ]
     }
 
@@ -125,6 +127,34 @@ impl ServiceExecutor for JobServiceExecutor {
                 self.handle_worker_heartbeat(worker_id, active_jobs).await
             }
             ClientRpcRequest::WorkerDeregister { worker_id } => self.handle_worker_deregister(worker_id).await,
+            ClientRpcRequest::WorkerPollJobs {
+                worker_id,
+                job_types,
+                max_jobs,
+                visibility_timeout_secs,
+            } => self.handle_worker_poll_jobs(worker_id, job_types, max_jobs, visibility_timeout_secs).await,
+            ClientRpcRequest::WorkerCompleteJob {
+                worker_id,
+                job_id,
+                receipt_handle,
+                execution_token,
+                is_success,
+                error_message,
+                output_data,
+                processing_time_ms,
+            } => {
+                self.handle_worker_complete_job(
+                    worker_id,
+                    job_id,
+                    receipt_handle,
+                    execution_token,
+                    is_success,
+                    error_message,
+                    output_data,
+                    processing_time_ms,
+                )
+                .await
+            }
             _ => anyhow::bail!("unhandled request for jobs service"),
         }
     }
@@ -616,6 +646,111 @@ impl JobServiceExecutor {
             })),
         }
     }
+
+    async fn handle_worker_poll_jobs(
+        &self,
+        worker_id: String,
+        _job_types: Vec<String>,
+        max_jobs: usize,
+        visibility_timeout_secs: u64,
+    ) -> Result<ClientRpcResponse> {
+        use std::time::Duration;
+
+        let max_jobs_u32 = u32::try_from(max_jobs.min(100)).unwrap_or(1).max(1);
+        let visibility_timeout = Duration::from_secs(visibility_timeout_secs.min(3600));
+
+        // Dequeue jobs from the job manager's priority queues.
+        // Type filtering is left to the worker — the manager dequeues across
+        // all priority levels (critical → high → normal → low).
+        let dequeued = match self.job_manager.dequeue_jobs(&worker_id, max_jobs_u32, visibility_timeout).await {
+            Ok(items) => items,
+            Err(e) => {
+                debug!(worker_id, error = %e, "dequeue_jobs failed");
+                return Ok(ClientRpcResponse::WorkerPollJobsResult(WorkerPollJobsResultResponse {
+                    is_success: false,
+                    worker_id,
+                    jobs: vec![],
+                    error: Some(e.to_string()),
+                }));
+            }
+        };
+
+        let now_ms =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+
+        let jobs: Vec<WorkerJobInfo> = dequeued
+            .into_iter()
+            .map(|(dequeued_item, job)| {
+                let job_spec_json = serde_json::to_string(&job.spec).unwrap_or_else(|_| "{}".to_string());
+                let execution_token = job.execution_token.clone().unwrap_or_default();
+                let created_at_ms = job.created_at.timestamp_millis() as u64;
+                let visibility_timeout_ms = now_ms.saturating_add(visibility_timeout_secs.saturating_mul(1000));
+
+                WorkerJobInfo {
+                    job_id: job.id.to_string(),
+                    job_type: job.spec.job_type.clone(),
+                    job_spec_json,
+                    priority: format!("{:?}", job.spec.config.priority),
+                    created_at_ms,
+                    visibility_timeout_ms,
+                    receipt_handle: dequeued_item.receipt_handle.clone(),
+                    execution_token,
+                }
+            })
+            .collect();
+
+        debug!(worker_id, jobs_count = jobs.len(), "poll_jobs returning jobs");
+
+        Ok(ClientRpcResponse::WorkerPollJobsResult(WorkerPollJobsResultResponse {
+            is_success: true,
+            worker_id,
+            jobs,
+            error: None,
+        }))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn handle_worker_complete_job(
+        &self,
+        worker_id: String,
+        job_id: String,
+        receipt_handle: String,
+        execution_token: String,
+        is_success: bool,
+        error_message: Option<String>,
+        output_data: Option<Vec<u8>>,
+        _processing_time_ms: u64,
+    ) -> Result<ClientRpcResponse> {
+        let jid = JobId::from_string(job_id.clone());
+
+        let result = if is_success {
+            let data = output_data.and_then(|d| serde_json::from_slice(&d).ok()).unwrap_or(serde_json::Value::Null);
+            JobResult::success(data)
+        } else {
+            JobResult::failure(error_message.unwrap_or_else(|| "unknown error".to_string()))
+        };
+
+        match self.job_manager.ack_job(&jid, &receipt_handle, &execution_token, result).await {
+            Ok(()) => {
+                debug!(worker_id, job_id, "job completed successfully");
+                Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
+                    is_success: true,
+                    worker_id,
+                    job_id,
+                    error: None,
+                }))
+            }
+            Err(e) => {
+                warn!(worker_id, job_id, error = %e, "job completion failed");
+                Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
+                    is_success: false,
+                    worker_id,
+                    job_id,
+                    error: Some(e.to_string()),
+                }))
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -631,11 +766,13 @@ mod tests {
         "WorkerRegister",
         "WorkerHeartbeat",
         "WorkerDeregister",
+        "WorkerPollJobs",
+        "WorkerCompleteJob",
     ];
 
     #[test]
     fn handles_count() {
-        assert_eq!(EXPECTED_HANDLES.len(), 10, "job handler should handle 10 operations");
+        assert_eq!(EXPECTED_HANDLES.len(), 12, "job handler should handle 12 operations");
     }
 
     #[test]
