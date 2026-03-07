@@ -40,8 +40,8 @@
     "openraft": "path+file:///home/brittonr/git/aspen/openraft/openraft#0.10.0",
     "openraft-macros": "path+file:///home/brittonr/git/aspen/openraft/macros#openraft-macros@0.10.0"
   },
-  "cargoLockHash": "a9c0480cc6460e273a1b8fac4351ec16995ee428688019ce6a9fdbc9f74bcff0",
-  "inputsHash": "dc68c34a142eb67fe7bc60056ededf132287ce5fd0c5ed6afee5d44cb2aa9385",
+  "cargoLockHash": "a8fc9fe7a029751c58264aecc5fb410f31ff57cb22a6a3d14a69f5ef8c93687a",
+  "inputsHash": "f0a18925e9c464a1d3a4bcf76bbb08f985930ba0b6ce5ddfe79c03440849a542",
   "crates": {
     "path+file:///home/brittonr/git/aspen/crates/aspen-auth#0.1.0": {
       "crateName": "aspen-auth",
@@ -230,13 +230,7 @@
         "type": "local",
         "path": "crates/aspen-cli"
       },
-      "features": [
-        "automerge",
-        "ci",
-        "forge",
-        "secrets",
-        "sql"
-      ],
+      "features": [],
       "dependencies": [
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
@@ -3455,7 +3449,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "R\u00fcdiger Klaehn <rklaehn@protonmail.com>"
+        "Rüdiger Klaehn <rklaehn@protonmail.com>"
       ],
       "description": "BLAKE3 verfiied streaming with custom chunk groups and range set queries",
       "license": "MIT OR Apache-2.0",
@@ -3628,7 +3622,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "R\u00fcdiger Klaehn <rklaehn@protonmail.com>"
+        "Rüdiger Klaehn <rklaehn@protonmail.com>"
       ],
       "description": "Minimum comparison merge of two sorted sequences with random access",
       "homepage": "https://github.com/rklaehn",
@@ -4519,7 +4513,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "Joel Ho\u0308ner <athre0z@zyantific.com>"
+        "Joel Höner <athre0z@zyantific.com>"
       ],
       "description": "Colorful panic backtraces",
       "license": "MIT OR Apache-2.0",
@@ -6839,7 +6833,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "Fowler\u2013Noll\u2013Vo hash function",
+      "description": "Fowler–Noll–Vo hash function",
       "license": "Apache-2.0 / MIT",
       "repository": "https://github.com/servo/rust-fnv"
     },
@@ -7597,7 +7591,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "Bart\u0142omiej Kami\u0144ski <fizyk20@gmail.com>",
+        "Bartłomiej Kamiński <fizyk20@gmail.com>",
         "Aaron Trent <novacrazy@gmail.com>"
       ],
       "description": "Generic types implementing functionality of arrays",
@@ -9463,7 +9457,7 @@
       "links": null,
       "authors": [
         "Andrew Straw <strawman@astraw.com>",
-        "Ren\u00e9 Kijewski <rene.kijewski@fu-berlin.de>",
+        "René Kijewski <rene.kijewski@fu-berlin.de>",
         "Ryan Lopopolo <rjl@hyperbo.la>"
       ],
       "description": "get the IANA time zone for the current system",
@@ -10139,7 +10133,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "R\u00fcdiger Klaehn <rklaehn@protonmail.com>"
+        "Rüdiger Klaehn <rklaehn@protonmail.com>"
       ],
       "description": "Build a vec from a vec, in place",
       "license": "MIT OR Apache-2.0",
@@ -11402,7 +11396,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "R\u00fcdiger Klaehn <rklaehn@protonmail.com>"
+        "Rüdiger Klaehn <rklaehn@protonmail.com>"
       ],
       "description": "Macros for irpc",
       "license": "Apache-2.0/MIT",
@@ -11495,7 +11489,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "R\u00fcdiger Klaehn <rklaehn@protonmail.com>",
+        "Rüdiger Klaehn <rklaehn@protonmail.com>",
         "n0 team"
       ],
       "description": "A streaming rpc system based on quic",
@@ -11613,7 +11607,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "Marvin L\u00f6bel <loebel.marvin@gmail.com>"
+        "Marvin Löbel <loebel.marvin@gmail.com>"
       ],
       "description": "A macro for declaring lazily evaluated statics in Rust.",
       "license": "MIT OR Apache-2.0",
@@ -11953,7 +11947,7 @@
       "authors": [
         "bluss"
       ],
-      "description": "Collection \u201cliteral\u201d macros for HashMap, HashSet, BTreeMap, and BTreeSet.",
+      "description": "Collection “literal” macros for HashMap, HashSet, BTreeMap, and BTreeSet.",
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/bluss/maplit"
     },
@@ -12309,7 +12303,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "Philipp Kr\u00fcger <philipp@n0.computer>",
+        "Philipp Krüger <philipp@n0.computer>",
         "n0 team"
       ],
       "description": "Number 0's way of doing rust futures. Re-exports what we think are useful abstractions and good implementations.",
@@ -12443,7 +12437,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "R\u00fcdiger Klaehn <rklaehn@protonmail.com>"
+        "Rüdiger Klaehn <rklaehn@protonmail.com>"
       ],
       "description": "Macros to provide conversions for nested enums",
       "license": "MIT OR Apache-2.0",
@@ -14219,7 +14213,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "Bastian K\u00f6cher <git@kchr.de>"
+        "Bastian Köcher <git@kchr.de>"
       ],
       "description": "Replacement for crate (macro_rules keyword) in proc-macros ",
       "license": "MIT OR Apache-2.0",
@@ -14798,7 +14792,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "R\u00fcdiger Klaehn <rklaehn@protonmail.com>"
+        "Rüdiger Klaehn <rklaehn@protonmail.com>"
       ],
       "description": "Sets and maps of ranges, backed by smallvec",
       "homepage": "https://github.com/rklaehn",
@@ -16704,7 +16698,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "Tomasz Mi\u0105sko <tomasz.miasko@gmail.com>"
+        "Tomasz Miąsko <tomasz.miasko@gmail.com>"
       ],
       "description": "Process command line according to parsing rules of UNIX shell",
       "license": "MIT/Apache-2.0",
@@ -17572,7 +17566,7 @@
         "Danny Guo <danny@dannyguo.com>",
         "maxbachmann <oss@maxbachmann.de>"
       ],
-      "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein, OSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and S\u00f8rensen-Dice. ",
+      "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein, OSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and Sørensen-Dice. ",
       "homepage": "https://github.com/rapidfuzz/strsim-rs",
       "license": "MIT",
       "repository": "https://github.com/rapidfuzz/strsim-rs"

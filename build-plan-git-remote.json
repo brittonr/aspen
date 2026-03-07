@@ -45,8 +45,8 @@
     "openraft": "path+file:///home/brittonr/git/aspen/openraft/openraft#0.10.0",
     "openraft-macros": "path+file:///home/brittonr/git/aspen/openraft/macros#openraft-macros@0.10.0"
   },
-  "cargoLockHash": "a9c0480cc6460e273a1b8fac4351ec16995ee428688019ce6a9fdbc9f74bcff0",
-  "inputsHash": "48b900f5f02bae81119e332b97cdd8ce58c7f4af1088a546320482e552906e03",
+  "cargoLockHash": "a8fc9fe7a029751c58264aecc5fb410f31ff57cb22a6a3d14a69f5ef8c93687a",
+  "inputsHash": "cef1453e1a3d1d502ca0ed114ed3a843a10727d1ab3aeb08b316b710c8959aa2",
   "crates": {
     "path+file:///home/brittonr/git/aspen#0.1.0": {
       "crateName": "aspen",
