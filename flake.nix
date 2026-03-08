@@ -687,8 +687,11 @@
             $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
-          # Strip git source lines from Cargo.lock for deps converted to path
-          ${pkgs.gnused}/bin/sed -i '/^source = "git+https:\/\/github.com\/n0-computer\/iroh-proxy-utils/d' $out/aspen/Cargo.lock
+          # Strip git source lines from Cargo.lock for ALL deps converted to
+          # path stubs. Without this, crane's vendorCargoDeps tries to git-clone
+          # these repos (creating FODs that need network), which fails in VMs
+          # where DNS/network is unreliable.
+          ${pkgs.gnused}/bin/sed -i '/^source = "git+/d' $out/aspen/Cargo.lock
 
           # Rewrite git deps in all subcrates too
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
@@ -781,8 +784,10 @@
             $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
-          # Strip git source lines from Cargo.lock for deps converted to path
-          ${pkgs.gnused}/bin/sed -i '/^source = "git+https:\/\/github.com\/n0-computer\/iroh-proxy-utils/d' $out/aspen/Cargo.lock
+          # Strip ALL git source lines from Cargo.lock — every git dep is
+          # either stubbed or provided locally, so crane shouldn't create
+          # FODs that need network access.
+          ${pkgs.gnused}/bin/sed -i '/^source = "git+/d' $out/aspen/Cargo.lock
 
           # Rewrite git deps in all subcrates too
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
@@ -3615,8 +3620,8 @@
                       $out/aspen/Cargo.toml
                     ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
-                    # Strip git source lines from Cargo.lock
-                    ${pkgs.gnused}/bin/sed -i '/^source = "git+https:\/\/github.com\/n0-computer\/iroh-proxy-utils/d' $out/aspen/Cargo.lock
+                    # Strip ALL git source lines from Cargo.lock
+                    ${pkgs.gnused}/bin/sed -i '/^source = "git+/d' $out/aspen/Cargo.lock
 
                     # Rewrite git deps in subcrates
                     find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
