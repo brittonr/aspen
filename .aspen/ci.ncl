@@ -47,7 +47,7 @@
           type = 'nix,
           flake_url = ".",
           flake_attr = "checks.x86_64-linux.clippy",
-          timeout_secs = 1800,
+          timeout_secs = 3600,
         },
       ],
     },

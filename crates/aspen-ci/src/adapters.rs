@@ -250,6 +250,10 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
         self.start_pipeline_perform_checkout(&run_id, &event.commit_hash, &checkout_dir).await?;
         self.start_pipeline_prepare_for_build(&run_id, &event.commit_hash, &checkout_dir).await?;
 
+        // Pre-fetch flake inputs into the host nix store so VMs can use them
+        // via the shared virtiofs /nix/.ro-store mount without downloading.
+        self.prefetch_flake_inputs(&run_id, &checkout_dir).await;
+
         let source_hash = self.start_pipeline_create_source_archive(&run_id, &checkout_dir).await;
         let updated_context = self.start_pipeline_build_updated_context(&event, &checkout_dir, source_hash);
         self.orchestrator.update_run_context(&run_id, updated_context).await?;
@@ -341,6 +345,47 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
                 error = %cleanup_err,
                 "Failed to clean up checkout directory after failure"
             );
+        }
+    }
+
+    /// Pre-fetch flake inputs into the host nix store.
+    ///
+    /// Runs `nix flake archive` on the checkout directory to fetch all flake
+    /// inputs (nixpkgs, crane, rust-overlay, etc.) into `/nix/store`. These
+    /// store paths are then available to VMs via the virtiofs `/nix/.ro-store`
+    /// mount, avoiding multi-GB downloads inside VMs.
+    async fn prefetch_flake_inputs(&self, run_id: &str, checkout_dir: &std::path::Path) {
+        let flake_nix = checkout_dir.join("flake.nix");
+        if !flake_nix.exists() {
+            debug!(run_id = %run_id, "No flake.nix in checkout, skipping flake input prefetch");
+            return;
+        }
+
+        info!(run_id = %run_id, checkout_dir = %checkout_dir.display(), "Pre-fetching flake inputs for VM builds");
+
+        match tokio::process::Command::new("nix")
+            .args(["flake", "archive", "--no-write-lock-file", "--accept-flake-config"])
+            .current_dir(checkout_dir)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .await
+        {
+            Ok(output) if output.status.success() => {
+                info!(run_id = %run_id, "Flake inputs pre-fetched into host nix store");
+            }
+            Ok(output) => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warn!(
+                    run_id = %run_id,
+                    exit_code = ?output.status.code(),
+                    stderr = %stderr.chars().take(500).collect::<String>(),
+                    "nix flake archive failed (VMs will download inputs directly)"
+                );
+            }
+            Err(e) => {
+                warn!(run_id = %run_id, error = %e, "Failed to run nix flake archive (nix not in PATH?)");
+            }
         }
     }
 
