@@ -24,8 +24,11 @@
 
     # SNIX - Nix store implementation in Rust
     # Used for content-addressed storage and Nix binary cache integration
+    # Tarball URL avoids git clone during flake evaluation — nix verifies
+    # the narHash from flake.lock against the store path, so VMs with a
+    # shared /nix/store (virtiofs) never hit the network for this input.
     snix-src = {
-      url = "git+https://git.snix.dev/snix/snix.git?rev=180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac";
+      url = "https://git.snix.dev/api/v1/repos/snix/snix/archive/180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac.tar.gz";
       flake = false;
     };
 
