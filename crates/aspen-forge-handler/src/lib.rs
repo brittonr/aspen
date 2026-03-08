@@ -81,7 +81,7 @@ impl HandlerFactory for ForgeHandlerFactory {
             ctx.federation_discovery.clone(),
             ctx.federation_identity.clone(),
             ctx.federation_trust_manager.clone(),
-            #[cfg(feature = "hooks")]
+            #[cfg(all(feature = "hooks", feature = "git-bridge"))]
             ctx.hook_service.clone(),
             ctx.node_id,
         ));
