@@ -28,6 +28,11 @@
   pkgs,
   vmId,
   aspenNodePackage,
+  # Optional: closureInfo for CI build deps. When provided, these store paths
+  # are registered in the VM's nix database at boot so the VM doesn't need
+  # to rebuild FODs (rust toolchain, crate tarballs, etc.) that already exist
+  # on the host's /nix/store (shared via virtiofs).
+  ciBuildClosureInfo ? null,
   ...
 }: {
   # MicroVM hypervisor configuration
@@ -511,4 +516,16 @@
     description = "CI Job Runner";
     # No password - jobs run as root via systemd
   };
+
+  # Register CI build closure in the VM's nix database at boot.
+  # The host's /nix/store is shared via virtiofs (read-only), but the VM's
+  # nix database is empty. Without registration, nix-daemon doesn't know
+  # these paths exist and tries to rebuild FODs (rust toolchain, crate
+  # tarballs), which fails when VM DNS is unreliable.
+  # closureInfo produces a /registration file with nix-store --dump-db format.
+  boot.postBootCommands = lib.mkIf (ciBuildClosureInfo != null) ''
+    if [ -f ${ciBuildClosureInfo}/registration ]; then
+      ${pkgs.nix}/bin/nix-store --load-db < ${ciBuildClosureInfo}/registration
+    fi
+  '';
 }

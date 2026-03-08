@@ -3345,6 +3345,18 @@
               '';
 
               # Build the CI worker VM image (kernel + initrd + NixOS toplevel)
+              # Pre-compute closure info for CI build dependencies.
+              # This registers all build-time store paths (rust toolchain,
+              # vendored crates, build artifacts) in the VM's nix database
+              # so it can reuse them from the host's virtiofs-shared store
+              # without needing network access to rebuild FODs.
+              ciBuildClosureInfo = pkgs.closureInfo {
+                rootPaths = [
+                  ciCargoArtifacts
+                  ciCargoVendorDir
+                ];
+              };
+
               ciVmConfig = nixpkgs.lib.nixosSystem {
                 system = "x86_64-linux";
                 modules = [
@@ -3354,6 +3366,7 @@
                     lib = nixpkgs.lib;
                     vmId = "aspen-ci-vm";
                     aspenNodePackage = bins.aspen-node-vmci;
+                    inherit ciBuildClosureInfo;
                   })
                 ];
               };
