@@ -2014,6 +2014,25 @@
                     ++ [pkgs.cargo-nextest];
                 }
               );
+              # CI build checks — verify binaries compile with CI features.
+              # Uses ciCommonArgs (stubbed git deps, no network needed).
+              build-node = craneLib.buildPackage (
+                ciCommonArgs
+                // {
+                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,proxy";
+                  doCheck = false;
+                }
+              );
+
+              build-cli = craneLib.buildPackage (
+                ciCommonArgs
+                // {
+                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
+                  cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features forge,ci,automerge";
+                  doCheck = false;
+                }
+              );
             }
             # ── Real checks (override stubs when aspen-wasm-plugin available) ──
             // lib.optionalAttrs hasExternalRepos {
@@ -3354,6 +3373,13 @@
                 rootPaths = [
                   ciCargoArtifacts
                   ciCargoVendorDir
+                  # Include build outputs so the VM's nix-daemon recognizes
+                  # all intermediate build products and final binaries.
+                  self.checks.${system}.clippy
+                  self.checks.${system}.build-node
+                  self.checks.${system}.build-cli
+                  self.checks.${system}.nextest-quick
+                  self.checks.${system}.fmt
                 ];
               };
 
