@@ -277,6 +277,16 @@
   # Use mkForce to override the default value from the nix-daemon module.
   systemd.services.nix-daemon.serviceConfig.LimitNOFILE = lib.mkForce 2097152;
 
+  # Mask the host's /nix/store/.links in the overlay upper layer.
+  # The host store has millions of hard links that are visible through the
+  # overlayfs lower layer. If nix-daemon ever scans .links (GC, optimize),
+  # it exhausts the system-wide FD limit traversing them through virtiofs.
+  # Creating an empty .links dir in the upper layer (tmpfs) makes overlayfs
+  # return an empty listing, preventing the FD exhaustion.
+  systemd.services.nix-daemon.serviceConfig.ExecStartPre = lib.mkBefore [
+    "+${pkgs.coreutils}/bin/mkdir -p /nix/.rw-store/store/.links"
+  ];
+
   # Mount points for virtiofs shares
   # These extend the mounts created by microvm.nix from the shares config above
   # neededForBoot = true ensures they're mounted in the initrd before switch-root
