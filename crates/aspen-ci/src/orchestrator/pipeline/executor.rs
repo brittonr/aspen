@@ -422,4 +422,43 @@ mod tests {
         assert_eq!(payload.flake_url, ".");
         assert_eq!(payload.attribute, "packages.x86_64-linux.default");
     }
+
+    /// Regression: run_id must be preserved in NixBuildPayload.
+    ///
+    /// The bug was that `start_pipeline_build_updated_context` created a new
+    /// PipelineContext with empty run_id, which then got serialized into
+    /// NixBuildPayload. Log chunks were written as `_ci:logs::<job>:<chunk>`
+    /// (empty run_id), making them invisible to `ci logs` queries.
+    #[test]
+    fn test_build_nix_payload_preserves_run_id() {
+        let job = test_job_config();
+        let context = test_context();
+
+        let value = build_nix_payload(&job, &context).unwrap();
+        let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
+
+        assert_eq!(
+            payload.run_id,
+            Some("test-run-id".to_string()),
+            "run_id must be preserved from PipelineContext into NixBuildPayload"
+        );
+    }
+
+    /// Verify that empty run_id would cause the log streaming bug.
+    #[test]
+    fn test_build_nix_payload_empty_run_id_detected() {
+        let job = test_job_config();
+        let mut context = test_context();
+        context.run_id = String::new(); // Simulates the bug
+
+        let value = build_nix_payload(&job, &context).unwrap();
+        let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
+
+        // Empty run_id means log keys will have double colon: _ci:logs::<job>:<chunk>
+        assert_eq!(
+            payload.run_id,
+            Some(String::new()),
+            "empty run_id propagates to payload — this was the root cause of the log streaming bug"
+        );
+    }
 }

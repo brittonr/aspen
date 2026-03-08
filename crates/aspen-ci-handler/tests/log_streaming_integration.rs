@@ -291,6 +291,61 @@ async fn test_failed_job_completion_marker() {
     assert!(result.chunks[0].content.contains("ERROR: build failed"));
 }
 
+/// Regression: empty run_id in log keys made logs unretrievable.
+///
+/// The bug was in `start_pipeline_build_updated_context` which created a new
+/// PipelineContext with `run_id: String::new()`, overwriting the run_id set
+/// by `create_early_run`. This caused log chunks to be written as
+/// `_ci:logs::<job_id>:<chunk>` (double colon = empty run_id) instead of
+/// `_ci:logs:<run_id>:<job_id>:<chunk>`.
+///
+/// The handler's `handle_get_job_logs` queries with the real run_id, so logs
+/// written with empty run_id were invisible — always returning "not found".
+#[tokio::test]
+async fn test_empty_run_id_logs_not_found_regression() {
+    let kv = DeterministicKeyValueStore::new();
+
+    // Simulate what the old buggy code did: write logs with empty run_id
+    let mut writer_empty = CiLogWriter::new("".into(), "job-bug".into(), kv.clone());
+    writer_empty.write_line("hidden log", "stdout").await.unwrap();
+    writer_empty.flush().await.unwrap();
+    writer_empty.complete("success").await.unwrap();
+
+    // Querying with the real run_id should NOT find logs written with empty run_id
+    let resp = aspen_ci_handler::handler::logs::handle_get_job_logs(
+        kv.as_ref(),
+        "real-run-id".into(),
+        "job-bug".into(),
+        0,
+        Some(100),
+    )
+    .await
+    .unwrap();
+    let result = unwrap_logs_response(resp);
+    assert!(!result.was_found, "logs with empty run_id should NOT match query with real run_id");
+
+    // Now write logs with the correct run_id (the fix)
+    let mut writer_correct = CiLogWriter::new("real-run-id".into(), "job-fix".into(), kv.clone());
+    writer_correct.write_line("visible log", "stdout").await.unwrap();
+    writer_correct.flush().await.unwrap();
+    writer_correct.complete("success").await.unwrap();
+
+    // Querying with the real run_id SHOULD find logs
+    let resp = aspen_ci_handler::handler::logs::handle_get_job_logs(
+        kv.as_ref(),
+        "real-run-id".into(),
+        "job-fix".into(),
+        0,
+        Some(100),
+    )
+    .await
+    .unwrap();
+    let result = unwrap_logs_response(resp);
+    assert!(result.was_found, "logs with correct run_id should be found");
+    assert!(result.is_complete);
+    assert!(result.chunks[0].content.contains("visible log"));
+}
+
 #[tokio::test]
 async fn test_spawned_writer_channel_close_without_complete() {
     let kv = DeterministicKeyValueStore::new();

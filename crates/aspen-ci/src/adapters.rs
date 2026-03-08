@@ -255,7 +255,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
         self.prefetch_flake_inputs(&run_id, &checkout_dir).await;
 
         let source_hash = self.start_pipeline_create_source_archive(&run_id, &checkout_dir).await;
-        let updated_context = self.start_pipeline_build_updated_context(&event, &checkout_dir, source_hash);
+        let updated_context = self.start_pipeline_build_updated_context(&event, &run_id, &checkout_dir, source_hash);
         self.orchestrator.update_run_context(&run_id, updated_context).await?;
 
         let run = self.orchestrator.execute_existing_run(&run_id, event.config).await?;
@@ -413,9 +413,15 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
     }
 
     /// Build updated context after successful checkout.
+    ///
+    /// The `run_id` is passed in from the already-created run to preserve it.
+    /// Previously this was set to `String::new()` which caused log streaming
+    /// to write empty run_id into KV keys, making logs unretrievable by the
+    /// CLI (which queries with the real run_id).
     fn start_pipeline_build_updated_context(
         &self,
         event: &TriggerEvent,
+        run_id: &str,
         checkout_dir: &std::path::Path,
         source_hash: Option<String>,
     ) -> PipelineContext {
@@ -432,7 +438,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
             commit_hash: event.commit_hash,
             ref_name: event.ref_name.clone(),
             triggered_by: event.pusher.to_string(),
-            run_id: String::new(), // Set by orchestrator after run ID generation
+            run_id: run_id.to_string(),
             env,
             checkout_dir: Some(checkout_dir.to_path_buf()),
             source_hash,
