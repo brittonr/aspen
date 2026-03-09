@@ -2441,7 +2441,9 @@
               # Pushes the full 80-crate workspace, auto-triggers CI pipeline,
               # validates checkout integrity, then compiles aspen-constants
               # Pushes Aspen source to Forge, runs NixBuildWorker with `type = 'nix` jobs.
-              # Build: nix build .#checks.x86_64-linux.ci-dogfood-test --impure
+              # Build: nix build .#checks.x86_64-linux.ci-dogfood-test --impure --option sandbox false
+              # Note: --option sandbox false gives the VM internet access via QEMU user-mode NAT
+              # so inner nix builds can resolve flake inputs (nixpkgs) from the registry.
               ci-dogfood-test = import ./nix/tests/ci-dogfood.nix {
                 inherit pkgs lib kvPluginWasm forgePluginWasm rustToolChain;
                 aspenNodePackage = bins.full-aspen-node-plugins;
@@ -2450,6 +2452,7 @@
                 gitRemoteAspenPackage = bins.full-git-remote-aspen;
                 aspenSource = fullRawSrc;
                 cargoVendorDir = fullCargoVendorDir;
+                nixpkgsFlake = nixpkgs;
               };
 
               # HTTP proxy test: TCP tunnel and HTTP forward proxy over
