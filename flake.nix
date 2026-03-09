@@ -752,7 +752,9 @@
 
           chmod -R u+w $out
 
-          # Replace ALL git deps with local stubs (same as fullSrc).
+          # Stub non-snix git deps as local path crates.
+          # snix deps are kept as real git deps — vendored via
+          # overrideVendorGitCheckout in ciCargoVendorDir.
           stub() {
             local name="$1"; shift
             local dir="$out/aspen/.nix-stubs/$name"
@@ -768,26 +770,26 @@
             echo '// stub' > "$dir/src/lib.rs"
           }
           stub mad-turmoil
-          stub snix-castore
-          stub snix-store
-          stub nix-compat async serde
-          stub nix-compat-derive
           stub h3-iroh
 
-          # Rewrite git deps to path stubs in root Cargo.toml
+          # Rewrite non-snix git deps to path stubs in root Cargo.toml.
+          # snix deps (snix-castore, snix-store, nix-compat) stay as git deps
+          # so the cargo vendor dir (with overrideVendorGitCheckout) provides
+          # real snix source for aspen-castore, aspen-snix, aspen-snix-bridge.
           ${pkgs.gnused}/bin/sed -i \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
-            -e 's|snix-castore = { git = "[^"]*"[^}]*}|snix-castore = { path = ".nix-stubs/snix-castore" }|' \
-            -e 's|snix-store = { git = "[^"]*"[^}]*}|snix-store = { path = ".nix-stubs/snix-store" }|' \
-            -e 's|nix-compat = { git = "[^"]*"[^}]*}|nix-compat = { path = ".nix-stubs/nix-compat", features = ["async", "serde"] }|' \
             -e 's|h3-iroh = { git = "[^"]*"[^}]*}|h3-iroh = { path = ".nix-stubs/h3-iroh" }|' \
             $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
-          # Strip ALL git source lines from Cargo.lock — every git dep is
-          # either stubbed or provided locally, so crane shouldn't create
-          # FODs that need network access.
-          ${pkgs.gnused}/bin/sed -i '/^source = "git+/d' $out/aspen/Cargo.lock
+          # Strip git source lines from Cargo.lock for stubbed deps only.
+          # Keep snix.dev and tvlfyi (wu-manber, a snix dep) source lines —
+          # these are vendored via overrideVendorGitCheckout / normal FODs.
+          ${pkgs.gnused}/bin/sed -i '/^source = "git+/{
+            /snix\.dev/b
+            /tvlfyi/b
+            d
+          }' $out/aspen/Cargo.lock
 
           # Rewrite git deps in all subcrates too
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
@@ -809,13 +811,26 @@
             src = ciSrc;
             postUnpack = ''sourceRoot="$sourceRoot/aspen"'';
             cargoToml = ./Cargo.toml;
+            # Explicit cargoLock ensures buildDepsOnly includes the lockfile
+            # even when src changes invalidate the dummy source derivation.
+            cargoLock = ciSrc + "/aspen/Cargo.lock";
             cargoExtraArgs = "";
           };
 
         ciCargoVendorDir = patchVendorForHyperlight (craneLib.vendorCargoDeps {
           src = ciSrc + "/aspen";
-          overrideVendorGitCheckout = _ps: drv:
-            ensureGitCheckoutLock drv;
+          overrideVendorGitCheckout = ps: drv: let
+            isSnixRepo =
+              builtins.any (
+                p:
+                  builtins.isString (p.source or null)
+                  && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
+              )
+              ps;
+          in
+            if isSnixRepo
+            then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
+            else ensureGitCheckoutLock drv;
         });
 
         ciCargoArtifacts = craneLib.buildDepsOnly (
@@ -1884,10 +1899,12 @@
               clippy = craneLib.cargoClippy (
                 ciCommonArgs
                 // {
-                  # Exclude crates that can't compile with stubbed snix/h3-iroh:
+                  # Exclude crates that can't compile with stubbed deps:
                   # - aspen-nix-cache-gateway: h3-iroh 0.96 vs iroh 0.95.1 mismatch
-                  # - aspen-castore, aspen-snix, aspen-snix-bridge: unconditional snix deps
-                  cargoClippyExtraArgs = "--workspace --exclude aspen-nix-cache-gateway --exclude aspen-castore --exclude aspen-snix --exclude aspen-snix-bridge -- -D warnings";
+                  # snix crates (aspen-castore, aspen-snix, aspen-snix-bridge) now
+                  # compile in CI — snix deps are real (not stubbed), vendored via
+                  # overrideVendorGitCheckout with snix-src flake input.
+                  cargoClippyExtraArgs = "--workspace --exclude aspen-nix-cache-gateway -- -D warnings";
                 }
               );
 
