@@ -608,6 +608,9 @@
             ./deny.toml
             ./rustfmt.toml
             ./rust-toolchain.toml
+            ./flake.nix
+            ./flake.lock
+            ./nix
             ./src
             ./crates
             ./openraft
@@ -2445,13 +2448,11 @@
               # Note: --option sandbox false gives the VM internet access via QEMU user-mode NAT
               # so inner nix builds can resolve flake inputs (nixpkgs) from the registry.
               ci-dogfood-test = import ./nix/tests/ci-dogfood.nix {
-                inherit pkgs lib kvPluginWasm forgePluginWasm rustToolChain;
+                inherit pkgs lib kvPluginWasm forgePluginWasm;
                 aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-e2e;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
                 gitRemoteAspenPackage = bins.full-git-remote-aspen;
-                aspenSource = fullRawSrc;
-                cargoVendorDir = fullCargoVendorDir;
                 nixpkgsFlake = nixpkgs;
               };
 
