@@ -143,7 +143,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         let scan_limit = max_items.saturating_mul(4).max(16);
         let item_keys = self.scan_keys(&items_pref, scan_limit).await?;
 
-        info!(
+        debug!(
             name,
             consumer_id,
             items_prefix = items_pref,

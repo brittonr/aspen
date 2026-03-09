@@ -247,7 +247,8 @@ fn determine_status_from_workflow(state_name: &str, no_failed_jobs: bool) -> Opt
     }
 }
 
-/// Update stage job IDs and statuses from collected info. Returns true if any were updated.
+/// Update stage job IDs, job statuses, and aggregate stage statuses from collected info.
+/// Returns true if any were updated.
 fn update_stage_job_info(run: &mut PipelineRun, job_name_to_info: &HashMap<String, (JobId, PipelineStatus)>) -> bool {
     let mut any_updated = false;
 
@@ -264,7 +265,73 @@ fn update_stage_job_info(run: &mut PipelineRun, job_name_to_info: &HashMap<Strin
                 }
             }
         }
+
+        // Aggregate stage status from its job statuses.
+        let new_stage_status = compute_stage_status(&stage.jobs);
+        if stage.status != new_stage_status {
+            stage.status = new_stage_status;
+            // Set started_at on first transition away from Pending.
+            if stage.started_at.is_none() && new_stage_status != PipelineStatus::Pending {
+                stage.started_at = Some(Utc::now());
+            }
+            // Set completed_at when stage reaches a terminal state.
+            if stage.completed_at.is_none() && new_stage_status.is_terminal() {
+                stage.completed_at = Some(Utc::now());
+            }
+            any_updated = true;
+        }
     }
 
     any_updated
+}
+
+/// Compute aggregate stage status from its job statuses.
+///
+/// Rules:
+/// - Any job failed/cancelled → stage is failed/cancelled
+/// - Any job running → stage is running
+/// - All jobs succeeded → stage is success
+/// - Otherwise → stage is pending
+fn compute_stage_status(jobs: &HashMap<String, super::JobStatus>) -> PipelineStatus {
+    if jobs.is_empty() {
+        return PipelineStatus::Pending;
+    }
+
+    let mut all_success = true;
+    let mut any_running = false;
+    let mut any_failed = false;
+    let mut any_cancelled = false;
+
+    for job in jobs.values() {
+        match job.status {
+            PipelineStatus::Success => {}
+            PipelineStatus::Failed => {
+                any_failed = true;
+                all_success = false;
+            }
+            PipelineStatus::Cancelled => {
+                any_cancelled = true;
+                all_success = false;
+            }
+            PipelineStatus::Running => {
+                any_running = true;
+                all_success = false;
+            }
+            _ => {
+                all_success = false;
+            }
+        }
+    }
+
+    if any_failed {
+        PipelineStatus::Failed
+    } else if any_cancelled {
+        PipelineStatus::Cancelled
+    } else if all_success {
+        PipelineStatus::Success
+    } else if any_running {
+        PipelineStatus::Running
+    } else {
+        PipelineStatus::Pending
+    }
 }

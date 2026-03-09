@@ -315,41 +315,41 @@ in
           if pipeline_status == "failed":
               # Log detailed failure info for debugging
               node1.log("Pipeline FAILED — checking job details")
-              jobs = final_status.get("jobs", [])
-              for j in jobs:
-                  node1.log(f"  Job '{j.get('name')}': {j.get('status')} - {j.get('error', 'no error')}")
-                  if j.get("output"):
-                      node1.log(f"  Output: {json.dumps(j['output'], indent=2)[:2000]}")
+              for stage in final_status.get("stages", []):
+                  for j in stage.get("jobs", []):
+                      node1.log(f"  Job '{j.get('name')}': {j.get('status')} - {j.get('error', 'no error')}")
 
           assert pipeline_status == "success", \
               f"Nix build pipeline failed with status={pipeline_status}: {final_status}"
           node1.log("Nix build pipeline completed successfully!")
 
+          # Verify stage-level statuses are populated (not stuck at "pending")
+          for stage in final_status.get("stages", []):
+              stage_name = stage.get("name")
+              stage_status = stage.get("status")
+              node1.log(f"  Stage '{stage_name}': status={stage_status}")
+              assert stage_status == "success", \
+                  f"Stage '{stage_name}' has status '{stage_status}', expected 'success'"
+
       # ── phase 6: verify build produced output ───────────────────────
 
       with subtest("verify build output in ci status"):
-          # The ci status should contain job output with nix store paths
-          jobs = final_status.get("jobs", [])
+          # The ci status nests jobs inside stages[].jobs[].
+          # Find the nix-build job by traversing the stage/job hierarchy.
           nix_job = None
-          for j in jobs:
-              if j.get("name") == "nix-build" or j.get("type") == "nix":
-                  nix_job = j
+          for stage in final_status.get("stages", []):
+              for j in stage.get("jobs", []):
+                  if j.get("name") == "nix-build":
+                      nix_job = j
+                      break
+              if nix_job:
                   break
 
-          if nix_job:
-              output = nix_job.get("output", {})
-              output_paths = output.get("output_paths", [])
-              node1.log(f"Nix build output paths: {output_paths}")
-              if output_paths:
-                  node1.log(f"First output: {output_paths[0]}")
-                  assert "/nix/store/" in output_paths[0], \
-                      f"Expected /nix/store/ path, got: {output_paths[0]}"
-                  node1.log("Nix build produced valid store path!")
-              else:
-                  node1.log("No output paths in job output (build may have been cached)")
-          else:
-              node1.log("Could not find nix-build job in pipeline status (checking full output)")
-              node1.log(f"All jobs: {json.dumps(jobs, indent=2)[:2000]}")
+          assert nix_job is not None, \
+              f"Could not find 'nix-build' job in pipeline stages: {json.dumps(final_status.get('stages', []), indent=2)[:2000]}"
+          node1.log(f"Found nix-build job: id={nix_job.get('id')}, status={nix_job.get('status')}")
+          assert nix_job.get("status") == "success", \
+              f"nix-build job status is '{nix_job.get('status')}', expected 'success'"
 
       # ── phase 7: verify ci list shows success ───────────────────────
 

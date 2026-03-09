@@ -437,10 +437,13 @@ in
               ticket = get_ticket()
               # Launch ci logs --follow as a background systemd unit.
               # It will stream chunks to a file until the job completes, then exit.
+              # Use absolute path — systemd-run starts a transient unit that does
+              # NOT inherit environment.systemPackages PATH.
+              cli_path = "/run/current-system/sw/bin/aspen-cli"
               node1.succeed(
                   f"systemd-run --unit=ci-log-stream "
                   f"bash -c \""
-                  f"aspen-cli --ticket '{ticket}' ci logs {run_id} {stream_job_id} --follow "
+                  f"{cli_path} --ticket '{ticket}' ci logs {run_id} {stream_job_id} --follow "
                   f">/tmp/ci-stream-output.txt 2>/tmp/ci-stream-err.txt"
                   f"\""
               )
@@ -466,6 +469,14 @@ in
           assert pipeline_status == "success", \
               f"Dogfood pipeline failed: {pipeline_status}: {final_status}"
           node1.log("Aspen dogfood pipeline completed successfully!")
+
+          # Verify stage-level statuses are populated (not stuck at "pending")
+          for stage in final_status.get("stages", []):
+              stage_name = stage.get("name")
+              stage_status = stage.get("status")
+              node1.log(f"  Stage '{stage_name}': status={stage_status}")
+              assert stage_status == "success", \
+                  f"Stage '{stage_name}' has status '{stage_status}', expected 'success'"
 
       # ── phase 5b: verify real-time log stream captured output ───────
       # NixBuildWorker writes CI log chunks to _ci:logs:* KV keys during
@@ -499,11 +510,13 @@ in
                   node1.log(f"Real-time stream captured {len(stream_output)} bytes, {output_lines} lines")
                   node1.log(f"Stream output (first 500 chars): {stream_output[:500]}")
               else:
-                  # NixBuildWorker should write log chunks — log for debugging but don't fail
-                  # (the follow stream may have exited before chunks were flushed)
-                  node1.log(f"WARNING: No stream output captured (stream may have exited early)")
+                  # NixBuildWorker writes log chunks — if we got nothing, the stream failed.
                   if stream_err and stream_err != "empty":
-                      node1.log(f"  stderr: {stream_err[:300]}")
+                      node1.log(f"Stream stderr: {stream_err[:500]}")
+                  assert False, (
+                      f"Real-time log stream captured no output. "
+                      f"Stream unit state: {stream_status}, stderr: {stream_err[:300]}"
+                  )
 
               # Clean up
               node1.execute("systemctl stop ci-log-stream 2>/dev/null || true")
@@ -537,23 +550,23 @@ in
 
       with subtest("ci output retrieves full job output"):
           # Pick the first job to check full output
-          if all_jobs:
-              first_job = all_jobs[0]
-              output_result = cli(
-                  f"ci output {run_id} {first_job['id']}",
-                  check=False
-              )
-              node1.log(f"ci output for '{first_job['name']}': {type(output_result)}")
-              if isinstance(output_result, dict):
-                  was_found = output_result.get("was_found", False)
-                  has_stdout = bool(output_result.get("stdout"))
-                  has_error = bool(output_result.get("error"))
-                  node1.log(
-                      f"  was_found={was_found}, has_stdout={has_stdout}, "
-                      f"error={output_result.get('error', 'none')}"
-                  )
-                  # Job output should be available for completed jobs
-                  # (may be empty for shell jobs that don't use the output ref system)
+          assert len(all_jobs) > 0, "No jobs to check output for"
+          first_job = all_jobs[0]
+          output_result = cli(
+              f"ci output {run_id} {first_job['id']}",
+              check=False
+          )
+          node1.log(f"ci output for '{first_job['name']}': {type(output_result)}")
+          assert isinstance(output_result, dict), \
+              f"Expected dict from ci output, got: {output_result}"
+          was_found = output_result.get("was_found", False)
+          has_stdout = bool(output_result.get("stdout"))
+          has_error = bool(output_result.get("error"))
+          node1.log(
+              f"  was_found={was_found}, has_stdout={has_stdout}, "
+              f"error={output_result.get('error', 'none')}"
+          )
+          assert was_found, f"ci output was_found=False for completed job '{first_job['name']}'"
 
       # ── phase 6c: diagnostic log retrieval (non-blocking) ───────────
       # Shell worker doesn't write _ci:logs:* keys, so ci logs will return
@@ -582,11 +595,10 @@ in
                   node1.log(f"  Job '{job_name}': no CI log chunks")
 
           node1.log(f"Jobs with CI log chunks: {jobs_with_logs}/{len(all_jobs)}")
-          # NixBuildWorker writes log chunks — at least some jobs should have them
-          if jobs_with_logs > 0:
-              node1.log(f"Log streaming confirmed: {jobs_with_logs} jobs with CI log chunks")
-          else:
-              node1.log("WARNING: No jobs had CI log chunks (NixBuildWorker should write them)")
+          # NixBuildWorker writes log chunks — ALL nix jobs must have them.
+          assert jobs_with_logs == len(all_jobs), \
+              f"Expected all {len(all_jobs)} nix jobs to have CI log chunks, only {jobs_with_logs} did"
+          node1.log(f"Log streaming confirmed: {jobs_with_logs}/{len(all_jobs)} jobs with CI log chunks")
 
       # ── phase 7: verify CI list shows success ───────────────────────
 
