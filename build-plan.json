@@ -65,8 +65,8 @@
     "openraft": "path+file:///home/brittonr/git/aspen/openraft/openraft#0.10.0",
     "openraft-macros": "path+file:///home/brittonr/git/aspen/openraft/macros#openraft-macros@0.10.0"
   },
-  "cargoLockHash": "26ffd54eec1dcd42795381079564430a719e9b41f7d32e2b2c8eaaaa8cd1698c",
-  "inputsHash": "cc04f8447f4ddda7be1f9f1f4938db772a2d60d49546d5b41ad84e46271c49f2",
+  "cargoLockHash": "bb42adadbce189baf558dd90a1b374cfc5d9c7ded6c42eb6fa12cfbde100f152",
+  "inputsHash": "32fa1cdcd2f58e13df114f884b7a4f2ea47479d6e6eb9a9ec3367131a8fc023f",
   "crates": {
     "path+file:///home/brittonr/git/aspen#0.1.0": {
       "crateName": "aspen",
@@ -136,6 +136,10 @@
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-core#0.1.0",
           "externCrateName": "aspen_core"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-core-essentials-handler#0.1.0",
+          "externCrateName": "aspen_core_essentials_handler"
         },
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-docs#0.1.0",
@@ -2283,6 +2287,14 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
           "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
+          "externCrateName": "tokio"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio-util@0.7.18",
+          "externCrateName": "tokio_util"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44",
