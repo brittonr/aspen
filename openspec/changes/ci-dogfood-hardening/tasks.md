@@ -64,7 +64,7 @@
 
 ## 9. Integration Verification
 
-- [ ] 9.1 Run `cargo nextest run --workspace -P quick` — all tests pass
-- [ ] 9.2 Run `nix build .#checks.x86_64-linux.ci-dogfood-test --impure` — dogfood test passes with Nix executor
+- [x] 9.1 Run `cargo nextest run --workspace -P quick` — 6,418 tests pass (14 new), 201 skipped
+- [ ] 9.2 Run `nix build .#checks.x86_64-linux.ci-dogfood-test --impure` — dogfood test passes with Nix executor (requires VM build)
 - [ ] 9.3 Run `nix run .#dogfood-local` on a real machine — full pipeline succeeds
-- [ ] 9.4 Update napkin with any new patterns discovered during implementation
+- [x] 9.4 Update napkin with patterns discovered during implementation
