@@ -239,3 +239,20 @@ pub const ALERT_HISTORY_TTL_SECONDS: u32 = 604_800;
 ///
 /// Tiger Style: Bounded notification fanout prevents amplification.
 pub const MAX_ALERT_NOTIFICATION_TARGETS: u32 = 8;
+
+/// Default periodic alert evaluation interval in seconds (60).
+///
+/// Tiger Style: Fixed interval prevents both too-frequent evaluations
+/// (wasting Raft bandwidth) and too-infrequent checks (missing alerts).
+/// 60 seconds balances responsiveness with resource efficiency.
+pub const ALERT_EVALUATION_INTERVAL_SECONDS: u64 = 60;
+
+/// Minimum periodic alert evaluation interval in seconds (10).
+///
+/// Tiger Style: Lower bound prevents runaway evaluation loops.
+pub const ALERT_EVALUATION_MIN_INTERVAL_SECONDS: u64 = 10;
+
+/// Maximum periodic alert evaluation interval in seconds (3600 = 1 hour).
+///
+/// Tiger Style: Upper bound ensures alerts are eventually evaluated.
+pub const ALERT_EVALUATION_MAX_INTERVAL_SECONDS: u64 = 3_600;

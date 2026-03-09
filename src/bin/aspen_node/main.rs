@@ -206,6 +206,16 @@ async fn async_main() -> Result<()> {
     )
     .await?;
 
+    // Spawn periodic alert evaluator (runs on leader only, skips on followers)
+    let alert_eval_config = match args.alert_evaluation_interval {
+        Some(0) => None, // Disabled
+        Some(secs) => Some(aspen_core_essentials_handler::AlertEvaluatorConfig::with_interval(secs)),
+        None => Some(aspen_core_essentials_handler::AlertEvaluatorConfig::default()),
+    };
+    let alert_evaluator_handle = alert_eval_config.map(|config| {
+        aspen_core_essentials_handler::spawn_alert_evaluator(client_context.clone(), config, node_mode.shutdown_token())
+    });
+
     // Extract signer before client_context is consumed by the handler.
     #[cfg(feature = "nix-cache-gateway")]
     let nix_cache_signer = client_context.nix_cache_signer.clone();
@@ -242,6 +252,12 @@ async fn async_main() -> Result<()> {
 
     // Wait for shutdown signal
     shutdown_signal().await;
+
+    // Stop periodic alert evaluator
+    if let Some(handle) = alert_evaluator_handle {
+        info!("stopping periodic alert evaluator");
+        handle.shutdown().await;
+    }
 
     // Stop distributed worker coordinator if started
     if let Some(ref coordinator) = worker_coordinator {

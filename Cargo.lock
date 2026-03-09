@@ -600,6 +600,7 @@ dependencies = [
  "aspen-cluster",
  "aspen-coordination",
  "aspen-core",
+ "aspen-core-essentials-handler",
  "aspen-docs",
  "aspen-forge",
  "aspen-hooks",
@@ -1323,6 +1324,7 @@ dependencies = [
  "hex",
  "serde_json",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 

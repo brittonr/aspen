@@ -406,3 +406,8 @@ const _: () = assert!(MAX_ALERT_RULE_NAME_SIZE > 0);
 const _: () = assert!(MAX_ALERT_HISTORY_PER_RULE > 0);
 const _: () = assert!(ALERT_HISTORY_TTL_SECONDS > 0);
 const _: () = assert!(MAX_ALERT_NOTIFICATION_TARGETS > 0);
+
+// Alert evaluation interval ordering
+const _: () = assert!(ALERT_EVALUATION_MIN_INTERVAL_SECONDS > 0);
+const _: () = assert!(ALERT_EVALUATION_MIN_INTERVAL_SECONDS <= ALERT_EVALUATION_INTERVAL_SECONDS);
+const _: () = assert!(ALERT_EVALUATION_INTERVAL_SECONDS <= ALERT_EVALUATION_MAX_INTERVAL_SECONDS);

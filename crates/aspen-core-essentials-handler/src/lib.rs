@@ -9,6 +9,7 @@
 //!   WriteKeyWithLease
 //! - **Watch**: WatchCreate, WatchCancel, WatchStatus
 
+pub mod alert_evaluator;
 mod coordination;
 mod core;
 pub(crate) mod error_utils;
@@ -19,6 +20,9 @@ mod watch;
 pub use core::CoreHandler;
 use std::sync::Arc;
 
+pub use alert_evaluator::AlertEvaluatorConfig;
+pub use alert_evaluator::AlertEvaluatorHandle;
+pub use alert_evaluator::spawn_alert_evaluator;
 // Re-export core types for convenience
 pub use aspen_rpc_core::ClientProtocolContext;
 pub use aspen_rpc_core::HandlerFactory;

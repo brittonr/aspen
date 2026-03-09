@@ -219,6 +219,16 @@ pub struct Args {
     #[arg(long)]
     pub ci_auto_trigger: bool,
 
+    // === Observability Configuration ===
+    /// Periodic alert evaluation interval in seconds (default: 60).
+    ///
+    /// The node periodically evaluates all alert rules against current metrics.
+    /// Only the Raft leader performs evaluations; followers skip silently.
+    /// Set to 0 to disable periodic evaluation (manual only via CLI).
+    /// Clamped to [10, 3600] when non-zero.
+    #[arg(long)]
+    pub alert_evaluation_interval: Option<u64>,
+
     // === HTTP Proxy Configuration ===
     /// Enable HTTP proxy for TCP tunneling over iroh.
     ///

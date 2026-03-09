@@ -245,6 +245,7 @@ aspen-proxy = { path = "crates/aspen-proxy" }
 aspen-net = { path = "crates/aspen-net" }
 aspen-dht-discovery = { path = "crates/aspen-dht-discovery" }
 aspen-rpc-core = { path = "crates/aspen-rpc-core" }
+aspen-core-essentials-handler = { path = "crates/aspen-core-essentials-handler" }
 aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers", default-features = false }
 aspen-ticket = { path = "crates/aspen-ticket" }
 aspen-hooks-types = { path = "crates/aspen-hooks-types" }
@@ -339,6 +340,7 @@ aspen-jobs-worker-maintenance = { workspace = true, optional = true }
 aspen-jobs-worker-shell = { workspace = true, optional = true }
 aspen-transport = { workspace = true }
 aspen-rpc-handlers = { workspace = true }
+aspen-core-essentials-handler = { workspace = true }
 aspen-hooks-types = { workspace = true }
 aspen-hooks = { workspace = true, optional = true }
 aspen-forge = { workspace = true, optional = true }
