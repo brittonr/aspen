@@ -2460,7 +2460,7 @@
               # Proves the self-hosting loop: Aspen builds its own Rust code.
               # Build: nix build .#checks.x86_64-linux.ci-dogfood-self-build-test --impure --option sandbox false
               ci-dogfood-self-build-test = import ./nix/tests/ci-dogfood-self-build.nix {
-                inherit pkgs lib kvPluginWasm forgePluginWasm;
+                inherit pkgs kvPluginWasm forgePluginWasm;
                 aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-e2e;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
