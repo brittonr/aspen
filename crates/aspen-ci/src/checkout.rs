@@ -358,7 +358,7 @@ pub async fn cleanup_checkout(checkout_dir: &Path) -> Result<()> {
 
 /// Git source line for snix packages.
 /// This must match the revision in Cargo.toml and flake.nix snix-src input.
-const SNIX_GIT_SOURCE: &str = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559";
+const SNIX_GIT_SOURCE: &str = "git+https://git.snix.dev/snix/snix.git?rev=180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac#180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac";
 
 /// Snix package names that need git source lines added to Cargo.lock.
 const SNIX_PACKAGES: &[&str] = &[

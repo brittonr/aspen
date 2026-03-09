@@ -2050,6 +2050,47 @@
                   doCheck = false;
                 }
               );
+
+              # SNIX rev drift guard: verify the SNIX_GIT_SOURCE constant in
+              # checkout.rs matches the snix-src flake input revision. Prevents
+              # silent drift between the hardcoded rev and the actual dependency.
+              snix-rev-check = let
+                lockfile = builtins.fromJSON (builtins.readFile ./flake.lock);
+                snixFlakeRev = lockfile.nodes."snix-src".locked.rev;
+              in
+                pkgs.runCommand "snix-rev-check" {
+                  src = fullRawSrc;
+                  inherit snixFlakeRev;
+                } ''
+                  CHECKOUT_RS="$src/crates/aspen-ci/src/checkout.rs"
+                  if [ ! -f "$CHECKOUT_RS" ]; then
+                    echo "FAIL: checkout.rs not found at $CHECKOUT_RS"
+                    exit 1
+                  fi
+
+                  CHECKOUT_REV=$(${pkgs.gnugrep}/bin/grep -oP 'SNIX_GIT_SOURCE.*\?rev=\K[0-9a-f]+' "$CHECKOUT_RS" | head -1)
+
+                  if [ -z "$CHECKOUT_REV" ]; then
+                    echo "FAIL: could not extract rev from SNIX_GIT_SOURCE in checkout.rs"
+                    exit 1
+                  fi
+
+                  echo "Flake snix-src rev:   $snixFlakeRev"
+                  echo "checkout.rs rev:      $CHECKOUT_REV"
+
+                  if [ "$CHECKOUT_REV" != "$snixFlakeRev" ]; then
+                    echo ""
+                    echo "DRIFT DETECTED: SNIX_GIT_SOURCE in checkout.rs ($CHECKOUT_REV)"
+                    echo "  does not match snix-src flake input ($snixFlakeRev)"
+                    echo ""
+                    echo "Fix: update the rev in crates/aspen-ci/src/checkout.rs line ~361"
+                    echo "  to match: $snixFlakeRev"
+                    exit 1
+                  fi
+
+                  echo "PASS: SNIX revs match"
+                  touch $out
+                '';
             }
             # ── Real checks (override stubs when aspen-wasm-plugin available) ──
             // lib.optionalAttrs hasExternalRepos {

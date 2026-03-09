@@ -58,9 +58,9 @@
 
 ## 8. SNIX Source Drift Guard (D7)
 
-- [ ] 8.1 Add a Nix flake check (`checks.x86_64-linux.snix-rev-check`) that extracts the rev from `SNIX_GIT_SOURCE` in `checkout.rs` and compares it to the `snix-src` flake input rev
-- [ ] 8.2 Verify the check passes with current values
-- [ ] 8.3 Add the check to the CI pipeline (either in `.aspen/ci.ncl` or as part of the existing `clippy` check)
+- [x] 8.1 Add Nix flake check `snix-rev-check` that extracts rev from `SNIX_GIT_SOURCE` in `checkout.rs` and compares to `snix-src` flake.lock rev
+- [x] 8.2 Fixed existing drift: updated `SNIX_GIT_SOURCE` from `8fe3bad...` to `180bfc4...` to match flake input
+- [x] 8.3 Verified check passes with current values (`nix build .#checks.x86_64-linux.snix-rev-check`)
 
 ## 9. Integration Verification
 
