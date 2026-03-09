@@ -206,6 +206,11 @@ in
 
         networking.firewall.enable = false;
 
+        # Enable nix-command and flakes for NixBuildWorker's `nix build`
+        nix.settings.experimental-features = ["nix-command" "flakes"];
+        # Disable sandbox — builds run inside a VM which is already sandboxed
+        nix.settings.sandbox = false;
+
         # More memory for handling large git push (23MB source)
         virtualisation.memorySize = 4096;
         virtualisation.cores = 2;
