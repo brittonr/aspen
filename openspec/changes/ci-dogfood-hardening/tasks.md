@@ -39,13 +39,13 @@
 
 ## 6. `ignore_paths` Evaluation (D5)
 
-- [ ] 6.1 Add `diff_trees(old_hash, new_hash) -> Vec<String>` function to `crates/aspen-ci/src/checkout.rs` (or a new `diff.rs`) that walks two commit trees and returns changed file paths
-- [ ] 6.2 Add `matches_ignore_pattern(path, patterns) -> bool` helper using glob matching on `ignore_paths`
-- [ ] 6.3 In `TriggerService::handle_trigger()`, after fetching config, compute the diff (if `old_hash` is Some) and check if all changed files match ignore patterns — skip trigger if so
-- [ ] 6.4 Add 10,000-entry diff limit — if exceeded, log warning and always trigger
-- [ ] 6.5 Write unit test: docs-only push with `ignore_paths = ["*.md", "docs/*"]` skips trigger
-- [ ] 6.6 Write unit test: mixed push (md + rs files) triggers normally
-- [ ] 6.7 Write unit test: first push (old_hash = None) always triggers
+- [x] 6.1 Add `list_changed_paths` to `ConfigFetcher` trait (default returns None); implement in `ForgeConfigFetcher` via recursive tree diff
+- [x] 6.2 Add `glob_match` and `matches_any_pattern` helpers for path pattern matching (supports `*`, `**`, `*.ext`, `dir/*`, `dir/**`)
+- [x] 6.3 Add `should_trigger_for_paths()` evaluating `ignore_paths`/`only_paths` filters
+- [x] 6.4 Wire path filter into `handle_trigger()` after ref pattern check, with 10,000-entry diff limit
+- [x] 6.5 Write unit test: docs-only push with `ignore_paths = ["*.md", "docs/*"]` skips trigger
+- [x] 6.6 Write unit test: mixed push (md + rs files) triggers normally
+- [x] 6.7 Tests for: first push (None changed paths) always triggers, empty changed paths skips, only_paths match/no-match, glob patterns (exact, *.ext, dir/*, **,**/*.ext)
 
 ## 7. Watch-Before-Push Race Fix (D6)
 

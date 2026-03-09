@@ -187,6 +187,216 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> ConfigFetcher 
 
         Ok(Some(content))
     }
+
+    async fn list_changed_paths(
+        &self,
+        repo_id: &RepoId,
+        old_hash: &[u8; 32],
+        new_hash: &[u8; 32],
+    ) -> Result<Option<Vec<String>>> {
+        let old_commit_hash = blake3::Hash::from_bytes(*old_hash);
+        let new_commit_hash = blake3::Hash::from_bytes(*new_hash);
+
+        // Get both commit objects
+        let old_commit = match self.forge.git.get_commit(&old_commit_hash).await {
+            Ok(c) => c,
+            Err(e) => {
+                debug!(
+                    repo_id = %repo_id.to_hex(),
+                    commit = %hex::encode(old_hash),
+                    error = %e,
+                    "Failed to load old commit for diff, skipping path filter"
+                );
+                return Ok(None);
+            }
+        };
+
+        let new_commit = match self.forge.git.get_commit(&new_commit_hash).await {
+            Ok(c) => c,
+            Err(e) => {
+                debug!(
+                    repo_id = %repo_id.to_hex(),
+                    commit = %hex::encode(new_hash),
+                    error = %e,
+                    "Failed to load new commit for diff, skipping path filter"
+                );
+                return Ok(None);
+            }
+        };
+
+        let old_tree = blake3::Hash::from_bytes(old_commit.tree);
+        let new_tree = blake3::Hash::from_bytes(new_commit.tree);
+
+        // Diff the two trees
+        let mut changed: Vec<String> = Vec::new();
+        let max_paths: u32 = 10_000;
+        self.diff_trees(old_tree, new_tree, String::new(), &mut changed, max_paths).await?;
+
+        debug!(
+            repo_id = %repo_id.to_hex(),
+            changed_count = changed.len(),
+            "Diffed commit trees for path filter"
+        );
+
+        Ok(Some(changed))
+    }
+}
+
+impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeConfigFetcher<B, K> {
+    /// Recursively diff two trees and collect changed file paths.
+    ///
+    /// Entries are compared by name and hash. If hashes differ, the entry is
+    /// considered changed. Entries present in only one tree are additions/deletions.
+    ///
+    /// Bounded by `max_paths` to prevent unbounded growth on large diffs.
+    async fn diff_trees(
+        &self,
+        old_tree: blake3::Hash,
+        new_tree: blake3::Hash,
+        prefix: String,
+        changed: &mut Vec<String>,
+        max_paths: u32,
+    ) -> Result<()> {
+        if changed.len() as u32 >= max_paths {
+            return Ok(());
+        }
+
+        // If trees are identical, no changes
+        if old_tree == new_tree {
+            return Ok(());
+        }
+
+        let old_entries = match self.forge.git.get_tree(&old_tree).await {
+            Ok(t) => t.entries,
+            Err(_) => vec![],
+        };
+        let new_entries = match self.forge.git.get_tree(&new_tree).await {
+            Ok(t) => t.entries,
+            Err(_) => vec![],
+        };
+
+        // Build maps by name for O(n) comparison
+        let old_map: std::collections::HashMap<&str, &aspen_forge::git::TreeEntry> =
+            old_entries.iter().map(|e| (e.name.as_str(), e)).collect();
+        let new_map: std::collections::HashMap<&str, &aspen_forge::git::TreeEntry> =
+            new_entries.iter().map(|e| (e.name.as_str(), e)).collect();
+
+        // Check entries in new tree
+        for (name, new_entry) in &new_map {
+            if changed.len() as u32 >= max_paths {
+                return Ok(());
+            }
+
+            let path = if prefix.is_empty() {
+                (*name).to_string()
+            } else {
+                format!("{prefix}/{name}")
+            };
+
+            match old_map.get(name) {
+                Some(old_entry) => {
+                    if old_entry.hash != new_entry.hash {
+                        if new_entry.mode == 0o040000 && old_entry.mode == 0o040000 {
+                            // Both are trees — recurse
+                            Box::pin(self.diff_trees(
+                                blake3::Hash::from_bytes(old_entry.hash),
+                                blake3::Hash::from_bytes(new_entry.hash),
+                                path,
+                                changed,
+                                max_paths,
+                            ))
+                            .await?;
+                        } else {
+                            // File content changed or mode changed
+                            changed.push(path);
+                        }
+                    }
+                }
+                None => {
+                    // New entry (addition)
+                    if new_entry.mode == 0o040000 {
+                        // New directory — collect all files
+                        Box::pin(self.collect_tree_paths(
+                            blake3::Hash::from_bytes(new_entry.hash),
+                            path,
+                            changed,
+                            max_paths,
+                        ))
+                        .await?;
+                    } else {
+                        changed.push(path);
+                    }
+                }
+            }
+        }
+
+        // Check for deletions (in old but not in new)
+        for (name, old_entry) in &old_map {
+            if changed.len() as u32 >= max_paths {
+                return Ok(());
+            }
+
+            if !new_map.contains_key(name) {
+                let path = if prefix.is_empty() {
+                    (*name).to_string()
+                } else {
+                    format!("{prefix}/{name}")
+                };
+
+                if old_entry.mode == 0o040000 {
+                    Box::pin(self.collect_tree_paths(
+                        blake3::Hash::from_bytes(old_entry.hash),
+                        path,
+                        changed,
+                        max_paths,
+                    ))
+                    .await?;
+                } else {
+                    changed.push(path);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Collect all file paths under a tree (for additions/deletions of directories).
+    async fn collect_tree_paths(
+        &self,
+        tree_hash: blake3::Hash,
+        prefix: String,
+        paths: &mut Vec<String>,
+        max_paths: u32,
+    ) -> Result<()> {
+        if paths.len() as u32 >= max_paths {
+            return Ok(());
+        }
+
+        let tree = match self.forge.git.get_tree(&tree_hash).await {
+            Ok(t) => t,
+            Err(_) => return Ok(()),
+        };
+
+        for entry in &tree.entries {
+            if paths.len() as u32 >= max_paths {
+                return Ok(());
+            }
+
+            let path = if prefix.is_empty() {
+                entry.name.clone()
+            } else {
+                format!("{prefix}/{}", entry.name)
+            };
+
+            if entry.mode == 0o040000 {
+                Box::pin(self.collect_tree_paths(blake3::Hash::from_bytes(entry.hash), path, paths, max_paths)).await?;
+            } else {
+                paths.push(path);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Adapter that starts pipelines via the PipelineOrchestrator.

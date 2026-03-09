@@ -44,6 +44,8 @@ use crate::error::Result;
 const MAX_PENDING_TRIGGERS: usize = 100;
 /// Maximum watched repositories.
 const MAX_WATCHED_REPOS: usize = 100;
+/// Maximum changed paths to diff before falling back to always-trigger.
+const MAX_DIFF_PATHS: usize = 10_000;
 /// Default CI config path.
 const DEFAULT_CI_CONFIG_PATH: &str = ".aspen/ci.ncl";
 
@@ -103,6 +105,24 @@ pub trait ConfigFetcher: Send + Sync + 'static {
     /// The config file contents as a string, or None if not found.
     async fn fetch_config(&self, repo_id: &RepoId, commit_hash: &[u8; 32], config_path: &str)
     -> Result<Option<String>>;
+
+    /// List file paths changed between two commits.
+    ///
+    /// Used by the trigger service to evaluate `ignore_paths` and `only_paths`
+    /// filters. Returns `None` if diffing is not supported, in which case
+    /// path filters are skipped (trigger always fires).
+    ///
+    /// Implementations should cap results at `MAX_DIFF_PATHS` entries to
+    /// prevent unbounded memory usage on large diffs.
+    async fn list_changed_paths(
+        &self,
+        _repo_id: &RepoId,
+        _old_hash: &[u8; 32],
+        _new_hash: &[u8; 32],
+    ) -> Result<Option<Vec<String>>> {
+        // Default: diffing not supported, skip path filters
+        Ok(None)
+    }
 }
 
 /// Trait for starting pipeline executions.
@@ -149,6 +169,109 @@ struct PendingTrigger {
     new_hash: [u8; 32],
     old_hash: Option<[u8; 32]>,
     signer: PublicKey,
+}
+
+/// Check if a file path matches any of the given glob patterns.
+///
+/// Supports basic glob patterns:
+/// - `*` matches any single path component (not `/`)
+/// - `**` matches any number of path components
+/// - `*.ext` matches files with that extension
+/// - `dir/*` matches files directly under `dir/`
+/// - `dir/**` matches files anywhere under `dir/`
+///
+/// This is a verified function: deterministic, no I/O, no side effects.
+fn matches_any_pattern(path: &str, patterns: &[String]) -> bool {
+    for pattern in patterns {
+        if glob_match(path, pattern) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Simple glob matching for path patterns.
+///
+/// Supports `*` (single component), `**` (recursive), and literal segments.
+fn glob_match(path: &str, pattern: &str) -> bool {
+    // Split into segments
+    let path_parts: Vec<&str> = path.split('/').collect();
+    let pattern_parts: Vec<&str> = pattern.split('/').collect();
+    glob_match_segments(&path_parts, &pattern_parts)
+}
+
+fn glob_match_segments(path: &[&str], pattern: &[&str]) -> bool {
+    if pattern.is_empty() {
+        return path.is_empty();
+    }
+    if path.is_empty() {
+        // Pattern remaining — only match if all remaining are `**`
+        return pattern.iter().all(|p| *p == "**");
+    }
+
+    let pat = pattern[0];
+    if pat == "**" {
+        // `**` matches zero or more segments
+        // Try matching 0, 1, 2, ... segments
+        for skip in 0..=path.len() {
+            if glob_match_segments(&path[skip..], &pattern[1..]) {
+                return true;
+            }
+        }
+        false
+    } else if segment_matches(path[0], pat) {
+        glob_match_segments(&path[1..], &pattern[1..])
+    } else {
+        false
+    }
+}
+
+/// Match a single path segment against a pattern segment.
+/// `*` matches anything, `*.ext` matches extension, otherwise literal.
+fn segment_matches(segment: &str, pattern: &str) -> bool {
+    if pattern == "*" {
+        return true;
+    }
+    if let Some(suffix) = pattern.strip_prefix('*') {
+        return segment.ends_with(suffix);
+    }
+    if let Some(prefix) = pattern.strip_suffix('*') {
+        return segment.starts_with(prefix);
+    }
+    segment == pattern
+}
+
+/// Evaluate path-based trigger filters (ignore_paths / only_paths).
+///
+/// Returns `true` if the trigger should fire, `false` if it should be skipped.
+///
+/// Rules:
+/// - If `only_paths` is non-empty: trigger fires only if ANY changed path matches
+/// - If `ignore_paths` is non-empty: trigger fires only if ANY changed path does NOT match
+/// - Both empty: always trigger
+/// - `changed_paths` is `None` (diffing unavailable): always trigger
+fn should_trigger_for_paths(changed_paths: Option<&[String]>, ignore_paths: &[String], only_paths: &[String]) -> bool {
+    let paths = match changed_paths {
+        Some(p) => p,
+        None => return true, // Diffing not available, always trigger
+    };
+
+    if paths.is_empty() {
+        return false; // No files changed — skip trigger
+    }
+
+    // only_paths: at least one changed file must match
+    if !only_paths.is_empty() {
+        return paths.iter().any(|p| matches_any_pattern(p, only_paths));
+    }
+
+    // ignore_paths: at least one changed file must NOT match the ignore patterns
+    if !ignore_paths.is_empty() {
+        return paths.iter().any(|p| !matches_any_pattern(p, ignore_paths));
+    }
+
+    // Neither filter set — always trigger
+    true
 }
 
 impl TriggerService {
@@ -283,6 +406,49 @@ impl TriggerService {
                 "Ref does not match trigger patterns, skipping"
             );
             return Ok(());
+        }
+
+        // Evaluate path-based filters (ignore_paths / only_paths)
+        if !config.triggers.ignore_paths.is_empty() || !config.triggers.only_paths.is_empty() {
+            if let Some(old_hash) = &trigger.old_hash {
+                match self.config_fetcher.list_changed_paths(&trigger.repo_id, old_hash, &trigger.new_hash).await {
+                    Ok(Some(paths)) => {
+                        if paths.len() >= MAX_DIFF_PATHS {
+                            warn!(
+                                repo_id = %repo_hex,
+                                changed_count = paths.len(),
+                                "Diff exceeds {MAX_DIFF_PATHS} paths, skipping path filter"
+                            );
+                        } else if !should_trigger_for_paths(
+                            Some(&paths),
+                            &config.triggers.ignore_paths,
+                            &config.triggers.only_paths,
+                        ) {
+                            info!(
+                                repo_id = %repo_hex,
+                                ref_name = %trigger.ref_name,
+                                changed_count = paths.len(),
+                                "All changed paths filtered by ignore_paths/only_paths, skipping"
+                            );
+                            return Ok(());
+                        }
+                    }
+                    Ok(None) => {
+                        debug!(
+                            repo_id = %repo_hex,
+                            "Diffing not supported, skipping path filter"
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            repo_id = %repo_hex,
+                            error = %e,
+                            "Failed to diff commits for path filter, triggering anyway"
+                        );
+                    }
+                }
+            }
+            // First push (old_hash = None) always triggers
         }
 
         // Create trigger event
@@ -509,5 +675,93 @@ mod tests {
         assert_eq!(config.config_path, PathBuf::from(".aspen/ci.ncl"));
         assert!(config.auto_trigger_enabled);
         assert!(!config.default_trigger_refs.is_empty());
+    }
+
+    // ── Path filter tests ────────────────────────────────────────────
+
+    #[test]
+    fn test_glob_match_exact() {
+        assert!(glob_match("README.md", "README.md"));
+        assert!(!glob_match("README.md", "CHANGELOG.md"));
+    }
+
+    #[test]
+    fn test_glob_match_star_extension() {
+        assert!(glob_match("README.md", "*.md"));
+        assert!(glob_match("CHANGELOG.md", "*.md"));
+        assert!(!glob_match("src/main.rs", "*.md"));
+    }
+
+    #[test]
+    fn test_glob_match_dir_star() {
+        assert!(glob_match("docs/README.md", "docs/*"));
+        assert!(!glob_match("docs/sub/file.md", "docs/*"));
+        assert!(!glob_match("src/main.rs", "docs/*"));
+    }
+
+    #[test]
+    fn test_glob_match_double_star() {
+        assert!(glob_match("docs/README.md", "docs/**"));
+        assert!(glob_match("docs/sub/file.md", "docs/**"));
+        assert!(glob_match("docs/a/b/c/file.txt", "docs/**"));
+        assert!(!glob_match("src/main.rs", "docs/**"));
+    }
+
+    #[test]
+    fn test_glob_match_double_star_extension() {
+        // **/*.md matches .md files anywhere
+        assert!(glob_match("docs/README.md", "**/*.md"));
+        assert!(glob_match("a/b/c.md", "**/*.md"));
+        assert!(!glob_match("src/main.rs", "**/*.md"));
+    }
+
+    #[test]
+    fn test_should_trigger_for_paths_no_filters() {
+        let paths = vec!["src/main.rs".to_string()];
+        assert!(should_trigger_for_paths(Some(&paths), &[], &[]));
+    }
+
+    #[test]
+    fn test_should_trigger_for_paths_none_changed() {
+        // Diffing not available — always trigger
+        assert!(should_trigger_for_paths(None, &["*.md".to_string()], &[]));
+    }
+
+    #[test]
+    fn test_should_trigger_for_paths_empty_changed() {
+        // No files changed — skip trigger
+        assert!(!should_trigger_for_paths(Some(&[]), &[], &[]));
+    }
+
+    #[test]
+    fn test_ignore_paths_docs_only_push() {
+        let paths = vec!["README.md".to_string(), "docs/guide.md".to_string()];
+        let ignore = vec!["*.md".to_string(), "docs/*".to_string()];
+        // All changed files match ignore patterns → skip trigger
+        assert!(!should_trigger_for_paths(Some(&paths), &ignore, &[]));
+    }
+
+    #[test]
+    fn test_ignore_paths_mixed_push() {
+        let paths = vec!["README.md".to_string(), "src/main.rs".to_string()];
+        let ignore = vec!["*.md".to_string()];
+        // src/main.rs does NOT match ignore → trigger fires
+        assert!(should_trigger_for_paths(Some(&paths), &ignore, &[]));
+    }
+
+    #[test]
+    fn test_only_paths_match() {
+        let paths = vec!["src/main.rs".to_string(), "docs/README.md".to_string()];
+        let only = vec!["src/*".to_string()];
+        // src/main.rs matches only_paths → trigger fires
+        assert!(should_trigger_for_paths(Some(&paths), &[], &only));
+    }
+
+    #[test]
+    fn test_only_paths_no_match() {
+        let paths = vec!["docs/README.md".to_string()];
+        let only = vec!["src/*".to_string()];
+        // No changed file matches only_paths → skip trigger
+        assert!(!should_trigger_for_paths(Some(&paths), &[], &only));
     }
 }
