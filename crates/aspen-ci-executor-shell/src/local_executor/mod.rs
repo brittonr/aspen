@@ -314,9 +314,11 @@ mod tests {
         let (cmd, args) = inject_nix_flags(&["build".to_string(), "-L".to_string(), ".#default".to_string()]);
 
         assert_eq!(cmd, "nix");
-        assert!(args.contains(&"--offline".to_string()));
+        // --offline is intentionally NOT injected (causes tarball read failures in VM CI)
+        assert!(!args.contains(&"--offline".to_string()));
         assert!(args.contains(&"--accept-flake-config".to_string()));
         assert!(args.contains(&"--no-write-lock-file".to_string()));
+        assert!(args.contains(&"--output-lock-file".to_string()));
     }
 
     #[test]
