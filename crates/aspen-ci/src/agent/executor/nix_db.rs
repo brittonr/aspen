@@ -5,7 +5,9 @@
 //! paths exist in /nix/store but the VM's nix-daemon doesn't know about them.
 //! Loading this dump makes nix recognize these paths as valid.
 
+use std::collections::HashSet;
 use std::process::Stdio;
+use std::sync::Mutex;
 use std::time::Instant;
 
 use tokio::fs::File;
@@ -17,12 +19,20 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-/// Check if a command is nix-related (needs database dump loaded).
+/// Track which workspace roots have already loaded their DB dump.
+/// Prevents redundant subprocess spawns for repeated calls.
+static LOADED_WORKSPACES: Mutex<Option<HashSet<std::path::PathBuf>>> = Mutex::new(None);
+
+/// Check if a command is directly a nix binary.
 ///
 /// This handles:
 /// - Direct nix commands: nix, nix-build, nix-shell, etc.
 /// - Full paths: /nix/store/.../bin/nix, /run/current-system/sw/bin/nix
-/// - Shell wrappers: Commands that might invoke nix internally
+///
+/// Note: Shell wrappers (sh, bash, zsh) are NOT matched. The executor now
+/// always calls `load_nix_db_dump()` which is idempotent and has a fast
+/// early-exit when no dump file exists.
+#[cfg(test)]
 pub(crate) fn is_nix_command(cmd: &str) -> bool {
     // Direct command match
     if matches!(cmd, "nix" | "nix-build" | "nix-shell" | "nix-store" | "nix-env" | "nix-instantiate") {
@@ -31,12 +41,6 @@ pub(crate) fn is_nix_command(cmd: &str) -> bool {
 
     // Check if command is a path containing nix binary
     if cmd.contains("/nix") && cmd.contains("/bin/nix") {
-        return true;
-    }
-
-    // Shell commands that might run nix internally should also trigger DB load
-    // since they commonly wrap nix builds in CI pipelines
-    if matches!(cmd, "sh" | "bash" | "zsh") {
         return true;
     }
 
@@ -62,14 +66,26 @@ struct DbDumpMeta {
 
 /// Load nix database dump from the workspace if present.
 ///
-/// This function also reads the metadata file for verification and logging.
+/// This function is idempotent — it tracks which workspaces have been loaded
+/// and skips redundant loads. Also reads the metadata file for verification.
 pub(crate) async fn load_nix_db_dump(workspace_root: &std::path::Path) {
     let dump_path = workspace_root.join(".nix-db-dump");
     let meta_path = workspace_root.join(".nix-db-dump.meta");
 
     if !dump_path.exists() {
-        info!(dump_path = %dump_path.display(), "no nix database dump found - skipping DB load");
+        debug!(dump_path = %dump_path.display(), "no nix database dump found - skipping DB load");
         return;
+    }
+
+    // Check if we already loaded this workspace's dump
+    {
+        let mut guard = LOADED_WORKSPACES.lock().unwrap_or_else(|e| e.into_inner());
+        let loaded = guard.get_or_insert_with(HashSet::new);
+        if loaded.contains(workspace_root) {
+            debug!(workspace = %workspace_root.display(), "nix database dump already loaded");
+            return;
+        }
+        loaded.insert(workspace_root.to_path_buf());
     }
 
     let start = Instant::now();
@@ -212,11 +228,12 @@ mod tests {
     }
 
     #[test]
-    fn test_is_nix_command_shell_wrappers() {
-        // Shell commands that might invoke nix
-        assert!(is_nix_command("sh"));
-        assert!(is_nix_command("bash"));
-        assert!(is_nix_command("zsh"));
+    fn test_is_nix_command_shell_not_matched() {
+        // Shell commands are no longer matched — load_nix_db_dump handles
+        // the fast path (file not found) and idempotency itself.
+        assert!(!is_nix_command("sh"));
+        assert!(!is_nix_command("bash"));
+        assert!(!is_nix_command("zsh"));
     }
 
     #[test]

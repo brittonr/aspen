@@ -208,9 +208,22 @@ pub(crate) async fn execute_inner(
     // Stop heartbeat
     heartbeat_handle.abort();
 
-    // Collect output
-    let stdout_result = stdout_handle.await.unwrap_or_default();
-    let stderr_result = stderr_handle.await.unwrap_or_default();
+    // Collect output. Log if collection tasks panicked (shouldn't happen,
+    // but a silent default would hide data corruption).
+    let stdout_result = match stdout_handle.await {
+        Ok(s) => s,
+        Err(e) => {
+            warn!(job_id = %request.id, error = %e, "stdout collection task panicked");
+            String::new()
+        }
+    };
+    let stderr_result = match stderr_handle.await {
+        Ok(s) => s,
+        Err(e) => {
+            warn!(job_id = %request.id, error = %e, "stderr collection task panicked");
+            String::new()
+        }
+    };
 
     match result {
         Ok(exit_code) => Ok((exit_code, stdout_result, stderr_result)),

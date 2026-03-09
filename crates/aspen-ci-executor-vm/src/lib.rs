@@ -1,52 +1,47 @@
 //! Cloud Hypervisor VM executor for Aspen CI jobs.
 //!
-//! This crate provides the `CloudHypervisorWorker` and supporting types for executing
-//! CI jobs in isolated Cloud Hypervisor microVMs.
+//! This crate provides the `CloudHypervisorWorker` and supporting types for
+//! managing a pool of Cloud Hypervisor microVMs used as ephemeral CI workers.
 //!
 //! # Architecture
 //!
+//! VMs run `aspen-node --worker-only` and autonomously join the Aspen cluster
+//! via Iroh. Jobs are routed through the normal Raft-backed job queue — the
+//! `CloudHypervisorWorker` only manages VM lifecycle, not job execution.
+//!
 //! ```text
-//!                     Job Queue (Raft KV)
-//!                            |
-//!                            v
-//! +------------------------------------------------------------------+
-//! |                  CloudHypervisorWorker                           |
-//! |  (implements Worker trait, manages VM lifecycle via REST API)    |
-//! +------------------------------+-----------------------------------+
-//!                                |
-//!                +---------------+---------------+
-//!                v               v               v
-//!           +--------+     +--------+      +--------+
-//!           |VmPool  |---->|VmPool  |----> |VmPool  |  (warm pool)
-//!           | idle   |     |assigned|      |running |
-//!           +--------+     +--------+      +--------+
-//!                |               |               |
-//!                v               v               v
-//!      +-------------------------------------------------------------+
-//!      |              Cloud Hypervisor REST API                       |
-//!      |  (Unix socket: /tmp/aspen-ci-vm-{id}-api.sock)              |
-//!      +------------------------------+------------------------------+
-//!                                     |
-//!      +------------------------------+------------------------------+
-//!      |                    MicroVM Guest                             |
-//!      |  +-------------------------------------------------------+  |
-//!      |  |              Guest Agent (aspen-ci-agent)              |  |
-//!      |  |  - Listens on vsock port 5000                          |  |
-//!      |  |  - Receives ExecutionRequest                           |  |
-//!      |  |  - Executes command in /workspace (virtiofs)           |  |
-//!      |  |  - Streams logs back via vsock                         |  |
-//!      |  |  - Returns ExecutionResult                             |  |
-//!      |  +-------------------------------------------------------+  |
-//!      |                                                              |
-//!      |  VirtioFS mounts:                                           |
-//!      |    /nix/.ro-store -> host /nix/store (read-only)            |
-//!      |    /workspace     -> job working directory (read-write)     |
-//!      +--------------------------------------------------------------+
+//! +-------------------------------------------------------------+
+//! |                    Host Node                                |
+//! |  +-------------------------------------------------------+  |
+//! |  |            CloudHypervisorWorker                      |  |
+//! |  |  (VM Pool Manager - maintains warm VMs)               |  |
+//! |  +-------------------------------------------------------+  |
+//! |           |                    |                    |       |
+//! |     +-----+-----+        +-----+-----+       +-----+-----+  |
+//! |     |   VM 0    |        |   VM 1    |       |   VM N    |  |
+//! |     | aspen-node|        | aspen-node|       | aspen-node|  |
+//! |     | (worker)  |        | (worker)  |       | (worker)  |  |
+//! |     +-----------+        +-----------+       +-----------+  |
+//! |           |                    |                    |       |
+//! |           +--------------------+--------------------+       |
+//! |                                |                            |
+//! |                    Iroh Cluster Connection                  |
+//! +-------------------------------|-----------------------------+
+//! |                               |                             |
+//! |                  +------------+-----------+                 |
+//! |                  |     Aspen Cluster      |                 |
+//! |                  |  (Job Queue + SNIX)    |                 |
+//! |                  +------------------------+                 |
+//! |                                                             |
+//! |  VirtioFS mounts per VM:                                    |
+//! |    /nix/.ro-store -> host /nix/store (read-only, virtiofsd) |
+//! |    /workspace     -> AspenFs KV (in-process VirtioFS)       |
+//! +-------------------------------------------------------------+
 //! ```
 //!
 //! # Main Components
 //!
-//! - [`CloudHypervisorWorker`]: Worker implementation that manages VM pool lifecycle
+//! - [`CloudHypervisorWorker`]: VM pool lifecycle manager (does NOT execute jobs)
 //! - [`CloudHypervisorWorkerConfig`]: Configuration for VM resources, paths, and networking
 //! - [`VmPool`]: Warm pool of pre-booted VMs for fast job startup
 //! - [`ManagedCiVm`]: State machine for individual VM lifecycle

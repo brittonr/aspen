@@ -1,5 +1,6 @@
 //! VM lifecycle management: start, assign, release, pause, resume, shutdown.
 
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -16,6 +17,33 @@ use super::types::VmState;
 use crate::error::CloudHypervisorError;
 use crate::error::Result;
 use crate::error::{self};
+
+/// Inject a bridge socket address into a cluster ticket string.
+///
+/// Parses the ticket, adds the bridge address so VMs can reach the host's
+/// Iroh endpoint, and re-serializes. Falls back to the original ticket
+/// on parse errors.
+fn inject_bridge_addr(ticket_str: &str, bridge_addr: SocketAddr, vm_id: &str) -> String {
+    match aspen_ticket::AspenClusterTicket::deserialize(ticket_str) {
+        Ok(mut ticket) => {
+            info!(
+                vm_id = %vm_id,
+                bridge_addr = %bridge_addr,
+                "injecting bridge address into ticket"
+            );
+            ticket.inject_direct_addr(bridge_addr);
+            ticket.serialize()
+        }
+        Err(e) => {
+            warn!(
+                vm_id = %vm_id,
+                error = %e,
+                "failed to parse ticket for bridge injection, using original"
+            );
+            ticket_str.to_string()
+        }
+    }
+}
 
 impl ManagedCiVm {
     /// Get the current VM state.
@@ -41,6 +69,20 @@ impl ManagedCiVm {
 
         *self.state.write().await = VmState::Creating;
 
+        // Run the actual start logic, transitioning to Error on failure
+        if let Err(e) = self.start_inner().await {
+            *self.state.write().await = VmState::Error;
+            // Clean up any partially-started processes
+            self.kill_processes().await;
+            self.cleanup_sockets().await;
+            return Err(e);
+        }
+
+        Ok(())
+    }
+
+    /// Inner start logic, separated so the caller can handle error transitions.
+    async fn start_inner(&self) -> Result<()> {
         // Ensure state directory exists
         tokio::fs::create_dir_all(&self.config.state_dir).await.context(error::WorkspaceSetupSnafu)?;
 
@@ -61,25 +103,7 @@ impl ManagedCiVm {
 
             // If bridge socket address is configured, inject it into the ticket
             let final_ticket = if let Some(bridge_addr) = self.config.bridge_socket_addr() {
-                match aspen_ticket::AspenClusterTicket::deserialize(&ticket_str) {
-                    Ok(mut ticket) => {
-                        info!(
-                            vm_id = %self.id,
-                            bridge_addr = %bridge_addr,
-                            "injecting bridge address into workspace ticket"
-                        );
-                        ticket.inject_direct_addr(bridge_addr);
-                        ticket.serialize()
-                    }
-                    Err(e) => {
-                        warn!(
-                            vm_id = %self.id,
-                            error = %e,
-                            "failed to parse ticket for bridge injection, using original"
-                        );
-                        ticket_str.clone()
-                    }
-                }
+                inject_bridge_addr(&ticket_str, bridge_addr, &self.id)
             } else {
                 ticket_str.clone()
             };
@@ -122,27 +146,7 @@ impl ManagedCiVm {
             // If bridge socket address is configured, inject it into the ticket
             // so VMs can reach the host's Iroh endpoint via the bridge IP.
             let final_ticket = if let Some(bridge_addr) = self.config.bridge_socket_addr() {
-                // Parse ticket, inject bridge address, re-serialize
-                match aspen_ticket::AspenClusterTicket::deserialize(&ticket_str) {
-                    Ok(mut ticket) => {
-                        info!(
-                            vm_id = %self.id,
-                            bridge_addr = %bridge_addr,
-                            "injecting bridge address into VM ticket"
-                        );
-                        ticket.inject_direct_addr(bridge_addr);
-                        ticket.serialize()
-                    }
-                    Err(e) => {
-                        // Fall back to original ticket if parsing fails
-                        warn!(
-                            vm_id = %self.id,
-                            error = %e,
-                            "failed to parse ticket for bridge injection, using original"
-                        );
-                        ticket_str
-                    }
-                }
+                inject_bridge_addr(&ticket_str, bridge_addr, &self.id)
             } else {
                 ticket_str
             };
@@ -274,30 +278,36 @@ impl ManagedCiVm {
         *self.state.write().await = VmState::Cleanup;
 
         // Clean workspace: scan and delete all keys under the VM's KV prefix.
+        // Done in a single spawn_blocking call to avoid per-key thread spawns.
         {
             let prefix = format!("ci/workspaces/{}/", self.id);
             let client = self.workspace_client.read().await;
             if let Some(ref c) = *client {
-                debug!(vm_id = %self.id, prefix = %prefix, "cleaning workspace KV keys");
-                let c = c.clone();
-                let prefix_clone = prefix.clone();
-                let keys = tokio::task::spawn_blocking(move || c.scan_keys(&prefix_clone, 10_000))
+                let key_count = {
+                    let c = c.clone();
+                    let prefix_clone = prefix.clone();
+                    let vm_id = self.id.clone();
+                    tokio::task::spawn_blocking(move || {
+                        debug!(vm_id = %vm_id, prefix = %prefix_clone, "cleaning workspace KV keys");
+                        let keys = match c.scan_keys(&prefix_clone, 10_000) {
+                            Ok(k) => k,
+                            Err(e) => {
+                                warn!(vm_id = %vm_id, error = %e, "failed to scan workspace keys");
+                                return 0u32;
+                            }
+                        };
+                        let count = keys.len() as u32;
+                        for (key, _) in keys {
+                            if let Err(e) = c.delete_key(&key) {
+                                warn!(vm_id = %vm_id, key = %key, error = %e, "failed to delete workspace key");
+                            }
+                        }
+                        count
+                    })
                     .await
-                    .map_err(|e| CloudHypervisorError::WorkspaceProvision {
-                        reason: format!("spawn_blocking join error: {e}"),
-                    })?
-                    .map_err(|e| CloudHypervisorError::WorkspaceProvision {
-                        reason: format!("failed to scan workspace keys: {e}"),
-                    })?;
-
-                for (key, _) in keys {
-                    let c = self.workspace_client.read().await.clone();
-                    if let Some(c) = c {
-                        let key_clone = key.clone();
-                        let _ = tokio::task::spawn_blocking(move || c.delete_key(&key_clone)).await;
-                    }
-                }
-                debug!(vm_id = %self.id, "workspace KV keys cleaned");
+                    .unwrap_or(0)
+                };
+                debug!(vm_id = %self.id, keys_deleted = key_count, "workspace KV keys cleaned");
             }
         }
 
@@ -363,16 +373,21 @@ impl ManagedCiVm {
     }
 
     /// Shutdown the VM gracefully.
+    ///
+    /// Handles all states including Error — an errored VM still needs
+    /// its processes killed and sockets cleaned up.
     pub async fn shutdown(&self) -> Result<()> {
         let current = self.state().await;
         if current == VmState::Stopped {
             return Ok(());
         }
 
-        info!(vm_id = %self.id, "shutting down VM");
+        info!(vm_id = %self.id, state = ?current, "shutting down VM");
 
-        // Try graceful shutdown via API
-        if let Err(e) = self.api.shutdown().await {
+        // Try graceful shutdown via API (skip for Error state — API may be unreachable)
+        if current != VmState::Error
+            && let Err(e) = self.api.shutdown().await
+        {
             warn!(vm_id = %self.id, error = ?e, "graceful shutdown failed, force killing");
         }
 

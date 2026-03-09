@@ -27,6 +27,7 @@ mod types;
 
 use tokio::process::Child;
 use tokio::process::ChildStderr;
+use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::RwLock;
 pub use types::SharedVm;
 pub use types::VmState;
@@ -68,6 +69,11 @@ pub struct ManagedCiVm {
 
     /// VM index (for networking).
     pub(super) vm_index: u32,
+
+    /// Pool semaphore permit — held while this VM exists.
+    /// Automatically released on drop, preventing semaphore leaks even
+    /// if the VM is dropped without going through `destroy_vm()`.
+    pub(crate) pool_permit: RwLock<Option<OwnedSemaphorePermit>>,
 }
 
 impl ManagedCiVm {
@@ -88,6 +94,7 @@ impl ManagedCiVm {
             workspace_client: RwLock::new(None),
             current_job: RwLock::new(None),
             vm_index,
+            pool_permit: RwLock::new(None),
         }
     }
 }

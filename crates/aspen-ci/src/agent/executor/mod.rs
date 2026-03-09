@@ -81,13 +81,13 @@ impl Executor {
         // Validate working directory
         self.validate_working_dir(&request.working_dir)?;
 
-        // Load nix database dump if present and command is nix-related.
-        // The host generates this file with `nix-store --dump-db` after prefetching
-        // the build closure. We load it here (not at startup) because the dump is
-        // written AFTER the VM boots and the job is assigned.
-        if nix_db::is_nix_command(&request.command) {
-            nix_db::load_nix_db_dump(&self.workspace_root).await;
-        }
+        // Load nix database dump if present. The host generates this file
+        // with `nix-store --dump-db` after prefetching the build closure.
+        // We always attempt the load because:
+        // 1. Shell wrappers (sh -c "nix build ...") are common in CI pipelines
+        // 2. load_nix_db_dump() has a fast early-exit when the dump file doesn't exist
+        // 3. The dump is only loaded once per workspace (idempotent after first load)
+        nix_db::load_nix_db_dump(&self.workspace_root).await;
 
         // Create cancellation channel
         let (cancel_tx, cancel_rx) = oneshot::channel();

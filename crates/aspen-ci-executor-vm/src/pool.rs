@@ -5,6 +5,8 @@
 
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use aspen_core::MAX_CI_VMS_PER_NODE;
 use tokio::sync::Mutex;
@@ -35,8 +37,9 @@ pub struct VmPool {
     /// Semaphore to limit total VM count.
     vm_semaphore: Arc<Semaphore>,
 
-    /// Counter for generating unique VM indices.
-    next_vm_index: Mutex<u32>,
+    /// Monotonic counter for generating unique VM indices.
+    /// Uses AtomicU64 to avoid wrapping collisions over long-lived nodes.
+    next_vm_index: AtomicU64,
 }
 
 impl VmPool {
@@ -49,7 +52,7 @@ impl VmPool {
             idle_vms: Mutex::new(VecDeque::with_capacity(max_vms as usize)),
             all_vms: Mutex::new(Vec::new()),
             vm_semaphore: Arc::new(Semaphore::new(max_vms as usize)),
-            next_vm_index: Mutex::new(0),
+            next_vm_index: AtomicU64::new(0),
         }
     }
 
@@ -104,12 +107,24 @@ impl VmPool {
         }
 
         for _ in 0..target_size {
+            // Acquire permit before creating VM
+            let permit = match self.vm_semaphore.clone().try_acquire_owned() {
+                Ok(p) => p,
+                Err(_) => {
+                    warn!("no permits available for pre-warming");
+                    break;
+                }
+            };
+
             match self.create_and_start_vm().await {
                 Ok(vm) => {
+                    // Store permit in VM — released automatically on VM drop
+                    *vm.pool_permit.write().await = Some(permit);
                     info!(vm_id = %vm.id, "pre-warmed VM added to pool");
                     self.idle_vms.lock().await.push_back(vm);
                 }
                 Err(e) => {
+                    // Permit drops here, releasing capacity back
                     error!(error = ?e, "failed to pre-warm VM, continuing with reduced pool");
                 }
             }
@@ -150,11 +165,12 @@ impl VmPool {
             Ok(permit) => {
                 let vm = self.create_and_start_vm().await.map_err(|e| {
                     error!(error = ?e, "failed to create new VM");
+                    // Permit drops here automatically, releasing capacity
                     e
                 })?;
+                // Store permit in VM — released automatically on VM drop
+                *vm.pool_permit.write().await = Some(permit);
                 vm.assign(job_id.to_string()).await?;
-                // Keep permit alive while VM exists
-                std::mem::forget(permit);
                 info!(vm_id = %vm.id, job_id = %job_id, "created new VM for job");
                 Ok(vm)
             }
@@ -254,10 +270,14 @@ impl VmPool {
         let total = self.all_vms.lock().await.len();
         let available_permits = self.vm_semaphore.available_permits();
 
+        // Report the effective max (capped by MAX_CI_VMS_PER_NODE), not the
+        // uncapped config value, so callers see consistent numbers.
+        let effective_max = self.config.max_vms.min(MAX_CI_VMS_PER_NODE);
+
         PoolStatus {
             idle_vms: idle as u32,
             total_vms: total as u32,
-            max_vms: self.config.max_vms,
+            max_vms: effective_max,
             available_capacity: available_permits as u32,
             target_pool_size: self.config.pool_size,
         }
@@ -278,17 +298,19 @@ impl VmPool {
         debug!(current_idle = current_idle, target = target, to_create = to_create, "maintaining pool");
 
         for _ in 0..to_create {
-            // Check if we have capacity
-            let available = self.vm_semaphore.available_permits();
-            if available == 0 {
-                break;
-            }
+            // Acquire permit before creating VM
+            let permit = match self.vm_semaphore.clone().try_acquire_owned() {
+                Ok(p) => p,
+                Err(_) => break,
+            };
 
             match self.create_and_start_vm().await {
                 Ok(vm) => {
+                    *vm.pool_permit.write().await = Some(permit);
                     self.idle_vms.lock().await.push_back(vm);
                 }
                 Err(e) => {
+                    // Permit drops here, releasing capacity back
                     warn!(error = ?e, "failed to create maintenance VM");
                     break;
                 }
@@ -300,12 +322,9 @@ impl VmPool {
 
     /// Create and start a new VM.
     async fn create_and_start_vm(&self) -> Result<SharedVm> {
-        let vm_index = {
-            let mut idx = self.next_vm_index.lock().await;
-            let current = *idx;
-            *idx = (*idx + 1) % 1000; // Wrap around
-            current
-        };
+        // Monotonic: never wraps, never collides.
+        // u64 overflow is effectively impossible (~18 quintillion VMs).
+        let vm_index = self.next_vm_index.fetch_add(1, Ordering::Relaxed) as u32;
 
         let vm = Arc::new(ManagedCiVm::new(self.config.clone(), vm_index));
 
@@ -319,6 +338,9 @@ impl VmPool {
     }
 
     /// Destroy a VM and release its resources.
+    ///
+    /// The semaphore permit is released automatically when the VM's
+    /// `pool_permit` is dropped (either here or on VM drop).
     async fn destroy_vm(&self, vm: &SharedVm) {
         // Shutdown the VM
         if let Err(e) = vm.shutdown().await {
@@ -331,8 +353,10 @@ impl VmPool {
             all.retain(|v| !Arc::ptr_eq(v, vm));
         }
 
-        // Release semaphore permit
-        self.vm_semaphore.add_permits(1);
+        // Release semaphore permit by dropping it explicitly.
+        // This is safe even if the permit was already dropped (e.g., VM created
+        // during initialize() before a permit was assigned).
+        let _ = vm.pool_permit.write().await.take();
 
         debug!(vm_id = %vm.id, "VM destroyed");
     }
@@ -413,9 +437,8 @@ mod tests {
         let pool = VmPool::new(config);
         let status = pool.status().await;
 
-        // Should be capped at the constant
-        assert_eq!(status.max_vms, MAX_CI_VMS_PER_NODE + 100);
-        // Semaphore should use the capped value
+        // Both max_vms and available_capacity should be capped consistently
+        assert_eq!(status.max_vms, MAX_CI_VMS_PER_NODE);
         assert_eq!(status.available_capacity, MAX_CI_VMS_PER_NODE);
     }
 

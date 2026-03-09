@@ -7,10 +7,21 @@ use tokio::sync::oneshot;
 use super::*;
 
 #[tokio::test]
+async fn test_validate_working_dir_rejects_nonexistent() {
+    let executor = Executor::new();
+
+    // Non-existent path is rejected before the prefix check
+    let result = executor.validate_working_dir(Path::new("/tmp/evil-nonexistent"));
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("invalid working directory"));
+}
+
+#[tokio::test]
 async fn test_validate_working_dir_rejects_outside_workspace() {
     let executor = Executor::new();
 
-    let result = executor.validate_working_dir(Path::new("/tmp/evil"));
+    // /tmp exists but is not under /workspace — rejected after canonicalize
+    let result = executor.validate_working_dir(Path::new("/tmp"));
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("/workspace"));
 }

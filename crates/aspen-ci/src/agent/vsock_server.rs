@@ -115,14 +115,19 @@ async fn handle_connection(mut stream: VsockStream, executor: Arc<Executor>) -> 
                 // Spawn execution task
                 let exec_handle = tokio::spawn(async move { executor.execute(request, log_tx).await });
 
-                // Stream logs to host
+                // Stream logs to host. Track whether we already sent a Complete
+                // to avoid duplicate completion messages.
+                let mut completion_sent = false;
                 while let Some(log_msg) = log_rx.recv().await {
                     let is_complete = matches!(log_msg, LogMessage::Complete(_));
                     // Convert LogMessage to flat AgentMessage variants
                     let agent_msg = match log_msg {
                         LogMessage::Stdout(data) => AgentMessage::Stdout { data },
                         LogMessage::Stderr(data) => AgentMessage::Stderr { data },
-                        LogMessage::Complete(result) => AgentMessage::Complete { result },
+                        LogMessage::Complete(result) => {
+                            completion_sent = true;
+                            AgentMessage::Complete { result }
+                        }
                         LogMessage::Heartbeat { elapsed_secs } => AgentMessage::Heartbeat { elapsed_secs },
                     };
                     send_message(&mut stream, &agent_msg).await?;
@@ -131,23 +136,27 @@ async fn handle_connection(mut stream: VsockStream, executor: Arc<Executor>) -> 
                     }
                 }
 
-                // Wait for execution to finish and send final result
+                // Wait for execution to finish. Only send completion if
+                // it wasn't already sent via the log channel above.
                 match exec_handle.await {
                     Ok(Ok(result)) => {
-                        // Send completion if not already sent via log channel
-                        if result.error.is_none() || result.exit_code != -1 {
+                        if !completion_sent {
                             send_message(&mut stream, &AgentMessage::Complete { result }).await?;
                         }
                     }
                     Ok(Err(e)) => {
-                        send_message(&mut stream, &AgentMessage::Error { message: e.to_string() }).await?;
+                        if !completion_sent {
+                            send_message(&mut stream, &AgentMessage::Error { message: e.to_string() }).await?;
+                        }
                     }
                     Err(e) => {
                         error!(job_id = %job_id, "execution task panicked: {}", e);
-                        send_message(&mut stream, &AgentMessage::Error {
-                            message: format!("execution task panicked: {}", e),
-                        })
-                        .await?;
+                        if !completion_sent {
+                            send_message(&mut stream, &AgentMessage::Error {
+                                message: format!("execution task panicked: {}", e),
+                            })
+                            .await?;
+                        }
                     }
                 }
             }
