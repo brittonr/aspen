@@ -163,18 +163,19 @@ impl LocalExecutorWorker {
             }
 
             // Parse the store path
-            let store_path_parsed: SnixStorePath<String> = match SnixStorePath::from_bytes(store_path.as_bytes()) {
-                Ok(sp) => sp,
-                Err(e) => {
-                    warn!(
-                        job_id = %job_id,
-                        store_path = %store_path,
-                        error = %e,
-                        "Failed to parse store path for SNIX"
-                    );
-                    continue;
-                }
-            };
+            let store_path_parsed: SnixStorePath<String> =
+                match SnixStorePath::from_absolute_path(store_path.as_bytes()) {
+                    Ok(sp) => sp,
+                    Err(e) => {
+                        warn!(
+                            job_id = %job_id,
+                            store_path = %store_path,
+                            error = %e,
+                            "Failed to parse store path for SNIX"
+                        );
+                        continue;
+                    }
+                };
 
             // Query nix path-info for references and deriver
             let path_info_extra = self.query_path_info(store_path).await;
@@ -186,15 +187,18 @@ impl LocalExecutorWorker {
                 references: path_info_extra
                     .as_ref()
                     .map(|info| {
-                        info.references.iter().filter_map(|r| SnixStorePath::from_bytes(r.as_bytes()).ok()).collect()
+                        info.references
+                            .iter()
+                            .filter_map(|r| SnixStorePath::from_absolute_path(r.as_bytes()).ok())
+                            .collect()
                     })
                     .unwrap_or_default(),
                 nar_size: actual_nar_size,
                 nar_sha256,
                 signatures: vec![], // No signatures for CI builds
-                deriver: path_info_extra
-                    .as_ref()
-                    .and_then(|info| info.deriver.as_ref().and_then(|d| SnixStorePath::from_bytes(d.as_bytes()).ok())),
+                deriver: path_info_extra.as_ref().and_then(|info| {
+                    info.deriver.as_ref().and_then(|d| SnixStorePath::from_absolute_path(d.as_bytes()).ok())
+                }),
                 ca: None, // No content addressing for CI builds
             };
 
