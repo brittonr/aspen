@@ -35,7 +35,7 @@
 - [x] 5.4 Updated log chunk diagnostic from "expected for shell worker" to "NixBuildWorker should write them"
 - [x] 5.5 Updated "real-time log stream" subtest to expect NixBuildWorker log chunks (non-fatal for timing)
 - [x] 5.6 Removed `rustToolChain`/`gcc` dependencies from VM — nix checks use `/bin/sh` only
-- [ ] 5.7 Run `nix build .#checks.x86_64-linux.ci-dogfood-test --impure` and verify all subtests pass (requires VM build)
+- [x] 5.7 VM dogfood test passes: all 4 nix jobs succeed via NixBuildWorker, 4/4 jobs have log chunks, 76s total
 
 ## 6. `ignore_paths` Evaluation (D5)
 
@@ -65,6 +65,6 @@
 ## 9. Integration Verification
 
 - [x] 9.1 Run `cargo nextest run --workspace -P quick` — 6,422 tests pass (18 new), 201 skipped
-- [ ] 9.2 Run `nix build .#checks.x86_64-linux.ci-dogfood-test --impure` — dogfood test passes with Nix executor (requires VM build)
+- [x] 9.2 VM dogfood test passes end-to-end (Forge → CI trigger → NixBuildWorker → nix build → log streaming → success)
 - [ ] 9.3 Run `nix run .#dogfood-local` on a real machine — full pipeline succeeds
 - [x] 9.4 Update napkin with patterns discovered during implementation
