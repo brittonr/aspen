@@ -630,28 +630,48 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     ///
     /// Updates both in-memory cache and KV store.
     pub async fn complete_run(&self, run_id: &str, status: PipelineStatus) {
-        let mut runs = self.active_runs.write().await;
+        let checkout_dir_to_clean = {
+            let mut runs = self.active_runs.write().await;
 
-        if let Some(run) = runs.get_mut(run_id) {
-            let repo_id = run.context.repo_id;
-            run.status = status;
-            run.completed_at = Some(Utc::now());
+            if let Some(run) = runs.get_mut(run_id) {
+                let repo_id = run.context.repo_id;
+                run.status = status;
+                run.completed_at = Some(Utc::now());
 
-            // Persist updated run to KV store
-            if let Err(e) = self.persist_run(run).await {
-                warn!(run_id = %run_id, error = %e, "Failed to persist completed run to KV store");
+                // Persist updated run to KV store
+                if let Err(e) = self.persist_run(run).await {
+                    warn!(run_id = %run_id, error = %e, "Failed to persist completed run to KV store");
+                }
+
+                // Update repo run count
+                if let Some(count) = self.runs_per_repo.write().await.get_mut(&repo_id) {
+                    *count = count.saturating_sub(1);
+                }
+
+                info!(
+                    run_id = %run_id,
+                    status = ?status,
+                    "Pipeline run completed"
+                );
+
+                // Capture checkout dir for cleanup (done outside the lock)
+                run.context.checkout_dir.clone()
+            } else {
+                None
             }
+        };
 
-            // Update repo run count
-            if let Some(count) = self.runs_per_repo.write().await.get_mut(&repo_id) {
-                *count = count.saturating_sub(1);
+        // Clean up checkout directory for all terminal pipeline states.
+        // Done outside the active_runs lock to avoid holding it during I/O.
+        if let Some(ref checkout_dir) = checkout_dir_to_clean {
+            if let Err(e) = crate::checkout::cleanup_checkout(checkout_dir).await {
+                warn!(
+                    run_id = %run_id,
+                    checkout_dir = %checkout_dir.display(),
+                    error = %e,
+                    "Failed to cleanup checkout directory after pipeline completion (non-fatal)"
+                );
             }
-
-            info!(
-                run_id = %run_id,
-                status = ?status,
-                "Pipeline run completed"
-            );
         }
     }
 

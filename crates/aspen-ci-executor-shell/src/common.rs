@@ -4,6 +4,7 @@
 //! - Artifact collection from workspace directories
 //! - Workspace seeding from blob store
 //! - Source archive creation for VM jobs
+//! - Log bridge for real-time CI log streaming to KV store
 
 use std::io::Cursor;
 use std::path::Path;
@@ -12,6 +13,10 @@ use std::sync::Arc;
 
 use aspen_blob::BlobRef;
 use aspen_blob::prelude::*;
+use aspen_ci_core::log_writer::CiLogChunk;
+use aspen_ci_core::log_writer::CiLogCompleteMarker;
+use aspen_core::KeyValueStore;
+use aspen_core::WriteRequest;
 use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
@@ -521,4 +526,119 @@ pub async fn create_source_archive(source_dir: &Path, blob_store: &Arc<dyn BlobS
     );
 
     Ok(hash_hex)
+}
+
+// ============================================================================
+// Log Bridge — shared CI log streaming for all executor workers
+// ============================================================================
+
+/// KV key prefix for CI log chunks.
+pub const CI_LOG_KV_PREFIX: &str = "_ci:logs:";
+/// Completion marker suffix.
+pub const CI_LOG_COMPLETE_MARKER: &str = "__complete__";
+/// Maximum bytes buffered before flushing a chunk.
+pub const LOG_FLUSH_THRESHOLD: usize = 8 * 1024;
+/// Periodic flush interval in milliseconds.
+/// Ensures partial buffers are written to KV for real-time streaming,
+/// even when output is sparse and doesn't fill a full chunk.
+pub const LOG_FLUSH_INTERVAL_MS: u64 = 500;
+
+/// Bridge task: reads log lines from a channel, buffers them, and writes
+/// log chunks to KV. Flushes on size threshold OR periodic timer to ensure
+/// real-time streaming even with sparse output.
+///
+/// Used by both `NixBuildWorker` and `LocalExecutorWorker` for consistent
+/// CI log streaming.
+pub async fn log_bridge(
+    mut rx: tokio::sync::mpsc::Receiver<String>,
+    kv_store: Arc<dyn KeyValueStore>,
+    run_id: String,
+    job_id: String,
+) {
+    use std::time::Duration;
+
+    use tokio::time::interval;
+
+    let mut chunk_index: u32 = 0;
+    let mut buffer = String::new();
+    let mut flush_interval = interval(Duration::from_millis(LOG_FLUSH_INTERVAL_MS));
+
+    // Skip the immediate first tick
+    flush_interval.tick().await;
+
+    loop {
+        tokio::select! {
+            biased;
+
+            msg = rx.recv() => {
+                match msg {
+                    Some(line) => {
+                        buffer.push_str(&line);
+
+                        // Flush when buffer exceeds threshold
+                        if buffer.len() >= LOG_FLUSH_THRESHOLD {
+                            log_bridge_flush_chunk(&kv_store, &run_id, &job_id, &mut chunk_index, &mut buffer).await;
+                        }
+                    }
+                    None => {
+                        // Channel closed — job finished
+                        break;
+                    }
+                }
+            }
+            _ = flush_interval.tick() => {
+                // Periodic flush: write partial buffer to KV so streaming
+                // clients see output in real-time, not just at 8KB boundaries.
+                if !buffer.is_empty() {
+                    log_bridge_flush_chunk(&kv_store, &run_id, &job_id, &mut chunk_index, &mut buffer).await;
+                }
+            }
+        }
+    }
+
+    // Flush remaining buffer
+    if !buffer.is_empty() {
+        log_bridge_flush_chunk(&kv_store, &run_id, &job_id, &mut chunk_index, &mut buffer).await;
+    }
+
+    // Write completion marker
+    let marker_key = format!("{CI_LOG_KV_PREFIX}{run_id}:{job_id}:{CI_LOG_COMPLETE_MARKER}");
+    let now_ms =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+    let marker = CiLogCompleteMarker {
+        total_chunks: chunk_index,
+        timestamp_ms: now_ms,
+        status: "done".to_string(),
+    };
+    if let Ok(json) = serde_json::to_string(&marker) {
+        let _ = kv_store.write(WriteRequest::set(marker_key, json)).await;
+    }
+}
+
+/// Flush the current buffer as a log chunk to KV.
+pub async fn log_bridge_flush_chunk(
+    kv_store: &Arc<dyn KeyValueStore>,
+    run_id: &str,
+    job_id: &str,
+    chunk_index: &mut u32,
+    buffer: &mut String,
+) {
+    let now_ms =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+
+    let chunk = CiLogChunk {
+        index: *chunk_index,
+        content: buffer.clone(),
+        timestamp_ms: now_ms,
+    };
+
+    if let Ok(json) = serde_json::to_string(&chunk) {
+        let key = format!("{CI_LOG_KV_PREFIX}{run_id}:{job_id}:{:010}", *chunk_index);
+        if let Err(e) = kv_store.write(WriteRequest::set(key, json)).await {
+            tracing::warn!(run_id = %run_id, job_id = %job_id, chunk = *chunk_index, error = %e, "Failed to write log chunk");
+        }
+    }
+
+    *chunk_index += 1;
+    buffer.clear();
 }

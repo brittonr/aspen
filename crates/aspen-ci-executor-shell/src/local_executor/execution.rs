@@ -317,6 +317,9 @@ impl LocalExecutorWorker {
     }
 
     /// Execute a request with log streaming and return the result.
+    ///
+    /// If the worker has a KV store and the payload has a `run_id`, spawns
+    /// a `log_bridge` task for real-time CI log streaming via `_ci:logs:*` KV keys.
     async fn execute_with_streaming(
         &self,
         job_id: &str,
@@ -333,25 +336,47 @@ impl LocalExecutorWorker {
             "executing job"
         );
 
+        // Set up KV log bridge for CI log streaming if KV store and run_id are available.
+        let kv_log_sender = match (&self.config.kv_store, &payload.run_id) {
+            (Some(kv_store), Some(run_id)) if !run_id.is_empty() => {
+                let (tx, rx) = mpsc::channel::<String>(1000);
+                let kv = kv_store.clone();
+                let rid = run_id.clone();
+                let jid = job_id.to_string();
+                tracing::debug!(run_id = %rid, job_id = %jid, "Starting CI log streaming for shell job");
+                let handle = tokio::spawn(crate::common::log_bridge(rx, kv, rid, jid));
+                Some((tx, handle))
+            }
+            _ => None,
+        };
+
         // If an external log sink is set (e.g., VM worker streaming to cluster),
         // interpose a forwarder that sends messages to both the internal consumer
         // and the external sink.
-        let log_consumer = if let Some(ref sink) = self.log_sink {
+        let kv_log_tx = kv_log_sender.as_ref().map(|(tx, _)| tx.clone());
+        let log_consumer = if self.log_sink.is_some() || kv_log_tx.is_some() {
             let (fwd_tx, fwd_rx) = mpsc::channel::<LogMessage>(1024);
-            let sink_clone = sink.clone();
-            let fwd_job_id = job_id.to_string();
+            let sink_clone = self.log_sink.clone();
+            let kv_tx = kv_log_tx;
 
-            // Forwarder task: reads from log_rx, sends to both fwd_tx (internal) and sink (external)
+            // Forwarder task: reads from log_rx, sends to internal consumer,
+            // external sink (if set), and KV log bridge (if set)
             tokio::spawn(async move {
                 let mut log_rx = log_rx;
                 while let Some(msg) = log_rx.recv().await {
                     // Forward to external sink (best-effort, don't block execution)
-                    if let Err(e) = sink_clone.try_send(msg.clone()) {
-                        tracing::debug!(
-                            job_id = %fwd_job_id,
-                            error = %e,
-                            "log sink send failed (backpressure or closed)"
-                        );
+                    if let Some(ref sink) = sink_clone {
+                        let _ = sink.try_send(msg.clone());
+                    }
+                    // Forward to KV log bridge for CI log streaming
+                    if let Some(ref kv) = kv_tx {
+                        let line = match &msg {
+                            LogMessage::Stdout(s) | LogMessage::Stderr(s) => s.clone(),
+                            LogMessage::Complete(_) | LogMessage::Heartbeat { .. } => String::new(),
+                        };
+                        if !line.is_empty() {
+                            let _ = kv.send(line).await;
+                        }
                     }
                     // Forward to internal consumer
                     if fwd_tx.send(msg).await.is_err() {
@@ -369,6 +394,12 @@ impl LocalExecutorWorker {
 
         // Log consumer task is non-critical; if it panics, empty logs are acceptable
         let (collected_stdout, collected_stderr) = log_consumer.await.unwrap_or_default();
+
+        // Drop KV log sender and await bridge completion (flushes remaining buffer + writes marker)
+        if let Some((tx, handle)) = kv_log_sender {
+            drop(tx);
+            let _ = handle.await;
+        }
 
         match exec_result {
             Ok(mut result) => {

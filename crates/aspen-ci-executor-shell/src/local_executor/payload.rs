@@ -62,6 +62,12 @@ pub struct LocalExecutorPayload {
     /// Flake attribute to prefetch for nix commands.
     #[serde(default)]
     pub flake_attr: Option<String>,
+
+    /// Pipeline run ID for CI log streaming.
+    /// When set (along with a KV store on the worker), log chunks are written
+    /// to `_ci:logs:{run_id}:{job_id}:{chunk}` for real-time streaming via `ci logs --follow`.
+    #[serde(default)]
+    pub run_id: Option<String>,
 }
 
 fn default_working_dir() -> String {

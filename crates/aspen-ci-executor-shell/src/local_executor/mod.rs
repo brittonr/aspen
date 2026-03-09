@@ -257,19 +257,11 @@ impl Worker for LocalExecutorWorker {
     }
 
     fn job_types(&self) -> Vec<String> {
-        // Handle all CI job types for local execution
-        // - shell_command: Shell jobs from ci.ncl
-        // - ci_nix_build: Nix build jobs from ci.ncl
-        // - ci_vm: VM isolation jobs (CloudHypervisorWorker compatibility)
-        // - cloud_hypervisor: Direct CloudHypervisorWorker jobs
-        // - local_executor: Jobs explicitly targeting local execution
-        vec![
-            "shell_command".to_string(),
-            "ci_nix_build".to_string(),
-            "ci_vm".to_string(),
-            "cloud_hypervisor".to_string(),
-            "local_executor".to_string(),
-        ]
+        // Shell executor only claims shell job types.
+        // ci_nix_build → NixBuildWorker (dedicated executor)
+        // ci_vm → VM workers (self-register via aspen-node --worker-only)
+        // cloud_hypervisor → CloudHypervisorWorker (VM pool manager)
+        vec!["shell_command".to_string(), "local_executor".to_string()]
     }
 }
 
@@ -291,6 +283,7 @@ mod tests {
             source_hash: None,
             checkout_dir: None,
             flake_attr: None,
+            run_id: None,
         };
         assert!(payload.validate().is_ok());
 
@@ -328,8 +321,14 @@ mod tests {
 
         let types = worker.job_types();
         assert!(types.contains(&"shell_command".to_string()));
-        assert!(types.contains(&"ci_nix_build".to_string()));
-        assert!(types.contains(&"ci_vm".to_string()));
         assert!(types.contains(&"local_executor".to_string()));
+        // Shell executor must NOT claim types belonging to dedicated executors
+        assert!(!types.contains(&"ci_nix_build".to_string()), "ci_nix_build belongs to NixBuildWorker");
+        assert!(!types.contains(&"ci_vm".to_string()), "ci_vm belongs to VM workers");
+        assert!(
+            !types.contains(&"cloud_hypervisor".to_string()),
+            "cloud_hypervisor belongs to CloudHypervisorWorker"
+        );
+        assert_eq!(types.len(), 2);
     }
 }

@@ -112,6 +112,7 @@ fn create_shell_payload(command: &str, args: Vec<&str>) -> LocalExecutorPayload 
         source_hash: None,
         checkout_dir: None,
         flake_attr: None,
+        run_id: None,
     }
 }
 
@@ -354,6 +355,7 @@ async fn test_empty_command_validation() {
         source_hash: None,
         checkout_dir: None,
         flake_attr: None,
+        run_id: None,
     };
     let job = create_test_job(payload, "shell_command");
 
@@ -388,6 +390,7 @@ async fn test_command_too_long_validation() {
         source_hash: None,
         checkout_dir: None,
         flake_attr: None,
+        run_id: None,
     };
     let job = create_test_job(payload, "shell_command");
 
@@ -484,9 +487,11 @@ fn test_worker_job_types() {
     let job_types = worker.job_types();
 
     assert!(job_types.contains(&"shell_command".to_string()), "should handle shell_command");
-    assert!(job_types.contains(&"ci_nix_build".to_string()), "should handle ci_nix_build");
-    assert!(job_types.contains(&"ci_vm".to_string()), "should handle ci_vm");
     assert!(job_types.contains(&"local_executor".to_string()), "should handle local_executor");
+    // Shell executor must NOT claim types belonging to dedicated executors
+    assert!(!job_types.contains(&"ci_nix_build".to_string()), "ci_nix_build belongs to NixBuildWorker");
+    assert!(!job_types.contains(&"ci_vm".to_string()), "ci_vm belongs to VM workers");
+    assert_eq!(job_types.len(), 2);
 }
 
 /// Test default configuration.
