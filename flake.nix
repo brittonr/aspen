@@ -2456,6 +2456,18 @@
                 nixpkgsFlake = nixpkgs;
               };
 
+              # Self-build test: push Aspen Rust code to Forge, CI compiles it with rustc.
+              # Proves the self-hosting loop: Aspen builds its own Rust code.
+              # Build: nix build .#checks.x86_64-linux.ci-dogfood-self-build-test --impure --option sandbox false
+              ci-dogfood-self-build-test = import ./nix/tests/ci-dogfood-self-build.nix {
+                inherit pkgs lib kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+                nixpkgsFlake = nixpkgs;
+              };
+
               # HTTP proxy test: TCP tunnel and HTTP forward proxy over
               # iroh QUIC. Two nodes — server (aspen-node with proxy) and
               # client (aspen-cli proxy commands). Tests tunnel creation,
