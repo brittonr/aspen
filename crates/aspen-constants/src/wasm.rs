@@ -33,3 +33,18 @@ pub const DEFAULT_WASM_EXECUTION_TIMEOUT_SECS: u64 = 30;
 /// Manifests may override the default up to this cap. Values above this are
 /// clamped silently.
 pub const MAX_WASM_EXECUTION_TIMEOUT_SECS: u64 = 300;
+
+/// Default guest output buffer size for WASM sandbox responses (256 KB).
+///
+/// hyperlight-wasm defaults to 16 KB (`0x4000`) which is too small for
+/// responses containing large JSON payloads (e.g., CI job results, KV scan
+/// results, multi-step pipeline outputs). 256 KB covers realistic use cases
+/// while keeping per-sandbox memory overhead reasonable.
+///
+/// If a response exceeds this limit, the guest call fails with a buffer
+/// overflow error. Extremely large data should use blob storage instead.
+pub const DEFAULT_WASM_GUEST_OUTPUT_BUFFER_SIZE: usize = 256 * 1024;
+
+// Compile-time: output buffer must be at least 32KB to handle typical
+// CI job results (~20KB) and KV scan payloads with headroom.
+const _: () = assert!(DEFAULT_WASM_GUEST_OUTPUT_BUFFER_SIZE >= 32 * 1024, "WASM output buffer must be at least 32KB");
