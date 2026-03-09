@@ -1818,6 +1818,56 @@
                   doCheck = false;
                 }
               );
+              # Node with plugins + SNIX decomposed content-addressed storage.
+              # Used by ci-dogfood-self-build-test to verify SNIX upload path.
+              #
+              # fullSrc stubs snix git deps as empty crates. fullSrcWithSnix
+              # reverses that and restores the real git dep lines. We also
+              # need a vendor dir with the real snix source and PROTO_ROOT
+              # for snix-castore's build.rs (tonic protobuf generation).
+              full-aspen-node-plugins-snix = let
+                snixVendorDir = patchVendorForHyperlight (craneLib.vendorCargoDeps {
+                  src = fullSrcWithSnix + "/aspen";
+                  overrideVendorGitCheckout = ps: drv: let
+                    isSnixRepo =
+                      builtins.any (
+                        p:
+                          builtins.isString (p.source or null)
+                          && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
+                      )
+                      ps;
+                  in
+                    if isSnixRepo
+                    then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
+                    else ensureGitCheckoutLock drv;
+                });
+                snixBasicArgs =
+                  fullBasicArgs
+                  // {
+                    src = fullSrcWithSnix;
+                  };
+              in
+                craneLib.buildPackage (
+                  snixBasicArgs
+                  // {
+                    inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                    cargoArtifacts = fullPluginsCargoArtifacts;
+                    cargoVendorDir = snixVendorDir;
+                    cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,snix";
+                    doCheck = false;
+                    HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+                    PROTO_ROOT = "${snix-src}";
+                    SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
+                    nativeBuildInputs =
+                      basicArgs.nativeBuildInputs
+                      ++ (with pkgs; [autoPatchelfHook]);
+                    buildInputs =
+                      basicArgs.buildInputs
+                      ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
+                        with pkgs; [darwin.apple_sdk.frameworks.Security]
+                      ));
+                  }
+                );
               full-aspen-net-daemon = craneLib.buildPackage (
                 fullCommonArgs
                 // {
@@ -2461,7 +2511,7 @@
               # Build: nix build .#checks.x86_64-linux.ci-dogfood-self-build-test --impure --option sandbox false
               ci-dogfood-self-build-test = import ./nix/tests/ci-dogfood-self-build.nix {
                 inherit pkgs kvPluginWasm forgePluginWasm;
-                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenNodePackage = bins.full-aspen-node-plugins-snix;
                 aspenCliPackage = bins.full-aspen-cli-e2e;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
                 gitRemoteAspenPackage = bins.full-git-remote-aspen;

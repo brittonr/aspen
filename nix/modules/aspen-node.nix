@@ -173,6 +173,12 @@ in {
       default = "/workspace";
       description = "Directory for CI job workspaces when using local executor mode";
     };
+
+    enableSnix = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Enable SNIX decomposed content-addressed storage for Nix artifacts";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -186,6 +192,10 @@ in {
         {
           RUST_LOG = cfg.logLevel;
           ASPEN_CI_WATCHED_REPOS = lib.concatStringsSep "," cfg.watchedRepos;
+        }
+        # SNIX decomposed content-addressed storage
+        // lib.optionalAttrs cfg.enableSnix {
+          ASPEN_SNIX_ENABLED = "true";
         }
         # Local executor mode - runs jobs directly without nested VMs
         // lib.optionalAttrs cfg.ciLocalExecutor {
