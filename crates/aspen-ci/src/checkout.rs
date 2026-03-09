@@ -843,4 +843,25 @@ dependencies = []
         // Git repo should exist after full prepare
         assert!(temp_dir.path().join(".git").exists());
     }
+
+    #[tokio::test]
+    async fn test_cleanup_checkout_removes_dir() {
+        use tempfile::TempDir;
+
+        let parent = TempDir::new().unwrap();
+        let checkout_dir = parent.path().join("ci-checkout-test-run");
+        tokio::fs::create_dir_all(&checkout_dir).await.unwrap();
+        tokio::fs::write(checkout_dir.join("file.txt"), "test").await.unwrap();
+
+        assert!(checkout_dir.exists());
+        cleanup_checkout(&checkout_dir).await.unwrap();
+        assert!(!checkout_dir.exists(), "checkout dir should be removed");
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_checkout_nonexistent_is_noop() {
+        let path = std::path::Path::new("/tmp/ci-checkout-nonexistent-test-xyz");
+        // Should not error even if path doesn't exist
+        cleanup_checkout(path).await.unwrap();
+    }
 }

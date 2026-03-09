@@ -676,3 +676,156 @@ async fn test_concurrent_execution() {
         assert!(result.is_success(), "job {} should succeed: {:?}", i, result);
     }
 }
+
+// ── Log bridge integration tests ────────────────────────────────────────────
+
+/// Minimal in-memory KV store for testing CI log streaming.
+///
+/// Captures all writes for later assertion. Only the `write` method is needed
+/// for the log bridge; read/delete/scan are stub implementations.
+mod mock_kv {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use aspen_core::DeleteRequest;
+    use aspen_core::DeleteResult;
+    use aspen_core::KeyValueStore;
+    use aspen_core::KeyValueStoreError;
+    use aspen_core::KeyValueWithRevision;
+    use aspen_core::ReadRequest;
+    use aspen_core::ReadResult;
+    use aspen_core::ScanRequest;
+    use aspen_core::ScanResult;
+    use aspen_core::WriteCommand;
+    use aspen_core::WriteRequest;
+    use aspen_core::WriteResult;
+    use tokio::sync::RwLock;
+
+    #[derive(Debug, Default, Clone)]
+    pub struct MockKvStore {
+        pub data: Arc<RwLock<HashMap<String, String>>>,
+    }
+
+    impl MockKvStore {
+        pub fn new() -> Self {
+            Self::default()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl KeyValueStore for MockKvStore {
+        async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
+            let data = self.data.read().await;
+            let kv = data.get(&request.key).map(|v| KeyValueWithRevision {
+                key: request.key.clone(),
+                value: v.clone(),
+                version: 1,
+                create_revision: 1,
+                mod_revision: 1,
+            });
+            Ok(ReadResult { kv })
+        }
+
+        async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+            let mut data = self.data.write().await;
+            match &request.command {
+                WriteCommand::Set { key, value } => {
+                    data.insert(key.clone(), value.clone());
+                }
+                _ => {} // Only Set is used by log_bridge
+            }
+            Ok(WriteResult::default())
+        }
+
+        async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+            let mut data = self.data.write().await;
+            let is_deleted = data.remove(&request.key).is_some();
+            Ok(DeleteResult {
+                key: request.key,
+                is_deleted,
+            })
+        }
+
+        async fn scan(&self, _request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+            Ok(ScanResult {
+                entries: vec![],
+                result_count: 0,
+                is_truncated: false,
+                continuation_token: None,
+            })
+        }
+    }
+}
+
+/// Test 3.5: Shell job with mock KV store produces log chunks with correct key format.
+///
+/// Verifies that when a KV store and run_id are provided, the shell executor
+/// spawns the log_bridge and writes `_ci:logs:{run_id}:{job_id}:chunk:{N}` keys.
+#[tokio::test]
+async fn test_shell_job_with_kv_produces_log_chunks() {
+    let temp_dir = TempDir::new().expect("failed to create temp dir");
+    let kv = Arc::new(mock_kv::MockKvStore::new());
+
+    let config = LocalExecutorWorkerConfig {
+        workspace_dir: temp_dir.path().to_path_buf(),
+        should_cleanup_workspaces: true,
+        kv_store: Some(kv.clone() as Arc<dyn aspen_core::KeyValueStore>),
+        ..Default::default()
+    };
+    let worker = LocalExecutorWorker::new(config);
+
+    let mut payload = create_shell_payload("echo", vec!["hello from CI log bridge"]);
+    payload.run_id = Some("test-run-001".to_string());
+    let job = create_test_job(payload, "shell_command");
+
+    let result = worker.execute(job).await;
+    assert!(result.is_success(), "job should succeed: {:?}", result);
+
+    // Check KV store for log chunks
+    let data = kv.data.read().await;
+    let log_keys: Vec<&String> = data.keys().filter(|k| k.starts_with("_ci:logs:")).collect();
+    assert!(
+        !log_keys.is_empty(),
+        "Expected CI log chunk keys in KV store, found none. Keys: {:?}",
+        data.keys().collect::<Vec<_>>()
+    );
+
+    // Verify key format: _ci:logs:{run_id}:{job_id}:{seq_number}
+    for key in &log_keys {
+        if !key.contains("__complete__") {
+            assert!(
+                key.starts_with("_ci:logs:test-run-001:"),
+                "Log key should start with _ci:logs:test-run-001: but got {key}"
+            );
+        }
+    }
+
+    // Verify a complete marker exists: _ci:logs:{run_id}:{job_id}:__complete__
+    let has_complete = data.keys().any(|k| k.contains("__complete__"));
+    assert!(has_complete, "Expected __complete__ marker key. Keys: {:?}", data.keys().collect::<Vec<_>>());
+}
+
+/// Test 3.6: Shell job without KV store still captures output in JobOutput.
+///
+/// Verifies that the shell executor works normally when no KV store is configured,
+/// and stdout/stderr are still captured in the job result.
+#[tokio::test]
+async fn test_shell_job_without_kv_captures_output() {
+    let temp_dir = TempDir::new().expect("failed to create temp dir");
+    let worker = create_test_worker(&temp_dir);
+
+    let payload = create_shell_payload("echo", vec!["captured output"]);
+    let job = create_test_job(payload, "shell_command");
+
+    let result = worker.execute(job).await;
+    assert!(result.is_success(), "job should succeed: {:?}", result);
+
+    match result {
+        JobResult::Success(output) => {
+            let data: Value = serde_json::from_value(output.data).expect("output should be JSON");
+            let stdout = extract_stdout(&data);
+            assert!(stdout.contains("captured output"), "stdout should contain 'captured output', got: {stdout}");
+        }
+        other => panic!("expected Success, got: {:?}", other),
+    }
+}
