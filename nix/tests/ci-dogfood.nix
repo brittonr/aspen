@@ -1,12 +1,11 @@
-# Dogfood NixOS VM test: push Aspen's source to Forge, COMPILE it via NixBuildWorker.
+# Dogfood NixOS VM test: push Aspen's source to Forge, BUILD it via NixBuildWorker.
 #
 # This is the self-hosting litmus test. It:
 #   1. Creates a Forge repository
 #   2. Pushes Aspen's ACTUAL source tree (80+ crates, ~23MB) via git-remote-aspen
-#   3. CI auto-triggers with 3-stage pipeline using `type = 'nix` jobs:
+#   3. CI auto-triggers with 2-stage pipeline using `type = 'nix` jobs:
 #      a. Validate: structural check (source tree has 70+ crates)
-#      b. Build: `cargo check` on aspen-constants + aspen-time (zero-dep crates)
-#      c. Test: `cargo check -p aspen-core` (real crate with vendored dependencies)
+#      b. Build: `cargo build --bin aspen-node` with full feature set
 #   4. Verifies pipeline completion with all stages passing
 #   5. Verifies NixBuildWorker log chunks are written to KV store
 #
@@ -15,7 +14,7 @@
 #   - Vendored cargo deps via cargoVendorDir (crane-built)
 #   - Cargo config at /etc/aspen-ci/cargo-config.toml
 #
-# This proves Aspen can host its own source code AND build it with Nix
+# This proves Aspen can host its own source code AND build itself with Nix
 # (stdenv.mkDerivation + nixpkgs) through its own CI using NixBuildWorker.
 #
 # Run (requires --option sandbox false for VM internet via QEMU user-mode NAT):
@@ -48,53 +47,93 @@
   # using full /nix/store/... paths, so no path rewriting needed.
   cargoConfig = "${cargoVendorDir}/config.toml";
 
-  # Minimal workspace Cargo.toml for the cargo-check-core build.
-  # Only includes aspen-core and its transitive path deps — avoids loading
-  # workspace members that depend on git sources (aspen-net, aspen-proxy, etc.)
-  # which would require vendoring git deps too.
-  minimalWorkspaceToml = pkgs.writeText "minimal-workspace-Cargo.toml" ''
-    [workspace]
-    members = [
-      "crates/aspen-core",
-      "crates/aspen-constants",
-      "crates/aspen-hlc",
-      "crates/aspen-cluster-types",
-      "crates/aspen-kv-types",
-      "crates/aspen-traits",
-      "crates/aspen-time",
-      "crates/aspen-disk",
-      "crates/aspen-storage-types",
-      "crates/aspen-layer",
-    ]
-    resolver = "3"
+  # Pre-process source for dogfood: stub all git deps so cargo can resolve
+  # the full workspace without network access. Only registry deps are needed.
+  # Replicates the transformations from fullSrc in flake.nix.
+  dogfoodSource =
+    pkgs.runCommand "aspen-dogfood-source" {
+      nativeBuildInputs = [pkgs.gnused pkgs.findutils];
+    } ''
+      cp -r ${aspenSource} $out
+      chmod -R u+w $out
 
-    [workspace.dependencies]
-    aspen-constants = { path = "crates/aspen-constants" }
-    aspen-core = { path = "crates/aspen-core" }
-    aspen-hlc = { path = "crates/aspen-hlc" }
-    aspen-kv-types = { path = "crates/aspen-kv-types" }
-    aspen-cluster-types = { path = "crates/aspen-cluster-types" }
-    aspen-traits = { path = "crates/aspen-traits" }
-    aspen-time = { path = "crates/aspen-time" }
-    aspen-disk = { path = "crates/aspen-disk" }
-    aspen-storage-types = { path = "crates/aspen-storage-types" }
-    aspen-layer = { path = "crates/aspen-layer" }
-  '';
+      # ── Create stubs for all git dependencies ────────────────────
+      stub() {
+        local name="$1"; shift
+        local dir="$out/.nix-stubs/$name"
+        mkdir -p "$dir/src"
+        {
+          echo '[package]'
+          echo "name = \"$name\""
+          echo 'version = "0.1.0"'
+          echo 'edition = "2024"'
+          echo '[features]'
+          for feat in "$@"; do echo "$feat = []"; done
+        } > "$dir/Cargo.toml"
+        echo '// stub' > "$dir/src/lib.rs"
+      }
+      stub mad-turmoil
+      stub snix-castore
+      stub snix-store
+      stub nix-compat async serde
+      stub nix-compat-derive
+      stub h3-iroh
+      stub iroh-proxy-utils
+      stub aspen-wasm-plugin hooks
+
+      # aspen-dns: optional dep of aspen-net (3 levels up from crates/aspen-net/)
+      mkdir -p "$out/.nix-stubs/aspen-dns/src"
+      cat > "$out/.nix-stubs/aspen-dns/Cargo.toml" << 'DNSEOF'
+      [package]
+      name = "aspen-dns"
+      version = "0.1.0"
+      edition = "2024"
+      DNSEOF
+      echo '// stub' > "$out/.nix-stubs/aspen-dns/src/lib.rs"
+
+      # ── Rewrite git deps in root Cargo.toml ──────────────────────
+      sed -i \
+        -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
+        -e 's|snix-castore = { git = "[^"]*"[^}]*}|snix-castore = { path = ".nix-stubs/snix-castore" }|' \
+        -e 's|snix-store = { git = "[^"]*"[^}]*}|snix-store = { path = ".nix-stubs/snix-store" }|' \
+        -e 's|nix-compat = { git = "[^"]*"[^}]*}|nix-compat = { path = ".nix-stubs/nix-compat", features = ["async", "serde"] }|' \
+        -e 's|h3-iroh = { git = "[^"]*"[^}]*}|h3-iroh = { path = ".nix-stubs/h3-iroh" }|' \
+        -e 's|aspen-wasm-plugin = { path = "[^"]*" }|aspen-wasm-plugin = { path = ".nix-stubs/aspen-wasm-plugin" }|' \
+        $out/Cargo.toml
+
+      # Remove dep:mad-turmoil from simulation feature (already optional stub)
+      sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/Cargo.toml
+
+      # Strip git source lines from Cargo.lock so cargo doesn't try to resolve them
+      sed -i '/^source = "git+/d' $out/Cargo.lock
+
+      # ── Rewrite git deps in subcrate Cargo.tomls ─────────────────
+      find $out/crates -name Cargo.toml -exec sed -i \
+        -e 's|mad-turmoil = { git = "[^"]*"[^}]*optional = true[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
+        -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil" }|' \
+        -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../.nix-stubs/iroh-proxy-utils" }|' \
+        -e 's|aspen-wasm-plugin = { path = "[^"]*", optional = true }|aspen-wasm-plugin = { path = "../../.nix-stubs/aspen-wasm-plugin", optional = true }|' \
+        -e 's|aspen-wasm-plugin = { path = "[^"]*" }|aspen-wasm-plugin = { path = "../../.nix-stubs/aspen-wasm-plugin" }|' \
+        -e 's|aspen-dns = { path = "[^"]*", optional = true }|aspen-dns = { path = "../../.nix-stubs/aspen-dns", optional = true }|' \
+        -e 's|aspen-dns = { path = "[^"]*" }|aspen-dns = { path = "../../.nix-stubs/aspen-dns" }|' \
+        {} \;
+
+      # ── Remove [patch.*] sections from .cargo/config.toml ────────
+      if [ -f $out/.cargo/config.toml ]; then
+        sed -i '/^\[patch\./,$d' $out/.cargo/config.toml
+      fi
+    '';
 
   # Override CI config for the dogfood test.
   #
   # Uses `type = 'nix` jobs to exercise the real NixBuildWorker code path.
-  # The pushed flake defines REAL cargo check derivations that compile Rust code
-  # using pre-staged toolchain and vendored deps (isolation = 'none for filesystem access).
-  #
-  # Three stages:
+  # Two stages:
   #   1. Validate: structural check (source tree has 70+ crates)
-  #   2. Build: two parallel `cargo check` builds (aspen-constants + aspen-time)
-  #   3. Test: `cargo check -p aspen-core` (real crate with dependencies)
+  #   2. Build: full `cargo build --bin aspen-node` with major features
   #
   # This proves the full NixBuildWorker path: payload parsing, `nix build`
   # execution, log streaming via KV chunks, and output path collection —
-  # with REAL Rust compilation, not just file-existence checks.
+  # building the REAL aspen-node binary from source.
   dogfoodCiConfig = pkgs.writeText "ci.ncl" ''
     {
       name = "aspen-dogfood-build",
@@ -117,34 +156,12 @@
           depends_on = ["validate"],
           jobs = [
             {
-              name = "cargo-check-constants",
+              name = "build-aspen-node",
               type = 'nix,
               flake_url = ".",
-              flake_attr = "checks.x86_64-linux.cargo-check-constants",
+              flake_attr = "packages.x86_64-linux.aspen-node",
               isolation = 'none,
-              timeout_secs = 180,
-            },
-            {
-              name = "cargo-check-time",
-              type = 'nix,
-              flake_url = ".",
-              flake_attr = "checks.x86_64-linux.cargo-check-time",
-              isolation = 'none,
-              timeout_secs = 180,
-            },
-          ],
-        },
-        {
-          name = "test",
-          depends_on = ["build"],
-          jobs = [
-            {
-              name = "cargo-check-core",
-              type = 'nix,
-              flake_url = ".",
-              flake_attr = "checks.x86_64-linux.cargo-check-core",
-              isolation = 'none,
-              timeout_secs = 600,
+              timeout_secs = 3600,
             },
           ],
         },
@@ -152,27 +169,31 @@
     }
   '';
 
+  # Build features for the dogfood binary.
+  # Includes all features that don't require external git dependencies.
+  # Excluded: proxy/net (iroh-proxy-utils), snix (snix git), simulation (mad-turmoil),
+  #           plugins (hyperlight-wasm patching), nix-cache-proxy (h3-iroh)
+  buildFeatures = "forge,git-bridge,blob,docs,hooks,jobs,ci,ci-basic,automerge,secrets,shell-worker,sql,federation,global-discovery,relay-server";
+
   # A self-contained flake.nix to be pushed to Forge alongside Aspen source.
   #
-  # Uses nixpkgs stdenv.mkDerivation for a proper Nix build — not raw shell
-  # scripts. The nixpkgs input resolves from the VM's pre-registered flake
-  # registry (no download needed). Pre-staged Rust toolchain and vendored
-  # deps are accessed via --no-sandbox (isolation='none).
+  # Uses nixpkgs stdenv.mkDerivation for a proper Nix build.
+  # The nixpkgs input resolves from the VM's pre-registered flake registry
+  # (no download needed). Pre-staged Rust toolchain and vendored deps are
+  # accessed via --no-sandbox (isolation='none).
   #
-  # Three checks:
-  #   1. source-tree: structural validation (sandboxed, pure derivation)
-  #   2. cargo-check-constants/time: stdenv builds of zero-dep crates
-  #   3. cargo-check-core: stdenv build with vendored dependencies
+  # Two outputs:
+  #   1. checks.source-tree: structural validation (sandboxed, pure)
+  #   2. packages.aspen-node: full cargo build of aspen-node binary
   dogfoodFlake = pkgs.writeText "flake.nix" ''
     {
-      description = "Aspen CI dogfood — Nix builds with stdenv.mkDerivation";
+      description = "Aspen CI dogfood — full project build with stdenv.mkDerivation";
       inputs.nixpkgs.url = "nixpkgs";
       outputs = { self, nixpkgs }: let
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
       in {
         checks.x86_64-linux = {
-
-          # ── Stage 1: structural validation (sandboxed, pure) ─────────
+          # ── Structural validation (sandboxed, pure) ──────────────────
           source-tree = derivation {
             name = "check-source-tree";
             system = "x86_64-linux";
@@ -180,51 +201,56 @@
             src = self;
             args = [ "-c" "cd $src && test -f Cargo.toml && test -d crates && echo PASS > $out" ];
           };
+        };
 
-          # ── Stage 2: stdenv builds of zero-dep crates ────────────────
+        packages.x86_64-linux = {
+          # ── Full aspen-node binary build ─────────────────────────────
           #
-          # Uses stdenv.mkDerivation with pre-staged Rust nightly toolchain.
-          # Crates are copied to isolated dirs outside the workspace so cargo
-          # doesn't resolve the full workspace dependency graph.
-
-          cargo-check-constants = pkgs.stdenv.mkDerivation {
-            name = "cargo-check-aspen-constants";
+          # Builds the real aspen-node binary with all registry-dep features.
+          # Uses pre-staged Rust toolchain at /etc/aspen-ci/rust/ and
+          # vendored cargo deps via /etc/aspen-ci/cargo-config.toml.
+          # This is the ultimate dogfood: Aspen builds itself.
+          aspen-node = pkgs.stdenv.mkDerivation {
+            name = "aspen-node-dogfood";
             src = self;
             dontConfigure = true;
-            buildPhase = "export PATH=/etc/aspen-ci/rust/bin:$PATH && export CARGO_HOME=$TMPDIR/cargo && mkdir -p $CARGO_HOME $TMPDIR/build && cp -r crates/aspen-constants $TMPDIR/build/aspen-constants && chmod -R u+w $TMPDIR/build/aspen-constants && cd $TMPDIR/build/aspen-constants && cargo check 2>&1";
-            installPhase = "echo PASS > $out";
-          };
 
-          cargo-check-time = pkgs.stdenv.mkDerivation {
-            name = "cargo-check-aspen-time";
-            src = self;
-            dontConfigure = true;
-            buildPhase = "export PATH=/etc/aspen-ci/rust/bin:$PATH && export CARGO_HOME=$TMPDIR/cargo && mkdir -p $CARGO_HOME $TMPDIR/build && cp -r crates/aspen-time $TMPDIR/build/aspen-time && chmod -R u+w $TMPDIR/build/aspen-time && cd $TMPDIR/build/aspen-time && cargo check 2>&1";
-            installPhase = "echo PASS > $out";
-          };
+            buildPhase = '''
+              export PATH=/etc/aspen-ci/rust/bin:$PATH
+              export CARGO_HOME=$TMPDIR/cargo
+              export CARGO_TARGET_DIR=$TMPDIR/target
+              mkdir -p $CARGO_HOME $CARGO_TARGET_DIR
 
-          # ── Stage 3: stdenv build with vendored deps ─────────────────
-          #
-          # Builds aspen-core (serde, tokio, iroh, etc.) using a minimal
-          # workspace Cargo.toml that excludes members with git deps.
-          # Vendored cargo deps and config are pre-staged at /etc/aspen-ci/.
+              # Use pre-staged vendored deps
+              mkdir -p .cargo
+              cp /etc/aspen-ci/cargo-config.toml .cargo/config.toml
 
-          cargo-check-core = pkgs.stdenv.mkDerivation {
-            name = "cargo-check-aspen-core";
-            src = self;
-            dontConfigure = true;
-            buildPhase = "export PATH=/etc/aspen-ci/rust/bin:$PATH && export CARGO_HOME=$TMPDIR/cargo && export CARGO_TARGET_DIR=$TMPDIR/target && mkdir -p $CARGO_HOME $CARGO_TARGET_DIR && cp /etc/aspen-ci/minimal-workspace.toml Cargo.toml && mkdir -p .cargo && cp /etc/aspen-ci/cargo-config.toml .cargo/config.toml && cargo check -p aspen-core 2>&1";
-            installPhase = "echo PASS > $out";
+              echo "=== Building aspen-node with features: ${buildFeatures} ==="
+              echo "=== Workspace crates: $(ls -d crates/*/ | wc -l) ==="
+
+              cargo build --bin aspen-node \
+                --features ${buildFeatures} \
+                2>&1
+
+              echo "=== Build complete ==="
+              ls -lh $CARGO_TARGET_DIR/debug/aspen-node
+            ''';
+
+            dontStrip = true;
+
+            installPhase = '''
+              mkdir -p $out/bin
+              cp $CARGO_TARGET_DIR/debug/aspen-node $out/bin/
+            ''';
           };
         };
       };
     }
   '';
 
-  # Create a tarball of Aspen's source for the VM.
-  # We use the actual git-tracked source tree.
+  # Create a tarball of the pre-processed Aspen source for the VM.
   aspenSourceTar = pkgs.runCommand "aspen-source-tar" {} ''
-    cd ${aspenSource}
+    cd ${dogfoodSource}
     ${pkgs.gnutar}/bin/tar czf $out --transform='s,^\./,aspen/,' .
   '';
 
@@ -275,10 +301,12 @@ in
           pkgs.git
           # Nix is needed on PATH for NixBuildWorker to run `nix build`
           pkgs.nix
-          # Rust toolchain for cargo check builds (accessed via /etc/aspen-ci/rust)
+          # Rust toolchain for cargo builds (accessed via /etc/aspen-ci/rust)
           rustToolChain
           # C compiler and linker for crates with build scripts
           pkgs.gcc
+          # protobuf compiler for build scripts
+          pkgs.protobuf
         ];
 
         # Pre-stage Rust toolchain and vendored deps at well-known paths.
@@ -286,7 +314,6 @@ in
         # to compile Rust code without network access.
         environment.etc."aspen-ci/rust".source = rustToolChain;
         environment.etc."aspen-ci/cargo-config.toml".source = cargoConfig;
-        environment.etc."aspen-ci/minimal-workspace.toml".source = minimalWorkspaceToml;
 
         networking.firewall.enable = false;
 
@@ -300,9 +327,11 @@ in
         # The nixpkgs source is already in the VM's nix store (part of its closure).
         nix.registry.nixpkgs.flake = nixpkgsFlake;
 
-        # More memory for cargo check with dependencies (aspen-core build)
-        virtualisation.memorySize = 6144;
-        virtualisation.cores = 2;
+        # Full project build needs substantial resources:
+        # ~110 workspace crates, release build with many features
+        virtualisation.memorySize = 16384;
+        virtualisation.cores = 4;
+        virtualisation.diskSize = 20480;
       };
     };
 
@@ -354,7 +383,7 @@ in
                   node1.log(f"Pipeline {run_id}: status={status}")
                   if status in ("success", "failed", "cancelled"):
                       return result
-              time.sleep(5)
+              time.sleep(10)
           raise Exception(f"Pipeline {run_id} did not complete within {timeout}s")
 
       def plugin_cli(cmd, check=True):
@@ -424,7 +453,7 @@ in
           # Replace CI config with our dogfood-specific one
           node1.succeed(f"mkdir -p /tmp/aspen-dogfood/aspen/.aspen")
           node1.succeed(f"cp {DOGFOOD_CI} /tmp/aspen-dogfood/aspen/.aspen/ci.ncl")
-          # Add the dogfood flake for nix check derivations
+          # Add the dogfood flake for nix build derivations
           node1.succeed(f"cp {DOGFOOD_FLAKE} /tmp/aspen-dogfood/aspen/flake.nix")
 
           # Verify source looks right
@@ -499,23 +528,29 @@ in
               time.sleep(3)
           assert run_id, "No auto-triggered pipeline appeared within 90s"
 
-      # ── phase 4b: start real-time log streaming on a running job ────
+      # ── phase 4b: start real-time log streaming on the build job ────
 
       with subtest("start real-time log streaming"):
-          # Wait until at least one job is visible in the pipeline status
+          # Wait until the build job is visible in the pipeline status
           stream_job_id = None
           stream_job_name = None
-          deadline = time.time() + 60
+          deadline = time.time() + 120
           while time.time() < deadline:
               status_out = cli(f"ci status {run_id}", check=False)
               if isinstance(status_out, dict):
                   for stage in status_out.get("stages", []):
                       for job in stage.get("jobs", []):
-                          if job.get("id"):
-                              stream_job_id = job["id"]
-                              stream_job_name = job.get("name", "unknown")
+                          jname = job.get("name", "")
+                          jid = job.get("id")
+                          # Prefer the build job for streaming (most interesting output)
+                          if jid and "build" in jname:
+                              stream_job_id = jid
+                              stream_job_name = jname
                               break
-                      if stream_job_id:
+                          elif jid and not stream_job_id:
+                              stream_job_id = jid
+                              stream_job_name = jname
+                      if stream_job_id and "build" in (stream_job_name or ""):
                           break
               if stream_job_id:
                   break
@@ -524,10 +559,6 @@ in
           if stream_job_id:
               node1.log(f"Starting --follow log stream for job '{stream_job_name}' ({stream_job_id})")
               ticket = get_ticket()
-              # Launch ci logs --follow as a background systemd unit.
-              # It will stream chunks to a file until the job completes, then exit.
-              # Use absolute path — systemd-run starts a transient unit that does
-              # NOT inherit environment.systemPackages PATH.
               cli_path = "/run/current-system/sw/bin/aspen-cli"
               node1.succeed(
                   f"systemd-run --unit=ci-log-stream "
@@ -543,9 +574,9 @@ in
       # ── phase 5: wait for pipeline completion ───────────────────────
 
       with subtest("dogfood pipeline completes successfully"):
-          # Three stages: validate (quick) + build (2 parallel cargo checks) + test (cargo check core)
-          # cargo check -p aspen-core with vendored deps can take several minutes
-          final_status = wait_for_pipeline(run_id, timeout=600)
+          # Full release build of aspen-node with many features.
+          # This compiles ~110 workspace crates + hundreds of deps.
+          final_status = wait_for_pipeline(run_id, timeout=3600)
           node1.log(f"Pipeline final: {json.dumps(final_status, indent=2)}")
           pipeline_status = final_status.get("status")
 
@@ -554,13 +585,27 @@ in
               stages = final_status.get("stages", [])
               for s in stages:
                   for j in s.get("jobs", []):
-                      node1.log(f"  Job '{j.get('name')}': {j.get('status')}")
+                      jname = j.get("name", "unknown")
+                      jstatus = j.get("status", "unknown")
+                      jid = j.get("id", "")
+                      node1.log(f"  Job '{jname}': {jstatus}")
+                      # Dump logs for failed jobs
+                      if jstatus == "failed" and jid:
+                          ticket = get_ticket()
+                          node1.execute(
+                              f"aspen-cli --ticket '{ticket}' ci logs {run_id} {jid} "
+                              f">/tmp/ci-failed-logs.txt 2>/dev/null"
+                          )
+                          failed_logs = node1.succeed(
+                              "tail -100 /tmp/ci-failed-logs.txt 2>/dev/null || echo 'no logs'"
+                          ).strip()
+                          node1.log(f"  Logs (last 100 lines):\n{failed_logs}")
 
           assert pipeline_status == "success", \
               f"Dogfood pipeline failed: {pipeline_status}: {final_status}"
           node1.log("Aspen dogfood pipeline completed successfully!")
 
-          # Verify stage-level statuses are populated (not stuck at "pending")
+          # Verify stage-level statuses
           for stage in final_status.get("stages", []):
               stage_name = stage.get("name")
               stage_status = stage.get("status")
@@ -569,25 +614,17 @@ in
                   f"Stage '{stage_name}' has status '{stage_status}', expected 'success'"
 
       # ── phase 5b: verify real-time log stream captured output ───────
-      # NixBuildWorker writes CI log chunks to _ci:logs:* KV keys during
-      # execution, enabling real-time streaming via `ci logs --follow`.
-      # Since this test now uses type='nix jobs, log content should be non-empty.
 
       with subtest("real-time log stream captured output"):
           if stream_job_id:
               # Give the follow stream a few seconds to finish after pipeline completion
               time.sleep(5)
 
-              # Check if the stream unit finished
-              exit_code, _ = node1.execute(
-                  "systemctl is-active ci-log-stream 2>/dev/null"
-              )
               stream_status = node1.succeed(
                   "systemctl show ci-log-stream --property=ActiveState --value 2>/dev/null || echo unknown"
               ).strip()
               node1.log(f"Log stream unit state: {stream_status}")
 
-              # Read captured output
               stream_output = node1.succeed(
                   "cat /tmp/ci-stream-output.txt 2>/dev/null || echo empty"
               ).strip()
@@ -598,9 +635,8 @@ in
               if stream_output and stream_output != "empty":
                   output_lines = stream_output.count("\n")
                   node1.log(f"Real-time stream captured {len(stream_output)} bytes, {output_lines} lines")
-                  node1.log(f"Stream output (first 500 chars): {stream_output[:500]}")
+                  node1.log(f"Stream output (first 1000 chars): {stream_output[:1000]}")
               else:
-                  # NixBuildWorker writes log chunks — if we got nothing, the stream failed.
                   if stream_err and stream_err != "empty":
                       node1.log(f"Stream stderr: {stream_err[:500]}")
                   assert False, (
@@ -608,15 +644,13 @@ in
                       f"Stream unit state: {stream_status}, stderr: {stream_err[:300]}"
                   )
 
-              # Clean up
               node1.execute("systemctl stop ci-log-stream 2>/dev/null || true")
           else:
               node1.log("Skipped: no stream_job_id was captured")
 
-      # ── phase 6: verify job tracking for all completed jobs ─────────
+      # ── phase 6: verify job tracking ────────────────────────────────
 
       with subtest("all pipeline jobs completed"):
-          # Collect all job IDs from the final pipeline status
           all_jobs = []
           for stage in final_status.get("stages", []):
               for job in stage.get("jobs", []):
@@ -628,39 +662,30 @@ in
                       })
 
           node1.log(f"Pipeline had {len(all_jobs)} jobs")
-          assert len(all_jobs) >= 4, f"Expected at least 4 jobs (validate + 2 build + test), got {len(all_jobs)}"
+          assert len(all_jobs) >= 2, f"Expected at least 2 jobs (validate + build), got {len(all_jobs)}"
 
-          # Verify all jobs succeeded
           for job in all_jobs:
               assert job["status"] == "success", \
                   f"Job '{job['name']}' has status '{job['status']}', expected 'success'"
-          node1.log("All 4 pipeline jobs completed successfully")
+          node1.log(f"All {len(all_jobs)} pipeline jobs completed successfully")
 
-      # ── phase 6b: verify ci output for completed jobs ───────────────
+      # ── phase 6b: verify ci output for build job ────────────────────
 
-      with subtest("ci output retrieves full job output"):
-          # Pick the first job to check full output
-          assert len(all_jobs) > 0, "No jobs to check output for"
-          first_job = all_jobs[0]
+      with subtest("ci output retrieves build output"):
+          # Find the build job specifically
+          build_job = next((j for j in all_jobs if "build" in j["name"]), all_jobs[-1])
           output_result = cli(
-              f"ci output {run_id} {first_job['id']}",
+              f"ci output {run_id} {build_job['id']}",
               check=False
           )
-          node1.log(f"ci output for '{first_job['name']}': {type(output_result)}")
+          node1.log(f"ci output for '{build_job['name']}': {type(output_result)}")
           assert isinstance(output_result, dict), \
               f"Expected dict from ci output, got: {output_result}"
           was_found = output_result.get("was_found", False)
-          has_stdout = bool(output_result.get("stdout"))
-          has_error = bool(output_result.get("error"))
-          node1.log(
-              f"  was_found={was_found}, has_stdout={has_stdout}, "
-              f"error={output_result.get('error', 'none')}"
-          )
-          assert was_found, f"ci output was_found=False for completed job '{first_job['name']}'"
+          node1.log(f"  was_found={was_found}")
+          assert was_found, f"ci output was_found=False for completed job '{build_job['name']}'"
 
-      # ── phase 6c: diagnostic log retrieval (non-blocking) ───────────
-      # Shell worker doesn't write _ci:logs:* keys, so ci logs will return
-      # empty. Log this for diagnostic purposes but don't fail.
+      # ── phase 6c: verify CI log chunks for all jobs ─────────────────
 
       with subtest("ci logs diagnostic check"):
           jobs_with_logs = 0
@@ -669,13 +694,13 @@ in
               job_name = job["name"]
               ticket = get_ticket()
 
-              exit_code, _ = node1.execute(
+              node1.execute(
                   f"aspen-cli --ticket '{ticket}' ci logs {run_id} {job_id} "
                   f">/tmp/ci-logs-{job_name}.txt 2>/tmp/ci-logs-{job_name}-err.txt"
               )
 
               log_content = node1.succeed(
-                  f"cat /tmp/ci-logs-{job_name}.txt 2>/dev/null || echo """
+                  f"cat /tmp/ci-logs-{job_name}.txt 2>/dev/null || echo \"\""
               ).strip()
 
               if log_content:
@@ -685,7 +710,6 @@ in
                   node1.log(f"  Job '{job_name}': no CI log chunks")
 
           node1.log(f"Jobs with CI log chunks: {jobs_with_logs}/{len(all_jobs)}")
-          # NixBuildWorker writes log chunks — ALL nix jobs must have them.
           assert jobs_with_logs == len(all_jobs), \
               f"Expected all {len(all_jobs)} nix jobs to have CI log chunks, only {jobs_with_logs} did"
           node1.log(f"Log streaming confirmed: {jobs_with_logs}/{len(all_jobs)} jobs with CI log chunks")
@@ -703,6 +727,6 @@ in
               assert found, f"run {run_id} not in list with status=success: {runs}"
 
       # ── done ─────────────────────────────────────────────────────────
-      node1.log("Dogfood test passed: Forge → CI trigger → NixBuildWorker → stdenv.mkDerivation (Nix-native Rust build)")
+      node1.log("DOGFOOD PASSED: Forge → CI trigger → NixBuildWorker → cargo build --bin aspen-node (real binary)")
     '';
   }
