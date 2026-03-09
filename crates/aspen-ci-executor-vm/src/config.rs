@@ -226,6 +226,11 @@ impl CloudHypervisorWorkerConfig {
         if !self.toplevel_path.as_os_str().is_empty() && !self.toplevel_path.exists() {
             return Err(format!("toplevel_path does not exist: {:?}", self.toplevel_path));
         }
+        if matches!(self.network_mode, crate::NetworkMode::TapWithHelper) {
+            return Err("NetworkMode::TapWithHelper is not yet implemented. \
+                 Use NetworkMode::Tap (requires CAP_NET_ADMIN) or NetworkMode::None (isolated)."
+                .to_string());
+        }
         Ok(())
     }
 
@@ -401,5 +406,35 @@ mod tests {
         assert_eq!(config.vm_ip(0), "10.200.0.10");
         assert_eq!(config.vm_ip(1), "10.200.0.11");
         assert!(config.vm_mac(0).starts_with("02:00:00:c1:"));
+    }
+
+    #[test]
+    fn test_tap_with_helper_rejected_by_validation() {
+        let config = CloudHypervisorWorkerConfig {
+            network_mode: crate::NetworkMode::TapWithHelper,
+            ..Default::default()
+        };
+        let result = config.validate();
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err();
+        assert!(err_msg.contains("TapWithHelper"), "error should mention TapWithHelper: {err_msg}");
+    }
+
+    #[test]
+    fn test_tap_mode_passes_validation() {
+        let config = CloudHypervisorWorkerConfig {
+            network_mode: crate::NetworkMode::Tap,
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_none_mode_passes_validation() {
+        let config = CloudHypervisorWorkerConfig {
+            network_mode: crate::NetworkMode::None,
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
     }
 }

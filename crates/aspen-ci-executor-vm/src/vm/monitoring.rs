@@ -15,6 +15,24 @@ use crate::error::Result;
 use crate::error::{self};
 
 impl ManagedCiVm {
+    /// Check if the VM's cloud-hypervisor process is still alive.
+    ///
+    /// Used by the pool during maintenance to evict dead idle VMs.
+    /// Returns `true` if the process is running, `false` if it has exited
+    /// or the process handle is missing.
+    pub async fn is_process_alive(&self) -> bool {
+        let mut guard = self.process.write().await;
+        if let Some(ref mut child) = *guard {
+            match child.try_wait() {
+                Ok(Some(_status)) => false, // Exited
+                Ok(None) => true,           // Still running
+                Err(_) => true,             // Can't check, assume alive
+            }
+        } else {
+            false // No process handle
+        }
+    }
+
     /// Wait for API socket with process health monitoring.
     ///
     /// This method waits for the Cloud Hypervisor API socket to become available,

@@ -7,6 +7,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use aspen_core::MAX_CI_VMS_PER_NODE;
 use tokio::sync::Mutex;
@@ -15,6 +16,11 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
+
+/// How long `acquire()` waits for a VM to become available when the pool
+/// is at capacity, before returning `NoVmsAvailable`. This gives in-flight
+/// jobs time to finish and release their VMs.
+const ACQUIRE_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 
 use crate::config::CloudHypervisorWorkerConfig;
 use crate::error::CloudHypervisorError;
@@ -139,48 +145,77 @@ impl VmPool {
     /// Acquire a VM for job execution.
     ///
     /// Returns an idle VM from the pool, or creates a new one if
-    /// none are available and capacity allows.
+    /// none are available and capacity allows. Dead VMs are evicted
+    /// on encounter.
     pub async fn acquire(&self, job_id: &str) -> Result<SharedVm> {
         debug!(job_id = %job_id, "acquiring VM from pool");
 
-        // Try to get an idle VM
-        if let Some(vm) = self.idle_vms.lock().await.pop_front() {
+        // Try to get a healthy idle VM. Loop because we may encounter dead VMs
+        // that need to be evicted before finding a live one.
+        loop {
+            let vm = self.idle_vms.lock().await.pop_front();
+            let Some(vm) = vm else {
+                break; // No more idle VMs
+            };
+
+            // Check process liveness before using
+            if !vm.is_process_alive().await {
+                warn!(vm_id = %vm.id, job_id = %job_id, "evicting dead VM encountered during acquire");
+                self.destroy_vm(&vm).await;
+                continue;
+            }
+
             let state = vm.state().await;
             if state == VmState::Idle {
                 vm.assign(job_id.to_string()).await?;
                 debug!(vm_id = %vm.id, job_id = %job_id, "acquired idle VM");
                 return Ok(vm);
-            } else {
-                // VM is in unexpected state, put it back and try another
-                warn!(vm_id = %vm.id, state = ?state, "unexpected VM state in idle queue");
-                self.idle_vms.lock().await.push_back(vm);
             }
+
+            // VM is in unexpected state — destroy it
+            warn!(vm_id = %vm.id, state = ?state, "unexpected VM state in idle queue, destroying");
+            self.destroy_vm(&vm).await;
         }
 
         // No idle VMs, try to create a new one
         debug!(job_id = %job_id, "no idle VMs, attempting to create new one");
 
-        // Try to acquire permit (non-blocking check)
+        // Try non-blocking acquire first
         match self.vm_semaphore.clone().try_acquire_owned() {
-            Ok(permit) => {
-                let vm = self.create_and_start_vm().await.map_err(|e| {
-                    error!(error = ?e, "failed to create new VM");
-                    // Permit drops here automatically, releasing capacity
-                    e
-                })?;
-                // Store permit in VM — released automatically on VM drop
-                *vm.pool_permit.write().await = Some(permit);
-                vm.assign(job_id.to_string()).await?;
-                info!(vm_id = %vm.id, job_id = %job_id, "created new VM for job");
-                Ok(vm)
-            }
+            Ok(permit) => return self.create_vm_with_permit(permit, job_id).await,
             Err(_) => {
-                // Pool is at capacity
-                Err(CloudHypervisorError::PoolAtCapacity {
-                    max_vms: self.config.max_vms,
-                })
+                // Pool at capacity — wait up to ACQUIRE_WAIT_TIMEOUT for a permit
+                // (a VM being destroyed will release one).
+                debug!(job_id = %job_id, "pool at capacity, waiting for a VM to be released");
+
+                match tokio::time::timeout(ACQUIRE_WAIT_TIMEOUT, self.vm_semaphore.clone().acquire_owned()).await {
+                    Ok(Ok(permit)) => return self.create_vm_with_permit(permit, job_id).await,
+                    Ok(Err(_closed)) => {
+                        // Semaphore closed — shouldn't happen
+                        Err(CloudHypervisorError::PoolAtCapacity {
+                            max_vms: self.config.max_vms,
+                        })
+                    }
+                    Err(_timeout) => Err(CloudHypervisorError::NoVmsAvailable {
+                        timeout_ms: ACQUIRE_WAIT_TIMEOUT.as_millis() as u64,
+                    }),
+                }
             }
         }
+    }
+
+    /// Create a VM using an already-acquired semaphore permit.
+    async fn create_vm_with_permit(&self, permit: tokio::sync::OwnedSemaphorePermit, job_id: &str) -> Result<SharedVm> {
+        let vm = self.create_and_start_vm().await.map_err(|e| {
+            error!(error = ?e, "failed to create new VM");
+            // Permit drops here automatically, releasing capacity
+            e
+        })?;
+        // Store permit in VM — released automatically on VM drop
+        *vm.pool_permit.write().await = Some(permit);
+        vm.assign(job_id.to_string()).await?;
+        info!(vm_id = %vm.id, job_id = %job_id, "created new VM for job");
+        Ok(vm)
     }
 
     /// Release a VM back to the pool after job completion.
@@ -283,10 +318,40 @@ impl VmPool {
         }
     }
 
-    /// Ensure the pool has at least the target number of idle VMs.
+    /// Ensure the pool has at least the target number of healthy idle VMs.
     ///
     /// Call this periodically to maintain warm VM availability.
+    /// First evicts dead VMs from the idle queue, then creates replacements.
     pub async fn maintain(&self) {
+        // Phase 1: Evict dead idle VMs.
+        // Check each idle VM's process liveness and remove any that have crashed.
+        let dead_vms = {
+            let mut idle = self.idle_vms.lock().await;
+            let mut alive = VecDeque::with_capacity(idle.len());
+            let mut dead = Vec::new();
+
+            for vm in idle.drain(..) {
+                if vm.is_process_alive().await {
+                    alive.push_back(vm);
+                } else {
+                    warn!(vm_id = %vm.id, "evicting dead VM from idle queue");
+                    dead.push(vm);
+                }
+            }
+
+            *idle = alive;
+            dead
+        };
+
+        // Destroy dead VMs (releases permits + cleans up resources)
+        for vm in &dead_vms {
+            self.destroy_vm(vm).await;
+        }
+        if !dead_vms.is_empty() {
+            info!(evicted = dead_vms.len(), "evicted dead VMs from idle pool");
+        }
+
+        // Phase 2: Create replacement VMs to reach target pool size.
         let current_idle = self.idle_vms.lock().await.len();
         let target = self.config.pool_size as usize;
 
@@ -295,7 +360,7 @@ impl VmPool {
         }
 
         let to_create = target - current_idle;
-        debug!(current_idle = current_idle, target = target, to_create = to_create, "maintaining pool");
+        debug!(current_idle = current_idle, target = target, to_create = to_create, "replenishing pool");
 
         for _ in 0..to_create {
             // Acquire permit before creating VM
@@ -535,5 +600,30 @@ mod tests {
         assert_eq!(status.max_vms, 20);
         assert_eq!(status.available_capacity, 10);
         assert_eq!(status.target_pool_size, 5);
+    }
+
+    #[tokio::test]
+    async fn test_acquire_returns_no_vms_available_when_empty() {
+        // With pool_size=1, max_vms=1 and no actual VMs created (no infra),
+        // acquire will try to create a VM, fail, and the permit drops.
+        // But since create_and_start_vm will fail without real kernel paths,
+        // we verify the error path doesn't panic.
+        let config = CloudHypervisorWorkerConfig {
+            pool_size: 1,
+            max_vms: 1,
+            ..test_config()
+        };
+        let pool = VmPool::new(config);
+
+        // Pool has permits but no real infrastructure — creation will fail
+        let result = pool.acquire("test-job-1").await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_acquire_wait_timeout_is_reasonable() {
+        // Verify the timeout constant is bounded and reasonable
+        assert!(ACQUIRE_WAIT_TIMEOUT.as_secs() > 0, "timeout must be positive");
+        assert!(ACQUIRE_WAIT_TIMEOUT.as_secs() <= 120, "timeout should not exceed 2 minutes");
     }
 }

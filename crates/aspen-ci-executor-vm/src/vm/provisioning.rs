@@ -9,6 +9,7 @@ use snafu::ResultExt;
 use tokio::process::Child;
 use tokio::process::Command;
 use tracing::debug;
+use tracing::error;
 use tracing::info;
 use tracing::warn;
 
@@ -300,35 +301,17 @@ impl ManagedCiVm {
                 );
             }
             NetworkMode::TapWithHelper => {
-                // TAP with helper mode: use pre-created TAP device via fd= parameter.
-                // This allows running without CAP_NET_ADMIN on cloud-hypervisor.
-                // The helper script must be setcap cap_net_admin+ep.
-                //
-                // NOTE: fd= parameter requires the file descriptor to be opened
-                // before cloud-hypervisor starts. This is complex to implement
-                // with async Rust, so for now we fall back to standard TAP mode
-                // and log a warning if TAP helper is not available.
-                if let Some(ref _helper_path) = self.config.tap_helper_path {
-                    // DEFERRED: fd passing via helper process.
-                    // Requires: (1) run setcap helper to create TAP and get fd,
-                    // (2) pass fd to cloud-hypervisor via Command::pre_exec,
-                    // (3) use fd={fd_num} in --net argument.
-                    // Falls back to standard TAP mode for now.
-                    warn!(
-                        vm_id = %self.id,
-                        "TapWithHelper mode not yet fully implemented, falling back to Tap mode"
-                    );
-                    let tap_name = format!("{}-tap", self.id);
-                    cmd.arg("--net").arg(format!("tap={tap_name},mac={mac}"));
-                } else {
-                    // No helper configured, fall back to standard TAP
-                    warn!(
-                        vm_id = %self.id,
-                        "TapWithHelper mode selected but no tap_helper_path configured, falling back to Tap mode"
-                    );
-                    let tap_name = format!("{}-tap", self.id);
-                    cmd.arg("--net").arg(format!("tap={tap_name},mac={mac}"));
-                }
+                // TapWithHelper is not yet implemented. Config validation rejects
+                // this mode, so this branch should be unreachable. If we get here
+                // (e.g., config was constructed without validate()), fall back to
+                // standard Tap mode with an error-level log.
+                error!(
+                    vm_id = %self.id,
+                    "TapWithHelper mode is not implemented — falling back to Tap mode. \
+                     Use NetworkMode::Tap or NetworkMode::None instead."
+                );
+                let tap_name = format!("{}-tap", self.id);
+                cmd.arg("--net").arg(format!("tap={tap_name},mac={mac}"));
             }
             NetworkMode::None => {
                 // No network: VM runs in complete isolation.
