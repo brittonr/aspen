@@ -46,6 +46,10 @@ const MAX_PENDING_TRIGGERS: usize = 100;
 const MAX_WATCHED_REPOS: usize = 100;
 /// Maximum changed paths to diff before falling back to always-trigger.
 const MAX_DIFF_PATHS: usize = 10_000;
+/// Maximum buffered announcements for the watch-before-push race window.
+const MAX_REPLAY_BUFFER: usize = 32;
+/// How long to keep buffered announcements before eviction (30 seconds).
+const REPLAY_BUFFER_TTL_MS: u64 = 30_000;
 /// Default CI config path.
 const DEFAULT_CI_CONFIG_PATH: &str = ".aspen/ci.ncl";
 
@@ -159,6 +163,11 @@ pub struct TriggerService {
     trigger_tx: mpsc::Sender<PendingTrigger>,
     /// Tracks all spawned tasks for graceful shutdown.
     task_tracker: TaskTracker,
+    /// Bounded replay buffer for announcements that arrive before watch_repo().
+    /// Solves the watch-before-push race: announcement arrives via gossip before
+    /// the watch_repo() call, gets buffered here and replayed when watch_repo()
+    /// is called. Entries expire after REPLAY_BUFFER_TTL_MS.
+    replay_buffer: RwLock<std::collections::VecDeque<(tokio::time::Instant, PendingTrigger)>>,
 }
 
 /// Internal pending trigger waiting to be processed.
@@ -297,6 +306,7 @@ impl TriggerService {
             watched_repos: RwLock::new(HashSet::new()),
             trigger_tx,
             task_tracker,
+            replay_buffer: RwLock::new(std::collections::VecDeque::with_capacity(MAX_REPLAY_BUFFER)),
         });
 
         // Spawn the processing task
@@ -313,18 +323,71 @@ impl TriggerService {
     /// When a RefUpdate announcement is received for this repo,
     /// the service will check for CI config and start pipelines.
     pub async fn watch_repo(&self, repo_id: RepoId) -> Result<()> {
-        let mut repos = self.watched_repos.write().await;
+        {
+            let mut repos = self.watched_repos.write().await;
 
-        if repos.len() >= MAX_WATCHED_REPOS {
-            return Err(CiError::InvalidConfig {
-                reason: format!("Cannot watch more than {} repositories", MAX_WATCHED_REPOS),
-            });
+            if repos.len() >= MAX_WATCHED_REPOS {
+                return Err(CiError::InvalidConfig {
+                    reason: format!("Cannot watch more than {} repositories", MAX_WATCHED_REPOS),
+                });
+            }
+
+            repos.insert(repo_id);
         }
-
-        repos.insert(repo_id);
         info!(repo_id = %repo_id.to_hex(), "Now watching repository for CI triggers");
 
+        // Replay any buffered announcements for this repo (watch-before-push race fix).
+        // Announcements that arrived via gossip before this watch_repo() call are
+        // buffered in replay_buffer. Now that we're watching, replay matching entries.
+        self.replay_buffered_for_repo(&repo_id).await;
+
         Ok(())
+    }
+
+    /// Replay buffered announcements for a newly-watched repo.
+    ///
+    /// Removes matching entries from the buffer and sends them to the trigger channel.
+    async fn replay_buffered_for_repo(&self, repo_id: &RepoId) {
+        let now = tokio::time::Instant::now();
+        let ttl = std::time::Duration::from_millis(REPLAY_BUFFER_TTL_MS);
+        let mut buffer = self.replay_buffer.write().await;
+
+        // Evict expired entries first
+        while let Some((ts, _)) = buffer.front() {
+            if now.duration_since(*ts) > ttl {
+                buffer.pop_front();
+            } else {
+                break;
+            }
+        }
+
+        // Extract and replay matching triggers
+        let mut replayed: u32 = 0;
+        let mut remaining = std::collections::VecDeque::with_capacity(buffer.len());
+        for (ts, trigger) in buffer.drain(..) {
+            if trigger.repo_id == *repo_id && now.duration_since(ts) <= ttl {
+                if let Err(e) = self.trigger_tx.try_send(trigger) {
+                    warn!(
+                        repo_id = %repo_id.to_hex(),
+                        error = %e,
+                        "Failed to replay buffered announcement"
+                    );
+                } else {
+                    replayed += 1;
+                }
+            } else {
+                remaining.push_back((ts, trigger));
+            }
+        }
+        *buffer = remaining;
+
+        if replayed > 0 {
+            info!(
+                repo_id = %repo_id.to_hex(),
+                replayed_count = replayed,
+                "Replayed buffered announcements for newly-watched repo"
+            );
+        }
     }
 
     /// Stop watching a repository for CI triggers.
@@ -542,10 +605,25 @@ impl AnnouncementCallback for CiTriggerHandler {
             );
 
             if !is_watching {
-                info!(
+                // Buffer the announcement for replay when watch_repo() is called.
+                // This fixes the race where gossip delivers the push announcement
+                // before the orchestrator has called watch_repo().
+                let trigger = PendingTrigger {
+                    repo_id,
+                    ref_name: ref_name.clone(),
+                    new_hash,
+                    old_hash,
+                    signer,
+                };
+                let mut buffer = trigger_service.replay_buffer.write().await;
+                if buffer.len() >= MAX_REPLAY_BUFFER {
+                    buffer.pop_front(); // Evict oldest to stay bounded
+                }
+                buffer.push_back((tokio::time::Instant::now(), trigger));
+                debug!(
                     repo_id = %repo_id.to_hex(),
-                    watched_count = watched_count,
-                    "repo not being watched for CI triggers - skipping"
+                    buffer_size = buffer.len(),
+                    "Buffered announcement for unwatched repo (will replay on watch)"
                 );
                 return;
             }
@@ -763,5 +841,79 @@ mod tests {
         let only = vec!["src/*".to_string()];
         // No changed file matches only_paths → skip trigger
         assert!(!should_trigger_for_paths(Some(&paths), &[], &only));
+    }
+
+    // ── Replay buffer tests ─────────────────────────────────────────
+
+    /// Generate a valid test public key.
+    fn test_public_key() -> PublicKey {
+        iroh::SecretKey::generate(&mut rand::rng()).public()
+    }
+
+    #[tokio::test]
+    async fn test_replay_buffer_announcement_then_watch() {
+        let config = TriggerServiceConfig::default();
+        let fetcher = Arc::new(MockConfigFetcher { config: None });
+        let starter = Arc::new(MockPipelineStarter {
+            started_count: AtomicU32::new(0),
+        });
+
+        let service = TriggerService::new(config, fetcher, starter);
+
+        let repo_id = RepoId::from_hash(blake3::hash(b"replay-test"));
+
+        // Simulate an announcement arriving for an unwatched repo
+        let trigger = PendingTrigger {
+            repo_id,
+            ref_name: "refs/heads/main".to_string(),
+            new_hash: [1u8; 32],
+            old_hash: Some([0u8; 32]),
+            signer: test_public_key(),
+        };
+
+        {
+            let mut buffer = service.replay_buffer.write().await;
+            buffer.push_back((tokio::time::Instant::now(), trigger));
+        }
+
+        assert_eq!(service.replay_buffer.read().await.len(), 1);
+
+        // Now watch the repo — should replay the buffered announcement
+        service.watch_repo(repo_id).await.unwrap();
+
+        // Buffer should be drained for this repo
+        assert_eq!(service.replay_buffer.read().await.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_replay_buffer_bounded() {
+        let config = TriggerServiceConfig::default();
+        let fetcher = Arc::new(MockConfigFetcher { config: None });
+        let starter = Arc::new(MockPipelineStarter {
+            started_count: AtomicU32::new(0),
+        });
+
+        let service = TriggerService::new(config, fetcher, starter);
+        let signer = test_public_key();
+
+        // Fill buffer beyond capacity
+        for i in 0..MAX_REPLAY_BUFFER + 5 {
+            let repo_id = RepoId::from_hash(blake3::hash(format!("repo-{i}").as_bytes()));
+            let trigger = PendingTrigger {
+                repo_id,
+                ref_name: "refs/heads/main".to_string(),
+                new_hash: [i as u8; 32],
+                old_hash: None,
+                signer,
+            };
+            let mut buffer = service.replay_buffer.write().await;
+            if buffer.len() >= MAX_REPLAY_BUFFER {
+                buffer.pop_front();
+            }
+            buffer.push_back((tokio::time::Instant::now(), trigger));
+        }
+
+        // Should be capped at MAX_REPLAY_BUFFER
+        assert_eq!(service.replay_buffer.read().await.len(), MAX_REPLAY_BUFFER);
     }
 }

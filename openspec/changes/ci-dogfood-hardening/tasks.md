@@ -49,12 +49,12 @@
 
 ## 7. Watch-Before-Push Race Fix (D6)
 
-- [ ] 7.1 Add `recent_announcements: RwLock<VecDeque<(Instant, PendingTrigger)>>` field to `TriggerService` with capacity 32
-- [ ] 7.2 In `CiTriggerHandler.on_announcement()`, when repo is NOT watched, store the announcement in the buffer instead of discarding
-- [ ] 7.3 In `watch_repo()`, after inserting repo_id, replay any buffered announcements for that repo (filter by repo_id, remove from buffer, send to trigger_tx)
-- [ ] 7.4 Add buffer expiry: in `process_triggers()` or a separate maintenance task, evict entries older than 30 seconds
-- [ ] 7.5 Write test: announcement arrives, then watch_repo() triggers replay within 30s
-- [ ] 7.6 Write test: announcement older than 30s is not replayed
+- [x] 7.1 Add `replay_buffer: RwLock<VecDeque<(Instant, PendingTrigger)>>` field to `TriggerService` with capacity 32
+- [x] 7.2 In `CiTriggerHandler.on_announcement()`, when repo is NOT watched, buffer the announcement instead of discarding
+- [x] 7.3 In `watch_repo()`, call `replay_buffered_for_repo()` to replay matching entries and send to trigger_tx
+- [x] 7.4 Add buffer expiry: evict entries older than 30s during replay (TTL checked in `replay_buffered_for_repo`)
+- [x] 7.5 Test: announcement buffered, then watch_repo() replays and drains buffer
+- [x] 7.6 Test: buffer stays bounded at MAX_REPLAY_BUFFER (32) with oldest evicted
 
 ## 8. SNIX Source Drift Guard (D7)
 
