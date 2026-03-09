@@ -445,18 +445,19 @@ in
               assert log, f"No log output for job '{job.get('name')}'"
               node1.log(f"Job '{job.get('name')}': {len(log)} bytes of logs")
 
-      # ── run the CI-built binary ──────────────────────────────────
-      with subtest("run CI-built binary"):
+      # ── extract job results ─────────────────────────────────────
+      with subtest("extract job results"):
           build_job = [j for j in all_jobs if j.get("name") == "build-and-test"][0]
           job_data = cli(f"kv get __jobs:{build_job['id']}", check=False)
 
           output_path = None
+          job_result_data = None
           if isinstance(job_data, dict):
               value = job_data.get("value", "")
               try:
                   job_result = json.loads(value) if isinstance(value, str) else value
-                  data = job_result.get("result", {}).get("Success", {}).get("data", {})
-                  paths = data.get("output_paths", [])
+                  job_result_data = job_result.get("result", {}).get("Success", {}).get("data", {})
+                  paths = job_result_data.get("output_paths", [])
                   if paths:
                       output_path = paths[0]
               except (json.JSONDecodeError, ValueError, AttributeError) as e:
@@ -465,6 +466,52 @@ in
           assert output_path, f"No output_path in job result: {job_data}"
           node1.log(f"Nix output path: {output_path}")
 
+      # ── verify blob upload ──────────────────────────────────────
+      with subtest("build output uploaded to blobs"):
+          uploaded = job_result_data.get("uploaded_store_paths", [])
+          assert len(uploaded) >= 1, f"No uploaded store paths: {job_result_data}"
+
+          build_upload = [u for u in uploaded if "aspen-constants-0.1.0" in u.get("store_path", "")]
+          assert len(build_upload) == 1, f"Expected 1 build upload, got {len(build_upload)}: {uploaded}"
+
+          blob_hash = build_upload[0].get("blob_hash")
+          nar_size = build_upload[0].get("nar_size", 0)
+          cache_registered = build_upload[0].get("cache_registered", False)
+
+          assert blob_hash, f"No blob_hash in upload: {build_upload[0]}"
+          assert nar_size > 0, f"NAR size is 0: {build_upload[0]}"
+          assert cache_registered, f"Store path not registered in cache: {build_upload[0]}"
+
+          node1.log(f"Blob upload: hash={blob_hash} nar_size={nar_size} cached={cache_registered}")
+
+      # ── verify nix binary cache entry ────────────────────────────
+      with subtest("build output in nix binary cache"):
+          cache_result = cli(f"cache query {output_path}", check=False)
+          node1.log(f"Cache query result: {json.dumps(cache_result, indent=2)}")
+
+          assert isinstance(cache_result, dict), f"Cache query failed: {cache_result}"
+          assert cache_result.get("was_found"), f"Store path not found in cache: {cache_result}"
+          assert cache_result.get("blob_hash") == blob_hash, \
+              f"Blob hash mismatch: cache={cache_result.get('blob_hash')} upload={blob_hash}"
+          assert cache_result.get("nar_size") == nar_size, \
+              f"NAR size mismatch: cache={cache_result.get('nar_size')} upload={nar_size}"
+
+          node1.log(f"Cache entry verified: {cache_result.get('store_path')}")
+
+      # ── verify cache stats ──────────────────────────────────────
+      with subtest("cache stats reflect uploads"):
+          stats = cli("cache stats", check=False)
+          node1.log(f"Cache stats: {json.dumps(stats, indent=2)}")
+
+          assert isinstance(stats, dict), f"Cache stats failed: {stats}"
+          # Both jobs (cargo-check + build-and-test) upload their outputs
+          assert stats.get("total_entries", 0) >= 2, \
+              f"Expected >=2 cache entries (check + build), got {stats.get('total_entries')}"
+          assert stats.get("total_nar_bytes", 0) > 0, \
+              f"Total NAR bytes is 0: {stats}"
+
+      # ── run the CI-built binary ──────────────────────────────────
+      with subtest("run CI-built binary"):
           binary = f"{output_path}/bin/aspen-constants-check"
           node1.succeed(f"test -x {binary}")
 
@@ -479,6 +526,6 @@ in
           assert "MAX_KEY_SIZE" in output, \
               f"Constants missing from output: {output}"
 
-      node1.log("SELF-BUILD PASSED: Forge -> CI -> cargo build+test -> run binary")
+      node1.log("SELF-BUILD PASSED: Forge -> CI -> cargo build+test -> blob+cache -> run binary")
     '';
   }
