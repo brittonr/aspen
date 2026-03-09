@@ -2443,12 +2443,13 @@
               # Pushes Aspen source to Forge, runs NixBuildWorker with `type = 'nix` jobs.
               # Build: nix build .#checks.x86_64-linux.ci-dogfood-test --impure
               ci-dogfood-test = import ./nix/tests/ci-dogfood.nix {
-                inherit pkgs lib kvPluginWasm forgePluginWasm;
+                inherit pkgs lib kvPluginWasm forgePluginWasm rustToolChain;
                 aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-e2e;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
                 gitRemoteAspenPackage = bins.full-git-remote-aspen;
                 aspenSource = fullRawSrc;
+                cargoVendorDir = fullCargoVendorDir;
               };
 
               # HTTP proxy test: TCP tunnel and HTTP forward proxy over

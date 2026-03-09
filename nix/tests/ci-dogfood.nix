@@ -1,17 +1,22 @@
-# Dogfood NixOS VM test: push Aspen's source to Forge, build via NixBuildWorker.
+# Dogfood NixOS VM test: push Aspen's source to Forge, COMPILE it via NixBuildWorker.
 #
 # This is the self-hosting litmus test. It:
 #   1. Creates a Forge repository
 #   2. Pushes Aspen's ACTUAL source tree (80+ crates, ~23MB) via git-remote-aspen
 #   3. CI auto-triggers with 3-stage pipeline using `type = 'nix` jobs:
-#      a. Validate: nix build check verifying source tree structure
-#      b. Build: two parallel nix checks (crate content validation)
-#      c. Test: nix check verifying workspace integrity
+#      a. Validate: structural check (source tree has 70+ crates)
+#      b. Build: `cargo check` on aspen-constants + aspen-time (zero-dep crates)
+#      c. Test: `cargo check -p aspen-core` (real crate with vendored dependencies)
 #   4. Verifies pipeline completion with all stages passing
 #   5. Verifies NixBuildWorker log chunks are written to KV store
 #
-# This proves Aspen can host its own source code AND build it through
-# its own CI using the NixBuildWorker (the production executor path).
+# Pre-staged in the VM (no network needed for builds):
+#   - Rust nightly toolchain at /etc/aspen-ci/rust/
+#   - Vendored cargo deps via cargoVendorDir (crane-built)
+#   - Cargo config at /etc/aspen-ci/cargo-config.toml
+#
+# This proves Aspen can host its own source code AND compile real Rust
+# through its own CI using the NixBuildWorker (the production executor path).
 #
 # Run:
 #   nix build .#checks.x86_64-linux.ci-dogfood-test --impure
@@ -29,25 +34,66 @@
   forgePluginWasm,
   gitRemoteAspenPackage,
   aspenSource,
+  rustToolChain,
+  cargoVendorDir,
 }: let
   # Deterministic Iroh secret key.
   secretKey = "0000000000000005000000000000000500000000000000050000000000000005";
 
   cookie = "ci-dogfood-test";
 
+  # Crane's vendor dir has config.toml at root with absolute Nix store paths.
+  # We use it directly — it already points to the vendored crates subdirectory
+  # using full /nix/store/... paths, so no path rewriting needed.
+  cargoConfig = "${cargoVendorDir}/config.toml";
+
+  # Minimal workspace Cargo.toml for the cargo-check-core build.
+  # Only includes aspen-core and its transitive path deps — avoids loading
+  # workspace members that depend on git sources (aspen-net, aspen-proxy, etc.)
+  # which would require vendoring git deps too.
+  minimalWorkspaceToml = pkgs.writeText "minimal-workspace-Cargo.toml" ''
+    [workspace]
+    members = [
+      "crates/aspen-core",
+      "crates/aspen-constants",
+      "crates/aspen-hlc",
+      "crates/aspen-cluster-types",
+      "crates/aspen-kv-types",
+      "crates/aspen-traits",
+      "crates/aspen-time",
+      "crates/aspen-disk",
+      "crates/aspen-storage-types",
+      "crates/aspen-layer",
+    ]
+    resolver = "3"
+
+    [workspace.dependencies]
+    aspen-constants = { path = "crates/aspen-constants" }
+    aspen-core = { path = "crates/aspen-core" }
+    aspen-hlc = { path = "crates/aspen-hlc" }
+    aspen-kv-types = { path = "crates/aspen-kv-types" }
+    aspen-cluster-types = { path = "crates/aspen-cluster-types" }
+    aspen-traits = { path = "crates/aspen-traits" }
+    aspen-time = { path = "crates/aspen-time" }
+    aspen-disk = { path = "crates/aspen-disk" }
+    aspen-storage-types = { path = "crates/aspen-storage-types" }
+    aspen-layer = { path = "crates/aspen-layer" }
+  '';
+
   # Override CI config for the dogfood test.
   #
-  # Uses `type = 'nix` jobs to exercise the real NixBuildWorker code path,
-  # matching production .aspen/ci.ncl behavior. The pushed flake defines
-  # simple check derivations that work inside the Nix sandbox without network.
+  # Uses `type = 'nix` jobs to exercise the real NixBuildWorker code path.
+  # The pushed flake defines REAL cargo check derivations that compile Rust code
+  # using pre-staged toolchain and vendored deps (isolation = 'none for filesystem access).
   #
   # Three stages:
-  #   1. Validate: nix build check that verifies source tree (70+ crates)
-  #   2. Build: two parallel nix checks (crate content + file structure)
-  #   3. Test: nix check that exercises a more thorough validation
+  #   1. Validate: structural check (source tree has 70+ crates)
+  #   2. Build: two parallel `cargo check` builds (aspen-constants + aspen-time)
+  #   3. Test: `cargo check -p aspen-core` (real crate with dependencies)
   #
   # This proves the full NixBuildWorker path: payload parsing, `nix build`
-  # execution, log streaming via KV chunks, and output path collection.
+  # execution, log streaming via KV chunks, and output path collection —
+  # with REAL Rust compilation, not just file-existence checks.
   dogfoodCiConfig = pkgs.writeText "ci.ncl" ''
     {
       name = "aspen-dogfood-build",
@@ -70,18 +116,20 @@
           depends_on = ["validate"],
           jobs = [
             {
-              name = "check-constants",
+              name = "cargo-check-constants",
               type = 'nix,
               flake_url = ".",
-              flake_attr = "checks.x86_64-linux.constants-crate",
-              timeout_secs = 120,
+              flake_attr = "checks.x86_64-linux.cargo-check-constants",
+              isolation = 'none,
+              timeout_secs = 180,
             },
             {
-              name = "check-time",
+              name = "cargo-check-time",
               type = 'nix,
               flake_url = ".",
-              flake_attr = "checks.x86_64-linux.time-crate",
-              timeout_secs = 120,
+              flake_attr = "checks.x86_64-linux.cargo-check-time",
+              isolation = 'none,
+              timeout_secs = 180,
             },
           ],
         },
@@ -90,11 +138,12 @@
           depends_on = ["build"],
           jobs = [
             {
-              name = "verify-workspace",
+              name = "cargo-check-core",
               type = 'nix,
               flake_url = ".",
-              flake_attr = "checks.x86_64-linux.workspace-integrity",
-              timeout_secs = 120,
+              flake_attr = "checks.x86_64-linux.cargo-check-core",
+              isolation = 'none,
+              timeout_secs = 600,
             },
           ],
         },
@@ -103,18 +152,26 @@
   '';
 
   # A self-contained flake.nix to be pushed to Forge alongside Aspen source.
-  # Defines check derivations that validate source tree structure and crate
-  # contents. All derivations use only /bin/sh — no network, no inputs,
-  # no Rust toolchain needed. This exercises the full NixBuildWorker path
-  # (nix build → log streaming → output collection) while keeping the test fast.
+  #
+  # Defines REAL cargo check derivations that compile actual Rust code.
+  # Uses isolation='none (--no-sandbox) to access pre-staged tools:
+  #   - Rust nightly toolchain at /etc/aspen-ci/rust/bin/
+  #   - Vendored cargo deps config at /etc/aspen-ci/cargo-config.toml
+  #
+  # Three types of checks:
+  #   1. source-tree: structural validation (fast, sandboxed)
+  #   2. cargo-check-constants/time: standalone crate builds (no deps)
+  #   3. cargo-check-core: workspace build with vendored dependencies
   #
   # Uses double-quoted args strings to avoid nested ''...'' escaping issues.
   dogfoodFlake = pkgs.writeText "flake.nix" ''
     {
-      description = "Aspen CI dogfood checks";
+      description = "Aspen CI dogfood checks — real Rust compilation";
       inputs = {};
       outputs = { self, ... }: {
         checks.x86_64-linux = {
+
+          # ── Stage 1: structural validation (sandboxed, fast) ─────────
           source-tree = derivation {
             name = "check-source-tree";
             system = "x86_64-linux";
@@ -122,26 +179,42 @@
             src = self;
             args = [ "-c" "cd $src && test -f Cargo.toml && test -d crates && echo PASS > $out" ];
           };
-          constants-crate = derivation {
-            name = "check-constants-crate";
+
+          # ── Stage 2: standalone cargo check (no-sandbox, zero deps) ──
+          #
+          # Copy individual crates to isolated dirs outside the workspace
+          # so cargo doesn't try to resolve all workspace deps.
+          # These crates have ZERO external dependencies — only rustc needed.
+
+          cargo-check-constants = derivation {
+            name = "cargo-check-aspen-constants";
             system = "x86_64-linux";
             builder = "/bin/sh";
             src = self;
-            args = [ "-c" "cd $src/crates/aspen-constants && test -f Cargo.toml && test -f src/lib.rs && echo PASS > $out" ];
+            args = [ "-c" "export PATH=/etc/aspen-ci/rust/bin:/run/current-system/sw/bin:$PATH && export CARGO_HOME=/tmp/cargo-home && mkdir -p $CARGO_HOME /tmp/build && cp -r $src/crates/aspen-constants /tmp/build/aspen-constants && chmod -R u+w /tmp/build/aspen-constants && cd /tmp/build/aspen-constants && cargo check 2>&1 && echo PASS > $out" ];
           };
-          time-crate = derivation {
-            name = "check-time-crate";
+
+          cargo-check-time = derivation {
+            name = "cargo-check-aspen-time";
             system = "x86_64-linux";
             builder = "/bin/sh";
             src = self;
-            args = [ "-c" "cd $src/crates/aspen-time && test -f Cargo.toml && test -f src/lib.rs && echo PASS > $out" ];
+            args = [ "-c" "export PATH=/etc/aspen-ci/rust/bin:/run/current-system/sw/bin:$PATH && export CARGO_HOME=/tmp/cargo-home && mkdir -p $CARGO_HOME /tmp/build && cp -r $src/crates/aspen-time /tmp/build/aspen-time && chmod -R u+w /tmp/build/aspen-time && cd /tmp/build/aspen-time && cargo check 2>&1 && echo PASS > $out" ];
           };
-          workspace-integrity = derivation {
-            name = "check-workspace-integrity";
+
+          # ── Stage 3: workspace cargo check with vendored deps ────────
+          #
+          # Build aspen-core (real crate with dependencies: serde, tokio, iroh, etc.)
+          # Uses the full workspace source with vendored cargo deps.
+          # A fresh .cargo/config.toml replaces the dev config (mold linker etc.)
+          # with the vendor source replacement pointing to pre-staged deps.
+
+          cargo-check-core = derivation {
+            name = "cargo-check-aspen-core";
             system = "x86_64-linux";
             builder = "/bin/sh";
             src = self;
-            args = [ "-c" "cd $src && test -f Cargo.lock && test -f flake.nix && test -d crates/aspen-core && test -d crates/aspen-raft && test -d crates/aspen-ci && test -d crates/aspen-forge && echo PASS > $out" ];
+            args = [ "-c" "set -e && export PATH=/etc/aspen-ci/rust/bin:/run/current-system/sw/bin:$PATH && export CARGO_HOME=/tmp/cargo-home && export CARGO_TARGET_DIR=/tmp/cargo-target && mkdir -p $CARGO_HOME $CARGO_TARGET_DIR /tmp/workspace && cp -r $src/. /tmp/workspace/ && chmod -R u+w /tmp/workspace && cd /tmp/workspace && cp /etc/aspen-ci/minimal-workspace.toml Cargo.toml && mkdir -p .cargo && cp /etc/aspen-ci/cargo-config.toml .cargo/config.toml && cargo check -p aspen-core 2>&1 && echo PASS > $out" ];
           };
         };
       };
@@ -202,7 +275,18 @@ in
           pkgs.git
           # Nix is needed on PATH for NixBuildWorker to run `nix build`
           pkgs.nix
+          # Rust toolchain for cargo check builds (accessed via /etc/aspen-ci/rust)
+          rustToolChain
+          # C compiler and linker for crates with build scripts
+          pkgs.gcc
         ];
+
+        # Pre-stage Rust toolchain and vendored deps at well-known paths.
+        # The pushed flake's derivations (built with --no-sandbox) access these
+        # to compile Rust code without network access.
+        environment.etc."aspen-ci/rust".source = rustToolChain;
+        environment.etc."aspen-ci/cargo-config.toml".source = cargoConfig;
+        environment.etc."aspen-ci/minimal-workspace.toml".source = minimalWorkspaceToml;
 
         networking.firewall.enable = false;
 
@@ -211,8 +295,8 @@ in
         # Disable sandbox — builds run inside a VM which is already sandboxed
         nix.settings.sandbox = false;
 
-        # More memory for handling large git push (23MB source)
-        virtualisation.memorySize = 4096;
+        # More memory for cargo check with dependencies (aspen-core build)
+        virtualisation.memorySize = 6144;
         virtualisation.cores = 2;
       };
     };
@@ -454,8 +538,9 @@ in
       # ── phase 5: wait for pipeline completion ───────────────────────
 
       with subtest("dogfood pipeline completes successfully"):
-          # Three stages: validate (quick) + build (2 parallel compiles) + test
-          final_status = wait_for_pipeline(run_id, timeout=300)
+          # Three stages: validate (quick) + build (2 parallel cargo checks) + test (cargo check core)
+          # cargo check -p aspen-core with vendored deps can take several minutes
+          final_status = wait_for_pipeline(run_id, timeout=600)
           node1.log(f"Pipeline final: {json.dumps(final_status, indent=2)}")
           pipeline_status = final_status.get("status")
 
@@ -613,6 +698,6 @@ in
               assert found, f"run {run_id} not in list with status=success: {runs}"
 
       # ── done ─────────────────────────────────────────────────────────
-      node1.log("Dogfood test passed: Forge → CI trigger → NixBuildWorker → nix build checks")
+      node1.log("Dogfood test passed: Forge → CI trigger → NixBuildWorker → cargo check (real Rust compilation)")
     '';
   }
