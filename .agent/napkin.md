@@ -370,6 +370,7 @@
 | 2026-03-09 | self | New nix test files not visible to nix eval until `git add` — flake source filtering excludes untracked files | Always `git add` new .nix files and fixture files before running `nix eval` or `nix build`. |
 | 2026-03-09 | self | Wrote main.rs for 13-crate workspace with wrong struct fields on 7 different types (60 compile errors) — guessed field names instead of checking definitions | ALWAYS `rg "pub struct TypeName" crates/ -A 20` before constructing any struct. Affected: PipelineConfig, StageConfig, JobConfig, ForgeRepoInfo, ForgeTreeEntry, ForgeCommitInfo, JobDetails, JobQueueStatsResultResponse, ClusterNode, ClusterState, ClusterMetrics, HookHandlerConfig, HooksConfig. |
 | 2026-03-10 | self | delegate_task file edits now work — pi bug fixed. 6 previous incidents (2026-02-25 through 2026-03-06) were all the same pi-level bug, not user error | delegate_task is now safe for both read-only AND write operations. Use for larger autonomous tasks. Direct edits still preferred for surgical single-line changes. |
+| 2026-03-10 | self | ci-dogfood-test "run CI-built cowsay" took `output_paths[0]` which was `cowsay-3.8.4-man` (man pages), not the binary output `cowsay-3.8.4` | Nix multi-output packages return ALL outputs in `output_paths`. Iterate through paths and probe for the expected binary (`test -x {p}/bin/{name}`) instead of blindly taking `paths[0]`. |
 
 **VM Serial Testing (from Redox repo patterns):**
 

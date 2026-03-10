@@ -293,49 +293,46 @@ in
           node1.log(f"Job KV data type: {type(job_data)}")
 
           # Parse the job result to extract output_paths
-          output_path = None
+          output_paths = []
           if isinstance(job_data, dict):
               value = job_data.get("value", "")
               try:
                   job_result = json.loads(value) if isinstance(value, str) else value
                   data = job_result.get("result", {}).get("Success", {}).get("data", {})
-                  paths = data.get("output_paths", [])
-                  if paths:
-                      output_path = paths[0]
-                      node1.log(f"Nix output path: {output_path}")
+                  output_paths = data.get("output_paths", [])
+                  node1.log(f"Nix output paths: {output_paths}")
               except (json.JSONDecodeError, ValueError, AttributeError) as e:
                   node1.log(f"Failed to parse job result: {e}")
 
-          if output_path:
-              # The output_path is a nix store path like /nix/store/...-cowsay-3.8.4
-              # cowsay binary should be at <output_path>/bin/cowsay
-              cowsay_bin = f"{output_path}/bin/cowsay"
-              node1.log(f"Looking for cowsay at: {cowsay_bin}")
+          # Find the output path that has bin/cowsay (skip -man, -doc, etc.)
+          cowsay_bin = None
+          for p in output_paths:
+              candidate = f"{p}/bin/cowsay"
+              rc, _ = node1.execute(f"test -x {candidate}")
+              if rc == 0:
+                  cowsay_bin = candidate
+                  node1.log(f"Found cowsay binary at: {cowsay_bin}")
+                  break
+              else:
+                  node1.log(f"No bin/cowsay in {p}, skipping")
 
-              # Verify the binary exists
-              node1.succeed(f"test -x {cowsay_bin}")
-              node1.log("cowsay binary exists and is executable")
-
-              # Actually run it!
-              cowsay_output = node1.succeed(f"{cowsay_bin} 'Built by Aspen CI!'")
-              node1.log(f"cowsay output:\n{cowsay_output}")
-              assert "Built by Aspen CI!" in cowsay_output, f"cowsay output missing expected text: {cowsay_output}"
-              assert "___" in cowsay_output or "---" in cowsay_output, f"cowsay output missing cow art: {cowsay_output}"
-              node1.log("cowsay binary runs correctly!")
-          else:
+          if not cowsay_bin:
               # Fallback: scan nix store for cowsay binary
-              # Multiple cowsay store paths may exist (-man, -doc, etc.)
-              # Find the one that actually has bin/cowsay
-              node1.log("No output_path in job result, scanning nix store...")
-              cowsay_output = node1.succeed(
+              node1.log("No cowsay in output_paths, scanning nix store...")
+              cowsay_bin = node1.succeed(
                   "for p in /nix/store/*cowsay*; do "
                   "  if [ -x \"$p/bin/cowsay\" ]; then "
-                  "    exec \"$p/bin/cowsay\" 'Built by Aspen CI!'; "
+                  "    echo \"$p/bin/cowsay\"; exit 0; "
                   "  fi; "
                   "done; echo 'ERROR: no cowsay binary found'; exit 1"
-              )
-              node1.log(f"cowsay output:\n{cowsay_output}")
-              assert "Built by Aspen CI!" in cowsay_output, f"cowsay output missing expected text"
+              ).strip()
+              node1.log(f"Found cowsay via store scan: {cowsay_bin}")
+
+          cowsay_output = node1.succeed(f"{cowsay_bin} 'Built by Aspen CI!'")
+          node1.log(f"cowsay output:\n{cowsay_output}")
+          assert "Built by Aspen CI!" in cowsay_output, f"cowsay output missing expected text: {cowsay_output}"
+          assert "___" in cowsay_output or "---" in cowsay_output, f"cowsay output missing cow art: {cowsay_output}"
+          node1.log("cowsay binary runs correctly!")
 
       node1.log("DOGFOOD PASSED: Forge -> CI -> nix build + RUN cowsay")
     '';
