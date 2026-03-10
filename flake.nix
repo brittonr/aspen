@@ -2518,6 +2518,19 @@
                 nixpkgsFlake = nixpkgs;
               };
 
+              # Workspace build test: push 3-crate Cargo workspace to Forge, CI builds
+              # with real external deps (serde, blake3, uhlc, thiserror) and path deps.
+              # Proves workspace resolution, crates.io fetching, native code compilation.
+              # Build: nix build .#checks.x86_64-linux.ci-dogfood-workspace-test --impure --option sandbox false
+              ci-dogfood-workspace-test = import ./nix/tests/ci-dogfood-workspace.nix {
+                inherit pkgs kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins-snix;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+                nixpkgsFlake = nixpkgs;
+              };
+
               # HTTP proxy test: TCP tunnel and HTTP forward proxy over
               # iroh QUIC. Two nodes — server (aspen-node with proxy) and
               # client (aspen-cli proxy commands). Tests tunnel creation,
