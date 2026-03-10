@@ -6,7 +6,7 @@ This file provides guidance when working with code in this repository.
 
 Aspen is a foundational orchestration layer for distributed systems, written in Rust. It provides distributed primitives for managing and coordinating distributed systems, drawing inspiration from Erlang/BEAM, Plan9, Kubernetes, FoundationDB, etcd, and Antithesis.
 
-**Status**: Production-ready with ~386,000 lines of Rust across 72 crates and 683 passing tests. All trait-based APIs have complete implementations with no stubs or placeholders.
+**Status**: Production-ready with ~436,000 lines of Rust across 80 crates. 44 NixOS VM integration tests, 5,700+ unit/integration tests. All trait-based APIs have complete implementations with no stubs or placeholders.
 
 **Goal: Self-Hosted Infrastructure** - Aspen aims to build and host itself using its own distributed primitives:
 
@@ -155,6 +155,60 @@ nix flake check                # Full verification
 nix run .#coverage html        # Code coverage report
 nix run .#fuzz-quick           # Quick fuzz testing (5min/target)
 nix run .#cluster              # Launch 3-node cluster
+nix run .#dogfood-local        # Full self-hosted build pipeline
+nix run .#dogfood-local -- start  # Just start the cluster
+```
+
+### Dogfood (Self-Hosted Build)
+
+Aspen builds itself using its own Forge + CI + Nix pipeline:
+
+```bash
+# Full pipeline: cluster → forge repo → git push → CI auto-trigger → nix build → verify
+nix run .#dogfood-local
+
+# Step-by-step
+nix run .#dogfood-local -- start   # Start 1-node cluster
+nix run .#dogfood-local -- push    # Push source to Forge
+nix run .#dogfood-local -- build   # Wait for CI pipeline
+nix run .#dogfood-local -- verify  # Compare CI-built binary
+nix run .#dogfood-local -- stop    # Clean up
+```
+
+Script: `scripts/dogfood-local.sh`. VM-isolated variant: `scripts/dogfood-local-vmci.sh`.
+
+### NixOS VM Integration Tests
+
+44 NixOS VM tests in `nix/tests/`. Run with:
+
+```bash
+nix build .#checks.x86_64-linux.ci-dogfood-test --impure --option sandbox false
+nix build .#checks.x86_64-linux.kv-operations-test
+```
+
+Key dogfood tests:
+
+- `ci-dogfood-test`: Push flake to Forge → CI auto-trigger → nix build → run result
+- `ci-dogfood-self-build`: Push Aspen workspace to Forge → CI builds Aspen itself
+- `ci-nix-build-test`: Single nix build job end-to-end
+
+**Ad-hoc VM testing via pi tools** (no NixOS test framework rebuild needed):
+
+- `vm_boot` + `vm_serial` for QEMU-based interactive testing
+- `vm_serial command:` to run commands, `vm_serial expect:` to wait for patterns
+- Boot milestones: `"Welcome to NixOS"` → `"login:"` → `"[#$] "`
+- `vm_screenshot` for graphical debugging
+
+**Serial dogfood VM** (standalone bootable NixOS with aspen):
+
+```bash
+nix build .#dogfood-serial-vm
+cp result/disk.qcow2 /tmp/dogfood-serial.qcow2 && chmod +w /tmp/dogfood-serial.qcow2
+# Then in pi:
+#   vm_boot image="/tmp/dogfood-serial.qcow2" format="qcow2" memory="4096M" cpus=2
+#   vm_serial expect:"root@dogfood"
+#   vm_serial command:"/etc/dogfood/start-node.sh"
+#   vm_serial command:"/etc/dogfood/cowsay-test.sh 2>&1"
 ```
 
 ### Binaries

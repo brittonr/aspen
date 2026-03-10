@@ -3863,6 +3863,12 @@
                     name = "aspen-ci-workspace-server";
                     cargoExtraArgs = "--package aspen-fuse --bin aspen-ci-workspace-server --features virtiofs";
                   };
+
+                  # aspen-node for serial dogfood VM (includes git-bridge for forge push)
+                  aspen-node-serial-dogfood = pureBin {
+                    name = "aspen-node-serial-dogfood";
+                    cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge";
+                  };
                 })
                 // {
                   # Minimal nginx microVM — smoke test for the Cloud Hypervisor boot path
@@ -3894,6 +3900,19 @@
                   snix-boot-initrd = snixBoot.initrd;
                   snix-boot-runVM = snixBoot.runVM;
                 })
+                // {
+                  # Standalone NixOS VM for interactive dogfood testing via vm_boot + vm_serial.
+                  # Build: nix build .#dogfood-serial-vm
+                  # Boot:  vm_boot image="result/disk.qcow2" format="qcow2" memory="4096M"
+                  dogfood-serial-vm = import ./nix/vms/serial-dogfood.nix {
+                    inherit pkgs;
+                    lib = nixpkgs.lib;
+                    aspenNodePackage = self.packages.${system}.aspen-node-serial-dogfood;
+                    aspenCliPackage = aspenCli;
+                    gitRemoteAspenPackage = aspenGitRemote;
+                    nixpkgsFlake = nixpkgs;
+                  };
+                }
             );
         }
         // {

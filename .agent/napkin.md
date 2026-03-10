@@ -5,7 +5,7 @@
 | 2026-03-06 | self | VM workers polled for `ci_vm` jobs but CI pipeline submitted `ci_nix_build` — VMs sat idle consuming 48GB RAM while host handled all builds | Job types must match: VMs now poll `ci_nix_build` + `ci_vm` + `shell_command`. When `ASPEN_CI_KERNEL_PATH` is set, host skips local NixBuildWorker registration so VMs get the jobs. |
 | 2026-03-06 | self | Dogfood smoke test checked `[ -n "$ci_version" ]` but `$ci_version` contained error message from unsupported `--version` flag — non-empty error = "functional" | Check exit code (`if "$ci_bin" --help >/dev/null 2>&1`), not output emptiness. Error messages are non-empty strings. Added `#[command(version)]` to clap derive so `--version` actually works. |
 | 2026-03-06 | self | `stream_pid: unbound variable` — `trap cleanup_stream EXIT` set inside `stream_pipeline()` persists after function returns, but local `stream_pid` goes out of scope | Add `trap - EXIT` after `cleanup_stream` before returning from the function to clear the trap. |
-| 2026-03-06 | self | delegate_task workers reported success for VM CI routing fix but no file changes persisted (again, 6th documented incident) | **CONFIRMED: delegate_task NEVER persists file edits.** Always make edits directly. Only use for read-only information gathering. |
+| 2026-03-06 | self | delegate_task workers reported success for VM CI routing fix but no file changes persisted (6th documented incident at the time) | **UPDATE 2026-03-10: delegate_task NOW WORKS for file edits.** Previous failures were a pi bug, now fixed. delegate_task can be used for both read-only and write operations. Still prefer direct edits for surgical changes; delegate for larger autonomous tasks. |
 
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
@@ -18,7 +18,7 @@
 | 2026-02-26 | self | Snapshot race: `LogsSinceLast(100)` triggers openraft snapshot during tests, `snapshot.submitted(100) > apply_progress.submitted(99)` → panic → Raft core dead → all operations return NOT_LEADER | Increase snapshot threshold to `LogsSinceLast(10_000)`. Root cause: state machine eagerly applies during `append()` but openraft tracks via `apply()` callback. TOCTOU race between redb `last_applied` and openraft `apply_progress`. |
 | 2026-02-26 | self | `aspen-client-api` features (`ci`, `secrets`, `automerge`) defaulted to off → postcard enum discriminants shifted between CLI and server → "Found a bool that wasn't 0 or 1" deserialization crash | Make ALL `aspen-client-api` features default-on: `default = ["auth", "ci", "secrets", "automerge"]`. Wire format enum layout must be identical between all consumers. |
 | 2026-02-26 | self | `set -o pipefail` in test script: CLI returns non-zero for expected errors → pipeline exit code is non-zero even though grep matches | Use `{ $CLI cmd 2>&1 \|\| true; } \| grep ...` pattern to suppress CLI exit code when testing error messages. |
-| 2026-02-25 | self | delegate_task workers report success but file changes don't persist (5 incidents) | **NEVER use delegate_task for file edits.** Only use for read-only info gathering. Always verify with `git diff --stat` after any delegation. Do surgical edits directly. |
+| 2026-02-25 | self | delegate_task workers report success but file changes don't persist (5 incidents at the time) | **UPDATE 2026-03-10: pi bug fixed, delegate_task now persists file edits.** Previous guidance was correct for the old behavior. Now safe for both reads and writes. |
 | 2026-02-25 | self | Postcard enum discriminant mismatch: `ClientRpcResponse` variants shifted by `#[cfg(feature = "ci")]` causing CLI to deserialize wrong variant | Feature flags that add enum variants MUST match between producer (node) and consumer (CLI). Always build CLI with same feature set that affects aspen-client-api enum layout. Affects: secrets CLI needs `ci` feature for CacheMigration variants before Secrets variants. |
 | 2026-02-24 | self | WASM plugin AOT precompile version mismatch: wasmtime 36.0.6 vs hyperlight-wasm guest runtime 36.0.3 | Pin wasmtime exactly to match `hyperlight_wasm::get_wasmtime_version()`. Use `config.target("x86_64-unknown-none")` not `linux`. Enable `config.wasm_component_model(true)` to match guest runtime flags. |
 | 2026-02-24 | self | Guest SDK extern declarations used Rust high-level types (String, Vec<u8>) producing wrong wasm32 ABI | All host function externs MUST use raw C types (`*const c_char`, `*const u8`, `i32`, `i64`) matching hyperlight primitive ABI. Vec<u8> params require explicit `_len: i32` following the buffer param. |
@@ -106,8 +106,8 @@
 ## User Preferences
 
 - Improve plugin system iteratively
-- For multi-crate changes: do edits directly (delegate_task unreliable for file writes)
-- delegate_task for test writing: CLI output tests worked, secrets tests didn't persist. Pattern: delegate works for single-file appends but fails for multi-file edits.
+- For multi-crate changes: delegate_task now works for file edits (pi bug fixed 2026-03-10). Use delegate for larger autonomous tasks, direct edits for surgical changes.
+- delegate_task for test writing: now works reliably for both single-file and multi-file edits.
 - CLI parse tests: always check actual clap subcommand names (e.g., `status` not `state`, `enqueue` not `push`, `--repo` flag not positional). Use `grep -A10 "pub enum.*Command"` on the command file first.
 - `crates/aspen-client/src/rpc_types.rs` is orphaned (156 structs, not compiled). Comment says "included in rpc.rs" but nothing references it.
 
@@ -169,7 +169,7 @@
 
 ## Patterns That Don't Work
 
-- delegate_task for file creation/edits (5 confirmed failures across sessions)
+- ~~delegate_task for file creation/edits~~ **FIXED 2026-03-10**: delegate_task now persists file edits correctly
 - Adding fields to public structs with many external consumers (use trait methods instead)
 - `workspace = true` in extracted crate workspace deps with git URLs (pulls entire repo, causes type duplication)
 - Bare EndpointId in `add-learner` (requires JSON with `addrs` array)
@@ -369,3 +369,59 @@
 | 2026-03-09 | self | `ReadRequest` has a `consistency` field, `ScanRequest.limit_results` is `Option<u32>` not `u32`, `KeyValueWithRevision` has `version`/`create_revision`/`mod_revision` not `revision` | Always check actual struct definitions with `rg "pub struct TypeName" crates/ -A 10` before writing code that constructs them. Struct field names drift from what you remember. |
 | 2026-03-09 | self | New nix test files not visible to nix eval until `git add` — flake source filtering excludes untracked files | Always `git add` new .nix files and fixture files before running `nix eval` or `nix build`. |
 | 2026-03-09 | self | Wrote main.rs for 13-crate workspace with wrong struct fields on 7 different types (60 compile errors) — guessed field names instead of checking definitions | ALWAYS `rg "pub struct TypeName" crates/ -A 20` before constructing any struct. Affected: PipelineConfig, StageConfig, JobConfig, ForgeRepoInfo, ForgeTreeEntry, ForgeCommitInfo, JobDetails, JobQueueStatsResultResponse, ClusterNode, ClusterState, ClusterMetrics, HookHandlerConfig, HooksConfig. |
+| 2026-03-10 | self | delegate_task file edits now work — pi bug fixed. 6 previous incidents (2026-02-25 through 2026-03-06) were all the same pi-level bug, not user error | delegate_task is now safe for both read-only AND write operations. Use for larger autonomous tasks. Direct edits still preferred for surgical single-line changes. |
+
+**VM Serial Testing (from Redox repo patterns):**
+
+Pi's `vm_boot` + `vm_serial` tools can run dogfood tests without NixOS VM test framework:
+
+- `vm_boot` starts QEMU headless with serial console
+- `vm_serial` sends commands and reads output (expect-style pattern matching)
+- `vm_screenshot` for GUI debugging
+- `vm_sendkey` for keyboard input to GUI
+
+Redox repo test protocol (reusable for Aspen):
+
+- Emit structured markers: `FUNC_TEST:<name>:PASS`, `FUNC_TEST:<name>:FAIL:<reason>`, `FUNC_TEST:<name>:SKIP`
+- Bracket with `FUNC_TESTS_START` / `FUNC_TESTS_COMPLETE`
+- Use `vm_serial expect:` to wait for markers: `"Boot Complete"`, `"[#$] "` (shell prompt)
+- File-based polling (`serial file=path` + grep) is more reliable than stdin piping for non-interactive OSes
+- For graphical VMs: serial READ always works for boot log monitoring, serial INPUT may not work (use `vm_sendkey` instead)
+
+Boot milestones for QEMU serial (NixOS):
+
+- `"Welcome to NixOS"` — systemd started
+- `"login:"` — getty ready
+- `"[#$] "` — root shell prompt (if autologin configured)
+
+Dogfood-via-serial approach (alternative to NixOS VM test framework):
+
+1. Build NixOS image with aspen-node, aspen-cli, git-remote-aspen pre-installed
+2. `vm_boot image=<path>` with serial enabled
+3. `vm_serial expect:"login:"` → wait for boot
+4. `vm_serial command:"aspen-node ..." prompt:"[#$] "` → start cluster
+5. `vm_serial command:"aspen-cli cluster health"` → verify
+6. Push source, trigger CI, poll status — all via `vm_serial command:`
+7. Parse structured output from serial for pass/fail
+
+Advantage over NixOS VM test framework: iterative (no full rebuild), debuggable (screenshot + serial), runs from any pi session.
+Disadvantage: no multi-machine orchestration (NixOS test has `nodes.node1`, `nodes.node2` etc.).
+
+**Confirmed working (2026-03-10)**: Full cowsay dogfood via vm_serial:
+
+- `nix build .#dogfood-serial-vm` → 2.4GB qcow2 with aspen-node+cli+git-remote+nix
+- `cp result/disk.qcow2 /tmp/dogfood-serial.qcow2 && chmod +w /tmp/dogfood-serial.qcow2`
+- `vm_boot image=/tmp/dogfood-serial.qcow2 format=qcow2 memory=4096M cpus=2`
+- `vm_serial expect:"Welcome to NixOS"` then `vm_serial expect:"root@dogfood"` (auto-login)
+- `vm_serial command:"/etc/dogfood/start-node.sh"` → cluster ready in ~10s
+- `vm_serial command:"/etc/dogfood/cowsay-test.sh 2>&1"` → full forge→CI→nix build pipeline
+- Pipeline completed, `cowsay "Built by Aspen CI via vm_serial!"` worked
+
+Key gotchas:
+
+- Disk image is read-only in nix store — must `cp` + `chmod +w` before `vm_boot`
+- vm_boot defaults to UEFI — NixOS image must use systemd-boot, not BIOS GRUB
+- vm_boot `extra_args` splits on spaces — can't pass `-append "multi word"`. Use UEFI disk boot instead of direct kernel boot.
+- Auto-login types "root" as a command on first connect — ignore the `command not found`
+- aspen-node-vm-test package lacks `git-bridge` — created `aspen-node-serial-dogfood` with it
+- vm_serial `prompt:` for NixOS: use `"root@dogfood"` not `"[#$] "` (ANSI escapes break regex)
