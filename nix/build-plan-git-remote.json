@@ -18,6 +18,7 @@
     "aspen-coordination-protocol": "path+file:///home/brittonr/git/aspen/crates/aspen-coordination-protocol#0.1.0",
     "aspen-core": "path+file:///home/brittonr/git/aspen/crates/aspen-core#0.1.0",
     "aspen-core-essentials-handler": "path+file:///home/brittonr/git/aspen/crates/aspen-core-essentials-handler#0.1.0",
+    "aspen-crypto": "path+file:///home/brittonr/git/aspen/crates/aspen-crypto#0.1.0",
     "aspen-dht-discovery": "path+file:///home/brittonr/git/aspen/crates/aspen-dht-discovery#0.1.0",
     "aspen-disk": "path+file:///home/brittonr/git/aspen/crates/aspen-disk#0.1.0",
     "aspen-federation": "path+file:///home/brittonr/git/aspen/crates/aspen-federation#0.1.0",
@@ -44,6 +45,8 @@
     "openraft": "path+file:///home/brittonr/git/aspen/openraft/openraft#0.10.0",
     "openraft-macros": "path+file:///home/brittonr/git/aspen/openraft/macros#openraft-macros@0.10.0"
   },
+  "cargoLockHash": "bb42adadbce189baf558dd90a1b374cfc5d9c7ded6c42eb6fa12cfbde100f152",
+  "inputsHash": "e6bfba73c7562f830beac25d4e5c4d98c320bb6533fdf577031d8c09abbd8dd2",
   "crates": {
     "path+file:///home/brittonr/git/aspen#0.1.0": {
       "crateName": "aspen",
@@ -87,6 +90,10 @@
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-core#0.1.0",
           "externCrateName": "aspen_core"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-core-essentials-handler#0.1.0",
+          "externCrateName": "aspen_core_essentials_handler"
         },
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-forge#0.1.0",
@@ -229,7 +236,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -288,6 +295,10 @@
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-core#0.1.0",
           "externCrateName": "aspen_core"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-crypto#0.1.0",
+          "externCrateName": "aspen_crypto"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#async-trait@0.1.89",
@@ -419,7 +430,7 @@
           "externCrateName": "snafu"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -526,7 +537,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -643,6 +654,10 @@
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-core#0.1.0",
           "externCrateName": "aspen_core"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-crypto#0.1.0",
+          "externCrateName": "aspen_crypto"
         },
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-dht-discovery#0.1.0",
@@ -785,7 +800,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -1017,7 +1032,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -1178,7 +1193,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -1257,6 +1272,14 @@
           "externCrateName": "serde_json"
         },
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
+          "externCrateName": "tokio"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio-util@0.7.18",
+          "externCrateName": "tokio_util"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44",
           "externCrateName": "tracing"
         }
@@ -1273,6 +1296,54 @@
       "links": null,
       "description": "Core essentials RPC handlers for Aspen distributed cluster (health, metrics, leases, watches)",
       "license": "AGPL-3.0-or-later"
+    },
+    "path+file:///home/brittonr/git/aspen/crates/aspen-crypto#0.1.0": {
+      "crateName": "aspen-crypto",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "crates/aspen-crypto"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.3",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hex@0.4.3",
+          "externCrateName": "hex"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#iroh@0.95.1",
+          "externCrateName": "iroh"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rand@0.9.2",
+          "externCrateName": "rand"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "externCrateName": "thiserror"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
+          "externCrateName": "tokio"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Lightweight cryptographic primitives for Aspen (cookie validation, identity key lifecycle, key derivation)"
     },
     "path+file:///home/brittonr/git/aspen/crates/aspen-dht-discovery#0.1.0": {
       "crateName": "aspen-dht-discovery",
@@ -1336,7 +1407,7 @@
           "externCrateName": "sha2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -1491,7 +1562,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -1654,7 +1725,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -1736,6 +1807,14 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#iroh@0.95.1",
           "externCrateName": "iroh"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
+          "externCrateName": "tokio"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44",
@@ -2168,7 +2247,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -2270,7 +2349,7 @@
           "externCrateName": "static_assertions"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -2464,7 +2543,7 @@
           "externCrateName": "serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -2604,7 +2683,7 @@
           "externCrateName": "serde_json"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -2657,7 +2736,7 @@
           "externCrateName": "serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -2909,7 +2988,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -2958,7 +3037,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -3051,7 +3130,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -3103,7 +3182,7 @@
           "externCrateName": "parking_lot"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
@@ -3111,7 +3190,7 @@
           "externCrateName": "smol_str"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -3240,7 +3319,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Traits for Authenticated Encryption with Associated Data (AEAD) algorithms,\nsuch as AES-GCM as ChaCha20Poly1305, which provide a high-level API\n",
+      "description": "Traits for Authenticated Encryption with Associated Data (AEAD) algorithms, such as AES-GCM as ChaCha20Poly1305, which provide a high-level API ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/traits"
     },
@@ -3627,7 +3706,7 @@
           "externCrateName": "futures_core"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         }
       ],
@@ -3671,11 +3750,11 @@
           "externCrateName": "once_cell"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         }
       ],
@@ -3712,7 +3791,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -3859,7 +3938,7 @@
           "externCrateName": "fastrand"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         }
       ],
@@ -3928,7 +4007,7 @@
       "authors": [
         "The Rust Project Developers"
       ],
-      "description": "A library to acquire a stack trace (backtrace) at runtime in a Rust program.\n",
+      "description": "A library to acquire a stack trace (backtrace) at runtime in a Rust program. ",
       "homepage": "https://github.com/rust-lang/backtrace-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/backtrace-rs"
@@ -3990,7 +4069,7 @@
           "externCrateName": "smallvec"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         }
       ],
@@ -4034,7 +4113,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of Base16 a.k.a hexadecimal (RFC 4648) which avoids\nany usages of data-dependent branches/LUTs and thereby provides portable\n\"best effort\" constant-time operation and embedded-friendly no_std support\n",
+      "description": "Pure Rust implementation of Base16 a.k.a hexadecimal (RFC 4648) which avoids any usages of data-dependent branches/LUTs and thereby provides portable 'best effort' constant-time operation and embedded-friendly no_std support ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats/tree/master/base16ct"
     },
@@ -4061,7 +4140,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of Base16 a.k.a hexadecimal (RFC 4648) which avoids\nany usages of data-dependent branches/LUTs and thereby provides portable\n\"best effort\" constant-time operation and embedded-friendly no_std support\n",
+      "description": "Pure Rust implementation of Base16 a.k.a hexadecimal (RFC 4648) which avoids any usages of data-dependent branches/LUTs and thereby provides portable 'best effort' constant-time operation and embedded-friendly no_std support ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/base16ct",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -4152,7 +4231,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of Base64 (RFC 4648) which avoids any usages of\ndata-dependent branches/LUTs and thereby provides portable \"best effort\"\nconstant-time operation and embedded-friendly no_std support\n",
+      "description": "Pure Rust implementation of Base64 (RFC 4648) which avoids any usages of data-dependent branches/LUTs and thereby provides portable 'best effort' constant-time operation and embedded-friendly no_std support ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/base64ct",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -4245,7 +4324,7 @@
       "authors": [
         "The Rust Project Developers"
       ],
-      "description": "A macro to generate structures which behave like bitflags.\n",
+      "description": "A macro to generate structures which behave like bitflags. ",
       "homepage": "https://github.com/bitflags/bitflags",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/bitflags/bitflags"
@@ -4442,7 +4521,7 @@
       "authors": [
         "Jane Lusby <jlusby@yaah.dev>"
       ],
-      "description": "A minimal deserializer for inspecting `std::backtrace::Backtrace`'s Debug format.\n",
+      "description": "A minimal deserializer for inspecting `std::backtrace::Backtrace`'s Debug format. ",
       "homepage": "https://github.com/yaahc/btparse",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/yaahc/btparse"
@@ -4586,7 +4665,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "A build-time dependency for Cargo build scripts to assist in invoking the native\nC compiler to compile native C code into a static archive to be linked into Rust\ncode.\n",
+      "description": "A build-time dependency for Cargo build scripts to assist in invoking the native C compiler to compile native C code into a static archive to be linked into Rust code. ",
       "homepage": "https://github.com/rust-lang/cc-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/cc-rs"
@@ -4614,7 +4693,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "A macro to ergonomically define an item depending on a large number of #[cfg]\nparameters. Structured like an if-else chain, the first matching branch is the\nitem that gets emitted.\n",
+      "description": "A macro to ergonomically define an item depending on a large number of #[cfg] parameters. Structured like an if-else chain, the first matching branch is the item that gets emitted. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/cfg-if"
     },
@@ -4692,7 +4771,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "The ChaCha20 stream cipher (RFC 8439) implemented in pure Rust using traits\nfrom the RustCrypto `cipher` crate, with optional architecture-specific\nhardware acceleration (AVX2, SSE2). Additionally provides the ChaCha8, ChaCha12,\nXChaCha20, XChaCha12 and XChaCha8 stream ciphers, and also optional\nrand_core-compatible RNGs based on those ciphers.\n",
+      "description": "The ChaCha20 stream cipher (RFC 8439) implemented in pure Rust using traits from the RustCrypto `cipher` crate, with optional architecture-specific hardware acceleration (AVX2, SSE2). Additionally provides the ChaCha8, ChaCha12, XChaCha20, XChaCha12 and XChaCha8 stream ciphers, and also optional rand_core-compatible RNGs based on those ciphers. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/stream-ciphers"
     },
@@ -4945,7 +5024,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -5020,7 +5099,7 @@
         "Allen Welkie <>",
         "James Munns <james@onevariable.com>"
       ],
-      "description": "    This is an implementation of the Consistent Overhead Byte Stuffing (COBS) algorithm.\n    COBS is an algorithm for transforming a message into an encoding where a specific value\n    (the \"sentinel\" value) is not used. This value can then be used to mark frame boundaries\n    in a serial communication channel. ",
+      "description": "    This is an implementation of the Consistent Overhead Byte Stuffing (COBS) algorithm.     COBS is an algorithm for transforming a message into an encoding where a specific value     (the 'sentinel' value) is not used. This value can then be used to mark frame boundaries     in a serial communication channel. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/jamesmunns/cobs.rs"
     },
@@ -5151,7 +5230,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Const-friendly implementation of the ISO/IEC Object Identifier (OID) standard\nas defined in ITU X.660, with support for BER/DER encoding/decoding as well as\nheapless no_std (i.e. embedded) support\n",
+      "description": "Const-friendly implementation of the ISO/IEC Object Identifier (OID) standard as defined in ITU X.660, with support for BER/DER encoding/decoding as well as heapless no_std (i.e. embedded) support ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/const-oid",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -5270,7 +5349,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Lightweight runtime CPU feature detection for aarch64, loongarch64, and x86/x86_64 targets, \nwith no_std support and support for mobile targets including Android and iOS\n",
+      "description": "Lightweight runtime CPU feature detection for aarch64, loongarch64, and x86/x86_64 targets,  with no_std support and support for mobile targets including Android and iOS ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/utils"
     },
@@ -5631,7 +5710,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of NaCl's crypto_box public-key authenticated\nencryption primitive which combines the X25519 Elliptic Curve Diffie-Hellman\nfunction and the XSalsa20Poly1305 authenticated encryption cipher\n",
+      "description": "Pure Rust implementation of NaCl's crypto_box public-key authenticated encryption primitive which combines the X25519 Elliptic Curve Diffie-Hellman function and the XSalsa20Poly1305 authenticated encryption cipher ",
       "homepage": "https://github.com/RustCrypto/nacl-compat/tree/master/crypto_box",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/nacl-compat"
@@ -5695,7 +5774,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of the XSalsa20Poly1305 (a.k.a. NaCl crypto_secretbox)\nauthenticated encryption cipher as well as the libsodium variant of\nXChaCha20Poly1305\n",
+      "description": "Pure Rust implementation of the XSalsa20Poly1305 (a.k.a. NaCl crypto_secretbox) authenticated encryption cipher as well as the libsodium variant of XChaCha20Poly1305 ",
       "homepage": "https://github.com/RustCrypto/nacl-compat/tree/master/crypto_secretbox",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/nacl-compat"
@@ -5715,7 +5794,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -5942,7 +6021,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust embedded-friendly implementation of the Distinguished Encoding Rules\n(DER) for Abstract Syntax Notation One (ASN.1) as described in ITU X.690 with\nfull support for heapless `no_std`/`no_alloc` targets\n",
+      "description": "Pure Rust embedded-friendly implementation of the Distinguished Encoding Rules (DER) for Abstract Syntax Notation One (ASN.1) as described in ITU X.690 with full support for heapless `no_std`/`no_alloc` targets ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/der",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -6002,7 +6081,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -6062,7 +6141,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -6200,7 +6279,7 @@
       "authors": [
         "Asynchronics and contributors"
       ],
-      "description": "An async, lock-free synchronization primitive for task wakeup.\n",
+      "description": "An async, lock-free synchronization primitive for task wakeup. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/asynchronics/diatomic-waker"
     },
@@ -6314,7 +6393,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -6335,7 +6414,7 @@
       "authors": [
         "Jane Lusby <jlusby@yaah.dev>"
       ],
-      "description": "A derive macro for implementing the display Trait via a doc comment and string interpolation\n",
+      "description": "A derive macro for implementing the display Trait via a doc comment and string interpolation ",
       "homepage": "https://github.com/yaahc/displaydoc",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/yaahc/displaydoc"
@@ -6550,7 +6629,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Edwards Digital Signature Algorithm (EdDSA) over Curve25519 (as specified in RFC 8032)\nsupport library providing signature type definitions and PKCS#8 private key\ndecoding/encoding support\n",
+      "description": "Edwards Digital Signature Algorithm (EdDSA) over Curve25519 (as specified in RFC 8032) support library providing signature type definitions and PKCS#8 private key decoding/encoding support ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/signatures/tree/master/ed25519"
     },
@@ -6595,7 +6674,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Edwards Digital Signature Algorithm (EdDSA) over Curve25519 (as specified in RFC 8032)\nsupport library providing signature type definitions and PKCS#8 private key\ndecoding/encoding support\n",
+      "description": "Edwards Digital Signature Algorithm (EdDSA) over Curve25519 (as specified in RFC 8032) support library providing signature type definitions and PKCS#8 private key decoding/encoding support ",
       "homepage": "https://github.com/RustCrypto/signatures/tree/master/ed25519",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/signatures"
@@ -6619,7 +6698,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -6640,7 +6719,7 @@
       "authors": [
         "Benjamin Fry <benjaminfry@me.com>"
       ],
-      "description": "A proc-macro for deriving inner field accessor functions on enums.\n",
+      "description": "A proc-macro for deriving inner field accessor functions on enums. ",
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/bluejekyll/enum-as-inner"
     },
@@ -6675,7 +6754,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Filter log events using environment variables\n",
+      "description": "Filter log events using environment variables ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-cli/env_logger"
     },
@@ -6708,7 +6787,7 @@
           "externCrateName": "env_filter"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#jiff@0.2.21",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#jiff@0.2.23",
           "externCrateName": "jiff"
         },
         {
@@ -6726,7 +6805,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A logging implementation for `log` which is configured via an environment\nvariable.\n",
+      "description": "A logging implementation for `log` which is configured via an environment variable. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-cli/env_logger"
     },
@@ -6807,7 +6886,7 @@
           "externCrateName": "event_listener"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         }
       ],
@@ -6850,7 +6929,7 @@
           "externCrateName": "parking"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         }
       ],
@@ -7066,7 +7145,7 @@
         "Alex Crichton <alex@alexcrichton.com>",
         "Josh Triplett <josh@joshtriplett.org>"
       ],
-      "description": "DEFLATE compression and decompression exposed as Read/BufRead/Write streams.\nSupports miniz_oxide and multiple zlib implementations. Supports zlib, gzip,\nand raw deflate streams.\n",
+      "description": "DEFLATE compression and decompression exposed as Read/BufRead/Write streams. Supports miniz_oxide and multiple zlib implementations. Supports zlib, gzip, and raw deflate streams. ",
       "homepage": "https://github.com/rust-lang/flate2-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/flate2-rs"
@@ -7233,7 +7312,7 @@
           "externCrateName": "futures_core"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
@@ -7293,7 +7372,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Channels for asynchronous communication using futures-rs.\n",
+      "description": "Channels for asynchronous communication using futures-rs. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -7325,7 +7404,7 @@
           "externCrateName": "futures_lite"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.10",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.11",
           "externCrateName": "pin_project"
         },
         {
@@ -7374,7 +7453,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "The core traits and types in for the `futures` library.\n",
+      "description": "The core traits and types in for the `futures` library. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -7414,7 +7493,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Executors for asynchronous tasks based on the futures-rs library.\n",
+      "description": "Executors for asynchronous tasks based on the futures-rs library. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -7442,7 +7521,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "The `AsyncRead`, `AsyncWrite`, `AsyncSeek`, and `AsyncBufRead` traits for the futures-rs library.\n",
+      "description": "The `AsyncRead`, `AsyncWrite`, `AsyncSeek`, and `AsyncBufRead` traits for the futures-rs library. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -7482,7 +7561,7 @@
           "externCrateName": "parking"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         }
       ],
@@ -7520,7 +7599,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -7538,7 +7617,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "The futures-rs procedural macro implementations.\n",
+      "description": "The futures-rs procedural macro implementations. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -7567,7 +7646,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "The asynchronous `Sink` trait for the futures-rs library.\n",
+      "description": "The asynchronous `Sink` trait for the futures-rs library. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -7595,7 +7674,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Tools for working with tasks.\n",
+      "description": "Tools for working with tasks. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -7654,7 +7733,7 @@
           "externCrateName": "memchr"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
@@ -7672,7 +7751,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Common utilities and extension traits for the futures-rs library.\n",
+      "description": "Common utilities and extension traits for the futures-rs library. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -7733,7 +7812,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "An implementation of futures and streams featuring zero allocations,\ncomposability, and iterator-like interfaces.\n",
+      "description": "An implementation of futures and streams featuring zero allocations, composability, and iterator-like interfaces. ",
       "homepage": "https://rust-lang.github.io/futures-rs",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/futures-rs"
@@ -7790,7 +7869,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -7982,11 +8061,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/getrandom"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.4.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.4.2": {
       "crateName": "getrandom",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "edition": "2024",
-      "sha256": "139ef39800118c7683f2fd3c98c1b23c09ae076556b435f8e9064ae108aaeeec",
+      "sha256": "0de51e6874e94e7bf76d726fc5d13ba782deca734ff60d5bb2fb2607c7406555",
       "source": {
         "type": "crates-io"
       },
@@ -8115,7 +8194,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-chunk-0.4.12/src/lib.rs",
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-chunk-0.4.12/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -8157,7 +8236,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-commitgraph-0.31.0/src/lib.rs",
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-commitgraph-0.31.0/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -8184,7 +8263,7 @@
           "externCrateName": "itoa"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#jiff@0.2.21",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#jiff@0.2.23",
           "externCrateName": "jiff"
         },
         {
@@ -8243,7 +8322,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-diff-0.57.1/src/lib.rs",
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-diff-0.57.1/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -8405,7 +8484,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-fs-0.18.2/src/lib.rs",
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-fs-0.18.2/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -8690,7 +8769,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-odb-0.74.0/src/lib.rs",
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-odb-0.74.0/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -8768,7 +8847,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-pack-0.64.1/src/lib.rs",
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-pack-0.64.1/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -8846,7 +8925,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-quote-0.6.2/src/lib.rs",
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-quote-0.6.2/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -8896,7 +8975,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-revwalk-0.25.0/src/lib.rs",
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-revwalk-0.25.0/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -8934,7 +9013,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-tempfile-20.0.1/src/lib.rs",
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-tempfile-20.0.1/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -9021,7 +9100,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-traverse-0.51.1/src/lib.rs",
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gix-traverse-0.51.1/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -9146,7 +9225,7 @@
           "externCrateName": "slab"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -9499,7 +9578,7 @@
           "externCrateName": "idna"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ipnet@2.11.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ipnet@2.12.0",
           "externCrateName": "ipnet"
         },
         {
@@ -9523,7 +9602,7 @@
           "externCrateName": "tinyvec"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -9552,7 +9631,7 @@
       "authors": [
         "The contributors to Hickory DNS"
       ],
-      "description": "Hickory DNS is a safe and secure DNS library. This is the foundational DNS protocol library for all Hickory DNS projects.\n",
+      "description": "Hickory DNS is a safe and secure DNS library. This is the foundational DNS protocol library for all Hickory DNS projects. ",
       "homepage": "https://hickory-dns.org/",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/hickory-dns/hickory-dns"
@@ -9587,7 +9666,7 @@
           "externCrateName": "hickory_proto"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#moka@0.12.13",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#moka@0.12.14",
           "externCrateName": "moka"
         },
         {
@@ -9619,7 +9698,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -9644,7 +9723,7 @@
       "authors": [
         "The contributors to Hickory DNS"
       ],
-      "description": "Hickory DNS is a safe and secure DNS library. This Resolver library uses the Client library to perform all DNS queries. The Resolver is intended to be a high-level library for any DNS record resolution. See Resolver for supported resolution types. The Client can be used for other queries.\n",
+      "description": "Hickory DNS is a safe and secure DNS library. This Resolver library uses the Client library to perform all DNS queries. The Resolver is intended to be a high-level library for any DNS record resolution. See Resolver for supported resolution types. The Client can be used for other queries. ",
       "homepage": "https://hickory-dns.org/",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/hickory-dns/hickory-dns"
@@ -9710,7 +9789,7 @@
           "externCrateName": "http_body"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         }
       ],
@@ -9729,7 +9808,7 @@
         "Lucio Franco <luciofranco14@gmail.com>",
         "Sean McArthur <sean@seanmonstar.com>"
       ],
-      "description": "Combinators and adapters for HTTP request or response bodies.\n",
+      "description": "Combinators and adapters for HTTP request or response bodies. ",
       "license": "MIT",
       "repository": "https://github.com/hyperium/http-body"
     },
@@ -9767,7 +9846,7 @@
         "Lucio Franco <luciofranco14@gmail.com>",
         "Sean McArthur <sean@seanmonstar.com>"
       ],
-      "description": "Trait representing an asynchronous, streaming, HTTP request or response body.\n",
+      "description": "Trait representing an asynchronous, streaming, HTTP request or response body. ",
       "license": "MIT",
       "repository": "https://github.com/hyperium/http-body"
     },
@@ -9808,7 +9887,7 @@
         "Carl Lerche <me@carllerche.com>",
         "Sean McArthur <sean@seanmonstar.com>"
       ],
-      "description": "A set of types for representing HTTP requests and responses.\n",
+      "description": "A set of types for representing HTTP requests and responses. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/hyperium/http"
     },
@@ -9928,7 +10007,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Hybrid typenum-based and const generic array types designed to provide the\nflexibility of typenum-based expressions while also allowing interoperability\nand a transition path to const generics\n",
+      "description": "Hybrid typenum-based and const generic array types designed to provide the flexibility of typenum-based expressions while also allowing interoperability and a transition path to const generics ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/hybrid-array"
     },
@@ -9969,7 +10048,7 @@
           "externCrateName": "pki_types"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -10047,7 +10126,7 @@
           "externCrateName": "hyper"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ipnet@2.11.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ipnet@2.12.0",
           "externCrateName": "ipnet"
         },
         {
@@ -10059,7 +10138,7 @@
           "externCrateName": "percent_encoding"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
@@ -10067,7 +10146,7 @@
           "externCrateName": "socket2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -10154,7 +10233,7 @@
           "externCrateName": "itoa"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
@@ -10166,7 +10245,7 @@
           "externCrateName": "smallvec"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -10689,7 +10768,7 @@
           "externCrateName": "rand"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -10881,11 +10960,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/dtolnay/inventory"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#ipnet@2.11.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#ipnet@2.12.0": {
       "crateName": "ipnet",
-      "version": "2.11.0",
+      "version": "2.12.0",
       "edition": "2018",
-      "sha256": "469fb0b9cefa57e3ef31275ee7cacb78f2fdca44e4765491884a2b119d4eb130",
+      "sha256": "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2",
       "source": {
         "type": "crates-io"
       },
@@ -11154,7 +11233,7 @@
           "externCrateName": "snafu"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -11276,7 +11355,7 @@
           "externCrateName": "serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -11330,7 +11409,7 @@
           "externCrateName": "futures_lite"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.10",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.11",
           "externCrateName": "pin_project"
         },
         {
@@ -11338,7 +11417,7 @@
           "externCrateName": "smallvec"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         }
       ],
@@ -11379,7 +11458,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -11612,7 +11691,7 @@
           "externCrateName": "udp"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
@@ -11632,7 +11711,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -11740,7 +11819,7 @@
           "externCrateName": "num_enum"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.10",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.11",
           "externCrateName": "pin_project"
         },
         {
@@ -11784,7 +11863,7 @@
           "externCrateName": "strum"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -11996,7 +12075,7 @@
           "externCrateName": "netwatch"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.10",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.11",
           "externCrateName": "pin_project"
         },
         {
@@ -12052,7 +12131,7 @@
           "externCrateName": "swarm_discovery"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -12119,7 +12198,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -12207,7 +12286,7 @@
           "externCrateName": "smallvec"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -12291,11 +12370,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/dtolnay/itoa"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#jiff@0.2.21": {
+    "registry+https://github.com/rust-lang/crates.io-index#jiff@0.2.23": {
       "crateName": "jiff",
-      "version": "0.2.21",
+      "version": "0.2.23",
       "edition": "2021",
-      "sha256": "b3e3d65f018c6ae946ab16e80944b97096ed73c35b221d1c478a6c81d8f57940",
+      "sha256": "1a3546dc96b6d42c5f24902af9e2538e82e39ad350b0c766eb3fbf2d8f3d8359",
       "source": {
         "type": "crates-io"
       },
@@ -12324,7 +12403,7 @@
       "authors": [
         "Andrew Gallant <jamslam@gmail.com>"
       ],
-      "description": "A date-time library that encourages you to jump into the pit of success.\n\nThis library is heavily inspired by the Temporal project.\n",
+      "description": "A date-time library that encourages you to jump into the pit of success.  This library is heavily inspired by the Temporal project. ",
       "license": "Unlicense OR MIT",
       "repository": "https://github.com/BurntSushi/jiff"
     },
@@ -12469,7 +12548,7 @@
       "authors": [
         "Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"
       ],
-      "description": "Parse and inspect Rust literals (i.e. tokens in the Rust programming language\nrepresenting fixed values). Particularly useful for proc macros, but can also\nbe used outside of a proc-macro context.\n",
+      "description": "Parse and inspect Rust literals (i.e. tokens in the Rust programming language representing fixed values). Particularly useful for proc macros, but can also be used outside of a proc-macro context. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/LukasKalbertodt/litrs"
     },
@@ -12533,7 +12612,7 @@
       "authors": [
         "The Rust Project Developers"
       ],
-      "description": "A lightweight logging facade for Rust\n",
+      "description": "A lightweight logging facade for Rust ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/log"
     },
@@ -12721,7 +12800,7 @@
       "authors": [
         "Eliza Weisman <eliza@buoyant.io>"
       ],
-      "description": "Regex matching on character and byte streams.\n",
+      "description": "Regex matching on character and byte streams. ",
       "homepage": "https://github.com/hawkw/matchers",
       "license": "MIT",
       "repository": "https://github.com/hawkw/matchers"
@@ -12754,7 +12833,7 @@
         "Andrew Gallant <jamslam@gmail.com>",
         "bluss"
       ],
-      "description": "Provides extremely fast (uses SIMD on x86_64, aarch64 and wasm32) routines for\n1, 2 or 3 byte search and single substring search.\n",
+      "description": "Provides extremely fast (uses SIMD on x86_64, aarch64 and wasm32) routines for 1, 2 or 3 byte search and single substring search. ",
       "homepage": "https://github.com/BurntSushi/memchr",
       "license": "Unlicense OR MIT",
       "repository": "https://github.com/BurntSushi/memchr"
@@ -12777,7 +12856,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memmap2-0.9.10/src/lib.rs",
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memmap2-0.9.10/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -12867,11 +12946,11 @@
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/mio"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#moka@0.12.13": {
+    "registry+https://github.com/rust-lang/crates.io-index#moka@0.12.14": {
       "crateName": "moka",
-      "version": "0.12.13",
+      "version": "0.12.14",
       "edition": "2021",
-      "sha256": "b4ac832c50ced444ef6be0767a008b02c106a909ba79d1d830501e94b96f6b7e",
+      "sha256": "85f8024e1c8e71c778968af91d43700ce1d11b219d127d79fb2934153b82b42b",
       "source": {
         "type": "crates-io"
       },
@@ -12946,7 +13025,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -13043,11 +13122,11 @@
           "externCrateName": "futures_util"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.10",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.11",
           "externCrateName": "pin_project"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -13186,7 +13265,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -13225,7 +13304,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ipnet@2.11.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ipnet@2.12.0",
           "externCrateName": "ipnet"
         },
         {
@@ -13428,7 +13507,7 @@
           "externCrateName": "log"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         }
       ],
@@ -13509,7 +13588,7 @@
           "externCrateName": "netlink_sys"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
@@ -13521,7 +13600,7 @@
           "externCrateName": "time"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -13668,7 +13747,7 @@
       "authors": [
         "Jacob Pratt <jacob@jhpratt.dev>"
       ],
-      "description": "`num_conv` is a crate to convert between integer types without using `as` casts. This provides\nbetter certainty when refactoring, makes the exact behavior of code more explicit, and allows using\nturbofish syntax.\n",
+      "description": "`num_conv` is a crate to convert between integer types without using `as` casts. This provides better certainty when refactoring, makes the exact behavior of code more explicit, and allows using turbofish syntax. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/jhpratt/num-conv"
     },
@@ -13794,7 +13873,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro-crate@2.0.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro-crate@3.4.0",
           "externCrateName": "proc_macro_crate"
         },
         {
@@ -13802,7 +13881,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -13933,7 +14012,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "A library for helping to find system-wide trust anchor (\"root\") certificate\nlocations based on paths typically used by `openssl`.\n",
+      "description": "A library for helping to find system-wide trust anchor ('root') certificate locations based on paths typically used by `openssl`. ",
       "homepage": "https://github.com/rustls/openssl-probe",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rustls/openssl-probe"
@@ -14103,7 +14182,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "PEM Encoding (RFC 7468) for PKIX, PKCS, and CMS Structures, implementing a\nstrict subset of the original Privacy-Enhanced Mail encoding intended\nspecifically for use with cryptographic keys, certificates, and other messages.\nProvides a no_std-friendly, constant-time implementation suitable for use with\ncryptographic private keys.\n",
+      "description": "PEM Encoding (RFC 7468) for PKIX, PKCS, and CMS Structures, implementing a strict subset of the original Privacy-Enhanced Mail encoding intended specifically for use with cryptographic keys, certificates, and other messages. Provides a no_std-friendly, constant-time implementation suitable for use with cryptographic private keys. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats/tree/master/pem-rfc7468"
     },
@@ -14137,7 +14216,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "PEM Encoding (RFC 7468) for PKIX, PKCS, and CMS Structures, implementing a\nstrict subset of the original Privacy-Enhanced Mail encoding intended\nspecifically for use with cryptographic keys, certificates, and other messages.\nProvides a no_std-friendly, constant-time implementation suitable for use with\ncryptographic private keys.\n",
+      "description": "PEM Encoding (RFC 7468) for PKIX, PKCS, and CMS Structures, implementing a strict subset of the original Privacy-Enhanced Mail encoding intended specifically for use with cryptographic keys, certificates, and other messages. Provides a no_std-friendly, constant-time implementation suitable for use with cryptographic private keys. ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/pem-rfc7468",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -14209,11 +14288,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/servo/rust-url/"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#pin-project-internal@1.1.10": {
+    "registry+https://github.com/rust-lang/crates.io-index#pin-project-internal@1.1.11": {
       "crateName": "pin-project-internal",
-      "version": "1.1.10",
+      "version": "1.1.11",
       "edition": "2021",
-      "sha256": "6e918e4ff8c4549eb882f14b3a4bc8c8bc93de829416eacf579f1207a8fbf861",
+      "sha256": "d9b20ed30f105399776b9c883e68e536ef602a16ae6f596d2c473591d6ad64c6",
       "source": {
         "type": "crates-io"
       },
@@ -14224,7 +14303,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -14242,15 +14321,15 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Implementation detail of the `pin-project` crate.\n",
+      "description": "Implementation detail of the `pin-project` crate. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/taiki-e/pin-project"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16": {
+    "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17": {
       "crateName": "pin-project-lite",
-      "version": "0.2.16",
+      "version": "0.2.17",
       "edition": "2018",
-      "sha256": "3b3cff922bd51709b605d9ead9aa71031d81447142d828eb4a6eba76fe619f9b",
+      "sha256": "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd",
       "source": {
         "type": "crates-io"
       },
@@ -14266,22 +14345,22 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A lightweight version of pin-project written with declarative macros.\n",
+      "description": "A lightweight version of pin-project written with declarative macros. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/taiki-e/pin-project-lite"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.10": {
+    "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.11": {
       "crateName": "pin-project",
-      "version": "1.1.10",
+      "version": "1.1.11",
       "edition": "2021",
-      "sha256": "677f1add503faace112b9f1373e43e9e054bfdd22ff1a63c1bc485eaec6a6a8a",
+      "sha256": "f1749c7ed4bcaf4c3d0a3efc28538844fb29bcdd7d2b67b2be7e20ba861ff517",
       "source": {
         "type": "crates-io"
       },
       "features": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-internal@1.1.10",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-internal@1.1.11",
           "externCrateName": "pin_project_internal"
         }
       ],
@@ -14295,7 +14374,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A crate for safe and ergonomic pin-projection.\n",
+      "description": "A crate for safe and ergonomic pin-projection. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/taiki-e/pin-project"
     },
@@ -14322,7 +14401,7 @@
       "authors": [
         "Josef Brandl <mail@josefbrandl.de>"
       ],
-      "description": "Utilities for pinning\n",
+      "description": "Utilities for pinning ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang-nursery/pin-utils"
     },
@@ -14415,7 +14494,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -14488,7 +14567,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of Public-Key Cryptography Standards (PKCS) #8:\nPrivate-Key Information Syntax Specification (RFC 5208), with additional\nsupport for PKCS#8v2 asymmetric key packages (RFC 5958)\n",
+      "description": "Pure Rust implementation of Public-Key Cryptography Standards (PKCS) #8: Private-Key Information Syntax Specification (RFC 5208), with additional support for PKCS#8v2 asymmetric key packages (RFC 5958) ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/pkcs8",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -14552,7 +14631,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Portable atomic types including support for 128-bit atomics, atomic float, etc.\n",
+      "description": "Portable atomic types including support for 128-bit atomics, atomic float, etc. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/taiki-e/portable-atomic"
     },
@@ -14637,7 +14716,7 @@
           "externCrateName": "time"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -14722,7 +14801,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -14858,7 +14937,7 @@
       "authors": [
         "Jacob Pratt <jacob@jhpratt.dev>"
       ],
-      "description": "    `powerfmt` is a library that provides utilities for formatting values. This crate makes it\n    significantly easier to support filling to a minimum width with alignment, avoid heap\n    allocation, and avoid repetitive calculations.\n",
+      "description": "    `powerfmt` is a library that provides utilities for formatting values. This crate makes it     significantly easier to support filling to a minimum width with alignment, avoid heap     allocation, and avoid repetitive calculations. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/jhpratt/powerfmt"
     },
@@ -14876,7 +14955,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.39",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.40",
           "externCrateName": "zerocopy"
         }
       ],
@@ -14896,38 +14975,6 @@
       "description": "Cross-platform cryptography-oriented low-level SIMD library.",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/cryptocorrosion/cryptocorrosion"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#proc-macro-crate@2.0.0": {
-      "crateName": "proc-macro-crate",
-      "version": "2.0.0",
-      "edition": "2021",
-      "sha256": "7e8366a6159044a37876a2b9817124296703c586a5c92e2c53751fa06d8d43e8",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_edit@0.20.7",
-          "externCrateName": "toml_edit"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Bastian Köcher <git@kchr.de>"
-      ],
-      "description": "Replacement for crate (macro_rules keyword) in proc-macros\n",
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/bkchr/proc-macro-crate"
     },
     "registry+https://github.com/rust-lang/crates.io-index#proc-macro-crate@3.4.0": {
       "crateName": "proc-macro-crate",
@@ -14957,7 +15004,7 @@
       "authors": [
         "Bastian Köcher <git@kchr.de>"
       ],
-      "description": "Replacement for crate (macro_rules keyword) in proc-macros\n",
+      "description": "Replacement for crate (macro_rules keyword) in proc-macros ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/bkchr/proc-macro-crate"
     },
@@ -14976,7 +15023,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -15029,7 +15076,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -15200,11 +15247,11 @@
       "license": "MIT",
       "repository": "https://github.com/GitoxideLabs/prodash"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44": {
+    "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45": {
       "crateName": "quote",
-      "version": "1.0.44",
+      "version": "1.0.45",
       "edition": "2021",
-      "sha256": "21b2ebcf727b7760c461f091f9f0f539b77b8e87f2fd88131e7f1b433b3cece4",
+      "sha256": "41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924",
       "source": {
         "type": "crates-io"
       },
@@ -15280,7 +15327,7 @@
         "The Rand Project Developers",
         "The Rust Project Developers"
       ],
-      "description": "Random number generators and other randomness functionality.\n",
+      "description": "Random number generators and other randomness functionality. ",
       "homepage": "https://rust-random.github.io/book",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/rand"
@@ -15326,7 +15373,7 @@
         "The Rand Project Developers",
         "The Rust Project Developers"
       ],
-      "description": "Random number generators and other randomness functionality.\n",
+      "description": "Random number generators and other randomness functionality. ",
       "homepage": "https://rust-random.github.io/book",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/rand"
@@ -15367,7 +15414,7 @@
         "The Rust Project Developers",
         "The CryptoCorrosion Contributors"
       ],
-      "description": "ChaCha random number generator\n",
+      "description": "ChaCha random number generator ",
       "homepage": "https://rust-random.github.io/book",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/rand"
@@ -15408,7 +15455,7 @@
         "The Rust Project Developers",
         "The CryptoCorrosion Contributors"
       ],
-      "description": "ChaCha random number generator\n",
+      "description": "ChaCha random number generator ",
       "homepage": "https://rust-random.github.io/book",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/rand"
@@ -15446,7 +15493,7 @@
         "The Rand Project Developers",
         "The Rust Project Developers"
       ],
-      "description": "Core random number generator traits and tools for implementation.\n",
+      "description": "Core random number generator traits and tools for implementation. ",
       "homepage": "https://rust-random.github.io/book",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/rand"
@@ -15483,7 +15530,7 @@
         "The Rand Project Developers",
         "The Rust Project Developers"
       ],
-      "description": "Core random number generator traits and tools for implementation.\n",
+      "description": "Core random number generator traits and tools for implementation. ",
       "homepage": "https://rust-random.github.io/book",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/rand"
@@ -15640,7 +15687,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -15877,7 +15924,7 @@
         "The Rust Project Developers",
         "Andrew Gallant <jamslam@gmail.com>"
       ],
-      "description": "An implementation of regular expressions for Rust. This implementation uses\nfinite automata and guarantees linear time matching on all inputs.\n",
+      "description": "An implementation of regular expressions for Rust. This implementation uses finite automata and guarantees linear time matching on all inputs. ",
       "homepage": "https://github.com/rust-lang/regex",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/regex"
@@ -15949,7 +15996,7 @@
           "externCrateName": "percent_encoding"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
@@ -15973,7 +16020,7 @@
           "externCrateName": "sync_wrapper"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -16156,7 +16203,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "Rust compiler symbol demangling.\n",
+      "description": "Rust compiler symbol demangling. ",
       "homepage": "https://github.com/rust-lang/rustc-demangle",
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/rust-lang/rustc-demangle"
@@ -16597,7 +16644,7 @@
       "authors": [
         "Andrew Gallant <jamslam@gmail.com>"
       ],
-      "description": "A simple crate for determining whether two file paths point to the same file.\n",
+      "description": "A simple crate for determining whether two file paths point to the same file. ",
       "homepage": "https://github.com/BurntSushi/same-file",
       "license": "Unlicense/MIT",
       "repository": "https://github.com/BurntSushi/same-file"
@@ -16666,7 +16713,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -16719,7 +16766,7 @@
       "authors": [
         "bluss"
       ],
-      "description": "A RAII scope guard that will run a given closure when it goes out of scope,\neven if the code between panics (assuming unwinding panic).\n\nDefines the macros `defer!`, `defer_on_unwind!`, `defer_on_success!` as\nshorthands for guards with one of the implemented strategies.\n",
+      "description": "A RAII scope guard that will run a given closure when it goes out of scope, even if the code between panics (assuming unwinding panic).  Defines the macros `defer!`, `defer_on_unwind!`, `defer_on_success!` as shorthands for guards with one of the implemented strategies. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/bluss/scopeguard"
     },
@@ -16759,7 +16806,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of SEC1: Elliptic Curve Cryptography encoding formats\nincluding ASN.1 DER-serialized private keys as well as the\nElliptic-Curve-Point-to-Octet-String encoding\n",
+      "description": "Pure Rust implementation of SEC1: Elliptic Curve Cryptography encoding formats including ASN.1 DER-serialized private keys as well as the Elliptic-Curve-Point-to-Octet-String encoding ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats/tree/master/sec1"
     },
@@ -16988,7 +17035,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -17030,7 +17077,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -17212,7 +17259,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Constant-time serde serializer/deserializer helpers for data that potentially\ncontains secrets (e.g. cryptographic keys)\n",
+      "description": "Constant-time serde serializer/deserializer helpers for data that potentially contains secrets (e.g. cryptographic keys) ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/serdect",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -17407,7 +17454,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of the SHA-2 hash function family\nincluding SHA-224, SHA-256, SHA-384, and SHA-512.\n",
+      "description": "Pure Rust implementation of the SHA-2 hash function family including SHA-224, SHA-256, SHA-384, and SHA-512. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/hashes"
     },
@@ -17447,7 +17494,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of the SHA-2 hash function family\nincluding SHA-224, SHA-256, SHA-384, and SHA-512.\n",
+      "description": "Pure Rust implementation of the SHA-2 hash function family including SHA-224, SHA-256, SHA-384, and SHA-512. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/hashes"
     },
@@ -17479,7 +17526,7 @@
       "authors": [
         "Eliza Weisman <eliza@buoyant.io>"
       ],
-      "description": "A lock-free concurrent slab.\n",
+      "description": "A lock-free concurrent slab. ",
       "homepage": "https://github.com/hawkw/sharded-slab",
       "license": "MIT",
       "repository": "https://github.com/hawkw/sharded-slab"
@@ -17820,7 +17867,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -17921,7 +17968,7 @@
         "Alex Crichton <alex@alexcrichton.com>",
         "Thomas de Zeeuw <thomasdezeeuw@gmail.com>"
       ],
-      "description": "Utilities for handling networking sockets with a maximal amount of configuration\npossible intended.\n",
+      "description": "Utilities for handling networking sockets with a maximal amount of configuration possible intended. ",
       "homepage": "https://github.com/rust-lang/socket2",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/socket2"
@@ -17957,7 +18004,7 @@
         "Alex Crichton <alex@alexcrichton.com>",
         "Thomas de Zeeuw <thomasdezeeuw@gmail.com>"
       ],
-      "description": "Utilities for handling networking sockets with a maximal amount of configuration\npossible intended.\n",
+      "description": "Utilities for handling networking sockets with a maximal amount of configuration possible intended. ",
       "homepage": "https://github.com/rust-lang/socket2",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/socket2"
@@ -17977,7 +18024,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -18109,7 +18156,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "X.509 Subject Public Key Info (RFC5280) describing public keys as well as their\nassociated AlgorithmIdentifiers (i.e. OIDs)\n",
+      "description": "X.509 Subject Public Key Info (RFC5280) describing public keys as well as their associated AlgorithmIdentifiers (i.e. OIDs) ",
       "homepage": "https://github.com/RustCrypto/formats/tree/master/spki",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/formats"
@@ -18146,7 +18193,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of SSH symmetric encryption including support for the\nmodern aes128-gcm@openssh.com/aes256-gcm@openssh.com and\nchacha20-poly1305@openssh.com algorithms as well as legacy support for older\nciphers. Built on the pure Rust cryptography implementations maintained by the\nRustCrypto organization.\n",
+      "description": "Pure Rust implementation of SSH symmetric encryption including support for the modern aes128-gcm@openssh.com/aes256-gcm@openssh.com and chacha20-poly1305@openssh.com algorithms as well as legacy support for older ciphers. Built on the pure Rust cryptography implementations maintained by the RustCrypto organization. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/SSH/tree/master/ssh-cipher"
     },
@@ -18192,7 +18239,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of SSH data type decoders/encoders as described\nin RFC4251\n",
+      "description": "Pure Rust implementation of SSH data type decoders/encoders as described in RFC4251 ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/SSH/tree/master/ssh-encoding"
     },
@@ -18263,7 +18310,7 @@
       "authors": [
         "RustCrypto Developers"
       ],
-      "description": "Pure Rust implementation of SSH key file format decoders/encoders as described\nin RFC4251/RFC4253 and OpenSSH key formats, as well as \"sshsig\" signatures and\ncertificates (including certificate validation and certificate authority support),\nwith further support for the `authorized_keys` and `known_hosts` file formats.\n",
+      "description": "Pure Rust implementation of SSH key file format decoders/encoders as described in RFC4251/RFC4253 and OpenSSH key formats, as well as 'sshsig' signatures and certificates (including certificate validation and certificate authority support), with further support for the `authorized_keys` and `known_hosts` file formats. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/SSH/tree/master/ssh-key"
     },
@@ -18290,7 +18337,7 @@
       "authors": [
         "Robert Grosse <n210241048576@gmail.com>"
       ],
-      "description": "An unsafe marker trait for types like Box and Rc that dereference to a stable address even when moved, and hence can be used with libraries such as owning_ref and rental.\n",
+      "description": "An unsafe marker trait for types like Box and Rc that dereference to a stable address even when moved, and hence can be used with libraries such as owning_ref and rental. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/storyyeller/stable_deref_trait"
     },
@@ -18346,7 +18393,7 @@
         "Danny Guo <danny@dannyguo.com>",
         "maxbachmann <oss@maxbachmann.de>"
       ],
-      "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein,\nOSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and Sørensen-Dice.\n",
+      "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein, OSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and Sørensen-Dice. ",
       "homepage": "https://github.com/rapidfuzz/strsim-rs",
       "license": "MIT",
       "repository": "https://github.com/rapidfuzz/strsim-rs"
@@ -18408,7 +18455,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -18496,7 +18543,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -18536,7 +18583,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -18554,7 +18601,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Providing the features between \"full\" and \"derive\" of syn.\n",
+      "description": "Providing the features between 'full' and 'derive' of syn. ",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/taiki-e/syn-mid"
     },
@@ -18583,7 +18630,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -18635,7 +18682,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -18714,7 +18761,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -18784,7 +18831,7 @@
           "externCrateName": "fastrand"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.4.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.4.2",
           "externCrateName": "getrandom"
         },
         {
@@ -18840,7 +18887,7 @@
       "authors": [
         "Andrew Gallant <jamslam@gmail.com>"
       ],
-      "description": "A simple cross platform library for writing colored text to a terminal.\n",
+      "description": "A simple cross platform library for writing colored text to a terminal. ",
       "homepage": "https://github.com/BurntSushi/termcolor",
       "license": "Unlicense OR MIT",
       "repository": "https://github.com/BurntSushi/termcolor"
@@ -18860,7 +18907,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -19131,11 +19178,11 @@
       "license": "MIT OR Apache-2.0 OR Zlib",
       "repository": "https://github.com/Soveu/tinyvec_macros"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#tokio-macros@2.6.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#tokio-macros@2.6.1": {
       "crateName": "tokio-macros",
-      "version": "2.6.0",
+      "version": "2.6.1",
       "edition": "2021",
-      "sha256": "af407857209536a95c8e56f8231ef2c2e2aff839b22e07a1ffcbc617e9db9fa5",
+      "sha256": "5c55a2eff8b69ce66c84f85e1da1c233edc36ceb85a2058d11b0d6a3c7e7569c",
       "source": {
         "type": "crates-io"
       },
@@ -19146,7 +19193,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -19167,7 +19214,7 @@
       "authors": [
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Tokio's proc macros.\n",
+      "description": "Tokio's proc macros. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tokio"
@@ -19192,7 +19239,7 @@
           "externCrateName": "rustls"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         }
       ],
@@ -19231,11 +19278,11 @@
           "externCrateName": "futures_core"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -19256,7 +19303,7 @@
       "authors": [
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Utilities to work with `Stream` and `tokio`.\n",
+      "description": "Utilities to work with `Stream` and `tokio`. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tokio"
@@ -19301,11 +19348,11 @@
           "externCrateName": "futures_util"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         }
       ],
@@ -19322,7 +19369,7 @@
       "authors": [
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Additional utilities for working with Tokio.\n",
+      "description": "Additional utilities for working with Tokio. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tokio"
@@ -19388,7 +19435,7 @@
           "externCrateName": "simdutf8"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -19414,11 +19461,11 @@
       "license": "MIT",
       "repository": "https://github.com/Gelbpunkt/tokio-websockets/"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0": {
       "crateName": "tokio",
-      "version": "1.49.0",
+      "version": "1.50.0",
       "edition": "2021",
-      "sha256": "72a2903cd7736441aac9df9d7688bd0ce48edccaadf181c3b90be801e81d3d86",
+      "sha256": "27ad5e34374e03cfffefc301becb44e9dc3c17584f414349ebe29ed26661822d",
       "source": {
         "type": "crates-io"
       },
@@ -19457,7 +19504,7 @@
           "externCrateName": "mio"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
@@ -19469,7 +19516,7 @@
           "externCrateName": "socket2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio-macros@2.6.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio-macros@2.6.1",
           "externCrateName": "tokio_macros"
         }
       ],
@@ -19486,7 +19533,7 @@
       "authors": [
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "An event-driven, non-blocking I/O platform for writing asynchronous I/O\nbacked applications.\n",
+      "description": "An event-driven, non-blocking I/O platform for writing asynchronous I/O backed applications. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tokio"
@@ -19532,7 +19579,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A native Rust encoder and decoder of TOML-formatted files and streams. Provides\nimplementations of the standard Serialize/Deserialize traits for TOML data to\nfacilitate deserializing and serializing Rust structures.\n",
+      "description": "A native Rust encoder and decoder of TOML-formatted files and streams. Provides implementations of the standard Serialize/Deserialize traits for TOML data to facilitate deserializing and serializing Rust structures. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/toml-rs/toml"
     },
@@ -19592,49 +19639,6 @@
       "crateBin": [],
       "links": null,
       "description": "A TOML-compatible datetime type",
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/toml-rs/toml"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#toml_edit@0.20.7": {
-      "crateName": "toml_edit",
-      "version": "0.20.7",
-      "edition": "2021",
-      "sha256": "70f427fce4d84c72b5b732388bf4a9f4531b53f74e2887e3ecb2481f68f66d81",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.13.0",
-          "externCrateName": "indexmap"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_datetime@0.6.11",
-          "externCrateName": "toml_datetime"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#winnow@0.5.40",
-          "externCrateName": "winnow"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Andronik Ordian <write@reusable.software>",
-        "Ed Page <eopage@gmail.com>"
-      ],
-      "description": "Yet another format-preserving TOML parser.",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/toml-rs/toml"
     },
@@ -19791,7 +19795,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A low-level interface for writing out TOML\n",
+      "description": "A low-level interface for writing out TOML ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/toml-rs/toml"
     },
@@ -19835,7 +19839,7 @@
           "externCrateName": "iri_string"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
@@ -19892,7 +19896,7 @@
       "authors": [
         "Tower Maintainers <team@tower-rs.com>"
       ],
-      "description": "Decorates a `Service` to allow easy composition between `Service`s.\n",
+      "description": "Decorates a `Service` to allow easy composition between `Service`s. ",
       "homepage": "https://github.com/tower-rs/tower",
       "license": "MIT",
       "repository": "https://github.com/tower-rs/tower"
@@ -19920,7 +19924,7 @@
       "authors": [
         "Tower Maintainers <team@tower-rs.com>"
       ],
-      "description": "Trait representing an asynchronous, request / response based, client or server.\n",
+      "description": "Trait representing an asynchronous, request / response based, client or server. ",
       "homepage": "https://github.com/tower-rs/tower",
       "license": "MIT",
       "repository": "https://github.com/tower-rs/tower"
@@ -19953,7 +19957,7 @@
           "externCrateName": "futures_util"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
@@ -19961,7 +19965,7 @@
           "externCrateName": "sync_wrapper"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.49.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
           "externCrateName": "tokio"
         },
         {
@@ -19986,7 +19990,7 @@
       "authors": [
         "Tower Maintainers <team@tower-rs.com>"
       ],
-      "description": "Tower is a library of modular and reusable components for building robust\nclients and servers.\n",
+      "description": "Tower is a library of modular and reusable components for building robust clients and servers. ",
       "homepage": "https://github.com/tower-rs/tower",
       "license": "MIT",
       "repository": "https://github.com/tower-rs/tower"
@@ -20006,7 +20010,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -20029,7 +20033,7 @@
         "Eliza Weisman <eliza@buoyant.io>",
         "David Barsky <dbarsky@amazon.com>"
       ],
-      "description": "Procedural macro attributes for automatically instrumenting functions.\n",
+      "description": "Procedural macro attributes for automatically instrumenting functions. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -20066,7 +20070,7 @@
       "authors": [
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Core primitives for application-level tracing.\n",
+      "description": "Core primitives for application-level tracing. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -20108,7 +20112,7 @@
         "Jane Lusby <jlusby@yaah.dev>",
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Utilities for enriching errors with `tracing`.\n",
+      "description": "Utilities for enriching errors with `tracing`. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -20129,7 +20133,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.10",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project@1.1.11",
           "externCrateName": "pin_project"
         },
         {
@@ -20151,7 +20155,7 @@
         "Eliza Weisman <eliza@buoyant.io>",
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Utilities for instrumenting `futures` with `tracing`.\n",
+      "description": "Utilities for instrumenting `futures` with `tracing`. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -20195,7 +20199,7 @@
       "authors": [
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Provides compatibility between `tracing` and the `log` crate.\n",
+      "description": "Provides compatibility between `tracing` and the `log` crate. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -20282,7 +20286,7 @@
         "David Barsky <me@davidbarsky.com>",
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Utilities for implementing and composing `tracing` subscribers.\n",
+      "description": "Utilities for implementing and composing `tracing` subscribers. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -20308,7 +20312,7 @@
           "externCrateName": "log"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
           "externCrateName": "pin_project_lite"
         },
         {
@@ -20334,7 +20338,7 @@
         "Eliza Weisman <eliza@buoyant.io>",
         "Tokio Contributors <team@tokio.rs>"
       ],
-      "description": "Application-level tracing for Rust.\n",
+      "description": "Application-level tracing for Rust. ",
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
@@ -20393,7 +20397,7 @@
         "Paho Lurie-Gregg <paho@paholg.com>",
         "Andre Bogus <bogusandre@gmail.com>"
       ],
-      "description": "Typenum is a Rust library for type-level numbers evaluated at\n    compile time. It currently supports bits, unsigned integers, and signed\n    integers. It also provides a type-level array of type-level numbers, but its\n    implementation is incomplete.",
+      "description": "Typenum is a Rust library for type-level numbers evaluated at     compile time. It currently supports bits, unsigned integers, and signed     integers. It also provides a type-level array of type-level numbers, but its     implementation is incomplete.",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/paholg/typenum"
     },
@@ -20451,7 +20455,7 @@
       "authors": [
         "Julien Enoch <julien.enoch@adlinktech.com>"
       ],
-      "description": "A Unique Hybrid Logical Clock for Rust.\n",
+      "description": "A Unique Hybrid Logical Clock for Rust. ",
       "homepage": "https://crates.io/crates/uhlc",
       "license": "EPL-2.0 OR Apache-2.0",
       "repository": "https://github.com/atolab/uhlc-rs"
@@ -20512,7 +20516,7 @@
         "kwantam <kwantam@gmail.com>",
         "Manish Goregaokar <manishsmail@gmail.com>"
       ],
-      "description": "This crate provides functions for normalization of\nUnicode strings, including Canonical and Compatible\nDecomposition and Recomposition, as described in\nUnicode Standard Annex #15.\n",
+      "description": "This crate provides functions for normalization of Unicode strings, including Canonical and Compatible Decomposition and Recomposition, as described in Unicode Standard Annex #15. ",
       "homepage": "https://github.com/unicode-rs/unicode-normalization",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/unicode-rs/unicode-normalization"
@@ -20541,7 +20545,7 @@
         "kwantam <kwantam@gmail.com>",
         "Manish Goregaokar <manishsmail@gmail.com>"
       ],
-      "description": "This crate provides Grapheme Cluster, Word and Sentence boundaries\naccording to Unicode Standard Annex #29 rules.\n",
+      "description": "This crate provides Grapheme Cluster, Word and Sentence boundaries according to Unicode Standard Annex #29 rules. ",
       "homepage": "https://github.com/unicode-rs/unicode-segmentation",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/unicode-rs/unicode-segmentation"
@@ -20573,7 +20577,7 @@
         "kwantam <kwantam@gmail.com>",
         "Manish Goregaokar <manishsmail@gmail.com>"
       ],
-      "description": "Determine whether characters have the XID_Start\nor XID_Continue properties according to\nUnicode Standard Annex #31.\n",
+      "description": "Determine whether characters have the XID_Start or XID_Continue properties according to Unicode Standard Annex #31. ",
       "homepage": "https://github.com/unicode-rs/unicode-xid",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/unicode-rs/unicode-xid"
@@ -20795,7 +20799,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.4.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.4.2",
           "externCrateName": "getrandom"
         }
       ],
@@ -20977,34 +20981,6 @@
       "license": "CDLA-Permissive-2.0",
       "repository": "https://github.com/rustls/webpki-roots"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#winnow@0.5.40": {
-      "crateName": "winnow",
-      "version": "0.5.40",
-      "edition": "2021",
-      "sha256": "f593a95398737aeed53e489c785df13f3618e41dbcd6718c6addbf1395aa6876",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "alloc",
-        "default",
-        "std"
-      ],
-      "dependencies": [],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "A byte-oriented, zero-copy, parser combinators library",
-      "license": "MIT",
-      "repository": "https://github.com/winnow-rs/winnow"
-    },
     "registry+https://github.com/rust-lang/crates.io-index#winnow@0.7.14": {
       "crateName": "winnow",
       "version": "0.7.14",
@@ -21180,7 +21156,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -21279,11 +21255,11 @@
       "license": "MIT",
       "repository": "https://github.com/nuhvi/z32"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.39": {
+    "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.40": {
       "crateName": "zerocopy",
-      "version": "0.8.39",
+      "version": "0.8.40",
       "edition": "2021",
-      "sha256": "db6d35d663eadb6c932438e763b262fe1a70987f9ae936e60158176d710cae4a",
+      "sha256": "a789c6e490b576db9f7e6b6d661bcc9799f7c0ac8352f56ea20193b2681532e5",
       "source": {
         "type": "crates-io"
       },
@@ -21305,7 +21281,7 @@
         "Joshua Liebow-Feeser <joshlf@google.com>",
         "Jack Wrenn <jswrenn@amazon.com>"
       ],
-      "description": "Zerocopy makes zero-cost memory manipulation effortless. We write \"unsafe\" so you don't have to.",
+      "description": "Zerocopy makes zero-cost memory manipulation effortless. We write 'unsafe' so you don't have to.",
       "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
       "repository": "https://github.com/google/zerocopy"
     },
@@ -21324,7 +21300,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -21420,7 +21396,7 @@
       "authors": [
         "The RustCrypto Project Developers"
       ],
-      "description": "Securely clear secrets from memory with a simple trait built on\nstable Rust primitives which guarantee memory is zeroed using an\noperation will not be 'optimized away' by the compiler.\nUses a portable pure Rust implementation that works everywhere,\neven WASM!\n",
+      "description": "Securely clear secrets from memory with a simple trait built on stable Rust primitives which guarantee memory is zeroed using an operation will not be 'optimized away' by the compiler. Uses a portable pure Rust implementation that works everywhere, even WASM! ",
       "homepage": "https://github.com/RustCrypto/utils/tree/master/zeroize",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/utils"
@@ -21440,7 +21416,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -21524,7 +21500,7 @@
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.44",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
@@ -21610,7 +21586,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zlib-rs-0.5.5/src/lib.rs",
+      "libPath": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zlib-rs-0.5.5/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
