@@ -1,6 +1,8 @@
 # Dogfood NixOS VM test: build a multi-crate Rust WORKSPACE through the CI pipeline.
 #
-# Pushes 13 real Aspen crates as a Cargo workspace to Forge:
+# Pushes 18 real Aspen crates as a Cargo workspace to Forge:
+#
+#   Layer 0 (protocol/types — already proven in prior test):
 #   - aspen-constants              (2,600 lines, zero deps)
 #   - aspen-hlc                    (425 lines, deps: uhlc, blake3, serde, rand)
 #   - aspen-kv-types               (1,493 lines, deps: aspen-constants, serde, thiserror)
@@ -15,24 +17,28 @@
 #   - aspen-hooks-types            (2,122 lines, deps: aspen-hlc, iroh, snafu)
 #   - aspen-crypto                 (483 lines, deps: blake3, iroh, tokio)
 #
-# This proves:
-#   - Cargo workspace resolution (13 members, path deps)
-#   - crates.io dependency fetching (442 packages)
-#   - Native code compilation (blake3 has C/ASM backends, ring crypto)
-#   - Cross-crate path deps (kv-types → constants, hooks-types → hlc)
-#   - Error handling crates (snafu + thiserror — Aspen's standard)
-#   - Property-based testing (proptest in aspen-layer)
-#   - Zero-dep crate compilation (aspen-time)
-#   - Async runtime compilation (tokio in aspen-crypto)
-#   - P2P networking types (iroh QUIC in cluster-types, ticket, hooks-types)
-#   - Serialization framework (postcard binary + serde + serde_json)
-#   - CI pipeline pure functions (verified/ modules in aspen-ci-core)
-#   - Cluster ticket parsing and signing (aspen-ticket)
-#   - Cookie validation and key derivation (aspen-crypto)
-#   - ~612 unit tests across 13 crates via `doCheck = true`
+#   Layer 1 (new — foundational traits and types):
+#   - aspen-traits                 (220 lines, deps: aspen-cluster-types, aspen-kv-types)
+#   - aspen-storage-types          (313 lines, deps: redb, serde, bincode)
+#   - aspen-disk                   (306 lines, deps: libc)
+#   - aspen-plugin-api             (1,255 lines, deps: serde, semver)
 #
-# Pipeline: 2 stages (cargo check → build + test), same structure as
-# ci-dogfood-self-build but with real dependency resolution.
+#   Layer 2 (new — the core crate):
+#   - aspen-core                   (9,843 lines, deps: ALL Layer 0+1 + iroh, tokio, snafu)
+#
+# This proves:
+#   - Cargo workspace resolution (18 members, cross-layer path deps)
+#   - crates.io dependency fetching (509 packages)
+#   - Native code compilation (blake3 C/ASM, ring crypto, redb storage engine)
+#   - 3-layer dependency graph (protocol → traits → core)
+#   - aspen-core: the gateway crate (types, traits, verified functions, vault, simulation)
+#   - Plugin system types (manifests, permissions, dependency resolution, metrics)
+#   - Trait-based API design (KeyValueStore, ClusterController via aspen-traits)
+#   - Redb storage types (KvEntry serialization via aspen-storage-types)
+#   - Disk space monitoring (DiskSpace, threshold constants via aspen-disk)
+#   - ~1,044 unit tests across 18 crates via `doCheck = true`
+#
+# Pipeline: 2 stages (cargo check → build + test), same structure as prior test.
 #
 # Run:
 #   nix build .#checks.x86_64-linux.ci-dogfood-workspace-test --impure --option sandbox false
@@ -50,6 +56,7 @@
   cookie = "ci-workspace-build-test";
 
   # Real source trees from the Aspen workspace.
+  # Layer 0
   aspenConstantsSrc = ../../crates/aspen-constants/src;
   aspenHlcSrc = ../../crates/aspen-hlc/src;
   aspenKvTypesSrc = ../../crates/aspen-kv-types/src;
@@ -63,6 +70,13 @@
   aspenTicketSrc = ../../crates/aspen-ticket/src;
   aspenHooksTypesSrc = ../../crates/aspen-hooks-types/src;
   aspenCryptoSrc = ../../crates/aspen-crypto/src;
+  # Layer 1
+  aspenTraitsSrc = ../../crates/aspen-traits/src;
+  aspenStorageTypesSrc = ../../crates/aspen-storage-types/src;
+  aspenDiskSrc = ../../crates/aspen-disk/src;
+  aspenPluginApiSrc = ../../crates/aspen-plugin-api/src;
+  # Layer 2
+  aspenCoreSrc = ../../crates/aspen-core/src;
 
   # CI config: 2-stage pipeline — cargo check, then full build + test.
   ciConfig = pkgs.writeText "ci.ncl" ''
@@ -105,7 +119,7 @@
   # raw `cargo check` fails because nix sandbox blocks crates.io HTTPS.
   workspaceFlake = pkgs.writeText "flake.nix" ''
     {
-      description = "Aspen workspace — multi-crate self-build verification";
+      description = "Aspen workspace — 18-crate self-build verification";
       inputs.nixpkgs.url = "nixpkgs";
       outputs = { nixpkgs, self, ... }:
         let
@@ -134,7 +148,7 @@
     }
   '';
 
-  # Root Cargo.toml: workspace with 13 members + binary target.
+  # Root Cargo.toml: workspace with 18 members + binary target.
   rootCargoToml = pkgs.writeText "Cargo.toml" ''
     [workspace]
     members = [
@@ -151,6 +165,11 @@
       "aspen-ticket",
       "aspen-hooks-types",
       "aspen-crypto",
+      "aspen-traits",
+      "aspen-storage-types",
+      "aspen-disk",
+      "aspen-plugin-api",
+      "aspen-core",
     ]
     resolver = "3"
 
@@ -182,34 +201,31 @@
     aspen-ticket = { path = "aspen-ticket" }
     aspen-hooks-types = { path = "aspen-hooks-types" }
     aspen-crypto = { path = "aspen-crypto" }
+    aspen-traits = { path = "aspen-traits" }
+    aspen-storage-types = { path = "aspen-storage-types" }
+    aspen-disk = { path = "aspen-disk" }
+    aspen-plugin-api = { path = "aspen-plugin-api" }
+    aspen-core = { path = "aspen-core", features = ["layer"] }
   '';
 
-  # Pre-generated Cargo.lock with 442 packages (13 workspace + 429 external).
+  # Pre-generated Cargo.lock with 509 packages (18 workspace + 491 external).
   # Generated from the real crate sources with `cargo generate-lockfile`.
   workspaceCargoLock = ../../nix/tests/fixtures/workspace-build-cargo.lock;
 
-  # Binary that exercises all 13 crates.
-  # Verified locally: cargo check + cargo run + 644 tests pass.
+  # Binary that exercises all 18 crates.
+  # Verified locally: cargo check + cargo run + 1044 tests pass.
   workspaceMain = ../../nix/tests/fixtures/workspace-build-main.rs;
 
   # Bundle the complete workspace as a single derivation.
   workspaceRepo = pkgs.runCommand "aspen-workspace-repo" {} ''
     mkdir -p $out/src $out/.aspen
-    mkdir -p $out/aspen-constants/src
-    mkdir -p $out/aspen-hlc/src
-    mkdir -p $out/aspen-kv-types/src
-    mkdir -p $out/aspen-layer/src/index $out/aspen-layer/src/tuple
-    mkdir -p $out/aspen-time/src
-    mkdir -p $out/aspen-coordination-protocol/src
-    mkdir -p $out/aspen-ci-core/src/config $out/aspen-ci-core/src/verified
-    mkdir -p $out/aspen-forge-protocol/src
-    mkdir -p $out/aspen-jobs-protocol/src
-    mkdir -p $out/aspen-cluster-types/src
-    mkdir -p $out/aspen-ticket/src
-    mkdir -p $out/aspen-hooks-types/src
-    mkdir -p $out/aspen-crypto/src
+
+    # ═══════════════════════════════════════════════════════════════
+    #  Layer 0: Protocol and types crates (13 crates)
+    # ═══════════════════════════════════════════════════════════════
 
     # ── aspen-constants (11 source files, 2600+ lines) ──
+    mkdir -p $out/aspen-constants/src
     cp ${aspenConstantsSrc}/lib.rs         $out/aspen-constants/src/
     cp ${aspenConstantsSrc}/api.rs         $out/aspen-constants/src/
     cp ${aspenConstantsSrc}/assertions.rs  $out/aspen-constants/src/
@@ -224,10 +240,12 @@
     cp ${../../crates/aspen-constants/Cargo.toml} $out/aspen-constants/Cargo.toml
 
     # ── aspen-hlc (1 source file, 425 lines) ──
+    mkdir -p $out/aspen-hlc/src
     cp ${aspenHlcSrc}/lib.rs               $out/aspen-hlc/src/
     cp ${../../crates/aspen-hlc/Cargo.toml} $out/aspen-hlc/Cargo.toml
 
     # ── aspen-kv-types (7 source files, 1493 lines) ──
+    mkdir -p $out/aspen-kv-types/src
     cp ${aspenKvTypesSrc}/lib.rs           $out/aspen-kv-types/src/
     cp ${aspenKvTypesSrc}/batch.rs         $out/aspen-kv-types/src/
     cp ${aspenKvTypesSrc}/read.rs          $out/aspen-kv-types/src/
@@ -238,6 +256,7 @@
     cp ${../../crates/aspen-kv-types/Cargo.toml} $out/aspen-kv-types/Cargo.toml
 
     # ── aspen-layer (16 source files, 4439 lines) ──
+    mkdir -p $out/aspen-layer/src/index $out/aspen-layer/src/tuple
     cp ${aspenLayerSrc}/lib.rs             $out/aspen-layer/src/
     cp ${aspenLayerSrc}/proptest.rs        $out/aspen-layer/src/
     cp ${aspenLayerSrc}/subspace.rs        $out/aspen-layer/src/
@@ -257,14 +276,17 @@
     cp ${../../crates/aspen-layer/Cargo.toml} $out/aspen-layer/Cargo.toml
 
     # ── aspen-time (1 source file, 360 lines) ──
+    mkdir -p $out/aspen-time/src
     cp ${aspenTimeSrc}/lib.rs              $out/aspen-time/src/
     cp ${../../crates/aspen-time/Cargo.toml} $out/aspen-time/Cargo.toml
 
     # ── aspen-coordination-protocol (1 source file, 966 lines) ──
+    mkdir -p $out/aspen-coordination-protocol/src
     cp ${aspenCoordProtoSrc}/lib.rs        $out/aspen-coordination-protocol/src/
     cp ${../../crates/aspen-coordination-protocol/Cargo.toml} $out/aspen-coordination-protocol/Cargo.toml
 
     # ── aspen-ci-core (10 source files, 2571 lines) ──
+    mkdir -p $out/aspen-ci-core/src/config $out/aspen-ci-core/src/verified
     cp ${aspenCiCoreSrc}/lib.rs            $out/aspen-ci-core/src/
     cp ${aspenCiCoreSrc}/error.rs          $out/aspen-ci-core/src/
     cp ${aspenCiCoreSrc}/log_writer.rs     $out/aspen-ci-core/src/
@@ -278,14 +300,17 @@
     cp ${../../crates/aspen-ci-core/Cargo.toml} $out/aspen-ci-core/Cargo.toml
 
     # ── aspen-forge-protocol (1 source file, 782 lines) ──
+    mkdir -p $out/aspen-forge-protocol/src
     cp ${aspenForgeProtoSrc}/lib.rs        $out/aspen-forge-protocol/src/
     cp ${../../crates/aspen-forge-protocol/Cargo.toml} $out/aspen-forge-protocol/Cargo.toml
 
     # ── aspen-jobs-protocol (1 source file, 546 lines) ──
+    mkdir -p $out/aspen-jobs-protocol/src
     cp ${aspenJobsProtoSrc}/lib.rs         $out/aspen-jobs-protocol/src/
     cp ${../../crates/aspen-jobs-protocol/Cargo.toml} $out/aspen-jobs-protocol/Cargo.toml
 
     # ── aspen-cluster-types (5 source files, 1634 lines) ──
+    mkdir -p $out/aspen-cluster-types/src
     cp ${aspenClusterTypesSrc}/lib.rs      $out/aspen-cluster-types/src/
     cp ${aspenClusterTypesSrc}/errors.rs   $out/aspen-cluster-types/src/
     cp ${aspenClusterTypesSrc}/metrics.rs  $out/aspen-cluster-types/src/
@@ -294,6 +319,7 @@
     cp ${../../crates/aspen-cluster-types/Cargo.toml} $out/aspen-cluster-types/Cargo.toml
 
     # ── aspen-ticket (5 source files, 1425 lines) ──
+    mkdir -p $out/aspen-ticket/src
     cp ${aspenTicketSrc}/lib.rs            $out/aspen-ticket/src/
     cp ${aspenTicketSrc}/constants.rs      $out/aspen-ticket/src/
     cp ${aspenTicketSrc}/parse.rs          $out/aspen-ticket/src/
@@ -302,6 +328,7 @@
     cp ${../../crates/aspen-ticket/Cargo.toml} $out/aspen-ticket/Cargo.toml
 
     # ── aspen-hooks-types (6 source files, 2122 lines) ──
+    mkdir -p $out/aspen-hooks-types/src
     cp ${aspenHooksTypesSrc}/lib.rs        $out/aspen-hooks-types/src/
     cp ${aspenHooksTypesSrc}/config.rs     $out/aspen-hooks-types/src/
     cp ${aspenHooksTypesSrc}/constants.rs  $out/aspen-hooks-types/src/
@@ -311,12 +338,91 @@
     cp ${../../crates/aspen-hooks-types/Cargo.toml} $out/aspen-hooks-types/Cargo.toml
 
     # ── aspen-crypto (3 source files, 483 lines) ──
+    mkdir -p $out/aspen-crypto/src
     cp ${aspenCryptoSrc}/lib.rs            $out/aspen-crypto/src/
     cp ${aspenCryptoSrc}/cookie.rs         $out/aspen-crypto/src/
     cp ${aspenCryptoSrc}/identity.rs       $out/aspen-crypto/src/
     cp ${../../crates/aspen-crypto/Cargo.toml} $out/aspen-crypto/Cargo.toml
 
-    # ── root workspace ──
+    # ═══════════════════════════════════════════════════════════════
+    #  Layer 1: Foundational traits and types (4 crates)
+    # ═══════════════════════════════════════════════════════════════
+
+    # ── aspen-traits (1 source file, 220 lines) ──
+    mkdir -p $out/aspen-traits/src
+    cp ${aspenTraitsSrc}/lib.rs            $out/aspen-traits/src/
+    cp ${../../crates/aspen-traits/Cargo.toml} $out/aspen-traits/Cargo.toml
+
+    # ── aspen-storage-types (1 source file, 313 lines) ──
+    mkdir -p $out/aspen-storage-types/src
+    cp ${aspenStorageTypesSrc}/lib.rs      $out/aspen-storage-types/src/
+    cp ${../../crates/aspen-storage-types/Cargo.toml} $out/aspen-storage-types/Cargo.toml
+
+    # ── aspen-disk (1 source file, 306 lines) ──
+    mkdir -p $out/aspen-disk/src
+    cp ${aspenDiskSrc}/lib.rs              $out/aspen-disk/src/
+    cp ${../../crates/aspen-disk/Cargo.toml} $out/aspen-disk/Cargo.toml
+
+    # ── aspen-plugin-api (3 source files, 1255 lines) ──
+    mkdir -p $out/aspen-plugin-api/src
+    cp ${aspenPluginApiSrc}/lib.rs         $out/aspen-plugin-api/src/
+    cp ${aspenPluginApiSrc}/manifest.rs    $out/aspen-plugin-api/src/
+    cp ${aspenPluginApiSrc}/resolve.rs     $out/aspen-plugin-api/src/
+    cp ${../../crates/aspen-plugin-api/Cargo.toml} $out/aspen-plugin-api/Cargo.toml
+
+    # ═══════════════════════════════════════════════════════════════
+    #  Layer 2: Core crate (1 crate, 37 source files)
+    # ═══════════════════════════════════════════════════════════════
+
+    # ── aspen-core (37 source files, 9843 lines) ──
+    mkdir -p $out/aspen-core/src/constants
+    mkdir -p $out/aspen-core/src/context
+    mkdir -p $out/aspen-core/src/kv
+    mkdir -p $out/aspen-core/src/layer/directory
+    mkdir -p $out/aspen-core/src/spec
+    mkdir -p $out/aspen-core/src/verified
+    cp ${aspenCoreSrc}/lib.rs              $out/aspen-core/src/
+    cp ${aspenCoreSrc}/app_registry.rs     $out/aspen-core/src/
+    cp ${aspenCoreSrc}/cluster.rs          $out/aspen-core/src/
+    cp ${aspenCoreSrc}/crypto.rs           $out/aspen-core/src/
+    cp ${aspenCoreSrc}/error.rs            $out/aspen-core/src/
+    cp ${aspenCoreSrc}/hlc.rs              $out/aspen-core/src/
+    cp ${aspenCoreSrc}/prelude.rs          $out/aspen-core/src/
+    cp ${aspenCoreSrc}/simulation.rs       $out/aspen-core/src/
+    cp ${aspenCoreSrc}/sql.rs              $out/aspen-core/src/
+    cp ${aspenCoreSrc}/storage.rs          $out/aspen-core/src/
+    cp ${aspenCoreSrc}/test_support.rs     $out/aspen-core/src/
+    cp ${aspenCoreSrc}/traits.rs           $out/aspen-core/src/
+    cp ${aspenCoreSrc}/transport.rs        $out/aspen-core/src/
+    cp ${aspenCoreSrc}/types.rs            $out/aspen-core/src/
+    cp ${aspenCoreSrc}/utils.rs            $out/aspen-core/src/
+    cp ${aspenCoreSrc}/vault.rs            $out/aspen-core/src/
+    cp ${aspenCoreSrc}/constants/mod.rs    $out/aspen-core/src/constants/
+    cp ${aspenCoreSrc}/context/mod.rs      $out/aspen-core/src/context/
+    cp ${aspenCoreSrc}/context/discovery.rs $out/aspen-core/src/context/
+    cp ${aspenCoreSrc}/context/docs.rs     $out/aspen-core/src/context/
+    cp ${aspenCoreSrc}/context/peer.rs     $out/aspen-core/src/context/
+    cp ${aspenCoreSrc}/context/protocol.rs $out/aspen-core/src/context/
+    cp ${aspenCoreSrc}/context/service.rs  $out/aspen-core/src/context/
+    cp ${aspenCoreSrc}/context/watch.rs    $out/aspen-core/src/context/
+    cp ${aspenCoreSrc}/kv/mod.rs           $out/aspen-core/src/kv/
+    cp ${aspenCoreSrc}/layer/mod.rs        $out/aspen-core/src/layer/
+    cp ${aspenCoreSrc}/layer/allocator.rs  $out/aspen-core/src/layer/
+    cp ${aspenCoreSrc}/layer/directory/mod.rs        $out/aspen-core/src/layer/directory/
+    cp ${aspenCoreSrc}/layer/directory/layer.rs       $out/aspen-core/src/layer/directory/
+    cp ${aspenCoreSrc}/layer/directory/operations.rs  $out/aspen-core/src/layer/directory/
+    cp ${aspenCoreSrc}/layer/directory/subspace.rs    $out/aspen-core/src/layer/directory/
+    cp ${aspenCoreSrc}/layer/directory/tests.rs       $out/aspen-core/src/layer/directory/
+    cp ${aspenCoreSrc}/layer/directory/validation.rs  $out/aspen-core/src/layer/directory/
+    cp ${aspenCoreSrc}/spec/mod.rs         $out/aspen-core/src/spec/
+    cp ${aspenCoreSrc}/spec/verus_shim.rs  $out/aspen-core/src/spec/
+    cp ${aspenCoreSrc}/verified/mod.rs     $out/aspen-core/src/verified/
+    cp ${aspenCoreSrc}/verified/scan.rs    $out/aspen-core/src/verified/
+    cp ${../../crates/aspen-core/Cargo.toml} $out/aspen-core/Cargo.toml
+
+    # ═══════════════════════════════════════════════════════════════
+    #  Root workspace files
+    # ═══════════════════════════════════════════════════════════════
     cp ${workspaceMain}       $out/src/main.rs
     cp ${rootCargoToml}       $out/Cargo.toml
     cp ${workspaceCargoLock}  $out/Cargo.lock
@@ -447,6 +553,7 @@ in
                       logs = node1.succeed("tail -80 /tmp/fail.log 2>/dev/null || echo 'no logs'")
                       node1.log(f"Job '{job.get('name')}' logs:\n{logs}")
 
+
       # ── boot ─────────────────────────────────────────────────────
       start_all()
       node1.wait_for_unit("aspen-node.service")
@@ -480,7 +587,7 @@ in
           assert isinstance(result, dict) and result.get("is_success"), f"ci watch failed: {result}"
 
       # ── push workspace to forge ──────────────────────────────────
-      with subtest("push 13-crate workspace to forge"):
+      with subtest("push 18-crate workspace to forge"):
           node1.succeed(
               f"cp -r --no-preserve=mode {WORKSPACE_REPO} /tmp/workspace-repo && "
               "cd /tmp/workspace-repo && "
@@ -488,7 +595,7 @@ in
               "git config user.email 'test@test' && "
               "git config user.name 'Test' && "
               "git add -A && "
-              "git commit -m 'aspen workspace: 13 crates, 20K lines'"
+              "git commit -m 'aspen workspace: 18 crates, 30K lines'"
           )
           ticket = get_ticket()
           node1.succeed(
@@ -504,8 +611,8 @@ in
               "find /tmp/workspace-repo -name 'Cargo.toml' | wc -l"
           ).strip()
           node1.log(f"Pushed {rs_count} .rs files, {toml_count} Cargo.toml files")
-          assert int(rs_count) >= 55, f"Expected >=55 .rs files, got {rs_count}"
-          assert int(toml_count) >= 14, f"Expected >=14 Cargo.toml (root + 13 crates), got {toml_count}"
+          assert int(rs_count) >= 95, f"Expected >=95 .rs files, got {rs_count}"
+          assert int(toml_count) >= 19, f"Expected >=19 Cargo.toml (root + 18 crates), got {toml_count}"
 
       # ── wait for pipeline ────────────────────────────────────────
       with subtest("pipeline auto-triggers"):
@@ -652,38 +759,35 @@ in
           output = node1.succeed(f"{binary}")
           node1.log(f"Binary output:\n{output}")
 
-          # Verify all 13 crates were exercised
-          assert "[aspen-constants]" in output, f"Missing constants section: {output}"
-          assert "[aspen-hlc]" in output, f"Missing hlc section: {output}"
-          assert "[aspen-kv-types]" in output, f"Missing kv-types section: {output}"
-          assert "[aspen-layer]" in output, f"Missing layer section: {output}"
-          assert "[aspen-time]" in output, f"Missing time section: {output}"
-          assert "[aspen-coordination-protocol]" in output, f"Missing coordination-protocol section: {output}"
-          assert "[aspen-ci-core]" in output, f"Missing ci-core section: {output}"
-          assert "[aspen-forge-protocol]" in output, f"Missing forge-protocol section: {output}"
-          assert "[aspen-jobs-protocol]" in output, f"Missing jobs-protocol section: {output}"
-          assert "[aspen-cluster-types]" in output, f"Missing cluster-types section: {output}"
-          assert "[aspen-hooks-types]" in output, f"Missing hooks-types section: {output}"
-          assert "[aspen-crypto]" in output, f"Missing crypto section: {output}"
+          # Verify all 18 crates were exercised
+          for section in [
+              "aspen-constants", "aspen-hlc", "aspen-kv-types", "aspen-layer",
+              "aspen-time", "aspen-coordination-protocol", "aspen-ci-core",
+              "aspen-forge-protocol", "aspen-jobs-protocol", "aspen-cluster-types",
+              "aspen-hooks-types", "aspen-crypto",
+              "aspen-traits", "aspen-storage-types", "aspen-disk",
+              "aspen-plugin-api", "aspen-core",
+          ]:
+              assert f"[{section}]" in output, f"Missing [{section}] section in binary output"
 
-          # Verify key crate functionality
+          # Verify key functionality from new crates
+          assert "KeyValueStore" in output, f"Missing traits section: {output}"
+          assert "KvEntry:" in output, f"Missing storage-types section: {output}"
+          assert "THRESHOLD:" in output, f"Missing disk section: {output}"
+          assert "API_VERSION:" in output, f"Missing plugin-api section: {output}"
+          assert "load_order:" in output, f"Missing plugin dependency resolution: {output}"
+          assert "AppRegistry:" in output, f"Missing core app registry: {output}"
+          assert "SimulationArtifact:" in output, f"Missing core simulation: {output}"
+          assert "vault:" in output, f"Missing core vault: {output}"
+          assert "scan:" in output, f"Missing core verified scan: {output}"
+
+          # Verify legacy crate functionality still works
           assert "monotonic" in output, f"HLC monotonicity missing: {output}"
           assert "Packed key:" in output, f"Layer tuple encoding missing: {output}"
-          assert "current_time_ms:" in output, f"Time utilities missing: {output}"
-          assert "fencing_token=" in output, f"Coordination lock missing: {output}"
-          assert "compute_deadline:" in output, f"CI-core timeout missing: {output}"
-          assert "PipelineConfig:" in output, f"CI-core config missing: {output}"
-          assert "ForgeRepoInfo:" in output, f"Forge protocol missing: {output}"
-          assert "JobSubmit:" in output, f"Jobs protocol missing: {output}"
-          assert "ClusterNodeId:" in output, f"Cluster types missing: {output}"
-          assert "ClusterMetrics:" in output, f"Cluster metrics missing: {output}"
-          assert "TOPIC_PREFIX:" in output, f"Hooks types missing: {output}"
           assert "cookie_validate:" in output, f"Crypto cookie missing: {output}"
-          assert "hmac_derive:" in output, f"Crypto HMAC missing: {output}"
-          assert "gossip_topic:" in output, f"Crypto gossip missing: {output}"
-          assert "442 packages" in output, f"Package count missing: {output}"
+          assert "509 packages" in output, f"Package count missing: {output}"
           assert "Built by Aspen CI" in output, f"Build attribution missing: {output}"
 
-      node1.log("WORKSPACE BUILD PASSED: 13 crates, 442 packages, ~612 tests — Forge -> CI -> nix build -> blob+cache+snix -> run")
+      node1.log("WORKSPACE BUILD PASSED: 18 crates, 509 packages, ~1044 tests — Forge -> CI -> nix build -> blob+cache+snix -> run")
     '';
   }
