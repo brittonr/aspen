@@ -444,7 +444,7 @@ do_push() {
   git remote add aspen-dogfood "$remote_url"
 
   log "Pushing to aspen://<ticket>/${repo_id}..."
-  if RUST_LOG=warn git push aspen-dogfood HEAD:main 2>&1 | tail -5; then
+  if RUST_LOG=warn git push --no-verify aspen-dogfood HEAD:main 2>&1 | tail -5; then
     ok "Source pushed to Forge"
   else
     err "Push failed"
