@@ -1,16 +1,22 @@
 # Dogfood NixOS VM test: build a multi-crate Rust WORKSPACE through the CI pipeline.
 #
-# Pushes 3 real Aspen crates as a Cargo workspace to Forge:
-#   - aspen-constants (2,600 lines, zero deps)
-#   - aspen-hlc       (425 lines, deps: uhlc, blake3, serde, rand)
-#   - aspen-kv-types  (1,493 lines, deps: aspen-constants, serde, thiserror)
+# Pushes 6 real Aspen crates as a Cargo workspace to Forge:
+#   - aspen-constants              (2,600 lines, zero deps)
+#   - aspen-hlc                    (425 lines, deps: uhlc, blake3, serde, rand)
+#   - aspen-kv-types               (1,493 lines, deps: aspen-constants, serde, thiserror)
+#   - aspen-layer                  (4,439 lines, deps: snafu, serde, proptest)
+#   - aspen-time                   (360 lines, zero deps — pure std::time)
+#   - aspen-coordination-protocol  (966 lines, deps: serde, serde_json)
 #
-# This proves what ci-dogfood-self-build could not:
-#   - Cargo workspace resolution (3 members, path deps)
-#   - crates.io dependency fetching (53 external packages)
+# This proves:
+#   - Cargo workspace resolution (6 members, path deps)
+#   - crates.io dependency fetching (104 packages)
 #   - Native code compilation (blake3 has C/ASM backends)
 #   - Cross-crate path deps (kv-types → constants)
-#   - 93 unit tests across 3 crates via `doCheck = true`
+#   - Error handling crates (snafu — Aspen's standard)
+#   - Property-based testing (proptest in aspen-layer)
+#   - Zero-dep crate compilation (aspen-time)
+#   - 326 unit tests across 6 crates via `doCheck = true`
 #
 # Pipeline: 2 stages (cargo check → build + test), same structure as
 # ci-dogfood-self-build but with real dependency resolution.
@@ -34,6 +40,9 @@
   aspenConstantsSrc = ../../crates/aspen-constants/src;
   aspenHlcSrc = ../../crates/aspen-hlc/src;
   aspenKvTypesSrc = ../../crates/aspen-kv-types/src;
+  aspenLayerSrc = ../../crates/aspen-layer/src;
+  aspenTimeSrc = ../../crates/aspen-time/src;
+  aspenCoordProtoSrc = ../../crates/aspen-coordination-protocol/src;
 
   # CI config: 2-stage pipeline — cargo check, then full build + test.
   ciConfig = pkgs.writeText "ci.ncl" ''
@@ -102,10 +111,17 @@
     }
   '';
 
-  # Root Cargo.toml: workspace with 3 members + binary target.
+  # Root Cargo.toml: workspace with 6 members + binary target.
   rootCargoToml = pkgs.writeText "Cargo.toml" ''
     [workspace]
-    members = ["aspen-constants", "aspen-kv-types", "aspen-hlc"]
+    members = [
+      "aspen-constants",
+      "aspen-kv-types",
+      "aspen-hlc",
+      "aspen-layer",
+      "aspen-time",
+      "aspen-coordination-protocol",
+    ]
     resolver = "3"
 
     [package]
@@ -122,17 +138,25 @@
     aspen-constants = { path = "aspen-constants" }
     aspen-kv-types = { path = "aspen-kv-types" }
     aspen-hlc = { path = "aspen-hlc" }
+    aspen-layer = { path = "aspen-layer" }
+    aspen-time = { path = "aspen-time" }
+    aspen-coordination-protocol = { path = "aspen-coordination-protocol" }
   '';
 
-  # Pre-generated Cargo.lock with 56 packages (3 workspace + 53 external).
+  # Pre-generated Cargo.lock with 104 packages (6 workspace + 98 external).
   # Generated from the real crate sources with `cargo generate-lockfile`.
   workspaceCargoLock = ../../nix/tests/fixtures/workspace-build-cargo.lock;
 
-  # Binary that exercises all 3 crates and their cross-crate interactions.
+  # Binary that exercises all 6 crates and their cross-crate interactions.
   workspaceMain = pkgs.writeText "main.rs" ''
     use aspen_constants::{api, ci, coordination, network, raft};
+    use aspen_coordination_protocol::{
+        CounterResultResponse, LockResultResponse, QueueEnqueueResultResponse,
+    };
     use aspen_hlc::{create_hlc, new_timestamp, to_unix_ms};
     use aspen_kv_types::{ReadRequest, WriteRequest, WriteCommand, ScanRequest, KeyValueWithRevision};
+    use aspen_layer::{Element, Subspace, Tuple};
+    use aspen_time::{current_time_ms, current_time_secs};
 
     fn main() {
         println!("=== Aspen Workspace Self-Build ===");
@@ -188,12 +212,78 @@
         println!("  KV entry:          {}={} (v{})", kv.key, kv.value, kv.version);
         println!();
 
-        // Cross-crate assertions
+        // aspen-layer: FoundationDB tuple encoding + subspace isolation
+        println!("[aspen-layer]");
+        let users = Subspace::new(Tuple::new().push("users"));
+        let key = users.pack(&Tuple::new().push("alice").push(42i64));
+        let unpacked = users.unpack(&key).expect("unpack must succeed");
+        assert_eq!(unpacked.get(0), Some(&Element::String("alice".to_string())));
+        assert_eq!(unpacked.get(1), Some(&Element::Int(42)));
+        println!("  Subspace:          users");
+        println!("  Packed key:        {} bytes", key.len());
+        println!("  Unpacked[0]:       alice");
+        println!("  Unpacked[1]:       42");
+        let t = Tuple::new()
+            .push("string")
+            .push(123i64)
+            .push(true)
+            .push(Element::Bytes(vec![0xDE, 0xAD]));
+        let encoded = t.pack();
+        let decoded = Tuple::unpack(&encoded).expect("tuple roundtrip");
+        assert_eq!(decoded.len(), 4);
+        println!("  Tuple elements:    {} (string, i64, bool, bytes)", decoded.len());
+        let (range_begin, range_end) = users.range();
+        assert!(range_begin < range_end, "range must have begin < end");
+        println!("  Range scan:        {} byte prefix", range_begin.len());
+        println!();
+
+        // aspen-time: panic-free time utilities
+        println!("[aspen-time]");
+        let t1 = current_time_ms();
+        let t2 = current_time_secs();
+        assert!(t1 > 0, "current_time_ms must be positive");
+        assert!(t2 > 0, "current_time_secs must be positive");
+        assert!(t1 >= t2 * 1000, "ms >= secs * 1000");
+        println!("  current_time_ms:   {t1}");
+        println!("  current_time_secs: {t2}");
+        println!("  monotonic:         true");
+        println!();
+
+        // aspen-coordination-protocol: distributed primitive wire types
+        println!("[aspen-coordination-protocol]");
+        let lock = LockResultResponse {
+            is_success: true,
+            fencing_token: Some(42),
+            holder_id: Some("node-1".to_string()),
+            deadline_ms: Some(t1 + 30_000),
+            error: None,
+        };
+        let counter = CounterResultResponse {
+            is_success: true,
+            value: Some(100),
+            error: None,
+        };
+        let queue = QueueEnqueueResultResponse {
+            is_success: true,
+            item_id: Some(1),
+            error: None,
+        };
+        assert!(lock.is_success);
+        assert_eq!(lock.fencing_token, Some(42));
+        assert!(counter.is_success);
+        assert_eq!(counter.value, Some(100));
+        assert!(queue.is_success);
+        println!("  LockResult:        fencing_token={:?}", lock.fencing_token);
+        println!("  CounterResult:     value={:?}", counter.value);
+        println!("  QueueResult:       item_id={:?}", queue.item_id);
+        println!();
+
+        // Cross-crate validation
         assert!(api::MAX_KEY_SIZE > 0);
         assert!(api::DEFAULT_SCAN_LIMIT <= api::MAX_SCAN_RESULTS);
         assert!(coordination::MAX_CAS_RETRIES > 0);
 
-        println!("3 crates, 53 external deps, all assertions passed");
+        println!("6 crates, 104 packages, all assertions passed");
         println!("Built by Aspen CI");
     }
   '';
@@ -204,6 +294,9 @@
     mkdir -p $out/aspen-constants/src
     mkdir -p $out/aspen-hlc/src
     mkdir -p $out/aspen-kv-types/src
+    mkdir -p $out/aspen-layer/src/index $out/aspen-layer/src/tuple
+    mkdir -p $out/aspen-time/src
+    mkdir -p $out/aspen-coordination-protocol/src
 
     # ── aspen-constants (11 source files, 2600+ lines) ──
     cp ${aspenConstantsSrc}/lib.rs         $out/aspen-constants/src/
@@ -232,6 +325,33 @@
     cp ${aspenKvTypesSrc}/validation.rs    $out/aspen-kv-types/src/
     cp ${aspenKvTypesSrc}/write.rs         $out/aspen-kv-types/src/
     cp ${../../crates/aspen-kv-types/Cargo.toml} $out/aspen-kv-types/Cargo.toml
+
+    # ── aspen-layer (16 source files, 4439 lines, 178 tests) ──
+    cp ${aspenLayerSrc}/lib.rs             $out/aspen-layer/src/
+    cp ${aspenLayerSrc}/proptest.rs        $out/aspen-layer/src/
+    cp ${aspenLayerSrc}/subspace.rs        $out/aspen-layer/src/
+    cp ${aspenLayerSrc}/index/errors.rs    $out/aspen-layer/src/index/
+    cp ${aspenLayerSrc}/index/field_types.rs $out/aspen-layer/src/index/
+    cp ${aspenLayerSrc}/index/mod.rs       $out/aspen-layer/src/index/
+    cp ${aspenLayerSrc}/index/registry.rs  $out/aspen-layer/src/index/
+    cp ${aspenLayerSrc}/index/scan.rs      $out/aspen-layer/src/index/
+    cp ${aspenLayerSrc}/index/secondary_index.rs $out/aspen-layer/src/index/
+    cp ${aspenLayerSrc}/index/updates.rs   $out/aspen-layer/src/index/
+    cp ${aspenLayerSrc}/tuple/decoding.rs  $out/aspen-layer/src/tuple/
+    cp ${aspenLayerSrc}/tuple/element.rs   $out/aspen-layer/src/tuple/
+    cp ${aspenLayerSrc}/tuple/encoding.rs  $out/aspen-layer/src/tuple/
+    cp ${aspenLayerSrc}/tuple/mod.rs       $out/aspen-layer/src/tuple/
+    cp ${aspenLayerSrc}/tuple/tests.rs     $out/aspen-layer/src/tuple/
+    cp ${aspenLayerSrc}/tuple/tuple_type.rs $out/aspen-layer/src/tuple/
+    cp ${../../crates/aspen-layer/Cargo.toml} $out/aspen-layer/Cargo.toml
+
+    # ── aspen-time (1 source file, 360 lines, 18 tests) ──
+    cp ${aspenTimeSrc}/lib.rs              $out/aspen-time/src/
+    cp ${../../crates/aspen-time/Cargo.toml} $out/aspen-time/Cargo.toml
+
+    # ── aspen-coordination-protocol (1 source file, 966 lines, 30 tests) ──
+    cp ${aspenCoordProtoSrc}/lib.rs        $out/aspen-coordination-protocol/src/
+    cp ${../../crates/aspen-coordination-protocol/Cargo.toml} $out/aspen-coordination-protocol/Cargo.toml
 
     # ── root workspace ──
     cp ${workspaceMain}       $out/src/main.rs
@@ -397,7 +517,7 @@ in
           assert isinstance(result, dict) and result.get("is_success"), f"ci watch failed: {result}"
 
       # ── push workspace to forge ──────────────────────────────────
-      with subtest("push 3-crate workspace to forge"):
+      with subtest("push 6-crate workspace to forge"):
           node1.succeed(
               f"cp -r --no-preserve=mode {WORKSPACE_REPO} /tmp/workspace-repo && "
               "cd /tmp/workspace-repo && "
@@ -405,7 +525,7 @@ in
               "git config user.email 'test@test' && "
               "git config user.name 'Test' && "
               "git add -A && "
-              "git commit -m 'aspen workspace: constants + hlc + kv-types'"
+              "git commit -m 'aspen workspace: 6 crates, 10K lines'"
           )
           ticket = get_ticket()
           node1.succeed(
@@ -421,8 +541,8 @@ in
               "find /tmp/workspace-repo -name 'Cargo.toml' | wc -l"
           ).strip()
           node1.log(f"Pushed {rs_count} .rs files, {toml_count} Cargo.toml files")
-          assert int(rs_count) >= 20, f"Expected >=20 .rs files, got {rs_count}"
-          assert int(toml_count) >= 4, f"Expected >=4 Cargo.toml (root + 3 crates), got {toml_count}"
+          assert int(rs_count) >= 30, f"Expected >=30 .rs files, got {rs_count}"
+          assert int(toml_count) >= 7, f"Expected >=7 Cargo.toml (root + 6 crates), got {toml_count}"
 
       # ── wait for pipeline ────────────────────────────────────────
       with subtest("pipeline auto-triggers"):
@@ -569,22 +689,29 @@ in
           output = node1.succeed(f"{binary}")
           node1.log(f"Binary output:\n{output}")
 
-          # Verify all 3 crates were exercised
+          # Verify all 6 crates were exercised
           assert "[aspen-constants]" in output, f"Missing constants section: {output}"
           assert "[aspen-hlc]" in output, f"Missing hlc section: {output}"
           assert "[aspen-kv-types]" in output, f"Missing kv-types section: {output}"
+          assert "[aspen-layer]" in output, f"Missing layer section: {output}"
+          assert "[aspen-time]" in output, f"Missing time section: {output}"
+          assert "[aspen-coordination-protocol]" in output, f"Missing coordination-protocol section: {output}"
 
-          # Verify HLC actually ran (not just compiled)
+          # Verify crates actually ran (not just compiled)
           assert "monotonic" in output, f"HLC monotonicity check missing: {output}"
           assert "ts2 > ts1" in output, f"HLC comparison missing: {output}"
+          assert "Packed key:" in output, f"Layer tuple encoding missing: {output}"
+          assert "Tuple elements:" in output, f"Layer tuple roundtrip missing: {output}"
+          assert "current_time_ms:" in output, f"Time utilities missing: {output}"
+          assert "fencing_token=" in output, f"Coordination lock result missing: {output}"
 
           # Verify cross-crate KV types
           assert "WriteRequest:" in output, f"WriteRequest missing: {output}"
           assert "ReadRequest:" in output, f"ReadRequest missing: {output}"
 
-          assert "53 external deps" in output, f"Dep count missing: {output}"
+          assert "104 packages" in output, f"Package count missing: {output}"
           assert "Built by Aspen CI" in output, f"Build attribution missing: {output}"
 
-      node1.log("WORKSPACE BUILD PASSED: 3 crates, 53 deps, 93 tests — Forge -> CI -> nix build -> blob+cache+snix -> run")
+      node1.log("WORKSPACE BUILD PASSED: 6 crates, 104 packages, 326 tests — Forge -> CI -> nix build -> blob+cache+snix -> run")
     '';
   }
