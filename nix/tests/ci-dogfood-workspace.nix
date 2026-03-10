@@ -528,30 +528,41 @@ in
           except (json.JSONDecodeError, ValueError):
               return raw.strip()
 
+      def stream_job_logs(run_id, job_id, job_name):
+          """Stream logs for a job via ci logs --follow, saving to file."""
+          ticket = get_ticket()
+          node1.log(f"=== streaming logs: {job_name} ({job_id}) ===")
+          node1.execute(
+              f"aspen-cli --ticket '{ticket}' ci logs --follow {run_id} {job_id} "
+              f">/tmp/job-{job_id}.log 2>/dev/null"
+          )
+          log_size = node1.succeed(f"wc -c < /tmp/job-{job_id}.log").strip()
+          node1.log(f"=== end logs: {job_name} ({log_size} bytes) ===")
+
       def wait_for_pipeline(run_id, timeout=900):
+          """Wait for pipeline by streaming job logs as they're assigned."""
           deadline = time.time() + timeout
+          streamed_jobs = set()
           while time.time() < deadline:
               result = cli(f"ci status {run_id}", check=False)
-              if isinstance(result, dict):
-                  status = result.get("status")
-                  node1.log(f"Pipeline {run_id}: status={status}")
-                  if status in ("success", "failed", "cancelled"):
-                      return result
-              time.sleep(5)
-          raise Exception(f"Pipeline {run_id} did not complete within {timeout}s")
+              if not isinstance(result, dict):
+                  time.sleep(3)
+                  continue
 
-      def dump_failed_logs(final, run_id):
-          for stage in final.get("stages", []):
-              for job in stage.get("jobs", []):
-                  jid = job.get("id", "")
-                  if job.get("status") == "failed" and jid:
-                      ticket = get_ticket()
-                      node1.execute(
-                          f"aspen-cli --ticket '{ticket}' ci logs {run_id} {jid} "
-                          f">/tmp/fail.log 2>/dev/null"
-                      )
-                      logs = node1.succeed("tail -80 /tmp/fail.log 2>/dev/null || echo 'no logs'")
-                      node1.log(f"Job '{job.get('name')}' logs:\n{logs}")
+              # Stream logs for newly assigned jobs
+              for stage in result.get("stages", []):
+                  for job in stage.get("jobs", []):
+                      jid = job.get("id", "")
+                      if jid and jid not in streamed_jobs:
+                          streamed_jobs.add(jid)
+                          stream_job_logs(run_id, jid, job.get("name", "unknown"))
+
+              status = result.get("status")
+              node1.log(f"Pipeline {run_id}: status={status}")
+              if status in ("success", "failed", "cancelled"):
+                  return result
+              time.sleep(3)
+          raise Exception(f"Pipeline {run_id} did not complete within {timeout}s")
 
 
       # ── boot ─────────────────────────────────────────────────────
@@ -633,10 +644,6 @@ in
           final = wait_for_pipeline(run_id, timeout=900)
           node1.log(f"Final: {json.dumps(final, indent=2)}")
           status = final.get("status")
-
-          if status == "failed":
-              dump_failed_logs(final, run_id)
-
           assert status == "success", f"Pipeline failed: {status}: {final}"
 
       # ── verify both stages ───────────────────────────────────────
@@ -664,12 +671,7 @@ in
           for job in all_jobs:
               assert job["status"] == "success", \
                   f"Job '{job.get('name')}' not success: {job['status']}"
-
-              ticket = get_ticket()
-              node1.execute(
-                  f"aspen-cli --ticket '{ticket}' ci logs {run_id} {job['id']} "
-                  f">/tmp/job-{job['id']}.log 2>/dev/null"
-              )
+              # Logs already saved to /tmp/job-{id}.log by stream_job_logs during wait
               log = node1.succeed(f"cat /tmp/job-{job['id']}.log 2>/dev/null || echo empty").strip()
               assert log, f"No log output for job '{job.get('name')}'"
               node1.log(f"Job '{job.get('name')}': {len(log)} bytes of logs")
