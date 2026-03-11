@@ -175,7 +175,10 @@ impl Executor {
         // Must be under the configured workspace root, or under /tmp/ci-workspace-
         // (the tmpfs fallback used when virtiofs has I/O issues with nix)
         let is_under_workspace = path.starts_with(&self.workspace_root);
-        let is_tmpfs_workspace = path.starts_with("/tmp/ci-workspace-");
+        // Path::starts_with does component-level matching, so "/tmp/ci-workspace-abc"
+        // does NOT start_with "/tmp/ci-workspace-". Use string prefix instead.
+        let path_str = path.to_string_lossy();
+        let is_tmpfs_workspace = path_str.starts_with("/tmp/ci-workspace-");
         if !is_under_workspace && !is_tmpfs_workspace {
             return error::WorkingDirNotUnderWorkspaceSnafu {
                 path: path.display().to_string(),

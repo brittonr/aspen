@@ -25,8 +25,8 @@ pub struct JobManagerConfig {
 impl Default for JobManagerConfig {
     fn default() -> Self {
         let config = Self {
-            default_visibility_timeout: Duration::from_secs(300), // 5 minutes
-            default_job_timeout: Duration::from_secs(300),        // 5 minutes
+            default_visibility_timeout: Duration::from_secs(3600), // 1 hour — nix builds can take 20-30+ minutes
+            default_job_timeout: Duration::from_secs(300),         // 5 minutes
             enable_deduplication: true,
             deduplication_ttl: Duration::from_secs(3600), // 1 hour
             max_schedule_per_tick: 100_u32,

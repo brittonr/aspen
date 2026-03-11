@@ -182,6 +182,13 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    # Ensure the CI workspace directory exists before the service starts.
+    # ReadWritePaths in the systemd unit requires the path to exist for
+    # mount namespacing; without this, systemd fails with NAMESPACE error.
+    systemd.tmpfiles.rules = lib.optionals cfg.ciLocalExecutor [
+      "d ${cfg.ciWorkspaceDir} 0755 root root -"
+    ];
+
     systemd.services.aspen-node = {
       description = "Aspen distributed node";
       wantedBy = ["multi-user.target"];

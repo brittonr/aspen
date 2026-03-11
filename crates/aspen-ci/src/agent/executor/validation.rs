@@ -30,7 +30,10 @@ impl Executor {
         // (the tmpfs fallback used when virtiofs has I/O issues with nix)
         let canonical_workspace = self.workspace_root.canonicalize().unwrap_or_else(|_| self.workspace_root.clone());
         let is_under_workspace = canonical.starts_with(&canonical_workspace);
-        let is_tmpfs_workspace = canonical.starts_with("/tmp/ci-workspace-");
+        // Path::starts_with does component-level matching, so "/tmp/ci-workspace-abc"
+        // does NOT start_with "/tmp/ci-workspace-". Use string prefix instead.
+        let canonical_str = canonical.to_string_lossy();
+        let is_tmpfs_workspace = canonical_str.starts_with("/tmp/ci-workspace-");
         if !is_under_workspace && !is_tmpfs_workspace {
             return error::WorkingDirNotUnderWorkspaceSnafu {
                 path: canonical.display().to_string(),

@@ -211,7 +211,7 @@ pub(crate) fn default_poll_interval_ms() -> u64 {
 }
 
 pub(crate) fn default_visibility_timeout_secs() -> u64 {
-    300
+    3600
 }
 
 pub(crate) fn default_worker_heartbeat_ms() -> u64 {

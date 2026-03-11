@@ -286,6 +286,12 @@ in
 
       # ── boot ─────────────────────────────────────────────────────
       start_all()
+
+      # Register the pre-vendored cargo deps in the VM's nix database.
+      # Store paths from the test closure are physically present via 9p mount
+      # but NOT registered in the nix DB. builtins.storePath requires both.
+      node1.succeed(f"nix-store --register-validity <<'EOF'\n{VENDOR_DIR}\n\n0\nEOF")
+
       node1.wait_for_unit("aspen-node.service")
       node1.wait_for_file("/var/lib/aspen/cluster-ticket.txt", timeout=30)
       node1.wait_until_succeeds(

@@ -63,7 +63,7 @@ mod tests {
             prefer_local: true,
             data_locality_weight: 0.7,
             poll_interval_ms: 1000,
-            visibility_timeout_secs: 300,
+            visibility_timeout_secs: 3600,
             heartbeat_interval_ms: 5000,
             shutdown_timeout_ms: 30000,
             enable_distributed: false,

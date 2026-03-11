@@ -418,6 +418,12 @@ Disadvantage: no multi-machine orchestration (NixOS test has `nodes.node1`, `nod
 - `vm_serial command:"/etc/dogfood/cowsay-test.sh 2>&1"` → full forge→CI→nix build pipeline
 - Pipeline completed, `cowsay "Built by Aspen CI via vm_serial!"` worked
 
+| 2026-03-10 | self | `Path::starts_with("/tmp/ci-workspace-")` in validation.rs and agent/executor.rs uses component-level matching, always returns false for `/tmp/ci-workspace-abc` (no path component equals `ci-workspace-abc`) | Convert to string first: `path.to_string_lossy().starts_with("/tmp/ci-workspace-")`. Rust's `Path::starts_with` matches whole components, not prefix substrings. |
+| 2026-03-10 | self | CI inner flake used `nix build -L .#default` but `builtins.storePath` requires `--impure` evaluation — sandbox error | Add `"--impure"` to args in the CI config NCL file when the inner flake uses `builtins.storePath`. |
+| 2026-03-10 | self | systemd service ReadWritePaths referenced `/workspace` but directory didn't exist → NAMESPACE error | Add `systemd.tmpfiles.rules` to create workspace directories before service start when `ciLocalExecutor = true`. |
+| 2026-03-10 | self | `default_visibility_timeout_secs` in WorkerService config was 300s (5 min) — nix builds taking 8+ minutes caused receipt handle expiry → ack failed → pipeline stuck "running" forever | The queue visibility timeout must exceed the longest expected job duration. Increased from 300s to 3600s (1 hour). The `aspen_jobs::WorkerConfig::default()` already used 3600s but the WorkerService config used 300s — a dangerous inconsistency. |
+| 2026-03-10 | self | Worker ack failure (receipt handle mismatch) silently records success at the worker level, but the job stays Running in the pipeline — pipeline never completes | When ack fails, the job isn't transitioned to Completed. The worker pool reports `jobs_processed=1` but the pipeline sees the job still Running. Need to either retry the ack or update job status directly when ack fails. |
+
 Key gotchas:
 
 - Disk image is read-only in nix store — must `cp` + `chmod +w` before `vm_boot`
