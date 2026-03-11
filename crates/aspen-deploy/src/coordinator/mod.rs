@@ -11,6 +11,8 @@
 
 mod health;
 mod history;
+#[cfg(feature = "iroh")]
+pub mod iroh_rpc;
 pub mod rpc;
 
 use std::sync::Arc;

@@ -330,6 +330,8 @@ pub async fn setup_client_protocol(
         service_executors: Vec::new(),
         app_registry: aspen_core::shared_registry(),
         proxy_config: aspen_rpc_handlers::aspen_rpc_core::ProxyConfig::default(),
+        #[cfg(feature = "deploy")]
+        drain_state: Some(aspen_cluster::upgrade::DrainState::new()),
     };
 
     Ok((token_verifier_arc, client_context, worker_service_handle, coordinator_for_shutdown))

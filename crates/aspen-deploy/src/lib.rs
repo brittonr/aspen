@@ -32,4 +32,6 @@ pub mod verified;
 // Re-export types for convenience
 pub use coordinator::DeploymentCoordinator;
 pub use coordinator::NodeRpcClient;
+#[cfg(feature = "iroh")]
+pub use coordinator::iroh_rpc::IrohNodeRpcClient;
 pub use types::*;

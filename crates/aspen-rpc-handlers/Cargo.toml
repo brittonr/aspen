@@ -86,7 +86,7 @@ hooks = ["dep:aspen-hooks", "aspen-rpc-core/hooks", "aspen-wasm-plugin?/hooks"]
 jobs = ["dep:aspen-jobs", "dep:aspen-job-handler", "aspen-rpc-core/jobs", "aspen-rpc-core/worker"]
 docs = ["dep:aspen-docs", "dep:aspen-docs-handler", "aspen-cluster-handler/docs"]
 net = ["dep:aspen-net"]
-deploy = ["aspen-cluster-handler/deploy"]
+deploy = ["aspen-cluster-handler/deploy", "aspen-cluster-handler/blob", "aspen-rpc-core/deploy"]
 plugins-rpc = ["dep:aspen-wasm-plugin", "blob"]
 testing = []
 

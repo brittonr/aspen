@@ -1012,6 +1012,7 @@ dependencies = [
  "blake3",
  "chrono",
  "hex",
+ "iroh 0.95.1",
  "iroh-blobs",
  "serde",
  "serde_json",
@@ -1203,6 +1204,7 @@ name = "aspen-cluster-handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aspen-blob",
  "aspen-client",
  "aspen-client-api",
  "aspen-cluster",
@@ -1219,6 +1221,7 @@ dependencies = [
  "async-trait",
  "blake3",
  "iroh 0.95.1",
+ "iroh-blobs",
  "iroh-gossip",
  "postcard",
  "serde_json",
@@ -1359,11 +1362,15 @@ dependencies = [
 name = "aspen-deploy"
 version = "0.1.0"
 dependencies = [
+ "aspen-client-api",
  "aspen-constants",
+ "aspen-core",
  "aspen-kv-types",
  "aspen-testing",
  "aspen-traits",
  "async-trait",
+ "iroh 0.95.1",
+ "postcard",
  "serde",
  "serde_json",
  "snafu",

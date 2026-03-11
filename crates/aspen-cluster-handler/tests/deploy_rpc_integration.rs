@@ -289,6 +289,71 @@ async fn test_send_upgrade_rpc_reaches_target() {
     assert!(result.is_ok(), "send_upgrade should succeed, got: {:?}", result.err());
 }
 
+/// Test: DrainState integration — in-flight ops block drain, new ops rejected during drain.
+///
+/// Validates the core invariant: when a node upgrade triggers drain,
+/// in-flight RPCs complete before drain finishes, and new RPCs are rejected
+/// with the equivalent of NOT_LEADER.
+#[tokio::test]
+async fn test_drain_blocks_until_inflight_completes_and_rejects_new() {
+    use std::time::Duration;
+
+    use aspen_cluster::upgrade::DrainState;
+
+    let drain_state = DrainState::new();
+
+    // Simulate an in-flight RPC (try_start_op before drain)
+    assert!(drain_state.try_start_op(), "op should start before drain");
+    assert_eq!(drain_state.in_flight_count(), 1);
+
+    let drain_state_for_drain = drain_state.clone();
+    let drain_state_for_op = drain_state.clone();
+
+    // Spawn the drain (like the executor does)
+    let drain_handle = tokio::spawn(async move {
+        aspen_cluster::upgrade::drain::execute_drain(&drain_state_for_drain, Duration::from_secs(5)).await
+    });
+
+    // Give drain a moment to set the flag
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Verify: new RPCs should be rejected during drain
+    assert!(drain_state.is_draining(), "should be draining");
+    assert!(!drain_state.try_start_op(), "new ops should be rejected during drain");
+
+    // Complete the in-flight RPC
+    drain_state_for_op.finish_op();
+
+    // Drain should complete now
+    let result = drain_handle.await.unwrap();
+    assert!(result.completed, "drain should have completed cleanly");
+    assert_eq!(result.cancelled_ops, 0, "no ops should have been cancelled");
+}
+
+/// Test: BlobHash artifact with blob_store None returns rejected with clear error.
+#[tokio::test]
+async fn test_blob_artifact_without_blob_store_rejected() {
+    let ctx = build_target_context(1).await;
+
+    // blob_store is None by default in test context
+    let result = aspen_cluster_handler::handler::deploy::handle_node_upgrade(
+        &ctx,
+        "deploy-blob-1".to_string(),
+        "deadbeef".repeat(8),
+    )
+    .await
+    .expect("handler should not return Err");
+
+    match result {
+        ClientRpcResponse::NodeUpgradeResult(r) => {
+            assert!(!r.is_accepted, "should reject blob upgrade without blob store");
+            let err = r.error.expect("should have error message");
+            assert!(err.contains("blob") && err.contains("feature"), "error should mention blob feature: {err}");
+        }
+        other => panic!("expected NodeUpgradeResult, got: {other:?}"),
+    }
+}
+
 /// Test: send_rollback RPC reaches target node and is accepted.
 #[tokio::test]
 async fn test_send_rollback_rpc_reaches_target() {

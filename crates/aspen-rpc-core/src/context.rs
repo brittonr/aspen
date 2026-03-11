@@ -140,6 +140,14 @@ pub struct ClientProtocolContext {
     ///
     /// Controls whether requests for unavailable apps are forwarded to discovered clusters.
     pub proxy_config: ProxyConfig,
+    /// Shared drain state for graceful node upgrades (optional).
+    ///
+    /// When present, the client protocol handler checks this before dispatching RPCs.
+    /// During drain, new RPCs are rejected with NOT_LEADER so clients fail over.
+    /// The same instance is shared with the NodeUpgradeExecutor so drain waits
+    /// for real in-flight client RPCs to complete.
+    #[cfg(feature = "deploy")]
+    pub drain_state: Option<Arc<aspen_cluster::upgrade::DrainState>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
@@ -475,6 +483,8 @@ pub mod test_support {
                 service_executors: Vec::new(),
                 app_registry: aspen_core::shared_registry(),
                 proxy_config: ProxyConfig::default(),
+                #[cfg(feature = "deploy")]
+                drain_state: None,
             }
         }
     }

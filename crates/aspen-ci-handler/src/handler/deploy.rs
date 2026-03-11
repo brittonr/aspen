@@ -19,9 +19,8 @@ use aspen_core::KeyValueStore;
 use aspen_deploy::DeployArtifact;
 use aspen_deploy::DeployStrategy;
 use aspen_deploy::DeploymentCoordinator;
+use aspen_deploy::IrohNodeRpcClient;
 use aspen_deploy::NodeDeployStatus;
-use aspen_deploy::coordinator::rpc::NodeRpcClient;
-use aspen_deploy::coordinator::rpc::RpcError;
 use tracing::error;
 use tracing::info;
 
@@ -31,21 +30,27 @@ use tracing::info;
 
 /// Bridges `DeployDispatcher` to the cluster's `DeploymentCoordinator`.
 ///
-/// Uses the same approach as `handle_cluster_deploy` in the cluster handler:
-/// creates a `DeploymentCoordinator` with the node's KV store and a
-/// placeholder `NodeRpcClient`, then dispatches deploy and status queries.
+/// Uses `IrohNodeRpcClient` to send real NodeUpgrade/NodeRollback/GetHealth
+/// RPCs to target nodes via iroh QUIC, the same path the cluster handler uses.
 pub struct RpcDeployDispatcher {
     kv_store: Arc<dyn KeyValueStore>,
     controller: Arc<dyn ClusterController>,
+    endpoint: iroh::Endpoint,
     node_id: u64,
 }
 
 impl RpcDeployDispatcher {
-    /// Create a new deploy dispatcher.
-    pub fn new(kv_store: Arc<dyn KeyValueStore>, controller: Arc<dyn ClusterController>, node_id: u64) -> Self {
+    /// Create a new deploy dispatcher with a real iroh endpoint for sending RPCs.
+    pub fn new(
+        kv_store: Arc<dyn KeyValueStore>,
+        controller: Arc<dyn ClusterController>,
+        endpoint: iroh::Endpoint,
+        node_id: u64,
+    ) -> Self {
         Self {
             kv_store,
             controller,
+            endpoint,
             node_id,
         }
     }
@@ -82,7 +87,7 @@ impl DeployDispatcher for RpcDeployDispatcher {
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         let deploy_id = format!("deploy-{now_ms}");
 
-        let rpc_client = Arc::new(PlaceholderNodeRpcClient { node_id: self.node_id });
+        let rpc_client = Arc::new(IrohNodeRpcClient::new(self.endpoint.clone(), self.controller.clone(), self.node_id));
         let coordinator = DeploymentCoordinator::with_timeouts(
             self.kv_store.clone(),
             rpc_client.clone(),
@@ -124,7 +129,7 @@ impl DeployDispatcher for RpcDeployDispatcher {
     }
 
     async fn deploy_status(&self) -> Result<DeployStatusResult, String> {
-        let rpc_client = Arc::new(PlaceholderNodeRpcClient { node_id: self.node_id });
+        let rpc_client = Arc::new(IrohNodeRpcClient::new(self.endpoint.clone(), self.controller.clone(), self.node_id));
         let coordinator = DeploymentCoordinator::new(self.kv_store.clone(), rpc_client, self.node_id);
 
         match coordinator.get_status().await {
@@ -165,41 +170,6 @@ impl DeployDispatcher for RpcDeployDispatcher {
                 error: None,
             }),
         }
-    }
-}
-
-// ============================================================================
-// PlaceholderNodeRpcClient — bridges coordinator to cluster RPC
-// ============================================================================
-
-/// Placeholder NodeRpcClient that logs operations.
-///
-/// In production, this sends actual RPCs via iroh QUIC to target nodes.
-/// Currently acknowledges all requests — the real inter-node RPC routing
-/// will be wired up when per-node upgrade execution is implemented.
-struct PlaceholderNodeRpcClient {
-    node_id: u64,
-}
-
-#[async_trait::async_trait]
-impl NodeRpcClient for PlaceholderNodeRpcClient {
-    async fn send_upgrade(&self, node_id: u64, _deploy_id: &str, artifact_ref: &str) -> Result<(), RpcError> {
-        info!(
-            source_node = self.node_id,
-            target_node = node_id,
-            artifact = artifact_ref,
-            "sending NodeUpgrade RPC (CI deploy dispatcher)"
-        );
-        Ok(())
-    }
-
-    async fn send_rollback(&self, node_id: u64, _deploy_id: &str) -> Result<(), RpcError> {
-        info!(source_node = self.node_id, target_node = node_id, "sending NodeRollback RPC (CI deploy dispatcher)");
-        Ok(())
-    }
-
-    async fn check_health(&self, _node_id: u64) -> Result<bool, RpcError> {
-        Ok(true)
     }
 }
 

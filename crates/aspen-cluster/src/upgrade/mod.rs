@@ -13,14 +13,16 @@
 //! - Atomic binary replacement (Nix generations or rename)
 //! - Preserved rollback path (Nix rollback or `.bak` file)
 
-mod drain;
+pub mod drain;
 pub mod executor;
+pub mod leader_resume;
 mod restart;
 pub mod rollback;
 pub mod status;
-mod types;
+pub mod types;
 
 pub use executor::NodeUpgradeExecutor;
+pub use types::DrainState;
 pub use types::NodeUpgradeConfig;
 pub use types::NodeUpgradeError;
 pub use types::RestartMethod;

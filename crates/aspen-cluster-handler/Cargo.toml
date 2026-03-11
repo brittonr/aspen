@@ -32,6 +32,10 @@ tokio = { version = "1.48.0", features = ["rt"], optional = true }
 iroh = { version = "0.95.1" }
 iroh-gossip = "0.95"
 
+# Optional blob dependencies
+aspen-blob = { path = "../aspen-blob", optional = true }
+iroh-blobs = { version = "0.97", optional = true }
+
 # Serialization
 postcard = { version = "1.0", optional = true }
 
@@ -42,7 +46,8 @@ blake3 = { workspace = true }
 default = []
 docs = ["dep:aspen-docs"]
 jobs = ["aspen-rpc-core/jobs"]
-deploy = ["dep:aspen-deploy", "dep:aspen-cluster", "dep:aspen-constants", "dep:aspen-traits", "dep:aspen-kv-types", "dep:tokio", "dep:postcard"]
+deploy = ["dep:aspen-deploy", "aspen-deploy?/iroh", "dep:aspen-cluster", "dep:aspen-constants", "dep:aspen-traits", "dep:aspen-kv-types", "dep:tokio", "dep:postcard", "aspen-rpc-core/deploy"]
+blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-core/blob"]
 
 [dev-dependencies]
 aspen-testing = { workspace = true }

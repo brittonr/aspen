@@ -10,28 +10,18 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
-use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::messages::deploy::*;
 use aspen_deploy::DeployArtifact;
 use aspen_deploy::DeployStrategy;
 use aspen_deploy::DeploymentCoordinator;
+use aspen_deploy::IrohNodeRpcClient;
 use aspen_deploy::NodeDeployStatus;
-use aspen_deploy::coordinator::rpc::NodeRpcClient;
-use aspen_deploy::coordinator::rpc::RpcError;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_traits::KeyValueStore;
 use tracing::error;
 use tracing::info;
-use tracing::warn;
-
-/// RPC timeout for inter-node deploy operations.
-const DEPLOY_RPC_TIMEOUT_SECS: u64 = 30;
-
-/// Maximum response size for inter-node RPCs (same as MAX_CLIENT_MESSAGE_SIZE).
-const MAX_DEPLOY_RPC_RESPONSE: usize = 16 * 1024 * 1024;
 
 // ============================================================================
 // Cluster-level handlers
@@ -223,13 +213,126 @@ pub async fn handle_node_upgrade(
     );
 
     let parsed_artifact = DeployArtifact::parse(&artifact);
+
+    // For blob artifacts, validate blob store availability and stage the binary.
+    // The executor expects the staged binary to already exist on disk.
+    if let DeployArtifact::BlobHash(ref blob_hash) = parsed_artifact {
+        #[cfg(feature = "blob")]
+        {
+            let blob_store = match &ctx.blob_store {
+                Some(store) => store.clone(),
+                None => {
+                    info!(node_id = ctx.node_id, "blob artifact rejected: blob store not configured");
+                    return Ok(ClientRpcResponse::NodeUpgradeResult(NodeUpgradeResultResponse {
+                        is_accepted: false,
+                        error: Some(
+                            "blob upgrades require the blob feature to be enabled and a blob store configured"
+                                .to_string(),
+                        ),
+                    }));
+                }
+            };
+
+            let staging_dir = std::env::var("ASPEN_STAGING_DIR")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/aspen-staging"));
+            if let Err(e) = tokio::fs::create_dir_all(&staging_dir).await {
+                return Ok(ClientRpcResponse::NodeUpgradeResult(NodeUpgradeResultResponse {
+                    is_accepted: false,
+                    error: Some(format!("failed to create staging directory: {e}")),
+                }));
+            }
+
+            let staging_path = staging_dir.join(format!("aspen-node-{}", blob_hash));
+            let timeout = std::time::Duration::from_secs(aspen_constants::api::DEPLOY_HEALTH_TIMEOUT_SECS);
+
+            info!(
+                node_id = ctx.node_id,
+                blob_hash = %blob_hash,
+                staging_path = %staging_path.display(),
+                "downloading blob artifact to staging directory"
+            );
+
+            // Parse the blob hash and fetch from the local blob store via BlobRead trait.
+            let download_result = tokio::time::timeout(timeout, async {
+                use aspen_blob::BlobRead;
+
+                let hash: iroh_blobs::Hash =
+                    blob_hash.parse().map_err(|e| format!("invalid blob hash '{blob_hash}': {e}"))?;
+
+                // Read blob content via BlobRead::get_bytes
+                let data = blob_store
+                    .get_bytes(&hash)
+                    .await
+                    .map_err(|e| format!("blob store error: {e}"))?
+                    .ok_or_else(|| format!("blob hash {} not found in local store", hash))?;
+
+                // Write to staging file
+                tokio::fs::write(&staging_path, &data)
+                    .await
+                    .map_err(|e| format!("failed to write staged blob: {e}"))?;
+
+                // Set executable permission
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let perms = std::fs::Permissions::from_mode(0o755);
+                    tokio::fs::set_permissions(&staging_path, perms)
+                        .await
+                        .map_err(|e| format!("failed to set permissions: {e}"))?;
+                }
+
+                Ok::<(), String>(())
+            })
+            .await;
+
+            match download_result {
+                Ok(Ok(())) => {
+                    info!(node_id = ctx.node_id, blob_hash = %blob_hash, "blob artifact staged");
+                }
+                Ok(Err(e)) => {
+                    return Ok(ClientRpcResponse::NodeUpgradeResult(NodeUpgradeResultResponse {
+                        is_accepted: false,
+                        error: Some(format!("blob download failed: {e}")),
+                    }));
+                }
+                Err(_) => {
+                    return Ok(ClientRpcResponse::NodeUpgradeResult(NodeUpgradeResultResponse {
+                        is_accepted: false,
+                        error: Some("blob download timed out".to_string()),
+                    }));
+                }
+            }
+        }
+
+        #[cfg(not(feature = "blob"))]
+        {
+            let _ = blob_hash;
+            return Ok(ClientRpcResponse::NodeUpgradeResult(NodeUpgradeResultResponse {
+                is_accepted: false,
+                error: Some("blob upgrades require the blob feature to be enabled".to_string()),
+            }));
+        }
+    }
+
     let config = resolve_upgrade_config(ctx.node_id, &parsed_artifact);
     let kv = ctx.kv_store.clone();
     let node_id = ctx.node_id;
 
+    // Use the shared drain state from the RPC context if available,
+    // so the executor's drain phase waits for real in-flight client RPCs.
+    #[cfg(feature = "deploy")]
+    let drain_state = ctx.drain_state.clone();
+
     // Spawn the executor in a background task so the RPC returns immediately.
     // The coordinator polls health to track progress.
     tokio::spawn(async move {
+        #[cfg(feature = "deploy")]
+        let executor = match drain_state {
+            Some(ds) => aspen_cluster::upgrade::NodeUpgradeExecutor::with_drain_state(config, ds),
+            None => aspen_cluster::upgrade::NodeUpgradeExecutor::new(config),
+        };
+        #[cfg(not(feature = "deploy"))]
         let executor = aspen_cluster::upgrade::NodeUpgradeExecutor::new(config);
         let status_writer = KvStatusWriter { kv };
 
@@ -273,222 +376,6 @@ pub async fn handle_node_rollback(ctx: &ClientProtocolContext, deploy_id: String
         is_success: true,
         error: None,
     }))
-}
-
-// ============================================================================
-// IrohNodeRpcClient — real inter-node RPC over iroh QUIC
-// ============================================================================
-
-/// NodeRpcClient implementation that sends real RPCs via iroh QUIC.
-///
-/// The coordinator (running on the Raft leader) uses this to send
-/// NodeUpgrade, NodeRollback, and health check RPCs to follower nodes
-/// via the CLIENT_ALPN protocol handler.
-///
-/// Node address resolution uses `ClusterController::current_state()` which
-/// returns `ClusterState` with `ClusterNode` entries containing the iroh
-/// `EndpointAddr` for each node.
-pub struct IrohNodeRpcClient {
-    endpoint: iroh::Endpoint,
-    controller: Arc<dyn aspen_core::ClusterController>,
-    source_node_id: u64,
-}
-
-impl IrohNodeRpcClient {
-    /// Create a new iroh-based RPC client.
-    pub fn new(
-        endpoint: iroh::Endpoint,
-        controller: Arc<dyn aspen_core::ClusterController>,
-        source_node_id: u64,
-    ) -> Self {
-        Self {
-            endpoint,
-            controller,
-            source_node_id,
-        }
-    }
-
-    /// Resolve a node_id to its iroh EndpointAddr via cluster state.
-    async fn resolve_node_addr(&self, node_id: u64) -> std::result::Result<iroh::EndpointAddr, RpcError> {
-        let state = self
-            .controller
-            .current_state()
-            .await
-            .map_err(|e| RpcError::new(format!("failed to get cluster state for node {node_id}: {e}")))?;
-
-        for node in &state.nodes {
-            if node.id == node_id {
-                if let Some(addr) = node.iroh_addr() {
-                    return Ok(addr.clone());
-                }
-                return Err(RpcError::new(format!(
-                    "node {node_id} found in cluster state but has no iroh endpoint address"
-                )));
-            }
-        }
-
-        Err(RpcError::new(format!("node {node_id} not found in cluster state")))
-    }
-
-    /// Send a ClientRpcRequest to a specific node and return the response.
-    async fn send_rpc(
-        &self,
-        node_id: u64,
-        request: ClientRpcRequest,
-    ) -> std::result::Result<ClientRpcResponse, RpcError> {
-        let target_addr = self.resolve_node_addr(node_id).await?;
-        let timeout_duration = Duration::from_secs(DEPLOY_RPC_TIMEOUT_SECS);
-
-        // Connect via CLIENT_ALPN
-        let connection = tokio::time::timeout(timeout_duration, async {
-            self.endpoint
-                .connect(target_addr.clone(), aspen_client_api::CLIENT_ALPN)
-                .await
-                .map_err(|e| RpcError::new(format!("connection to node {node_id} failed: {e}")))
-        })
-        .await
-        .map_err(|_| RpcError::new(format!("connection to node {node_id} timed out")))??;
-
-        // Open bidirectional stream
-        let (mut send, mut recv) = connection
-            .open_bi()
-            .await
-            .map_err(|e| RpcError::new(format!("failed to open stream to node {node_id}: {e}")))?;
-
-        // Wrap as unauthenticated request (inter-node, same cluster)
-        let authenticated_request = aspen_client_api::AuthenticatedRequest::unauthenticated(request);
-
-        // Serialize and send
-        let request_bytes = postcard::to_stdvec(&authenticated_request)
-            .map_err(|e| RpcError::new(format!("failed to serialize request for node {node_id}: {e}")))?;
-
-        send.write_all(&request_bytes)
-            .await
-            .map_err(|e| RpcError::new(format!("failed to send request to node {node_id}: {e}")))?;
-
-        send.finish()
-            .map_err(|e| RpcError::new(format!("failed to finish send stream to node {node_id}: {e}")))?;
-
-        // Read response with timeout
-        let response_bytes = tokio::time::timeout(timeout_duration, async {
-            recv.read_to_end(MAX_DEPLOY_RPC_RESPONSE)
-                .await
-                .map_err(|e| RpcError::new(format!("failed to read response from node {node_id}: {e}")))
-        })
-        .await
-        .map_err(|_| RpcError::new(format!("response from node {node_id} timed out")))??;
-
-        // Deserialize response
-        let response: ClientRpcResponse = postcard::from_bytes(&response_bytes)
-            .map_err(|e| RpcError::new(format!("failed to deserialize response from node {node_id}: {e}")))?;
-
-        // Close connection gracefully
-        connection.close(iroh::endpoint::VarInt::from_u32(0), b"done");
-
-        Ok(response)
-    }
-}
-
-#[async_trait::async_trait]
-impl NodeRpcClient for IrohNodeRpcClient {
-    async fn send_upgrade(
-        &self,
-        node_id: u64,
-        deploy_id: &str,
-        artifact_ref: &str,
-    ) -> std::result::Result<(), RpcError> {
-        info!(
-            source_node = self.source_node_id,
-            target_node = node_id,
-            deploy_id = deploy_id,
-            artifact = artifact_ref,
-            "sending NodeUpgrade RPC via iroh"
-        );
-
-        let request = ClientRpcRequest::NodeUpgrade {
-            deploy_id: deploy_id.to_string(),
-            artifact: artifact_ref.to_string(),
-        };
-
-        let response = self.send_rpc(node_id, request).await?;
-
-        match response {
-            ClientRpcResponse::NodeUpgradeResult(result) => {
-                if result.is_accepted {
-                    info!(target_node = node_id, "NodeUpgrade accepted");
-                    Ok(())
-                } else {
-                    let msg = result.error.unwrap_or_else(|| "upgrade rejected".to_string());
-                    Err(RpcError::new(format!("node {node_id} rejected upgrade: {msg}")))
-                }
-            }
-            ClientRpcResponse::Error(e) => {
-                Err(RpcError::new(format!("node {node_id} returned error: {} - {}", e.code, e.message)))
-            }
-            other => Err(RpcError::new(format!("node {node_id} returned unexpected response: {other:?}"))),
-        }
-    }
-
-    async fn send_rollback(&self, node_id: u64, deploy_id: &str) -> std::result::Result<(), RpcError> {
-        info!(
-            source_node = self.source_node_id,
-            target_node = node_id,
-            deploy_id = deploy_id,
-            "sending NodeRollback RPC via iroh"
-        );
-
-        let request = ClientRpcRequest::NodeRollback {
-            deploy_id: deploy_id.to_string(),
-        };
-
-        let response = self.send_rpc(node_id, request).await?;
-
-        match response {
-            ClientRpcResponse::NodeRollbackResult(result) => {
-                if result.is_success {
-                    info!(target_node = node_id, "NodeRollback accepted");
-                    Ok(())
-                } else {
-                    let msg = result.error.unwrap_or_else(|| "rollback rejected".to_string());
-                    Err(RpcError::new(format!("node {node_id} rejected rollback: {msg}")))
-                }
-            }
-            ClientRpcResponse::Error(e) => {
-                Err(RpcError::new(format!("node {node_id} returned error: {} - {}", e.code, e.message)))
-            }
-            other => Err(RpcError::new(format!("node {node_id} returned unexpected response: {other:?}"))),
-        }
-    }
-
-    async fn check_health(&self, node_id: u64) -> std::result::Result<bool, RpcError> {
-        let request = ClientRpcRequest::GetHealth;
-
-        let response = self.send_rpc(node_id, request).await?;
-
-        match response {
-            ClientRpcResponse::Health(health) => {
-                // Node is healthy if it reports "healthy" status
-                let is_healthy = health.status == "healthy";
-                if !is_healthy {
-                    info!(
-                        target_node = node_id,
-                        status = %health.status,
-                        "node reports unhealthy"
-                    );
-                }
-                Ok(is_healthy)
-            }
-            ClientRpcResponse::Error(e) => {
-                warn!(target_node = node_id, code = %e.code, "health check returned error");
-                Ok(false)
-            }
-            _ => {
-                // Unexpected response type — treat as unhealthy but not an error
-                warn!(target_node = node_id, "health check returned unexpected response type");
-                Ok(false)
-            }
-        }
-    }
 }
 
 // ============================================================================

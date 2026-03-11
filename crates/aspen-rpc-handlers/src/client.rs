@@ -11,6 +11,8 @@ use aspen_client_api::AuthenticatedRequest;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::MAX_CLIENT_MESSAGE_SIZE;
+#[cfg(feature = "deploy")]
+use aspen_cluster::upgrade::DrainState;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
 use aspen_coordination::DistributedRateLimiter;
@@ -41,6 +43,27 @@ use tracing::warn;
 use crate::HandlerRegistry;
 use crate::context::ClientProtocolContext;
 use crate::error_sanitization::sanitize_error_for_client;
+
+// ============================================================================
+// DrainGuard — RAII guard for in-flight operation tracking
+// ============================================================================
+
+/// Drop guard that calls `finish_op()` on the shared `DrainState` when dropped.
+///
+/// Ensures the in-flight counter is decremented even if the request handler
+/// panics or returns early with an error. Without this, a leaked counter
+/// would prevent drain from ever completing.
+#[cfg(feature = "deploy")]
+struct DrainGuard {
+    drain_state: Arc<DrainState>,
+}
+
+#[cfg(feature = "deploy")]
+impl Drop for DrainGuard {
+    fn drop(&mut self) {
+        self.drain_state.finish_op();
+    }
+}
 
 // ============================================================================
 // Client Protocol Handler
@@ -384,6 +407,33 @@ async fn handle_client_request(
     if !handle_client_request_check_auth(&ctx, &client_id, &request, &token, &mut send).await? {
         return Ok(());
     }
+
+    // Drain check: reject new RPCs during node upgrade drain.
+    // Bootstrap operations are exempt — they're needed for cluster health during upgrades.
+    #[cfg(feature = "deploy")]
+    let _drain_guard = if !is_bootstrap_operation {
+        if let Some(ref drain_state) = ctx.drain_state {
+            if !drain_state.try_start_op() {
+                // Node is draining for upgrade — tell client to fail over
+                debug!(client_id = %client_id, request_id = %request_id, "rejecting RPC during drain, returning NOT_LEADER");
+                handle_client_request_send_error(
+                    &mut send,
+                    "NOT_LEADER",
+                    "node is draining for upgrade, retry on another node",
+                )
+                .await?;
+                return Ok(());
+            }
+            // Guard ensures finish_op() is called even on panic/error
+            Some(DrainGuard {
+                drain_state: Arc::clone(drain_state),
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     // Intercept GetBlob for streaming support (large blobs exceed RPC size limits).
     // Small blobs are sent inline in the response. Large blobs (>4MB) are sent as

@@ -290,3 +290,10 @@ pub const DEPLOY_STATUS_POLL_INTERVAL_SECS: u64 = 5;
 /// Tiger Style: Bounded gap ensures upgraded node has caught up with cluster.
 /// Node is not considered healthy until its log gap is below this threshold.
 pub const DEPLOY_LOG_GAP_THRESHOLD: u64 = 100;
+
+/// Maximum acceptable Raft replication log gap for deploy health checks.
+///
+/// Alias for `DEPLOY_LOG_GAP_THRESHOLD`. Used by `IrohNodeRpcClient::check_health()`
+/// to verify a recently-upgraded node has caught up on Raft replication before
+/// marking it healthy.
+pub const MAX_HEALTHY_LOG_GAP: u64 = DEPLOY_LOG_GAP_THRESHOLD;

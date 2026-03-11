@@ -83,6 +83,7 @@ impl HandlerFactory for CiHandlerFactory {
                     Arc::new(handler::deploy::RpcDeployDispatcher::new(
                         ctx.kv_store.clone(),
                         ctx.controller.clone(),
+                        ctx.endpoint_manager.endpoint().clone(),
                         ctx.node_id,
                     ));
                 orchestrator.set_deploy_dispatcher(deploy_dispatcher);

@@ -53,6 +53,7 @@ nickel = ["aspen-ci?/nickel"]
 # nix-cache-gateway removed: h3-iroh requires iroh 0.96+ (we use 0.95.1)
 global-discovery = ["aspen-core/global-discovery"]
 worker = ["dep:aspen-cluster", "aspen-cluster/jobs"]
+deploy = ["dep:aspen-cluster", "aspen-cluster/deploy"]
 jobs = ["dep:aspen-jobs"]
 hooks = ["dep:aspen-hooks"]
 testing = ["dep:aspen-testing", "dep:iroh"]
