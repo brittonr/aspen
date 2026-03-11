@@ -172,10 +172,9 @@ impl NodeUpgradeExecutor {
 
         let staging_path = staging_dir.join(format!("aspen-node-{blob_hash}"));
 
-        // Download blob to staging path.
-        // The actual blob fetch is handled by the caller (iroh-blobs).
-        // Here we assume the blob is already fetched to staging_path.
-        // This is a stub for the coordinator to fill in.
+        // The blob must be staged to disk by the RPC handler before calling
+        // the executor. The handler (handle_node_upgrade in deploy.rs) downloads
+        // the blob via iroh-blobs BlobRead and writes it to the staging path.
         if !staging_path.exists() {
             return Err(NodeUpgradeError::ArtifactFetchFailed {
                 reason: format!("staged blob not found at {}", staging_path.display()),

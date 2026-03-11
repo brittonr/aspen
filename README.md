@@ -611,6 +611,19 @@ DISCOVERY LAYER
 - **Distributed Execution**: Jobs run across cluster via `aspen-jobs`
 - **Artifact Storage**: Build outputs in iroh-blobs (P2P)
 - **Nix Binary Cache**: SNIX integration with HTTP/3 gateway (`iroh+h3` ALPN) for NAR archives
+- **Rolling Deployment**: `type = 'deploy` jobs call `ClusterDeploy` to upgrade cluster nodes one at a time with drain, health checks, and automatic rollback
+
+### Self-Hosted Pipeline
+
+Aspen builds, tests, and deploys itself using its own infrastructure:
+
+```
+git push → Forge → CI auto-trigger → nix build → deploy → verify
+```
+
+The `.aspen/ci.ncl` config defines the pipeline: format check, clippy, parallel nix builds (node + CLI), quick test suite, and an optional deploy stage. The deploy stage resolves the build artifact (Nix store path or blob hash) and initiates a rolling upgrade via `DeploymentCoordinator` — draining each node, swapping the binary, restarting, and gating on health checks before proceeding.
+
+Run the full loop locally: `nix run .#dogfood-local -- full-loop`
 
 ---
 
