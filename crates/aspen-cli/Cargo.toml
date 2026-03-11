@@ -80,11 +80,14 @@ flate2 = { version = "1.0", optional = true }  # for git-bridge
 [features]
 default = []
 blob = ["dep:aspen-blob"]
-ci = []
+# Marker features propagated to aspen-client-api so:
+# 1. unit2nix captures them in the build plan (features: [] breaks cfg gates)
+# 2. postcard enum discriminants match between CLI and node
+ci = ["aspen-client-api/ci"]
 forge = ["dep:aspen-forge"]
 git-bridge = ["forge", "dep:flate2"]
 sql = []
-secrets = []
-automerge = []
+secrets = ["aspen-client-api/secrets"]
+automerge = ["aspen-client-api/automerge"]
 plugins-rpc = ["dep:aspen-plugin-api"]
 proxy = ["dep:aspen-proxy"]

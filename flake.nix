@@ -3651,14 +3651,30 @@
             generate-build-plan-cli = {
               type = "app";
               program = "${pkgs.writeShellScript "generate-build-plan-cli" ''
-                set -e
-                echo "Generating build-plan-cli.json from Cargo's unit graph..."
-                ${unit2nix.packages.${system}.default}/bin/unit2nix \
-                  --manifest-path ./Cargo.toml \
-                  -p aspen-cli \
-                  --features forge,ci,secrets,automerge \
-                  -o build-plan-cli.json
-                echo "Done! Commit build-plan-cli.json to the repo."
+                                set -e
+                                echo "Generating build-plan-cli.json from Cargo's unit graph..."
+                                ${unit2nix.packages.${system}.default}/bin/unit2nix \
+                                  --manifest-path ./Cargo.toml \
+                                  -p aspen-cli \
+                                  --features forge,ci,secrets,automerge \
+                                  -o build-plan-cli.json
+                                # unit2nix doesn't capture root crate features that only propagate
+                                # to deps (no new optional deps on the root). Patch them in so
+                                # rustc gets --cfg feature="ci" etc.
+                                echo "Patching root crate features into build-plan-cli.json..."
+                                ${pkgs.python3}/bin/python3 -c "
+                import json, sys
+                with open('build-plan-cli.json') as f:
+                    plan = json.load(f)
+                for key, data in plan.get('crates', {}).items():
+                    if isinstance(data, dict) and data.get('crateName') == 'aspen-cli':
+                        data['features'] = ['automerge', 'ci', 'default', 'forge', 'secrets']
+                        break
+                with open('build-plan-cli.json', 'w') as f:
+                    json.dump(plan, f, indent=2)
+                    f.write('\n')
+                "
+                                echo "Done! Commit build-plan-cli.json to the repo."
               ''}";
             };
             # Usage: nix run .#generate-build-plan-git-remote
