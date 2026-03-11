@@ -394,6 +394,63 @@ impl AspenClient {
         }
     }
 
+    /// Send a GetBlob request with streaming support for large blobs.
+    ///
+    /// Returns the metadata response. If `output` is provided and the server
+    /// streams blob data, writes the raw bytes directly to the file.
+    /// Send a GetBlob request with streaming support for large blobs.
+    ///
+    /// Returns the metadata response. If `output` is provided and the server
+    /// streams blob data (blobs > 4MB), writes the raw bytes directly to the file.
+    pub async fn send_get_blob(&self, hash: String, output: Option<&std::path::Path>) -> Result<ClientRpcResponse> {
+        let peer_addr = self.bootstrap_addrs.first().context("no peers available")?;
+
+        let connection = self.get_connection_for_addr(peer_addr).await?;
+        let (mut send, mut recv) = match connection.open_bi().await {
+            Ok(streams) => streams,
+            Err(e) => {
+                self.discard_connection(peer_addr.id, connection);
+                return Err(anyhow::Error::new(e).context("failed to open stream"));
+            }
+        };
+
+        let request = ClientRpcRequest::GetBlob { hash };
+        let authenticated_request = match self.token.as_ref() {
+            Some(token) => AuthenticatedRequest::new(request, token.clone()),
+            None => AuthenticatedRequest::unauthenticated(request),
+        };
+        let request_bytes = postcard::to_stdvec(&authenticated_request)?;
+
+        send.write_all(&request_bytes).await.context("failed to send request")?;
+        send.finish().context("failed to finish send stream")?;
+
+        // Read the full stream. For streaming responses, the server sends a small
+        // postcard header followed by raw blob bytes. Postcard is self-delimiting,
+        // so take_from_bytes splits at the deserialization boundary.
+        let all_bytes = recv.read_to_end(256 * 1024 * 1024).await.context("failed to read response")?;
+
+        let (response, remaining) = match postcard::take_from_bytes::<ClientRpcResponse>(&all_bytes) {
+            Ok(r) => r,
+            Err(e) => {
+                self.discard_connection(peer_addr.id, connection);
+                return Err(anyhow::Error::new(e).context("failed to deserialize response"));
+            }
+        };
+
+        // If streaming, write the remaining bytes (raw blob data) to file
+        if let ClientRpcResponse::GetBlobResult(ref result) = response {
+            if result.is_streaming {
+                if let Some(output_path) = output {
+                    std::fs::write(output_path, remaining)
+                        .with_context(|| format!("failed to write blob to {}", output_path.display()))?;
+                }
+            }
+        }
+
+        self.return_connection(peer_addr.id, connection).await;
+        Ok(response)
+    }
+
     /// Get the cluster ID from the ticket.
     #[allow(dead_code)]
     pub fn cluster_id(&self) -> &str {

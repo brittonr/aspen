@@ -721,11 +721,22 @@ async fn blob_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()>
 }
 
 async fn blob_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
-    let response = client.send(ClientRpcRequest::GetBlob { hash: args.hash }).await?;
+    // Use streaming path when output file is specified (handles large blobs)
+    let response = client.send_get_blob(args.hash, args.output.as_deref()).await?;
 
     match response {
         ClientRpcResponse::GetBlobResult(result) => {
-            // If output file specified and blob found with data, write directly
+            // Streaming path already wrote the file, just report success
+            if result.is_streaming {
+                if let Some(output_path) = &args.output {
+                    if !json {
+                        println!("Wrote {} bytes to {}", result.size_bytes, output_path.display());
+                    }
+                    return Ok(());
+                }
+            }
+
+            // Inline path: data is in the response
             if let (Some(output_path), true, Some(data)) = (&args.output, result.was_found, &result.data) {
                 std::fs::write(output_path, data)
                     .with_context(|| format!("failed to write blob to {}", output_path.display()))?;

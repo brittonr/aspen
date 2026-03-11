@@ -205,6 +205,36 @@ in
       virtualisation.writableStoreUseTmpfs = false;
     };
 
+    # Lightweight second node: downloads blob from node1 and runs the binary.
+    # Separate single-node cluster — only shares iroh-blobs P2P, not raft.
+    nodes.client = {
+      imports = [
+        ../../nix/modules/aspen-node.nix
+      ];
+
+      services.aspen.node = {
+        enable = true;
+        package = aspenNodePackage;
+        nodeId = 1;
+        cookie = "client-cluster";
+        storageBackend = "redb";
+        dataDir = "/var/lib/aspen";
+        logLevel = "info";
+        relayMode = "disabled";
+        enableWorkers = false;
+        enableCi = false;
+        features = ["blob"];
+      };
+
+      environment.systemPackages = [
+        aspenCliPackage
+      ];
+
+      networking.firewall.enable = false;
+      virtualisation.memorySize = 2048;
+      virtualisation.cores = 2;
+    };
+
     testScript = ''
       import json, time
 
@@ -300,6 +330,32 @@ in
       )
       cli_text("cluster init")
       time.sleep(2)
+
+      # Boot client node (separate single-node cluster for blob operations)
+      client.wait_for_unit("aspen-node.service")
+      client.wait_for_file("/var/lib/aspen/cluster-ticket.txt", timeout=30)
+      client.wait_until_succeeds(
+          "aspen-cli --ticket $(cat /var/lib/aspen/cluster-ticket.txt) cluster health",
+          timeout=60,
+      )
+      client.succeed(
+          "aspen-cli --ticket $(cat /var/lib/aspen/cluster-ticket.txt) cluster init"
+      )
+      time.sleep(2)
+
+      def client_cli(cmd, check=True):
+          """Run aspen-cli against the client's own cluster."""
+          t = client.succeed("cat /var/lib/aspen/cluster-ticket.txt").strip()
+          run = f"aspen-cli --ticket '{t}' --json {cmd} >/tmp/_cli.json 2>/tmp/_cli.err"
+          if check:
+              client.succeed(run)
+          else:
+              client.execute(run)
+          raw = client.succeed("cat /tmp/_cli.json")
+          try:
+              return json.loads(raw)
+          except (json.JSONDecodeError, ValueError):
+              return raw.strip()
 
       # ── plugins ──────────────────────────────────────────────────
       with subtest("install WASM plugins"):
@@ -415,31 +471,55 @@ in
               f"Binary too small ({binary_size} bytes) — a real aspen-node is 50+ MB"
           node1.log(f"Binary uploaded to blobs: hash={blob_hash} size={binary_size}")
 
-      # ── verify blob exists and binary runs ─────────────────────
-      with subtest("verify binary in blob store and nix store"):
-          # Confirm the blob exists in the store (blob get streams the
-          # whole binary through RPC which exceeds QUIC frame limits for
-          # large binaries, so we use blob has to check existence)
-          has_result = cli(f"blob has {blob_hash}")
-          assert has_result.get("does_exist", False), \
-              f"Binary blob {blob_hash} not found in store"
-          node1.log(f"Blob {blob_hash} confirmed in store")
+      # ── fetch binary from blob store on node1 ───────────────────
+      with subtest("fetch and run binary from blob store"):
+          # blob get now streams large blobs (header + raw bytes) so
+          # this works for the 86MB binary without hitting RPC size limits
+          cli_text(f"blob get {blob_hash} -o /tmp/aspen-node-from-blob")
+          node1.succeed("chmod +x /tmp/aspen-node-from-blob")
 
-          # Run the binary from the nix store output path
-          binary_nix_path = nix_output.get("binary_path")
-          assert binary_nix_path is not None, "binary_path missing from nix_output"
-          node1.succeed(f"test -x {binary_nix_path}")
+          fetched_size = int(node1.succeed("stat -c %s /tmp/aspen-node-from-blob").strip())
+          node1.log(f"Fetched binary: {fetched_size} bytes")
+          assert fetched_size == binary_size, \
+              f"Size mismatch: got {fetched_size}, expected {binary_size}"
 
-          version_output = node1.succeed(f"{binary_nix_path} --version").strip()
+          version_output = node1.succeed("/tmp/aspen-node-from-blob --version").strip()
           node1.log(f"Version: {version_output}")
           assert "aspen" in version_output.lower(), \
               f"Version output missing 'aspen': {version_output}"
 
-          node1.log(
-              f"CI-built binary verified: {binary_nix_path} "
-              f"({binary_size} bytes, blob={blob_hash})"
-          )
+      # ── cross-node: download blob on client and run ──────────────
+      with subtest("cross-node blob download and run"):
+          # Get a blob ticket from node1 (contains node1's iroh endpoint)
+          ticket_result = cli(f"blob ticket {blob_hash}")
+          blob_ticket = ticket_result.get("ticket")
+          assert blob_ticket, f"Failed to get blob ticket: {ticket_result}"
+          node1.log(f"Blob ticket: {blob_ticket[:60]}...")
 
-      node1.log("FULL WORKSPACE DOGFOOD PASSED: 80 crates -> Forge -> CI -> nix build -> blob store -> run")
+          # Client tells its own node to download from node1 via iroh-blobs P2P
+          dl_result = client_cli(f"blob download {blob_ticket}")
+          assert dl_result.get("is_success", False), \
+              f"Blob download failed: {dl_result}"
+          dl_size = dl_result.get("size_bytes", 0)
+          node1.log(f"Client downloaded blob: {dl_size} bytes")
+          assert dl_size == binary_size, \
+              f"Size mismatch: downloaded {dl_size}, expected {binary_size}"
+
+          # Export from client's local blob store to file (streaming get)
+          client.succeed(
+              f"aspen-cli --ticket $(cat /var/lib/aspen/cluster-ticket.txt) "
+              f"blob get {blob_hash} -o /tmp/aspen-node-from-blob 2>/dev/null"
+          )
+          client.succeed("chmod +x /tmp/aspen-node-from-blob")
+
+          # Verify the binary runs on the client node
+          version_output = client.succeed("/tmp/aspen-node-from-blob --version").strip()
+          node1.log(f"Client ran CI-built binary: {version_output}")
+          assert "aspen" in version_output.lower(), \
+              f"Version output missing 'aspen': {version_output}"
+
+          node1.log("Cross-node verified: built on node1, downloaded to client via iroh-blobs, runs correctly")
+
+      node1.log("FULL WORKSPACE DOGFOOD PASSED: Forge -> CI -> nix build -> blob store -> cross-node download -> run")
     '';
   }

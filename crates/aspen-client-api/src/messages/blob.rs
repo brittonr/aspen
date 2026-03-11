@@ -117,14 +117,26 @@ pub struct AddBlobResultResponse {
 }
 
 /// Get blob result response.
+///
+/// For small blobs, `data` contains the bytes inline. For large blobs
+/// (when `is_streaming` is true), `data` is `None` and the raw blob
+/// bytes follow immediately after this response on the QUIC stream.
+/// The client reads exactly `size_bytes` additional bytes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetBlobResultResponse {
     /// Whether the blob was found.
     pub was_found: bool,
-    /// Blob data if found.
+    /// Blob data if found (inline for small blobs, None when streaming).
     pub data: Option<Vec<u8>>,
     /// Error message if failed.
     pub error: Option<String>,
+    /// When true, raw blob bytes follow on the stream after this response.
+    /// Read exactly `size_bytes` bytes from the stream.
+    #[serde(default)]
+    pub is_streaming: bool,
+    /// Size of the blob in bytes (set when streaming).
+    #[serde(default)]
+    pub size_bytes: u64,
 }
 
 /// Has blob result response.

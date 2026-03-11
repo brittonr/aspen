@@ -385,19 +385,56 @@ async fn handle_client_request(
         return Ok(());
     }
 
-    // Process the request through the handler registry
-    let response = match registry.dispatch(request, &ctx, proxy_hops).await {
-        Ok(resp) => resp,
-        Err(err) => {
-            warn!(error = %err, "Client request processing failed");
-            ClientRpcResponse::error("INTERNAL_ERROR", sanitize_error_for_client(&err))
+    // Intercept GetBlob for streaming support (large blobs exceed RPC size limits).
+    // Small blobs are sent inline in the response. Large blobs (>4MB) are sent as
+    // a header response followed by raw bytes on the same QUIC stream.
+    #[cfg(feature = "blob")]
+    let handled = if let ClientRpcRequest::GetBlob { ref hash } = request {
+        match aspen_blob_handler::BlobHandler::handle_get_blob_streaming(&ctx, hash.clone()).await {
+            Ok(aspen_blob_handler::GetBlobOutcome::Stream { header, data }) => {
+                let header_bytes = postcard::to_stdvec(&header).context("failed to serialize blob stream header")?;
+                send.write_all(&header_bytes).await.context("failed to write blob stream header")?;
+                send.write_all(&data).await.context("failed to stream blob data")?;
+                send.finish().context("failed to finish blob stream")?;
+                true
+            }
+            Ok(
+                aspen_blob_handler::GetBlobOutcome::Inline(resp) | aspen_blob_handler::GetBlobOutcome::Response(resp),
+            ) => {
+                let response_bytes = postcard::to_stdvec(&resp).context("failed to serialize Client response")?;
+                send.write_all(&response_bytes).await.context("failed to write Client response")?;
+                send.finish().context("failed to finish send stream")?;
+                true
+            }
+            Err(err) => {
+                warn!(error = %err, "blob get failed");
+                let resp = ClientRpcResponse::error("INTERNAL_ERROR", sanitize_error_for_client(&err));
+                let response_bytes = postcard::to_stdvec(&resp).context("failed to serialize error response")?;
+                send.write_all(&response_bytes).await.context("failed to write error response")?;
+                send.finish().context("failed to finish send stream")?;
+                true
+            }
         }
+    } else {
+        false
     };
+    #[cfg(not(feature = "blob"))]
+    let handled = false;
 
-    // Send response
-    let response_bytes = postcard::to_stdvec(&response).context("failed to serialize Client response")?;
-    send.write_all(&response_bytes).await.context("failed to write Client response")?;
-    send.finish().context("failed to finish send stream")?;
+    if !handled {
+        // Normal dispatch path for all other requests (and GetBlob when blob feature is off)
+        let response = match registry.dispatch(request, &ctx, proxy_hops).await {
+            Ok(resp) => resp,
+            Err(err) => {
+                warn!(error = %err, "Client request processing failed");
+                ClientRpcResponse::error("INTERNAL_ERROR", sanitize_error_for_client(&err))
+            }
+        };
+
+        let response_bytes = postcard::to_stdvec(&response).context("failed to serialize Client response")?;
+        send.write_all(&response_bytes).await.context("failed to write Client response")?;
+        send.finish().context("failed to finish send stream")?;
+    }
 
     // Increment cluster-wide request counter (best-effort, non-blocking)
     let kv_store = ctx.kv_store.clone();

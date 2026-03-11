@@ -15,6 +15,7 @@ use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;
+pub use crud::GetBlobOutcome;
 use crud::*;
 use download::*;
 use protection::*;
@@ -55,7 +56,14 @@ impl RequestHandler for BlobHandler {
         match request {
             // CRUD operations
             ClientRpcRequest::AddBlob { data, tag } => handle_add_blob(ctx, data, tag).await,
-            ClientRpcRequest::GetBlob { hash } => handle_get_blob(ctx, hash).await,
+            ClientRpcRequest::GetBlob { hash } => {
+                // Convert GetBlobOutcome to ClientRpcResponse for the generic dispatch path.
+                // The streaming path is handled separately by handle_get_blob_streaming().
+                match handle_get_blob(ctx, hash).await? {
+                    GetBlobOutcome::Response(r) | GetBlobOutcome::Inline(r) => Ok(r),
+                    GetBlobOutcome::Stream { header, .. } => Ok(header),
+                }
+            }
             ClientRpcRequest::HasBlob { hash } => handle_has_blob(ctx, hash).await,
             ClientRpcRequest::GetBlobTicket { hash } => handle_get_blob_ticket(ctx, hash).await,
             ClientRpcRequest::ListBlobs {
@@ -97,6 +105,19 @@ impl RequestHandler for BlobHandler {
 
     fn name(&self) -> &'static str {
         "BlobHandler"
+    }
+}
+
+impl BlobHandler {
+    /// Handle GetBlob with streaming support for large blobs.
+    ///
+    /// Returns `GetBlobOutcome` which the caller uses to decide whether
+    /// to stream raw bytes after the header response.
+    pub async fn handle_get_blob_streaming(
+        ctx: &ClientProtocolContext,
+        hash: String,
+    ) -> anyhow::Result<GetBlobOutcome> {
+        handle_get_blob(ctx, hash).await
     }
 }
 

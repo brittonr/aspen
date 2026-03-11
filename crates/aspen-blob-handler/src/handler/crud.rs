@@ -80,45 +80,92 @@ pub(crate) async fn handle_add_blob(
     }
 }
 
-pub(crate) async fn handle_get_blob(ctx: &ClientProtocolContext, hash: String) -> anyhow::Result<ClientRpcResponse> {
+/// Threshold for inline blob responses. Blobs larger than this are streamed.
+/// Must be well below `MAX_CLIENT_MESSAGE_SIZE` (16 MB) to leave room for
+/// postcard framing and other response fields.
+/// Threshold for inline blob responses (4 MB).
+pub const BLOB_INLINE_THRESHOLD: u64 = 4 * 1024 * 1024;
+
+/// Result of a blob get operation, separating metadata from potentially large data.
+pub enum GetBlobOutcome {
+    /// Blob not found or error — return as normal RPC response.
+    Response(ClientRpcResponse),
+    /// Blob found and small enough to inline.
+    Inline(ClientRpcResponse),
+    /// Blob found but too large to inline — stream after header.
+    Stream {
+        /// Header response to send first (is_streaming=true, size_bytes set).
+        header: ClientRpcResponse,
+        /// Raw blob bytes to write after the header.
+        data: Vec<u8>,
+    },
+}
+
+pub(crate) async fn handle_get_blob(ctx: &ClientProtocolContext, hash: String) -> anyhow::Result<GetBlobOutcome> {
     let Some(ref blob_store) = ctx.blob_store else {
-        return Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+        return Ok(GetBlobOutcome::Response(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
             was_found: false,
             data: None,
             error: Some("blob store not enabled".to_string()),
-        }));
+            is_streaming: false,
+            size_bytes: 0,
+        })));
     };
 
-    // Parse hash from string
     let hash = match hash.parse::<Hash>() {
         Ok(h) => h,
         Err(_) => {
-            return Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+            return Ok(GetBlobOutcome::Response(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
                 was_found: false,
                 data: None,
                 error: Some("invalid hash".to_string()),
-            }));
+                is_streaming: false,
+                size_bytes: 0,
+            })));
         }
     };
 
     match blob_store.get_bytes(&hash).await {
-        Ok(Some(data)) => Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
-            was_found: true,
-            data: Some(data.to_vec()),
-            error: None,
-        })),
-        Ok(None) => Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+        Ok(Some(data)) => {
+            let size = data.len() as u64;
+            if size <= BLOB_INLINE_THRESHOLD {
+                Ok(GetBlobOutcome::Inline(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+                    was_found: true,
+                    data: Some(data.to_vec()),
+                    error: None,
+                    is_streaming: false,
+                    size_bytes: size,
+                })))
+            } else {
+                let header = ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+                    was_found: true,
+                    data: None,
+                    error: None,
+                    is_streaming: true,
+                    size_bytes: size,
+                });
+                Ok(GetBlobOutcome::Stream {
+                    header,
+                    data: data.to_vec(),
+                })
+            }
+        }
+        Ok(None) => Ok(GetBlobOutcome::Response(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
             was_found: false,
             data: None,
             error: None,
-        })),
+            is_streaming: false,
+            size_bytes: 0,
+        }))),
         Err(e) => {
             warn!(error = %e, "blob get failed");
-            Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+            Ok(GetBlobOutcome::Response(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
                 was_found: false,
                 data: None,
                 error: Some(sanitize_blob_error(&e)),
-            }))
+                is_streaming: false,
+                size_bytes: 0,
+            })))
         }
     }
 }

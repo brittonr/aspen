@@ -13,7 +13,8 @@
 //! - RunBlobRepairCycle: Cluster-wide blob repair
 
 mod executor;
-pub(crate) mod handler;
+/// Blob RPC request handlers.
+pub mod handler;
 
 use std::sync::Arc;
 
@@ -23,6 +24,8 @@ pub use aspen_rpc_core::HandlerFactory;
 pub use aspen_rpc_core::RequestHandler;
 pub use aspen_rpc_core::ServiceHandler;
 pub use executor::BlobServiceExecutor;
+pub use handler::BlobHandler;
+pub use handler::GetBlobOutcome;
 
 // =============================================================================
 // Handler Factory (Plugin Registration)
