@@ -57,8 +57,11 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         let job_name_to_info = self.collect_job_info(&all_job_ids, run).await;
 
         // Determine new pipeline status from workflow state
-        let mut new_status =
-            determine_status_from_workflow(&workflow_state.state, workflow_state.failed_jobs.is_empty());
+        let mut new_status = determine_status_from_workflow(
+            &workflow_state.state,
+            workflow_state.failed_jobs.is_empty(),
+            run.has_pending_deploys,
+        );
 
         // If workflow state doesn't show completion, check actual job statuses
         if new_status.is_none() && !workflow_state.active_jobs.is_empty() {
@@ -234,9 +237,22 @@ fn aspen_job_status_to_pipeline(status: AspenJobStatus) -> PipelineStatus {
 }
 
 /// Determine pipeline status from workflow state fields.
-fn determine_status_from_workflow(state_name: &str, no_failed_jobs: bool) -> Option<PipelineStatus> {
+///
+/// When `has_pending_deploys` is true, reaching "done" does NOT produce
+/// `Success` — deploy stages still need to run. The deploy monitor will
+/// set the final status after deploys complete.
+fn determine_status_from_workflow(
+    state_name: &str,
+    no_failed_jobs: bool,
+    has_pending_deploys: bool,
+) -> Option<PipelineStatus> {
     if state_name == "done" {
-        Some(PipelineStatus::Success)
+        if has_pending_deploys {
+            // Workflow finished but deploys are pending — keep running.
+            None
+        } else {
+            Some(PipelineStatus::Success)
+        }
     } else if state_name == "failed" {
         Some(PipelineStatus::Failed)
     } else if !no_failed_jobs {

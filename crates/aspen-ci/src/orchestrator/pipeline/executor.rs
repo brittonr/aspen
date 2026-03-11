@@ -41,7 +41,19 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         config.stages.iter().any(|s| s.jobs.iter().any(|j| j.job_type == JobType::Deploy))
     }
 
+    /// Check if a stage contains only deploy jobs.
+    ///
+    /// Deploy-only stages are excluded from the workflow definition and
+    /// run in-process via `DeployExecutor` after the preceding stage.
+    pub fn is_deploy_only_stage(stage: &crate::config::types::StageConfig) -> bool {
+        !stage.jobs.is_empty() && stage.jobs.iter().all(|j| j.job_type == JobType::Deploy)
+    }
+
     /// Build a workflow definition from pipeline configuration.
+    ///
+    /// Deploy-only stages are excluded from the workflow — they execute
+    /// in-process on the leader via `DeployExecutor` after the preceding
+    /// stage completes. Transitions are adjusted to skip over them.
     pub(crate) fn build_workflow_definition(
         &self,
         config: &PipelineConfig,
@@ -50,22 +62,26 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         let mut steps = HashMap::new();
         let mut terminal_states = std::collections::HashSet::new();
 
-        // Get stages in topological order
+        // Get stages in topological order, filtering out deploy-only stages.
+        // Deploy stages are handled by the deploy monitor, not the workflow.
         let ordered_stages = config.stages_in_order();
+        let workflow_stages: Vec<&crate::config::types::StageConfig> =
+            ordered_stages.iter().filter(|s| !Self::is_deploy_only_stage(s)).copied().collect();
 
-        // Build workflow steps from stages
-        for (idx, stage) in ordered_stages.iter().enumerate() {
+        // Build workflow steps from non-deploy stages
+        for (idx, stage) in workflow_stages.iter().enumerate() {
             let step_name = format!("stage_{}", stage.name);
 
-            // Convert jobs to JobSpecs
+            // Convert jobs to JobSpecs (deploy jobs in mixed stages are skipped)
             let job_specs: Vec<JobSpec> = stage
                 .jobs
                 .iter()
+                .filter(|job| job.job_type != JobType::Deploy)
                 .map(|job| self.job_config_to_spec(job, context, &config.env))
                 .collect::<Result<Vec<_>>>()?;
 
-            // Determine transitions
-            let transitions = build_stage_transitions(stage, ordered_stages.get(idx + 1).copied());
+            // Determine transitions (using filtered stage list)
+            let transitions = build_stage_transitions(stage, workflow_stages.get(idx + 1).copied());
 
             let timeout_secs = stage.jobs.iter().map(|j| j.timeout_secs).max().unwrap_or(DEFAULT_STEP_TIMEOUT_SECS);
 
@@ -100,9 +116,9 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         });
         terminal_states.insert("failed".to_string());
 
-        // Initial state is first stage
+        // Initial state is first non-deploy stage
         let initial_state =
-            ordered_stages.first().map(|s| format!("stage_{}", s.name)).unwrap_or_else(|| "done".to_string());
+            workflow_stages.first().map(|s| format!("stage_{}", s.name)).unwrap_or_else(|| "done".to_string());
 
         let timeout = Duration::from_secs(config.timeout_secs);
 

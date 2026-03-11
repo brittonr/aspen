@@ -557,6 +557,7 @@ mod tests {
             }],
             workflow_id: None,
             error_message: None,
+            has_pending_deploys: false,
         };
 
         assert_eq!(find_job_id_by_name(&run, "build-node"), Some("job-123".to_string()));

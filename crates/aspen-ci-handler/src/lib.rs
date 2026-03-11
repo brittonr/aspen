@@ -83,6 +83,8 @@ impl HandlerFactory for CiHandlerFactory {
                 #[cfg(feature = "blob")]
                 ctx.blob_store.clone(),
                 ctx.kv_store.clone(),
+                ctx.controller.clone(),
+                ctx.node_id,
             ));
             Some(Arc::new(ServiceHandler::new(executor)))
         } else {

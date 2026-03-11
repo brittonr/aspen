@@ -240,6 +240,12 @@ pub struct PipelineRun {
     /// This field stores actionable error context for debugging.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_message: Option<String>,
+    /// Whether this pipeline has deploy stages that execute after the workflow
+    /// completes. When true, `sync_run_status` will keep the pipeline Running
+    /// even after the workflow reaches "done", allowing the deploy monitor to
+    /// run deploy stages and set the final status.
+    #[serde(default)]
+    pub has_pending_deploys: bool,
 }
 
 impl PipelineRun {
@@ -260,6 +266,7 @@ impl PipelineRun {
             stages: Vec::new(),
             workflow_id: None,
             error_message: None,
+            has_pending_deploys: false,
         }
     }
 }
@@ -321,6 +328,13 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         self.blob_store.clone()
     }
 
+    /// Get the KV store.
+    ///
+    /// Used by the deploy executor to resolve build artifacts from job results.
+    pub fn kv_store(&self) -> Arc<S> {
+        self.kv_store.clone()
+    }
+
     /// Initialize the orchestrator by setting up job completion callbacks.
     ///
     /// This must be called before executing pipelines to enable stage transitions.
@@ -380,7 +394,12 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         // Initialize stage statuses
         init_stage_statuses(&mut run, &pipeline_config);
 
-        // Convert to workflow definition
+        // Mark if pipeline has deploy stages — sync_run_status will keep the
+        // pipeline Running after the workflow finishes so the deploy monitor
+        // can execute deploy stages before setting the final status.
+        run.has_pending_deploys = Self::has_deploy_jobs(&pipeline_config);
+
+        // Convert to workflow definition (deploy-only stages are excluded)
         let workflow_def = self.build_workflow_definition(&pipeline_config, &context)?;
 
         // Build initial workflow data
@@ -390,6 +409,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             run_id = %run.id,
             pipeline = %pipeline_config.name,
             repo_id = %context.repo_id.to_hex(),
+            has_deploy_stages = run.has_pending_deploys,
             "Starting pipeline execution"
         );
 
@@ -829,7 +849,10 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         // Initialize stage statuses
         init_stage_statuses(&mut run, &pipeline_config);
 
-        // Convert to workflow definition
+        // Mark if pipeline has deploy stages
+        run.has_pending_deploys = Self::has_deploy_jobs(&pipeline_config);
+
+        // Convert to workflow definition (deploy-only stages are excluded)
         let workflow_def = self.build_workflow_definition(&pipeline_config, &run.context)?;
 
         // Build workflow data
@@ -839,6 +862,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             run_id = %run.id,
             pipeline = %pipeline_config.name,
             repo_id = %run.context.repo_id.to_hex(),
+            has_deploy_stages = run.has_pending_deploys,
             "Starting pipeline execution for existing run"
         );
 
@@ -873,6 +897,64 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     /// Get the count of active runs.
     pub async fn active_run_count(&self) -> usize {
         self.active_runs.read().await.len()
+    }
+
+    /// Mark deploy stages as complete and set the final pipeline status.
+    ///
+    /// Called by the deploy monitor after all deploy stages have executed.
+    /// Clears `has_pending_deploys` so that `sync_run_status` will no longer
+    /// suppress workflow completion, then updates the pipeline to its final
+    /// status.
+    pub async fn complete_deploy_stages(&self, run_id: &str, success: bool) {
+        let status = if success {
+            PipelineStatus::Success
+        } else {
+            PipelineStatus::Failed
+        };
+
+        // Clear the pending deploys flag and set final status
+        {
+            let mut runs = self.active_runs.write().await;
+            if let Some(run) = runs.get_mut(run_id) {
+                run.has_pending_deploys = false;
+            }
+        }
+
+        self.complete_run(run_id, status).await;
+    }
+
+    /// Update a pipeline run in-place and persist the changes.
+    ///
+    /// Used by the deploy monitor to update stage and job statuses during
+    /// deploy execution. The caller modifies the run directly and then
+    /// calls this method to persist the changes to both in-memory cache
+    /// and KV store.
+    pub async fn persist_run_update(&self, run: &PipelineRun) {
+        // Update in-memory cache
+        self.active_runs.write().await.insert(run.id.clone(), run.clone());
+
+        // Persist to KV store
+        if let Err(e) = self.persist_run(run).await {
+            warn!(run_id = %run.id, error = %e, "failed to persist run update");
+        }
+    }
+
+    /// Check whether the workflow portion of a pipeline has finished.
+    ///
+    /// Returns `Some(true)` if the workflow reached "done" (all non-deploy
+    /// stages succeeded), `Some(false)` if it failed, or `None` if still
+    /// running.
+    pub async fn is_workflow_done(&self, run: &PipelineRun) -> Option<bool> {
+        let workflow_id = run.workflow_id.as_ref()?;
+        let workflow_state = self.workflow_manager.get_workflow_state(workflow_id).await.ok()?;
+
+        if workflow_state.state == "done" {
+            Some(true)
+        } else if workflow_state.state == "failed" || !workflow_state.failed_jobs.is_empty() {
+            Some(false)
+        } else {
+            None
+        }
     }
 }
 

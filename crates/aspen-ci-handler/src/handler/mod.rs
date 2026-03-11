@@ -4,6 +4,7 @@
 //! through the aspen-ci orchestrator and trigger service.
 
 pub mod artifacts;
+pub mod deploy;
 pub mod helpers;
 pub mod logs;
 pub mod pipeline;
