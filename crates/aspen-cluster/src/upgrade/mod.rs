@@ -14,10 +14,10 @@
 //! - Preserved rollback path (Nix rollback or `.bak` file)
 
 mod drain;
-mod executor;
+pub mod executor;
 mod restart;
-mod rollback;
-mod status;
+pub mod rollback;
+pub mod status;
 mod types;
 
 pub use executor::NodeUpgradeExecutor;

@@ -17,7 +17,7 @@
 //! - GetDocsTicket: Generate a docs sync ticket
 //! - GetTopology: Get cluster topology information
 
-mod handler;
+pub mod handler;
 
 use std::sync::Arc;
 

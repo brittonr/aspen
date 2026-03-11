@@ -183,7 +183,7 @@ struct PlaceholderNodeRpcClient {
 
 #[async_trait::async_trait]
 impl NodeRpcClient for PlaceholderNodeRpcClient {
-    async fn send_upgrade(&self, node_id: u64, artifact_ref: &str) -> Result<(), RpcError> {
+    async fn send_upgrade(&self, node_id: u64, _deploy_id: &str, artifact_ref: &str) -> Result<(), RpcError> {
         info!(
             source_node = self.node_id,
             target_node = node_id,
@@ -193,7 +193,7 @@ impl NodeRpcClient for PlaceholderNodeRpcClient {
         Ok(())
     }
 
-    async fn send_rollback(&self, node_id: u64) -> Result<(), RpcError> {
+    async fn send_rollback(&self, node_id: u64, _deploy_id: &str) -> Result<(), RpcError> {
         info!(source_node = self.node_id, target_node = node_id, "sending NodeRollback RPC (CI deploy dispatcher)");
         Ok(())
     }

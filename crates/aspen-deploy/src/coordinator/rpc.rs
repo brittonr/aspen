@@ -1,7 +1,8 @@
 //! NodeRpcClient trait for sending upgrade/rollback/health RPCs to nodes.
 //!
 //! The coordinator uses this trait so it's testable with mock implementations.
-//! The real implementation will use iroh QUIC in the handler layer.
+//! The real implementation sends RPCs via iroh QUIC (CLIENT_ALPN) in the
+//! handler layer.
 
 use std::fmt;
 
@@ -14,14 +15,21 @@ use std::fmt;
 pub trait NodeRpcClient: Send + Sync {
     /// Send a NodeUpgrade RPC to the target node.
     ///
+    /// The `deploy_id` identifies the deployment this upgrade belongs to.
     /// The `artifact_ref` is either a Nix store path or blob hash string.
     /// Returns Ok(()) if the node accepted the upgrade.
-    async fn send_upgrade(&self, node_id: u64, artifact_ref: &str) -> std::result::Result<(), RpcError>;
+    async fn send_upgrade(
+        &self,
+        node_id: u64,
+        deploy_id: &str,
+        artifact_ref: &str,
+    ) -> std::result::Result<(), RpcError>;
 
     /// Send a NodeRollback RPC to the target node.
     ///
+    /// The `deploy_id` identifies the deployment being rolled back.
     /// Returns Ok(()) if the node accepted the rollback.
-    async fn send_rollback(&self, node_id: u64) -> std::result::Result<(), RpcError>;
+    async fn send_rollback(&self, node_id: u64, deploy_id: &str) -> std::result::Result<(), RpcError>;
 
     /// Check if a node is healthy (passed all health checks).
     ///

@@ -6,7 +6,7 @@
 
 mod client_auth;
 #[cfg(feature = "deploy")]
-mod deploy;
+pub mod deploy;
 mod init;
 mod membership;
 mod snapshot;

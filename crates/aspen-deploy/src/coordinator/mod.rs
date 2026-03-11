@@ -212,7 +212,7 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient> DeploymentCoordinator<K, R> {
 
         // Send NodeUpgrade RPC
         let artifact_ref = record.artifact.display_ref().to_string();
-        match self.rpc_client.send_upgrade(target_node_id, &artifact_ref).await {
+        match self.rpc_client.send_upgrade(target_node_id, &record.deploy_id, &artifact_ref).await {
             Ok(()) => {
                 self.update_node_status(&mut record, target_node_id, NodeDeployStatus::Upgrading).await?;
             }
@@ -415,7 +415,7 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient> DeploymentCoordinator<K, R> {
 
         let mut has_rollback_failure = false;
         for nid in &upgraded_nodes {
-            match self.rpc_client.send_rollback(*nid).await {
+            match self.rpc_client.send_rollback(*nid, &record.deploy_id).await {
                 Ok(()) => {
                     self.update_node_status(&mut record, *nid, NodeDeployStatus::Pending).await?;
                     info!(node_id = nid, "node rollback complete");

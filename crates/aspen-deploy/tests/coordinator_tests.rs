@@ -77,7 +77,12 @@ impl MockRpcClient {
 
 #[async_trait::async_trait]
 impl NodeRpcClient for MockRpcClient {
-    async fn send_upgrade(&self, node_id: u64, artifact_ref: &str) -> std::result::Result<(), RpcError> {
+    async fn send_upgrade(
+        &self,
+        node_id: u64,
+        _deploy_id: &str,
+        artifact_ref: &str,
+    ) -> std::result::Result<(), RpcError> {
         self.upgrade_calls.lock().await.push((node_id, artifact_ref.to_string()));
         let results = self.upgrade_results.lock().await;
         match results.get(&node_id) {
@@ -86,7 +91,7 @@ impl NodeRpcClient for MockRpcClient {
         }
     }
 
-    async fn send_rollback(&self, node_id: u64) -> std::result::Result<(), RpcError> {
+    async fn send_rollback(&self, node_id: u64, _deploy_id: &str) -> std::result::Result<(), RpcError> {
         self.rollback_calls.lock().await.push(node_id);
         let results = self.rollback_results.lock().await;
         match results.get(&node_id) {
