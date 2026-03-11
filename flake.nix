@@ -1814,7 +1814,7 @@
                 fullPluginsCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net";
+                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net";
                   doCheck = false;
                 }
               );
@@ -2525,6 +2525,20 @@
               ci-dogfood-workspace-test = import ./nix/tests/ci-dogfood-workspace.nix {
                 inherit pkgs kvPluginWasm forgePluginWasm;
                 aspenNodePackage = bins.full-aspen-node-plugins-snix;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+                nixpkgsFlake = nixpkgs;
+              };
+
+              # Full workspace build test: push ALL 80 Aspen crates to Forge,
+              # CI auto-triggers, NixBuildWorker compiles the entire aspen-node
+              # binary (343K lines, 658 packages). The ultimate self-hosting proof.
+              # Needs: 8GB RAM, 40GB disk, ~15-30 min build time inside the VM.
+              # Build: nix build .#checks.x86_64-linux.ci-dogfood-full-workspace-test --impure --option sandbox false
+              ci-dogfood-full-workspace-test = import ./nix/tests/ci-dogfood-full-workspace.nix {
+                inherit pkgs fullSrc fullCargoVendorDir kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-e2e;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
                 gitRemoteAspenPackage = bins.full-git-remote-aspen;

@@ -69,6 +69,13 @@ pub struct CloudHypervisorPayload {
     /// If not set, will attempt to extract from args.
     #[serde(default)]
     pub flake_attr: Option<String>,
+
+    /// Pipeline run ID for CI log streaming.
+    /// When set (along with a KV store on the worker), log chunks are written
+    /// to `_ci:logs:{run_id}:{job_id}:{chunk}` for real-time streaming via
+    /// `ci logs --follow`. Compatible with `LocalExecutorPayload::run_id`.
+    #[serde(default)]
+    pub run_id: Option<String>,
 }
 
 fn default_working_dir() -> String {
@@ -154,6 +161,7 @@ mod tests {
             source_hash: None,
             checkout_dir: None,
             flake_attr: None,
+            run_id: None,
         };
         assert!(payload.validate().is_ok());
 

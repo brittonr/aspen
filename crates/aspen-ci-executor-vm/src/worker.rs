@@ -279,6 +279,7 @@ mod tests {
             source_hash: None,
             checkout_dir: None,
             flake_attr: None,
+            run_id: None,
         };
         assert!(payload.validate().is_ok());
 
@@ -437,6 +438,7 @@ mod tests {
             source_hash: None,
             checkout_dir: None,
             flake_attr: None,
+            run_id: None,
         };
 
         assert_eq!(extract_flake_attr(&payload), ".#packages.x86_64-linux.default");
@@ -456,6 +458,7 @@ mod tests {
             source_hash: None,
             checkout_dir: None,
             flake_attr: Some(".#explicit".to_string()),
+            run_id: None,
         };
 
         assert_eq!(extract_flake_attr(&payload), ".#explicit");
@@ -475,6 +478,7 @@ mod tests {
             source_hash: None,
             checkout_dir: None,
             flake_attr: None,
+            run_id: None,
         };
 
         assert_eq!(extract_flake_attr(&payload), ".#default");
@@ -494,6 +498,7 @@ mod tests {
             source_hash: None,
             checkout_dir: None,
             flake_attr: Some("packages.x86_64-linux.default".to_string()),
+            run_id: None,
         };
 
         // Should be normalized to include .# prefix

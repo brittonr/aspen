@@ -338,6 +338,11 @@ fn build_vm_payload(
         source_hash: context.source_hash.clone(), // Download checkout from blob store
         checkout_dir: None,                       // VMs can't access host paths
         flake_attr: job.flake_attr.clone(),       // For nix command prefetching
+        run_id: if context.run_id.is_empty() {
+            None
+        } else {
+            Some(context.run_id.clone())
+        },
     };
 
     serde_json::to_value(&vm_payload).map_err(|e| CiError::InvalidConfig {
