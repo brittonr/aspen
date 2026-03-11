@@ -427,6 +427,7 @@ print(' ')
         cleanup_stream
         stream_pid=""
         # Print final status summary
+        trap - EXIT  # clear trap before returning (stream_pid goes out of scope)
         echo ""
         print_pipeline_summary "$status_out"
         ok "Pipeline completed successfully! 🎉"
@@ -436,6 +437,7 @@ print(' ')
         cleanup_stream
         stream_pid=""
         echo ""
+        trap - EXIT  # clear trap before returning (stream_pid goes out of scope)
         print_pipeline_summary "$status_out"
         err "Pipeline $pipeline_status"
         return 1
