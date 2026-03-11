@@ -122,6 +122,12 @@ filter = "test(/wasm_plugin/)"
 retries = 1
 slow-timeout = { period = "120s", terminate-after = 1 }
 
+# Deploy coordinator health timeout test: sleeps 2s waiting for health poll
+[[profile.default.overrides]]
+filter = "test(test_run_deployment_health_timeout)"
+retries = 1
+slow-timeout = { period = "30s", terminate-after = 1 }
+
 # ============================================================================
 # Network Profile - For tests requiring real network access
 # ============================================================================

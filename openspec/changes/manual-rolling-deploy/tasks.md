@@ -61,16 +61,16 @@
 
 ## 7. CLI Commands
 
-- [ ] 7.1 Add `cluster deploy <artifact>` command accepting either a Nix store path or blob hash, with `--strategy rolling` (default), `--max-concurrent` (default 1), `--health-timeout` (default 120) flags
-- [ ] 7.2 Add `cluster deploy-status` command: display deployment state as a table with per-node status, elapsed time, artifact reference
-- [ ] 7.3 Add `cluster rollback` command: trigger rollback on current/last deployment
-- [ ] 7.4 Write CLI parse tests for all three new subcommands
-- [ ] 7.5 Implement progress polling in `cluster deploy`: after initiating, poll status every 5s and print per-node progress until completion or failure
+- [x] 7.1 Add `cluster deploy <artifact>` command accepting either a Nix store path or blob hash, with `--strategy rolling` (default), `--max-concurrent` (default 1), `--health-timeout` (default 120) flags
+- [x] 7.2 Add `cluster deploy-status` command: display deployment state as a table with per-node status, elapsed time, artifact reference
+- [x] 7.3 Add `cluster rollback` command: trigger rollback on current/last deployment
+- [x] 7.4 Write CLI parse tests for all three new subcommands
+- [x] 7.5 Implement progress polling in `cluster deploy`: after initiating, poll status every 5s and print per-node progress until completion or failure
 
 ## 8. Testing
 
-- [ ] 8.1 Unit tests for quorum safety verified functions (edge cases: 1, 2, 3, 5, 7 nodes; all voters upgrading simultaneously)
-- [ ] 8.2 Unit tests for deployment state machine (full lifecycle, concurrent rejection, failover recovery)
-- [ ] 8.3 Unit tests for node drain (clean drain, timeout drain, cancelled operations count)
-- [ ] 8.4 Integration test with in-memory KV: start deployment, simulate node health responses, verify state transitions
-- [ ] 8.5 Add `deploy` to nextest profiles (quick profile may want to skip long-running deploy simulation tests)
+- [x] 8.1 Unit tests for quorum safety verified functions (edge cases: 1, 2, 3, 5, 7 nodes; all voters upgrading simultaneously)
+- [x] 8.2 Unit tests for deployment state machine (full lifecycle, concurrent rejection, failover recovery)
+- [x] 8.3 Unit tests for node drain (clean drain, timeout drain, cancelled operations count)
+- [x] 8.4 Integration test with in-memory KV: start deployment, simulate node health responses, verify state transitions
+- [x] 8.5 Add `deploy` to nextest profiles (quick profile may want to skip long-running deploy simulation tests)

@@ -2898,3 +2898,137 @@ impl Outputable for PatchDetailOutput {
         )
     }
 }
+
+// =============================================================================
+// Deployment Output Types
+// =============================================================================
+
+/// Output for cluster deploy initiation.
+pub struct DeployInitOutput {
+    pub is_accepted: bool,
+    pub deploy_id: Option<String>,
+    pub error: Option<String>,
+}
+
+impl Outputable for DeployInitOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "is_accepted": self.is_accepted,
+            "deploy_id": self.deploy_id,
+            "error": self.error,
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.is_accepted {
+            match &self.deploy_id {
+                Some(id) => format!("Deployment initiated: {}", id),
+                None => "Deployment initiated".to_string(),
+            }
+        } else {
+            format!("Deployment rejected: {}", self.error.as_deref().unwrap_or("unknown error"))
+        }
+    }
+}
+
+/// Per-node deployment status entry for display.
+pub struct DeployNodeStatusEntry {
+    pub node_id: u64,
+    pub status: String,
+    pub error: Option<String>,
+}
+
+/// Output for cluster deploy-status.
+pub struct DeployStatusOutput {
+    pub is_found: bool,
+    pub deploy_id: Option<String>,
+    pub status: Option<String>,
+    pub artifact: Option<String>,
+    pub nodes: Vec<DeployNodeStatusEntry>,
+    pub started_at_ms: Option<u64>,
+    pub elapsed_ms: Option<u64>,
+    pub error: Option<String>,
+}
+
+impl Outputable for DeployStatusOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "is_found": self.is_found,
+            "deploy_id": self.deploy_id,
+            "status": self.status,
+            "artifact": self.artifact,
+            "nodes": self.nodes.iter().map(|n| {
+                serde_json::json!({
+                    "node_id": n.node_id,
+                    "status": n.status,
+                    "error": n.error,
+                })
+            }).collect::<Vec<_>>(),
+            "started_at_ms": self.started_at_ms,
+            "elapsed_ms": self.elapsed_ms,
+            "error": self.error,
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if !self.is_found {
+            return "No deployment found".to_string();
+        }
+
+        let mut lines = Vec::new();
+
+        lines.push(format!("Deployment Status: {}", self.status.as_deref().unwrap_or("unknown")));
+        if let Some(id) = &self.deploy_id {
+            lines.push(format!("Deploy ID:  {}", id));
+        }
+        if let Some(artifact) = &self.artifact {
+            lines.push(format!("Artifact:   {}", artifact));
+        }
+        if let Some(elapsed) = self.elapsed_ms {
+            let secs = elapsed / 1000;
+            lines.push(format!("Elapsed:    {}s", secs));
+        }
+        if let Some(err) = &self.error {
+            lines.push(format!("Error:      {}", err));
+        }
+
+        if !self.nodes.is_empty() {
+            lines.push(String::new());
+            lines.push(format!("{:<10} {:<14} {}", "Node ID", "Status", "Error"));
+            lines.push(format!("{:<10} {:<14} {}", "-------", "-----------", "-----"));
+            for node in &self.nodes {
+                lines.push(format!("{:<10} {:<14} {}", node.node_id, node.status, node.error.as_deref().unwrap_or("")));
+            }
+        }
+
+        lines.join("\n")
+    }
+}
+
+/// Output for cluster rollback.
+pub struct RollbackOutput {
+    pub is_accepted: bool,
+    pub deploy_id: Option<String>,
+    pub error: Option<String>,
+}
+
+impl Outputable for RollbackOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "is_accepted": self.is_accepted,
+            "deploy_id": self.deploy_id,
+            "error": self.error,
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.is_accepted {
+            match &self.deploy_id {
+                Some(id) => format!("Rollback initiated for deployment: {}", id),
+                None => "Rollback initiated".to_string(),
+            }
+        } else {
+            format!("Rollback rejected: {}", self.error.as_deref().unwrap_or("unknown error"))
+        }
+    }
+}

@@ -1,7 +1,7 @@
 //! Cluster management commands.
 //!
 //! Commands for cluster initialization, status, health checks,
-//! membership management, and maintenance operations.
+//! membership management, deployment, and maintenance operations.
 
 use anyhow::Result;
 use aspen_client_api::ClientRpcRequest;
@@ -11,9 +11,13 @@ use clap::Subcommand;
 
 use crate::client::AspenClient;
 use crate::output::ClusterStateOutput;
+use crate::output::DeployInitOutput;
+use crate::output::DeployNodeStatusEntry;
+use crate::output::DeployStatusOutput;
 use crate::output::HealthOutput;
 use crate::output::NodeInfo;
 use crate::output::RaftMetricsOutput;
+use crate::output::RollbackOutput;
 use crate::output::print_output;
 use crate::output::print_success;
 
@@ -52,6 +56,15 @@ pub enum ClusterCommand {
 
     /// Get cluster connection ticket.
     Ticket,
+
+    /// Start a rolling deployment of a new binary.
+    Deploy(DeployArgs),
+
+    /// Show deployment status with per-node breakdown.
+    DeployStatus,
+
+    /// Roll back the current or last deployment.
+    Rollback,
 }
 
 #[derive(Args)]
@@ -87,6 +100,24 @@ pub struct ChangeMembershipArgs {
     pub members: Vec<u64>,
 }
 
+#[derive(Args)]
+pub struct DeployArgs {
+    /// Artifact to deploy: a Nix store path or blob hash.
+    pub artifact: String,
+
+    /// Deployment strategy.
+    #[arg(long, default_value = "rolling")]
+    pub strategy: String,
+
+    /// Maximum nodes to upgrade concurrently.
+    #[arg(long, default_value_t = 1)]
+    pub max_concurrent: u32,
+
+    /// Seconds to wait for a node to become healthy after upgrade.
+    #[arg(long, default_value_t = 120)]
+    pub health_timeout: u64,
+}
+
 impl ClusterCommand {
     /// Execute the cluster command.
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
@@ -102,6 +133,9 @@ impl ClusterCommand {
             ClusterCommand::Snapshot => trigger_snapshot(client, json).await,
             ClusterCommand::CheckpointWal => checkpoint_wal(client, json).await,
             ClusterCommand::Ticket => get_ticket(client, json).await,
+            ClusterCommand::Deploy(args) => deploy(client, args, json).await,
+            ClusterCommand::DeployStatus => deploy_status(client, json).await,
+            ClusterCommand::Rollback => rollback(client, json).await,
         }
     }
 }
@@ -369,5 +403,290 @@ async fn get_ticket(client: &AspenClient, json: bool) -> Result<()> {
             anyhow::bail!("{}: {}", e.code, e.message)
         }
         _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn deploy(client: &AspenClient, args: DeployArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::ClusterDeploy {
+            artifact: args.artifact,
+            strategy: args.strategy,
+            max_concurrent: args.max_concurrent,
+            health_timeout_secs: args.health_timeout,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::ClusterDeployResult(result) => {
+            let output = DeployInitOutput {
+                is_accepted: result.is_accepted,
+                deploy_id: result.deploy_id.clone(),
+                error: result.error.clone(),
+            };
+
+            if !result.is_accepted {
+                print_output(&output, json);
+                anyhow::bail!("deployment rejected: {}", result.error.as_deref().unwrap_or("unknown error"));
+            }
+
+            print_output(&output, json);
+
+            // Poll for progress until terminal state
+            let deploy_id = result.deploy_id;
+            poll_deploy_progress(client, deploy_id.as_deref(), json).await
+        }
+        ClientRpcResponse::Error(e) => {
+            anyhow::bail!("{}: {}", e.code, e.message)
+        }
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn deploy_status(client: &AspenClient, json: bool) -> Result<()> {
+    let response = client.send(ClientRpcRequest::ClusterDeployStatus).await?;
+
+    match response {
+        ClientRpcResponse::ClusterDeployStatusResult(result) => {
+            let output = DeployStatusOutput {
+                is_found: result.is_found,
+                deploy_id: result.deploy_id,
+                status: result.status,
+                artifact: result.artifact,
+                nodes: result
+                    .nodes
+                    .iter()
+                    .map(|n| DeployNodeStatusEntry {
+                        node_id: n.node_id,
+                        status: n.status.clone(),
+                        error: n.error.clone(),
+                    })
+                    .collect(),
+                started_at_ms: result.started_at_ms,
+                elapsed_ms: result.elapsed_ms,
+                error: result.error,
+            };
+            print_output(&output, json);
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => {
+            anyhow::bail!("{}: {}", e.code, e.message)
+        }
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn rollback(client: &AspenClient, json: bool) -> Result<()> {
+    let response = client.send(ClientRpcRequest::ClusterRollback).await?;
+
+    match response {
+        ClientRpcResponse::ClusterRollbackResult(result) => {
+            let output = RollbackOutput {
+                is_accepted: result.is_accepted,
+                deploy_id: result.deploy_id,
+                error: result.error.clone(),
+            };
+            print_output(&output, json);
+            if !result.is_accepted {
+                anyhow::bail!("rollback rejected: {}", result.error.as_deref().unwrap_or("unknown error"));
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => {
+            anyhow::bail!("{}: {}", e.code, e.message)
+        }
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+/// Poll deployment status until a terminal state is reached.
+async fn poll_deploy_progress(client: &AspenClient, deploy_id: Option<&str>, json: bool) -> Result<()> {
+    // Matches aspen_constants::DEPLOY_STATUS_POLL_INTERVAL_SECS
+    const POLL_INTERVAL_SECS: u64 = 5;
+
+    let interval = std::time::Duration::from_secs(POLL_INTERVAL_SECS);
+
+    loop {
+        tokio::time::sleep(interval).await;
+
+        let response = client.send(ClientRpcRequest::ClusterDeployStatus).await?;
+
+        match response {
+            ClientRpcResponse::ClusterDeployStatusResult(result) => {
+                if !result.is_found {
+                    // Deployment disappeared (completed and archived)
+                    if !json {
+                        println!("Deployment completed");
+                    }
+                    return Ok(());
+                }
+
+                // Only show progress for the deployment we initiated
+                if let (Some(expected), Some(actual)) = (deploy_id, &result.deploy_id) {
+                    if expected != actual {
+                        anyhow::bail!("deployment ID mismatch: expected {}, found {}", expected, actual);
+                    }
+                }
+
+                let status = result.status.as_deref().unwrap_or("unknown");
+                let elapsed_secs = result.elapsed_ms.unwrap_or(0) / 1000;
+
+                if !json {
+                    // Print per-node progress
+                    let node_summary: String = result
+                        .nodes
+                        .iter()
+                        .map(|n| format!("  node {}: {}", n.node_id, n.status))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    println!("[{}s] status: {}\n{}", elapsed_secs, status, node_summary);
+                }
+
+                // Check for terminal states
+                match status {
+                    "completed" => {
+                        if !json {
+                            println!("Deployment completed successfully");
+                        }
+                        return Ok(());
+                    }
+                    "failed" => {
+                        let err_msg = result.error.as_deref().unwrap_or("unknown failure");
+                        anyhow::bail!("deployment failed: {}", err_msg);
+                    }
+                    "rolled_back" => {
+                        anyhow::bail!("deployment was rolled back");
+                    }
+                    _ => {
+                        // Still in progress (pending, deploying, rolling_back)
+                    }
+                }
+            }
+            ClientRpcResponse::Error(e) => {
+                if e.code.contains("DEPLOY_UNAVAILABLE") {
+                    anyhow::bail!("deploy feature not enabled on server");
+                }
+                // Transient errors — keep polling
+                if !json {
+                    eprintln!("warning: status poll error: {}: {}", e.code, e.message);
+                }
+            }
+            _ => {
+                if !json {
+                    eprintln!("warning: unexpected response during status poll");
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::*;
+    // Use Cli::try_parse_from to validate clap parsing for deploy subcommands.
+    use crate::cli::Cli;
+
+    #[test]
+    fn test_cluster_deploy_parse_minimal() {
+        let result = Cli::try_parse_from(["aspen-cli", "cluster", "deploy", "/nix/store/abc123-aspen-node"]);
+        assert!(result.is_ok(), "parse failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_cluster_deploy_parse_all_flags() {
+        let result = Cli::try_parse_from([
+            "aspen-cli",
+            "cluster",
+            "deploy",
+            "/nix/store/abc123-aspen-node",
+            "--strategy",
+            "rolling",
+            "--max-concurrent",
+            "3",
+            "--health-timeout",
+            "60",
+        ]);
+        assert!(result.is_ok(), "parse failed: {:?}", result.err());
+
+        let cli = result.unwrap();
+        match cli.command {
+            crate::cli::Commands::Cluster(cmd) => match cmd {
+                ClusterCommand::Deploy(args) => {
+                    assert_eq!(args.artifact, "/nix/store/abc123-aspen-node");
+                    assert_eq!(args.strategy, "rolling");
+                    assert_eq!(args.max_concurrent, 3);
+                    assert_eq!(args.health_timeout, 60);
+                }
+                other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
+            },
+            other => panic!("expected Cluster, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+
+    #[test]
+    fn test_cluster_deploy_defaults() {
+        let result = Cli::try_parse_from(["aspen-cli", "cluster", "deploy", "blobhash123abc"]);
+        assert!(result.is_ok());
+
+        let cli = result.unwrap();
+        match cli.command {
+            crate::cli::Commands::Cluster(cmd) => match cmd {
+                ClusterCommand::Deploy(args) => {
+                    assert_eq!(args.strategy, "rolling");
+                    assert_eq!(args.max_concurrent, 1);
+                    assert_eq!(args.health_timeout, 120);
+                }
+                other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
+            },
+            other => panic!("expected Cluster, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+
+    #[test]
+    fn test_cluster_deploy_requires_artifact() {
+        let result = Cli::try_parse_from(["aspen-cli", "cluster", "deploy"]);
+        assert!(result.is_err(), "should fail without artifact");
+    }
+
+    #[test]
+    fn test_cluster_deploy_status_parse() {
+        let result = Cli::try_parse_from(["aspen-cli", "cluster", "deploy-status"]);
+        assert!(result.is_ok(), "parse failed: {:?}", result.err());
+
+        let cli = result.unwrap();
+        match cli.command {
+            crate::cli::Commands::Cluster(cmd) => {
+                assert!(matches!(cmd, ClusterCommand::DeployStatus));
+            }
+            other => panic!("expected Cluster, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+
+    #[test]
+    fn test_cluster_rollback_parse() {
+        let result = Cli::try_parse_from(["aspen-cli", "cluster", "rollback"]);
+        assert!(result.is_ok(), "parse failed: {:?}", result.err());
+
+        let cli = result.unwrap();
+        match cli.command {
+            crate::cli::Commands::Cluster(cmd) => {
+                assert!(matches!(cmd, ClusterCommand::Rollback));
+            }
+            other => panic!("expected Cluster, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+
+    #[test]
+    fn test_cluster_deploy_rejects_unknown_flag() {
+        let result = Cli::try_parse_from([
+            "aspen-cli",
+            "cluster",
+            "deploy",
+            "/nix/store/abc",
+            "--unknown-flag",
+            "val",
+        ]);
+        assert!(result.is_err());
     }
 }
