@@ -261,15 +261,21 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         let priority = job.spec.config.priority;
         let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
 
-        // Acknowledge the queue item
+        // Acknowledge the queue item. If this fails (e.g., receipt handle expired
+        // because the job ran longer than the visibility timeout), we still proceed
+        // to mark the job completed — the job IS done, and leaving it stuck in
+        // Running state forever is worse than an orphaned queue item.
         if let Some(queue_manager) = self.queue_managers.get(&priority) {
-            queue_manager
-                .ack(&queue_name, receipt_handle)
-                .await
-                .map_err(|e| JobError::QueueError { source: e })?;
+            if let Err(e) = queue_manager.ack(&queue_name, receipt_handle).await {
+                warn!(
+                    job_id = %job_id,
+                    error = ?e,
+                    "queue ack failed (receipt handle likely expired) - proceeding to mark job completed"
+                );
+            }
         }
 
-        // Mark job as completed
+        // Mark job as completed regardless of queue ack result
         self.mark_completed(job_id, result).await?;
 
         Ok(())
@@ -396,12 +402,16 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             self.dependency_graph.mark_ready_for_retry(job_id).await?;
         }
 
-        // Nack the queue item
+        // Nack the queue item. If this fails (e.g., receipt handle expired),
+        // the job status was already updated above — log and continue.
         if let Some(queue_manager) = self.queue_managers.get(&priority) {
-            queue_manager
-                .nack(&queue_name, receipt_handle, move_to_dlq, Some(error.clone()))
-                .await
-                .map_err(|e| JobError::QueueError { source: e })?;
+            if let Err(e) = queue_manager.nack(&queue_name, receipt_handle, move_to_dlq, Some(error.clone())).await {
+                warn!(
+                    job_id = %job_id,
+                    error = ?e,
+                    "queue nack failed (receipt handle likely expired) - job status already updated"
+                );
+            }
         }
 
         // Log the outcome

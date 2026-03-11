@@ -424,13 +424,15 @@ async fn run_worker_handle_success<S: aspen_core::KeyValueStore + ?Sized + 'stat
     receipt_handle: &str,
     execution_token: &str,
     result: JobResult,
-) {
+) -> bool {
     match timeout(JOB_ACK_TIMEOUT, manager.ack_job(job_id, receipt_handle, execution_token, result)).await {
         Ok(Ok(())) => {
             debug!(worker_id, job_id = %job_id, "job acknowledged successfully");
+            true
         }
         Ok(Err(e)) => {
             error!(worker_id, job_id = %job_id, error = ?e, "failed to acknowledge job");
+            false
         }
         Err(_) => {
             error!(
@@ -439,6 +441,7 @@ async fn run_worker_handle_success<S: aspen_core::KeyValueStore + ?Sized + 'stat
                 timeout_secs = JOB_ACK_TIMEOUT.as_secs(),
                 "timed out waiting for leader to acknowledge job"
             );
+            false
         }
     }
 }
@@ -612,10 +615,21 @@ async fn run_worker_execute_with_handler<S: aspen_core::KeyValueStore + ?Sized +
     let result = run_worker_execute_job(manager.clone(), worker_id, job, handler).await;
 
     if result.is_success() {
-        run_worker_handle_success(manager, worker_id, &job_id, &queue_item.receipt_handle, &execution_token, result)
-            .await;
+        let ack_ok = run_worker_handle_success(
+            manager,
+            worker_id,
+            &job_id,
+            &queue_item.receipt_handle,
+            &execution_token,
+            result,
+        )
+        .await;
         run_worker_record_success(worker_info, worker_id).await;
-        info!(worker_id, job_id = %job_id, "job completed successfully");
+        if ack_ok {
+            info!(worker_id, job_id = %job_id, "job completed successfully");
+        } else {
+            warn!(worker_id, job_id = %job_id, "job executed but ack failed - check if job was marked completed");
+        }
     } else {
         let error_msg = match &result {
             JobResult::Failure(f) => f.reason.clone(),

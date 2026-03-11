@@ -582,3 +582,102 @@ async fn test_echo_worker_excludes_ci_vm_jobs() {
 
     pool.shutdown().await.unwrap();
 }
+
+/// Regression test: ack_job with expired receipt handle must still mark job completed.
+///
+/// Before the fix, if a job ran longer than the queue visibility timeout, the
+/// receipt handle expired. When the worker tried to ack, the queue ack failed
+/// with "receipt handle mismatch" and `mark_completed` was never called. The job
+/// stayed in Running state forever, causing the CI pipeline to hang.
+#[tokio::test]
+async fn test_ack_job_with_stale_receipt_handle_still_completes() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+    let manager = JobManager::new(store.clone());
+    manager.initialize().await.unwrap();
+
+    // Submit a job
+    let job_id = manager
+        .submit(JobSpec::new("test").payload(serde_json::json!({"data": "long running"})).unwrap())
+        .await
+        .unwrap();
+
+    // Dequeue with a normal visibility timeout
+    let items = manager.dequeue_jobs("worker-1", 1, Duration::from_secs(300)).await.unwrap();
+    assert_eq!(items.len(), 1);
+    let (queue_item, _job) = &items[0];
+    let real_receipt_handle = queue_item.receipt_handle.clone();
+
+    // Mark started (this sets the execution token)
+    let execution_token = manager.mark_started(&job_id, "worker-1".to_string()).await.unwrap();
+
+    // Now ack with a WRONG receipt handle — simulating receipt handle expiration.
+    // The queue ack will fail, but the job should still be marked completed.
+    let stale_receipt = format!("{}-stale", real_receipt_handle);
+    let result = manager
+        .ack_job(&job_id, &stale_receipt, &execution_token, JobResult::success(serde_json::json!({"output": "done"})))
+        .await;
+
+    // ack_job should succeed overall (job was marked completed despite queue ack failure)
+    assert!(result.is_ok(), "ack_job should succeed even with stale receipt handle: {:?}", result);
+
+    // The job must be in Completed state
+    let job = manager.get_job(&job_id).await.unwrap().unwrap();
+    assert_eq!(
+        job.status,
+        JobStatus::Completed,
+        "job must be Completed even when queue ack fails — was {:?}",
+        job.status
+    );
+    assert!(job.result.is_some());
+}
+
+/// Regression test: nack_job with expired receipt handle must still update job status.
+#[tokio::test]
+async fn test_nack_job_with_stale_receipt_handle_still_updates_status() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+    let manager = JobManager::new(store.clone());
+    manager.initialize().await.unwrap();
+
+    // Submit a job with retries
+    let job_id = manager
+        .submit(
+            JobSpec::new("test")
+                .payload(serde_json::json!({"data": "will fail"}))
+                .unwrap()
+                .retry_policy(RetryPolicy::exponential(3)),
+        )
+        .await
+        .unwrap();
+
+    // Dequeue the job
+    let items = manager.dequeue_jobs("worker-1", 1, Duration::from_secs(300)).await.unwrap();
+    assert_eq!(items.len(), 1);
+    let (queue_item, _job) = &items[0];
+    let real_receipt_handle = queue_item.receipt_handle.clone();
+
+    // Mark started
+    let execution_token = manager.mark_started(&job_id, "worker-1".to_string()).await.unwrap();
+
+    // Nack with a stale receipt handle
+    let stale_receipt = format!("{}-stale", real_receipt_handle);
+    let result = manager.nack_job(&job_id, &stale_receipt, &execution_token, "simulated failure".to_string()).await;
+
+    // nack_job should succeed (job status was updated despite queue nack failure)
+    assert!(result.is_ok(), "nack_job should succeed even with stale receipt handle: {:?}", result);
+
+    // The job must have moved out of Running state
+    let job = manager.get_job(&job_id).await.unwrap().unwrap();
+    assert_ne!(
+        job.status,
+        JobStatus::Running,
+        "job must not stay Running when nack succeeds — was {:?}",
+        job.status
+    );
+    // Should be retrying (has retry policy with 3 max attempts)
+    assert_eq!(
+        job.status,
+        JobStatus::Retrying,
+        "job should be Retrying after nack with retries remaining — was {:?}",
+        job.status
+    );
+}
