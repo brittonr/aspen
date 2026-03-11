@@ -37,27 +37,27 @@
 
 ## 5. Deployment Coordinator (`aspen-deploy`)
 
-- [ ] 5.1 Implement `DeploymentCoordinator` struct taking `Arc<dyn KeyValueStore>` for state storage
-- [ ] 5.2 Implement `start_deployment()`: CAS write `_sys:deploy:current` with `Pending` status, fail if existing deployment is `Deploying`
-- [ ] 5.3 Implement `run_deployment()`: loop through nodes (followers first, leader last), call quorum check, send `NodeUpgrade` RPC, poll health, update per-node status via CAS
-- [ ] 5.4 Implement health polling: check `GetHealth`, Raft membership, log gap < `DEPLOY_LOG_GAP_THRESHOLD`, bounded by `DEPLOY_HEALTH_TIMEOUT_SECS`
-- [ ] 5.5 Implement failure handling: on health timeout → mark node `Failed`, mark deployment `Failed`, stop upgrading
-- [ ] 5.6 Implement leader-last logic: detect own node ID, defer self-upgrade to final step, write state before self-restart so new leader can finalize
-- [ ] 5.7 Implement leader failover recovery: on startup/leader election, check `_sys:deploy:current` for in-progress deployment, resume if found
-- [ ] 5.8 Implement `rollback_deployment()`: read current deployment, send `NodeRollback` to upgraded nodes in rolling fashion, update status
-- [ ] 5.9 Implement `get_status()`: read `_sys:deploy:current`, fall back to latest `_sys:deploy:history:*`
-- [ ] 5.10 Implement history management: on completion, copy record to `_sys:deploy:history:{timestamp}`, delete `_sys:deploy:current`, prune old entries
-- [ ] 5.11 Write integration tests: mock KV store, verify state transitions, concurrent deploy rejection, failover recovery
+- [x] 5.1 Implement `DeploymentCoordinator` struct taking `Arc<dyn KeyValueStore>` for state storage
+- [x] 5.2 Implement `start_deployment()`: CAS write `_sys:deploy:current` with `Pending` status, fail if existing deployment is `Deploying`
+- [x] 5.3 Implement `run_deployment()`: loop through nodes (followers first, leader last), call quorum check, send `NodeUpgrade` RPC, poll health, update per-node status via CAS
+- [x] 5.4 Implement health polling: check `GetHealth`, Raft membership, log gap < `DEPLOY_LOG_GAP_THRESHOLD`, bounded by `DEPLOY_HEALTH_TIMEOUT_SECS`
+- [x] 5.5 Implement failure handling: on health timeout → mark node `Failed`, mark deployment `Failed`, stop upgrading
+- [x] 5.6 Implement leader-last logic: detect own node ID, defer self-upgrade to final step, write state before self-restart so new leader can finalize
+- [x] 5.7 Implement leader failover recovery: on startup/leader election, check `_sys:deploy:current` for in-progress deployment, resume if found
+- [x] 5.8 Implement `rollback_deployment()`: read current deployment, send `NodeRollback` to upgraded nodes in rolling fashion, update status
+- [x] 5.9 Implement `get_status()`: read `_sys:deploy:current`, fall back to latest `_sys:deploy:history:*`
+- [x] 5.10 Implement history management: on completion, copy record to `_sys:deploy:history:{timestamp}`, delete `_sys:deploy:current`, prune old entries
+- [x] 5.11 Write integration tests: mock KV store, verify state transitions, concurrent deploy rejection, failover recovery
 
 ## 6. RPC Handlers
 
-- [ ] 6.1 Create `deploy` handler module in `aspen-cluster-handler` behind `deploy` feature flag
-- [ ] 6.2 Implement `ClusterDeploy` handler: validate artifact reference, delegate to `DeploymentCoordinator::start_deployment()`, spawn background task for `run_deployment()`
-- [ ] 6.3 Implement `ClusterDeployStatus` handler: delegate to `DeploymentCoordinator::get_status()`
-- [ ] 6.4 Implement `ClusterRollback` handler: delegate to `DeploymentCoordinator::rollback_deployment()`
-- [ ] 6.5 Implement `NodeUpgrade` handler: delegate to `NodeUpgradeExecutor`
-- [ ] 6.6 Implement `NodeRollback` handler: delegate to rollback logic
-- [ ] 6.7 Wire handlers into `aspen-rpc-handlers` dispatch with `deploy` feature flag propagation through feature chain
+- [x] 6.1 Create `deploy` handler module in `aspen-cluster-handler` behind `deploy` feature flag
+- [x] 6.2 Implement `ClusterDeploy` handler: validate artifact reference, delegate to `DeploymentCoordinator::start_deployment()`, spawn background task for `run_deployment()`
+- [x] 6.3 Implement `ClusterDeployStatus` handler: delegate to `DeploymentCoordinator::get_status()`
+- [x] 6.4 Implement `ClusterRollback` handler: delegate to `DeploymentCoordinator::rollback_deployment()`
+- [x] 6.5 Implement `NodeUpgrade` handler: delegate to `NodeUpgradeExecutor`
+- [x] 6.6 Implement `NodeRollback` handler: delegate to rollback logic
+- [x] 6.7 Wire handlers into `aspen-rpc-handlers` dispatch with `deploy` feature flag propagation through feature chain
 
 ## 7. CLI Commands
 

@@ -5,6 +5,8 @@
 //! GetClusterTicketCombined, GetClientTicket, GetDocsTicket, GetTopology.
 
 mod client_auth;
+#[cfg(feature = "deploy")]
+mod deploy;
 mod init;
 mod membership;
 mod snapshot;
@@ -45,6 +47,11 @@ impl RequestHandler for ClusterHandler {
                 | ClientRpcRequest::GetClientTicket { .. }
                 | ClientRpcRequest::GetDocsTicket { .. }
                 | ClientRpcRequest::GetTopology { .. }
+                | ClientRpcRequest::ClusterDeploy { .. }
+                | ClientRpcRequest::ClusterDeployStatus
+                | ClientRpcRequest::ClusterRollback
+                | ClientRpcRequest::NodeUpgrade { .. }
+                | ClientRpcRequest::NodeRollback { .. }
         )
     }
 
@@ -88,6 +95,38 @@ impl RequestHandler for ClusterHandler {
 
             ClientRpcRequest::GetTopology { client_version } => {
                 topology::handle_get_topology(ctx, client_version).await
+            }
+
+            #[cfg(feature = "deploy")]
+            ClientRpcRequest::ClusterDeploy {
+                artifact,
+                strategy,
+                max_concurrent,
+                health_timeout_secs,
+            } => deploy::handle_cluster_deploy(ctx, artifact, strategy, max_concurrent, health_timeout_secs).await,
+
+            #[cfg(feature = "deploy")]
+            ClientRpcRequest::ClusterDeployStatus => deploy::handle_cluster_deploy_status(ctx).await,
+
+            #[cfg(feature = "deploy")]
+            ClientRpcRequest::ClusterRollback => deploy::handle_cluster_rollback(ctx).await,
+
+            #[cfg(feature = "deploy")]
+            ClientRpcRequest::NodeUpgrade { deploy_id, artifact } => {
+                deploy::handle_node_upgrade(ctx, deploy_id, artifact).await
+            }
+
+            #[cfg(feature = "deploy")]
+            ClientRpcRequest::NodeRollback { deploy_id } => deploy::handle_node_rollback(ctx, deploy_id).await,
+
+            // When deploy feature is off, return capability unavailable
+            #[cfg(not(feature = "deploy"))]
+            ClientRpcRequest::ClusterDeploy { .. }
+            | ClientRpcRequest::ClusterDeployStatus
+            | ClientRpcRequest::ClusterRollback
+            | ClientRpcRequest::NodeUpgrade { .. }
+            | ClientRpcRequest::NodeRollback { .. } => {
+                Ok(ClientRpcResponse::error("DEPLOY_UNAVAILABLE", "deploy feature not enabled"))
             }
 
             _ => Err(anyhow::anyhow!("request not handled by ClusterHandler")),
@@ -556,5 +595,174 @@ mod tests {
         };
         let sanitized = sanitize_control_error(&error);
         assert_eq!(sanitized, "operation failed");
+    }
+
+    // ========================================================================
+    // Deploy handler tests
+    // ========================================================================
+
+    #[test]
+    fn test_can_handle_cluster_deploy() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ClusterDeploy {
+            artifact: "/nix/store/abc-aspen".to_string(),
+            strategy: "rolling".to_string(),
+            max_concurrent: 1,
+            health_timeout_secs: 120,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_cluster_deploy_status() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ClusterDeployStatus));
+    }
+
+    #[test]
+    fn test_can_handle_cluster_rollback() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ClusterRollback));
+    }
+
+    #[test]
+    fn test_can_handle_node_upgrade() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::NodeUpgrade {
+            deploy_id: "deploy-1".to_string(),
+            artifact: "/nix/store/abc-aspen".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_node_rollback() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::NodeRollback {
+            deploy_id: "deploy-1".to_string(),
+        }));
+    }
+
+    #[cfg(feature = "deploy")]
+    #[tokio::test]
+    async fn test_handle_cluster_deploy_status_no_deployment() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let result = handler.handle(ClientRpcRequest::ClusterDeployStatus, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::ClusterDeployStatusResult(response) => {
+                assert!(!response.is_found);
+            }
+            other => panic!("expected ClusterDeployStatusResult, got {:?}", other),
+        }
+    }
+
+    #[cfg(feature = "deploy")]
+    #[tokio::test]
+    async fn test_handle_cluster_deploy_invalid_strategy() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let request = ClientRpcRequest::ClusterDeploy {
+            artifact: "/nix/store/abc-aspen".to_string(),
+            strategy: "canary".to_string(),
+            max_concurrent: 1,
+            health_timeout_secs: 120,
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::ClusterDeployResult(response) => {
+                assert!(!response.is_accepted);
+                assert!(response.error.unwrap().contains("unknown strategy"));
+            }
+            other => panic!("expected ClusterDeployResult, got {:?}", other),
+        }
+    }
+
+    #[cfg(feature = "deploy")]
+    #[tokio::test]
+    async fn test_handle_node_upgrade_accepted() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let request = ClientRpcRequest::NodeUpgrade {
+            deploy_id: "deploy-1".to_string(),
+            artifact: "/nix/store/abc-aspen".to_string(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::NodeUpgradeResult(response) => {
+                assert!(response.is_accepted);
+                assert!(response.error.is_none());
+            }
+            other => panic!("expected NodeUpgradeResult, got {:?}", other),
+        }
+    }
+
+    #[cfg(feature = "deploy")]
+    #[tokio::test]
+    async fn test_handle_node_rollback_accepted() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let request = ClientRpcRequest::NodeRollback {
+            deploy_id: "deploy-1".to_string(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::NodeRollbackResult(response) => {
+                assert!(response.is_success);
+                assert!(response.error.is_none());
+            }
+            other => panic!("expected NodeRollbackResult, got {:?}", other),
+        }
+    }
+
+    #[cfg(feature = "deploy")]
+    #[tokio::test]
+    async fn test_handle_cluster_rollback_no_deployment() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let result = handler.handle(ClientRpcRequest::ClusterRollback, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::ClusterRollbackResult(response) => {
+                assert!(!response.is_accepted);
+                assert!(response.error.is_some());
+            }
+            other => panic!("expected ClusterRollbackResult, got {:?}", other),
+        }
+    }
+
+    #[cfg(not(feature = "deploy"))]
+    #[tokio::test]
+    async fn test_deploy_unavailable_without_feature() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let result = handler.handle(ClientRpcRequest::ClusterDeployStatus, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::Error(e) => {
+                assert!(
+                    e.code.contains("DEPLOY_UNAVAILABLE") || e.message.contains("deploy feature not enabled"),
+                    "expected deploy unavailable error, got: {e:?}"
+                );
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
     }
 }
