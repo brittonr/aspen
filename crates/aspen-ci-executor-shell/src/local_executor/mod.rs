@@ -129,7 +129,7 @@ impl Worker for LocalExecutorWorker {
 
         // Execute job
         match self.execute_job(&job, &payload).await {
-            Ok((result, artifacts, upload_result)) => {
+            Ok((result, artifacts, upload_result, nix_output)) => {
                 if result.exit_code == 0 && result.error.is_none() {
                     // Build artifact list for output
                     let artifact_list: Vec<_> = if let Some(ref upload) = upload_result {
@@ -171,6 +171,18 @@ impl Worker for LocalExecutorWorker {
                     let stdout_ref = self.store_output(&result.stdout, &job_id, "stdout").await;
                     let stderr_ref = self.store_output(&result.stderr, &job_id, "stderr").await;
 
+                    // Build nix output metadata if paths were captured
+                    let nix_output_meta = if !nix_output.output_paths.is_empty() {
+                        Some(serde_json::json!({
+                            "output_paths": nix_output.output_paths,
+                            "binary_blob_hash": nix_output.binary_blob_hash,
+                            "binary_size": nix_output.binary_size,
+                            "binary_path": nix_output.binary_path,
+                        }))
+                    } else {
+                        None
+                    };
+
                     let output = JobOutput {
                         data: serde_json::json!({
                             "exit_code": result.exit_code,
@@ -184,6 +196,7 @@ impl Worker for LocalExecutorWorker {
                             "artifacts_skipped": artifacts.skipped_files.len(),
                             "artifacts_unmatched_patterns": artifacts.unmatched_patterns,
                             "artifacts_upload": upload_stats,
+                            "nix_output": nix_output_meta,
                         }),
                         metadata: HashMap::from([
                             ("local_execution".to_string(), "true".to_string()),

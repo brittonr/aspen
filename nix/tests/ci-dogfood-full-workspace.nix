@@ -371,37 +371,75 @@ in
           status = final.get("status")
           assert status == "success", f"Pipeline failed: {status}: {final}"
 
-      # ── verify the CI-built binary ───────────────────────────────
-      with subtest("verify CI-built aspen-node"):
-          # Re-evaluate the same flake to get the output path. Since the
-          # CI pipeline already built it, this is an instant cache hit —
-          # nix just returns the store path without rebuilding.
-          output_path = node1.succeed(
-              "cd /tmp/full-workspace && "
-              "nix build --print-out-paths --impure .#default 2>/dev/null"
-          ).strip()
-          node1.log(f"Nix output path: {output_path}")
-          assert output_path.startswith("/nix/store/"), \
-              f"Expected nix store path, got: {output_path}"
+      # ── verify nix output in job result ──────────────────────────
+      with subtest("verify nix output recorded in job result"):
+          all_jobs = []
+          for stage in final.get("stages", []):
+              for job in stage.get("jobs", []):
+                  if job.get("id"):
+                      all_jobs.append(job)
+          assert len(all_jobs) >= 1, f"Expected >=1 jobs, got {len(all_jobs)}"
 
-          # The binary must exist and be executable
-          binary = f"{output_path}/bin/aspen-node"
-          node1.succeed(f"test -x {binary}")
+          build_job = [j for j in all_jobs if j.get("name") == "build-aspen-node"][0]
+          assert build_job["status"] == "success", \
+              f"Build job not success: {build_job['status']}"
 
-          # Must be a real binary, not an empty file or stub
-          size = int(node1.succeed(f"stat -c %s {binary}").strip())
-          node1.log(f"Binary size: {size} bytes")
-          assert size > 1_000_000, \
-              f"Binary too small ({size} bytes) — a real aspen-node is 50+ MB"
+          job_data = cli(f"kv get __jobs:{build_job['id']}", check=False)
 
-          # Must actually run
-          version_output = node1.succeed(f"{binary} --version").strip()
+          # Parse the job result to extract nix_output
+          nix_output = None
+          if isinstance(job_data, dict):
+              value = job_data.get("value", "")
+              try:
+                  job_result = json.loads(value) if isinstance(value, str) else value
+                  data = job_result.get("result", {}).get("Success", {}).get("data", {})
+                  nix_output = data.get("nix_output")
+              except (json.JSONDecodeError, ValueError, AttributeError) as e:
+                  node1.log(f"Failed to parse job result: {e}")
+
+          assert nix_output is not None, \
+              f"nix_output missing from job result — --print-out-paths not working"
+
+          output_paths = nix_output.get("output_paths", [])
+          assert len(output_paths) >= 1, \
+              f"Expected at least one nix output path, got: {output_paths}"
+          assert output_paths[0].startswith("/nix/store/"), \
+              f"Expected nix store path, got: {output_paths[0]}"
+          node1.log(f"Nix output path: {output_paths[0]}")
+
+          blob_hash = nix_output.get("binary_blob_hash")
+          assert blob_hash is not None, \
+              f"binary_blob_hash missing — binary was not uploaded to blob store"
+          binary_size = nix_output.get("binary_size", 0)
+          assert binary_size > 1_000_000, \
+              f"Binary too small ({binary_size} bytes) — a real aspen-node is 50+ MB"
+          node1.log(f"Binary uploaded to blobs: hash={blob_hash} size={binary_size}")
+
+      # ── verify blob exists and binary runs ─────────────────────
+      with subtest("verify binary in blob store and nix store"):
+          # Confirm the blob exists in the store (blob get streams the
+          # whole binary through RPC which exceeds QUIC frame limits for
+          # large binaries, so we use blob has to check existence)
+          has_result = cli(f"blob has {blob_hash}")
+          assert has_result.get("does_exist", False), \
+              f"Binary blob {blob_hash} not found in store"
+          node1.log(f"Blob {blob_hash} confirmed in store")
+
+          # Run the binary from the nix store output path
+          binary_nix_path = nix_output.get("binary_path")
+          assert binary_nix_path is not None, "binary_path missing from nix_output"
+          node1.succeed(f"test -x {binary_nix_path}")
+
+          version_output = node1.succeed(f"{binary_nix_path} --version").strip()
           node1.log(f"Version: {version_output}")
           assert "aspen" in version_output.lower(), \
               f"Version output missing 'aspen': {version_output}"
 
-          node1.log(f"CI-built binary verified: {binary} ({size} bytes)")
+          node1.log(
+              f"CI-built binary verified: {binary_nix_path} "
+              f"({binary_size} bytes, blob={blob_hash})"
+          )
 
-      node1.log("FULL WORKSPACE DOGFOOD PASSED: 80 crates -> Forge -> CI -> nix build -> aspen-node")
+      node1.log("FULL WORKSPACE DOGFOOD PASSED: 80 crates -> Forge -> CI -> nix build -> blob store -> run")
     '';
   }

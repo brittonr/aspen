@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use aspen_jobs::Job;
 use tokio::sync::mpsc;
-#[cfg(any(feature = "nix-cache-proxy", feature = "snix"))]
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -23,6 +22,30 @@ use crate::agent::protocol::LogMessage;
 use crate::cache_proxy::CacheProxy;
 use crate::common::ArtifactCollectionResult;
 use crate::common::ArtifactUploadResult;
+
+/// Information about nix build outputs uploaded to the blob store.
+#[derive(Debug, Default)]
+pub(crate) struct NixOutputInfo {
+    /// Nix store paths parsed from stdout (requires --print-out-paths).
+    pub output_paths: Vec<String>,
+    /// Blob hash of the uploaded binary (if found and uploaded).
+    pub binary_blob_hash: Option<String>,
+    /// Size of the uploaded binary in bytes.
+    pub binary_size: Option<u64>,
+    /// Path within the nix output where the binary was found.
+    pub binary_path: Option<String>,
+}
+
+/// Parse nix store paths from stdout.
+///
+/// `nix build --print-out-paths` prints one store path per line to stdout.
+fn parse_nix_output_paths(stdout: &str) -> Vec<String> {
+    stdout
+        .lines()
+        .filter(|line| line.starts_with("/nix/store/"))
+        .map(|line| line.trim().to_string())
+        .collect()
+}
 
 impl LocalExecutorWorker {
     /// Store output in blob store if large, inline if small.
@@ -83,7 +106,7 @@ impl LocalExecutorWorker {
         &self,
         job: &Job,
         payload: &LocalExecutorPayload,
-    ) -> Result<(ExecutionResult, ArtifactCollectionResult, Option<ArtifactUploadResult>), String> {
+    ) -> Result<(ExecutionResult, ArtifactCollectionResult, Option<ArtifactUploadResult>, NixOutputInfo), String> {
         let job_id = job.id.to_string();
 
         // Phase 1: Set up workspace (returns workspace path and optional flake store path)
@@ -203,14 +226,118 @@ impl LocalExecutorWorker {
             }
         }
 
-        // Phase 4: Collect artifacts (only on success)
+        // Phase 4: Parse nix output paths and upload binary to blob store
+        let nix_output = self.collect_nix_output(&job_id, &result, payload).await;
+
+        // Phase 5: Collect artifacts (only on success)
         let (artifacts, upload_result) =
             self.collect_and_upload_artifacts(&job_id, &result, payload, &job_workspace).await;
 
-        // Phase 5: Clean up workspace
+        // Phase 6: Clean up workspace
         self.cleanup_workspace(&job_id, &job_workspace).await;
 
-        Ok((result, artifacts, upload_result))
+        Ok((result, artifacts, upload_result, nix_output))
+    }
+
+    /// Parse nix output paths from stdout and upload the main binary to blobs.
+    async fn collect_nix_output(
+        &self,
+        job_id: &str,
+        result: &ExecutionResult,
+        payload: &LocalExecutorPayload,
+    ) -> NixOutputInfo {
+        let mut nix_output = NixOutputInfo::default();
+
+        let is_nix = payload.command == "nix";
+        let is_success = result.exit_code == 0 && result.error.is_none();
+        if !is_nix || !is_success {
+            return nix_output;
+        }
+
+        nix_output.output_paths = parse_nix_output_paths(&result.stdout);
+        if nix_output.output_paths.is_empty() {
+            debug!(
+                job_id = %job_id,
+                stdout_len = result.stdout.len(),
+                "no nix output paths in stdout (--print-out-paths missing?)"
+            );
+            return nix_output;
+        }
+
+        info!(
+            job_id = %job_id,
+            output_paths = ?nix_output.output_paths,
+            "parsed nix output paths"
+        );
+
+        // Find the main binary in the first output path. Convention: bin/<name>
+        // where <name> is derived from flake_attr or the derivation name.
+        let output_path = &nix_output.output_paths[0];
+        let bin_dir = format!("{}/bin", output_path);
+
+        let binary_path = if let Ok(mut entries) = tokio::fs::read_dir(&bin_dir).await {
+            let mut found = None;
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                if entry.file_type().await.map(|t| t.is_file()).unwrap_or(false) {
+                    found = Some(entry.path());
+                    break;
+                }
+            }
+            found
+        } else {
+            debug!(job_id = %job_id, bin_dir = %bin_dir, "no bin/ directory in nix output");
+            None
+        };
+
+        let binary_path = match binary_path {
+            Some(p) => p,
+            None => return nix_output,
+        };
+
+        // Read binary size
+        let metadata = match tokio::fs::metadata(&binary_path).await {
+            Ok(m) => m,
+            Err(e) => {
+                warn!(job_id = %job_id, path = ?binary_path, error = ?e, "failed to stat nix output binary");
+                return nix_output;
+            }
+        };
+
+        nix_output.binary_size = Some(metadata.len());
+        nix_output.binary_path = Some(binary_path.display().to_string());
+
+        // Upload to blob store if available
+        let blob_store = match self.blob_store.as_ref() {
+            Some(bs) => bs,
+            None => {
+                info!(job_id = %job_id, "no blob store — skipping nix output upload");
+                return nix_output;
+            }
+        };
+
+        match tokio::fs::read(&binary_path).await {
+            Ok(bytes) => match blob_store.add_bytes(&bytes).await {
+                Ok(add_result) => {
+                    let hash = add_result.blob_ref.hash.to_hex().to_string();
+                    info!(
+                        job_id = %job_id,
+                        path = ?binary_path,
+                        hash = %hash,
+                        size = bytes.len(),
+                        "uploaded nix output binary to blob store"
+                    );
+                    nix_output.binary_blob_hash = Some(hash);
+                }
+                Err(e) => {
+                    warn!(job_id = %job_id, error = ?e, "failed to upload nix output to blob store");
+                }
+            },
+            Err(e) => {
+                warn!(job_id = %job_id, path = ?binary_path, error = ?e, "failed to read nix output binary");
+            }
+        }
+
+        nix_output
     }
 
     /// Build an execution request from the payload.
