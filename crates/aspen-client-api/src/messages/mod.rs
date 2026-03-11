@@ -24,6 +24,7 @@ pub mod ci;
 pub mod cluster;
 pub mod contacts;
 pub mod coordination;
+pub mod deploy;
 pub mod docs;
 pub mod federation;
 pub mod forge;
@@ -204,6 +205,12 @@ pub use coordination::ServiceRegisterResultResponse;
 pub use coordination::ServiceUpdateHealthResultResponse;
 pub use coordination::ServiceUpdateMetadataResultResponse;
 pub use coordination::SignedCounterResultResponse;
+pub use deploy::ClusterDeployResultResponse;
+pub use deploy::ClusterDeployStatusResultResponse;
+pub use deploy::ClusterRollbackResultResponse;
+pub use deploy::NodeDeployStatusEntry;
+pub use deploy::NodeRollbackResultResponse;
+pub use deploy::NodeUpgradeResultResponse;
 pub use docs::AddPeerClusterResultResponse;
 pub use docs::DocsDeleteResultResponse;
 pub use docs::DocsGetResultResponse;
@@ -3496,6 +3503,50 @@ pub enum ClientRpcRequest {
     },
 
     // =========================================================================
+    // Deployment operations - Rolling upgrades
+    // =========================================================================
+    /// Initiate a cluster-wide rolling deployment.
+    ///
+    /// The coordinator upgrades followers first, then the leader, maintaining
+    /// quorum at all times. Only one deployment can be active at a time.
+    ClusterDeploy {
+        /// Target artifact: Nix store path (e.g., "/nix/store/...") or blob hash (hex).
+        artifact: String,
+        /// Deployment strategy: "rolling" (default).
+        strategy: String,
+        /// Maximum nodes to upgrade concurrently (default 1).
+        max_concurrent: u32,
+        /// Health check timeout in seconds (default 120).
+        health_timeout_secs: u64,
+    },
+
+    /// Query deployment status.
+    ///
+    /// Returns the current active deployment or the most recent from history.
+    ClusterDeployStatus,
+
+    /// Rollback the current or last deployment.
+    ///
+    /// Sends `NodeRollback` RPCs to upgraded nodes in rolling fashion.
+    ClusterRollback,
+
+    /// Upgrade a single node's binary (sent by coordinator to target node).
+    ///
+    /// The node drains, replaces its binary, and restarts.
+    NodeUpgrade {
+        /// Deploy ID this upgrade belongs to.
+        deploy_id: String,
+        /// Target artifact: Nix store path or blob hash.
+        artifact: String,
+    },
+
+    /// Rollback a single node to its previous binary (sent by coordinator).
+    NodeRollback {
+        /// Deploy ID this rollback belongs to.
+        deploy_id: String,
+    },
+
+    // =========================================================================
     // Plugin management operations
     // =========================================================================
     /// Reload WASM plugins.
@@ -3601,6 +3652,9 @@ impl ClientRpcRequest {
             Self::CiTriggerPipeline { .. } => "CiTriggerPipeline",
             Self::CiUnwatchRepo { .. } => "CiUnwatchRepo",
             Self::CiWatchRepo { .. } => "CiWatchRepo",
+            Self::ClusterDeploy { .. } => "ClusterDeploy",
+            Self::ClusterDeployStatus => "ClusterDeployStatus",
+            Self::ClusterRollback => "ClusterRollback",
             Self::ContactsAddToGroup { .. } => "ContactsAddToGroup",
             Self::ContactsCreateBook { .. } => "ContactsCreateBook",
             Self::ContactsCreateContact { .. } => "ContactsCreateContact",
@@ -3847,6 +3901,8 @@ impl ClientRpcRequest {
             Self::NetUnpublish { .. } => "NetUnpublish",
             Self::NetLookup { .. } => "NetLookup",
             Self::NetList { .. } => "NetList",
+            Self::NodeRollback { .. } => "NodeRollback",
+            Self::NodeUpgrade { .. } => "NodeUpgrade",
             Self::PluginReload { .. } => "PluginReload",
         }
     }
@@ -4170,6 +4226,13 @@ impl ClientRpcRequest {
             | Self::CalendarExportIcal { .. }
             | Self::CalendarFreeBusy { .. }
             | Self::CalendarExpandRecurrence { .. } => Some("calendar"),
+
+            // Deploy operations
+            Self::ClusterDeploy { .. }
+            | Self::ClusterDeployStatus
+            | Self::ClusterRollback
+            | Self::NodeUpgrade { .. }
+            | Self::NodeRollback { .. } => Some("deploy"),
 
             // SNIX and Cache operations
             Self::CacheQuery { .. }
@@ -4874,6 +4937,20 @@ pub enum ClientRpcResponse {
     IndexScanResult(IndexScanResultResponse),
     /// Index list result.
     IndexListResult(IndexListResultResponse),
+
+    // =========================================================================
+    // Deployment responses
+    // =========================================================================
+    /// Cluster deploy result.
+    ClusterDeployResult(ClusterDeployResultResponse),
+    /// Cluster deploy status result.
+    ClusterDeployStatusResult(ClusterDeployStatusResultResponse),
+    /// Cluster rollback result.
+    ClusterRollbackResult(ClusterRollbackResultResponse),
+    /// Node upgrade result (single node).
+    NodeUpgradeResult(NodeUpgradeResultResponse),
+    /// Node rollback result (single node).
+    NodeRollbackResult(NodeRollbackResultResponse),
 
     /// Capability unavailable response.
     ///

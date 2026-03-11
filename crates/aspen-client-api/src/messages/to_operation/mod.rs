@@ -6,6 +6,7 @@ mod ci_ops;
 mod cluster_ops;
 mod contacts_ops;
 mod coordination_ops;
+mod deploy_ops;
 mod docs_ops;
 mod forge_ops;
 mod hooks_ops;
@@ -49,6 +50,7 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Operation> {
         .or_else(|| net_ops::to_operation(request))
         .or_else(|| contacts_ops::to_operation(request))
         .or_else(|| calendar_ops::to_operation(request))
+        .or_else(|| deploy_ops::to_operation(request))
         // Flatten: Option<Option<Operation>> -> Option<Operation>
         .flatten()
 }

@@ -256,3 +256,37 @@ pub const ALERT_EVALUATION_MIN_INTERVAL_SECONDS: u64 = 10;
 ///
 /// Tiger Style: Upper bound ensures alerts are eventually evaluated.
 pub const ALERT_EVALUATION_MAX_INTERVAL_SECONDS: u64 = 3_600;
+
+// ============================================================================
+// Deployment Constants
+// ============================================================================
+
+/// Graceful drain timeout in seconds before node upgrade (30s).
+///
+/// Tiger Style: Bounded drain prevents indefinite wait for in-flight operations.
+/// After this timeout, remaining operations are cancelled and upgrade proceeds.
+pub const DRAIN_TIMEOUT_SECS: u64 = 30;
+
+/// Health check timeout after node upgrade in seconds (120s).
+///
+/// Tiger Style: Bounded health wait prevents deployment from stalling indefinitely.
+/// Node must pass health checks (Raft membership, log gap, GetHealth) within this window.
+pub const DEPLOY_HEALTH_TIMEOUT_SECS: u64 = 120;
+
+/// Maximum deployment history entries (50).
+///
+/// Tiger Style: Bounded history prevents unbounded KV growth from past deployments.
+/// Oldest entries are pruned when this limit is exceeded.
+pub const MAX_DEPLOY_HISTORY: u32 = 50;
+
+/// Deployment status poll interval in seconds (5s).
+///
+/// Tiger Style: Fixed interval balances responsiveness with Raft read overhead.
+/// Used by CLI `cluster deploy` to poll deployment progress.
+pub const DEPLOY_STATUS_POLL_INTERVAL_SECS: u64 = 5;
+
+/// Raft log gap threshold for post-upgrade health (100 entries).
+///
+/// Tiger Style: Bounded gap ensures upgraded node has caught up with cluster.
+/// Node is not considered healthy until its log gap is below this threshold.
+pub const DEPLOY_LOG_GAP_THRESHOLD: u64 = 100;

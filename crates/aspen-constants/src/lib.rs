@@ -79,11 +79,17 @@ pub use api::DEFAULT_SQL_RESULT_ROWS;
 #[cfg(feature = "sql")]
 pub use api::DEFAULT_SQL_TIMEOUT_MS;
 pub use api::DEFAULT_TRACE_QUERY_LIMIT;
+// Deploy constants
+pub use api::DEPLOY_HEALTH_TIMEOUT_SECS;
+pub use api::DEPLOY_LOG_GAP_THRESHOLD;
+pub use api::DEPLOY_STATUS_POLL_INTERVAL_SECS;
+pub use api::DRAIN_TIMEOUT_SECS;
 pub use api::MAX_ALERT_HISTORY_PER_RULE;
 pub use api::MAX_ALERT_NOTIFICATION_TARGETS;
 pub use api::MAX_ALERT_RULE_NAME_SIZE;
 pub use api::MAX_ALERT_RULES;
 pub use api::MAX_CUSTOM_INDEXES;
+pub use api::MAX_DEPLOY_HISTORY;
 pub use api::MAX_INDEX_NAME_SIZE;
 pub use api::MAX_KEY_SIZE;
 pub use api::MAX_METRIC_BATCH_SIZE;
@@ -304,6 +310,27 @@ mod tests {
         assert_eq!(api::MAX_ALERT_HISTORY_PER_RULE, 100, "MAX_ALERT_HISTORY_PER_RULE changed");
         assert_eq!(api::ALERT_HISTORY_TTL_SECONDS, 604_800, "ALERT_HISTORY_TTL_SECONDS changed");
         assert_eq!(api::MAX_ALERT_NOTIFICATION_TARGETS, 8, "MAX_ALERT_NOTIFICATION_TARGETS changed");
+    }
+
+    #[test]
+    fn golden_deploy_constants() {
+        assert_eq!(api::DRAIN_TIMEOUT_SECS, 30, "DRAIN_TIMEOUT_SECS changed");
+        assert_eq!(api::DEPLOY_HEALTH_TIMEOUT_SECS, 120, "DEPLOY_HEALTH_TIMEOUT_SECS changed");
+        assert_eq!(api::MAX_DEPLOY_HISTORY, 50, "MAX_DEPLOY_HISTORY changed");
+        assert_eq!(api::DEPLOY_STATUS_POLL_INTERVAL_SECS, 5, "DEPLOY_STATUS_POLL_INTERVAL_SECS changed");
+        assert_eq!(api::DEPLOY_LOG_GAP_THRESHOLD, 100, "DEPLOY_LOG_GAP_THRESHOLD changed");
+    }
+
+    #[test]
+    fn deploy_ordering() {
+        assert!(
+            api::DRAIN_TIMEOUT_SECS < api::DEPLOY_HEALTH_TIMEOUT_SECS,
+            "drain must complete before health timeout"
+        );
+        assert!(
+            api::DEPLOY_STATUS_POLL_INTERVAL_SECS < api::DEPLOY_HEALTH_TIMEOUT_SECS,
+            "poll interval must be shorter than health timeout"
+        );
     }
 
     #[test]

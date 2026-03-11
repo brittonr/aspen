@@ -226,6 +226,243 @@ mod tests {
         }
     }
 
+    /// Pin the postcard discriminant of deploy response variants.
+    ///
+    /// Deploy variants are non-gated and placed BEFORE the feature-gated section
+    /// (after CalendarExportResult, before CapabilityUnavailable).
+    #[test]
+    fn test_deploy_response_discriminant_golden_table() {
+        fn discriminant_of(resp: &ClientRpcResponse) -> u8 {
+            let bytes = postcard::to_stdvec(resp).expect("serialize");
+            bytes[0]
+        }
+
+        let deploy_result = ClientRpcResponse::ClusterDeployResult(ClusterDeployResultResponse {
+            is_accepted: true,
+            deploy_id: Some("d1".into()),
+            error: None,
+        });
+        let deploy_status = ClientRpcResponse::ClusterDeployStatusResult(ClusterDeployStatusResultResponse {
+            is_found: false,
+            deploy_id: None,
+            status: None,
+            artifact: None,
+            nodes: vec![],
+            started_at_ms: None,
+            elapsed_ms: None,
+            error: None,
+        });
+        let rollback = ClientRpcResponse::ClusterRollbackResult(ClusterRollbackResultResponse {
+            is_accepted: false,
+            deploy_id: None,
+            error: None,
+        });
+        let node_upgrade = ClientRpcResponse::NodeUpgradeResult(NodeUpgradeResultResponse {
+            is_accepted: false,
+            error: None,
+        });
+        let node_rollback = ClientRpcResponse::NodeRollbackResult(NodeRollbackResultResponse {
+            is_success: false,
+            error: None,
+        });
+
+        // All deploy variants must have discriminants LESS than CapabilityUnavailable
+        let cap = ClientRpcResponse::CapabilityUnavailable(CapabilityUnavailableResponse {
+            required_app: String::new(),
+            message: String::new(),
+            hints: vec![],
+        });
+        let cap_disc = discriminant_of(&cap);
+
+        let deploy_variants: Vec<(&ClientRpcResponse, &str)> = vec![
+            (&deploy_result, "ClusterDeployResult"),
+            (&deploy_status, "ClusterDeployStatusResult"),
+            (&rollback, "ClusterRollbackResult"),
+            (&node_upgrade, "NodeUpgradeResult"),
+            (&node_rollback, "NodeRollbackResult"),
+        ];
+
+        for (variant, name) in &deploy_variants {
+            let disc = discriminant_of(variant);
+            assert!(
+                disc < cap_disc,
+                "Deploy variant {name} (discriminant {disc}) must appear BEFORE \
+                 CapabilityUnavailable (discriminant {cap_disc})"
+            );
+        }
+
+        // Verify deploy variants are consecutive (no gaps)
+        let discs: Vec<u8> = deploy_variants.iter().map(|(v, _)| discriminant_of(v)).collect();
+        for window in discs.windows(2) {
+            assert_eq!(window[1], window[0] + 1, "Deploy response variants must be consecutive");
+        }
+
+        // Roundtrip test for each
+        for (variant, name) in &deploy_variants {
+            let bytes = postcard::to_stdvec(variant).expect("serialize");
+            let _decoded: ClientRpcResponse =
+                postcard::from_bytes(&bytes).unwrap_or_else(|e| panic!("Failed to deserialize {name}: {e}"));
+        }
+    }
+
+    /// Pin the postcard discriminant of deploy request variants.
+    #[test]
+    fn test_deploy_request_discriminant_golden_table() {
+        fn discriminant_of(req: &ClientRpcRequest) -> u8 {
+            let bytes = postcard::to_stdvec(req).expect("serialize");
+            bytes[0]
+        }
+
+        let deploy_requests: Vec<(ClientRpcRequest, &str)> = vec![
+            (
+                ClientRpcRequest::ClusterDeploy {
+                    artifact: String::new(),
+                    strategy: "rolling".into(),
+                    max_concurrent: 1,
+                    health_timeout_secs: 120,
+                },
+                "ClusterDeploy",
+            ),
+            (ClientRpcRequest::ClusterDeployStatus, "ClusterDeployStatus"),
+            (ClientRpcRequest::ClusterRollback, "ClusterRollback"),
+            (
+                ClientRpcRequest::NodeUpgrade {
+                    deploy_id: String::new(),
+                    artifact: String::new(),
+                },
+                "NodeUpgrade",
+            ),
+            (
+                ClientRpcRequest::NodeRollback {
+                    deploy_id: String::new(),
+                },
+                "NodeRollback",
+            ),
+        ];
+
+        // All deploy requests must appear BEFORE feature-gated variants (PluginReload is last non-gated)
+        let plugin_disc = discriminant_of(&ClientRpcRequest::PluginReload { name: None });
+
+        for (req, name) in &deploy_requests {
+            let disc = discriminant_of(req);
+            assert!(
+                disc < plugin_disc,
+                "Deploy request {name} (discriminant {disc}) must appear BEFORE \
+                 PluginReload (discriminant {plugin_disc})"
+            );
+        }
+
+        // Verify deploy requests are consecutive
+        let discs: Vec<u8> = deploy_requests.iter().map(|(r, _)| discriminant_of(r)).collect();
+        for window in discs.windows(2) {
+            assert_eq!(window[1], window[0] + 1, "Deploy request variants must be consecutive");
+        }
+
+        // Roundtrip test for each
+        for (req, name) in &deploy_requests {
+            let bytes = postcard::to_stdvec(req).expect("serialize");
+            let decoded: ClientRpcRequest =
+                postcard::from_bytes(&bytes).unwrap_or_else(|e| panic!("Failed to deserialize {name}: {e}"));
+            assert_eq!(decoded.variant_name(), *name);
+        }
+    }
+
+    /// Verify deploy variants have correct required_app.
+    #[test]
+    fn test_deploy_required_app() {
+        assert_eq!(
+            ClientRpcRequest::ClusterDeploy {
+                artifact: String::new(),
+                strategy: "rolling".into(),
+                max_concurrent: 1,
+                health_timeout_secs: 120,
+            }
+            .required_app(),
+            Some("deploy")
+        );
+        assert_eq!(ClientRpcRequest::ClusterDeployStatus.required_app(), Some("deploy"));
+        assert_eq!(ClientRpcRequest::ClusterRollback.required_app(), Some("deploy"));
+        assert_eq!(
+            ClientRpcRequest::NodeUpgrade {
+                deploy_id: String::new(),
+                artifact: String::new(),
+            }
+            .required_app(),
+            Some("deploy")
+        );
+        assert_eq!(
+            ClientRpcRequest::NodeRollback {
+                deploy_id: String::new(),
+            }
+            .required_app(),
+            Some("deploy")
+        );
+    }
+
+    /// Verify deploy variants have correct variant_name.
+    #[test]
+    fn test_deploy_variant_names() {
+        assert_eq!(
+            ClientRpcRequest::ClusterDeploy {
+                artifact: String::new(),
+                strategy: "rolling".into(),
+                max_concurrent: 1,
+                health_timeout_secs: 120,
+            }
+            .variant_name(),
+            "ClusterDeploy"
+        );
+        assert_eq!(ClientRpcRequest::ClusterDeployStatus.variant_name(), "ClusterDeployStatus");
+        assert_eq!(ClientRpcRequest::ClusterRollback.variant_name(), "ClusterRollback");
+        assert_eq!(
+            ClientRpcRequest::NodeUpgrade {
+                deploy_id: String::new(),
+                artifact: String::new(),
+            }
+            .variant_name(),
+            "NodeUpgrade"
+        );
+        assert_eq!(
+            ClientRpcRequest::NodeRollback {
+                deploy_id: String::new(),
+            }
+            .variant_name(),
+            "NodeRollback"
+        );
+    }
+
+    /// Verify deploy operations require cluster admin authorization.
+    #[cfg(feature = "auth")]
+    #[test]
+    fn test_deploy_to_operation() {
+        use aspen_auth::Operation;
+
+        // Mutating deploy ops require cluster admin auth
+        let deploy = ClientRpcRequest::ClusterDeploy {
+            artifact: String::new(),
+            strategy: "rolling".into(),
+            max_concurrent: 1,
+            health_timeout_secs: 120,
+        };
+        match deploy.to_operation() {
+            Some(Operation::ClusterAdmin { action }) => {
+                assert_eq!(action, "cluster_operation");
+            }
+            other => panic!("Expected ClusterAdmin for ClusterDeploy, got {other:?}"),
+        }
+
+        // Rollback requires cluster admin
+        match ClientRpcRequest::ClusterRollback.to_operation() {
+            Some(Operation::ClusterAdmin { action }) => {
+                assert_eq!(action, "cluster_operation");
+            }
+            other => panic!("Expected ClusterAdmin for ClusterRollback, got {other:?}"),
+        }
+
+        // Status is read-only, no auth required
+        assert!(ClientRpcRequest::ClusterDeployStatus.to_operation().is_none());
+    }
+
     /// Pin the postcard discriminant of critical request variants.
     #[test]
     fn test_request_discriminant_golden_table() {
