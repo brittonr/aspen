@@ -36,7 +36,6 @@ pub type ForgeNodeRef = Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dy
 pub async fn handle_trigger_pipeline(
     orchestrator: Option<&Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
     forge_node: Option<&ForgeNodeRef>,
-    deploy_dispatcher: Option<Arc<dyn aspen_ci::DeployDispatcher>>,
     repo_id: String,
     ref_name: String,
     commit_hash_opt: Option<String>,
@@ -233,16 +232,9 @@ pub async fn handle_trigger_pipeline(
         source_hash: None, // VM jobs may fail without source_hash
     };
 
-    // Check for deploy stages before executing (config is consumed by execute)
-    let has_deploys =
-        aspen_ci::PipelineOrchestrator::<dyn aspen_core::KeyValueStore>::has_deploy_jobs(&pipeline_config);
-    let deploy_stages = if has_deploys {
-        Some(super::deploy::extract_deploy_stages(&pipeline_config))
-    } else {
-        None
-    };
-
-    // Execute the pipeline
+    // Execute the pipeline.
+    // Deploy monitoring is handled automatically by the orchestrator
+    // when a deploy dispatcher is configured — no need to spawn it here.
     let run = match orchestrator.execute(pipeline_config, context).await {
         Ok(r) => r,
         Err(e) => {
@@ -253,19 +245,6 @@ pub async fn handle_trigger_pipeline(
             }));
         }
     };
-
-    // If pipeline has deploy stages, spawn a background monitor that runs
-    // them after the workflow (non-deploy stages) completes.
-    if let (Some(stages), Some(dispatcher)) = (deploy_stages, deploy_dispatcher)
-        && !stages.is_empty()
-    {
-        info!(
-            run_id = %run.id,
-            deploy_stages = stages.len(),
-            "spawning deploy monitor for pipeline"
-        );
-        super::deploy::spawn_deploy_monitor(orchestrator.clone(), dispatcher, run.id.clone(), stages);
-    }
 
     info!(run_id = %run.id, "CI pipeline started successfully");
 

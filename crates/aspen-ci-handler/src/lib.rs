@@ -75,6 +75,19 @@ impl HandlerFactory for CiHandlerFactory {
         let has_orchestrator = ctx.ci_orchestrator.is_some();
         let has_trigger = ctx.ci_trigger_service.is_some();
         if has_orchestrator || has_trigger {
+            // Set up deploy dispatcher on the orchestrator so it can
+            // automatically spawn deploy monitors for both trigger paths
+            // (direct RPC and auto-trigger via gossip).
+            if let Some(ref orchestrator) = ctx.ci_orchestrator {
+                let deploy_dispatcher: Arc<dyn aspen_ci::DeployDispatcher> =
+                    Arc::new(handler::deploy::RpcDeployDispatcher::new(
+                        ctx.kv_store.clone(),
+                        ctx.controller.clone(),
+                        ctx.node_id,
+                    ));
+                orchestrator.set_deploy_dispatcher(deploy_dispatcher);
+            }
+
             let executor = Arc::new(CiServiceExecutor::new(
                 ctx.ci_orchestrator.clone(),
                 ctx.ci_trigger_service.clone(),
@@ -83,8 +96,6 @@ impl HandlerFactory for CiHandlerFactory {
                 #[cfg(feature = "blob")]
                 ctx.blob_store.clone(),
                 ctx.kv_store.clone(),
-                ctx.controller.clone(),
-                ctx.node_id,
             ));
             Some(Arc::new(ServiceHandler::new(executor)))
         } else {

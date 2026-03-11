@@ -48,10 +48,6 @@ pub struct CiServiceExecutor {
     #[cfg(feature = "blob")]
     blob_store: Option<Arc<aspen_blob::IrohBlobStore>>,
     kv_store: Arc<dyn aspen_core::KeyValueStore>,
-    /// Cluster controller for deploy operations.
-    controller: Arc<dyn aspen_core::ClusterController>,
-    /// Node ID for deploy operations.
-    node_id: u64,
 }
 
 impl CiServiceExecutor {
@@ -62,8 +58,6 @@ impl CiServiceExecutor {
         #[cfg(all(feature = "forge", feature = "blob"))] forge_node: Option<ForgeNodeRef>,
         #[cfg(feature = "blob")] blob_store: Option<Arc<aspen_blob::IrohBlobStore>>,
         kv_store: Arc<dyn aspen_core::KeyValueStore>,
-        controller: Arc<dyn aspen_core::ClusterController>,
-        node_id: u64,
     ) -> Self {
         Self {
             ci_orchestrator,
@@ -73,20 +67,7 @@ impl CiServiceExecutor {
             #[cfg(feature = "blob")]
             blob_store,
             kv_store,
-            controller,
-            node_id,
         }
-    }
-
-    /// Create a deploy dispatcher for bridging CI deploy stages to the
-    /// cluster's deployment coordinator.
-    #[cfg(all(feature = "forge", feature = "blob"))]
-    fn deploy_dispatcher(&self) -> Arc<dyn aspen_ci::DeployDispatcher> {
-        Arc::new(crate::handler::deploy::RpcDeployDispatcher::new(
-            self.kv_store.clone(),
-            self.controller.clone(),
-            self.node_id,
-        ))
     }
 }
 
@@ -133,7 +114,6 @@ impl ServiceExecutor for CiServiceExecutor {
                 handle_trigger_pipeline(
                     self.ci_orchestrator.as_ref(),
                     self.forge_node.as_ref(),
-                    Some(self.deploy_dispatcher()),
                     repo_id,
                     ref_name,
                     commit_hash,

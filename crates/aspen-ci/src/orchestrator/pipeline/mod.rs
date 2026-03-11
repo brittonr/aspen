@@ -29,6 +29,12 @@ mod status;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+// Deploy dispatcher uses std::sync::RwLock (not tokio) because:
+// 1. It's written once at init, read occasionally during pipeline execution
+// 2. The lock hold time is negligible (just cloning an Arc)
+// 3. It needs to be settable from sync contexts (HandlerFactory::create)
+use std::sync::RwLock as StdRwLock;
+use std::sync::Weak;
 use std::time::Duration;
 
 use aspen_blob::prelude::*;
@@ -51,6 +57,7 @@ use uuid::Uuid;
 use crate::config::types::PipelineConfig;
 use crate::error::CiError;
 use crate::error::Result;
+use crate::orchestrator::DeployDispatcher;
 
 // Tiger Style: Bounded resources
 /// Maximum concurrent pipeline runs per repository.
@@ -299,6 +306,19 @@ pub struct PipelineOrchestrator<S: KeyValueStore + ?Sized> {
     active_runs: RwLock<HashMap<String, PipelineRun>>,
     /// Runs per repository (repo_id -> count) - in-memory counter.
     runs_per_repo: RwLock<HashMap<RepoId, usize>>,
+    /// Optional deploy dispatcher for running deploy stages.
+    ///
+    /// When set, the orchestrator automatically spawns a deploy monitor
+    /// for pipeline runs that have deploy stages. This covers both the
+    /// direct RPC trigger path and the auto-trigger (gossip) path.
+    ///
+    /// Uses `std::sync::RwLock` so it can be set from sync contexts
+    /// (e.g., `HandlerFactory::create`).
+    deploy_dispatcher: StdRwLock<Option<Arc<dyn DeployDispatcher>>>,
+    /// Weak self-reference for spawning deploy monitors from `execute()`.
+    ///
+    /// Set during `init()` which already requires `&Arc<Self>`.
+    self_ref: RwLock<Option<Weak<Self>>>,
 }
 
 impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
@@ -318,6 +338,24 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             kv_store,
             active_runs: RwLock::new(HashMap::new()),
             runs_per_repo: RwLock::new(HashMap::new()),
+            deploy_dispatcher: StdRwLock::new(None),
+            self_ref: RwLock::new(None),
+        }
+    }
+
+    /// Set the deploy dispatcher for automatic deploy stage monitoring.
+    ///
+    /// When configured, any pipeline run with deploy stages will
+    /// automatically get a deploy monitor spawned after execution starts.
+    /// This eliminates the need for callers to spawn monitors manually.
+    ///
+    /// Can be called after construction (e.g., from the handler factory)
+    /// since the field uses `std::sync::RwLock`.
+    pub fn set_deploy_dispatcher(&self, dispatcher: Arc<dyn DeployDispatcher>) {
+        if let Ok(mut guard) = self.deploy_dispatcher.write() {
+            *guard = Some(dispatcher);
+        } else {
+            warn!("failed to set deploy dispatcher: lock poisoned");
         }
     }
 
@@ -338,7 +376,11 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     /// Initialize the orchestrator by setting up job completion callbacks.
     ///
     /// This must be called before executing pipelines to enable stage transitions.
+    /// Also stores a weak self-reference used to spawn deploy monitors.
     pub async fn init(self: &Arc<Self>) {
+        // Store weak reference for deploy monitor spawning
+        *self.self_ref.write().await = Some(Arc::downgrade(self));
+
         let workflow_manager = self.workflow_manager.clone();
         let job_manager = self.job_manager.clone();
 
@@ -426,6 +468,9 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
 
         // Track the run
         self.track_run(&run).await;
+
+        // Spawn deploy monitor if the run has deploy stages and a dispatcher is configured
+        self.maybe_spawn_deploy_monitor(&run, &pipeline_config).await;
 
         info!(
             run_id = %run.id,
@@ -885,6 +930,9 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             warn!(run_id = %run.id, error = %e, "Failed to persist running run");
         }
 
+        // Spawn deploy monitor if the run has deploy stages and a dispatcher is configured
+        self.maybe_spawn_deploy_monitor(&run, &pipeline_config).await;
+
         info!(
             run_id = %run.id,
             workflow_id = %workflow_id,
@@ -955,6 +1003,55 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         } else {
             None
         }
+    }
+
+    /// Spawn a deploy monitor if the run has pending deploys and a dispatcher is configured.
+    ///
+    /// Uses the weak self-reference stored during `init()` to get an `Arc<Self>`
+    /// for the background task. Both `execute()` and `execute_existing_run()` call
+    /// this, so deploy monitoring works for both the direct RPC trigger path and
+    /// the auto-trigger (gossip → TriggerService → OrchestratorPipelineStarter) path.
+    async fn maybe_spawn_deploy_monitor(&self, run: &PipelineRun, config: &PipelineConfig) {
+        if !run.has_pending_deploys {
+            return;
+        }
+
+        let dispatcher = match self.deploy_dispatcher.read().ok().and_then(|g| g.clone()) {
+            Some(d) => d,
+            None => {
+                warn!(
+                    run_id = %run.id,
+                    "pipeline has deploy stages but no deploy dispatcher configured — \
+                     deploys will not run and pipeline will stay Running"
+                );
+                return;
+            }
+        };
+
+        let arc_self = match self.self_ref.read().await.as_ref().and_then(Weak::upgrade) {
+            Some(arc) => arc,
+            None => {
+                warn!(
+                    run_id = %run.id,
+                    "cannot spawn deploy monitor: orchestrator self-reference not available \
+                     (was init() called?)"
+                );
+                return;
+            }
+        };
+
+        let deploy_stages = crate::orchestrator::deploy_monitor::extract_deploy_stages(config);
+        if deploy_stages.is_empty() {
+            return;
+        }
+
+        info!(
+            run_id = %run.id,
+            deploy_stages = deploy_stages.len(),
+            "spawning deploy monitor for pipeline"
+        );
+
+        crate::orchestrator::deploy_monitor::spawn_deploy_monitor(arc_self, dispatcher, run.id.clone(), deploy_stages);
     }
 }
 
