@@ -22,4 +22,4 @@
 
 ## 5. Smoke Test
 
-- [ ] 5.1 Run `nix build .#checks.x86_64-linux.ci-dogfood-full-workspace-test --impure --option sandbox false -L` and verify all subtests pass. Capture full build log including cargo compilation output showing all 80 crates compiled.
+- [x] 5.1 Run `nix build .#checks.x86_64-linux.ci-dogfood-full-workspace-test --impure --option sandbox false -L` and verify all subtests pass. Capture full build log including cargo compilation output showing all 80 crates compiled.
