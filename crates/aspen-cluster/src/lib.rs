@@ -162,6 +162,9 @@ pub use aspen_cluster_bridges::ttl_events_bridge;
 #[cfg(feature = "jobs")]
 pub mod worker_service;
 
+#[cfg(feature = "deploy")]
+pub mod upgrade;
+
 // Re-export transport traits and types for convenient access
 // Re-export extracted types to preserve the public API
 pub use endpoint_config::IrohEndpointConfig;

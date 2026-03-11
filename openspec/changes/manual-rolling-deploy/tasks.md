@@ -17,23 +17,23 @@
 
 ## 3. Quorum Safety (verified functions)
 
-- [ ] 3.1 Create `aspen-deploy/src/verified/mod.rs` and `quorum.rs` with pure functions
-- [ ] 3.2 Implement `quorum_size(voter_count: u32) -> u32` — returns `ceil((voter_count + 1) / 2)`
-- [ ] 3.3 Implement `can_upgrade_node(healthy_voters: u32, currently_upgrading: u32, voter_count: u32) -> bool` — checks quorum invariant
-- [ ] 3.4 Implement `max_concurrent_upgrades(voter_count: u32) -> u32` — returns `(voter_count - 1) / 2`, minimum 1
-- [ ] 3.5 Write unit tests for edge cases: 1-node, 3-node, 5-node, 7-node clusters
-- [ ] 3.6 Add Verus specs in `aspen-deploy/verus/quorum_spec.rs` proving quorum safety invariant holds
+- [x] 3.1 Create `aspen-deploy/src/verified/mod.rs` and `quorum.rs` with pure functions
+- [x] 3.2 Implement `quorum_size(voter_count: u32) -> u32` — returns `ceil((voter_count + 1) / 2)`
+- [x] 3.3 Implement `can_upgrade_node(healthy_voters: u32, currently_upgrading: u32, voter_count: u32) -> bool` — checks quorum invariant
+- [x] 3.4 Implement `max_concurrent_upgrades(voter_count: u32) -> u32` — returns `(voter_count - 1) / 2`, minimum 1
+- [x] 3.5 Write unit tests for edge cases: 1-node, 3-node, 5-node, 7-node clusters
+- [x] 3.6 Add Verus specs in `aspen-deploy/verus/quorum_spec.rs` proving quorum safety invariant holds
 
 ## 4. Node-Level Upgrade (`aspen-cluster`)
 
-- [ ] 4.1 Create `aspen-cluster/src/upgrade/mod.rs` with `NodeUpgradeExecutor` struct
-- [ ] 4.2 Implement graceful drain: set drain flag → reject new client RPCs → return `NOT_LEADER` for writes → wait for in-flight ops up to `DRAIN_TIMEOUT_SECS` → force-proceed if timeout
-- [ ] 4.3 Implement Nix upgrade path: `nix-env --profile <path> --set <store-path>`, verify binary at `<store-path>/bin/aspen-node`
-- [ ] 4.4 Implement blob upgrade path: download blob to staging dir, SHA-256 validate, `--version` smoke test, atomic rename, preserve `.bak`
-- [ ] 4.5 Implement restart detection: check for systemd (`$NOTIFY_SOCKET` / `$INVOCATION_ID`) → `systemctl restart`, else `execve` with original args
-- [ ] 4.6 Implement status reporting: write `_sys:deploy:node:{node_id}` with status transitions through the upgrade lifecycle
-- [ ] 4.7 Implement `NodeRollback`: Nix `--rollback` or restore `.bak`, then restart
-- [ ] 4.8 Write unit tests for drain logic (mock in-flight counter), binary validation, status state machine
+- [x] 4.1 Create `aspen-cluster/src/upgrade/mod.rs` with `NodeUpgradeExecutor` struct
+- [x] 4.2 Implement graceful drain: set drain flag → reject new client RPCs → return `NOT_LEADER` for writes → wait for in-flight ops up to `DRAIN_TIMEOUT_SECS` → force-proceed if timeout
+- [x] 4.3 Implement Nix upgrade path: `nix-env --profile <path> --set <store-path>`, verify binary at `<store-path>/bin/aspen-node`
+- [x] 4.4 Implement blob upgrade path: download blob to staging dir, SHA-256 validate, `--version` smoke test, atomic rename, preserve `.bak`
+- [x] 4.5 Implement restart detection: check for systemd (`$NOTIFY_SOCKET` / `$INVOCATION_ID`) → `systemctl restart`, else `execve` with original args
+- [x] 4.6 Implement status reporting: write `_sys:deploy:node:{node_id}` with status transitions through the upgrade lifecycle
+- [x] 4.7 Implement `NodeRollback`: Nix `--rollback` or restore `.bak`, then restart
+- [x] 4.8 Write unit tests for drain logic (mock in-flight counter), binary validation, status state machine
 
 ## 5. Deployment Coordinator (`aspen-deploy`)
 

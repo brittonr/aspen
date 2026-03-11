@@ -472,7 +472,7 @@ docs = ["dep:aspen-docs", "dep:iroh-docs", "dep:iroh-blobs", "blob", "aspen-rpc-
 proxy = ["dep:aspen-proxy", "aspen-cluster/proxy"]
 net = ["dep:aspen-net", "proxy", "aspen-rpc-handlers/net"]
 # contacts and calendar are now WASM plugins (aspen-plugins repo)
-deploy = ["dep:aspen-deploy"]
+deploy = ["dep:aspen-deploy", "aspen-cluster/deploy"]
 federation = ["aspen-cluster/federation"]
 relay-server = ["aspen-cluster/relay-server"]
 snix = ["dep:aspen-snix", "dep:aspen-castore", "dep:snix-castore", "dep:snix-store", "blob", "aspen-cluster/snix", "aspen-ci?/nix-executor-snix"]
