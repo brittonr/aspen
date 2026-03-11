@@ -1,80 +1,117 @@
 ## Context
 
-Phase 1 (`manual-rolling-deploy`) provides the `ClusterDeploy`, `ClusterDeployStatus`, and `ClusterRollback` RPCs plus the node-level upgrade machinery. This phase connects those RPCs to the CI pipeline so deployments happen automatically after a successful build+test cycle.
+Phase 1 (`manual-rolling-deploy`) provides `ClusterDeploy`, `ClusterDeployStatus`, and `ClusterRollback` RPCs, the `DeploymentCoordinator` on the Raft leader, node-level binary swap (Nix profile switch or blob-based), graceful drain, health-gated progression, and quorum safety invariants. The CLI has `cluster deploy <artifact>`, `cluster deploy-status`, and `cluster rollback` with progress polling.
 
-The existing CI executor architecture has `ShellExecutor` and `NixBuildWorker`. Deploy needs a third executor type that doesn't run a build — it resolves an artifact from a previous build job and calls the deployment RPC.
+The CI pipeline already produces Nix store paths as build artifacts. Job results are stored in KV at `__jobs:{job_id}` with `result.Success.data.output_paths` containing the built store paths. The `PipelineOrchestrator` in `aspen-ci/src/orchestrator/pipeline/` coordinates stage execution and status sync. The trigger system in `aspen-ci/src/trigger/` auto-starts pipelines on git push via forge gossip.
+
+This phase connects deployment to the CI pipeline. A `type = 'deploy` job references a build job's artifacts and calls `ClusterDeploy`.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- CI pipeline can include a `type = 'deploy` job that triggers rolling deployment
-- Deploy jobs resolve artifacts from build job results automatically
-- Dogfood script runs the complete push → build → test → deploy → verify loop
+- CI pipeline can include a `type = 'deploy` job that triggers rolling deployment after build
+- Deploy jobs resolve artifacts from referenced build job results automatically
+- Dogfood script runs the full push → build → deploy → verify loop
 - NixOS VM test validates the full cycle in isolation
 
 **Non-Goals:**
 
-- Deployment approval gates (manual approval before deploy — future work)
-- Deploy-on-tag-only (trigger filtering is already in TriggerConfig, just needs config)
-- Multi-environment deploys (staging → production — future work)
-- Deploy notifications (Slack, email — future work)
+- Deployment approval gates (manual approval before deploy — future)
+- Multi-environment deploys (staging → production — future)
+- Wire format version negotiation between old and new binaries (acknowledged risk, not solved)
+- Deploy notifications (Slack/webhook — future)
 
 ## Decisions
 
-### 1. DeployExecutor as a CI executor, not a worker
+### 1. DeployExecutor runs on the leader, not via worker queue
 
-Deploy jobs don't run on worker nodes — they run on the leader where the `DeploymentCoordinator` lives. The `DeployExecutor` is registered directly in the CI pipeline orchestrator's dispatch, not in the worker pool. When the orchestrator encounters a `JobType::Deploy`, it runs the executor in-process on the leader.
+Deploy jobs don't run on worker nodes — they run on the leader where the `DeploymentCoordinator` lives. When the `PipelineOrchestrator` encounters a `JobType::Deploy`, it runs the `DeployExecutor` in-process instead of enqueueing to the job queue.
 
-**Alternative**: Route deploy jobs through the job queue to a worker that calls `ClusterDeploy` RPC. Rejected — adds an unnecessary hop. The orchestrator already runs on the leader.
+This avoids an unnecessary hop: the orchestrator already runs on the leader, and `ClusterDeploy` must be called on the leader. Routing through the worker queue would mean a worker calls an RPC back to the leader.
+
+**Alternative**: Route deploy jobs through the job queue to a `DeployWorker`. Rejected — adds latency and complexity for no benefit. The leader already has the `DeploymentCoordinator`.
 
 ### 2. Artifact resolution via job result KV lookup
 
-The deploy job config has `artifact_from = "build-node"`. The executor:
+The deploy job config has `artifact_from = "build-node"` (the name of a build job in a preceding stage). The `DeployExecutor`:
 
-1. Finds the job ID for "build-node" in the current pipeline run
+1. Finds the job ID for `"build-node"` in the current pipeline run's stage/job metadata
 2. Reads `__jobs:{job_id}` from KV
-3. Extracts `result.Success.data.output_paths[0]` (Nix store path) or `result.Success.data.artifacts[].blob_hash` (blob)
-4. Passes the artifact to `ClusterDeploy` RPC
+3. Extracts `result.Success.data.output_paths[0]` as a `DeployArtifact::NixStorePath`
+4. Falls back to `result.Success.data.artifacts[].blob_hash` as `DeployArtifact::BlobHash`
+5. Fails with `NO_ARTIFACTS_FOUND` if neither exists
 
-This reuses the existing job result storage — no new artifact registry.
+This reuses existing job result storage — no new artifact registry needed.
 
-### 3. Progress as CI job logs
+### 3. Progress emitted as CI job logs
 
-The executor polls `ClusterDeployStatus` every 5 seconds and emits per-node status changes as CI job log lines:
+The `DeployExecutor` polls `ClusterDeployStatus` every `DEPLOY_STATUS_POLL_INTERVAL_SECS` (5s) and emits per-node status changes as job log lines:
 
 ```
-[deploy] Starting rolling deployment (3 nodes)
-[deploy] Node 2: draining...
-[deploy] Node 2: restarting
+[deploy] Starting rolling deployment: /nix/store/...-aspen-node (3 nodes)
+[deploy] Node 2: draining
+[deploy] Node 2: upgrading
 [deploy] Node 2: healthy ✓
-[deploy] Node 3: draining...
-...
-[deploy] Node 1 (leader): draining...
-[deploy] Deployment completed successfully
+[deploy] Node 3: draining
+[deploy] Node 3: healthy ✓
+[deploy] Node 1 (leader): draining
+[deploy] Deployment completed (42s)
 ```
 
-This gives operators visibility in the CI log stream without needing a separate monitoring channel.
+Log lines flow through the existing CI log infrastructure (`_ci:logs:{run_id}:{job_id}:{chunk}`), so `ci logs --follow` works for deploy jobs the same way it works for build jobs.
 
-### 4. Dogfood script structure
+### 4. Validation: artifact_from must reference a prior stage job
 
-`dogfood-local.sh` gains:
+`JobConfig::validate()` gains a new check: if `job_type == Deploy`, then `artifact_from` must be `Some(name)` where `name` matches a job name in a preceding stage. This is a static check at config load time — doesn't wait for runtime.
 
-- `do_deploy`: calls `cli cluster deploy` with the CI-built artifact, polls status, prints progress
-- `do_full_loop`: `start → push → build → deploy → verify` (verify checks running node version matches)
-- Updates `do_verify` to check `cluster status` reports the new git hash
+Cross-stage reference validation needs the full `PipelineConfig` context, so this check lives in `PipelineConfig::validate()`, not `JobConfig::validate()`.
 
-The existing `full` command stays as-is (build only). `full-loop` is the new end-to-end command.
+### 5. Dogfood script: deploy + full-loop commands
+
+`scripts/dogfood-local.sh` gains:
+
+- `do_deploy`: reads the pipeline run ID from `$CLUSTER_DIR/run_id`, extracts the CI-built artifact (Nix store path from job result), calls `cli cluster deploy <store-path>`, polls `cli cluster deploy-status` with progress output
+- `do_full_loop`: `start → push → build → deploy → verify` (the complete self-hosted cycle)
+- `do_verify` update: additionally checks `cluster status` reports the expected version
+
+The existing `full` command stays as-is (build + verify only). `full-loop` adds deployment.
+
+### 6. VM test: single-node, pre-built binary, generous timeouts
+
+The NixOS VM test (`ci-dogfood-deploy.nix`) uses a **single-node** cluster, not 3-node. Reasons:
+
+- A single-node cluster still exercises the full deploy path (drain → swap → restart → health)
+- Multi-node tests need 3× the RAM and add flakiness from quorum timing during leader restart
+- The quorum safety invariant is already unit-tested in `aspen-deploy`
+
+The test pushes a minimal flake that produces a versioned wrapper binary (not the full Aspen build). This keeps the nix build under 60s and avoids the 15+ minute full workspace compile.
+
+Key VM test configuration (from napkin lessons):
+
+- `writableStoreUseTmpfs = false` — nix builds download large deps that overflow tmpfs
+- `diskSize = 20480` — enough for nix store with build deps
+- `memorySize = 4096` — hyperlight/redb need headroom
+- Use absolute paths in `systemd-run` (NixOS transient units don't inherit `environment.systemPackages` PATH)
+- Use `pkgs.writeText` for multi-line config files (not bash heredocs in Python `succeed()`)
+- Poll with `wait_until_succeeds` + generous timeout, not tight loops
+- Probe for binary with `test -x` before assuming output_paths\[0\] is the binary (skip -man, -doc outputs)
 
 ## Risks / Trade-offs
 
-**[Risk: Deploy stage runs before binary cache propagation]** → The build job's `publish_to_cache = true` uploads store paths. But cache propagation may lag. Mitigation: the deploy executor waits up to 60s for the store path to appear in the cache before giving up.
+**[Risk: Wire format incompatibility between old and new binary]** → Phase 1 design doc explicitly calls this out as a non-goal. Postcard discriminant stability is a known concern (napkin has 5+ incidents). The deploy machinery doesn't solve this — operators must ensure the new binary is wire-compatible. Version negotiation is future work.
 
-**[Risk: VM test flakiness from timing]** → Multi-node deploy involves restart windows. The VM test must use generous timeouts (180s health checks, 600s total). Use `retry_count = 1` on the deploy job for one retry.
+**[Risk: Store path not available on target node]** → The build job runs `nix build` on the leader node, so the store path exists there. For multi-node clusters, target nodes need to fetch from cache or have the store path already. If fetch fails, the per-node upgrade fails and deployment halts (phase 1 behavior). The deploy executor logs which path it's deploying so the operator can debug.
 
-**[Trade-off: No approval gate]** → The pipeline deploys immediately after test passes. This is fine for the dogfood use case (single operator, development cluster). Production clusters should add a `when: "refs/tags/release/*"` filter on the deploy stage.
+**[Risk: Deploy stage runs before build artifacts are fully written]** → The `PipelineOrchestrator` enforces stage ordering — deploy stage only starts after all preceding stages complete. The job result KV write happens before the job is marked complete, so the artifact is always readable when the deploy executor runs.
+
+**[Risk: VM test flakiness from nix store disk space]** → `writableStoreUseTmpfs = false` + `diskSize = 20480` (20GB) prevents the "No space left on device" failure that killed earlier tests. The minimal test flake (wrapping cowsay) only needs ~200MB of deps.
+
+**[Trade-off: No approval gate]** → The pipeline deploys immediately after tests pass. For the dogfood use case (single operator, dev cluster) this is correct. Production clusters should filter the deploy stage to tagged releases: `when = "refs/tags/release/*"`.
+
+**[Trade-off: Single-node VM test]** → Doesn't test leader failover during deploy or quorum safety under real restarts. Those properties are verified by unit tests and the quorum safety Verus proofs. A multi-node deploy VM test can be added later.
 
 ## Open Questions
 
-1. Should the deploy stage be optional in the default `.aspen/ci.ncl`? Leaning yes — commented out by default, operator uncomments when ready.
-2. Should the VM test do a full workspace build or use a minimal flake? Full workspace takes 15+ minutes — maybe use a pre-built binary injected into the VM.
+1. Should the deploy stage be commented out in the default `.aspen/ci.ncl`? Leaning yes — operators opt in when their cluster is ready.
+2. Should the `DeployExecutor` wait for the store path to appear in the binary cache before calling `ClusterDeploy`? Probably not for single-node — the path is local. Matters for multi-node, but cache propagation is an existing concern, not specific to this change.

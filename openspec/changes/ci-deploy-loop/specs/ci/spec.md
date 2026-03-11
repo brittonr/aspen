@@ -4,66 +4,46 @@
 
 The system SHALL use Nickel as the configuration language for CI/CD pipelines. Pipeline definitions SHALL specify stages, jobs, dependencies, triggers, and executor requirements. The `JobType` enum SHALL include a `Deploy` variant for deployment jobs.
 
-#### Scenario: Define a pipeline
+#### Scenario: Define a pipeline with deploy stage
 
 - GIVEN a Nickel configuration file defining stages `[build, test, deploy]`
 - WHEN the pipeline is loaded
 - THEN each stage SHALL be parsed with its jobs, dependencies, and executor type
+- AND deploy jobs SHALL have `artifact_from` referencing a build job name
 
-#### Scenario: Validate configuration
+#### Scenario: Validate deploy job config
 
-- GIVEN a Nickel config with a circular dependency between jobs
+- GIVEN a Nickel config with a job of `type = 'deploy` and `artifact_from = "build-node"`
 - WHEN validation runs
-- THEN the system SHALL reject the config with a descriptive error
+- THEN the config SHALL be accepted if `"build-node"` is a job in a preceding stage
+- AND the config SHALL be rejected if `"build-node"` is not found or is in the same stage
 
-#### Scenario: Define a deploy job
+#### Scenario: Deploy job missing artifact_from
 
-- GIVEN a Nickel config with a job of `type = 'deploy`
-- WHEN the pipeline is loaded
-- THEN the job SHALL be parsed with `artifact_from`, `strategy`, `health_check_timeout_secs`, and `max_concurrent` fields
-- AND missing `artifact_from` SHALL cause a validation error
+- GIVEN a deploy job defined without `artifact_from`
+- WHEN validation runs
+- THEN the system SHALL reject the config with "deploy job requires artifact_from"
 
 ### Requirement: Pipeline Execution
 
-The system SHALL execute pipeline stages in dependency order, parallelizing independent jobs. Execution SHALL be distributed across available worker nodes. When a cluster cache is available, Nix builds SHALL automatically use it as a substituter. Deploy jobs SHALL be executed by the pipeline orchestrator directly (not dispatched to workers).
+The system SHALL execute pipeline stages in dependency order, parallelizing independent jobs. Deploy jobs SHALL be executed by the pipeline orchestrator directly on the leader node, not dispatched to the worker queue.
 
-#### Scenario: Sequential stages
+#### Scenario: Stage ordering with deploy
 
 - GIVEN stages `build → test → deploy` with dependencies
 - WHEN the pipeline executes
-- THEN `test` SHALL NOT start until `build` completes successfully
-- AND `deploy` SHALL NOT start until `test` completes successfully
+- THEN `deploy` SHALL NOT start until `build` and `test` complete successfully
 
-#### Scenario: Parallel jobs within a stage
+#### Scenario: Job failure skips deploy
 
-- GIVEN a `test` stage with jobs `[unit-tests, lint, clippy]` with no inter-dependencies
-- WHEN the stage executes
-- THEN all three jobs MAY run in parallel on different workers
-
-#### Scenario: Nix build with cache substituter
-
-- GIVEN a CI job that runs `nix build` and `use_cluster_cache` is enabled
-- WHEN the executor runs the build command
-- THEN it SHALL inject `--substituters http://127.0.0.1:{proxy_port}` and `--trusted-public-keys {cache_public_key}` into the Nix invocation
-- AND the cache proxy SHALL translate HTTP requests to aspen client RPC
-
-#### Scenario: Nix build without cache
-
-- GIVEN a CI job that runs `nix build` and `use_cluster_cache` is disabled
-- WHEN the executor runs the build command
-- THEN it SHALL NOT modify the Nix invocation's substituter configuration
-
-#### Scenario: Job failure propagation
-
-- GIVEN `build` fails in a `build → test → deploy` pipeline
-- WHEN `build` completes with an error
-- THEN `test` and `deploy` SHALL be skipped
+- GIVEN `test` fails in a `build → test → deploy` pipeline
+- WHEN `test` completes with an error
+- THEN `deploy` SHALL be skipped
 - AND the pipeline SHALL be marked as failed
 
-#### Scenario: Deploy job execution
+#### Scenario: Deploy job execution path
 
 - GIVEN a deploy job with `artifact_from = "build-node"`
-- WHEN the deploy stage executes
-- THEN the orchestrator SHALL resolve the artifact from the build-node job result
-- AND initiate a rolling deployment via `ClusterDeploy` RPC
-- AND monitor status until completion or failure
+- WHEN the deploy stage executes on the leader
+- THEN the orchestrator SHALL run `DeployExecutor` in-process
+- AND SHALL NOT enqueue the job to the worker pool

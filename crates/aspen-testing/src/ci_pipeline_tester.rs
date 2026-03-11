@@ -577,6 +577,10 @@ fn test_job(name: &str, command: &str) -> JobConfig {
         tags: vec![],
         should_upload_result: true,
         publish_to_cache: true,
+        artifact_from: None,
+        strategy: None,
+        health_check_timeout_secs: None,
+        max_concurrent: None,
     }
 }
 

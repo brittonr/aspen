@@ -33,7 +33,7 @@ let RetentionDays = std.contract.from_predicate (fun v =>
 
 # === Enum Contracts ===
 
-let JobType = [| 'nix, 'shell, 'vm |] in
+let JobType = [| 'nix, 'shell, 'vm, 'deploy |] in
 
 let IsolationMode = [| 'nix_sandbox, 'vm, 'none |] in
 
@@ -90,6 +90,16 @@ let JobConfig = {
 
   # Whether to publish outputs to the Nix binary cache (nix jobs)
   publish_to_cache | Bool | default = true,
+
+  # Deploy job fields
+  # Name of a build job in a preceding stage whose artifact to deploy
+  artifact_from | String | optional,
+  # Deployment strategy (e.g., "rolling")
+  strategy | String | optional,
+  # Health check timeout in seconds for deployment
+  health_check_timeout_secs | Number | optional,
+  # Maximum nodes to upgrade concurrently during rolling deploy
+  max_concurrent | Number | optional,
 } in
 
 # === Stage Configuration ===

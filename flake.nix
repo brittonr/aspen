@@ -2506,6 +2506,18 @@
                 nixpkgsFlake = nixpkgs;
               };
 
+              # Deploy pipeline test: push flake with deploy stage, CI builds, deploy runs.
+              # Proves the Forge → CI → Build → Deploy loop works.
+              # Build: nix build .#checks.x86_64-linux.ci-dogfood-deploy-test --impure --option sandbox false
+              ci-dogfood-deploy-test = import ./nix/tests/ci-dogfood-deploy.nix {
+                inherit pkgs lib kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+                nixpkgsFlake = nixpkgs;
+              };
+
               # Self-build test: push Aspen Rust code to Forge, CI compiles it with rustc.
               # Proves the self-hosting loop: Aspen builds its own Rust code.
               # Build: nix build .#checks.x86_64-linux.ci-dogfood-self-build-test --impure --option sandbox false

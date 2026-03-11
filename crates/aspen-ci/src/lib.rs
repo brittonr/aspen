@@ -234,6 +234,15 @@ pub use error::CiError;
 // Re-export log writer types (the actual writer implementation, not just types)
 pub use log_writer::CiLogWriter;
 pub use log_writer::SpawnedLogWriter;
+pub use orchestrator::DeployArtifact;
+pub use orchestrator::DeployDispatcher;
+pub use orchestrator::DeployExecutor;
+pub use orchestrator::DeployInitResult;
+pub use orchestrator::DeployJobParams;
+pub use orchestrator::DeployJobResult;
+pub use orchestrator::DeployNodeStatus;
+pub use orchestrator::DeployRequest;
+pub use orchestrator::DeployStatusResult;
 pub use orchestrator::PipelineContext;
 pub use orchestrator::PipelineOrchestrator;
 pub use orchestrator::PipelineOrchestratorConfig;

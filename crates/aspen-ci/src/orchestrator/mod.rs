@@ -9,9 +9,19 @@
 //! after a leader failover. Use [`OrphanedPipelineRecovery`] to scan for and
 //! recover pipelines that were in progress when the previous leader crashed.
 
+pub mod deploy_executor;
 mod pipeline;
 mod recovery;
 
+pub use deploy_executor::DeployArtifact;
+pub use deploy_executor::DeployDispatcher;
+pub use deploy_executor::DeployExecutor;
+pub use deploy_executor::DeployInitResult;
+pub use deploy_executor::DeployJobParams;
+pub use deploy_executor::DeployJobResult;
+pub use deploy_executor::DeployNodeStatus;
+pub use deploy_executor::DeployRequest;
+pub use deploy_executor::DeployStatusResult;
 pub use pipeline::PipelineContext;
 pub use pipeline::PipelineOrchestrator;
 pub use pipeline::PipelineOrchestratorConfig;

@@ -424,6 +424,11 @@ Disadvantage: no multi-machine orchestration (NixOS test has `nodes.node1`, `nod
 | 2026-03-10 | self | `default_visibility_timeout_secs` in WorkerService config was 300s (5 min) — nix builds taking 8+ minutes caused receipt handle expiry → ack failed → pipeline stuck "running" forever | The queue visibility timeout must exceed the longest expected job duration. Increased from 300s to 3600s (1 hour). The `aspen_jobs::WorkerConfig::default()` already used 3600s but the WorkerService config used 300s — a dangerous inconsistency. |
 | 2026-03-10 | self | Worker ack failure (receipt handle mismatch) silently records success at the worker level, but the job stays Running in the pipeline — pipeline never completes | When ack fails, the job isn't transitioned to Completed. The worker pool reports `jobs_processed=1` but the pipeline sees the job still Running. Need to either retry the ack or update job status directly when ack fails. |
 
+| 2026-03-11 | self | `aspen-ci` doesn't depend on `aspen-client-api` — can't use `ClientRpcRequest`/`ClientRpcResponse` directly in the deploy executor | Use a trait (`DeployDispatcher`) with plain structs instead of RPC types. The handler layer bridges the trait to the actual RPC types. |
+| 2026-03-11 | self | `ReadRequest` requires `consistency` field (not just `key`) — use `ReadRequest::new(key)` constructor | Always use `::new()` constructors for KV request types instead of struct literals. |
+| 2026-03-11 | self | `JobId` is a newtype with no `From<String>` — use `serde_json::from_value(json!("id"))` in tests | Check if newtype has `From` impl before using `::from()`. Serde deserialization works as a fallback. |
+| 2026-03-11 | self | Adding fields to `JobConfig` (aspen-ci-core) broke 5 construction sites across workspace | When adding fields to widely-used config structs, grep `rg 'StructName\s*\{' --type rust -l` to find all construction sites. |
+
 Key gotchas:
 
 - Disk image is read-only in nix store — must `cp` + `chmod +w` before `vm_boot`

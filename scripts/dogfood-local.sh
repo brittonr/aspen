@@ -481,6 +481,13 @@ do_verify() {
 
   log "Verifying CI-built binary against local binary..."
 
+  # Check running node version if available
+  local cluster_version
+  cluster_version=$(cli cluster status 2>/dev/null | grep -i 'version' | head -1 || true)
+  if [ -n "$cluster_version" ]; then
+    log "Running node version: $cluster_version"
+  fi
+
   # Find the pipeline run — prefer saved run_id, fall back to latest
   local run_id
   run_id=$(cat "$CLUSTER_DIR/run_id" 2>/dev/null || true)
@@ -712,6 +719,203 @@ compare_binaries() {
   return 0
 }
 
+# ── Deploy ─────────────────────────────────────────────────────────────
+
+do_deploy() {
+  if [ ! -f "$CLUSTER_DIR/node1/cluster-ticket.txt" ]; then
+    err "No cluster running. Start with: $0 start"
+    exit 1
+  fi
+
+  log "Deploying CI-built artifact to cluster..."
+
+  # Find the pipeline run — prefer saved run_id, fall back to latest
+  local run_id
+  run_id=$(cat "$CLUSTER_DIR/run_id" 2>/dev/null || true)
+
+  if [ -z "$run_id" ]; then
+    local list_out
+    list_out=$(cli_json ci list 2>&1) || true
+    run_id=$(parse_json "d.get('runs',[])[0].get('run_id','') if d.get('runs') else ''" <<< "$list_out")
+  fi
+
+  if [ -z "$run_id" ]; then
+    err "No pipeline runs found. Run build first: $0 build"
+    exit 1
+  fi
+
+  # Get pipeline status to find build-node job
+  local status_out
+  status_out=$(cli_json ci status "$run_id" 2>&1) || true
+  local pipeline_status
+  pipeline_status=$(parse_json "d.get('status','unknown')" <<< "$status_out")
+
+  if [ "$pipeline_status" != "success" ]; then
+    err "Pipeline $run_id is not successful (status: $pipeline_status)"
+    exit 1
+  fi
+
+  # Extract the Nix store path from the build-node job result
+  local build_node_job_id
+  build_node_job_id=$(python3 -c "
+import json, sys, re
+raw = sys.stdin.read()
+for m in re.finditer(r'[\[{]', raw):
+    try:
+        d = json.loads(raw[m.start():])
+    except (json.JSONDecodeError, ValueError):
+        continue
+    for stage in d.get('stages', []):
+        if stage.get('name') == 'build':
+            for job in stage.get('jobs', []):
+                if job.get('name') == 'build-node' and job.get('id'):
+                    print(job['id'])
+                    sys.exit(0)
+    print('')
+    sys.exit(0)
+print('')
+" <<< "$status_out" 2>/dev/null)
+
+  if [ -z "$build_node_job_id" ]; then
+    err "Could not find build-node job ID in pipeline $run_id"
+    exit 1
+  fi
+
+  local job_data
+  job_data=$(cli_json kv get "__jobs:$build_node_job_id" 2>&1) || true
+
+  local store_path
+  store_path=$(python3 -c "
+import json, sys, re
+raw = sys.stdin.read()
+for m in re.finditer(r'[\[{]', raw):
+    try:
+        d = json.loads(raw[m.start():])
+    except (json.JSONDecodeError, ValueError):
+        continue
+    try:
+        job_str = d.get('value', '')
+        job = json.loads(job_str)
+        data = job.get('result', {}).get('Success', {}).get('data', {})
+        paths = data.get('output_paths', [])
+        if paths:
+            print(paths[0])
+        else:
+            print('')
+    except:
+        print('')
+    sys.exit(0)
+print('')
+" <<< "$job_data" 2>/dev/null)
+
+  if [ -z "$store_path" ]; then
+    err "Could not extract Nix store path from build-node job result"
+    exit 1
+  fi
+
+  ok "CI-built artifact: $store_path"
+
+  # Initiate rolling deployment
+  log "Calling cluster deploy..."
+  local deploy_out
+  deploy_out=$(cli_json cluster deploy "$store_path" 2>&1) || {
+    err "cluster deploy failed"
+    echo "Output: $deploy_out"
+    exit 1
+  }
+  ok "Deployment initiated"
+
+  # Poll deploy status
+  log "Polling deployment status..."
+  local deadline=$((SECONDS + 600))
+  local prev_status=""
+
+  while [ $SECONDS -lt $deadline ]; do
+    local ds_out
+    ds_out=$(cli_json cluster deploy-status 2>&1) || true
+    local ds_status
+    ds_status=$(parse_json "d.get('status', 'unknown')" <<< "$ds_out")
+
+    if [ "$ds_status" != "$prev_status" ]; then
+      log "Deploy status: $ds_status"
+      prev_status="$ds_status"
+    fi
+
+    case "$ds_status" in
+      completed)
+        ok "Deployment completed successfully"
+        return 0
+        ;;
+      failed|rolled_back)
+        err "Deployment $ds_status"
+        echo "$ds_out" | head -10
+        return 1
+        ;;
+    esac
+
+    sleep 5
+  done
+
+  err "Deployment timed out after 600 seconds"
+  return 1
+}
+
+# ── Full Loop (build + deploy + verify) ───────────────────────────────
+
+do_full_loop() {
+  echo -e "${BOLD}"
+  echo "╔══════════════════════════════════════════════════════════════╗"
+  echo "║     ASPEN SELF-HOSTED FULL LOOP — BUILD → DEPLOY → VERIFY  ║"
+  echo "║                                                            ║"
+  echo "║  Building and deploying Aspen with its own infrastructure   ║"
+  echo "╚══════════════════════════════════════════════════════════════╝"
+  echo -e "${NC}"
+  echo ""
+
+  do_start
+  echo ""
+  do_push
+  echo ""
+  do_build
+  local build_result=$?
+  echo ""
+
+  if [ $build_result -ne 0 ]; then
+    err "Build failed, cannot deploy"
+    return $build_result
+  fi
+
+  do_deploy
+  local deploy_result=$?
+  echo ""
+
+  if [ $deploy_result -ne 0 ]; then
+    err "Deploy failed"
+    return $deploy_result
+  fi
+
+  do_verify
+  local verify_result=$?
+  echo ""
+
+  echo -e "${GREEN}${BOLD}"
+  echo "╔══════════════════════════════════════════════════════════════╗"
+  echo "║          🎉 SELF-HOSTED FULL LOOP SUCCEEDED 🎉             ║"
+  echo "║                                                            ║"
+  echo "║  Aspen built and deployed itself:                           ║"
+  echo "║  • Forge: hosted source code via git-remote-aspen          ║"
+  echo "║  • CI: auto-triggered pipeline on push                     ║"
+  echo "║  • Nix: reproducible builds in sandbox                     ║"
+  echo "║  • Deploy: rolling deployment to cluster                   ║"
+  if [ $verify_result -eq 0 ]; then
+  echo "║  • Verify: deployed binary validated                       ║"
+  fi
+  echo "╚══════════════════════════════════════════════════════════════╝"
+  echo -e "${NC}"
+
+  return 0
+}
+
 # ── Full Pipeline ─────────────────────────────────────────────────────
 
 do_full() {
@@ -757,24 +961,28 @@ do_full() {
 CMD="${1:-full}"
 
 case "$CMD" in
-  start)  do_start ;;
-  stop)   do_stop ;;
-  status) do_status ;;
-  push)   do_push ;;
-  build)  do_build ;;
-  verify) do_verify ;;
-  full)   do_full ;;
+  start)     do_start ;;
+  stop)      do_stop ;;
+  status)    do_status ;;
+  push)      do_push ;;
+  build)     do_build ;;
+  verify)    do_verify ;;
+  deploy)    do_deploy ;;
+  full)      do_full ;;
+  full-loop) do_full_loop ;;
   *)
-    echo "Usage: $0 {start|stop|status|push|build|verify|full}"
+    echo "Usage: $0 {start|stop|status|push|build|verify|deploy|full|full-loop}"
     echo ""
     echo "Commands:"
-    echo "  full    Full pipeline: start → push → build → verify (default)"
-    echo "  start   Start the Aspen cluster"
-    echo "  stop    Stop the cluster"
-    echo "  status  Show cluster status"
-    echo "  push    Push Aspen source to Forge"
-    echo "  build   Wait for / trigger CI build"
-    echo "  verify  Download CI-built binary from blob store and compare"
+    echo "  full       Full pipeline: start → push → build → verify (default)"
+    echo "  full-loop  Full loop: start → push → build → deploy → verify"
+    echo "  start      Start the Aspen cluster"
+    echo "  stop       Stop the cluster"
+    echo "  status     Show cluster status"
+    echo "  push       Push Aspen source to Forge"
+    echo "  build      Wait for / trigger CI build"
+    echo "  verify     Download CI-built binary from blob store and compare"
+    echo "  deploy     Deploy CI-built artifact to cluster"
     exit 1
     ;;
 esac

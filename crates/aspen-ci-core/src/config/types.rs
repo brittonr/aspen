@@ -22,6 +22,8 @@ pub enum JobType {
     Shell,
     /// Run in isolated VM.
     Vm,
+    /// Deploy a build artifact to the cluster.
+    Deploy,
 }
 
 /// Job isolation mode.
@@ -144,6 +146,24 @@ pub struct JobConfig {
     /// Defaults to true.
     #[serde(default = "default_true")]
     pub publish_to_cache: bool,
+
+    /// Name of a build job in a preceding stage whose artifact this deploy
+    /// job should deploy. Required for `Deploy` jobs.
+    #[serde(default)]
+    pub artifact_from: Option<String>,
+
+    /// Deployment strategy (e.g., "rolling"). Defaults to "rolling".
+    #[serde(default)]
+    pub strategy: Option<String>,
+
+    /// Health check timeout in seconds for deployment. Uses the cluster
+    /// default (`DEPLOY_HEALTH_TIMEOUT_SECS`) when not set.
+    #[serde(default)]
+    pub health_check_timeout_secs: Option<u64>,
+
+    /// Maximum number of nodes to upgrade concurrently during rolling deploy.
+    #[serde(default)]
+    pub max_concurrent: Option<u32>,
 }
 
 fn default_job_timeout() -> u64 {
@@ -178,6 +198,13 @@ impl JobConfig {
                 if self.binary_hash.is_none() && self.flake_attr.is_none() {
                     return Err(CiCoreError::InvalidConfig {
                         reason: format!("VM job '{}' requires binary_hash or flake_attr", self.name),
+                    });
+                }
+            }
+            JobType::Deploy => {
+                if self.artifact_from.is_none() {
+                    return Err(CiCoreError::InvalidConfig {
+                        reason: format!("Deploy job '{}' requires artifact_from", self.name),
                     });
                 }
             }
@@ -415,6 +442,9 @@ impl PipelineConfig {
         // Check for circular dependencies
         self.check_circular_dependencies()?;
 
+        // Validate deploy job artifact_from references
+        self.validate_deploy_artifact_refs()?;
+
         Ok(())
     }
 
@@ -474,6 +504,50 @@ impl PipelineConfig {
         Ok(())
     }
 
+    /// Validate that deploy jobs' `artifact_from` references point to
+    /// job names in preceding stages (not the same stage or a later one).
+    fn validate_deploy_artifact_refs(&self) -> crate::error::Result<()> {
+        let ordered_stages = self.stages_in_order();
+
+        // Collect job names from all stages we've seen so far (preceding stages).
+        let mut preceding_job_names = std::collections::HashSet::new();
+
+        for stage in &ordered_stages {
+            // Check deploy jobs in this stage against preceding jobs
+            for job in &stage.jobs {
+                if job.job_type == JobType::Deploy
+                    && let Some(ref artifact_from) = job.artifact_from
+                    && !preceding_job_names.contains(artifact_from.as_str())
+                {
+                    // Check if it's in the same stage (different error message)
+                    let in_same_stage = stage.jobs.iter().any(|j| j.name == *artifact_from);
+                    if in_same_stage {
+                        return Err(CiCoreError::InvalidConfig {
+                            reason: format!(
+                                "Deploy job '{}' references '{}' in the same stage; \
+                                 artifact_from must reference a job in a preceding stage",
+                                job.name, artifact_from
+                            ),
+                        });
+                    }
+                    return Err(CiCoreError::InvalidConfig {
+                        reason: format!(
+                            "Deploy job '{}' references unknown job '{}' in artifact_from",
+                            job.name, artifact_from
+                        ),
+                    });
+                }
+            }
+
+            // Add this stage's job names to the preceding set
+            for job in &stage.jobs {
+                preceding_job_names.insert(job.name.as_str());
+            }
+        }
+
+        Ok(())
+    }
+
     /// Get stages in topological order (respecting dependencies).
     pub fn stages_in_order(&self) -> Vec<&StageConfig> {
         use std::collections::HashMap;
@@ -524,6 +598,209 @@ mod tests {
         assert!(trigger.should_trigger("refs/heads/feature/foo"));
         assert!(trigger.should_trigger("refs/heads/feature/bar/baz"));
         assert!(!trigger.should_trigger("refs/heads/develop"));
+    }
+
+    #[test]
+    fn test_deploy_job_requires_artifact_from() {
+        let job = JobConfig {
+            name: "deploy-node".to_string(),
+            job_type: JobType::Deploy,
+            command: None,
+            args: vec![],
+            env: HashMap::new(),
+            working_dir: None,
+            flake_url: None,
+            flake_attr: None,
+            binary_hash: None,
+            timeout_secs: 3600,
+            isolation: IsolationMode::default(),
+            cache_key: None,
+            artifacts: vec![],
+            depends_on: vec![],
+            retry_count: 0,
+            allow_failure: false,
+            tags: vec![],
+            should_upload_result: true,
+            publish_to_cache: true,
+            artifact_from: None,
+            strategy: None,
+            health_check_timeout_secs: None,
+            max_concurrent: None,
+        };
+        let err = job.validate().unwrap_err();
+        assert!(err.to_string().contains("requires artifact_from"), "got: {err}");
+    }
+
+    #[test]
+    fn test_deploy_job_valid_with_artifact_from() {
+        let job = JobConfig {
+            name: "deploy-node".to_string(),
+            job_type: JobType::Deploy,
+            command: None,
+            args: vec![],
+            env: HashMap::new(),
+            working_dir: None,
+            flake_url: None,
+            flake_attr: None,
+            binary_hash: None,
+            timeout_secs: 3600,
+            isolation: IsolationMode::default(),
+            cache_key: None,
+            artifacts: vec![],
+            depends_on: vec![],
+            retry_count: 0,
+            allow_failure: false,
+            tags: vec![],
+            should_upload_result: true,
+            publish_to_cache: true,
+            artifact_from: Some("build-node".to_string()),
+            strategy: Some("rolling".to_string()),
+            health_check_timeout_secs: None,
+            max_concurrent: None,
+        };
+        assert!(job.validate().is_ok());
+    }
+
+    fn make_shell_job(name: &str) -> JobConfig {
+        JobConfig {
+            name: name.to_string(),
+            job_type: JobType::Shell,
+            command: Some("echo ok".to_string()),
+            args: vec![],
+            env: HashMap::new(),
+            working_dir: None,
+            flake_url: None,
+            flake_attr: None,
+            binary_hash: None,
+            timeout_secs: 300,
+            isolation: IsolationMode::default(),
+            cache_key: None,
+            artifacts: vec![],
+            depends_on: vec![],
+            retry_count: 0,
+            allow_failure: false,
+            tags: vec![],
+            should_upload_result: true,
+            publish_to_cache: true,
+            artifact_from: None,
+            strategy: None,
+            health_check_timeout_secs: None,
+            max_concurrent: None,
+        }
+    }
+
+    fn make_deploy_job(name: &str, artifact_from: &str) -> JobConfig {
+        JobConfig {
+            name: name.to_string(),
+            job_type: JobType::Deploy,
+            command: None,
+            args: vec![],
+            env: HashMap::new(),
+            working_dir: None,
+            flake_url: None,
+            flake_attr: None,
+            binary_hash: None,
+            timeout_secs: 600,
+            isolation: IsolationMode::default(),
+            cache_key: None,
+            artifacts: vec![],
+            depends_on: vec![],
+            retry_count: 0,
+            allow_failure: false,
+            tags: vec![],
+            should_upload_result: true,
+            publish_to_cache: true,
+            artifact_from: Some(artifact_from.to_string()),
+            strategy: Some("rolling".to_string()),
+            health_check_timeout_secs: None,
+            max_concurrent: None,
+        }
+    }
+
+    #[test]
+    fn test_pipeline_deploy_artifact_from_valid() {
+        let config = PipelineConfig {
+            name: "test".to_string(),
+            description: None,
+            triggers: TriggerConfig::default(),
+            stages: vec![
+                StageConfig {
+                    name: "build".to_string(),
+                    jobs: vec![make_shell_job("build-node")],
+                    parallel: true,
+                    depends_on: vec![],
+                    when: None,
+                },
+                StageConfig {
+                    name: "deploy".to_string(),
+                    jobs: vec![make_deploy_job("deploy-node", "build-node")],
+                    parallel: true,
+                    depends_on: vec!["build".to_string()],
+                    when: None,
+                },
+            ],
+            artifacts: ArtifactConfig::default(),
+            env: HashMap::new(),
+            timeout_secs: 7200,
+            priority: Priority::default(),
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_pipeline_deploy_artifact_from_unknown_job() {
+        let config = PipelineConfig {
+            name: "test".to_string(),
+            description: None,
+            triggers: TriggerConfig::default(),
+            stages: vec![
+                StageConfig {
+                    name: "build".to_string(),
+                    jobs: vec![make_shell_job("build-node")],
+                    parallel: true,
+                    depends_on: vec![],
+                    when: None,
+                },
+                StageConfig {
+                    name: "deploy".to_string(),
+                    jobs: vec![make_deploy_job("deploy-node", "nonexistent")],
+                    parallel: true,
+                    depends_on: vec!["build".to_string()],
+                    when: None,
+                },
+            ],
+            artifacts: ArtifactConfig::default(),
+            env: HashMap::new(),
+            timeout_secs: 7200,
+            priority: Priority::default(),
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("unknown job"), "got: {err}");
+    }
+
+    #[test]
+    fn test_pipeline_deploy_artifact_from_same_stage() {
+        let config = PipelineConfig {
+            name: "test".to_string(),
+            description: None,
+            triggers: TriggerConfig::default(),
+            stages: vec![StageConfig {
+                name: "all-in-one".to_string(),
+                jobs: vec![
+                    make_shell_job("build-node"),
+                    make_deploy_job("deploy-node", "build-node"),
+                ],
+                parallel: true,
+                depends_on: vec![],
+                when: None,
+            }],
+            artifacts: ArtifactConfig::default(),
+            env: HashMap::new(),
+            timeout_secs: 7200,
+            priority: Priority::default(),
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("same stage"), "got: {err}");
     }
 
     #[test]

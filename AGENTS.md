@@ -32,7 +32,7 @@ Default features are empty — users opt-in as needed. The `full` feature enable
 
 - **sql**: DataFusion SQL engine
 - **forge/git-bridge**: Git hosting and bidirectional sync
-- **ci/ci-basic**: CI/CD pipelines (basic = shell executor, full = VM executor)
+- **ci/ci-basic**: CI/CD pipelines (basic = shell executor, full = VM executor, deploy stages via `DeployExecutor`)
 - **secrets**: SOPS secrets management
 - **automerge**: CRDT documents
 - **global-discovery**: BitTorrent DHT
@@ -107,7 +107,7 @@ Both implemented by `RaftNode` for production; deterministic in-memory versions 
 - **crates/aspen-cluster/**: Cluster coordination - `IrohEndpointManager`, bootstrap, gossip
 - **crates/aspen-transport/**: Transport layer with ALPN constants
 - **crates/aspen-jobs/**: Job execution system with VM/shell workers
-- **crates/aspen-ci/**: CI/CD system with Nickel config
+- **crates/aspen-ci/**: CI/CD system with Nickel config, deploy executor (`orchestrator/deploy_executor.rs`)
 - **crates/aspen-forge/**: Forge - decentralized Git hosting
 - **crates/aspen-client-api/**: Client RPC protocol definitions
 - **crates/aspen-sql/**: DataFusion SQL over Redb KV (optional)
@@ -168,11 +168,13 @@ Aspen builds itself using its own Forge + CI + Nix pipeline:
 nix run .#dogfood-local
 
 # Step-by-step
-nix run .#dogfood-local -- start   # Start 1-node cluster
-nix run .#dogfood-local -- push    # Push source to Forge
-nix run .#dogfood-local -- build   # Wait for CI pipeline
-nix run .#dogfood-local -- verify  # Compare CI-built binary
-nix run .#dogfood-local -- stop    # Clean up
+nix run .#dogfood-local -- start      # Start 1-node cluster
+nix run .#dogfood-local -- push       # Push source to Forge
+nix run .#dogfood-local -- build      # Wait for CI pipeline
+nix run .#dogfood-local -- deploy     # Deploy CI-built artifact to cluster
+nix run .#dogfood-local -- verify     # Compare CI-built binary
+nix run .#dogfood-local -- full-loop  # Full loop: start → push → build → deploy → verify
+nix run .#dogfood-local -- stop       # Clean up
 ```
 
 Script: `scripts/dogfood-local.sh`. VM-isolated variant: `scripts/dogfood-local-vmci.sh`.

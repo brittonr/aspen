@@ -28,6 +28,19 @@ use crate::error::CiError;
 use crate::error::Result;
 
 impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
+    /// Check if a stage contains deploy jobs. Deploy jobs are executed
+    /// in-process on the leader rather than dispatched to the worker queue.
+    ///
+    /// Returns the deploy job configs for the stage if any exist.
+    pub fn deploy_jobs_in_stage(stage: &crate::config::types::StageConfig) -> Vec<&JobConfig> {
+        stage.jobs.iter().filter(|j| j.job_type == JobType::Deploy).collect()
+    }
+
+    /// Check if a pipeline config has any deploy stages.
+    pub fn has_deploy_jobs(config: &PipelineConfig) -> bool {
+        config.stages.iter().any(|s| s.jobs.iter().any(|j| j.job_type == JobType::Deploy))
+    }
+
     /// Build a workflow definition from pipeline configuration.
     pub(crate) fn build_workflow_definition(
         &self,
@@ -126,7 +139,8 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         let job_type = match job.job_type {
             JobType::Shell => "shell_command",
             JobType::Nix => "ci_nix_build",
-            JobType::Vm => "ci_vm", // Maps to CloudHypervisorWorker
+            JobType::Vm => "ci_vm",         // Maps to CloudHypervisorWorker
+            JobType::Deploy => "ci_deploy", // Handled in-process, not via worker queue
         };
 
         let retry_policy = if job.retry_count > 0 {
@@ -215,6 +229,17 @@ fn build_job_payload(
         #[cfg(not(feature = "plugins-vm"))]
         JobType::Vm => Err(CiError::InvalidConfig {
             reason: format!("VM job type '{}' requires the 'plugins-vm' feature to be enabled", job.name),
+        }),
+        // Deploy jobs are executed in-process by DeployExecutor on the leader,
+        // not dispatched to the worker queue. This arm should not be reached
+        // during normal operation — the orchestrator intercepts deploy jobs
+        // before they reach job_config_to_spec.
+        JobType::Deploy => Err(CiError::InvalidConfig {
+            reason: format!(
+                "Deploy job '{}' should not be dispatched to worker queue; \
+                 it runs in-process on the leader via DeployExecutor",
+                job.name
+            ),
         }),
     }
 }
@@ -376,6 +401,10 @@ mod tests {
             tags: vec![],
             should_upload_result: true,
             publish_to_cache: true,
+            artifact_from: None,
+            strategy: None,
+            health_check_timeout_secs: None,
+            max_concurrent: None,
         }
     }
 
