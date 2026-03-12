@@ -8,6 +8,7 @@
 
 use aspen_ci::log_writer::CiLogWriter;
 use aspen_ci::log_writer::SpawnedLogWriter;
+use aspen_ci_core::log_writer::CiLogChunk;
 use aspen_client_api::ClientRpcResponse;
 use aspen_testing_core::DeterministicKeyValueStore;
 
@@ -372,4 +373,74 @@ async fn test_spawned_writer_channel_close_without_complete() {
     let result = unwrap_logs_response(resp);
     assert!(result.was_found);
     assert!(result.is_complete); // completion marker written even on channel close
+}
+
+/// Verify log chunks written to KV can be scanned by the watch prefix
+/// and deserialized as CiLogChunk in the correct order.
+///
+/// This simulates what WatchSession does: subscribe to
+/// `_ci:logs:{run_id}:{job_id}:` and parse Set event values as CiLogChunk.
+/// We can't use a real WatchSession here (needs Raft log subscriber), but
+/// we can verify the KV keys and values match the expected format.
+#[tokio::test]
+async fn test_log_chunks_scannable_by_watch_prefix_in_order() {
+    use aspen_core::kv::ScanRequest;
+    use aspen_traits::KeyValueStore;
+
+    let kv = DeterministicKeyValueStore::new();
+
+    // Write enough data to create multiple chunks.
+    let mut writer = CiLogWriter::new("run-watch".into(), "job-watch".into(), kv.clone());
+    let long_line = "z".repeat(5000);
+    for _ in 0..6 {
+        writer.write_line(&long_line, "stdout").await.unwrap();
+    }
+    writer.flush().await.unwrap();
+    writer.complete("success").await.unwrap();
+
+    let chunk_count = writer.chunk_count();
+    assert!(chunk_count >= 2, "expected at least 2 chunks, got {}", chunk_count);
+
+    // Scan KV using the watch prefix — same prefix WatchSession would subscribe to.
+    let watch_prefix = "_ci:logs:run-watch:job-watch:";
+    let scan_result = kv
+        .scan(ScanRequest {
+            prefix: watch_prefix.to_string(),
+            limit_results: Some(1000),
+            continuation_token: None,
+        })
+        .await
+        .unwrap();
+
+    // Should have chunk_count + 1 keys (chunks + __complete__ marker).
+    assert_eq!(
+        scan_result.entries.len() as u32,
+        chunk_count + 1,
+        "expected {} KV entries (chunks + marker), got {}",
+        chunk_count + 1,
+        scan_result.entries.len()
+    );
+
+    // Parse each non-marker entry as CiLogChunk and verify ordering.
+    let mut parsed_chunks: Vec<CiLogChunk> = Vec::new();
+    for kv_entry in &scan_result.entries {
+        if kv_entry.key.ends_with("__complete__") {
+            continue;
+        }
+        let chunk: CiLogChunk =
+            serde_json::from_str(&kv_entry.value).unwrap_or_else(|e| panic!("failed to parse chunk: {e}"));
+        parsed_chunks.push(chunk);
+    }
+
+    assert_eq!(parsed_chunks.len(), chunk_count as usize);
+
+    // Verify chunk indices are monotonically increasing.
+    for (i, chunk) in parsed_chunks.iter().enumerate() {
+        assert_eq!(chunk.index, i as u32, "chunk at position {} has index {}, expected {}", i, chunk.index, i);
+    }
+
+    // Verify all chunks have content.
+    for chunk in &parsed_chunks {
+        assert!(!chunk.content.is_empty(), "chunk {} has empty content", chunk.index);
+    }
 }

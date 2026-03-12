@@ -97,4 +97,26 @@ mod tests {
         assert_eq!(parsed.total_chunks, 100);
         assert_eq!(parsed.status, "success");
     }
+
+    /// Verify CiLogChunk can be deserialized from raw bytes, simulating
+    /// the value payload of a WatchEvent::Set from the log subscriber.
+    #[test]
+    fn test_ci_log_chunk_from_watch_event_value() {
+        let chunk = CiLogChunk {
+            index: 7,
+            content: "[stdout] building crate aspen-core\n[stderr] warning: unused import\n".to_string(),
+            timestamp_ms: 1700000050000,
+        };
+
+        // Simulate what the Raft log subscriber stores: JSON-serialized chunk as bytes.
+        let value_bytes = serde_json::to_vec(&chunk).unwrap();
+
+        // This is exactly how the CLI and TUI parse WatchEvent::Set values.
+        let parsed: CiLogChunk = serde_json::from_slice(&value_bytes).unwrap();
+
+        assert_eq!(parsed.index, 7);
+        assert_eq!(parsed.timestamp_ms, 1700000050000);
+        assert!(parsed.content.contains("[stdout] building crate aspen-core"));
+        assert!(parsed.content.contains("[stderr] warning: unused import"));
+    }
 }

@@ -80,6 +80,8 @@ pub struct MultiNodeClient {
     primary_target: RwLock<EndpointAddr>,
     /// Current leader node ID, if known.
     leader_id: RwLock<Option<u64>>,
+    /// Cluster identifier (used as cookie for WatchSession auth).
+    cluster_id: Option<String>,
 }
 
 impl MultiNodeClient {
@@ -91,6 +93,14 @@ impl MultiNodeClient {
     /// # Returns
     /// A new MultiNodeClient instance.
     pub async fn new(initial_targets: Vec<EndpointAddr>) -> Result<Self> {
+        Self::with_cluster_id(initial_targets, None).await
+    }
+
+    /// Create a new multi-node client with a cluster ID.
+    ///
+    /// The cluster ID is used as the authentication cookie for `WatchSession`
+    /// connections (CI log streaming, coordination watch, etc.).
+    pub async fn with_cluster_id(initial_targets: Vec<EndpointAddr>, cluster_id: Option<String>) -> Result<Self> {
         if initial_targets.is_empty() {
             anyhow::bail!("at least one bootstrap target is required");
         }
@@ -125,6 +135,7 @@ impl MultiNodeClient {
             nodes: RwLock::new(std::collections::HashMap::new()),
             primary_target: RwLock::new(primary_target),
             leader_id: RwLock::new(None),
+            cluster_id,
         })
     }
 
@@ -800,5 +811,28 @@ impl MultiNodeClient {
             }
         }
         Ok(())
+    }
+
+    /// Get a reference to the iroh endpoint for WatchSession connections.
+    pub fn endpoint(&self) -> &Endpoint {
+        &self.endpoint
+    }
+
+    /// Get the cluster ID (used as cookie for WatchSession auth).
+    pub fn cluster_id(&self) -> Option<&str> {
+        self.cluster_id.as_deref()
+    }
+
+    /// Get the primary target address for WatchSession connections.
+    pub async fn primary_addr(&self) -> EndpointAddr {
+        self.primary_target.read().await.clone()
+    }
+
+    /// Try to get the primary target address without blocking.
+    ///
+    /// Returns `None` if the lock is held by another task.
+    /// Used by sync trait methods that can't await.
+    pub fn try_primary_addr(&self) -> Option<EndpointAddr> {
+        self.primary_target.try_read().ok().map(|g| g.clone())
     }
 }

@@ -12,7 +12,7 @@ use super::types::ActiveView;
 use crate::client_trait::ClientImpl;
 use crate::client_trait::ClusterClient;
 use crate::iroh_client::MultiNodeClient;
-use crate::iroh_client::parse_cluster_ticket;
+use crate::iroh_client::parse_cluster_ticket_with_id;
 use crate::types::NodeInfo;
 use crate::types::NodeStatus;
 
@@ -121,13 +121,13 @@ impl App {
             return;
         }
 
-        // Parse the ticket to get all endpoint addresses
-        match parse_cluster_ticket(ticket) {
-            Ok(endpoint_addrs) => {
+        // Parse the ticket to get all endpoint addresses and cluster ID
+        match parse_cluster_ticket_with_id(ticket) {
+            Ok((endpoint_addrs, cluster_id)) => {
                 info!("Ticket contains {} bootstrap peers", endpoint_addrs.len());
 
-                // Create MultiNodeClient with all bootstrap endpoints
-                match MultiNodeClient::new(endpoint_addrs).await {
+                // Create MultiNodeClient with all bootstrap endpoints and cluster ID
+                match MultiNodeClient::with_cluster_id(endpoint_addrs, Some(cluster_id)).await {
                     Ok(multi_client) => {
                         let new_client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::MultiNode(multi_client));
 

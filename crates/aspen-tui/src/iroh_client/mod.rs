@@ -109,14 +109,23 @@ impl IrohClient {
 /// Tickets have the format: "aspen{base32-encoded-data}"
 /// Returns all bootstrap peers in the ticket with their direct socket addresses.
 pub fn parse_cluster_ticket(ticket: &str) -> Result<Vec<EndpointAddr>> {
+    let (addrs, _cluster_id) = parse_cluster_ticket_with_id(ticket)?;
+    Ok(addrs)
+}
+
+/// Parse an Aspen cluster ticket into EndpointAddrs and cluster ID.
+///
+/// The cluster ID is needed for `WatchSession` authentication (used as the
+/// cookie for HMAC auth on `LOG_SUBSCRIBER_ALPN` connections).
+pub fn parse_cluster_ticket_with_id(ticket: &str) -> Result<(Vec<EndpointAddr>, String)> {
     let ticket = AspenClusterTicket::deserialize(ticket)?;
 
-    // Extract all bootstrap peer endpoint addresses (includes direct socket addrs)
+    let cluster_id = ticket.cluster_id.clone();
     let endpoints = ticket.endpoint_addrs();
 
     if endpoints.is_empty() {
         anyhow::bail!("no bootstrap peers in ticket");
     }
 
-    Ok(endpoints)
+    Ok((endpoints, cluster_id))
 }

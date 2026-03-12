@@ -154,6 +154,21 @@ pub trait ClusterClient: Send + Sync {
         let _ = (run_id, job_id, start_index, limit);
         Err(eyre!("CI logs not supported"))
     }
+
+    /// Get connection info needed for WatchSession (CI log streaming).
+    ///
+    /// Returns (endpoint, peer_addr, cluster_id) if available.
+    /// Only MultiNode (Iroh) clients support this.
+    fn watch_connection_info(&self) -> Option<WatchConnectionInfo> {
+        None
+    }
+}
+
+/// Connection info needed to establish a WatchSession.
+pub struct WatchConnectionInfo {
+    pub endpoint: iroh::Endpoint,
+    pub peer_addr: iroh::EndpointAddr,
+    pub cluster_id: String,
 }
 
 /// Result from fetching CI job logs.
@@ -762,6 +777,22 @@ impl ClusterClient for ClientImpl {
                 client.ci_get_job_logs(run_id, job_id, start_index, limit).await.map_err(anyhow_to_eyre)
             }
             Self::Disconnected(client) => client.ci_get_job_logs(run_id, job_id, start_index, limit).await,
+        }
+    }
+
+    fn watch_connection_info(&self) -> Option<WatchConnectionInfo> {
+        match self {
+            Self::MultiNode(client) => {
+                let cluster_id = client.cluster_id()?.to_string();
+                let endpoint = client.endpoint().clone();
+                let peer_addr = client.try_primary_addr()?;
+                Some(WatchConnectionInfo {
+                    endpoint,
+                    peer_addr,
+                    cluster_id,
+                })
+            }
+            _ => None,
         }
     }
 }

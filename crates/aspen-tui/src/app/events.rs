@@ -47,6 +47,9 @@ impl App {
             }
         }
 
+        // Drain CI log watch channel for real-time log updates.
+        self.drain_ci_log_watch();
+
         // Clear old status messages (after 5 seconds)
         if let Some((_, timestamp)) = &self.status_message
             && timestamp.elapsed() > Duration::from_secs(5)

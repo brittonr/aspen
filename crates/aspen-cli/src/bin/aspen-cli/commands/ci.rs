@@ -4,11 +4,15 @@
 //! Nickel-based configuration and distributed job execution.
 
 use anyhow::Result;
+use aspen_ci_core::log_writer::CiLogChunk;
+use aspen_client::watch::WatchEvent;
+use aspen_client::watch::WatchSession;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 use serde_json::json;
+use tracing::debug;
 
 use crate::client::AspenClient;
 use crate::output::Outputable;
@@ -677,6 +681,10 @@ async fn ci_logs(client: &AspenClient, args: LogsArgs, json: bool) -> Result<()>
     let mut start_index: u32 = 0;
     let chunk_limit: u32 = 100;
 
+    // Phase 1: Historical catch-up via CiGetJobLogs RPC.
+    // Fetch all existing chunks before switching to watch-based streaming.
+    let mut is_complete = false;
+
     loop {
         let response = client
             .send(ClientRpcRequest::CiGetJobLogs {
@@ -691,8 +699,7 @@ async fn ci_logs(client: &AspenClient, args: LogsArgs, json: bool) -> Result<()>
             ClientRpcResponse::CiGetJobLogsResult(result) => {
                 if !result.was_found && start_index == 0 {
                     if args.follow {
-                        // In follow mode, the job may not have produced logs yet.
-                        // Wait and retry instead of exiting immediately.
+                        // Job hasn't produced logs yet — wait and retry.
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                         continue;
                     }
@@ -714,24 +721,133 @@ async fn ci_logs(client: &AspenClient, args: LogsArgs, json: bool) -> Result<()>
                     std::process::exit(1);
                 }
 
-                if json {
-                    for chunk in &result.chunks {
-                        println!(
-                            "{}",
-                            serde_json::to_string(&json!({
-                                "index": chunk.index,
-                                "content": chunk.content,
-                                "timestamp_ms": chunk.timestamp_ms
-                            }))?
-                        );
-                    }
-                } else {
-                    for chunk in &result.chunks {
-                        print!("{}", chunk.content);
-                    }
+                print_log_chunks(&result.chunks, json)?;
+
+                if result.last_index >= start_index {
+                    start_index = result.last_index + 1;
                 }
 
-                // Advance past what we've read
+                if result.is_complete {
+                    is_complete = true;
+                    break;
+                }
+
+                if !args.follow {
+                    if result.has_more {
+                        continue;
+                    }
+                    return Ok(());
+                }
+
+                // All historical chunks fetched, break to watch phase.
+                if !result.has_more {
+                    break;
+                }
+            }
+            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
+    }
+
+    // Job already complete — no need for watch.
+    if is_complete || !args.follow {
+        return Ok(());
+    }
+
+    // Phase 2: Real-time streaming via WatchSession.
+    // Falls back to polling if the watch connection fails.
+    let watch_prefix = format!("_ci:logs:{}:{}:", args.run_id, args.job_id);
+
+    match try_watch_logs(client, &watch_prefix, start_index, json).await {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            debug!(error = %e, "watch connection failed, falling back to polling");
+            ci_logs_poll_loop(client, &args.run_id, &args.job_id, start_index, json).await
+        }
+    }
+}
+
+/// Stream log chunks via WatchSession KV prefix subscription.
+///
+/// Connects to the cluster's log subscriber endpoint and subscribes to
+/// the job's log key prefix. Prints chunks as they arrive and exits
+/// when the completion marker key is received.
+async fn try_watch_logs(client: &AspenClient, prefix: &str, last_chunk_index: u32, json: bool) -> Result<()> {
+    let peer_addr = client.first_peer_addr().ok_or_else(|| anyhow::anyhow!("no peers available"))?;
+
+    let session = WatchSession::connect(client.endpoint(), peer_addr.clone(), client.cluster_id()).await?;
+
+    // Subscribe from start_index 0 to get all events from the beginning.
+    // We use last_chunk_index to skip chunks we already printed during catch-up.
+    let mut subscription = session.subscribe(prefix.as_bytes().to_vec(), 0).await?;
+
+    let mut last_seen_index = last_chunk_index;
+
+    while let Some(event) = subscription.next().await {
+        match event {
+            WatchEvent::Set { key, value, .. } | WatchEvent::SetWithTTL { key, value, .. } => {
+                let key_str = String::from_utf8_lossy(&key);
+
+                // Check for completion marker.
+                if key_str.ends_with("__complete__") {
+                    return Ok(());
+                }
+
+                // Parse the chunk from the watch event value.
+                let chunk: CiLogChunk = match serde_json::from_slice(&value) {
+                    Ok(c) => c,
+                    Err(_) => continue, // Skip unparseable values
+                };
+
+                // Skip chunks already printed during historical catch-up.
+                if chunk.index < last_seen_index {
+                    continue;
+                }
+
+                print_single_chunk(&chunk, json)?;
+                last_seen_index = chunk.index + 1;
+            }
+            WatchEvent::EndOfStream { reason } => {
+                debug!(reason = %reason, "watch stream ended");
+                // Return error so caller falls back to polling from last_seen_index.
+                return Err(anyhow::anyhow!("watch stream ended: {}", reason));
+            }
+            // Ignore keepalives, deletes, membership changes, etc.
+            _ => {}
+        }
+    }
+
+    // Channel closed without EndOfStream — treat as disconnect.
+    Err(anyhow::anyhow!("watch subscription channel closed"))
+}
+
+/// Polling fallback for CI log streaming.
+///
+/// Used when the WatchSession connection fails or drops mid-stream.
+/// Polls CiGetJobLogs every second until the job completes.
+async fn ci_logs_poll_loop(
+    client: &AspenClient,
+    run_id: &str,
+    job_id: &str,
+    mut start_index: u32,
+    json: bool,
+) -> Result<()> {
+    let chunk_limit: u32 = 100;
+
+    loop {
+        let response = client
+            .send(ClientRpcRequest::CiGetJobLogs {
+                run_id: run_id.to_string(),
+                job_id: job_id.to_string(),
+                start_index,
+                limit: Some(chunk_limit),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::CiGetJobLogsResult(result) => {
+                print_log_chunks(&result.chunks, json)?;
+
                 if result.last_index >= start_index {
                     start_index = result.last_index + 1;
                 }
@@ -740,16 +856,6 @@ async fn ci_logs(client: &AspenClient, args: LogsArgs, json: bool) -> Result<()>
                     return Ok(());
                 }
 
-                if !args.follow {
-                    // Not following — print what we have and exit
-                    if result.has_more {
-                        // More historical chunks available, keep fetching
-                        continue;
-                    }
-                    return Ok(());
-                }
-
-                // Following — if no new chunks, wait before polling again
                 if result.chunks.is_empty() {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
@@ -758,6 +864,42 @@ async fn ci_logs(client: &AspenClient, args: LogsArgs, json: bool) -> Result<()>
             _ => anyhow::bail!("unexpected response type"),
         }
     }
+}
+
+/// Print a batch of log chunks to stdout.
+fn print_log_chunks(chunks: &[aspen_client_api::ci::CiLogChunkInfo], json: bool) -> Result<()> {
+    for chunk in chunks {
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string(&json!({
+                    "index": chunk.index,
+                    "content": chunk.content,
+                    "timestamp_ms": chunk.timestamp_ms
+                }))?
+            );
+        } else {
+            print!("{}", chunk.content);
+        }
+    }
+    Ok(())
+}
+
+/// Print a single CiLogChunk from a watch event.
+fn print_single_chunk(chunk: &CiLogChunk, json: bool) -> Result<()> {
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string(&json!({
+                "index": chunk.index,
+                "content": chunk.content,
+                "timestamp_ms": chunk.timestamp_ms
+            }))?
+        );
+    } else {
+        print!("{}", chunk.content);
+    }
+    Ok(())
 }
 
 async fn ci_output(client: &AspenClient, args: OutputArgs, json: bool) -> Result<()> {

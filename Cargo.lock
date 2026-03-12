@@ -999,6 +999,7 @@ dependencies = [
  "aspen-blob",
  "aspen-cache",
  "aspen-ci",
+ "aspen-ci-core",
  "aspen-client-api",
  "aspen-constants",
  "aspen-core",
@@ -1008,6 +1009,7 @@ dependencies = [
  "aspen-jobs-worker-shell",
  "aspen-rpc-core",
  "aspen-testing-core",
+ "aspen-traits",
  "async-trait",
  "blake3",
  "chrono",
@@ -1028,6 +1030,7 @@ dependencies = [
  "anyhow",
  "aspen-auth",
  "aspen-blob",
+ "aspen-ci-core",
  "aspen-client",
  "aspen-client-api",
  "aspen-cluster",
@@ -2530,6 +2533,7 @@ name = "aspen-tui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aspen-ci-core",
  "aspen-client",
  "aspen-core",
  "async-trait",

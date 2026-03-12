@@ -452,9 +452,26 @@ impl AspenClient {
     }
 
     /// Get the cluster ID from the ticket.
-    #[allow(dead_code)]
+    ///
+    /// Used as the cluster cookie for `WatchSession` authentication.
     pub fn cluster_id(&self) -> &str {
         &self.cluster_id
+    }
+
+    /// Get a reference to the iroh endpoint.
+    ///
+    /// Callers use this to establish `WatchSession` connections for
+    /// real-time KV change notifications (e.g., CI log streaming).
+    pub fn endpoint(&self) -> &Endpoint {
+        &self.endpoint
+    }
+
+    /// Get the first bootstrap peer's endpoint address.
+    ///
+    /// Returns `None` if no bootstrap peers are configured (should never
+    /// happen since `connect()` rejects empty peer lists).
+    pub fn first_peer_addr(&self) -> Option<&EndpointAddr> {
+        self.bootstrap_addrs.first()
     }
 
     /// Shutdown the client and close all connections and the endpoint.

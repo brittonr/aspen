@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use color_eyre::Result;
+use tokio::sync::mpsc;
 use tracing::info;
 
 use super::types::ActiveView;
@@ -12,7 +13,8 @@ use super::types::InputMode;
 use crate::client_trait::ClientImpl;
 use crate::client_trait::ClusterClient;
 use crate::iroh_client::MultiNodeClient;
-use crate::iroh_client::parse_cluster_ticket;
+use crate::iroh_client::parse_cluster_ticket_with_id;
+use crate::types::CiLogLine;
 use crate::types::CiState;
 use crate::types::ClusterMetrics;
 use crate::types::JobsState;
@@ -106,6 +108,10 @@ pub struct App {
 
     /// CI view state.
     pub ci_state: CiState,
+
+    /// Receiver for CI log watch events from background task.
+    /// Set when a watch-based log viewer is active, None otherwise.
+    pub(crate) ci_log_watch_rx: Option<mpsc::Receiver<CiLogLine>>,
 }
 
 impl App {
@@ -149,6 +155,7 @@ impl App {
             jobs_state: JobsState::default(),
             workers_state: WorkersState::default(),
             ci_state: CiState::default(),
+            ci_log_watch_rx: None,
         }
     }
 
@@ -157,14 +164,17 @@ impl App {
     /// Uses the MultiNodeClient to automatically discover and connect to all
     /// nodes in the cluster.
     pub async fn new_with_iroh(ticket: String, is_debug_mode: bool, max_display_nodes: usize) -> Result<Self> {
-        // Parse the ticket to get all endpoint addresses
-        let endpoint_addrs = parse_cluster_ticket(&ticket).map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
+        // Parse the ticket to get endpoint addresses and cluster ID.
+        // The cluster ID is needed for WatchSession authentication (CI log streaming).
+        let (endpoint_addrs, cluster_id) =
+            parse_cluster_ticket_with_id(&ticket).map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
 
         info!("Ticket contains {} bootstrap peers, creating multi-node client", endpoint_addrs.len());
 
-        // Create MultiNodeClient with all bootstrap endpoints
-        let multi_client =
-            MultiNodeClient::new(endpoint_addrs).await.map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
+        // Create MultiNodeClient with all bootstrap endpoints and cluster ID
+        let multi_client = MultiNodeClient::with_cluster_id(endpoint_addrs, Some(cluster_id))
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
         let client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::MultiNode(multi_client));
 
         // Load SQL history from disk
@@ -199,6 +209,7 @@ impl App {
             jobs_state: JobsState::default(),
             workers_state: WorkersState::default(),
             ci_state: CiState::default(),
+            ci_log_watch_rx: None,
         })
     }
 
@@ -245,6 +256,7 @@ impl App {
             jobs_state: JobsState::default(),
             workers_state: WorkersState::default(),
             ci_state: CiState::default(),
+            ci_log_watch_rx: None,
         }
     }
 

@@ -1,8 +1,14 @@
 //! CI pipeline operations and log viewer.
 
+use aspen_ci_core::log_writer::CiLogChunk;
+use aspen_client::watch::WatchEvent;
+use aspen_client::watch::WatchSession;
+use tokio::sync::mpsc;
+use tracing::debug;
 use tracing::warn;
 
 use super::state::App;
+use crate::types::CiLogLine;
 use crate::types::MAX_DISPLAYED_CI_RUNS;
 
 impl App {
@@ -158,6 +164,8 @@ impl App {
                 if result.is_complete {
                     self.set_status(&format!("Loaded {} log lines (complete)", line_count));
                 } else {
+                    // Job still running — try to start a watch-based stream.
+                    self.start_ci_log_watch(&run_id, &job_id, result.last_index);
                     self.set_status(&format!("Loaded {} log lines (streaming...)", line_count));
                 }
             }
@@ -165,6 +173,72 @@ impl App {
                 self.ci_state.log_stream.error = Some(format!("Failed to fetch logs: {}", e));
                 self.set_status(&format!("Failed to fetch logs: {}", e));
             }
+        }
+    }
+
+    /// Spawn a background task to stream CI log lines via WatchSession.
+    ///
+    /// Connects to the cluster's log subscriber and sends parsed log lines
+    /// through an mpsc channel. The on_tick handler drains this channel.
+    fn start_ci_log_watch(&mut self, run_id: &str, job_id: &str, last_chunk_index: u32) {
+        let Some(watch_info) = self.client.watch_connection_info() else {
+            debug!("watch not available: client does not support watch connections");
+            return;
+        };
+
+        let watch_prefix = format!("_ci:logs:{}:{}:", run_id, job_id);
+
+        let (tx, rx) = mpsc::channel::<CiLogLine>(1000);
+        self.ci_log_watch_rx = Some(rx);
+
+        tokio::spawn(async move {
+            ci_log_watch_task(
+                watch_info.endpoint,
+                watch_info.peer_addr,
+                watch_info.cluster_id,
+                watch_prefix,
+                last_chunk_index,
+                tx,
+            )
+            .await;
+        });
+    }
+
+    /// Drain the CI log watch channel and append new lines.
+    ///
+    /// Called from on_tick to process watch events without blocking the UI.
+    pub(crate) fn drain_ci_log_watch(&mut self) {
+        let Some(rx) = self.ci_log_watch_rx.as_mut() else {
+            return;
+        };
+
+        let mut received_any = false;
+
+        // Drain up to 500 lines per tick to avoid blocking the UI.
+        for _ in 0..500 {
+            match rx.try_recv() {
+                Ok(line) => {
+                    self.ci_state.log_stream.lines.push(line);
+
+                    // Enforce bounded buffer.
+                    if self.ci_state.log_stream.lines.len() > aspen_core::MAX_TUI_LOG_LINES {
+                        self.ci_state.log_stream.lines.remove(0);
+                    }
+
+                    received_any = true;
+                }
+                Err(mpsc::error::TryRecvError::Empty) => break,
+                Err(mpsc::error::TryRecvError::Disconnected) => {
+                    // Watch task ended — stream complete or connection dropped.
+                    self.ci_log_watch_rx = None;
+                    self.ci_state.log_stream.is_streaming = false;
+                    break;
+                }
+            }
+        }
+
+        if received_any && self.ci_state.log_stream.auto_scroll && !self.ci_state.log_stream.lines.is_empty() {
+            self.ci_state.log_stream.scroll_position = (self.ci_state.log_stream.lines.len().saturating_sub(1)) as u32;
         }
     }
 
@@ -199,12 +273,109 @@ impl App {
     }
 
     /// Close the CI log viewer.
+    ///
+    /// Drops the watch channel receiver, which signals the background
+    /// watch task to exit (its send will fail).
     pub(crate) fn close_ci_log_viewer(&mut self) {
+        self.ci_log_watch_rx = None;
         self.ci_state.log_stream.is_visible = false;
         self.ci_state.log_stream.is_streaming = false;
         self.ci_state.log_stream.lines.clear();
         self.ci_state.log_stream.run_id = None;
         self.ci_state.log_stream.job_id = None;
         self.set_status("Log viewer closed");
+    }
+}
+
+/// Background task that streams CI log lines via WatchSession.
+///
+/// Connects to the cluster's log subscriber, subscribes to the job's
+/// log key prefix, parses `CiLogChunk` from Set events, and sends
+/// individual lines through the mpsc channel.
+///
+/// The task exits when:
+/// - The completion marker (`__complete__`) is received
+/// - The watch stream ends (EndOfStream)
+/// - The channel receiver is dropped (log viewer closed)
+/// - The watch connection fails
+async fn ci_log_watch_task(
+    endpoint: iroh::Endpoint,
+    peer_addr: iroh::EndpointAddr,
+    cluster_id: String,
+    watch_prefix: String,
+    last_chunk_index: u32,
+    tx: mpsc::Sender<CiLogLine>,
+) {
+    let session = match WatchSession::connect(&endpoint, peer_addr, &cluster_id).await {
+        Ok(s) => s,
+        Err(e) => {
+            debug!(error = %e, "CI log watch connection failed");
+            return;
+        }
+    };
+
+    let mut subscription = match session.subscribe(watch_prefix.as_bytes().to_vec(), 0).await {
+        Ok(s) => s,
+        Err(e) => {
+            debug!(error = %e, "CI log watch subscription failed");
+            return;
+        }
+    };
+
+    let mut last_seen = last_chunk_index;
+
+    while let Some(event) = subscription.next().await {
+        match event {
+            WatchEvent::Set { key, value, .. } | WatchEvent::SetWithTTL { key, value, .. } => {
+                let key_str = String::from_utf8_lossy(&key);
+
+                if key_str.ends_with("__complete__") {
+                    // Stream is done.
+                    return;
+                }
+
+                let chunk: CiLogChunk = match serde_json::from_slice(&value) {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+
+                // Skip chunks already shown during historical catch-up.
+                if chunk.index < last_seen {
+                    continue;
+                }
+                last_seen = chunk.index + 1;
+
+                // Parse chunk content into individual lines and send them.
+                for line in chunk.content.lines() {
+                    let (stream, content) = if let Some(rest) = line.strip_prefix("[stdout] ") {
+                        ("stdout".to_string(), rest.to_string())
+                    } else if let Some(rest) = line.strip_prefix("[stderr] ") {
+                        ("stderr".to_string(), rest.to_string())
+                    } else if let Some(rest) = line.strip_prefix("[build] ") {
+                        ("build".to_string(), rest.to_string())
+                    } else {
+                        ("stdout".to_string(), line.to_string())
+                    };
+
+                    if tx
+                        .send(CiLogLine {
+                            content,
+                            stream,
+                            timestamp_ms: chunk.timestamp_ms,
+                        })
+                        .await
+                        .is_err()
+                    {
+                        // Receiver dropped — log viewer closed.
+                        return;
+                    }
+                }
+            }
+            WatchEvent::EndOfStream { reason } => {
+                debug!(reason = %reason, "CI log watch stream ended");
+                return;
+            }
+            _ => {}
+        }
     }
 }
