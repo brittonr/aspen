@@ -1684,10 +1684,6 @@
               nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [pkgs.git];
               GIT_HASH = self.shortRev or self.dirtyShortRev or "nix";
               BUILD_TIME = "1970-01-01 00:00:00 UTC";
-              # unit2nix collect_features() only reads lib-like units, but
-              # aspen-cli is bin-only so its features list is empty.
-              # Inject the features that the u2nCliWorkspace plan requests.
-              features = (attrs.features or []) ++ ["forge" "ci" "secrets" "automerge"];
             };
             # Crates whose descriptions contain embedded double quotes, which break
             # buildRustCrate's `export CARGO_PKG_DESCRIPTION="..."` in bash.
