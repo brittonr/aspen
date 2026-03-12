@@ -394,6 +394,19 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized>
         let start = tokio::time::Instant::now();
         loop {
             if tokio::time::Instant::now() - start > timeout {
+                // Final check: leadership may have transferred after the last poll.
+                // If it did, return LeadershipTransferred so the new leader resumes.
+                if let Ok(metrics) = cc.get_metrics().await
+                    && metrics.current_leader != Some(self.node_id)
+                {
+                    info!(
+                        deploy_id = %record.deploy_id,
+                        new_leader = ?metrics.current_leader,
+                        target_node_id,
+                        "leadership transferred (detected at timeout)"
+                    );
+                    return Err(DeployError::LeadershipTransferred { target_node_id });
+                }
                 warn!(
                     deploy_id = %record.deploy_id,
                     target_node_id,
@@ -590,7 +603,10 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized>
     /// Reads `_sys:deploy:current`. If not found, falls back to the latest
     /// history entry.
     pub async fn get_status(&self) -> Result<DeploymentRecord> {
-        self.read_current_or_latest().await
+        // Use stale reads for status polling — works on followers after
+        // leadership transfer. The data is eventually consistent, which is
+        // acceptable for status display and CI executor polling.
+        self.read_current_or_latest_stale().await
     }
 
     // ========================================================================
@@ -648,6 +664,22 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized>
                 history::read_latest_history(&*self.kv).await
             }
             Err(e) => Err(e),
+        }
+    }
+
+    /// Read deployment status using stale consistency — works on any node
+    /// (leader or follower). Used for status polling where eventual consistency
+    /// is acceptable.
+    async fn read_current_or_latest_stale(&self) -> Result<DeploymentRecord> {
+        match self.kv.read(ReadRequest::stale(DEPLOY_CURRENT_KEY)).await {
+            Ok(result) => match result.kv {
+                Some(entry) => {
+                    serde_json::from_str(&entry.value).map_err(|e| DeployError::SerdeError { reason: e.to_string() })
+                }
+                None => Err(DeployError::NoDeploymentFound),
+            },
+            Err(KeyValueStoreError::NotFound { .. }) => Err(DeployError::NoDeploymentFound),
+            Err(e) => Err(DeployError::KvError { reason: e.to_string() }),
         }
     }
 
