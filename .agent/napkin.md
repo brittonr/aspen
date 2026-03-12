@@ -447,3 +447,17 @@ Key gotchas:
 | 2026-03-12 | self | Stubbing external optional deps (aspen-wasm-plugin) with minimal Cargo.toml breaks `--locked` because Cargo.lock has the real dep's transitive deps (hyperlight-wasm, wasmtime, etc.) that don't match the stub | Strip external deps from manifest AND use `noLocked = true` (new unit2nix param). Stripping from Cargo.lock is impractical — transitive dep trees are too deep. `noLocked` lets cargo resolve from vendored sources without lockfile validation. |
 | 2026-03-12 | self | `sed -i '/aspen-wasm-plugin/d'` on Cargo.toml deleted feature DEFINITION lines (e.g. `hooks = [..., "aspen-wasm-plugin?/hooks"]`) not just the path dep line | Use targeted patterns: `/^aspen-wasm-plugin = { path/d` for dep lines, `s/, "aspen-wasm-plugin?\/hooks"//g` for feature refs. Or use python for complex multi-pattern edits. |
 | 2026-03-12 | self | unit2nix auto mode needs ALL workspace member manifests resolvable — even `--bin aspen-node` validates the entire workspace manifest including unrelated crates' external path deps | Wrap source in `pkgs.runCommand` that creates stubs or strips external deps. Use `workspaceDir` param when src has parent-level structure. For aspen: strip aspen-wasm-plugin/aspen-dns from manifests + noLocked. |
+| 2026-03-12 | self | unit2nix `buildRustCrate` ignores `required-features` on `[[test]]` sections — compiles all test targets regardless, causing failures when features like `simulation`/`testing` aren't enabled | Exclude crates with `required-features` tests from per-crate checks: `aspen`, `aspen-rpc-handlers`. These still run under crane nextest which activates proper features. |
+| 2026-03-12 | self | unit2nix crate overrides (`nativeBuildInputs`) only affect the build drv, not the test runner drv — adding `git` to `aspen-ci` override didn't make it available at test runtime | `nativeBuildInputs` in `defaultCrateOverrides` provides tools during compilation only. Test execution happens in a separate derivation. Exclude crates needing runtime tools (git, /dev/fuse) from per-crate tests instead. |
+| 2026-03-12 | self | `CARGO_BIN_EXE_*` env var (set by cargo for integration tests referencing binary targets) not available in `buildRustCrate` — `aspen-sops` cli_smoke_test fails at compile time | Exclude crates using `env!("CARGO_BIN_EXE_*")` in tests. This is a known `buildRustCrate` limitation. |
+
+**Per-crate unit2nix test coverage (68 of 80 workspace crates):**
+
+Excluded (12 crates, all still tested via crane nextest):
+
+- 7 stubs: h3-iroh, iroh-proxy-utils, mad-turmoil, nix-compat, nix-compat-derive, snix-castore, snix-store
+- 6 unconditional stub consumers: aspen-castore, aspen-snix, aspen-snix-bridge, aspen-proxy, aspen-net, aspen-testing-madsim
+- 2 required-features: aspen, aspen-rpc-handlers
+- 2 sandbox-incompatible: aspen-fuse (/dev/fuse), aspen-ci (git runtime)
+- 1 CARGO_BIN_EXE: aspen-sops
+- 2 vendored: openraft, openraft-macros
