@@ -84,6 +84,9 @@
         # NO_COLOR prevents ANSI escape codes in logs (tracing subscriber adds
         # codes around = signs which breaks grep-based endpoint_id extraction).
         export NO_COLOR=1
+        # Quiet RPC/network spam — Raft heartbeats generate high-volume INFO logs
+        # that flood the serial console and log files.
+        export RUST_LOG="info,aspen_raft_network=warn,aspen_raft::network=warn,aspen_rpc_core=warn"
 
         # Node 1: CI leader with workers
         mkdir -p /var/lib/aspen-1
