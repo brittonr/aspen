@@ -478,13 +478,14 @@ async fn test_coordinator_sends_real_rpcs_to_followers() {
     let kv = Arc::new(DeterministicKeyValueStore::new()) as Arc<dyn KeyValueStore>;
     let rpc_client = Arc::new(TestNodeRpcClient::new(coord_ep, controller, 1));
 
-    let coordinator = DeploymentCoordinator::with_timeouts(
-        kv.clone(),
-        rpc_client,
-        1, // leader
-        5, // health_timeout_secs
-        1, // poll_interval_secs
-    );
+    let coordinator: DeploymentCoordinator<_, _, dyn aspen_traits::ClusterController> =
+        DeploymentCoordinator::with_timeouts(
+            kv.clone(),
+            rpc_client,
+            1, // leader
+            5, // health_timeout_secs
+            1, // poll_interval_secs
+        );
 
     let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
 

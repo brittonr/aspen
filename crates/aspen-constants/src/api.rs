@@ -267,6 +267,12 @@ pub const ALERT_EVALUATION_MAX_INTERVAL_SECONDS: u64 = 3_600;
 /// After this timeout, remaining operations are cancelled and upgrade proceeds.
 pub const DRAIN_TIMEOUT_SECS: u64 = 30;
 
+/// Maximum seconds to wait for Raft leadership transfer to complete (10s).
+///
+/// Tiger Style: Bounded wait prevents deployment from stalling on transfer.
+/// OpenRaft transfer is typically <100ms (one round-trip to the target).
+pub const DEPLOY_LEADER_TRANSFER_TIMEOUT_SECS: u64 = 10;
+
 /// Health check timeout after node upgrade in seconds (120s).
 ///
 /// Tiger Style: Bounded health wait prevents deployment from stalling indefinitely.

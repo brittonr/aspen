@@ -22,6 +22,7 @@ use aspen_constants::api::DEPLOY_STATUS_POLL_INTERVAL_SECS;
 use aspen_kv_types::KeyValueStoreError;
 use aspen_kv_types::ReadRequest;
 use aspen_kv_types::WriteRequest;
+use aspen_traits::ClusterController;
 use aspen_traits::KeyValueStore;
 pub use rpc::NodeRpcClient;
 use tracing::error;
@@ -44,11 +45,17 @@ use crate::verified::quorum;
 /// The coordinator uses the KV store for persistent state and a `NodeRpcClient`
 /// trait for sending upgrade/rollback/health RPCs to individual nodes. This
 /// makes it testable with mock implementations.
-pub struct DeploymentCoordinator<K: KeyValueStore + ?Sized, R: NodeRpcClient> {
+pub struct DeploymentCoordinator<
+    K: KeyValueStore + ?Sized,
+    R: NodeRpcClient,
+    C: ClusterController + ?Sized = dyn ClusterController,
+> {
     /// KV store for deployment state persistence.
     kv: Arc<K>,
     /// RPC client for communicating with individual nodes.
     rpc_client: Arc<R>,
+    /// Cluster controller for leadership transfer.
+    cluster_controller: Option<Arc<C>>,
     /// This node's ID (for leader-last ordering).
     node_id: u64,
     /// Health check timeout per node.
@@ -57,12 +64,16 @@ pub struct DeploymentCoordinator<K: KeyValueStore + ?Sized, R: NodeRpcClient> {
     poll_interval_secs: u64,
 }
 
-impl<K: KeyValueStore + ?Sized, R: NodeRpcClient> DeploymentCoordinator<K, R> {
-    /// Create a new deployment coordinator.
+impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized> DeploymentCoordinator<K, R, C> {
+    /// Create a new deployment coordinator (without cluster controller).
+    ///
+    /// Leadership transfer during deploy will be skipped. Use
+    /// `with_cluster_controller` for production deployments.
     pub fn new(kv: Arc<K>, rpc_client: Arc<R>, node_id: u64) -> Self {
         Self {
             kv,
             rpc_client,
+            cluster_controller: None,
             node_id,
             health_timeout_secs: DEPLOY_HEALTH_TIMEOUT_SECS,
             poll_interval_secs: DEPLOY_STATUS_POLL_INTERVAL_SECS,
@@ -80,6 +91,38 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient> DeploymentCoordinator<K, R> {
         Self {
             kv,
             rpc_client,
+            cluster_controller: None,
+            node_id,
+            health_timeout_secs,
+            poll_interval_secs,
+        }
+    }
+
+    /// Create a coordinator with a cluster controller for leadership transfer.
+    pub fn with_cluster_controller(kv: Arc<K>, rpc_client: Arc<R>, cluster_controller: Arc<C>, node_id: u64) -> Self {
+        Self {
+            kv,
+            rpc_client,
+            cluster_controller: Some(cluster_controller),
+            node_id,
+            health_timeout_secs: DEPLOY_HEALTH_TIMEOUT_SECS,
+            poll_interval_secs: DEPLOY_STATUS_POLL_INTERVAL_SECS,
+        }
+    }
+
+    /// Create with cluster controller and custom timeouts (for testing).
+    pub fn with_cluster_controller_and_timeouts(
+        kv: Arc<K>,
+        rpc_client: Arc<R>,
+        cluster_controller: Arc<C>,
+        node_id: u64,
+        health_timeout_secs: u64,
+        poll_interval_secs: u64,
+    ) -> Self {
+        Self {
+            kv,
+            rpc_client,
+            cluster_controller: Some(cluster_controller),
             node_id,
             health_timeout_secs,
             poll_interval_secs,
@@ -168,10 +211,26 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient> DeploymentCoordinator<K, R> {
 
         // Upgrade leader last (self)
         if is_leader_in_list {
-            record = self.prepare_leader_upgrade(&record).await?;
-            // After this, the process will restart. The new leader finalizes.
-            // If we're still running (e.g., single-node or test), mark ourselves healthy.
-            record = self.upgrade_single_node(&record, self.node_id, voter_count, max_concurrent).await?;
+            match self.prepare_leader_upgrade(&record).await {
+                Ok(r) => {
+                    // No leadership transfer happened (single-node, no controller, or
+                    // transfer timed out) — proceed with direct self-upgrade.
+                    record = r;
+                    record = self.upgrade_single_node(&record, self.node_id, voter_count, max_concurrent).await?;
+                }
+                Err(DeployError::LeadershipTransferred { target_node_id }) => {
+                    // Leadership moved to another node. The new leader's
+                    // leader_resume.rs watcher will pick up the deployment and
+                    // upgrade us (the old leader, now a follower) via iroh RPC.
+                    info!(
+                        deploy_id = %record.deploy_id,
+                        target_node_id,
+                        "leadership transferred, new leader will resume deployment"
+                    );
+                    return Ok(record);
+                }
+                Err(e) => return Err(e),
+            }
         }
 
         // All nodes upgraded — finalize
@@ -271,17 +330,91 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient> DeploymentCoordinator<K, R> {
     // 5.6: Leader-last logic
     // ========================================================================
 
-    /// Prepare for leader self-upgrade: persist state so new leader can finalize.
+    /// Transfer leadership to an already-upgraded follower before self-upgrade.
     ///
-    /// The actual status transition to Draining happens inside `upgrade_single_node`.
-    /// This method just logs the intent and ensures the record is persisted.
+    /// 1. Find first `Healthy` follower (already upgraded and health-checked)
+    /// 2. Persist the deployment record (so the new leader can find it)
+    /// 3. Call `cluster_controller.transfer_leader(target_id)`
+    /// 4. Poll metrics until leadership transfers (bounded timeout)
+    /// 5. Return `LeadershipTransferred` so `run_deployment()` returns early
+    ///
+    /// The new leader's `leader_resume.rs` watcher picks up the in-progress
+    /// deployment and upgrades the old leader as a regular follower over iroh RPC.
     async fn prepare_leader_upgrade(&self, record: &DeploymentRecord) -> Result<DeploymentRecord> {
+        let cc = match &self.cluster_controller {
+            Some(cc) => cc,
+            None => {
+                // No cluster controller — fall back to direct self-upgrade (single-node or test)
+                info!(
+                    deploy_id = %record.deploy_id,
+                    node_id = self.node_id,
+                    "no cluster controller, skipping leadership transfer"
+                );
+                return Ok(record.clone());
+            }
+        };
+
+        // Find first Healthy follower to transfer to
+        let target = record
+            .nodes
+            .iter()
+            .find(|n| n.node_id != self.node_id && matches!(n.status, NodeDeployStatus::Healthy))
+            .map(|n| n.node_id);
+
+        let target_node_id = match target {
+            Some(id) => id,
+            None => {
+                // Single-node cluster or no healthy followers
+                info!(
+                    deploy_id = %record.deploy_id,
+                    "no healthy follower for leadership transfer, proceeding with direct upgrade"
+                );
+                return Ok(record.clone());
+            }
+        };
+
         info!(
             deploy_id = %record.deploy_id,
             node_id = self.node_id,
-            "leader preparing for self-upgrade, state persisted for failover"
+            target_node_id,
+            "transferring leadership to upgraded follower"
         );
-        Ok(record.clone())
+
+        // Persist record before transfer so the new leader can find it
+        let expected = self.read_current_value().await?;
+        self.write_current_deployment(record, expected.as_deref()).await?;
+
+        // Transfer leadership
+        cc.transfer_leader(target_node_id).await.map_err(|e| DeployError::ControlPlaneError {
+            reason: format!("leadership transfer to node {target_node_id} failed: {e}"),
+        })?;
+
+        // Poll metrics until leadership actually moves (bounded timeout)
+        let timeout = std::time::Duration::from_secs(aspen_constants::api::DEPLOY_LEADER_TRANSFER_TIMEOUT_SECS);
+        let start = tokio::time::Instant::now();
+        loop {
+            if tokio::time::Instant::now() - start > timeout {
+                warn!(
+                    deploy_id = %record.deploy_id,
+                    target_node_id,
+                    "leadership transfer timed out, proceeding with direct upgrade"
+                );
+                return Ok(record.clone());
+            }
+
+            if let Ok(metrics) = cc.get_metrics().await
+                && metrics.current_leader != Some(self.node_id)
+            {
+                info!(
+                    deploy_id = %record.deploy_id,
+                    new_leader = ?metrics.current_leader,
+                    "leadership transferred successfully"
+                );
+                return Err(DeployError::LeadershipTransferred { target_node_id });
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
     }
 
     // ========================================================================

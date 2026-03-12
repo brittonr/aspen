@@ -88,9 +88,10 @@ impl DeployDispatcher for RpcDeployDispatcher {
         let deploy_id = format!("deploy-{now_ms}");
 
         let rpc_client = Arc::new(IrohNodeRpcClient::new(self.endpoint.clone(), self.controller.clone(), self.node_id));
-        let coordinator = DeploymentCoordinator::with_timeouts(
+        let coordinator = DeploymentCoordinator::with_cluster_controller_and_timeouts(
             self.kv_store.clone(),
             rpc_client.clone(),
+            self.controller.clone(),
             self.node_id,
             request.health_timeout_secs,
             aspen_constants::api::DEPLOY_STATUS_POLL_INTERVAL_SECS,
@@ -103,11 +104,13 @@ impl DeployDispatcher for RpcDeployDispatcher {
                 // Spawn background task to run the deployment
                 let deploy_id_bg = record.deploy_id.clone();
                 let kv = self.kv_store.clone();
+                let cc = self.controller.clone();
                 let nid = self.node_id;
                 let ht = request.health_timeout_secs;
                 let pi = aspen_constants::api::DEPLOY_STATUS_POLL_INTERVAL_SECS;
                 tokio::spawn(async move {
-                    let coord = DeploymentCoordinator::with_timeouts(kv, rpc_client, nid, ht, pi);
+                    let coord =
+                        DeploymentCoordinator::with_cluster_controller_and_timeouts(kv, rpc_client, cc, nid, ht, pi);
                     match coord.run_deployment(&deploy_id_bg).await {
                         Ok(r) => info!(deploy_id = %r.deploy_id, status = ?r.status, "deployment finished"),
                         Err(e) => error!(deploy_id = %deploy_id_bg, error = %e, "deployment failed"),
@@ -130,7 +133,8 @@ impl DeployDispatcher for RpcDeployDispatcher {
 
     async fn deploy_status(&self) -> Result<DeployStatusResult, String> {
         let rpc_client = Arc::new(IrohNodeRpcClient::new(self.endpoint.clone(), self.controller.clone(), self.node_id));
-        let coordinator = DeploymentCoordinator::new(self.kv_store.clone(), rpc_client, self.node_id);
+        let coordinator: DeploymentCoordinator<dyn KeyValueStore, _, dyn ClusterController> =
+            DeploymentCoordinator::new(self.kv_store.clone(), rpc_client, self.node_id);
 
         match coordinator.get_status().await {
             Ok(record) => {

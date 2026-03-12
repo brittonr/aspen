@@ -49,6 +49,21 @@ pub enum DeployError {
     /// Serialization/deserialization failed.
     #[snafu(display("serde error: {reason}"))]
     SerdeError { reason: String },
+
+    /// Leadership was transferred to another node during deployment.
+    ///
+    /// This is a sentinel value: the new leader will resume the deployment
+    /// and upgrade the old leader (now a follower) via normal iroh RPC.
+    #[snafu(display("leadership transferred to node {target_node_id}"))]
+    LeadershipTransferred { target_node_id: u64 },
+
+    /// No healthy follower available for leadership transfer.
+    #[snafu(display("no healthy follower for leadership transfer: {reason}"))]
+    NoTransferTarget { reason: String },
+
+    /// Cluster control plane operation failed.
+    #[snafu(display("cluster control plane error: {reason}"))]
+    ControlPlaneError { reason: String },
 }
 
 pub type Result<T> = std::result::Result<T, DeployError>;

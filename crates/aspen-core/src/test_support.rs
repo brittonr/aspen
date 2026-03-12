@@ -485,6 +485,11 @@ impl ClusterController for DeterministicClusterController {
         Ok(None)
     }
 
+    async fn transfer_leader(&self, _target: u64) -> Result<(), ControlPlaneError> {
+        // No-op for deterministic testing — no actual Raft consensus
+        Ok(())
+    }
+
     fn is_initialized(&self) -> bool {
         // Use blocking read since we can't await in a sync fn
         // For a simple test implementation, we can use try_read

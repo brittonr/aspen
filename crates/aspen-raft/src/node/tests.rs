@@ -648,6 +648,71 @@ fn test_read_consistency_variants_exhaustive() {
     }
 }
 
+/// Test transfer_leader requires initialization.
+#[tokio::test]
+async fn test_transfer_leader_requires_initialization() {
+    let node = create_test_node(1).await;
+    // Not initialized — should fail
+    let result = ClusterController::transfer_leader(&node, 2).await;
+    assert!(result.is_err());
+    match result {
+        Err(ControlPlaneError::NotInitialized) => {}
+        other => panic!("Expected NotInitialized, got {:?}", other),
+    }
+}
+
+/// Test transfer_leader call succeeds on an initialized leader node.
+///
+/// In the madsim test environment, the network layer doesn't support the
+/// full transfer_leader protocol (requires v2 network). This test verifies
+/// the RaftNode plumbing: the call is accepted and initiated (returns Ok).
+/// Full end-to-end leadership transfer is validated by the NixOS VM test.
+#[tokio::test]
+async fn test_transfer_leader_accepted_on_initialized_leader() {
+    let router = Arc::new(MadsimRaftRouter::new());
+    let failure_injector = Arc::new(FailureInjector::new());
+
+    let config = Arc::new(Config {
+        cluster_name: "transfer-test".to_string(),
+        ..Default::default()
+    });
+    let log_storage = InMemoryLogStore::default();
+    let state_machine = Arc::new(InMemoryStateMachine::default());
+    let net = MadsimNetworkFactory::new(NodeId(1), router.clone(), failure_injector);
+
+    let raft = openraft::Raft::new(NodeId(1), config, net, log_storage, state_machine.clone())
+        .await
+        .expect("create raft");
+
+    router.register_node(NodeId(1), "127.0.0.1:27001".to_string(), raft.clone()).expect("register node");
+
+    let node = RaftNode::new(NodeId(1), Arc::new(raft), StateMachineVariant::InMemory(state_machine));
+
+    let secret = iroh::SecretKey::generate(&mut rand::rng());
+    let cn = {
+        let mut cn = ClusterNode::new(1, "node-1", None);
+        cn.node_addr = Some(aspen_cluster_types::NodeAddress::new(iroh::EndpointAddr::from_parts(
+            secret.public(),
+            std::iter::empty(),
+        )));
+        cn
+    };
+
+    ClusterController::init(&node, InitRequest {
+        initial_members: vec![cn],
+    })
+    .await
+    .expect("init cluster");
+
+    // Wait for leader election (single node = immediate)
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    // transfer_leader to a non-existent target: openraft accepts the trigger
+    // (it's fire-and-forget), so this returns Ok even if the target doesn't exist.
+    let result = ClusterController::transfer_leader(&node, 99).await;
+    assert!(result.is_ok(), "transfer_leader should be accepted: {:?}", result.err());
+}
+
 /// Test that scan uses ReadIndex for linearizability.
 #[tokio::test]
 async fn test_scan_uses_read_index() {

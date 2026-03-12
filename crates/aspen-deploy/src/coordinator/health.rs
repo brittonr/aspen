@@ -9,6 +9,7 @@
 
 use std::time::Duration;
 
+use aspen_traits::ClusterController;
 use aspen_traits::KeyValueStore;
 use tracing::debug;
 use tracing::warn;
@@ -18,7 +19,7 @@ use super::DeploymentCoordinator;
 use super::Result;
 use crate::coordinator::rpc::NodeRpcClient;
 
-impl<K: KeyValueStore + ?Sized, R: NodeRpcClient> DeploymentCoordinator<K, R> {
+impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized> DeploymentCoordinator<K, R, C> {
     /// Poll a node's health until it passes all checks or times out.
     ///
     /// Bounded by `health_timeout_secs`. Polls every `poll_interval_secs`.

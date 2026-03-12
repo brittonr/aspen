@@ -431,7 +431,7 @@ in
 
       # ── verify deploy stage ──────────────────────────────────────────
 
-      with subtest("deploy stage in pipeline"):
+      with subtest("deploy stage succeeds"):
           deploy_stage = None
           for stage in final.get("stages", []):
               if stage.get("name") == "deploy":
@@ -441,33 +441,53 @@ in
           assert deploy_stage, "Deploy stage not found in pipeline result"
           node1.log(f"Deploy stage: {json.dumps(deploy_stage, indent=2)}")
           for job in deploy_stage.get("jobs", []):
+              assert job["status"] == "success", \
+                  f"Deploy job '{job.get('name')}' should succeed: {job['status']}"
               node1.log(f"Deploy job '{job.get('name')}': {job['status']}")
 
-      with subtest("deployment targeted cluster nodes"):
-          # Check deploy logs for evidence the coordinator dispatched to nodes.
-          # The coordinator logs: "running deploy job" with artifact_from,
-          # "Resolved deploy artifact", "deployment created", and per-node
-          # "sending NodeUpgrade RPC" messages.
-          deploy_logs = node1.succeed(
-              "journalctl -u aspen-node --no-pager 2>/dev/null"
-              " | grep -E 'deploy|Deploy|NodeUpgrade'"
-              " | tail -40"
-          )
-          node1.log(f"Deploy-related logs:\n{deploy_logs}")
+      with subtest("deployment targeted cluster nodes with leadership transfer"):
+          # Check deploy logs for evidence the coordinator dispatched to nodes
+          # and performed leadership transfer.
+          deploy_logs = ""
+          for node, name in [(node1, "node1"), (node2, "node2"), (node3, "node3")]:
+              logs = node.succeed(
+                  "journalctl -u aspen-node --no-pager 2>/dev/null"
+                  " | grep -iE 'deploy|Deploy|NodeUpgrade|transfer|leadership'"
+                  " | tail -30"
+              )
+              deploy_logs += logs
+              node.log(f"Deploy-related logs ({name}):\n{logs}")
 
           # Verify deployment was created (coordinator logged it)
           assert "deployment created" in deploy_logs or "Deployment initiated" in deploy_logs, \
               "No deployment creation logged"
 
+          # Verify leadership transfer occurred
+          assert "transferring leadership" in deploy_logs, \
+              "No 'transferring leadership' log found — leader transfer may not have triggered"
+          assert "leadership transferred" in deploy_logs, \
+              "No 'leadership transferred' log found — transfer may not have completed"
+
+          # Verify the new leader resumed the deployment
+          assert "found in-progress deployment" in deploy_logs or "resumed deployment" in deploy_logs, \
+              "No deployment resume log found on new leader"
+
       # ── verify cluster health after deploy ───────────────────────────
 
-      with subtest("cluster healthy after pipeline"):
+      with subtest("all 3 nodes healthy after deploy"):
           for node, name in [(node1, "node1"), (node2, "node2"), (node3, "node3")]:
               node.wait_until_succeeds(
                   f"aspen-cli --ticket $(cat /var/lib/aspen/cluster-ticket.txt) cluster health 2>/dev/null",
                   timeout=30,
               )
               node.log(f"{name} healthy after deploy pipeline")
+
+          # Verify cluster has 3 voters
+          status = cli(node1, "cluster status")
+          nodes_list = status.get("nodes", [])
+          voters = [n for n in nodes_list if n.get("is_voter", False)]
+          assert len(voters) == 3, f"expected 3 voters after deploy, got {len(voters)}"
+          node1.log("All 3 nodes healthy and voting after deploy")
 
       with subtest("kv data survives deploy"):
           result = cli(node1, "kv get deploy-test-key")

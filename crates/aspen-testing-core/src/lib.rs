@@ -169,6 +169,11 @@ impl ClusterController for DeterministicClusterController {
         Ok(None)
     }
 
+    async fn transfer_leader(&self, _target: u64) -> Result<(), ControlPlaneError> {
+        // No-op for deterministic testing — no actual Raft consensus
+        Ok(())
+    }
+
     fn is_initialized(&self) -> bool {
         // In-memory deterministic backend is always considered "initialized"
         // since it doesn't have the Raft bootstrapping concept

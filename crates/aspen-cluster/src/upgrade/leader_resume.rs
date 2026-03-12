@@ -110,7 +110,8 @@ where
     R: NodeRpcClient + 'static,
 {
     tokio::spawn(async move {
-        let coordinator = DeploymentCoordinator::new(kv, rpc_client, node_id);
+        let coordinator: DeploymentCoordinator<K, R, dyn aspen_core::ClusterController> =
+            DeploymentCoordinator::new(kv, rpc_client, node_id);
         match coordinator.check_and_resume().await {
             Ok(Some(record)) => {
                 info!(
@@ -181,7 +182,8 @@ mod tests {
         kv.write(aspen_core::WriteRequest::set("_sys:deploy:current", value)).await.unwrap();
 
         // Resume
-        let coordinator = DeploymentCoordinator::with_timeouts(kv.clone(), rpc_client, 1, 5, 1);
+        let coordinator: DeploymentCoordinator<_, _, dyn aspen_core::ClusterController> =
+            DeploymentCoordinator::with_timeouts(kv.clone(), rpc_client, 1, 5, 1);
         let result = coordinator.check_and_resume().await;
         assert!(result.is_ok(), "check_and_resume should succeed: {:?}", result.err());
 
@@ -201,7 +203,8 @@ mod tests {
         let kv = DeterministicKeyValueStore::new();
         let rpc_client = Arc::new(MockHealthyRpcClient);
 
-        let coordinator = DeploymentCoordinator::new(kv, rpc_client, 1);
+        let coordinator: DeploymentCoordinator<_, _, dyn aspen_core::ClusterController> =
+            DeploymentCoordinator::new(kv, rpc_client, 1);
         let result = coordinator.check_and_resume().await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_none(), "should find no deployment");
@@ -225,7 +228,8 @@ mod tests {
         let value = serde_json::to_string(&record).unwrap();
         kv.write(aspen_core::WriteRequest::set("_sys:deploy:current", value)).await.unwrap();
 
-        let coordinator = DeploymentCoordinator::new(kv, rpc_client, 1);
+        let coordinator: DeploymentCoordinator<_, _, dyn aspen_core::ClusterController> =
+            DeploymentCoordinator::new(kv, rpc_client, 1);
         let result = coordinator.check_and_resume().await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_none(), "completed deployment should not be resumed");

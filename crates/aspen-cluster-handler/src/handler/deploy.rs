@@ -74,9 +74,10 @@ pub async fn handle_cluster_deploy(
 
     let rpc_client =
         Arc::new(IrohNodeRpcClient::new(ctx.endpoint_manager.endpoint().clone(), ctx.controller.clone(), ctx.node_id));
-    let coordinator = DeploymentCoordinator::with_timeouts(
+    let coordinator = DeploymentCoordinator::with_cluster_controller_and_timeouts(
         ctx.kv_store.clone(),
         rpc_client.clone(),
+        ctx.controller.clone(),
         ctx.node_id,
         health_timeout_secs,
         aspen_constants::api::DEPLOY_STATUS_POLL_INTERVAL_SECS,
@@ -92,11 +93,13 @@ pub async fn handle_cluster_deploy(
             // Spawn background task to run the deployment
             let deploy_id_clone = record.deploy_id.clone();
             let kv = ctx.kv_store.clone();
+            let cc = ctx.controller.clone();
             let node_id = ctx.node_id;
             let ht = health_timeout_secs;
             let pi = aspen_constants::api::DEPLOY_STATUS_POLL_INTERVAL_SECS;
             tokio::spawn(async move {
-                let coord = DeploymentCoordinator::with_timeouts(kv, rpc_client, node_id, ht, pi);
+                let coord =
+                    DeploymentCoordinator::with_cluster_controller_and_timeouts(kv, rpc_client, cc, node_id, ht, pi);
                 match coord.run_deployment(&deploy_id_clone).await {
                     Ok(r) => info!(deploy_id = %r.deploy_id, status = ?r.status, "deployment finished"),
                     Err(e) => error!(deploy_id = %deploy_id_clone, error = %e, "deployment failed"),
@@ -121,7 +124,8 @@ pub async fn handle_cluster_deploy(
 pub async fn handle_cluster_deploy_status(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
     let rpc_client =
         Arc::new(IrohNodeRpcClient::new(ctx.endpoint_manager.endpoint().clone(), ctx.controller.clone(), ctx.node_id));
-    let coordinator = DeploymentCoordinator::new(ctx.kv_store.clone(), rpc_client, ctx.node_id);
+    let coordinator: DeploymentCoordinator<dyn KeyValueStore, _, dyn aspen_traits::ClusterController> =
+        DeploymentCoordinator::new(ctx.kv_store.clone(), rpc_client, ctx.node_id);
 
     match coordinator.get_status().await {
         Ok(record) => {
@@ -173,7 +177,8 @@ pub async fn handle_cluster_deploy_status(ctx: &ClientProtocolContext) -> anyhow
 pub async fn handle_cluster_rollback(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
     let rpc_client =
         Arc::new(IrohNodeRpcClient::new(ctx.endpoint_manager.endpoint().clone(), ctx.controller.clone(), ctx.node_id));
-    let coordinator = DeploymentCoordinator::new(ctx.kv_store.clone(), rpc_client, ctx.node_id);
+    let coordinator: DeploymentCoordinator<dyn KeyValueStore, _, dyn aspen_traits::ClusterController> =
+        DeploymentCoordinator::new(ctx.kv_store.clone(), rpc_client, ctx.node_id);
 
     match coordinator.rollback_deployment().await {
         Ok(record) => Ok(ClientRpcResponse::ClusterRollbackResult(ClusterRollbackResultResponse {

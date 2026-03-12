@@ -87,6 +87,13 @@ pub trait ClusterController: Send + Sync {
         Ok(self.get_metrics().await?.current_leader)
     }
 
+    /// Trigger Raft leadership transfer to the specified node.
+    ///
+    /// The target must be a voter in the current membership. The transfer is
+    /// initiated asynchronously — callers should poll `get_metrics()` to confirm
+    /// the leadership actually moved.
+    async fn transfer_leader(&self, target: u64) -> Result<(), ControlPlaneError>;
+
     /// Check if the cluster has been initialized.
     fn is_initialized(&self) -> bool;
 }
@@ -120,6 +127,10 @@ impl<T: ClusterController> ClusterController for Arc<T> {
 
     async fn get_leader(&self) -> Result<Option<u64>, ControlPlaneError> {
         (**self).get_leader().await
+    }
+
+    async fn transfer_leader(&self, target: u64) -> Result<(), ControlPlaneError> {
+        (**self).transfer_leader(target).await
     }
 
     fn is_initialized(&self) -> bool {

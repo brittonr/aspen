@@ -119,7 +119,7 @@ fn make_coordinator(
     kv: Arc<dyn KeyValueStore>,
     rpc: Arc<MockRpcClient>,
     node_id: u64,
-) -> DeploymentCoordinator<dyn KeyValueStore, MockRpcClient> {
+) -> DeploymentCoordinator<dyn KeyValueStore, MockRpcClient, dyn aspen_traits::ClusterController> {
     DeploymentCoordinator::with_timeouts(kv, rpc, node_id, 2, 1)
 }
 
@@ -571,4 +571,51 @@ async fn test_blob_artifact_deployment() {
     for (_, artifact_ref) in &calls {
         assert_eq!(artifact_ref, &blob_hash);
     }
+}
+
+/// Test resume after leadership transfer: old leader is Pending, two followers Healthy.
+///
+/// Simulates the scenario where leadership was transferred during deploy. The new
+/// leader (node 2) calls check_and_resume(), finds the old leader (node 1) still
+/// Pending, sends it an upgrade RPC, and finalizes the deployment.
+#[tokio::test]
+async fn test_resume_after_leadership_transfer() {
+    let kv = new_kv();
+    let rpc = Arc::new(MockRpcClient::new());
+    rpc.set_all_healthy(&[1, 2, 3]).await;
+
+    // Simulate post-transfer state: node 1 (old leader) is Pending,
+    // nodes 2 and 3 (upgraded followers) are Healthy.
+    let mut record = DeploymentRecord::new(
+        "deploy-transfer-1".into(),
+        test_artifact(),
+        DeployStrategy::rolling(1),
+        &[1, 2, 3],
+        now_ms(),
+    );
+    record.status = DeploymentStatus::Deploying;
+    record.nodes[0].status = NodeDeployStatus::Pending; // node 1 = old leader
+    record.nodes[1].status = NodeDeployStatus::Healthy; // node 2 = new leader
+    record.nodes[2].status = NodeDeployStatus::Healthy; // node 3
+
+    let json = serde_json::to_string(&record).unwrap();
+    kv_write(&*kv, DEPLOY_CURRENT_KEY, &json).await;
+
+    // New leader (node 2) resumes
+    let coord = make_coordinator(kv.clone(), rpc.clone(), 2);
+    let result = coord.check_and_resume().await;
+    assert!(result.is_ok(), "resume should succeed: {:?}", result.err());
+
+    let resumed = result.unwrap();
+    assert!(resumed.is_some(), "should find in-progress deployment");
+    let final_record = resumed.unwrap();
+
+    // Deployment should be completed
+    assert_eq!(final_record.status, DeploymentStatus::Completed);
+    assert_eq!(final_record.count_healthy(), 3);
+
+    // Verify the old leader (node 1) got an upgrade RPC
+    let calls = rpc.get_upgrade_calls().await;
+    assert_eq!(calls.len(), 1, "only old leader should get upgrade RPC");
+    assert_eq!(calls[0].0, 1, "upgrade RPC should target old leader (node 1)");
 }

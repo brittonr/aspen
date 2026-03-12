@@ -173,6 +173,22 @@ impl ClusterController for RaftNode {
         Ok(metrics.snapshot.as_ref().map(snapshot_log_id_from_openraft))
     }
 
+    #[instrument(skip(self))]
+    async fn transfer_leader(&self, target: u64) -> Result<(), ControlPlaneError> {
+        self.ensure_initialized()?;
+
+        info!(target, "triggering leadership transfer");
+        self.raft()
+            .trigger()
+            .transfer_leader(target.into())
+            .await
+            .map_err(|err| ControlPlaneError::Failed {
+                reason: err.to_string(),
+            })?;
+
+        Ok(())
+    }
+
     fn is_initialized(&self) -> bool {
         // Fast path: check atomic flag (Acquire ensures we see prior writes)
         if self.initialized_ref().load(Ordering::Acquire) {

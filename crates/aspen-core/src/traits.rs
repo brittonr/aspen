@@ -331,6 +331,10 @@ mod tests {
             Ok(None)
         }
 
+        async fn transfer_leader(&self, _target: u64) -> Result<(), ControlPlaneError> {
+            Ok(())
+        }
+
         fn is_initialized(&self) -> bool {
             true
         }
