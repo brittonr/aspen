@@ -1814,7 +1814,7 @@
                 fullPluginsCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net";
+                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy";
                   doCheck = false;
                 }
               );
@@ -2510,6 +2510,18 @@
               # Proves the Forge → CI → Build → Deploy loop works.
               # Build: nix build .#checks.x86_64-linux.ci-dogfood-deploy-test --impure --option sandbox false
               ci-dogfood-deploy-test = import ./nix/tests/ci-dogfood-deploy.nix {
+                inherit pkgs lib kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+                nixpkgsFlake = nixpkgs;
+              };
+
+              # Multi-node deploy pipeline test: 3-node cluster, Forge push, CI build,
+              # deploy stage exercises DeploymentCoordinator rolling upgrade path.
+              # Build: nix build .#checks.x86_64-linux.ci-dogfood-deploy-multinode-test --impure --option sandbox false
+              ci-dogfood-deploy-multinode-test = import ./nix/tests/ci-dogfood-deploy-multinode.nix {
                 inherit pkgs lib kvPluginWasm forgePluginWasm;
                 aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-e2e;
