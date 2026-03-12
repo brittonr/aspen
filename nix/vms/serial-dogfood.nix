@@ -22,6 +22,7 @@
   aspenNodePackage,
   aspenCliPackage,
   gitRemoteAspenPackage,
+  nixCacheGatewayPackage ? null,
   nixpkgsFlake,
 }: let
   # NixOS system configuration
@@ -51,15 +52,17 @@
     services.getty.autologinUser = "root";
 
     # Packages
-    environment.systemPackages = [
-      aspenNodePackage
-      aspenCliPackage
-      gitRemoteAspenPackage
-      pkgs.git
-      pkgs.nix
-      pkgs.curl
-      pkgs.jq
-    ];
+    environment.systemPackages =
+      [
+        aspenNodePackage
+        aspenCliPackage
+        gitRemoteAspenPackage
+        pkgs.git
+        pkgs.nix
+        pkgs.curl
+        pkgs.jq
+      ]
+      ++ lib.optional (nixCacheGatewayPackage != null) nixCacheGatewayPackage;
 
     # Nix settings for in-VM builds
     nix.settings.experimental-features = ["nix-command" "flakes"];
@@ -81,6 +84,19 @@
         set -euo pipefail
         export NO_COLOR=1
         mkdir -p /var/lib/aspen
+
+        # Check if gateway binary is available
+        HAS_GATEWAY=false
+        if command -v aspen-nix-cache-gateway >/dev/null 2>&1; then
+          HAS_GATEWAY=true
+        fi
+
+        CACHE_ARGS=""
+        if [ "$HAS_GATEWAY" = true ]; then
+          CACHE_ARGS="--nix-cache-gateway-url http://127.0.0.1:8380"
+          export ASPEN_NIX_CACHE_ENABLED=true
+        fi
+
         echo "[dogfood] Starting aspen-node..."
         aspen-node \
           --node-id 1 \
@@ -93,6 +109,7 @@
           --enable-workers \
           --enable-ci \
           --ci-auto-trigger \
+          $CACHE_ARGS \
           > /var/log/aspen-node.log 2>&1 &
         echo $! > /tmp/aspen-node.pid
         echo "[dogfood] Waiting for cluster ticket..."
@@ -111,6 +128,29 @@
         echo "[dogfood] Initializing cluster..."
         aspen-cli --ticket "$(cat /tmp/ticket)" cluster init 2>/dev/null || true
         sleep 2
+
+        # Start the nix cache gateway if available
+        if [ "$HAS_GATEWAY" = true ]; then
+          echo "[dogfood] Starting nix cache gateway on 127.0.0.1:8380..."
+          aspen-nix-cache-gateway \
+            --ticket "$(cat /tmp/ticket)" \
+            --port 8380 \
+            --bind 127.0.0.1 \
+            > /var/log/nix-cache-gateway.log 2>&1 &
+          echo $! > /tmp/nix-cache-gateway.pid
+          # Wait for gateway to start
+          for i in $(seq 1 15); do
+            if curl -s http://127.0.0.1:8380/nix-cache-info >/dev/null 2>&1; then
+              echo "[dogfood] Nix cache gateway ready"
+              break
+            fi
+            sleep 1
+          done
+          if ! curl -s http://127.0.0.1:8380/nix-cache-info >/dev/null 2>&1; then
+            echo "[dogfood] WARNING: gateway not responding after 15s"
+          fi
+        fi
+
         echo "[dogfood] Node ready. Ticket saved to /tmp/ticket"
       '';
     };

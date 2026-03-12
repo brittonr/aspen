@@ -88,6 +88,16 @@ pub struct NixCacheConfig {
     /// Default: true (enabled when nix_cache.enabled)
     #[serde(default = "default_enable_ci_substituter")]
     pub enable_ci_substituter: bool,
+
+    /// URL of a running `aspen-nix-cache-gateway` HTTP server.
+    ///
+    /// When set, CI workers use this URL as a Nix substituter for builds,
+    /// bypassing the H3 proxy path. The gateway must be reachable from
+    /// the node at this URL.
+    ///
+    /// Example: "http://127.0.0.1:8380"
+    #[serde(default)]
+    pub gateway_url: Option<String>,
 }
 
 impl Default for NixCacheConfig {
@@ -101,6 +111,7 @@ impl Default for NixCacheConfig {
             signing_key_name: None,
             transit_mount: default_nix_cache_transit_mount(),
             enable_ci_substituter: default_enable_ci_substituter(),
+            gateway_url: None,
         }
     }
 }

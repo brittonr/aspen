@@ -1210,6 +1210,7 @@ fn from_env_nix_cache() -> NixCacheConfig {
         transit_mount: parse_env("ASPEN_NIX_CACHE_TRANSIT_MOUNT").unwrap_or_else(default_nix_cache_transit_mount),
         enable_ci_substituter: parse_env("ASPEN_NIX_CACHE_ENABLE_CI_SUBSTITUTER")
             .unwrap_or_else(default_enable_ci_substituter),
+        gateway_url: parse_env("ASPEN_NIX_CACHE_GATEWAY_URL"),
     }
 }
 

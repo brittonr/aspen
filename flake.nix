@@ -3695,11 +3695,13 @@
                     aspenNode
                     bins.aspen-cli
                     bins.git-remote-aspen
+                    bins.full-aspen-nix-cache-gateway
                     pkgs.bash
                     pkgs.coreutils
                     pkgs.gnugrep
                     pkgs.gnused
                     pkgs.git
+                    pkgs.curl
                     pkgs.nix # Required for CI jobs that run nix build/fmt
                   ]
                 }:$PATH"
@@ -3707,6 +3709,7 @@
                 export ASPEN_NODE_BIN="${aspenNode}/bin/aspen-node"
                 export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
                 export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
+                export ASPEN_NIX_CACHE_GATEWAY_BIN="${bins.full-aspen-nix-cache-gateway}/bin/aspen-nix-cache-gateway"
                 export PROJECT_DIR="$PWD"
 
                 exec ${scriptsDir}/dogfood-local.sh "$@"
@@ -4092,6 +4095,7 @@
                     aspenNodePackage = self.packages.${system}.aspen-node-serial-dogfood;
                     aspenCliPackage = aspenCli;
                     gitRemoteAspenPackage = aspenGitRemote;
+                    nixCacheGatewayPackage = bins.full-aspen-nix-cache-gateway;
                     nixpkgsFlake = nixpkgs;
                   };
 

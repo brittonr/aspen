@@ -219,6 +219,13 @@ pub struct Args {
     #[arg(long)]
     pub ci_auto_trigger: bool,
 
+    /// URL of the nix cache gateway HTTP server.
+    ///
+    /// When set, CI workers use this as a Nix substituter. The gateway
+    /// must be reachable at this URL (e.g., http://127.0.0.1:8380).
+    #[arg(long)]
+    pub nix_cache_gateway_url: Option<String>,
+
     // === Observability Configuration ===
     /// Periodic alert evaluation interval in seconds (default: 60).
     ///

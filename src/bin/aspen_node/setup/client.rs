@@ -582,6 +582,26 @@ async fn initialize_job_system(
                 None
             };
 
+            // Ensure signing key exists before reading public key.
+            // When Transit-based signer is not configured (no secrets feature or no
+            // cache_name/signing_key_name), bootstrap the key via the simpler
+            // ensure_signing_key path so CI workers can use the cache substituter.
+            let has_transit_signer = {
+                #[cfg(feature = "nix-cache-gateway")]
+                {
+                    config.nix_cache.cache_name.is_some() && config.nix_cache.signing_key_name.is_some()
+                }
+                #[cfg(not(feature = "nix-cache-gateway"))]
+                {
+                    false
+                }
+            };
+
+            if use_cluster_cache && !has_transit_signer {
+                let cache_name = config.nix_cache.cache_name.as_deref().unwrap_or(aspen_cache::DEFAULT_CACHE_NAME);
+                crate::config::ensure_nix_cache_signing_key(&kv_store, cache_name).await;
+            }
+
             let cache_public_key = if use_cluster_cache {
                 crate::config::read_nix_cache_public_key(&kv_store).await
             } else {
@@ -601,7 +621,7 @@ async fn initialize_job_system(
                 } else {
                     warn!(
                         "Nix cache substituter requested but public key not available in KV store. \
-                         Cache substitution will be disabled until key is stored at _system:nix-cache:public-key"
+                         The key will be created when the gateway starts or cluster initializes."
                     );
                 }
             }
@@ -675,7 +695,7 @@ async fn initialize_job_system(
                         iroh_endpoint: iroh_endpoint.clone(),
                         gateway_node,
                         cache_public_key: cache_public_key.clone(),
-                        gateway_url: None,
+                        gateway_url: config.nix_cache.gateway_url.clone(),
                     };
 
                     let all_services_available = nix_config.validate();

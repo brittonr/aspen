@@ -81,6 +81,7 @@ print('')
 
 do_stop() {
   log "Stopping cluster..."
+  stop_cache_gateway
   for i in $(seq 1 "$NODE_COUNT"); do
     local pid
     pid=$(cat "$CLUSTER_DIR/node$i.pid" 2>/dev/null || true)
@@ -92,6 +93,67 @@ do_stop() {
   sleep 1
   rm -rf "$CLUSTER_DIR"
   ok "Cluster directory cleaned up"
+}
+
+# ── Cache Gateway ─────────────────────────────────────────────────────
+
+NIX_CACHE_GATEWAY="${ASPEN_NIX_CACHE_GATEWAY_BIN:-aspen-nix-cache-gateway}"
+GATEWAY_PORT=8380
+
+start_cache_gateway() {
+  # Only start if binary exists and --enable-ci was passed
+  if ! command -v "$NIX_CACHE_GATEWAY" >/dev/null 2>&1; then
+    # Gateway binary not available, skipping
+    return 0
+  fi
+
+  local ticket
+  ticket=$(cat "$CLUSTER_DIR/node1/cluster-ticket.txt" 2>/dev/null) || return 0
+
+  log "Starting nix cache gateway on 127.0.0.1:$GATEWAY_PORT..."
+  "$NIX_CACHE_GATEWAY" \
+    --ticket "$ticket" \
+    --port "$GATEWAY_PORT" \
+    --bind 127.0.0.1 \
+    > "$CLUSTER_DIR/nix-cache-gateway.log" 2>&1 &
+  echo $! > "$CLUSTER_DIR/nix-cache-gateway.pid"
+
+  # Wait for gateway to respond
+  local retries=15
+  while [ $retries -gt 0 ]; do
+    if curl -s "http://127.0.0.1:$GATEWAY_PORT/nix-cache-info" >/dev/null 2>&1; then
+      ok "Nix cache gateway ready (PID $(cat "$CLUSTER_DIR/nix-cache-gateway.pid"))"
+      return 0
+    fi
+    sleep 1
+    retries=$((retries - 1))
+  done
+  warn "Nix cache gateway not responding after 15s — continuing without cache"
+}
+
+stop_cache_gateway() {
+  local pid
+  pid=$(cat "$CLUSTER_DIR/nix-cache-gateway.pid" 2>/dev/null || true)
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
+    ok "Nix cache gateway (PID $pid) stopped"
+  fi
+}
+
+verify_cache() {
+  if ! curl -s "http://127.0.0.1:$GATEWAY_PORT/nix-cache-info" >/dev/null 2>&1; then
+    warn "Nix cache gateway not running, skipping cache verification"
+    return 0
+  fi
+
+  log "Checking cache entries after build..."
+  local entries
+  entries=$(cli kv scan _cache: 2>/dev/null | wc -l)
+  if [ "$entries" -gt 0 ]; then
+    ok "Cache has $entries entries"
+  else
+    warn "No cache entries found"
+  fi
 }
 
 # ── Start ─────────────────────────────────────────────────────────────
@@ -108,6 +170,12 @@ do_start() {
   mkdir -p "$CLUSTER_DIR"
   echo "$COOKIE" > "$CLUSTER_DIR/cookie"
 
+  # Check if cache gateway binary is available for substituter config
+  local cache_args=()
+  if command -v "$NIX_CACHE_GATEWAY" >/dev/null 2>&1; then
+    cache_args=(--nix-cache-gateway-url "http://127.0.0.1:$GATEWAY_PORT")
+  fi
+
   # Start nodes
   for i in $(seq 1 "$NODE_COUNT"); do
     local key
@@ -117,6 +185,7 @@ do_start() {
     ASPEN_DOCS_ENABLED=true \
     ASPEN_DOCS_IN_MEMORY=true \
     ASPEN_HOOKS_ENABLED=true \
+    ASPEN_NIX_CACHE_ENABLED=${cache_args:+true} \
     "$ASPEN_NODE" \
       --node-id "$i" \
       --data-dir "$CLUSTER_DIR/node$i" \
@@ -129,6 +198,7 @@ do_start() {
       --enable-workers \
       --enable-ci \
       --ci-auto-trigger \
+      "${cache_args[@]}" \
       > "$CLUSTER_DIR/node$i.log" 2>&1 &
     echo $! > "$CLUSTER_DIR/node$i.pid"
   done
@@ -195,6 +265,9 @@ do_start() {
     warn "Cluster health check inconclusive (single-node is OK)"
   fi
 
+  # Start nix cache gateway if binary is available
+  start_cache_gateway
+
   log "Cluster started at $CLUSTER_DIR"
   echo ""
   echo -e "${BOLD}Cluster ticket:${NC}"
@@ -226,6 +299,14 @@ do_status() {
   done
 
   echo ""
+
+  # Check gateway status
+  local gw_pid
+  gw_pid=$(cat "$CLUSTER_DIR/nix-cache-gateway.pid" 2>/dev/null || true)
+  if [ -n "$gw_pid" ] && kill -0 "$gw_pid" 2>/dev/null; then
+    ok "Nix cache gateway (PID $gw_pid): running on 127.0.0.1:$GATEWAY_PORT"
+  fi
+
   cli cluster status 2>/dev/null || warn "Could not get cluster status"
   echo ""
   cli cluster metrics 2>/dev/null || true
@@ -430,6 +511,7 @@ print(' ')
         trap - EXIT  # clear trap before returning (stream_pid goes out of scope)
         echo ""
         print_pipeline_summary "$status_out"
+        verify_cache
         ok "Pipeline completed successfully! 🎉"
         return 0
         ;;

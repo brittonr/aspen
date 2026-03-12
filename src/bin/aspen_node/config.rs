@@ -98,6 +98,11 @@ pub fn build_cluster_config(args: &Args) -> NodeConfig {
         config.forge.enable_gossip = true;
     }
 
+    // Apply nix cache configuration from CLI flags
+    if let Some(ref url) = args.nix_cache_gateway_url {
+        config.nix_cache.gateway_url = Some(url.clone());
+    }
+
     // Apply proxy configuration from CLI flags
     if args.enable_proxy {
         config.proxy.is_enabled = true;
@@ -201,28 +206,73 @@ fn handle_config_error(e: anyhow::Error) -> Result<()> {
 }
 
 /// Load Nix cache public key from Raft KV store for CI substituter.
+///
+/// Checks two KV keys to support both the simple `ensure_signing_key` path
+/// (writes to `_sys:nix-cache:public-key`) and the Transit-based signer path
+/// (writes to `_system:nix-cache:public-key`).
 #[cfg(feature = "ci")]
 pub async fn read_nix_cache_public_key(kv_store: &std::sync::Arc<dyn aspen_core::KeyValueStore>) -> Option<String> {
     use aspen_core::ReadRequest;
     use tracing::debug;
 
-    let read_request = ReadRequest::new("_system:nix-cache:public-key");
-    match kv_store.read(read_request).await {
-        Ok(read_result) => {
-            if let Some(kv) = read_result.kv {
-                debug!(
-                    public_key = %kv.value,
-                    "Retrieved Nix cache public key from KV store for CI substituter"
-                );
-                Some(kv.value)
-            } else {
-                debug!("No Nix cache public key found in KV store");
-                None
+    // Try the canonical key from aspen-cache::signing first
+    let keys = [
+        aspen_cache::signing::CACHE_PUBLIC_KEY_KV,
+        "_system:nix-cache:public-key",
+    ];
+
+    for key in &keys {
+        let read_request = ReadRequest::new(*key);
+        match kv_store.read(read_request).await {
+            Ok(read_result) => {
+                if let Some(kv) = read_result.kv {
+                    debug!(
+                        public_key = %kv.value,
+                        kv_key = key,
+                        "retrieved Nix cache public key from KV store"
+                    );
+                    return Some(kv.value);
+                }
+            }
+            Err(e) => {
+                debug!(error = %e, kv_key = key, "failed to read Nix cache public key");
             }
         }
+    }
+
+    debug!("no Nix cache public key found in KV store");
+    None
+}
+
+/// Ensure the nix cache signing key exists in KV.
+///
+/// Called on node startup when `nix_cache.is_enabled` and the Transit-based
+/// signer is not configured. Uses `aspen-cache::signing::ensure_signing_key`
+/// to generate and store an Ed25519 keypair in KV.
+#[cfg(feature = "ci")]
+pub async fn ensure_nix_cache_signing_key(
+    kv_store: &std::sync::Arc<dyn aspen_core::KeyValueStore>,
+    cache_name: &str,
+) -> Option<String> {
+    use tracing::debug;
+    use tracing::warn;
+
+    match aspen_cache::signing::ensure_signing_key(kv_store, cache_name).await {
+        Ok((_key, public_key)) => {
+            info!(
+                public_key = %public_key,
+                cache_name = cache_name,
+                "nix cache signing key ready"
+            );
+            Some(public_key)
+        }
         Err(e) => {
-            // This is expected when cluster is not yet initialized or key not set
-            debug!(error = %e, "Failed to read Nix cache public key from KV store");
+            // Expected on first boot before cluster init
+            warn!(
+                error = %e,
+                "failed to ensure nix cache signing key (cluster may not be initialized yet)"
+            );
+            debug!("signing key will be created when the gateway starts or cluster initializes");
             None
         }
     }
