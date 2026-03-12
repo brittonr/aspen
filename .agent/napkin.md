@@ -2,6 +2,7 @@
 
 ## Corrections
 
+| 2026-03-12 | self | unit2nix auto mode (`buildFromUnitGraphAuto`) dropped CLI features — `collect_features()` only reads lib-like units, aspen-cli is bin-only so `crateFeatures=''` | Inject features via crate override: `features = (attrs.features or []) ++ ["forge" "ci" "secrets" "automerge"];`. Previous manual JSON patch (1b267c536) was deleted when switching to auto mode (8668c42a2). Upstream fix needed: unit2nix `collect_features()` should include bin units when no lib exists. |
 | 2026-03-06 | self | VM workers polled for `ci_vm` jobs but CI pipeline submitted `ci_nix_build` — VMs sat idle consuming 48GB RAM while host handled all builds | Job types must match: VMs now poll `ci_nix_build` + `ci_vm` + `shell_command`. When `ASPEN_CI_KERNEL_PATH` is set, host skips local NixBuildWorker registration so VMs get the jobs. |
 | 2026-03-06 | self | Dogfood smoke test checked `[ -n "$ci_version" ]` but `$ci_version` contained error message from unsupported `--version` flag — non-empty error = "functional" | Check exit code (`if "$ci_bin" --help >/dev/null 2>&1`), not output emptiness. Error messages are non-empty strings. Added `#[command(version)]` to clap derive so `--version` actually works. |
 | 2026-03-06 | self | `stream_pid: unbound variable` — `trap cleanup_stream EXIT` set inside `stream_pipeline()` persists after function returns, but local `stream_pid` goes out of scope | Add `trap - EXIT` after `cleanup_stream` before returning from the function to clear the trap. |
