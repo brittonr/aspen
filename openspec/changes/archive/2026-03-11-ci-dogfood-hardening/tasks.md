@@ -66,5 +66,5 @@
 
 - [x] 9.1 Run `cargo nextest run --workspace -P quick` — 6,422 tests pass (18 new), 201 skipped
 - [x] 9.2 VM dogfood test passes end-to-end (Forge → CI trigger → NixBuildWorker → nix build → log streaming → success)
-- [ ] 9.3 Run `nix run .#dogfood-local` on a real machine — full pipeline succeeds
+- [x] 9.3 Run `nix run .#dogfood-local` on a real machine — full pipeline succeeds
 - [x] 9.4 Update napkin with patterns discovered during implementation
