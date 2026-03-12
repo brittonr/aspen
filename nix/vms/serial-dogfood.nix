@@ -79,6 +79,7 @@
       text = ''
         #!/usr/bin/env bash
         set -euo pipefail
+        export NO_COLOR=1
         mkdir -p /var/lib/aspen
         echo "[dogfood] Starting aspen-node..."
         aspen-node \

@@ -4049,7 +4049,7 @@
                   # aspen-node for serial dogfood VM (includes git-bridge for forge push)
                   aspen-node-serial-dogfood = pureBin {
                     name = "aspen-node-serial-dogfood";
-                    cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge";
+                    cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy";
                   };
                 })
                 // {
@@ -4087,6 +4087,18 @@
                   # Build: nix build .#dogfood-serial-vm
                   # Boot:  vm_boot image="result/disk.qcow2" format="qcow2" memory="4096M"
                   dogfood-serial-vm = import ./nix/vms/serial-dogfood.nix {
+                    inherit pkgs;
+                    lib = nixpkgs.lib;
+                    aspenNodePackage = self.packages.${system}.aspen-node-serial-dogfood;
+                    aspenCliPackage = aspenCli;
+                    gitRemoteAspenPackage = aspenGitRemote;
+                    nixpkgsFlake = nixpkgs;
+                  };
+
+                  # 3-node variant for testing cluster formation, deploy, and leadership transfer.
+                  # Build: nix build .#dogfood-serial-multinode-vm
+                  # Boot:  vm_boot image="result/disk.qcow2" format="qcow2" memory="6144M" cpus=4
+                  dogfood-serial-multinode-vm = import ./nix/vms/serial-dogfood-multinode.nix {
                     inherit pkgs;
                     lib = nixpkgs.lib;
                     aspenNodePackage = self.packages.${system}.aspen-node-serial-dogfood;
