@@ -1524,31 +1524,101 @@
         '';
 
         # ── unit2nix: Per-crate Nix builds ────────────────────────────
-        # Replaces crane's monolithic builds with individual buildRustCrate
-        # derivations. Changing one crate only rebuilds its dependents,
-        # not the entire 648-crate workspace.
-        #
-        # Regenerate build plans whenever Cargo.lock changes:
-        #   nix run .#generate-build-plan       # aspen-node (build-plan.json)
-        #   nix run .#generate-build-plan-cli   # aspen-cli  (build-plan-cli.json)
-        #
-        # The build plans are generated from the real workspace (not stubs),
-        # so they capture the exact dependency graph Cargo resolves.
-        u2nSrc = lib.fileset.toSource {
+        # Uses auto mode (IFD) — build plans generated at eval time from
+        # Cargo's unit graph. No checked-in JSON files to maintain.
+        # Changing one crate only rebuilds its dependents, not the entire
+        # 648-crate workspace.
+        u2nRawSrc = lib.fileset.toSource {
           root = ./.;
           fileset = lib.fileset.unions [
             ./Cargo.toml
             ./Cargo.lock
+            ./crate-hashes.json
             ./build.rs
             ./src
             ./crates
             ./openraft
+            ./tests
+            ./benches
+            ./vendor
           ];
         };
 
-        # Shared crate overrides for unit2nix builds.
-        # Both aspen-node and aspen-cli share the same overrides since they
-        # pull from the same workspace and share many dependencies.
+        # Strip external path deps (aspen-dns, aspen-wasm-plugin) from
+        # the workspace so cargo doesn't try to resolve them in the IFD
+        # sandbox. Both are optional and never activated by our feature sets.
+        # Also strip their entries from Cargo.lock so --locked passes.
+        u2nSrc = pkgs.runCommand "aspen-u2n-src" {} ''
+          mkdir -p $out/aspen
+          cp -r ${u2nRawSrc}/* $out/aspen/
+          chmod -R u+w $out/aspen
+
+          # Remove external optional deps: aspen-wasm-plugin, aspen-dns
+          # Strip path deps, feature activations, and Cargo.lock entries.
+          # These are never activated by our feature sets (no plugins-rpc, no dns).
+          ${pkgs.python3}/bin/python3 ${pkgs.writeText "strip-external-deps.py" ''
+            import re, sys
+            out = sys.argv[1]
+
+            def strip_lines(path, patterns):
+                with open(path) as f:
+                    lines = f.readlines()
+                with open(path, "w") as f:
+                    for line in lines:
+                        if not any(p in line for p in patterns):
+                            f.write(line)
+
+            # Root Cargo.toml: remove wasm-plugin dep + plugin features
+            strip_lines(f"{out}/aspen/Cargo.toml", [
+                'aspen-wasm-plugin = { path',
+                'plugins-rpc = [',
+                'plugins = ["plugins-vm"',
+                'plugins-vm = [',
+                'plugins-wasm = [',
+            ])
+            # Strip "plugins" from the full feature list
+            root_toml = f"{out}/aspen/Cargo.toml"
+            with open(root_toml) as f:
+                content = f.read()
+            content = content.replace('"plugins", ', "")
+            with open(root_toml, "w") as f:
+                f.write(content)
+
+            # aspen-rpc-handlers: remove wasm-plugin dep + features referencing it
+            strip_lines(f"{out}/aspen/crates/aspen-rpc-handlers/Cargo.toml", [
+                'aspen-wasm-plugin = { path',
+                'plugins-rpc = [',
+            ])
+            # Also strip aspen-wasm-plugin?/hooks from the hooks feature line
+            rpc_toml = f"{out}/aspen/crates/aspen-rpc-handlers/Cargo.toml"
+            with open(rpc_toml) as f:
+                content = f.read()
+            content = content.replace(', "aspen-wasm-plugin?/hooks"', "")
+            with open(rpc_toml, "w") as f:
+                f.write(content)
+
+            # aspen-net: remove aspen-dns dep + dns feature
+            strip_lines(f"{out}/aspen/crates/aspen-net/Cargo.toml", [
+                'aspen-dns = { path',
+                'dns = ["dep:aspen-dns"',
+            ])
+          ''} $out
+
+          # Strip aspen-wasm-plugin and aspen-dns package blocks from Cargo.lock
+          ${pkgs.python3}/bin/python3 ${pkgs.writeText "strip-lockfile.py" ''
+            import re, sys
+            lockfile = sys.argv[1]
+            with open(lockfile) as f:
+                content = f.read()
+            for name in ["aspen-wasm-plugin", "aspen-dns"]:
+                pattern = r"\[\[package\]\]\nname = \"" + name + r"\".*?(?=\n\[\[|\Z)"
+                content = re.sub(pattern, "", content, flags=re.DOTALL)
+            with open(lockfile, "w") as f:
+                f.write(content)
+          ''} $out/aspen/Cargo.lock
+        '';
+
+        # Shared crate overrides for all unit2nix builds.
         u2nCrateOverrides =
           pkgs.defaultCrateOverrides
           // {
@@ -1580,39 +1650,42 @@
             };
           };
 
+        # Common args shared across all auto-mode builds
+        u2nAutoCommon = {
+          inherit pkgs;
+          src = u2nSrc;
+          workspaceDir = "aspen";
+          defaultCrateOverrides = u2nCrateOverrides;
+          rustToolchain = rustToolChain;
+          # External optional deps (aspen-wasm-plugin, aspen-dns) are stripped
+          # from the manifest but their transitive deps remain in Cargo.lock.
+          noLocked = true;
+        };
+
         # Short aliases used throughout the flake
         aspenNode = u2nWorkspace.workspaceMembers."aspen".build;
         aspenCli = u2nCliWorkspace.workspaceMembers."aspen-cli".build;
 
-        # Build plan for aspen-node (661 crates,
-        # features: ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy)
-        u2nWorkspace = unit2nix.lib.${system}.buildFromUnitGraph {
-          inherit pkgs;
-          src = u2nSrc;
-          resolvedJson = ./build-plan.json;
-          defaultCrateOverrides = u2nCrateOverrides;
-          # Cargo.lock hash mismatch between fileset source and build plan
-          # is a false positive — the plan is regenerated from the same lock.
-          skipStalenessCheck = true;
-        };
+        # aspen-node (features: ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy)
+        u2nWorkspace = unit2nix.lib.${system}.buildFromUnitGraphAuto (u2nAutoCommon
+          // {
+            bin = "aspen-node";
+            features = "ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy";
+          });
 
-        # Build plan for aspen-cli (472 crates, features: forge,ci,secrets,automerge)
-        u2nCliWorkspace = unit2nix.lib.${system}.buildFromUnitGraph {
-          inherit pkgs;
-          src = u2nSrc;
-          resolvedJson = ./build-plan-cli.json;
-          defaultCrateOverrides = u2nCrateOverrides;
-          skipStalenessCheck = true;
-        };
+        # aspen-cli (features: forge,ci,secrets,automerge)
+        u2nCliWorkspace = unit2nix.lib.${system}.buildFromUnitGraphAuto (u2nAutoCommon
+          // {
+            package = "aspen-cli";
+            features = "forge,ci,secrets,automerge";
+          });
 
-        # Build plan for git-remote-aspen (474 crates, features: git-bridge)
-        u2nGitRemoteWorkspace = unit2nix.lib.${system}.buildFromUnitGraph {
-          inherit pkgs;
-          src = u2nSrc;
-          resolvedJson = ./build-plan-git-remote.json;
-          defaultCrateOverrides = u2nCrateOverrides;
-          skipStalenessCheck = true;
-        };
+        # git-remote-aspen (features: git-bridge)
+        u2nGitRemoteWorkspace = unit2nix.lib.${system}.buildFromUnitGraphAuto (u2nAutoCommon
+          // {
+            bin = "git-remote-aspen";
+            features = "git-bridge";
+          });
         aspenGitRemote = u2nGitRemoteWorkspace.workspaceMembers."aspen".build;
 
         bins = let
@@ -3654,65 +3727,8 @@
 
             # build-plugins and deploy-plugin: moved to ~/git/aspen-plugins repo
 
-            # Regenerate build-plan.json for unit2nix
-            # Usage: nix run .#generate-build-plan
-            generate-build-plan = {
-              type = "app";
-              program = "${pkgs.writeShellScript "generate-build-plan" ''
-                set -e
-                echo "Generating build-plan.json from Cargo's unit graph..."
-                ${unit2nix.packages.${system}.default}/bin/unit2nix \
-                  --manifest-path ./Cargo.toml \
-                  --bin aspen-node \
-                  --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy \
-                  -o build-plan.json
-                echo "Done! Commit build-plan.json to the repo."
-              ''}";
-            };
-            # Usage: nix run .#generate-build-plan-cli
-            generate-build-plan-cli = {
-              type = "app";
-              program = "${pkgs.writeShellScript "generate-build-plan-cli" ''
-                                set -e
-                                echo "Generating build-plan-cli.json from Cargo's unit graph..."
-                                ${unit2nix.packages.${system}.default}/bin/unit2nix \
-                                  --manifest-path ./Cargo.toml \
-                                  -p aspen-cli \
-                                  --features forge,ci,secrets,automerge \
-                                  -o build-plan-cli.json
-                                # unit2nix doesn't capture root crate features that only propagate
-                                # to deps (no new optional deps on the root). Patch them in so
-                                # rustc gets --cfg feature="ci" etc.
-                                echo "Patching root crate features into build-plan-cli.json..."
-                                ${pkgs.python3}/bin/python3 -c "
-                import json, sys
-                with open('build-plan-cli.json') as f:
-                    plan = json.load(f)
-                for key, data in plan.get('crates', {}).items():
-                    if isinstance(data, dict) and data.get('crateName') == 'aspen-cli':
-                        data['features'] = ['automerge', 'ci', 'default', 'forge', 'secrets']
-                        break
-                with open('build-plan-cli.json', 'w') as f:
-                    json.dump(plan, f, indent=2)
-                    f.write('\n')
-                "
-                                echo "Done! Commit build-plan-cli.json to the repo."
-              ''}";
-            };
-            # Usage: nix run .#generate-build-plan-git-remote
-            generate-build-plan-git-remote = {
-              type = "app";
-              program = "${pkgs.writeShellScript "generate-build-plan-git-remote" ''
-                set -e
-                echo "Generating build-plan-git-remote.json from Cargo's unit graph..."
-                ${unit2nix.packages.${system}.default}/bin/unit2nix \
-                  --manifest-path ./Cargo.toml \
-                  --bin git-remote-aspen \
-                  --features git-bridge \
-                  -o build-plan-git-remote.json
-                echo "Done! Commit build-plan-git-remote.json to the repo."
-              ''}";
-            };
+            # Build plans are auto-generated via IFD (buildFromUnitGraphAuto).
+            # No manual regeneration needed — plans update when Cargo.lock changes.
           };
         }
         // {
