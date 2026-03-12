@@ -35,7 +35,7 @@ pub fn spawn_deploy_resume_watcher<K, R>(
     node_id: u64,
 ) -> CancellationToken
 where
-    K: KeyValueStore + 'static,
+    K: KeyValueStore + ?Sized + 'static,
     R: NodeRpcClient + 'static,
 {
     let cancel = CancellationToken::new();
@@ -56,7 +56,7 @@ async fn deploy_resume_watcher_task<K, R>(
     node_id: u64,
     cancel: CancellationToken,
 ) where
-    K: KeyValueStore + 'static,
+    K: KeyValueStore + ?Sized + 'static,
     R: NodeRpcClient + 'static,
 {
     let mut rx = raft.metrics();
@@ -106,7 +106,7 @@ async fn deploy_resume_watcher_task<K, R>(
 /// Spawn a one-shot task that attempts to resume in-progress deployments.
 fn spawn_resume_task<K, R>(kv: Arc<K>, rpc_client: Arc<R>, node_id: u64)
 where
-    K: KeyValueStore + 'static,
+    K: KeyValueStore + ?Sized + 'static,
     R: NodeRpcClient + 'static,
 {
     tokio::spawn(async move {

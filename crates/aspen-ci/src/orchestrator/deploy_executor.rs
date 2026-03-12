@@ -361,12 +361,13 @@ pub fn extract_artifact_from_job_data(job_data: &serde_json::Value) -> Result<De
         reason: "Job result has no Success.data — job may not have completed successfully".to_string(),
     })?;
 
-    // Try output_paths first (Nix store path)
+    // Try output_paths first (Nix store path).
+    // Multi-output packages emit several paths (e.g. cowsay-3.8.4-man, cowsay-3.8.4).
+    // Prefer the main output: the path without a secondary output suffix.
     if let Some(paths) = data.get("output_paths").and_then(|p| p.as_array()) {
-        if let Some(first_path) = paths.first().and_then(|p| p.as_str()) {
-            if !first_path.is_empty() {
-                return Ok(DeployArtifact::NixStorePath(first_path.to_string()));
-            }
+        let path_strs: Vec<&str> = paths.iter().filter_map(|p| p.as_str()).filter(|p| !p.is_empty()).collect();
+        if let Some(best) = select_primary_output(&path_strs) {
+            return Ok(DeployArtifact::NixStorePath(best.to_string()));
         }
     }
 
@@ -395,6 +396,37 @@ pub fn extract_artifact_from_job_data(job_data: &serde_json::Value) -> Result<De
     Err(CiError::ExecutionFailed {
         reason: "NO_ARTIFACTS_FOUND: job result has no output_paths or artifact blob hashes".to_string(),
     })
+}
+
+/// Secondary output suffixes for multi-output Nix packages.
+/// `nix build` can emit paths like `cowsay-3.8.4-man`, `cowsay-3.8.4-doc`, etc.
+/// The main output has no suffix (e.g. `cowsay-3.8.4`).
+const SECONDARY_OUTPUT_SUFFIXES: &[&str] = &["-man", "-doc", "-dev", "-info", "-lib", "-debug", "-static"];
+
+/// Select the primary (main) output from a list of Nix store paths.
+///
+/// Multi-output packages produce multiple store paths. The main output is the
+/// one without a secondary suffix like `-man`, `-doc`, `-dev`. If all paths
+/// have suffixes (unusual), falls back to the first path.
+fn select_primary_output<'a>(paths: &[&'a str]) -> Option<&'a str> {
+    if paths.is_empty() {
+        return None;
+    }
+    if paths.len() == 1 {
+        return Some(paths[0]);
+    }
+
+    // Extract the store path name (after the hash-) for suffix checking.
+    // Format: /nix/store/<hash>-<name>
+    let is_secondary = |path: &str| -> bool {
+        let name = path.rsplit('/').next().unwrap_or(path);
+        // Strip the 32-char hash + dash prefix to get the package name
+        let pkg_name = if name.len() > 33 { &name[33..] } else { name };
+        SECONDARY_OUTPUT_SUFFIXES.iter().any(|suffix| pkg_name.ends_with(suffix))
+    };
+
+    // Prefer paths that aren't secondary outputs
+    paths.iter().find(|p| !is_secondary(p)).or(paths.first()).copied()
 }
 
 /// Result of a deploy job execution.
@@ -598,5 +630,66 @@ mod tests {
         });
         let artifact = extract_artifact_from_job_data(&job_data).unwrap();
         assert_eq!(artifact, DeployArtifact::BlobHash("fallback-hash".to_string()));
+    }
+
+    #[test]
+    fn test_extract_artifact_prefers_main_output_over_man() {
+        // Multi-output: man pages listed first, main output second (real nix behavior)
+        let job_data = serde_json::json!({
+            "result": {
+                "Success": {
+                    "data": {
+                        "output_paths": [
+                            "/nix/store/ibhfxh52ibdg5c5fgy58m964im9xgn5f-cowsay-3.8.4-man",
+                            "/nix/store/lgcnp2fwlzgxhs73y9scqf59p9la55c9-cowsay-3.8.4"
+                        ]
+                    }
+                }
+            }
+        });
+        let artifact = extract_artifact_from_job_data(&job_data).unwrap();
+        assert_eq!(
+            artifact,
+            DeployArtifact::NixStorePath("/nix/store/lgcnp2fwlzgxhs73y9scqf59p9la55c9-cowsay-3.8.4".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_artifact_handles_doc_and_dev_outputs() {
+        let job_data = serde_json::json!({
+            "result": {
+                "Success": {
+                    "data": {
+                        "output_paths": [
+                            "/nix/store/aaa-openssl-3.0.12-doc",
+                            "/nix/store/bbb-openssl-3.0.12-dev",
+                            "/nix/store/ccc-openssl-3.0.12"
+                        ]
+                    }
+                }
+            }
+        });
+        let artifact = extract_artifact_from_job_data(&job_data).unwrap();
+        assert_eq!(artifact, DeployArtifact::NixStorePath("/nix/store/ccc-openssl-3.0.12".to_string()));
+    }
+
+    #[test]
+    fn test_select_primary_output_single_path() {
+        let paths = vec!["/nix/store/abc-pkg-1.0-man"];
+        // Only one path — use it even if it's a secondary output
+        assert_eq!(select_primary_output(&paths), Some("/nix/store/abc-pkg-1.0-man"));
+    }
+
+    #[test]
+    fn test_select_primary_output_empty() {
+        let paths: Vec<&str> = vec![];
+        assert_eq!(select_primary_output(&paths), None);
+    }
+
+    #[test]
+    fn test_select_primary_output_all_secondary() {
+        // All paths are secondary — fall back to first
+        let paths = vec!["/nix/store/aaa-pkg-1.0-man", "/nix/store/bbb-pkg-1.0-doc"];
+        assert_eq!(select_primary_output(&paths), Some("/nix/store/aaa-pkg-1.0-man"));
     }
 }

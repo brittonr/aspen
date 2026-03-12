@@ -216,6 +216,24 @@ async fn async_main() -> Result<()> {
         aspen_core_essentials_handler::spawn_alert_evaluator(client_context.clone(), config, node_mode.shutdown_token())
     });
 
+    // Spawn deploy resume watcher (detects leadership transitions and resumes
+    // in-progress deployments that were left by the old leader)
+    #[cfg(feature = "deploy")]
+    let deploy_resume_cancel = {
+        let endpoint = node_mode.iroh_manager().endpoint().clone();
+        let rpc_client = Arc::new(aspen_deploy::coordinator::iroh_rpc::IrohNodeRpcClient::new(
+            endpoint,
+            controller.clone(),
+            config.node_id,
+        ));
+        aspen_cluster::upgrade::leader_resume::spawn_deploy_resume_watcher(
+            primary_raft_node.raft().clone(),
+            kv_store.clone(),
+            rpc_client,
+            config.node_id,
+        )
+    };
+
     // Extract signer before client_context is consumed by the handler.
     #[cfg(feature = "nix-cache-gateway")]
     let nix_cache_signer = client_context.nix_cache_signer.clone();
@@ -257,6 +275,13 @@ async fn async_main() -> Result<()> {
     if let Some(handle) = alert_evaluator_handle {
         info!("stopping periodic alert evaluator");
         handle.shutdown().await;
+    }
+
+    // Stop deploy resume watcher
+    #[cfg(feature = "deploy")]
+    {
+        info!("stopping deploy resume watcher");
+        deploy_resume_cancel.cancel();
     }
 
     // Stop distributed worker coordinator if started
