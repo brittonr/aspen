@@ -436,10 +436,11 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         // Initialize stage statuses
         init_stage_statuses(&mut run, &pipeline_config);
 
-        // Mark if pipeline has deploy stages — sync_run_status will keep the
-        // pipeline Running after the workflow finishes so the deploy monitor
-        // can execute deploy stages before setting the final status.
-        run.has_pending_deploys = Self::has_deploy_jobs(&pipeline_config);
+        // Mark if pipeline has deploy stages that apply to this ref.
+        // Stages guarded by `when` (e.g., deploy on release tags only) are
+        // excluded when the ref doesn't match, so the pipeline can complete
+        // without waiting for a deploy monitor that would never fire.
+        run.has_pending_deploys = Self::has_deploy_jobs_for_ref(&pipeline_config, &context.ref_name);
 
         // Convert to workflow definition (deploy-only stages are excluded)
         let workflow_def = self.build_workflow_definition(&pipeline_config, &context)?;
@@ -894,8 +895,8 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         // Initialize stage statuses
         init_stage_statuses(&mut run, &pipeline_config);
 
-        // Mark if pipeline has deploy stages
-        run.has_pending_deploys = Self::has_deploy_jobs(&pipeline_config);
+        // Mark if pipeline has deploy stages that apply to this ref
+        run.has_pending_deploys = Self::has_deploy_jobs_for_ref(&pipeline_config, &run.context.ref_name);
 
         // Convert to workflow definition (deploy-only stages are excluded)
         let workflow_def = self.build_workflow_definition(&pipeline_config, &run.context)?;
@@ -1040,7 +1041,8 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             }
         };
 
-        let deploy_stages = crate::orchestrator::deploy_monitor::extract_deploy_stages(config);
+        let deploy_stages =
+            crate::orchestrator::deploy_monitor::extract_deploy_stages_for_ref(config, Some(&run.context.ref_name));
         if deploy_stages.is_empty() {
             return;
         }

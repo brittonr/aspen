@@ -26,6 +26,7 @@ pub use deploy_executor::DeployStatusResult;
 pub use deploy_monitor::DeployJobInfo;
 pub use deploy_monitor::DeployStageInfo;
 pub use deploy_monitor::extract_deploy_stages;
+pub use deploy_monitor::extract_deploy_stages_for_ref;
 pub use deploy_monitor::spawn_deploy_monitor;
 pub use pipeline::PipelineContext;
 pub use pipeline::PipelineOrchestrator;

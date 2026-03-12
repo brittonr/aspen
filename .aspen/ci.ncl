@@ -97,44 +97,29 @@
       ],
     },
 
-    # Stage 4: Deploy (disabled by default)
+    # Stage 4: Deploy — rolling upgrade on tagged releases.
     #
-    # Uncomment to enable automatic rolling deployment after tests pass.
-    # The deploy job resolves the artifact from the build-node job's
-    # output (Nix store path) and calls ClusterDeploy to initiate a
-    # rolling upgrade of all cluster nodes.
-    #
-    # Prerequisites:
-    # - Cluster must have deploy feature enabled on the node
-    # - All nodes must have access to the Nix store path (local build
-    #   or binary cache)
-    # - Wire format compatibility between old and new binary (not
-    #   enforced — operator responsibility)
-    #
-    # Options:
-    #   artifact_from  - Name of a build job in a preceding stage
-    #   strategy       - "rolling" (default) — upgrade nodes one at a time
-    #   max_concurrent - Max nodes to upgrade simultaneously (default: 1)
-    #   health_check_timeout_secs - Per-node health timeout (default: 120)
-    #
-    # For production, gate on tagged releases:
-    #   when = "refs/tags/release/*"
-    #
-    # {
-    #   name = "deploy",
-    #   depends_on = ["test"],
-    #   jobs = [
-    #     {
-    #       name = "deploy-node",
-    #       type = 'deploy,
-    #       artifact_from = "build-node",
-    #       strategy = "rolling",
-    #       max_concurrent = 1,
-    #       health_check_timeout_secs = 120,
-    #       timeout_secs = 600,
-    #     },
-    #   ],
-    # },
+    # Gated on release tags so it doesn't run during normal CI builds.
+    # For 1-node dogfood-local, deployment is handled at the script
+    # level (do_deploy stops/restarts the node with the CI-built binary).
+    # In multi-node production clusters, this stage runs the full
+    # DeploymentCoordinator rolling upgrade via DeployExecutor.
+    {
+      name = "deploy",
+      depends_on = ["test"],
+      when = "refs/tags/release/*",
+      jobs = [
+        {
+          name = "deploy-node",
+          type = 'deploy,
+          artifact_from = "build-node",
+          strategy = "rolling",
+          max_concurrent = 1,
+          health_check_timeout_secs = 120,
+          timeout_secs = 600,
+        },
+      ],
+    },
   ],
 
   artifacts = {

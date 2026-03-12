@@ -67,7 +67,7 @@
     "openraft-macros": "path+file:///home/brittonr/git/aspen/openraft/macros#openraft-macros@0.10.0"
   },
   "cargoLockHash": "7b3293e5df301a344f8e767385b0e0c20799d074ea6b0605f085cfb1140fff2b",
-  "inputsHash": "8003b73e6b3665747339004e3a474d663d58133826dded93660b2d8c79e24c6a",
+  "inputsHash": "5b4787e993c71f2746ae8fc6b1e3a9f5ccca3bc1bf77702ebd6bb5db3fe47111",
   "crates": {
     "path+file:///home/brittonr/git/aspen#0.1.0": {
       "crateName": "aspen",
@@ -84,6 +84,7 @@
         "ci",
         "ci-basic",
         "default",
+        "deploy",
         "docs",
         "forge",
         "git-bridge",
@@ -141,6 +142,10 @@
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-core-essentials-handler#0.1.0",
           "externCrateName": "aspen_core_essentials_handler"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-deploy#0.1.0",
+          "externCrateName": "aspen_deploy"
         },
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-docs#0.1.0",
@@ -1531,6 +1536,7 @@
       "features": [
         "blob",
         "default",
+        "deploy",
         "docs",
         "federation",
         "hooks",
@@ -1570,6 +1576,10 @@
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-crypto#0.1.0",
           "externCrateName": "aspen_crypto"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-deploy#0.1.0",
+          "externCrateName": "aspen_deploy"
         },
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-dht-discovery#0.1.0",
@@ -1694,6 +1704,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#n0-future@0.3.2",
           "externCrateName": "n0_future"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nix@0.29.0",
+          "externCrateName": "nix"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#num_cpus@1.17.0",
@@ -1875,13 +1889,19 @@
         "path": "crates/aspen-cluster-handler"
       },
       "features": [
+        "blob",
         "default",
+        "deploy",
         "docs"
       ],
       "dependencies": [
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
           "externCrateName": "anyhow"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-blob#0.1.0",
+          "externCrateName": "aspen_blob"
         },
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-client#0.1.0",
@@ -1892,12 +1912,28 @@
           "externCrateName": "aspen_client_api"
         },
         {
+          "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-cluster#0.1.0",
+          "externCrateName": "aspen_cluster"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-constants#0.1.0",
+          "externCrateName": "aspen_constants"
+        },
+        {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-core#0.1.0",
           "externCrateName": "aspen_core"
         },
         {
+          "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-deploy#0.1.0",
+          "externCrateName": "aspen_deploy"
+        },
+        {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-docs#0.1.0",
           "externCrateName": "aspen_docs"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-kv-types#0.1.0",
+          "externCrateName": "aspen_kv_types"
         },
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-rpc-core#0.1.0",
@@ -1906,6 +1942,10 @@
         {
           "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-ticket#0.1.0",
           "externCrateName": "aspen_ticket"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/aspen/crates/aspen-traits#0.1.0",
+          "externCrateName": "aspen_traits"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#async-trait@0.1.89",
@@ -1920,12 +1960,24 @@
           "externCrateName": "iroh"
         },
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#iroh-blobs@0.97.0",
+          "externCrateName": "iroh_blobs"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#iroh-gossip@0.95.0",
           "externCrateName": "iroh_gossip"
         },
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#postcard@1.1.3",
+          "externCrateName": "postcard"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
           "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
+          "externCrateName": "tokio"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44",
@@ -4424,6 +4476,7 @@
         "blob",
         "ci",
         "default",
+        "deploy",
         "forge",
         "hooks",
         "jobs",
@@ -4538,6 +4591,7 @@
         "automerge",
         "blob",
         "ci",
+        "deploy",
         "docs",
         "forge",
         "git-bridge",

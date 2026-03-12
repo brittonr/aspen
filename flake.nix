@@ -1584,8 +1584,8 @@
         aspenNode = u2nWorkspace.workspaceMembers."aspen".build;
         aspenCli = u2nCliWorkspace.workspaceMembers."aspen-cli".build;
 
-        # Build plan for aspen-node (658 crates,
-        # features: ci,docs,hooks,shell-worker,automerge,secrets,git-bridge)
+        # Build plan for aspen-node (661 crates,
+        # features: ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy)
         u2nWorkspace = unit2nix.lib.${system}.buildFromUnitGraph {
           inherit pkgs;
           src = u2nSrc;
@@ -3642,7 +3642,7 @@
                 ${unit2nix.packages.${system}.default}/bin/unit2nix \
                   --manifest-path ./Cargo.toml \
                   --bin aspen-node \
-                  --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge \
+                  --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy \
                   -o build-plan.json
                 echo "Done! Commit build-plan.json to the repo."
               ''}";

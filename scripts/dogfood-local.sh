@@ -731,7 +731,8 @@ do_deploy() {
 
   log "Deploying CI-built artifact to cluster..."
 
-  # Find the pipeline run — prefer saved run_id, fall back to latest
+  # ── Step 1: Extract the CI-built Nix store path ──────────────────
+
   local run_id
   run_id=$(cat "$CLUSTER_DIR/run_id" 2>/dev/null || true)
 
@@ -746,7 +747,6 @@ do_deploy() {
     exit 1
   fi
 
-  # Get pipeline status to find build-node job
   local status_out
   status_out=$(cli_json ci status "$run_id" 2>&1) || true
   local pipeline_status
@@ -757,7 +757,6 @@ do_deploy() {
     exit 1
   fi
 
-  # Extract the Nix store path from the build-node job result
   local build_node_job_id
   build_node_job_id=$(python3 -c "
 import json, sys, re
@@ -817,48 +816,132 @@ print('')
 
   ok "CI-built artifact: $store_path"
 
-  # Initiate rolling deployment
-  log "Calling cluster deploy..."
-  local deploy_out
-  deploy_out=$(cli_json cluster deploy "$store_path" 2>&1) || {
-    err "cluster deploy failed"
-    echo "Output: $deploy_out"
-    exit 1
-  }
-  ok "Deployment initiated"
+  # ── Step 2: Validate the CI-built binary exists ──────────────────
 
-  # Poll deploy status
-  log "Polling deployment status..."
-  local deadline=$((SECONDS + 600))
-  local prev_status=""
+  local ci_bin="$store_path/bin/aspen-node"
+  if [ ! -f "$ci_bin" ]; then
+    err "CI-built binary not found at $ci_bin"
+    err "The Nix store path may not be available locally."
+    return 1
+  fi
 
-  while [ $SECONDS -lt $deadline ]; do
-    local ds_out
-    ds_out=$(cli_json cluster deploy-status 2>&1) || true
-    local ds_status
-    ds_status=$(parse_json "d.get('status', 'unknown')" <<< "$ds_out")
+  if ! "$ci_bin" --version >/dev/null 2>&1; then
+    err "CI-built binary at $ci_bin is not executable"
+    return 1
+  fi
+  ok "CI-built binary validated: $ci_bin"
 
-    if [ "$ds_status" != "$prev_status" ]; then
-      log "Deploy status: $ds_status"
-      prev_status="$ds_status"
+  # ── Step 3: Script-level deploy (stop → restart with new binary) ─
+  #
+  # In a 1-node cluster, CI-internal deploy (DeploymentCoordinator) can't
+  # work because the coordinator sends NodeUpgrade to itself, which restarts
+  # the process and kills the coordinator mid-flight. Instead, we do the
+  # deploy at the script level: stop the old node, start with the CI-built
+  # binary, wait for it to come back.
+
+  for i in $(seq 1 "$NODE_COUNT"); do
+    local pid
+    pid=$(cat "$CLUSTER_DIR/node$i.pid" 2>/dev/null || true)
+
+    if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+      warn "Node $i not running (PID $pid), skipping"
+      continue
     fi
 
-    case "$ds_status" in
-      completed)
-        ok "Deployment completed successfully"
-        return 0
-        ;;
-      failed|rolled_back)
-        err "Deployment $ds_status"
-        echo "$ds_out" | head -10
-        return 1
-        ;;
-    esac
+    log "Stopping node $i (PID $pid) for binary upgrade..."
+    kill "$pid" 2>/dev/null || true
 
-    sleep 5
+    # Wait for the process to actually exit
+    local wait_count=0
+    while kill -0 "$pid" 2>/dev/null && [ $wait_count -lt 15 ]; do
+      sleep 1
+      wait_count=$((wait_count + 1))
+    done
+
+    if kill -0 "$pid" 2>/dev/null; then
+      warn "Node $i didn't stop gracefully, sending SIGKILL"
+      kill -9 "$pid" 2>/dev/null || true
+      sleep 1
+    fi
+
+    ok "Node $i stopped"
+
+    # Read the iroh secret key used at start (deterministic from node id)
+    local key
+    key=$(printf '%064x' $((2000 + i)))
+
+    log "Starting node $i with CI-built binary..."
+
+    # Restart with the same flags as do_start but using the CI binary.
+    # Data directory is preserved so Raft state and KV data persist.
+    ASPEN_DOCS_ENABLED=true \
+    ASPEN_DOCS_IN_MEMORY=true \
+    ASPEN_HOOKS_ENABLED=true \
+    "$ci_bin" \
+      --node-id "$i" \
+      --data-dir "$CLUSTER_DIR/node$i" \
+      --cookie "$COOKIE" \
+      --iroh-secret-key "$key" \
+      --disable-mdns \
+      --heartbeat-interval-ms 500 \
+      --election-timeout-min-ms 1500 \
+      --election-timeout-max-ms 3000 \
+      --enable-workers \
+      --enable-ci \
+      --ci-auto-trigger \
+      >> "$CLUSTER_DIR/node$i.log" 2>&1 &
+    echo $! > "$CLUSTER_DIR/node$i.pid"
   done
 
-  err "Deployment timed out after 600 seconds"
+  # ── Step 4: Wait for the cluster to come back ───────────────────
+
+  log "Waiting for cluster to come back online..."
+
+  # The cluster-ticket.txt is regenerated on each start. Wait for it to
+  # appear fresh (the old one was from the previous process).
+  rm -f "$CLUSTER_DIR/node1/cluster-ticket.txt"
+
+  local retries=60
+  while [ $retries -gt 0 ]; do
+    if [ -f "$CLUSTER_DIR/node1/cluster-ticket.txt" ]; then
+      break
+    fi
+    sleep 1
+    retries=$((retries - 1))
+  done
+
+  if [ ! -f "$CLUSTER_DIR/node1/cluster-ticket.txt" ]; then
+    err "Node 1 failed to restart within 60s"
+    tail -20 "$CLUSTER_DIR/node1.log" 2>/dev/null
+    return 1
+  fi
+
+  # ── Step 5: Health check ────────────────────────────────────────
+
+  # Verify all nodes are alive
+  for i in $(seq 1 "$NODE_COUNT"); do
+    local pid
+    pid=$(cat "$CLUSTER_DIR/node$i.pid" 2>/dev/null || true)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      ok "Node $i (PID $pid): running with CI-built binary"
+    else
+      err "Node $i failed to restart — check $CLUSTER_DIR/node$i.log"
+      return 1
+    fi
+  done
+
+  # Verify cluster is responsive via CLI
+  local health_retries=10
+  while [ $health_retries -gt 0 ]; do
+    if cli cluster status >/dev/null 2>&1; then
+      ok "Cluster is healthy after deploy"
+      return 0
+    fi
+    sleep 2
+    health_retries=$((health_retries - 1))
+  done
+
+  err "Cluster not responsive after deploy"
   return 1
 }
 

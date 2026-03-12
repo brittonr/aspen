@@ -41,6 +41,20 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         config.stages.iter().any(|s| s.jobs.iter().any(|j| j.job_type == JobType::Deploy))
     }
 
+    /// Check if a pipeline config has deploy stages that should run for a given ref.
+    ///
+    /// Deploy stages guarded by `when` are only counted when the ref matches.
+    /// This prevents `has_pending_deploys` from keeping the pipeline in Running
+    /// state when the deploy stage's `when` guard excludes the current ref
+    /// (e.g., deploy stage has `when = "refs/tags/release/*"` but the push
+    /// was to `refs/heads/main`).
+    pub fn has_deploy_jobs_for_ref(config: &PipelineConfig, ref_name: &str) -> bool {
+        config
+            .stages
+            .iter()
+            .any(|s| s.should_run(ref_name) && s.jobs.iter().any(|j| j.job_type == JobType::Deploy))
+    }
+
     /// Check if a stage contains only deploy jobs.
     ///
     /// Deploy-only stages are excluded from the workflow definition and
@@ -510,5 +524,192 @@ mod tests {
             Some(String::new()),
             "empty run_id propagates to payload — this was the root cause of the log streaming bug"
         );
+    }
+
+    #[test]
+    fn test_has_deploy_jobs_for_ref_skips_guarded_stages() {
+        use std::collections::HashMap;
+
+        use crate::config::types::*;
+
+        let config = PipelineConfig {
+            name: "test".to_string(),
+            description: None,
+            triggers: TriggerConfig::default(),
+            stages: vec![
+                StageConfig {
+                    name: "build".to_string(),
+                    jobs: vec![JobConfig {
+                        name: "build-node".to_string(),
+                        job_type: JobType::Nix,
+                        flake_url: Some(".".to_string()),
+                        flake_attr: Some("build-node".to_string()),
+                        command: None,
+                        args: vec![],
+                        env: HashMap::new(),
+                        working_dir: None,
+                        binary_hash: None,
+                        timeout_secs: 3600,
+                        isolation: IsolationMode::default(),
+                        cache_key: None,
+                        artifacts: vec![],
+                        depends_on: vec![],
+                        retry_count: 0,
+                        allow_failure: false,
+                        tags: vec![],
+                        should_upload_result: true,
+                        publish_to_cache: true,
+                        artifact_from: None,
+                        strategy: None,
+                        health_check_timeout_secs: None,
+                        max_concurrent: None,
+                    }],
+                    parallel: true,
+                    depends_on: vec![],
+                    when: None,
+                },
+                StageConfig {
+                    name: "deploy".to_string(),
+                    jobs: vec![JobConfig {
+                        name: "deploy-node".to_string(),
+                        job_type: JobType::Deploy,
+                        artifact_from: Some("build-node".to_string()),
+                        strategy: Some("rolling".to_string()),
+                        command: None,
+                        args: vec![],
+                        env: HashMap::new(),
+                        working_dir: None,
+                        flake_url: None,
+                        flake_attr: None,
+                        binary_hash: None,
+                        timeout_secs: 600,
+                        isolation: IsolationMode::default(),
+                        cache_key: None,
+                        artifacts: vec![],
+                        depends_on: vec![],
+                        retry_count: 0,
+                        allow_failure: false,
+                        tags: vec![],
+                        should_upload_result: false,
+                        publish_to_cache: false,
+                        health_check_timeout_secs: None,
+                        max_concurrent: None,
+                    }],
+                    parallel: true,
+                    depends_on: vec!["build".to_string()],
+                    when: Some("refs/tags/release/*".to_string()),
+                },
+            ],
+            artifacts: ArtifactConfig::default(),
+            env: HashMap::new(),
+            timeout_secs: 7200,
+            priority: Priority::default(),
+        };
+
+        // has_deploy_jobs ignores when guard — always true
+        assert!(PipelineOrchestrator::<dyn KeyValueStore>::has_deploy_jobs(&config),);
+
+        // has_deploy_jobs_for_ref respects when guard
+        assert!(
+            !PipelineOrchestrator::<dyn KeyValueStore>::has_deploy_jobs_for_ref(&config, "refs/heads/main"),
+            "deploy stage guarded by release tags should not count for main branch"
+        );
+        assert!(
+            PipelineOrchestrator::<dyn KeyValueStore>::has_deploy_jobs_for_ref(&config, "refs/tags/release/v1.0"),
+            "deploy stage should count when ref matches the when guard"
+        );
+    }
+}
+
+#[cfg(test)]
+mod deploy_ref_tests {
+    use aspen_core::KeyValueStore;
+
+    use crate::config::types::*;
+    use crate::orchestrator::PipelineOrchestrator;
+
+    fn make_job(name: &str, job_type: JobType) -> JobConfig {
+        JobConfig {
+            name: name.to_string(),
+            job_type,
+            command: if job_type == JobType::Shell {
+                Some("make".to_string())
+            } else {
+                None
+            },
+            args: vec![],
+            env: Default::default(),
+            working_dir: None,
+            flake_url: None,
+            flake_attr: None,
+            binary_hash: None,
+            timeout_secs: 3600,
+            isolation: IsolationMode::default(),
+            cache_key: None,
+            artifacts: vec![],
+            depends_on: vec![],
+            retry_count: 0,
+            allow_failure: false,
+            tags: vec![],
+            should_upload_result: false,
+            publish_to_cache: false,
+            artifact_from: if job_type == JobType::Deploy {
+                Some("build-node".to_string())
+            } else {
+                None
+            },
+            strategy: None,
+            health_check_timeout_secs: None,
+            max_concurrent: None,
+        }
+    }
+
+    fn make_deploy_pipeline_with_when(when: Option<&str>) -> PipelineConfig {
+        PipelineConfig {
+            name: "test".to_string(),
+            description: None,
+            triggers: TriggerConfig::default(),
+            stages: vec![
+                StageConfig {
+                    name: "build".to_string(),
+                    jobs: vec![make_job("build-node", JobType::Shell)],
+                    parallel: true,
+                    depends_on: vec![],
+                    when: None,
+                },
+                StageConfig {
+                    name: "deploy".to_string(),
+                    jobs: vec![make_job("deploy-node", JobType::Deploy)],
+                    parallel: true,
+                    depends_on: vec!["build".to_string()],
+                    when: when.map(String::from),
+                },
+            ],
+            artifacts: ArtifactConfig::default(),
+            env: Default::default(),
+            timeout_secs: 7200,
+            priority: Priority::default(),
+        }
+    }
+
+    #[test]
+    fn test_deploy_no_when_guard_always_pending() {
+        let config = make_deploy_pipeline_with_when(None);
+        assert!(PipelineOrchestrator::<dyn KeyValueStore>::has_deploy_jobs_for_ref(&config, "refs/heads/main"));
+    }
+
+    #[test]
+    fn test_deploy_with_release_guard_skips_main() {
+        let config = make_deploy_pipeline_with_when(Some("refs/tags/release/*"));
+        assert!(!PipelineOrchestrator::<dyn KeyValueStore>::has_deploy_jobs_for_ref(&config, "refs/heads/main"));
+    }
+
+    #[test]
+    fn test_deploy_with_release_guard_matches_tag() {
+        let config = make_deploy_pipeline_with_when(Some("refs/tags/release/*"));
+        assert!(PipelineOrchestrator::<dyn KeyValueStore>::has_deploy_jobs_for_ref(
+            &config,
+            "refs/tags/release/v2.0"
+        ));
     }
 }

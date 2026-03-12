@@ -68,12 +68,25 @@ pub struct DeployJobInfo {
 /// Extract deploy stage info from a pipeline config.
 ///
 /// Returns deploy stages in pipeline order. Only stages where ALL jobs
-/// are `JobType::Deploy` are included.
+/// are `JobType::Deploy` are included. Stages with a `when` guard that
+/// doesn't match `ref_name` are excluded.
 pub fn extract_deploy_stages(config: &PipelineConfig) -> Vec<DeployStageInfo> {
+    extract_deploy_stages_for_ref(config, None)
+}
+
+/// Extract deploy stages that should run for a given ref.
+///
+/// When `ref_name` is `Some`, stages guarded by `when` are filtered by
+/// `should_run()`. When `None`, all deploy-only stages are returned
+/// (backwards-compatible with the original behavior).
+pub fn extract_deploy_stages_for_ref(config: &PipelineConfig, ref_name: Option<&str>) -> Vec<DeployStageInfo> {
     config
         .stages_in_order()
         .iter()
-        .filter(|s| PipelineOrchestrator::<dyn KeyValueStore>::is_deploy_only_stage(s))
+        .filter(|s| {
+            PipelineOrchestrator::<dyn KeyValueStore>::is_deploy_only_stage(s)
+                && ref_name.is_none_or(|r| s.should_run(r))
+        })
         .map(|s| DeployStageInfo {
             stage_name: s.name.clone(),
             jobs: s
@@ -438,6 +451,42 @@ mod tests {
         }]);
         let stages = extract_deploy_stages(&config);
         assert!(stages.is_empty(), "mixed stages should not be extracted as deploy stages");
+    }
+
+    #[test]
+    fn test_extract_deploy_stages_when_guard_skips_non_matching_ref() {
+        let config = test_pipeline(vec![
+            StageConfig {
+                name: "build".to_string(),
+                jobs: vec![test_job("build-node", JobType::Nix)],
+                ..test_stage()
+            },
+            StageConfig {
+                name: "deploy".to_string(),
+                jobs: vec![JobConfig {
+                    name: "deploy-node".to_string(),
+                    job_type: JobType::Deploy,
+                    artifact_from: Some("build-node".to_string()),
+                    ..test_job_config()
+                }],
+                depends_on: vec!["build".to_string()],
+                when: Some("refs/tags/release/*".to_string()),
+                ..test_stage()
+            },
+        ]);
+
+        // Non-matching ref: deploy stage should be excluded
+        let stages = extract_deploy_stages_for_ref(&config, Some("refs/heads/main"));
+        assert!(stages.is_empty(), "deploy stage with when guard should be skipped for non-matching ref");
+
+        // Matching ref: deploy stage should be included
+        let stages = extract_deploy_stages_for_ref(&config, Some("refs/tags/release/v1.0"));
+        assert_eq!(stages.len(), 1);
+        assert_eq!(stages[0].stage_name, "deploy");
+
+        // No ref (backwards compat): all deploy stages included
+        let stages = extract_deploy_stages_for_ref(&config, None);
+        assert_eq!(stages.len(), 1);
     }
 
     fn test_pipeline(stages: Vec<StageConfig>) -> PipelineConfig {
