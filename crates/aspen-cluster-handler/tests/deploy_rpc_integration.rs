@@ -60,11 +60,18 @@ impl ProtocolHandler for TestDeployHandler {
             };
 
             let response = match auth_request.request {
-                ClientRpcRequest::NodeUpgrade { deploy_id, artifact } => {
-                    aspen_cluster_handler::handler::deploy::handle_node_upgrade(&ctx, deploy_id, artifact)
-                        .await
-                        .unwrap_or_else(|e| ClientRpcResponse::error("INTERNAL", e.to_string()))
-                }
+                ClientRpcRequest::NodeUpgrade {
+                    deploy_id,
+                    artifact,
+                    expected_binary,
+                } => aspen_cluster_handler::handler::deploy::handle_node_upgrade(
+                    &ctx,
+                    deploy_id,
+                    artifact,
+                    expected_binary,
+                )
+                .await
+                .unwrap_or_else(|e| ClientRpcResponse::error("INTERNAL", e.to_string())),
                 ClientRpcRequest::NodeRollback { deploy_id } => {
                     aspen_cluster_handler::handler::deploy::handle_node_rollback(&ctx, deploy_id)
                         .await
@@ -167,10 +174,17 @@ impl TestNodeRpcClient {
 
 #[async_trait::async_trait]
 impl NodeRpcClient for TestNodeRpcClient {
-    async fn send_upgrade(&self, node_id: u64, deploy_id: &str, artifact_ref: &str) -> Result<(), RpcError> {
+    async fn send_upgrade(
+        &self,
+        node_id: u64,
+        deploy_id: &str,
+        artifact_ref: &str,
+        _expected_binary: Option<&str>,
+    ) -> Result<(), RpcError> {
         let request = ClientRpcRequest::NodeUpgrade {
             deploy_id: deploy_id.to_string(),
             artifact: artifact_ref.to_string(),
+            expected_binary: None,
         };
         let resp = self.send_rpc(node_id, request).await?;
         match resp {
@@ -285,7 +299,7 @@ async fn test_send_upgrade_rpc_reaches_target() {
 
     let rpc_client = TestNodeRpcClient::new(coord_ep, controller, 1);
 
-    let result = rpc_client.send_upgrade(2, "deploy-test-1", "/nix/store/abc-aspen").await;
+    let result = rpc_client.send_upgrade(2, "deploy-test-1", "/nix/store/abc-aspen", None).await;
     assert!(result.is_ok(), "send_upgrade should succeed, got: {:?}", result.err());
 }
 
@@ -417,7 +431,7 @@ async fn test_send_upgrade_unknown_node_fails() {
 
     let rpc_client = TestNodeRpcClient::new(coord_ep, controller, 1);
 
-    let result = rpc_client.send_upgrade(99, "deploy-1", "/nix/store/abc").await;
+    let result = rpc_client.send_upgrade(99, "deploy-1", "/nix/store/abc", None).await;
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.message.contains("node 99"), "error should mention node 99: {}", err.message);
@@ -441,7 +455,7 @@ async fn test_node_without_iroh_addr_fails_clearly() {
 
     let rpc_client = TestNodeRpcClient::new(coord_ep, controller, 1);
 
-    let result = rpc_client.send_upgrade(2, "deploy-1", "/nix/store/abc").await;
+    let result = rpc_client.send_upgrade(2, "deploy-1", "/nix/store/abc", None).await;
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(

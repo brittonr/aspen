@@ -147,7 +147,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl NodeRpcClient for MockHealthyRpcClient {
-        async fn send_upgrade(&self, _: u64, _: &str, _: &str) -> Result<(), RpcError> {
+        async fn send_upgrade(&self, _: u64, _: &str, _: &str, _: Option<&str>) -> Result<(), RpcError> {
             Ok(())
         }
         async fn send_rollback(&self, _: u64, _: &str) -> Result<(), RpcError> {

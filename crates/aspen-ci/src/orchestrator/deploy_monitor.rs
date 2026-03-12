@@ -59,6 +59,8 @@ pub struct DeployJobInfo {
     pub health_timeout_secs: Option<u64>,
     /// Max concurrent node upgrades override.
     pub max_concurrent: Option<u32>,
+    /// Binary to validate inside a Nix store path.
+    pub expected_binary: Option<String>,
 }
 
 // ============================================================================
@@ -99,6 +101,7 @@ pub fn extract_deploy_stages_for_ref(config: &PipelineConfig, ref_name: Option<&
                     strategy: j.strategy.clone(),
                     health_timeout_secs: j.health_check_timeout_secs,
                     max_concurrent: j.max_concurrent,
+                    expected_binary: j.expected_binary.clone(),
                 })
                 .collect(),
         })
@@ -246,6 +249,7 @@ async fn run_all_deploy_stages<S: KeyValueStore + ?Sized + 'static>(
                 strategy: job.strategy.as_deref(),
                 health_timeout_secs: job.health_timeout_secs,
                 max_concurrent: job.max_concurrent,
+                expected_binary: job.expected_binary.as_deref(),
                 pipeline_run: &pipeline_run,
                 dispatcher,
             };
@@ -545,6 +549,7 @@ mod tests {
             strategy: None,
             health_check_timeout_secs: None,
             max_concurrent: None,
+            expected_binary: None,
         }
     }
 }

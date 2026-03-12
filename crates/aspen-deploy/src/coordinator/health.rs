@@ -5,10 +5,16 @@
 //! 2. It appears in Raft membership
 //! 3. Its Raft log gap is below DEPLOY_LOG_GAP_THRESHOLD
 //!
-//! All three must pass within DEPLOY_HEALTH_TIMEOUT_SECS.
+//! Additionally, each poll cycle checks the KV-stored node deploy status
+//! (`_sys:deploy:node:{node_id}`). If the executor wrote `Failed` before
+//! restarting (e.g., binary validation error), the coordinator detects it
+//! immediately instead of waiting for the health timeout.
+//!
+//! All checks must pass within DEPLOY_HEALTH_TIMEOUT_SECS.
 
 use std::time::Duration;
 
+use aspen_kv_types::ReadRequest;
 use aspen_traits::ClusterController;
 use aspen_traits::KeyValueStore;
 use tracing::debug;
@@ -17,12 +23,18 @@ use tracing::warn;
 use super::DeployError;
 use super::DeploymentCoordinator;
 use super::Result;
+use crate::DEPLOY_NODE_PREFIX;
+use crate::NodeDeployStatus;
 use crate::coordinator::rpc::NodeRpcClient;
 
 impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized> DeploymentCoordinator<K, R, C> {
     /// Poll a node's health until it passes all checks or times out.
     ///
     /// Bounded by `health_timeout_secs`. Polls every `poll_interval_secs`.
+    ///
+    /// Each poll cycle also checks the KV-stored node deploy status. If the
+    /// executor wrote `Failed` (e.g., binary validation error before restart),
+    /// the poll returns an error immediately.
     pub(super) async fn poll_node_health(&self, node_id: u64) -> Result<()> {
         let timeout = Duration::from_secs(self.health_timeout_secs);
         let interval = Duration::from_secs(self.poll_interval_secs);
@@ -36,6 +48,18 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized>
                     node_id,
                     timeout_secs: self.health_timeout_secs,
                 });
+            }
+
+            // Check KV for executor-reported failure (pre-restart failures).
+            // This catches cases where the executor failed before restarting
+            // the node, so GetHealth would still report "healthy".
+            if let Some(NodeDeployStatus::Failed(reason)) = self.check_node_kv_status(node_id).await {
+                warn!(
+                    node_id,
+                    reason = %reason,
+                    "executor reported failure via KV before restart"
+                );
+                return Err(DeployError::NodeUpgradeFailed { node_id, reason });
             }
 
             match self.rpc_client.check_health(node_id).await {
@@ -52,6 +76,22 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized>
             }
 
             tokio::time::sleep(interval).await;
+        }
+    }
+
+    /// Read the executor-reported deploy status for a node from KV.
+    ///
+    /// Returns `Some(status)` if the executor wrote a status, `None` if
+    /// no status exists or the read fails (best-effort, non-blocking).
+    /// Uses stale reads so it works on any node (leader or follower).
+    pub(super) async fn check_node_kv_status(&self, node_id: u64) -> Option<NodeDeployStatus> {
+        let key = format!("{DEPLOY_NODE_PREFIX}{node_id}");
+        match self.kv.read(ReadRequest::stale(&key)).await {
+            Ok(result) => result.kv.and_then(|entry| serde_json::from_str(&entry.value).ok()),
+            Err(e) => {
+                debug!(node_id, error = %e, "KV status check failed (best-effort)");
+                None
+            }
         }
     }
 }

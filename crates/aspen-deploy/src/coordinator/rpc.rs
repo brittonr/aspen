@@ -23,6 +23,7 @@ pub trait NodeRpcClient: Send + Sync {
         node_id: u64,
         deploy_id: &str,
         artifact_ref: &str,
+        expected_binary: Option<&str>,
     ) -> std::result::Result<(), RpcError>;
 
     /// Send a NodeRollback RPC to the target node.

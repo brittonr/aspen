@@ -34,6 +34,7 @@ pub async fn handle_cluster_deploy(
     strategy: String,
     max_concurrent: u32,
     health_timeout_secs: u64,
+    expected_binary: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     let parsed_artifact = DeployArtifact::parse(&artifact);
     let deploy_strategy = match strategy.as_str() {
@@ -84,7 +85,14 @@ pub async fn handle_cluster_deploy(
     );
 
     match coordinator
-        .start_deployment(deploy_id.clone(), parsed_artifact, deploy_strategy, &node_ids, now_ms)
+        .start_deployment_with_options(
+            deploy_id.clone(),
+            parsed_artifact,
+            deploy_strategy,
+            &node_ids,
+            now_ms,
+            expected_binary,
+        )
         .await
     {
         Ok(record) => {
@@ -209,11 +217,13 @@ pub async fn handle_node_upgrade(
     ctx: &ClientProtocolContext,
     deploy_id: String,
     artifact: String,
+    expected_binary: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     info!(
         node_id = ctx.node_id,
         deploy_id = %deploy_id,
         artifact = %artifact,
+        expected_binary = ?expected_binary,
         "received NodeUpgrade request, delegating to executor"
     );
 
@@ -320,7 +330,7 @@ pub async fn handle_node_upgrade(
         }
     }
 
-    let config = resolve_upgrade_config(ctx.node_id, &parsed_artifact);
+    let config = resolve_upgrade_config(ctx.node_id, &parsed_artifact, expected_binary);
     let kv = ctx.kv_store.clone();
     let node_id = ctx.node_id;
 
@@ -331,6 +341,7 @@ pub async fn handle_node_upgrade(
 
     // Spawn the executor in a background task so the RPC returns immediately.
     // The coordinator polls health to track progress.
+    let kv_for_failure = kv.clone();
     tokio::spawn(async move {
         #[cfg(feature = "deploy")]
         let executor = match drain_state {
@@ -343,7 +354,23 @@ pub async fn handle_node_upgrade(
 
         match executor.execute(&parsed_artifact, Some(&status_writer)).await {
             Ok(()) => info!(node_id, deploy_id = %deploy_id, "node upgrade completed"),
-            Err(e) => error!(node_id, deploy_id = %deploy_id, error = %e, "node upgrade failed"),
+            Err(e) => {
+                error!(node_id, deploy_id = %deploy_id, error = %e, "node upgrade failed");
+                // Write Failed status to KV so the coordinator can detect the failure
+                // during health polling (the node never restarted, so GetHealth alone
+                // would report healthy).
+                let key = aspen_cluster::upgrade::status::node_status_key(node_id);
+                let value = aspen_cluster::upgrade::status::serialize_status(&aspen_deploy::NodeDeployStatus::Failed(
+                    e.to_string(),
+                ));
+                if let Err(kv_err) = kv_for_failure.write(aspen_kv_types::WriteRequest::set(&key, value)).await {
+                    error!(
+                        node_id,
+                        error = %kv_err,
+                        "failed to write Failed deploy status to KV"
+                    );
+                }
+            }
         }
     });
 
@@ -432,7 +459,11 @@ impl aspen_cluster::upgrade::executor::StatusWriter for KvStatusWriter {
 /// - ASPEN_STAGING_DIR: Staging directory for blob downloads
 /// - ASPEN_SYSTEMD_UNIT: Systemd unit name
 /// - ASPEN_RESTART_METHOD: "systemd" (default) or "execve"
-fn resolve_upgrade_config(node_id: u64, artifact: &DeployArtifact) -> aspen_cluster::upgrade::NodeUpgradeConfig {
+fn resolve_upgrade_config(
+    node_id: u64,
+    artifact: &DeployArtifact,
+    expected_binary: Option<String>,
+) -> aspen_cluster::upgrade::NodeUpgradeConfig {
     let upgrade_method = match artifact {
         DeployArtifact::NixStorePath(_) => {
             let profile_path = std::env::var("ASPEN_PROFILE_PATH")
@@ -461,6 +492,7 @@ fn resolve_upgrade_config(node_id: u64, artifact: &DeployArtifact) -> aspen_clus
         upgrade_method,
         restart_method,
         drain_timeout_secs: aspen_constants::api::DRAIN_TIMEOUT_SECS,
+        expected_binary: Some(expected_binary.unwrap_or_else(|| "bin/aspen-node".into())),
     }
 }
 

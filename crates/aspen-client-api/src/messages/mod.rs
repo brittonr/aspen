@@ -3518,6 +3518,9 @@ pub enum ClientRpcRequest {
         max_concurrent: u32,
         /// Health check timeout in seconds (default 120).
         health_timeout_secs: u64,
+        /// Binary to validate inside a Nix store path.
+        /// `None` → default `bin/aspen-node`. `Some("bin/cowsay")` → custom check.
+        expected_binary: Option<String>,
     },
 
     /// Query deployment status.
@@ -3538,6 +3541,9 @@ pub enum ClientRpcRequest {
         deploy_id: String,
         /// Target artifact: Nix store path or blob hash.
         artifact: String,
+        /// Binary to validate inside a Nix store path.
+        /// `None` → default `bin/aspen-node`. `Some("bin/cowsay")` → custom check.
+        expected_binary: Option<String>,
     },
 
     /// Rollback a single node to its previous binary (sent by coordinator).

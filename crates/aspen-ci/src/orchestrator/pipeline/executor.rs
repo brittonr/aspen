@@ -435,6 +435,7 @@ mod tests {
             strategy: None,
             health_check_timeout_secs: None,
             max_concurrent: None,
+            expected_binary: None,
         }
     }
 
@@ -563,6 +564,7 @@ mod tests {
                         strategy: None,
                         health_check_timeout_secs: None,
                         max_concurrent: None,
+                        expected_binary: None,
                     }],
                     parallel: true,
                     depends_on: vec![],
@@ -594,6 +596,7 @@ mod tests {
                         publish_to_cache: false,
                         health_check_timeout_secs: None,
                         max_concurrent: None,
+                        expected_binary: None,
                     }],
                     parallel: true,
                     depends_on: vec!["build".to_string()],
@@ -661,6 +664,7 @@ mod deploy_ref_tests {
             strategy: None,
             health_check_timeout_secs: None,
             max_concurrent: None,
+            expected_binary: None,
         }
     }
 

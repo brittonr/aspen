@@ -145,6 +145,19 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized>
         node_ids: &[u64],
         now_ms: u64,
     ) -> Result<DeploymentRecord> {
+        self.start_deployment_with_options(deploy_id, artifact, strategy, node_ids, now_ms, None).await
+    }
+
+    /// Start a new deployment with custom options (e.g., expected_binary).
+    pub async fn start_deployment_with_options(
+        &self,
+        deploy_id: String,
+        artifact: DeployArtifact,
+        strategy: DeployStrategy,
+        node_ids: &[u64],
+        now_ms: u64,
+        expected_binary: Option<String>,
+    ) -> Result<DeploymentRecord> {
         // Check for existing active deployment
         match self.read_current_deployment().await {
             Ok(existing) => {
@@ -161,7 +174,8 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized>
             Err(e) => return Err(e),
         }
 
-        let record = DeploymentRecord::new(deploy_id, artifact, strategy, node_ids, now_ms);
+        let record =
+            DeploymentRecord::with_expected_binary(deploy_id, artifact, strategy, node_ids, now_ms, expected_binary);
         self.write_current_deployment(&record, None).await?;
 
         info!(
@@ -273,7 +287,12 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized>
 
         // Send NodeUpgrade RPC
         let artifact_ref = record.artifact.display_ref().to_string();
-        match self.rpc_client.send_upgrade(target_node_id, &record.deploy_id, &artifact_ref).await {
+        let expected_binary_ref = record.expected_binary.as_deref();
+        match self
+            .rpc_client
+            .send_upgrade(target_node_id, &record.deploy_id, &artifact_ref, expected_binary_ref)
+            .await
+        {
             Ok(()) => {
                 self.update_node_status(&mut record, target_node_id, NodeDeployStatus::Upgrading).await?;
             }

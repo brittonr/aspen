@@ -59,6 +59,7 @@
               max_concurrent = 1,
               health_check_timeout_secs = 120,
               timeout_secs = 600,
+              expected_binary = "bin/cowsay",
             },
           ],
         },
@@ -298,21 +299,22 @@ in
               )
           node1.log("Build stage completed successfully")
 
-      # ── verify deploy stage ──────────────────────────────────────
-      with subtest("deploy stage in pipeline"):
+      # ── verify deploy stage succeeds (happy path) ─────────────────
+      with subtest("deploy stage succeeds"):
           deploy_stage = None
           for stage in final.get("stages", []):
               if stage.get("name") == "deploy":
                   deploy_stage = stage
                   break
 
-          # Deploy stage should be present in the pipeline result
-          if deploy_stage:
-              node1.log(f"Deploy stage: {json.dumps(deploy_stage, indent=2)}")
-              for job in deploy_stage.get("jobs", []):
-                  node1.log(f"Deploy job '{job.get('name')}': {job['status']}")
-          else:
-              node1.log("Deploy stage not present — may not be wired yet")
+          assert deploy_stage, "Deploy stage not found in pipeline result"
+          node1.log(f"Deploy stage: {json.dumps(deploy_stage, indent=2)}")
+          for job in deploy_stage.get("jobs", []):
+              assert job["status"] == "success", (
+                  f"Deploy job '{job.get('name')}' should succeed with expected_binary=bin/cowsay: "
+                  f"{job['status']}"
+              )
+              node1.log(f"Deploy job '{job.get('name')}': {job['status']} (happy path)")
 
       # ── verify cluster health ────────────────────────────────────
       with subtest("cluster healthy after pipeline"):

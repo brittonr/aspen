@@ -74,6 +74,9 @@ pub struct DeployRequest {
     pub max_concurrent: u32,
     /// Health check timeout in seconds.
     pub health_timeout_secs: u64,
+    /// Binary to validate inside a Nix store path.
+    /// `None` → default `bin/aspen-node`.
+    pub expected_binary: Option<String>,
 }
 
 /// Result of initiating a deployment.
@@ -143,6 +146,8 @@ pub struct DeployJobParams<'a> {
     pub health_timeout_secs: Option<u64>,
     /// Max concurrent node upgrades override.
     pub max_concurrent: Option<u32>,
+    /// Binary to validate inside a Nix store path (e.g., "bin/cowsay").
+    pub expected_binary: Option<&'a str>,
     /// The pipeline run containing stage/job metadata.
     pub pipeline_run: &'a super::pipeline::PipelineRun,
     /// Dispatcher for deploy RPCs.
@@ -169,6 +174,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DeployExecutor<S> {
             strategy,
             health_timeout_secs,
             max_concurrent,
+            expected_binary,
             pipeline_run,
             dispatcher,
         } = params;
@@ -194,6 +200,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DeployExecutor<S> {
             strategy: strategy.unwrap_or(DEFAULT_STRATEGY).to_string(),
             max_concurrent: max_concurrent.unwrap_or(DEFAULT_MAX_CONCURRENT),
             health_timeout_secs: health_timeout_secs.unwrap_or(DEPLOY_HEALTH_TIMEOUT_SECS),
+            expected_binary: expected_binary.map(|s| s.to_string()),
         };
 
         let init_result = dispatcher.deploy(request).await.map_err(|e| CiError::ExecutionFailed {

@@ -164,6 +164,11 @@ pub struct JobConfig {
     /// Maximum number of nodes to upgrade concurrently during rolling deploy.
     #[serde(default)]
     pub max_concurrent: Option<u32>,
+
+    /// Binary to validate inside a Nix store path during deployment.
+    /// Defaults to `bin/aspen-node`. Set to `bin/cowsay` for non-aspen deploys.
+    #[serde(default)]
+    pub expected_binary: Option<String>,
 }
 
 fn default_job_timeout() -> u64 {

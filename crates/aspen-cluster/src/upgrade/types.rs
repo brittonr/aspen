@@ -94,6 +94,12 @@ pub struct NodeUpgradeConfig {
     pub restart_method: RestartMethod,
     /// Drain timeout in seconds (default: DRAIN_TIMEOUT_SECS).
     pub drain_timeout_secs: u64,
+    /// Binary to validate inside a Nix store path.
+    ///
+    /// - `Some("bin/aspen-node")` (default): checks that `bin/aspen-node` exists in the store path
+    /// - `Some("bin/cowsay")`: checks for a custom binary path
+    /// - `None`: skip binary existence check, only verify the store path is available
+    pub expected_binary: Option<String>,
 }
 
 /// Shared drain state for coordinating graceful shutdown of client RPCs.

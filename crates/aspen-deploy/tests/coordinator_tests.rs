@@ -82,6 +82,7 @@ impl NodeRpcClient for MockRpcClient {
         node_id: u64,
         _deploy_id: &str,
         artifact_ref: &str,
+        _expected_binary: Option<&str>,
     ) -> std::result::Result<(), RpcError> {
         self.upgrade_calls.lock().await.push((node_id, artifact_ref.to_string()));
         let results = self.upgrade_results.lock().await;
@@ -618,4 +619,93 @@ async fn test_resume_after_leadership_transfer() {
     let calls = rpc.get_upgrade_calls().await;
     assert_eq!(calls.len(), 1, "only old leader should get upgrade RPC");
     assert_eq!(calls[0].0, 1, "upgrade RPC should target old leader (node 1)");
+}
+
+// ============================================================================
+// KV Status Polling Tests
+// ============================================================================
+
+/// Test that health polling detects KV-stored failure status from executor.
+#[tokio::test]
+async fn test_health_poll_detects_kv_failure_status() {
+    let kv = new_kv();
+    let rpc = Arc::new(MockRpcClient::new());
+    let coord = make_coordinator(kv.clone(), rpc.clone(), 1);
+
+    // Write a Failed status to the node's KV key (simulates executor reporting failure before restart)
+    let failure_status = NodeDeployStatus::Failed("binary not found".to_string());
+    let json = serde_json::to_string(&failure_status).unwrap();
+    kv_write(&*kv, "_sys:deploy:node:2", &json).await;
+
+    // Start a deployment with node 2
+    coord
+        .start_deployment("deploy-1".into(), test_artifact(), DeployStrategy::rolling(1), &[1, 2], now_ms())
+        .await
+        .unwrap();
+
+    // Run deployment should fail because poll_node_health detects the KV failure status
+    let result = coord.run_deployment("deploy-1").await;
+    assert!(result.is_err());
+
+    let error = result.unwrap_err();
+    match error {
+        DeployError::NodeUpgradeFailed { node_id, reason } => {
+            assert_eq!(node_id, 2);
+            assert_eq!(reason, "node 2 upgrade failed: binary not found");
+        }
+        other => panic!("expected NodeUpgradeFailed, got: {other:?}"),
+    }
+}
+
+/// Test that health polling proceeds normally when no KV entry exists for a node.
+#[tokio::test]
+async fn test_health_poll_no_kv_entry_continues_normally() {
+    let kv = new_kv();
+    let rpc = Arc::new(MockRpcClient::new());
+    rpc.set_all_healthy(&[1, 3]).await;
+    let coord = make_coordinator(kv.clone(), rpc.clone(), 1);
+
+    // No KV entry for node 3, but it's healthy via RPC
+    coord
+        .start_deployment("deploy-1".into(), test_artifact(), DeployStrategy::rolling(1), &[1, 3], now_ms())
+        .await
+        .unwrap();
+
+    // Run deployment should succeed - no KV failure status means normal health polling
+    let result = coord.run_deployment("deploy-1").await.unwrap();
+    assert_eq!(result.status, DeploymentStatus::Completed);
+    assert_eq!(result.count_healthy(), 2);
+
+    let calls = rpc.get_upgrade_calls().await;
+    assert_eq!(calls.len(), 2); // Both nodes should be upgraded
+}
+
+/// Test that different failure reasons in KV are properly detected and reported.
+#[tokio::test]
+async fn test_health_poll_detects_specific_kv_failure_reasons() {
+    let kv = new_kv();
+    let rpc = Arc::new(MockRpcClient::new());
+    let coord = make_coordinator(kv.clone(), rpc, 1);
+
+    // Write a specific failure reason to node 5's KV key
+    let failure_status = NodeDeployStatus::Failed("dependency check failed: libssl not found".to_string());
+    let json = serde_json::to_string(&failure_status).unwrap();
+    kv_write(&*kv, "_sys:deploy:node:5", &json).await;
+
+    coord
+        .start_deployment("deploy-1".into(), test_artifact(), DeployStrategy::rolling(1), &[1, 5], now_ms())
+        .await
+        .unwrap();
+
+    // Run deployment should fail with the specific error message
+    let result = coord.run_deployment("deploy-1").await;
+    assert!(result.is_err());
+
+    match result.unwrap_err() {
+        DeployError::NodeUpgradeFailed { node_id, reason } => {
+            assert_eq!(node_id, 5);
+            assert_eq!(reason, "node 5 upgrade failed: dependency check failed: libssl not found");
+        }
+        other => panic!("expected NodeUpgradeFailed, got: {other:?}"),
+    }
 }

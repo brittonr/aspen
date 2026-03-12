@@ -103,7 +103,18 @@ impl RequestHandler for ClusterHandler {
                 strategy,
                 max_concurrent,
                 health_timeout_secs,
-            } => deploy::handle_cluster_deploy(ctx, artifact, strategy, max_concurrent, health_timeout_secs).await,
+                expected_binary,
+            } => {
+                deploy::handle_cluster_deploy(
+                    ctx,
+                    artifact,
+                    strategy,
+                    max_concurrent,
+                    health_timeout_secs,
+                    expected_binary,
+                )
+                .await
+            }
 
             #[cfg(feature = "deploy")]
             ClientRpcRequest::ClusterDeployStatus => deploy::handle_cluster_deploy_status(ctx).await,
@@ -112,9 +123,11 @@ impl RequestHandler for ClusterHandler {
             ClientRpcRequest::ClusterRollback => deploy::handle_cluster_rollback(ctx).await,
 
             #[cfg(feature = "deploy")]
-            ClientRpcRequest::NodeUpgrade { deploy_id, artifact } => {
-                deploy::handle_node_upgrade(ctx, deploy_id, artifact).await
-            }
+            ClientRpcRequest::NodeUpgrade {
+                deploy_id,
+                artifact,
+                expected_binary,
+            } => deploy::handle_node_upgrade(ctx, deploy_id, artifact, expected_binary).await,
 
             #[cfg(feature = "deploy")]
             ClientRpcRequest::NodeRollback { deploy_id } => deploy::handle_node_rollback(ctx, deploy_id).await,
@@ -609,6 +622,7 @@ mod tests {
             strategy: "rolling".to_string(),
             max_concurrent: 1,
             health_timeout_secs: 120,
+            expected_binary: None,
         }));
     }
 
@@ -630,6 +644,7 @@ mod tests {
         assert!(handler.can_handle(&ClientRpcRequest::NodeUpgrade {
             deploy_id: "deploy-1".to_string(),
             artifact: "/nix/store/abc-aspen".to_string(),
+            expected_binary: None,
         }));
     }
 
@@ -669,6 +684,7 @@ mod tests {
             strategy: "canary".to_string(),
             max_concurrent: 1,
             health_timeout_secs: 120,
+            expected_binary: None,
         };
 
         let result = handler.handle(request, &ctx).await;
@@ -692,6 +708,7 @@ mod tests {
         let request = ClientRpcRequest::NodeUpgrade {
             deploy_id: "deploy-1".to_string(),
             artifact: "/nix/store/abc-aspen".to_string(),
+            expected_binary: None,
         };
 
         let result = handler.handle(request, &ctx).await;

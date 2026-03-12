@@ -320,6 +320,7 @@ mod tests {
                     strategy: "rolling".into(),
                     max_concurrent: 1,
                     health_timeout_secs: 120,
+                    expected_binary: None,
                 },
                 "ClusterDeploy",
             ),
@@ -329,6 +330,7 @@ mod tests {
                 ClientRpcRequest::NodeUpgrade {
                     deploy_id: String::new(),
                     artifact: String::new(),
+                    expected_binary: None,
                 },
                 "NodeUpgrade",
             ),
@@ -376,6 +378,7 @@ mod tests {
                 strategy: "rolling".into(),
                 max_concurrent: 1,
                 health_timeout_secs: 120,
+                expected_binary: None,
             }
             .required_app(),
             Some("deploy")
@@ -386,6 +389,7 @@ mod tests {
             ClientRpcRequest::NodeUpgrade {
                 deploy_id: String::new(),
                 artifact: String::new(),
+                expected_binary: None,
             }
             .required_app(),
             Some("deploy")
@@ -408,6 +412,7 @@ mod tests {
                 strategy: "rolling".into(),
                 max_concurrent: 1,
                 health_timeout_secs: 120,
+                expected_binary: None,
             }
             .variant_name(),
             "ClusterDeploy"
@@ -418,6 +423,7 @@ mod tests {
             ClientRpcRequest::NodeUpgrade {
                 deploy_id: String::new(),
                 artifact: String::new(),
+                expected_binary: None,
             }
             .variant_name(),
             "NodeUpgrade"
@@ -443,6 +449,7 @@ mod tests {
             strategy: "rolling".into(),
             max_concurrent: 1,
             health_timeout_secs: 120,
+            expected_binary: None,
         };
         match deploy.to_operation() {
             Some(Operation::ClusterAdmin { action }) => {

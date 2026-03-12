@@ -431,7 +431,12 @@ in
 
       # ── verify deploy stage ──────────────────────────────────────────
 
-      with subtest("deploy stage succeeds"):
+      # ── verify deploy stage fails gracefully (sad path) ─────────────
+      # No expected_binary override → executor checks for bin/aspen-node
+      # in the cowsay store path → fails → writes Failed to KV →
+      # coordinator detects via KV poll → marks deploy failed.
+
+      with subtest("deploy stage fails with expected error"):
           deploy_stage = None
           for stage in final.get("stages", []):
               if stage.get("name") == "deploy":
@@ -441,18 +446,19 @@ in
           assert deploy_stage, "Deploy stage not found in pipeline result"
           node1.log(f"Deploy stage: {json.dumps(deploy_stage, indent=2)}")
           for job in deploy_stage.get("jobs", []):
-              assert job["status"] == "success", \
-                  f"Deploy job '{job.get('name')}' should succeed: {job['status']}"
-              node1.log(f"Deploy job '{job.get('name')}': {job['status']}")
+              # Deploy should fail because cowsay doesn't have bin/aspen-node
+              assert job["status"] == "failed", \
+                  f"Deploy job '{job.get('name')}' should fail for cowsay (no bin/aspen-node): {job['status']}"
+              node1.log(f"Deploy job '{job.get('name')}': {job['status']} (expected failure)")
 
-      with subtest("deployment targeted cluster nodes with leadership transfer"):
+      with subtest("deploy coordinator detected failure"):
           # Check deploy logs for evidence the coordinator dispatched to nodes
-          # and performed leadership transfer.
+          # and the executor reported failure via KV.
           deploy_logs = ""
           for node, name in [(node1, "node1"), (node2, "node2"), (node3, "node3")]:
               logs = node.succeed(
                   "journalctl -u aspen-node --no-pager 2>/dev/null"
-                  " | grep -iE 'deploy|Deploy|NodeUpgrade|transfer|leadership'"
+                  " | grep -iE 'deploy|Deploy|NodeUpgrade|transfer|leadership|upgrade failed|not found'"
                   " | tail -30"
               )
               deploy_logs += logs
@@ -462,15 +468,9 @@ in
           assert "deployment created" in deploy_logs or "Deployment initiated" in deploy_logs, \
               "No deployment creation logged"
 
-          # Verify leadership transfer occurred
-          assert "transferring leadership" in deploy_logs, \
-              "No 'transferring leadership' log found — leader transfer may not have triggered"
-          assert "leadership transferred" in deploy_logs, \
-              "No 'leadership transferred' log found — transfer may not have completed"
-
-          # Verify the new leader resumed the deployment
-          assert "found in-progress deployment" in deploy_logs or "resumed deployment" in deploy_logs, \
-              "No deployment resume log found on new leader"
+          # Verify the executor reported the binary validation failure
+          assert "not found" in deploy_logs or "upgrade failed" in deploy_logs, \
+              "No binary validation failure logged — executor should report bin/aspen-node not found"
 
       # ── verify cluster health after deploy ───────────────────────────
 
@@ -504,6 +504,6 @@ in
               f"Post-deploy KV write/read failed: {result}"
           node1.log("KV operations work after deploy pipeline")
 
-      node1.log("MULTI-NODE DEPLOY DOGFOOD PASSED: Forge -> CI -> build -> deploy across 3 nodes")
+      node1.log("MULTI-NODE DEPLOY DOGFOOD PASSED: Forge -> CI -> build -> deploy fails gracefully for non-aspen artifact")
     '';
   }

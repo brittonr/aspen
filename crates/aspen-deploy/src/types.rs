@@ -239,6 +239,10 @@ pub struct DeploymentRecord {
     pub updated_at_ms: u64,
     /// Error message if the deployment failed.
     pub error: Option<String>,
+    /// Binary to validate inside a Nix store path (`None` → default `bin/aspen-node`).
+    /// Stored in the record so resume-after-failover preserves the setting.
+    #[serde(default)]
+    pub expected_binary: Option<String>,
 }
 
 impl DeploymentRecord {
@@ -249,6 +253,18 @@ impl DeploymentRecord {
         strategy: DeployStrategy,
         node_ids: &[u64],
         now_ms: u64,
+    ) -> Self {
+        Self::with_expected_binary(deploy_id, artifact, strategy, node_ids, now_ms, None)
+    }
+
+    /// Create a new pending deployment record with a custom expected binary.
+    pub fn with_expected_binary(
+        deploy_id: String,
+        artifact: DeployArtifact,
+        strategy: DeployStrategy,
+        node_ids: &[u64],
+        now_ms: u64,
+        expected_binary: Option<String>,
     ) -> Self {
         let nodes = node_ids
             .iter()
@@ -268,6 +284,7 @@ impl DeploymentRecord {
             created_at_ms: now_ms,
             updated_at_ms: now_ms,
             error: None,
+            expected_binary,
         }
     }
 

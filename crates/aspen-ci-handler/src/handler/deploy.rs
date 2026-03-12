@@ -97,7 +97,17 @@ impl DeployDispatcher for RpcDeployDispatcher {
             aspen_constants::api::DEPLOY_STATUS_POLL_INTERVAL_SECS,
         );
 
-        match coordinator.start_deployment(deploy_id.clone(), parsed_artifact, strategy, &node_ids, now_ms).await {
+        match coordinator
+            .start_deployment_with_options(
+                deploy_id.clone(),
+                parsed_artifact,
+                strategy,
+                &node_ids,
+                now_ms,
+                request.expected_binary.clone(),
+            )
+            .await
+        {
             Ok(record) => {
                 info!(deploy_id = %record.deploy_id, "deployment accepted via CI deploy dispatcher");
 
@@ -325,6 +335,7 @@ mod tests {
             strategy: None,
             health_check_timeout_secs: None,
             max_concurrent: None,
+            expected_binary: None,
         }
     }
 }

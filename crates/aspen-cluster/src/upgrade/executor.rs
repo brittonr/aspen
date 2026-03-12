@@ -101,10 +101,19 @@ impl NodeUpgradeExecutor {
             }
         };
 
-        // Verify the binary exists at the store path.
-        let binary_path = PathBuf::from(store_path).join("bin/aspen-node");
-        if !binary_path.exists() {
-            // Attempt to fetch from binary cache via nix-store --realise.
+        // Verify the store path and (optionally) a specific binary within it.
+        //
+        // expected_binary = Some("bin/aspen-node") → check that file exists
+        // expected_binary = None                   → only verify the store path is available
+        let check_path = self.config.expected_binary.as_ref().map(|bin| PathBuf::from(store_path).join(bin));
+
+        let store_dir = PathBuf::from(store_path);
+        let needs_realise = match &check_path {
+            Some(bp) => !bp.exists(),
+            None => !store_dir.exists(),
+        };
+
+        if needs_realise {
             info!(store_path, "store path not local, attempting realise");
             let realise =
                 tokio::process::Command::new("nix-store").args(["--realise", store_path]).output().await.map_err(
@@ -121,9 +130,16 @@ impl NodeUpgradeExecutor {
             }
 
             // Verify again after realise.
-            if !binary_path.exists() {
+            if let Some(bp) = &check_path {
+                if !bp.exists() {
+                    let bin_name = self.config.expected_binary.as_deref().unwrap_or("(unknown)");
+                    return Err(NodeUpgradeError::StorePathUnavailable {
+                        path: format!("{store_path}: {bin_name} not found"),
+                    });
+                }
+            } else if !store_dir.exists() {
                 return Err(NodeUpgradeError::StorePathUnavailable {
-                    path: format!("{}: bin/aspen-node not found", store_path),
+                    path: format!("{store_path}: store path not found after realise"),
                 });
             }
         }
@@ -282,6 +298,7 @@ mod tests {
                 unit_name: "aspen-node".into(),
             },
             drain_timeout_secs: DRAIN_TIMEOUT_SECS,
+            expected_binary: Some("bin/aspen-node".into()),
         };
 
         assert_eq!(config.node_id, 1);
@@ -298,6 +315,7 @@ mod tests {
             },
             restart_method: RestartMethod::Execve,
             drain_timeout_secs: 60,
+            expected_binary: Some("bin/aspen-node".into()),
         };
 
         assert_eq!(config.node_id, 2);
@@ -315,6 +333,7 @@ mod tests {
                 unit_name: "aspen-node".into(),
             },
             drain_timeout_secs: DRAIN_TIMEOUT_SECS,
+            expected_binary: Some("bin/aspen-node".into()),
         };
 
         let executor = NodeUpgradeExecutor::new(config);
@@ -334,11 +353,62 @@ mod tests {
                 unit_name: "aspen-node".into(),
             },
             drain_timeout_secs: DRAIN_TIMEOUT_SECS,
+            expected_binary: Some("bin/aspen-node".into()),
         };
 
         let executor = NodeUpgradeExecutor::with_drain_state(config, drain.clone());
         // Drain state is shared.
         drain.is_draining.store(true, std::sync::atomic::Ordering::Release);
         assert!(executor.drain_state().is_draining());
+    }
+
+    #[test]
+    fn test_expected_binary_default() {
+        let config = NodeUpgradeConfig {
+            node_id: 1,
+            upgrade_method: UpgradeMethod::Nix {
+                profile_path: PathBuf::from("/nix/var/nix/profiles/aspen-node"),
+            },
+            restart_method: RestartMethod::Systemd {
+                unit_name: "aspen-node".into(),
+            },
+            drain_timeout_secs: DRAIN_TIMEOUT_SECS,
+            expected_binary: Some("bin/aspen-node".into()),
+        };
+
+        assert_eq!(config.expected_binary, Some("bin/aspen-node".into()));
+    }
+
+    #[test]
+    fn test_expected_binary_custom() {
+        let config = NodeUpgradeConfig {
+            node_id: 2,
+            upgrade_method: UpgradeMethod::Blob {
+                binary_path: PathBuf::from("/usr/local/bin/cowsay"),
+                staging_dir: PathBuf::from("/tmp/aspen-staging"),
+            },
+            restart_method: RestartMethod::Execve,
+            drain_timeout_secs: 60,
+            expected_binary: Some("bin/cowsay".into()),
+        };
+
+        assert_eq!(config.expected_binary, Some("bin/cowsay".into()));
+    }
+
+    #[test]
+    fn test_expected_binary_none() {
+        let config = NodeUpgradeConfig {
+            node_id: 3,
+            upgrade_method: UpgradeMethod::Nix {
+                profile_path: PathBuf::from("/nix/var/nix/profiles/aspen-node"),
+            },
+            restart_method: RestartMethod::Systemd {
+                unit_name: "aspen-node".into(),
+            },
+            drain_timeout_secs: DRAIN_TIMEOUT_SECS,
+            expected_binary: None,
+        };
+
+        assert_eq!(config.expected_binary, None);
     }
 }

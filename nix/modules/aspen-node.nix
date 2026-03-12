@@ -240,14 +240,31 @@ in {
 
       serviceConfig = {
         Type = "simple";
+
+        # Initialize the deploy profile to the configured package on first boot.
+        # After a deploy, the executor switches this profile to the new artifact,
+        # and ExecStart picks up the new binary on restart.
+        ExecStartPre = let
+          profileDir = "/nix/var/nix/profiles";
+          profilePath = "${profileDir}/aspen-node";
+        in "+${pkgs.writeShellScript "aspen-init-profile" ''
+          mkdir -p ${profileDir}
+          if [ ! -L ${profilePath} ]; then
+            ${pkgs.nix}/bin/nix-env --profile ${profilePath} --set ${cfg.package}
+          fi
+        ''}";
+
         ExecStart = let
           secretKeyArg =
             if cfg.secretKey != null
             then cfg.secretKey
             else defaultSecretKey;
+          # Use the nix profile path so deploys take effect on restart.
+          # ExecStartPre initializes this to cfg.package on first boot.
+          aspenBin = "/nix/var/nix/profiles/aspen-node/bin/aspen-node";
           args =
             [
-              "${cfg.package}/bin/aspen-node"
+              aspenBin
               "--node-id"
               (toString cfg.nodeId)
               "--cookie"

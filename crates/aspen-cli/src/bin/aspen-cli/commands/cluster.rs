@@ -413,6 +413,7 @@ async fn deploy(client: &AspenClient, args: DeployArgs, json: bool) -> Result<()
             strategy: args.strategy,
             max_concurrent: args.max_concurrent,
             health_timeout_secs: args.health_timeout,
+            expected_binary: None,
         })
         .await?;
 

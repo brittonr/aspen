@@ -142,18 +142,21 @@ impl NodeRpcClient for IrohNodeRpcClient {
         node_id: u64,
         deploy_id: &str,
         artifact_ref: &str,
+        expected_binary: Option<&str>,
     ) -> std::result::Result<(), RpcError> {
         info!(
             source_node = self.source_node_id,
             target_node = node_id,
             deploy_id = deploy_id,
             artifact = artifact_ref,
+            expected_binary = ?expected_binary,
             "sending NodeUpgrade RPC via iroh"
         );
 
         let request = ClientRpcRequest::NodeUpgrade {
             deploy_id: deploy_id.to_string(),
             artifact: artifact_ref.to_string(),
+            expected_binary: expected_binary.map(|s| s.to_string()),
         };
 
         let response = self.send_rpc(node_id, request).await?;
