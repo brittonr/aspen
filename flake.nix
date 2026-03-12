@@ -2275,6 +2275,16 @@
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
               };
 
+              # Alert failover test: alert rule fires, leadership transfer,
+              # alert state survives on new leader, periodic evaluator picks up,
+              # alert resolves when metrics drop.
+              # Build: nix build .#checks.x86_64-linux.alert-failover-test
+              alert-failover-test = import ./nix/tests/alert-failover.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
+              };
+
               # Multi-node KV test: write/read replication, CAS across nodes,
               # batch write replication, scan consistency, NOT_LEADER routing,
               # delete propagation, large value replication, failover survival.
