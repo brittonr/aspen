@@ -1618,6 +1618,57 @@
           ''} $out/aspen/Cargo.lock
         '';
 
+        # Extended source for workspace-mode test builds.
+        # Workspace mode resolves ALL members, including those with git deps
+        # (snix, h3-iroh, iroh-proxy-utils, mad-turmoil) that can't be fetched
+        # in the IFD sandbox. Stub them as empty path crates.
+        u2nTestSrc = pkgs.runCommand "aspen-u2n-test-src" {} ''
+          cp -r ${u2nSrc} $out
+          chmod -R u+w $out
+
+          # Stub git deps as empty crates under .nix-stubs/
+          stub() {
+            local name="$1"; shift
+            local dir="$out/aspen/.nix-stubs/$name"
+            mkdir -p "$dir/src"
+            {
+              echo '[package]'
+              echo "name = \"$name\""
+              echo 'version = "0.1.0"'
+              echo 'edition = "2024"'
+              echo '[features]'
+              for feat in "$@"; do echo "$feat = []"; done
+            } > "$dir/Cargo.toml"
+            echo '// stub' > "$dir/src/lib.rs"
+          }
+          stub snix-castore
+          stub snix-store
+          stub nix-compat async serde
+          stub nix-compat-derive
+          stub h3-iroh
+          stub mad-turmoil
+          stub iroh-proxy-utils
+
+          # Rewrite git deps to path stubs in root Cargo.toml
+          ${pkgs.gnused}/bin/sed -i \
+            -e 's|snix-castore = { git = "[^"]*"[^}]*}|snix-castore = { path = ".nix-stubs/snix-castore" }|' \
+            -e 's|snix-store = { git = "[^"]*"[^}]*}|snix-store = { path = ".nix-stubs/snix-store" }|' \
+            -e 's|nix-compat = { git = "[^"]*"[^}]*}|nix-compat = { path = ".nix-stubs/nix-compat", features = ["async", "serde"] }|' \
+            -e 's|h3-iroh = { git = "[^"]*"[^}]*}|h3-iroh = { path = ".nix-stubs/h3-iroh" }|' \
+            -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
+            $out/aspen/Cargo.toml
+          ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
+
+          # Rewrite git deps in subcrates
+          find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
+            -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../.nix-stubs/iroh-proxy-utils" }|' \
+            -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
+            {} \;
+
+          # Strip git source lines from Cargo.lock (stubs are path deps now)
+          ${pkgs.gnused}/bin/sed -i '/^source = "git+/d' $out/aspen/Cargo.lock
+        '';
+
         # Shared crate overrides for all unit2nix builds.
         u2nCrateOverrides =
           pkgs.defaultCrateOverrides
@@ -1661,6 +1712,16 @@
           # from the manifest but their transitive deps remain in Cargo.lock.
           noLocked = true;
         };
+
+        # Per-crate test builds: workspace = true resolves ALL members with
+        # dev-deps, enabling test.check.<member> for every workspace crate.
+        # Uses u2nTestSrc (git deps stubbed) so IFD sandbox can resolve all members.
+        # Only used for flake checks — binary builds use the narrower plans above.
+        u2nTestWorkspace = unit2nix.lib.${system}.buildFromUnitGraphAuto (u2nAutoCommon
+          // {
+            src = u2nTestSrc;
+            workspace = true;
+          });
 
         # Short aliases used throughout the flake
         aspenNode = u2nWorkspace.workspaceMembers."aspen".build;
@@ -2218,6 +2279,47 @@
                   touch $out
                 '';
             }
+            # ── Per-crate unit tests (unit2nix workspace mode) ─────────────
+            # Each workspace member gets a checks.test-<name> that compiles
+            # and runs its #[test] binaries. Only the changed crate and its
+            # reverse deps are rebuilt — deps stay cached.
+            // lib.mapAttrs'
+            (name: drv: lib.nameValuePair "test-${name}" drv)
+            (lib.filterAttrs (
+                name: _:
+                # Exclude stubs (git deps replaced with empty crates for IFD),
+                # crates that unconditionally import from stubs, and vendored
+                # openraft (tested upstream).
+                  !builtins.elem name [
+                    # Stubs themselves
+                    "h3-iroh"
+                    "iroh-proxy-utils"
+                    "mad-turmoil"
+                    "nix-compat"
+                    "nix-compat-derive"
+                    "snix-castore"
+                    "snix-store"
+                    # Crates with unconditional deps on stubs
+                    "aspen-castore"
+                    "aspen-snix"
+                    "aspen-snix-bridge" # snix-*
+                    "aspen-proxy"
+                    "aspen-net" # iroh-proxy-utils
+                    "aspen-testing-madsim" # mad-turmoil
+                    # buildRustCrate ignores required-features — gated tests get compiled
+                    "aspen"
+                    "aspen-rpc-handlers"
+                    # Sandbox-incompatible (needs /dev/fuse or git at runtime)
+                    "aspen-fuse"
+                    "aspen-ci"
+                    # CARGO_BIN_EXE_* not set by buildRustCrate
+                    "aspen-sops"
+                    # Vendored (tested upstream)
+                    "openraft"
+                    "openraft-macros"
+                  ]
+              )
+              u2nTestWorkspace.test.check)
             # ── Real checks (override stubs when aspen-wasm-plugin available) ──
             // lib.optionalAttrs hasExternalRepos {
               clippy = craneLib.cargoClippy (
