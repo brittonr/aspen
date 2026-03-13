@@ -1005,6 +1005,13 @@ fn merge_nix_cache_config(target: &mut NixCacheConfig, other: NixCacheConfig) {
     if other.transit_mount != default_nix_cache_transit_mount() {
         target.transit_mount = other.transit_mount;
     }
+    if !other.enable_ci_substituter {
+        // Only merge if explicitly disabled (default is true)
+        target.enable_ci_substituter = other.enable_ci_substituter;
+    }
+    if other.gateway_url.is_some() {
+        target.gateway_url = other.gateway_url;
+    }
 }
 
 /// Merge SNIX content-addressed storage configuration.

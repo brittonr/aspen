@@ -6,6 +6,7 @@ use std::sync::Arc;
 use aspen_blob::prelude::*;
 use aspen_cache::CacheIndex;
 use aspen_core::KeyValueStore;
+use aspen_core::ReadRequest;
 use iroh::Endpoint;
 use iroh::PublicKey;
 #[cfg(feature = "snix")]
@@ -14,6 +15,7 @@ use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
 #[cfg(feature = "snix")]
 use snix_store::pathinfoservice::PathInfoService;
+use tokio::sync::OnceCell;
 use tracing::info;
 use tracing::warn;
 
@@ -98,6 +100,13 @@ pub struct NixBuildWorkerConfig {
     /// When set (with `cache_public_key`), Nix builds use this as a substituter
     /// without needing the H3 proxy. Example: `http://127.0.0.1:8380`.
     pub gateway_url: Option<String>,
+
+    /// Lazily resolved cache public key. On first build, if `cache_public_key`
+    /// is None but `kv_store` is available, reads from KV. This handles the
+    /// startup race where the signing key is created after cluster init but
+    /// the worker config was built before init completed.
+    #[doc(hidden)]
+    pub resolved_public_key: OnceCell<Option<String>>,
 }
 
 impl Default for NixBuildWorkerConfig {
@@ -123,6 +132,7 @@ impl Default for NixBuildWorkerConfig {
             gateway_node: None,
             cache_public_key: None,
             gateway_url: None,
+            resolved_public_key: OnceCell::new(),
         }
     }
 }
@@ -227,22 +237,69 @@ impl NixBuildWorkerConfig {
     /// This is the simpler path: point at a pre-running `aspen-nix-cache-gateway`
     /// HTTP server. No H3 proxy needed.
     pub fn can_use_gateway(&self) -> bool {
-        self.gateway_url.is_some() && self.cache_public_key.is_some()
+        self.gateway_url.is_some() && self.get_public_key().is_some()
     }
 
     /// Get extra args to inject into `nix build` for cache substitution.
     ///
     /// Returns `None` if no cache is configured.
     pub fn substituter_args(&self) -> Option<Vec<String>> {
-        if let (Some(url), Some(key)) = (&self.gateway_url, &self.cache_public_key) {
-            Some(vec![
-                "--extra-substituters".to_string(),
-                url.clone(),
-                "--trusted-public-keys".to_string(),
-                key.clone(),
-            ])
-        } else {
-            None
+        let key = self.get_public_key()?;
+        let url = self.gateway_url.as_ref()?;
+        // Use --extra-* variants to append to defaults rather than replace.
+        // --trusted-public-keys would replace the default cache.nixos.org key,
+        // causing nix to reject all substitutes from cache.nixos.org.
+        Some(vec![
+            "--extra-substituters".to_string(),
+            url.clone(),
+            "--extra-trusted-public-keys".to_string(),
+            key,
+        ])
+    }
+
+    /// Get the cache public key, using the eagerly-set value or the lazily
+    /// resolved one from KV.
+    pub(crate) fn get_public_key(&self) -> Option<String> {
+        if let Some(ref key) = self.cache_public_key {
+            return Some(key.clone());
         }
+        self.resolved_public_key.get()?.clone()
+    }
+
+    /// Attempt to resolve the cache public key from KV store.
+    ///
+    /// Called before the first build to handle the startup race where
+    /// `ensure_signing_key` runs after cluster init but the worker config
+    /// was created before init completed.
+    pub async fn resolve_cache_public_key(&self) {
+        if self.cache_public_key.is_some() {
+            return;
+        }
+        let kv = match self.kv_store.as_ref() {
+            Some(kv) => kv,
+            None => return,
+        };
+        let _ = self
+            .resolved_public_key
+            .get_or_init(|| async {
+                let keys = [
+                    aspen_cache::signing::CACHE_PUBLIC_KEY_KV,
+                    "_system:nix-cache:public-key",
+                ];
+                for key in &keys {
+                    if let Ok(result) = kv.read(ReadRequest::new(*key)).await
+                        && let Some(kv_entry) = result.kv
+                    {
+                        info!(
+                            public_key = %kv_entry.value,
+                            kv_key = key,
+                            "Lazily resolved Nix cache public key from KV"
+                        );
+                        return Some(kv_entry.value);
+                    }
+                }
+                None
+            })
+            .await;
     }
 }

@@ -59,6 +59,7 @@
 pub mod error;
 pub mod index;
 pub mod narinfo;
+pub mod nix32;
 pub mod signing;
 
 pub use error::CacheError;

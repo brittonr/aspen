@@ -34,7 +34,10 @@ const MAX_CONCURRENT_REQUESTS: usize = 100;
 /// Maximum NAR size to serve (1 GB).
 const MAX_NAR_STREAM_SIZE: u64 = 1_073_741_824;
 /// Cache priority for substituter ordering.
-const CACHE_PRIORITY: u32 = 40;
+/// Lower = higher priority. cache.nixos.org defaults to 40.
+/// We use 30 so the cluster cache is preferred when available,
+/// falling back to cache.nixos.org for paths we don't have.
+const CACHE_PRIORITY: u32 = 30;
 
 /// Run the HTTP server.
 pub async fn run(state: Arc<GatewayState>, addr: SocketAddr) -> anyhow::Result<()> {

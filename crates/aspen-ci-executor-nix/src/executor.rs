@@ -77,6 +77,10 @@ impl NixBuildWorker {
     ) -> Result<NixBuildOutput> {
         payload.validate()?;
 
+        // Lazy-resolve the cache public key in case it wasn't available at
+        // worker startup (signing key created after cluster init).
+        self.config.resolve_cache_public_key().await;
+
         let flake_ref = payload.flake_ref();
         info!(
             cluster_id = %self.config.cluster_id,
@@ -166,7 +170,13 @@ impl NixBuildWorker {
             for arg in &sub_args {
                 cmd.arg(arg);
             }
-            debug!("injected gateway substituter args into nix build");
+            info!("Nix build using cluster cache substituter: {:?}", sub_args);
+        } else {
+            info!(
+                gateway_url = ?self.config.gateway_url,
+                has_key = self.config.get_public_key().is_some(),
+                "No cache substituter available for this build"
+            );
         }
 
         if self.config.is_verbose {

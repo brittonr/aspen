@@ -194,6 +194,6 @@ fn test_gateway_substituter_args() {
     assert_eq!(args.len(), 4);
     assert_eq!(args[0], "--extra-substituters");
     assert_eq!(args[1], "http://127.0.0.1:8380");
-    assert_eq!(args[2], "--trusted-public-keys");
+    assert_eq!(args[2], "--extra-trusted-public-keys");
     assert_eq!(args[3], "aspen-cache:AAAA");
 }

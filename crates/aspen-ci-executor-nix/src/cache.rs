@@ -60,7 +60,7 @@ impl NixBuildWorker {
         let parsed: serde_json::Value = serde_json::from_str(&json_str)
             .inspect_err(|e| debug!(store_path, "failed to parse nix path-info JSON: {e}"))
             .ok()?;
-        let entry = parsed.as_array()?.first()?;
+        let entry = path_info_entry(&parsed, store_path)?;
         entry.get("narSize")?.as_u64()
     }
 
@@ -125,14 +125,16 @@ impl NixBuildWorker {
             let nar_data = output.stdout;
             let nar_size = nar_data.len() as u64;
 
-            // Compute SHA256 hash of NAR (Nix's native format)
+            // Compute SHA256 hash of NAR in nix32 format (Nix's native base32).
+            // Nix narinfo fingerprints and signature verification use nix32,
+            // not hex. Using hex here would cause signature mismatches.
             use sha2::Digest;
             use sha2::Sha256;
             let nar_hash = {
                 let mut hasher = Sha256::new();
                 hasher.update(&nar_data);
                 let hash = hasher.finalize();
-                format!("sha256:{}", hex::encode(hash))
+                format!("sha256:{}", aspen_cache::nix32::encode(&hash))
             };
 
             // Upload to blob store
@@ -272,12 +274,9 @@ impl NixBuildWorker {
             return None;
         }
 
-        // Parse JSON output - nix path-info --json returns an array
         let json_str = String::from_utf8_lossy(&output.stdout);
         let parsed: serde_json::Value = serde_json::from_str(&json_str).ok()?;
-
-        // Get the first (and typically only) entry
-        let entry = parsed.as_array()?.first()?;
+        let entry = path_info_entry(&parsed, store_path)?;
 
         let references: Vec<String> = entry
             .get("references")?
@@ -289,5 +288,61 @@ impl NixBuildWorker {
         let deriver = entry.get("deriver").and_then(|v| v.as_str()).map(|s| s.to_string());
 
         Some(PathInfo { references, deriver })
+    }
+}
+
+/// Extract the path-info entry from `nix path-info --json` output.
+///
+/// Newer nix versions return an object keyed by store path:
+///   `{"/nix/store/abc-foo": {"narSize": 123, ...}}`
+/// Older versions return an array:
+///   `[{"narSize": 123, ...}]`
+fn path_info_entry<'a>(parsed: &'a serde_json::Value, store_path: &str) -> Option<&'a serde_json::Value> {
+    // Try object format first (newer nix): keyed by store path
+    if let Some(obj) = parsed.as_object() {
+        if let Some(entry) = obj.get(store_path) {
+            return Some(entry);
+        }
+        // Fall back to first value if store path key doesn't match exactly
+        return obj.values().next();
+    }
+    // Try array format (older nix)
+    parsed.as_array()?.first()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn path_info_entry_object_format() {
+        let json: serde_json::Value =
+            serde_json::from_str(r#"{"/nix/store/abc-foo": {"narSize": 123, "references": ["/nix/store/xyz-bar"]}}"#)
+                .unwrap();
+        let entry = path_info_entry(&json, "/nix/store/abc-foo").unwrap();
+        assert_eq!(entry.get("narSize").unwrap().as_u64().unwrap(), 123);
+        assert_eq!(entry.get("references").unwrap().as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn path_info_entry_array_format() {
+        let json: serde_json::Value = serde_json::from_str(r#"[{"narSize": 456, "references": []}]"#).unwrap();
+        let entry = path_info_entry(&json, "/nix/store/anything").unwrap();
+        assert_eq!(entry.get("narSize").unwrap().as_u64().unwrap(), 456);
+    }
+
+    #[test]
+    fn path_info_entry_object_fallback_to_first_value() {
+        let json: serde_json::Value =
+            serde_json::from_str(r#"{"/nix/store/different-path": {"narSize": 789}}"#).unwrap();
+        // Store path doesn't match key, but we still get the first value
+        let entry = path_info_entry(&json, "/nix/store/other").unwrap();
+        assert_eq!(entry.get("narSize").unwrap().as_u64().unwrap(), 789);
+    }
+
+    #[test]
+    fn path_info_entry_null_returns_none() {
+        let json = serde_json::Value::Null;
+        assert!(path_info_entry(&json, "/nix/store/foo").is_none());
     }
 }

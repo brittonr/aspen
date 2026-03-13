@@ -696,7 +696,16 @@ async fn initialize_job_system(
                         gateway_node,
                         cache_public_key: cache_public_key.clone(),
                         gateway_url: config.nix_cache.gateway_url.clone(),
+                        resolved_public_key: tokio::sync::OnceCell::new(),
                     };
+
+                    info!(
+                        nix_cache_enabled = config.nix_cache.is_enabled,
+                        gateway_url = ?config.nix_cache.gateway_url,
+                        use_cluster_cache = use_cluster_cache,
+                        has_cache_public_key = cache_public_key.is_some(),
+                        "NixBuildWorkerConfig: cache setup"
+                    );
 
                     let all_services_available = nix_config.validate();
                     if !all_services_available {
