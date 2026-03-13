@@ -31,18 +31,21 @@
 mod builder;
 mod capability;
 pub mod constants;
+mod credential;
 mod error;
 pub mod hmac_auth;
 mod revocation;
 mod token;
 mod utils;
 pub mod verified_auth;
+pub mod verified_credential;
 mod verifier;
 
 pub use builder::TokenBuilder;
 pub use builder::generate_root_token;
 pub use capability::Capability;
 pub use capability::Operation;
+pub use credential::Credential;
 pub use error::AuthError;
 pub use revocation::KeyValueRevocationStore;
 pub use revocation::RevocationStore;

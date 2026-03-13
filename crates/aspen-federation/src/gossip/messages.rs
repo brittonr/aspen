@@ -55,6 +55,20 @@ pub enum FederationGossipMessage {
         hlc_timestamp: SerializableTimestamp,
     },
 
+    /// Announce token revocation for urgent propagation.
+    ///
+    /// Best-effort revocation gossip — short-lived tokens (24h default)
+    /// ensure revocation is enforced within the token lifetime even if
+    /// this message is missed by disconnected clusters.
+    TokenRevoked {
+        /// BLAKE3 hash of the revoked token.
+        token_hash: [u8; 32],
+        /// Public key of the cluster that issued/revoked the token.
+        revoker: [u8; 32],
+        /// Unix timestamp in milliseconds when revocation occurred.
+        timestamp_ms: u64,
+    },
+
     /// Announce an update to a resource.
     ResourceUpdate {
         /// Protocol version.
@@ -81,16 +95,20 @@ impl FederationGossipMessage {
             Self::ClusterOnline { cluster_key, .. } => cluster_key,
             Self::ResourceSeeding { cluster_key, .. } => cluster_key,
             Self::ResourceUpdate { cluster_key, .. } => cluster_key,
+            Self::TokenRevoked { revoker, .. } => revoker,
         };
         PublicKey::from_bytes(bytes).ok()
     }
 
     /// Get the HLC timestamp from any message type.
-    pub fn hlc_timestamp(&self) -> &SerializableTimestamp {
+    ///
+    /// Returns `None` for `TokenRevoked` which uses plain Unix millis.
+    pub fn hlc_timestamp(&self) -> Option<&SerializableTimestamp> {
         match self {
-            Self::ClusterOnline { hlc_timestamp, .. } => hlc_timestamp,
-            Self::ResourceSeeding { hlc_timestamp, .. } => hlc_timestamp,
-            Self::ResourceUpdate { hlc_timestamp, .. } => hlc_timestamp,
+            Self::ClusterOnline { hlc_timestamp, .. } => Some(hlc_timestamp),
+            Self::ResourceSeeding { hlc_timestamp, .. } => Some(hlc_timestamp),
+            Self::ResourceUpdate { hlc_timestamp, .. } => Some(hlc_timestamp),
+            Self::TokenRevoked { .. } => None,
         }
     }
 }

@@ -63,6 +63,11 @@ pub struct FederationProtocolContext {
     /// When set, enables actual data fetching for GetResourceState and SyncObjects.
     /// If None, these handlers return stub responses.
     pub resource_resolver: Option<Arc<dyn FederationResourceResolver>>,
+    /// Verified credential from the federation handshake.
+    ///
+    /// Set during handshake processing when the remote peer presents a valid credential.
+    /// Used to authorize subsequent sync requests on the same connection.
+    pub session_credential: std::sync::Mutex<Option<aspen_auth::Credential>>,
 }
 
 /// Protocol handler for federation sync.
@@ -215,7 +220,8 @@ async fn process_federation_request(
             identity,
             protocol_version: _,
             capabilities: _,
-        } => handle_handshake(identity, context),
+            credential,
+        } => handle_handshake(identity, credential, context),
 
         FederationRequest::ListResources {
             resource_type,
@@ -241,6 +247,8 @@ async fn process_federation_request(
             }
             handle_sync_objects(fed_id, want_types, have_hashes, limit, context).await
         }
+
+        FederationRequest::RefreshToken { credential } => handle_refresh_token(credential, context, remote_peer),
 
         FederationRequest::VerifyRefUpdate {
             fed_id,
@@ -268,13 +276,40 @@ async fn process_federation_request(
 /// Check if the remote peer is allowed to access a federated resource.
 ///
 /// Returns `Some(FederationResponse::Error)` if denied, `None` if allowed.
-/// Public resources allow everyone; AllowList requires explicit permission;
-/// Disabled resources deny all access.
+///
+/// Authorization flow:
+/// 1. If session has a credential, check if it authorizes Read for the resource prefix
+/// 2. Fall back to legacy TrustManager / per-resource settings check
+/// 3. Public resources allow everyone; AllowList requires explicit permission
 async fn check_resource_access(
     fed_id: &FederatedId,
     remote_peer: &PublicKey,
     context: &FederationProtocolContext,
 ) -> Option<FederationResponse> {
+    // Check session credential first (new token-based auth)
+    let session_cred = context.session_credential.lock().ok().and_then(|guard| guard.clone());
+
+    if let Some(ref cred) = session_cred {
+        // Check if credential authorizes reading keys under this resource's prefix
+        let settings = context.resource_settings.read().await;
+        if let Some(resource_settings) = settings.get(fed_id) {
+            if let Some(ref rt) = resource_settings.resource_type {
+                let authorized = cred
+                    .token
+                    .capabilities
+                    .iter()
+                    .any(|cap| cap.authorizes(&aspen_auth::Operation::Read { key: rt.clone() }));
+                if authorized {
+                    return None; // Allowed by credential
+                }
+            }
+        } else {
+            // Resource not in settings — don't block, let the handler return NotFound
+            return None;
+        }
+    }
+
+    // Fall back to legacy resource settings check
     let settings = context.resource_settings.read().await;
     let Some(resource_settings) = settings.get(fed_id) else {
         // Resource not in settings — don't block, let the handler return NotFound
@@ -299,6 +334,7 @@ async fn check_resource_access(
 
 fn handle_handshake(
     identity: crate::identity::SignedClusterIdentity,
+    credential: Option<aspen_auth::Credential>,
     context: &FederationProtocolContext,
 ) -> Result<FederationResponse> {
     // Verify the peer's identity signature
@@ -310,13 +346,52 @@ fn handle_handshake(
     }
 
     let peer_key = identity.public_key();
+
+    // If credential is present, verify it with our cluster key as trusted root
+    if let Some(ref cred) = credential {
+        let our_key = context.cluster_identity.public_key();
+        match cred.verify(&[our_key], Some(&peer_key)) {
+            Ok(()) => {
+                debug!(
+                    peer = %peer_key,
+                    peer_name = %identity.name(),
+                    "federation handshake: credential verified"
+                );
+                // Store verified credential in session
+                if let Ok(mut session) = context.session_credential.lock() {
+                    *session = Some(cred.clone());
+                }
+                // Update trust manager from credential
+                context.trust_manager.update_from_credential(peer_key, cred);
+            }
+            Err(e) => {
+                warn!(
+                    peer = %peer_key,
+                    error = %e,
+                    "federation handshake: credential verification failed"
+                );
+                return Ok(FederationResponse::Error {
+                    code: "INVALID_CREDENTIAL".to_string(),
+                    message: format!("Credential verification failed: {e}"),
+                });
+            }
+        }
+    } else {
+        // Legacy handshake — no credential, fall back to TrustManager
+        warn!(
+            peer = %peer_key,
+            peer_name = %identity.name(),
+            "federation handshake: no credential (legacy mode, deprecated)"
+        );
+    }
+
     let trusted = context.trust_manager.is_trusted(&peer_key);
 
     debug!(
         peer = %peer_key,
         peer_name = %identity.name(),
         trusted = trusted,
-        "federation handshake"
+        "federation handshake complete"
     );
 
     // Return our identity
@@ -335,13 +410,30 @@ async fn handle_list_resources(
 ) -> Result<FederationResponse> {
     let _limit = limit.min(MAX_RESOURCES_PER_LIST);
 
+    // Get session credential for filtering
+    let session_cred = context.session_credential.lock().ok().and_then(|guard| guard.clone());
+
     // Get resources from settings
     let settings = context.resource_settings.read().await;
     let mut resources: Vec<ResourceInfo> = settings
         .iter()
         .filter(|(_, s)| {
-            // Only include public resources for now
-            matches!(s.mode, crate::types::FederationMode::Public)
+            // Include public resources, or resources the credential authorizes
+            if matches!(s.mode, crate::types::FederationMode::Public) {
+                return true;
+            }
+            // If we have a credential, check if it authorizes read for this resource
+            if let Some(ref cred) = session_cred {
+                // Check if any capability authorizes a read for a key under this resource type
+                if let Some(ref rt) = s.resource_type {
+                    return cred
+                        .token
+                        .capabilities
+                        .iter()
+                        .any(|cap| cap.authorizes(&aspen_auth::Operation::Read { key: rt.clone() }));
+                }
+            }
+            false
         })
         .map(|(fed_id, s)| ResourceInfo {
             fed_id: *fed_id,
@@ -486,6 +578,63 @@ async fn handle_sync_objects_resolved(
                 message,
             })
         }
+    }
+}
+
+fn handle_refresh_token(
+    credential: aspen_auth::Credential,
+    context: &FederationProtocolContext,
+    remote_peer: PublicKey,
+) -> Result<FederationResponse> {
+    let our_key = context.cluster_identity.public_key();
+
+    // Verify the presented credential
+    match credential.verify(&[our_key], Some(&remote_peer)) {
+        Ok(()) => {}
+        Err(e) => {
+            return Ok(FederationResponse::Error {
+                code: "INVALID_CREDENTIAL".to_string(),
+                message: format!("Credential verification failed: {e}"),
+            });
+        }
+    }
+
+    // Check that the root token was issued by us
+    let root_issuer = if credential.proofs.is_empty() {
+        credential.token.issuer
+    } else {
+        // Last proof in chain is the root
+        credential.proofs.last().map(|t| t.issuer).unwrap_or(credential.token.issuer)
+    };
+
+    if root_issuer != our_key {
+        return Ok(FederationResponse::Error {
+            code: "WRONG_ISSUER".to_string(),
+            message: "Token was not issued by this cluster".to_string(),
+        });
+    }
+
+    // Issue fresh token with same capabilities and new expiry
+    let original_lifetime_secs = credential.token.expires_at.saturating_sub(credential.token.issued_at);
+    let lifetime = std::time::Duration::from_secs(if original_lifetime_secs > 0 {
+        original_lifetime_secs
+    } else {
+        86400 // Default 24h
+    });
+
+    let fresh_token = aspen_auth::TokenBuilder::new(context.cluster_identity.secret_key().clone())
+        .for_key(remote_peer)
+        .with_capabilities(credential.token.capabilities.clone())
+        .with_lifetime(lifetime)
+        .with_random_nonce()
+        .build();
+
+    match fresh_token {
+        Ok(token) => Ok(FederationResponse::TokenRefreshed { token }),
+        Err(e) => Ok(FederationResponse::Error {
+            code: "REFRESH_FAILED".to_string(),
+            message: format!("Failed to issue fresh token: {e}"),
+        }),
     }
 }
 

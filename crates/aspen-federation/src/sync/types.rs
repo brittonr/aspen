@@ -28,6 +28,11 @@ pub enum FederationRequest {
         protocol_version: u8,
         /// Capabilities we support.
         capabilities: Vec<String>,
+        /// Optional credential for token-based auth (replaces trust-level auth).
+        /// `#[serde(default)]` for backward compatibility with clusters that
+        /// don't yet send credentials.
+        #[serde(default)]
+        credential: Option<aspen_auth::Credential>,
     },
 
     /// List federated resources available on this cluster.
@@ -70,6 +75,12 @@ pub enum FederationRequest {
         signature: Signature,
         /// Signer public key.
         signer: [u8; 32],
+    },
+
+    /// Refresh a near-expiry federation token.
+    RefreshToken {
+        /// Current credential (near-expiry) to refresh.
+        credential: aspen_auth::Credential,
     },
 
     /// Verify an update signature (generic, any resource type).
@@ -145,6 +156,12 @@ pub enum FederationResponse {
         is_valid: bool,
         /// Error message if invalid.
         error: Option<String>,
+    },
+
+    /// Token refresh response.
+    TokenRefreshed {
+        /// Fresh token with same capabilities and new expiry.
+        token: aspen_auth::CapabilityToken,
     },
 
     /// Error response.

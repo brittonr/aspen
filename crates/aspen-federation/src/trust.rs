@@ -326,6 +326,68 @@ impl TrustManager {
     pub fn get_trusted_info(&self, cluster_key: &PublicKey) -> Option<TrustedClusterInfo> {
         self.trusted.read().get(cluster_key).cloned()
     }
+
+    // ========================================================================
+    // Credential-derived trust methods
+    // ========================================================================
+
+    /// Update trust from a verified credential.
+    ///
+    /// Sets trust level to `Trusted` for the cluster key. Called after a
+    /// credential passes verification during a federation handshake.
+    pub fn update_from_credential(&self, cluster_key: PublicKey, _credential: &aspen_auth::Credential) {
+        // Remove from blocked if present
+        self.blocked.write().remove(&cluster_key);
+
+        let mut trusted = self.trusted.write();
+        if trusted.len() >= MAX_TRUSTED_CLUSTERS && !trusted.contains_key(&cluster_key) {
+            warn!(
+                cluster = %cluster_key,
+                "Cannot add credential-derived trust: at capacity ({})",
+                MAX_TRUSTED_CLUSTERS
+            );
+            return;
+        }
+
+        let now_secs =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+
+        trusted.insert(cluster_key, TrustedClusterInfo {
+            cluster_key,
+            name: format!("credential:{}", &cluster_key.to_string()[..8]),
+            level: TrustLevel::Trusted,
+            trusted_since_secs: now_secs,
+            notes: Some("derived from valid credential".to_string()),
+        });
+
+        debug!(cluster = %cluster_key, "trust updated from credential");
+    }
+
+    /// Expire credential-derived trust for a cluster.
+    ///
+    /// Transitions trust level to `Public` when a credential expires
+    /// without refresh.
+    pub fn expire_credential(&self, cluster_key: &PublicKey) {
+        let mut trusted = self.trusted.write();
+        if let Some(info) = trusted.get_mut(cluster_key) {
+            if info.notes.as_deref() == Some("derived from valid credential") {
+                info!(cluster = %cluster_key, "credential expired, reverting to Public");
+                trusted.remove(cluster_key);
+            }
+        }
+    }
+
+    /// Revoke credential-derived trust for a cluster.
+    ///
+    /// Transitions trust level to `Blocked`.
+    pub fn revoke_credential(&self, cluster_key: PublicKey) {
+        self.trusted.write().remove(&cluster_key);
+        let mut blocked = self.blocked.write();
+        if blocked.len() < MAX_BLOCKED_CLUSTERS {
+            blocked.insert(cluster_key);
+            info!(cluster = %cluster_key, "credential revoked, cluster blocked");
+        }
+    }
 }
 
 impl Default for TrustManager {
@@ -564,6 +626,115 @@ mod tests {
 
         assert!(verify_content_hash(data, &hash));
         assert!(!verify_content_hash(b"different", &hash));
+    }
+
+    #[test]
+    fn test_trust_from_credential() {
+        let manager = TrustManager::new();
+
+        let cluster_sk = iroh::SecretKey::generate(&mut rand::rng());
+        let cluster_pk = cluster_sk.public();
+
+        let remote_sk = iroh::SecretKey::generate(&mut rand::rng());
+        let remote_pk = remote_sk.public();
+
+        // Issue a token from cluster to remote
+        let token = aspen_auth::TokenBuilder::new(cluster_sk)
+            .for_key(remote_pk)
+            .with_capability(aspen_auth::Capability::Read { prefix: "data:".into() })
+            .with_lifetime(std::time::Duration::from_secs(3600))
+            .build()
+            .unwrap();
+
+        let cred = aspen_auth::Credential::from_root(token);
+
+        // Before: remote is Public
+        assert_eq!(manager.trust_level(&remote_pk), TrustLevel::Public);
+
+        // Update trust from credential
+        manager.update_from_credential(remote_pk, &cred);
+        assert_eq!(manager.trust_level(&remote_pk), TrustLevel::Trusted);
+    }
+
+    #[test]
+    fn test_trust_expires_with_credential() {
+        let manager = TrustManager::new();
+
+        let cluster_sk = iroh::SecretKey::generate(&mut rand::rng());
+        let remote_sk = iroh::SecretKey::generate(&mut rand::rng());
+        let remote_pk = remote_sk.public();
+
+        let token = aspen_auth::TokenBuilder::new(cluster_sk)
+            .for_key(remote_pk)
+            .with_capability(aspen_auth::Capability::Read { prefix: "data:".into() })
+            .with_lifetime(std::time::Duration::from_secs(3600))
+            .build()
+            .unwrap();
+
+        let cred = aspen_auth::Credential::from_root(token);
+        manager.update_from_credential(remote_pk, &cred);
+        assert!(manager.is_trusted(&remote_pk));
+
+        // Expire credential
+        manager.expire_credential(&remote_pk);
+        assert!(!manager.is_trusted(&remote_pk));
+        assert_eq!(manager.trust_level(&remote_pk), TrustLevel::Public);
+    }
+
+    #[test]
+    fn test_trust_blocked_on_revocation() {
+        let manager = TrustManager::new();
+
+        let cluster_sk = iroh::SecretKey::generate(&mut rand::rng());
+        let remote_sk = iroh::SecretKey::generate(&mut rand::rng());
+        let remote_pk = remote_sk.public();
+
+        let token = aspen_auth::TokenBuilder::new(cluster_sk)
+            .for_key(remote_pk)
+            .with_capability(aspen_auth::Capability::Read { prefix: "data:".into() })
+            .with_lifetime(std::time::Duration::from_secs(3600))
+            .build()
+            .unwrap();
+
+        let cred = aspen_auth::Credential::from_root(token);
+        manager.update_from_credential(remote_pk, &cred);
+        assert!(manager.is_trusted(&remote_pk));
+
+        // Revoke credential
+        manager.revoke_credential(remote_pk);
+        assert!(!manager.is_trusted(&remote_pk));
+        assert_eq!(manager.trust_level(&remote_pk), TrustLevel::Blocked);
+    }
+
+    #[test]
+    fn test_manual_trust_coexists_with_credential() {
+        let manager = TrustManager::new();
+
+        let manual_key = test_key();
+        let cred_key = test_key();
+
+        // Manual trust
+        manager.add_trusted(manual_key, "manual-cluster".to_string(), None);
+
+        // Credential trust
+        let sk = iroh::SecretKey::generate(&mut rand::rng());
+        let token = aspen_auth::TokenBuilder::new(sk)
+            .for_key(cred_key)
+            .with_capability(aspen_auth::Capability::Read { prefix: "data:".into() })
+            .with_lifetime(std::time::Duration::from_secs(3600))
+            .build()
+            .unwrap();
+        let cred = aspen_auth::Credential::from_root(token);
+        manager.update_from_credential(cred_key, &cred);
+
+        // Both should be trusted
+        assert!(manager.is_trusted(&manual_key));
+        assert!(manager.is_trusted(&cred_key));
+
+        // Expire credential — manual trust unaffected
+        manager.expire_credential(&cred_key);
+        assert!(manager.is_trusted(&manual_key));
+        assert!(!manager.is_trusted(&cred_key));
     }
 
     #[test]

@@ -1489,6 +1489,7 @@ name = "aspen-federation"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aspen-auth",
  "aspen-core",
  "aspen-hlc",
  "aspen-sharding",
@@ -1507,6 +1508,7 @@ dependencies = [
  "postcard",
  "rand 0.9.2",
  "serde",
+ "serde_json",
  "sha2 0.10.9",
  "snafu",
  "thiserror 2.0.18",

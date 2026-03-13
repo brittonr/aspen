@@ -27,6 +27,53 @@ pub enum FederationRequest {
         federated_id: String,
         remote_cluster: String,
     },
+
+    // ========================================================================
+    // Federation auth primitives
+    // ========================================================================
+    /// Issue a federation capability token to a remote cluster.
+    FederationGrant {
+        /// Remote cluster's public key (audience).
+        audience: String,
+        /// Capabilities to grant (JSON-encoded list).
+        capabilities: String,
+        /// Token lifetime in seconds.
+        lifetime_secs: u64,
+        /// Whether the token allows further delegation.
+        allow_delegate: bool,
+    },
+    /// Revoke a federation token by its BLAKE3 hash.
+    FederationRevoke {
+        /// Hex-encoded BLAKE3 hash of the token to revoke.
+        token_hash: String,
+    },
+    /// List active federation tokens issued by this cluster.
+    FederationListTokens,
+    /// Publish a KV prefix for federation.
+    FederationPublish {
+        /// KV prefix to publish.
+        prefix: String,
+        /// Access policy: "public" or "token_required".
+        access_policy: String,
+    },
+    /// Subscribe to a remote cluster's KV prefix.
+    FederationSubscribe {
+        /// Source cluster's public key.
+        source: String,
+        /// KV prefix to subscribe to.
+        prefix: String,
+        /// Sync mode: "periodic:<secs>" or "on_gossip".
+        sync_mode: String,
+    },
+    /// List active federation subscriptions.
+    FederationListSubscriptions,
+    /// Unsubscribe from a remote cluster's KV prefix.
+    FederationUnsubscribe {
+        /// Source cluster's public key.
+        source: String,
+        /// KV prefix to unsubscribe from.
+        prefix: String,
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -44,10 +91,16 @@ impl FederationRequest {
             Self::TrustCluster { .. }
             | Self::UntrustCluster { .. }
             | Self::FederateRepository { .. }
-            | Self::ForgeFetchFederated { .. } => Some(Operation::Write {
-                key: "_forge:".to_string(),
+            | Self::ForgeFetchFederated { .. }
+            | Self::FederationGrant { .. }
+            | Self::FederationRevoke { .. }
+            | Self::FederationPublish { .. }
+            | Self::FederationSubscribe { .. }
+            | Self::FederationUnsubscribe { .. } => Some(Operation::Write {
+                key: "_sys:fed:".to_string(),
                 value: vec![],
             }),
+            Self::FederationListTokens | Self::FederationListSubscriptions => None,
         }
     }
 }
@@ -167,6 +220,107 @@ pub struct FederatedRepositoriesResponse {
     /// Total count.
     pub count: u32,
     /// Error message if retrieval failed.
+    pub error: Option<String>,
+}
+
+/// Federation grant result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationGrantResponse {
+    /// Whether the operation succeeded.
+    pub is_success: bool,
+    /// Base64-encoded token (if successful).
+    pub token_b64: Option<String>,
+    /// Token hash (hex).
+    pub token_hash: Option<String>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Federation revoke result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationRevokeResponse {
+    /// Whether the operation succeeded.
+    pub is_success: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Federation token info.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationTokenInfo {
+    /// Token hash (hex).
+    pub token_hash: String,
+    /// Audience public key.
+    pub audience: String,
+    /// Capabilities (JSON).
+    pub capabilities: String,
+    /// Expiry timestamp (Unix seconds).
+    pub expires_at: u64,
+    /// Delegation depth.
+    pub delegation_depth: u8,
+}
+
+/// Federation list tokens response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationListTokensResponse {
+    /// Active tokens.
+    pub tokens: Vec<FederationTokenInfo>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Federation publish result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationPublishResponse {
+    /// Whether the operation succeeded.
+    pub is_success: bool,
+    /// KV key where publication is stored.
+    pub key: Option<String>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Federation subscription info.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationSubscriptionInfo {
+    /// Source cluster key.
+    pub source: String,
+    /// Prefix being subscribed to.
+    pub prefix: String,
+    /// Sync mode description.
+    pub sync_mode: String,
+    /// Status: active, needs_refresh, paused.
+    pub status: String,
+    /// Last sync HLC timestamp.
+    pub last_sync_hlc: u64,
+}
+
+/// Federation list subscriptions response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationListSubscriptionsResponse {
+    /// Active subscriptions.
+    pub subscriptions: Vec<FederationSubscriptionInfo>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Federation subscribe result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationSubscribeResponse {
+    /// Whether the operation succeeded.
+    pub is_success: bool,
+    /// KV key where subscription is stored.
+    pub key: Option<String>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Federation unsubscribe result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationUnsubscribeResponse {
+    /// Whether the operation succeeded.
+    pub is_success: bool,
+    /// Error message if failed.
     pub error: Option<String>,
 }
 

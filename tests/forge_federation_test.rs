@@ -346,6 +346,7 @@ fn test_handshake_request_serialization() {
         identity: identity.to_signed(),
         protocol_version: FEDERATION_PROTOCOL_VERSION,
         capabilities: vec!["forge".to_string()],
+        credential: None,
     };
 
     let bytes = postcard::to_allocvec(&request).unwrap();

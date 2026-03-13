@@ -63,6 +63,13 @@ pub struct CapabilityToken {
     /// Used to enforce MAX_DELEGATION_DEPTH limit.
     #[serde(default)]
     pub delegation_depth: u8,
+    /// Arbitrary key-value metadata (UCAN "facts").
+    ///
+    /// Facts carry informational claims that don't affect authorization.
+    /// For federation: sync preferences, cluster metadata, subscription context.
+    /// `#[serde(default)]` ensures backward-compatible deserialization.
+    #[serde(default)]
+    pub facts: Vec<(String, Vec<u8>)>,
     /// Ed25519 signature over all above fields.
     #[serde(with = "signature_serde")]
     pub signature: [u8; 64],

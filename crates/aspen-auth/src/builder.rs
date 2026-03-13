@@ -34,6 +34,7 @@ pub struct TokenBuilder {
     lifetime: Duration,
     nonce: Option<[u8; 16]>,
     parent: Option<CapabilityToken>,
+    facts: Vec<(String, Vec<u8>)>,
 }
 
 impl TokenBuilder {
@@ -50,6 +51,7 @@ impl TokenBuilder {
             lifetime: Duration::from_secs(3600), // 1 hour default
             nonce: None,
             parent: None,
+            facts: Vec::new(),
         }
     }
 
@@ -94,6 +96,18 @@ impl TokenBuilder {
         let mut nonce = [0u8; 16];
         rand::rng().fill_bytes(&mut nonce);
         self.nonce = Some(nonce);
+        self
+    }
+
+    /// Add a single fact (key-value metadata).
+    pub fn with_fact(mut self, key: impl Into<String>, value: impl Into<Vec<u8>>) -> Self {
+        self.facts.push((key.into(), value.into()));
+        self
+    }
+
+    /// Add multiple facts.
+    pub fn with_facts(mut self, facts: Vec<(String, Vec<u8>)>) -> Self {
+        self.facts = facts;
         self
     }
 
@@ -167,6 +181,7 @@ impl TokenBuilder {
             nonce: self.nonce,
             proof: self.parent.as_ref().map(|p| p.hash()),
             delegation_depth,
+            facts: self.facts,
             signature: [0u8; 64], // Placeholder
         };
 
@@ -243,6 +258,11 @@ pub(crate) fn bytes_to_sign(token: &CapabilityToken) -> Vec<u8> {
 
     // Include delegation_depth to prevent tampering
     bytes.push(token.delegation_depth);
+
+    // Include facts in signature computation
+    if let Ok(facts_bytes) = postcard::to_allocvec(&token.facts) {
+        bytes.extend_from_slice(&facts_bytes);
+    }
 
     bytes
 }

@@ -138,6 +138,7 @@ impl TestCluster {
             endpoint: Arc::new(endpoint.clone()),
             hlc,
             resource_resolver,
+            session_credential: std::sync::Mutex::new(None),
         };
 
         let handler = FederationProtocolHandler::new(context);
@@ -218,6 +219,7 @@ async fn connect_and_handshake(
         identity: our_identity.to_signed(),
         protocol_version: FEDERATION_PROTOCOL_VERSION,
         capabilities: vec!["forge".to_string()],
+        credential: None,
     };
     write_message(&mut send, &request).await?;
 

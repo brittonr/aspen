@@ -45,6 +45,7 @@ pub async fn connect_to_cluster(
         identity: our_identity.to_signed(),
         protocol_version: FEDERATION_PROTOCOL_VERSION,
         capabilities: vec!["forge".to_string()],
+        credential: None,
     };
     write_message(&mut send, &request).await?;
 

@@ -189,6 +189,7 @@ mod tests {
             identity: identity.to_signed(),
             protocol_version: FEDERATION_PROTOCOL_VERSION,
             capabilities: vec!["forge".to_string()],
+            credential: None,
         };
 
         let bytes = postcard::to_allocvec(&request).unwrap();
@@ -215,6 +216,7 @@ mod tests {
             identity: identity.to_signed(),
             protocol_version: FEDERATION_PROTOCOL_VERSION,
             capabilities: vec![],
+            credential: None,
         };
 
         let bytes = postcard::to_allocvec(&request).unwrap();
@@ -236,6 +238,7 @@ mod tests {
             identity: identity.to_signed(),
             protocol_version: FEDERATION_PROTOCOL_VERSION,
             capabilities: vec!["forge".to_string(), "ci".to_string(), "registry".to_string()],
+            credential: None,
         };
 
         let bytes = postcard::to_allocvec(&request).unwrap();

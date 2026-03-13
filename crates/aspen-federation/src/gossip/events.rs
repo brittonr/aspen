@@ -34,4 +34,13 @@ pub enum FederationEvent {
         /// Updated ref heads.
         ref_heads: HashMap<String, [u8; 32]>,
     },
+    /// A federation token was revoked.
+    TokenRevoked {
+        /// BLAKE3 hash of the revoked token.
+        token_hash: [u8; 32],
+        /// Public key of the cluster that revoked the token.
+        revoker: PublicKey,
+        /// Unix timestamp in milliseconds when revoked.
+        timestamp_ms: u64,
+    },
 }

@@ -187,6 +187,29 @@ impl FederationGossipService {
                                         ref_heads: ref_map,
                                     }
                                 }
+
+                                FederationGossipMessage::TokenRevoked {
+                                    token_hash,
+                                    revoker,
+                                    timestamp_ms,
+                                } => {
+                                    let rk = match PublicKey::from_bytes(revoker) {
+                                        Ok(k) => k,
+                                        Err(_) => continue,
+                                    };
+
+                                    debug!(
+                                        revoker = %rk,
+                                        timestamp_ms = timestamp_ms,
+                                        "token revocation gossip received"
+                                    );
+
+                                    FederationEvent::TokenRevoked {
+                                        token_hash: *token_hash,
+                                        revoker: rk,
+                                        timestamp_ms: *timestamp_ms,
+                                    }
+                                }
                             };
 
                             // Send event (non-blocking)

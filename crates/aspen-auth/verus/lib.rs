@@ -67,6 +67,17 @@
 //! 10. **AUTH-10: Future Token Rejection**: issued_at <= now + tolerance
 //!    - Rejects tokens from the future
 //!
+//! ## Credential Chain (federation auth)
+//!
+//! 11. **CRED-1: Chain Attenuation**: Each delegation level has narrower capabilities
+//!     - Enforced by Capability::contains() at each level
+//!
+//! 12. **CRED-2: Authorization Correctness**: Prefix-based authorization is correct
+//!     - A credential authorizes P if any capability C satisfies P.starts_with(C.prefix)
+//!
+//! 13. **CRED-3: Credential Size Bounded**: Chain length <= MAX_DELEGATION_DEPTH
+//!     - Total wire size bounded by MAX_DELEGATION_DEPTH × MAX_TOKEN_SIZE
+//!
 //! # Trusted Axioms
 //!
 //! The specifications assume:
@@ -109,6 +120,7 @@ verus! {
     pub use timestamp_spec::not_from_future;
 }
 
+mod credential_spec;
 mod delegation_spec;
 mod revocation_spec;
 mod signature_spec;
