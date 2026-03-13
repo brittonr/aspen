@@ -241,6 +241,16 @@
 - Metric TTL: default 24h (`METRIC_DEFAULT_TTL_SECONDS`), max 7d (`METRIC_MAX_TTL_SECONDS`)
 - Periodic alert evaluation: `spawn_alert_evaluator()` runs on leader (skips on follower via NOT_LEADER). Default 60s interval, configurable via `--alert-evaluation-interval` CLI flag (0 = disabled). VM test: `alert-failover-test` proves alerts fire, survive leadership transfer, periodic evaluator picks up on new leader, and alerts resolve when metrics drop.
 
+**Nix Cache Round-Trip (VERIFIED 2026-03-13):**
+
+- Full cycle: CI build → NAR upload to blob store → narinfo in KV → gateway serves narinfo+NAR → nix substituter fetches from cache
+- Upload path: NixBuildWorker uploads build outputs after `nix build`. 2 entries for cowsay (main + man pages). CacheEntry has store_path, blob_hash, nar_hash (nix32), references, deriver.
+- Gateway: `aspen-nix-cache-gateway --ticket <ticket> --port 8380 --bind 127.0.0.1`. Serves `/nix-cache-info`, `/{hash}.narinfo`, `/nar/{blob_hash}.nar`.
+- Signing: `ensure_signing_key` generates Ed25519 keypair at first boot, stores public key in KV at `_sys:nix-cache:public-key`. Narinfo `Sig` field uses nix32-encoded NarHash in fingerprint.
+- Substituter: `--extra-substituters http://127.0.0.1:8380 --extra-trusted-public-keys "aspen-cache:..."` passed to `nix build` by NixBuildWorker. Second build confirms cowsay fetched from aspen cache.
+- Narinfo cache race: nix caches negative narinfo responses. Use `--option narinfo-cache-negative-ttl 0` for manual testing. CI builds run fresh so this isn't an issue in practice.
+- Man pages came from cache.nixos.org in second build despite being in aspen cache — nix fetches concurrently from all substituters, nondeterministic which responds first.
+
 **Self-Hosting Pipeline (FULLY WORKING 2026-03-06, DEPLOY LOOP 2026-03-12):**
 
 - **Full loop (build + deploy + verify)**: `nix run .#dogfood-local -- full-loop`
