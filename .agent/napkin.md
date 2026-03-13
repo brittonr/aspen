@@ -251,13 +251,17 @@
 - Narinfo cache race: nix caches negative narinfo responses. Use `--option narinfo-cache-negative-ttl 0` for manual testing. CI builds run fresh so this isn't an issue in practice.
 - Man pages came from cache.nixos.org in second build despite being in aspen cache — nix fetches concurrently from all substituters, nondeterministic which responds first.
 
-**Self-Hosting Pipeline (FULLY WORKING 2026-03-06, DEPLOY LOOP 2026-03-12):**
+**Self-Hosting Pipeline (FULLY WORKING 2026-03-06, DEPLOY LOOP 2026-03-12, MULTI-NODE 2026-03-12):**
 
 - **Full loop (build + deploy + verify)**: `nix run .#dogfood-local -- full-loop`
   - Push 27,933 objects → Forge → CI auto-trigger → 4-stage pipeline → deploy CI-built binary → verify
   - CI-built aspen-node: 99.8MB at `/nix/store/1s3j8r1mqad6ki5wp83ggyhw1m9ghb6b-aspen-0.1.0/bin/aspen-node`
   - Script-level deploy: stop old node → restart with CI-built binary → cluster healthy
   - Verify: downloaded binary from blob store, smoke-tested `aspen-node 0.1.0` ✅
+- **3-node dogfood**: `nix build .#dogfood-serial-multinode-vm` — 3 aspen-node processes in single QEMU VM
+  - Scripts at `/etc/dogfood/`: start-cluster.sh, cowsay-test.sh, deploy-test.sh, cluster-status.sh
+  - NixOS VM test (`ab91fc6`) proves DeploymentCoordinator upgrades followers first, leader last
+  - Known gap: leader self-upgrade fails (iroh rejects self-connections)
 - **Full pipeline**: git push → forge gossip → CI auto-trigger → nix build → success
 - **Real dogfood run**: 3-stage pipeline, 5 jobs, ALL pass in 8m48s:
   - Stage 1 (check): format-check ✅, clippy ✅
@@ -477,9 +481,9 @@ Key gotchas:
 
 ## Investigation Items
 
-| Date | Topic | Question |
-|------|-------|---------|
-| 2026-03-13 | aspen-nix-cache-gateway dual AspenClient | `AspenClient` doesn't impl `Clone`, so the gateway creates two separate iroh QUIC connections — one for HTTP request handling, one for signing key management (KV reads for `ensure_signing_key`). iroh QUIC supports multiplexing multiple streams over a single connection. Should `AspenClient` be `Clone` (wrapping internals in `Arc`) so a single iroh connection can be shared? Two connections means two QUIC handshakes, two sets of keep-alives, two entries in the server's connection table. The same pattern appears in `aspen-snix-bridge` (two clients: blob ops + KV ops). Investigate: (1) Why doesn't `AspenClient` impl Clone today — is it a deliberate choice or just not done yet? (2) Would `Arc<AspenClient>` with interior mutability work, or does the client hold mutable state that prevents sharing? (3) How many other consumers create duplicate connections for the same reason? |
+| Date | Topic | Resolution |
+|------|-------|------------|
+| 2026-03-13 | aspen-nix-cache-gateway dual AspenClient | **RESOLVED** (`a832193`): AspenClient fields were already Clone-able (Endpoint is Arc-wrapped, ticket derives Clone, Duration is Copy). Added `#[derive(Clone)]`. Gateway and snix-bridge now clone a single client instead of connecting twice. |
 
 **Per-crate unit2nix test coverage (68 of 80 workspace crates):**
 

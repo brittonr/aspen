@@ -457,6 +457,8 @@
             openssl
             zlib # Required by hyperlight-host build script
             stdenv.cc.cc.lib # Provides libgcc_s.so.1
+            iproute2 # tc for patchbay link conditions
+            nftables # nft for patchbay NAT/firewall rules
           ];
 
           # Ensure libraries are available for build scripts

@@ -103,6 +103,7 @@ members = [
     "crates/aspen-testing-fixtures",
     "crates/aspen-testing-madsim",
     "crates/aspen-testing-network",
+    "crates/aspen-testing-patchbay",
 
     # Extension crates (previously separate repos)
     "crates/aspen-blob",
@@ -257,6 +258,7 @@ aspen-testing-core = { path = "crates/aspen-testing-core" }
 aspen-testing-fixtures = { path = "crates/aspen-testing-fixtures" }
 aspen-testing-madsim = { path = "crates/aspen-testing-madsim" }
 aspen-testing-network = { path = "crates/aspen-testing-network" }
+aspen-testing-patchbay = { path = "crates/aspen-testing-patchbay" }
 
 # === Extension crates (now local) ===
 aspen-blob = { path = "crates/aspen-blob" }

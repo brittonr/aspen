@@ -221,3 +221,34 @@ slow-timeout = { period = "120s", terminate-after = 1 }
 path = "junit-kvm.xml"
 store-success-output = false
 store-failure-output = true
+
+# ============================================================================
+# Patchbay Profile - Network simulation tests via Linux namespaces
+# ============================================================================
+# Usage: cargo nextest run -P patchbay -p aspen-testing-patchbay
+# Requires: unprivileged user namespaces, nft, tc in PATH.
+# Tests gracefully skip if prerequisites are not met.
+
+[profile.patchbay]
+retries = 1
+fail-fast = false
+test-threads = 1
+slow-timeout = { period = "120s", terminate-after = 1 }
+default-filter = "test(/patchbay/)"
+
+[profile.patchbay.junit]
+path = "junit-patchbay.xml"
+store-success-output = false
+store-failure-output = true
+
+# Partition/heal tests need more time for recovery
+[[profile.patchbay.overrides]]
+filter = "test(/region_partition/) or test(/catchup/)"
+retries = 1
+slow-timeout = { period = "180s", terminate-after = 1 }
+
+# Packet loss tests are inherently non-deterministic
+[[profile.patchbay.overrides]]
+filter = "test(/packet_loss/)"
+retries = 2
+slow-timeout = { period = "120s", terminate-after = 1 }
