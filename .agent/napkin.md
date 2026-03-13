@@ -475,6 +475,12 @@ Key gotchas:
 | 2026-03-12 | self | unit2nix crate overrides (`nativeBuildInputs`) only affect the build drv, not the test runner drv — adding `git` to `aspen-ci` override didn't make it available at test runtime | `nativeBuildInputs` in `defaultCrateOverrides` provides tools during compilation only. Test execution happens in a separate derivation. Exclude crates needing runtime tools (git, /dev/fuse) from per-crate tests instead. |
 | 2026-03-12 | self | `CARGO_BIN_EXE_*` env var (set by cargo for integration tests referencing binary targets) not available in `buildRustCrate` — `aspen-sops` cli_smoke_test fails at compile time | Exclude crates using `env!("CARGO_BIN_EXE_*")` in tests. This is a known `buildRustCrate` limitation. |
 
+## Investigation Items
+
+| Date | Topic | Question |
+|------|-------|---------|
+| 2026-03-13 | aspen-nix-cache-gateway dual AspenClient | `AspenClient` doesn't impl `Clone`, so the gateway creates two separate iroh QUIC connections — one for HTTP request handling, one for signing key management (KV reads for `ensure_signing_key`). iroh QUIC supports multiplexing multiple streams over a single connection. Should `AspenClient` be `Clone` (wrapping internals in `Arc`) so a single iroh connection can be shared? Two connections means two QUIC handshakes, two sets of keep-alives, two entries in the server's connection table. The same pattern appears in `aspen-snix-bridge` (two clients: blob ops + KV ops). Investigate: (1) Why doesn't `AspenClient` impl Clone today — is it a deliberate choice or just not done yet? (2) Would `Arc<AspenClient>` with interior mutability work, or does the client hold mutable state that prevents sharing? (3) How many other consumers create duplicate connections for the same reason? |
+
 **Per-crate unit2nix test coverage (68 of 80 workspace crates):**
 
 Excluded (12 crates, all still tested via crane nextest):

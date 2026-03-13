@@ -83,15 +83,14 @@ async fn main() -> anyhow::Result<()> {
         "starting nix cache gateway"
     );
 
-    // Connect to cluster (for HTTP request handling)
+    // Connect to cluster
     let timeout = Duration::from_secs(cli.timeout_secs);
     let client = AspenClient::connect(&cli.ticket, timeout, None).await.context("failed to connect to cluster")?;
 
     info!("connected to cluster");
 
-    // Create separate KV client for signing key management
-    let kv_client = AspenClient::connect(&cli.ticket, timeout, None).await.context("failed to connect KV client")?;
-    let kv_store: Arc<dyn aspen_traits::KeyValueStore> = Arc::new(ClientKvAdapter::new(Arc::new(kv_client)));
+    // Reuse the same client for signing key management (shares the iroh endpoint)
+    let kv_store: Arc<dyn aspen_traits::KeyValueStore> = Arc::new(ClientKvAdapter::new(Arc::new(client.clone())));
 
     // Ensure signing key exists (generates if first time)
     let (signing_key, public_key) =

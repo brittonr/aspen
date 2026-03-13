@@ -147,12 +147,13 @@ async fn build_cluster_services(
 > {
     let timeout = Duration::from_secs(timeout_secs);
 
-    // Create two clients: one for blob ops, one for KV ops.
-    // AspenClient doesn't impl Clone, so we connect twice.
-    let blob_client = aspen_client::AspenClient::connect(ticket, timeout, None).await?;
-    let kv_client = aspen_client::AspenClient::connect(ticket, timeout, None).await?;
+    let client = aspen_client::AspenClient::connect(ticket, timeout, None).await?;
 
     info!("connected to Aspen cluster");
+
+    // Clone shares the iroh endpoint — one UDP socket, one relay connection
+    let blob_client = client.clone();
+    let kv_client = client;
 
     // BlobService: RpcBlobStore wraps AspenClient for remote blob operations
     let rpc_blob_store = aspen_client::RpcBlobStore::new(blob_client);

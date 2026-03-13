@@ -83,6 +83,7 @@ impl AuthToken {
 ///
 /// let response = client.send(ClientRpcRequest::Ping).await?;
 /// ```
+#[derive(Clone)]
 pub struct AspenClient {
     endpoint: Endpoint,
     ticket: AspenClusterTicket,
