@@ -53,6 +53,7 @@ impl SagaBuilder {
             name: name.into(),
             timeout: None,
             requires_compensation: true,
+            branch_backed: false,
         }
     }
 
@@ -82,6 +83,7 @@ pub struct StepBuilder {
     name: String,
     timeout: Option<Duration>,
     requires_compensation: bool,
+    branch_backed: bool,
 }
 
 impl StepBuilder {
@@ -97,6 +99,16 @@ impl StepBuilder {
         self
     }
 
+    /// Mark this step as branch-backed. KV writes will buffer in-memory
+    /// and commit atomically on success. Failure drops the branch with no
+    /// compensation needed for KV writes.
+    pub fn branch_backed(mut self) -> Self {
+        self.branch_backed = true;
+        // Branch-backed steps don't need KV compensation — abort is free.
+        self.requires_compensation = false;
+        self
+    }
+
     /// Complete the step and return to the saga builder.
     pub fn done(mut self) -> SagaBuilder {
         let step = SagaStep {
@@ -106,6 +118,7 @@ impl StepBuilder {
             compensation_result: None,
             timeout: self.timeout,
             requires_compensation: self.requires_compensation,
+            branch_backed: self.branch_backed,
         };
 
         if self.saga_builder.steps.len() < MAX_SAGA_STEPS {

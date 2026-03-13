@@ -1,0 +1,21 @@
+[package]
+name = "aspen-kv-branch"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Copy-on-write branch overlay for Aspen's KeyValueStore trait"
+
+[dependencies]
+aspen-traits = { workspace = true }
+aspen-kv-types = { workspace = true }
+aspen-constants = { workspace = true }
+async-trait = "0.1"
+dashmap = "6.1"
+serde = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+aspen-testing-core = { workspace = true }
+proptest = "1.0"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

@@ -188,6 +188,51 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized>
     }
 
     // ========================================================================
+    // Branch-backed deployment
+    // ========================================================================
+
+    /// Run a deployment inside a `BranchOverlay`. All deploy KV writes buffer
+    /// in-memory. On health check pass, the branch is committed atomically.
+    /// On failure, the branch is dropped and the base state is unchanged.
+    #[cfg(feature = "kv-branch")]
+    pub async fn run_deployment_branched(&self, deploy_id: &str) -> Result<DeploymentRecord> {
+        let branch = aspen_kv_branch::BranchOverlay::new(format!("deploy-{deploy_id}"), Arc::clone(&self.kv));
+
+        // Create a coordinator that writes to the branch instead of base KV.
+        let branched_coordinator = DeploymentCoordinator {
+            kv: Arc::new(branch),
+            rpc_client: Arc::clone(&self.rpc_client),
+            cluster_controller: self.cluster_controller.clone(),
+            node_id: self.node_id,
+            health_timeout_secs: self.health_timeout_secs,
+            poll_interval_secs: self.poll_interval_secs,
+        };
+
+        // Run the deployment — all writes go to the branch.
+        let result = branched_coordinator.run_deployment(deploy_id).await;
+
+        match &result {
+            Ok(record) if record.status == DeploymentStatus::Completed => {
+                // Health checks passed — commit the branch.
+                // Use no-conflict-check commit because the deploy coordinator
+                // uses CAS writes that pass through the branch and legitimately
+                // modify keys the branch also read.
+                branched_coordinator.kv.commit_no_conflict_check().await.map_err(|e| DeployError::KvError {
+                    reason: format!("branch commit failed: {e}"),
+                })?;
+                tracing::info!(deploy_id, "branch-backed deploy committed");
+            }
+            _ => {
+                // Failed or rolled back — branch is dropped, base state unchanged.
+                branched_coordinator.kv.abort();
+                tracing::info!(deploy_id, "branch-backed deploy aborted");
+            }
+        }
+
+        result
+    }
+
+    // ========================================================================
     // 5.3: run_deployment
     // ========================================================================
 

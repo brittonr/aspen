@@ -95,6 +95,12 @@ pub struct SagaStep {
     pub timeout: Option<Duration>,
     /// Whether compensation is required for this step.
     pub requires_compensation: bool,
+    /// Whether this step should run inside a `BranchOverlay` for automatic
+    /// rollback on failure. When true, KV writes are buffered in-memory and
+    /// committed atomically on success. Failure drops the branch — no
+    /// compensation needed for KV writes.
+    #[serde(default)]
+    pub branch_backed: bool,
 }
 
 /// Result of executing a step action.

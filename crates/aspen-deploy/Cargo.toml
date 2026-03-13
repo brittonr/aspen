@@ -11,6 +11,8 @@ default = []
 verus = []
 # Enable real iroh QUIC RPC client for inter-node deploy communication
 iroh = ["dep:iroh", "dep:aspen-client-api", "dep:aspen-core", "dep:postcard"]
+# Enable branch-backed deployments
+kv-branch = ["dep:aspen-kv-branch"]
 
 [dependencies]
 # Core types and traits
@@ -38,6 +40,7 @@ iroh = { version = "0.95.1", optional = true }
 aspen-client-api = { workspace = true, optional = true }
 aspen-core = { path = "../aspen-core", optional = true }
 postcard = { version = "1.0", optional = true }
+aspen-kv-branch = { path = "../aspen-kv-branch", optional = true }
 
 [dev-dependencies]
 # Tests

@@ -40,6 +40,55 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
         Self { store }
     }
 
+    /// Access the underlying store.
+    pub fn store(&self) -> &Arc<S> {
+        &self.store
+    }
+
+    /// Run a saga step inside a `BranchOverlay` for automatic rollback.
+    ///
+    /// On success, the branch's dirty writes and the saga journal update
+    /// are committed as a single atomic batch. On failure, the branch is
+    /// dropped — no compensation needed for KV writes.
+    ///
+    /// The `step_fn` receives an `Arc<BranchOverlay<S>>` that it should
+    /// use for all KV operations. Writes to the branch are buffered in-memory
+    /// and only become visible on commit.
+    #[cfg(feature = "kv-branch")]
+    pub async fn run_step_in_branch<F, Fut>(
+        &self,
+        state: &mut PersistentSagaState,
+        step_index: u32,
+        step_fn: F,
+    ) -> Result<()>
+    where
+        F: FnOnce(Arc<aspen_kv_branch::BranchOverlay<S>>) -> Fut,
+        Fut: std::future::Future<Output = std::result::Result<Option<String>, String>>,
+    {
+        let branch_id = format!("saga-{}-step-{}", state.execution_id, step_index);
+        let branch = Arc::new(aspen_kv_branch::BranchOverlay::new(branch_id, Arc::clone(&self.store)));
+
+        match step_fn(Arc::clone(&branch)).await {
+            Ok(output) => {
+                // Commit the branch — flushes all KV writes atomically.
+                branch.commit().await.map_err(|e| JobError::ExecutionFailed {
+                    reason: format!("branch commit failed: {e}"),
+                })?;
+
+                // Update saga state (step completed).
+                self.complete_step(state, step_index, output).await?;
+                Ok(())
+            }
+            Err(error) => {
+                // Branch is dropped here — all KV writes discarded.
+                // No compensation needed for KV mutations.
+                drop(branch);
+                self.fail_step(state, step_index, error).await?;
+                Ok(())
+            }
+        }
+    }
+
     /// Generate the storage key for a saga.
     fn storage_key(execution_id: &SagaExecutionId) -> String {
         format!("{}{}", SAGA_STATE_PREFIX, execution_id)
@@ -272,15 +321,16 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
                 current_compensation, ..
             } => {
                 let step = state.definition.get_step(*current_compensation)?;
-                // Decomposed: check if step was executed, then check if it needs compensation
+                // Decomposed: check if step was executed, then check if it needs compensation.
+                // Branch-backed steps never need compensation — abort is free.
                 let was_executed = step.was_executed;
-                let needs_compensation = step.requires_compensation;
+                let needs_compensation = step.requires_compensation && !step.branch_backed;
                 if was_executed && needs_compensation {
                     Some(SagaAction::Compensate {
                         step_index: *current_compensation,
                     })
                 } else {
-                    // Skip compensation for unexecuted or no-compensation steps
+                    // Skip compensation for unexecuted, no-compensation, or branch-backed steps
                     Some(SagaAction::SkipCompensation {
                         step_index: *current_compensation,
                     })

@@ -116,6 +116,7 @@ members = [
     "crates/aspen-automerge",
     "crates/aspen-federation",
     "crates/aspen-deploy",
+    "crates/aspen-kv-branch",
     "crates/aspen-cli",
     "crates/aspen-tui",
     "crates/aspen-cluster-bridges",
@@ -263,6 +264,7 @@ aspen-testing-patchbay = { path = "crates/aspen-testing-patchbay" }
 # === Extension crates (now local) ===
 aspen-blob = { path = "crates/aspen-blob" }
 aspen-deploy = { path = "crates/aspen-deploy" }
+aspen-kv-branch = { path = "crates/aspen-kv-branch" }
 aspen-sql = { path = "crates/aspen-sql" }
 aspen-forge = { path = "crates/aspen-forge" }
 aspen-hooks = { path = "crates/aspen-hooks" }
@@ -352,6 +354,7 @@ aspen-testing = { workspace = true, optional = true }
 aspen-secrets = { workspace = true, optional = true }
 aspen-automerge = { workspace = true, optional = true }
 aspen-deploy = { workspace = true, optional = true }
+aspen-kv-branch = { workspace = true, optional = true }
 aspen-ci = { workspace = true, optional = true }
 aspen-cache = { workspace = true, optional = true }
 aspen-snix = { workspace = true, optional = true }
@@ -444,7 +447,7 @@ cloud-hypervisor-client = "0.3"
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
 default = []
 
-full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "deploy"]
+full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "deploy", "kv-branch"]
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
@@ -475,13 +478,14 @@ proxy = ["dep:aspen-proxy", "aspen-cluster/proxy"]
 net = ["dep:aspen-net", "proxy", "aspen-rpc-handlers/net"]
 # contacts and calendar are now WASM plugins (aspen-plugins repo)
 deploy = ["dep:aspen-deploy", "aspen-cluster/deploy", "aspen-rpc-handlers/deploy"]
+kv-branch = ["dep:aspen-kv-branch"]
 federation = ["aspen-cluster/federation"]
 relay-server = ["aspen-cluster/relay-server"]
 snix = ["dep:aspen-snix", "dep:aspen-castore", "dep:snix-castore", "dep:snix-store", "blob", "aspen-cluster/snix", "aspen-ci?/nix-executor-snix"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\", \"kv-branch\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit

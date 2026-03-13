@@ -495,3 +495,7 @@ Excluded (12 crates, all still tested via crane nextest):
 - 2 sandbox-incompatible: aspen-fuse (/dev/fuse), aspen-ci (git runtime)
 - 1 CARGO_BIN_EXE: aspen-sops
 - 2 vendored: openraft, openraft-macros
+| 2026-03-13 | self | `async-trait` is NOT a workspace dep in aspen — each crate specifies `async-trait = "0.1"` directly. Using `{ workspace = true }` fails with "not found in workspace.dependencies". | Always grep `crates/*/Cargo.toml` for a dep before assuming workspace. |
+| 2026-03-13 | self | `DeterministicKeyValueStore::new()` returns `Arc<Self>`, not `Self`. Double-wrapping with `Arc::new(DeterministicKeyValueStore::new())` fails with type mismatch. | Use `DeterministicKeyValueStore::new()` directly — it already returns Arc. |
+| 2026-03-13 | self | Branch overlay CAS pass-through + read set conflict: BranchOverlay reads key from parent (records mod_revision), then CAS write passes through to parent (changes mod_revision). On commit, OCC finds stale revision → false conflict. | Use `commit_no_conflict_check()` when the branch is combined with pass-through CAS writes. Added this method to BranchOverlay. |
+| 2026-03-13 | self | `test_get_status_falls_back_to_history` in aspen-deploy is a pre-existing failure (not related to kv-branching changes). Verified by stashing changes and re-running. | Don't debug test failures before checking if they're pre-existing. |

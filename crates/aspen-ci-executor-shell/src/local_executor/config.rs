@@ -109,4 +109,17 @@ impl LocalExecutorWorkerConfig {
     pub fn can_use_cache_proxy(&self) -> bool {
         false
     }
+
+    /// Wrap the KV store in a `BranchOverlay` for job isolation.
+    ///
+    /// The returned branch buffers all KV writes in-memory. On job success,
+    /// call `branch.commit()` to flush. On failure, drop the branch — no
+    /// writes reach the base store.
+    ///
+    /// Returns None if no KV store is configured.
+    #[cfg(feature = "kv-branch")]
+    pub fn branch_kv_store(&self, job_id: &str) -> Option<aspen_kv_branch::BranchOverlay<dyn KeyValueStore>> {
+        let kv = self.kv_store.as_ref()?;
+        Some(aspen_kv_branch::BranchOverlay::new(format!("ci-job-{job_id}"), Arc::clone(kv)))
+    }
 }

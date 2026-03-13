@@ -32,6 +32,7 @@
 //! - Fail-fast on configuration errors
 //! - Bounded retries with backoff
 
+pub mod branch;
 pub mod cache;
 pub mod chunking;
 pub mod client;

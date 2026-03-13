@@ -709,3 +709,45 @@ async fn test_health_poll_detects_specific_kv_failure_reasons() {
         other => panic!("expected NodeUpgradeFailed, got: {other:?}"),
     }
 }
+
+// ============================================================================
+// Branch-backed deploy tests
+// ============================================================================
+
+#[cfg(feature = "kv-branch")]
+#[tokio::test]
+async fn test_branched_deploy_success_commits() {
+    let kv: Arc<dyn KeyValueStore> = DeterministicKeyValueStore::new();
+    let rpc = Arc::new(MockRpcClient::new());
+    rpc.set_all_healthy(&[1, 2]).await;
+
+    let coord = make_coordinator(Arc::clone(&kv), Arc::clone(&rpc), 1);
+
+    coord
+        .start_deployment("deploy-branch-1".into(), test_artifact(), DeployStrategy::rolling(1), &[1, 2], now_ms())
+        .await
+        .unwrap();
+
+    let result = coord.run_deployment_branched("deploy-branch-1").await.unwrap();
+    assert_eq!(result.status, DeploymentStatus::Completed);
+}
+
+#[cfg(feature = "kv-branch")]
+#[tokio::test]
+async fn test_branched_deploy_failure_aborts() {
+    let kv: Arc<dyn KeyValueStore> = DeterministicKeyValueStore::new();
+    let rpc = Arc::new(MockRpcClient::new());
+    rpc.set_upgrade_failure(2, "node 2 is down").await;
+    rpc.set_all_healthy(&[1]).await;
+
+    let coord = make_coordinator(Arc::clone(&kv), Arc::clone(&rpc), 1);
+
+    coord
+        .start_deployment("deploy-branch-2".into(), test_artifact(), DeployStrategy::rolling(1), &[1, 2], now_ms())
+        .await
+        .unwrap();
+
+    // Deploy will fail on node 2 — branch is dropped, no partial state committed.
+    let result = coord.run_deployment_branched("deploy-branch-2").await;
+    assert!(result.is_err());
+}

@@ -609,6 +609,7 @@ dependencies = [
  "aspen-jobs",
  "aspen-jobs-worker-maintenance",
  "aspen-jobs-worker-shell",
+ "aspen-kv-branch",
  "aspen-net",
  "aspen-proxy",
  "aspen-raft",
@@ -921,6 +922,7 @@ dependencies = [
  "aspen-ci-core",
  "aspen-core",
  "aspen-jobs",
+ "aspen-kv-branch",
  "async-trait",
  "bytes",
  "command-group",
@@ -1368,6 +1370,7 @@ dependencies = [
  "aspen-client-api",
  "aspen-constants",
  "aspen-core",
+ "aspen-kv-branch",
  "aspen-kv-types",
  "aspen-testing",
  "aspen-traits",
@@ -1599,9 +1602,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-client",
+ "aspen-kv-branch",
  "blake3",
  "clap",
  "ctrlc",
+ "dashmap",
  "fuse-backend-rs 0.13.1",
  "iroh 0.95.1",
  "libc",
@@ -1710,6 +1715,7 @@ dependencies = [
  "aspen-coordination",
  "aspen-core",
  "aspen-hlc",
+ "aspen-kv-branch",
  "aspen-kv-types",
  "aspen-testing",
  "aspen-time",
@@ -1836,6 +1842,22 @@ dependencies = [
  "chrono",
  "redb 2.6.3",
  "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-kv-branch"
+version = "0.1.0"
+dependencies = [
+ "aspen-constants",
+ "aspen-kv-types",
+ "aspen-testing-core",
+ "aspen-traits",
+ "async-trait",
+ "dashmap",
+ "proptest",
+ "serde",
+ "tokio",
  "tracing",
 ]
 

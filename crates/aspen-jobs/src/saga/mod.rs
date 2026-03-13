@@ -168,4 +168,135 @@ mod tests {
         let action = executor.get_next_action(&state);
         assert_eq!(action, Some(SagaAction::Execute { step_index: 0 }));
     }
+
+    #[tokio::test]
+    async fn test_branch_backed_skip_compensation() {
+        let store = Arc::new(DeterministicKeyValueStore::default());
+        let executor = SagaExecutor::new(store);
+
+        let saga = SagaBuilder::new("branch_skip_test")
+            .step("step1")
+            .done()
+            .step("step2")
+            .branch_backed()
+            .done()
+            .step("step3")
+            .done()
+            .build();
+
+        let mut state = executor.start_saga(saga, None).await.unwrap();
+
+        // Complete steps 1 and 2
+        executor.complete_step(&mut state, 0, None).await.unwrap();
+        executor.complete_step(&mut state, 1, None).await.unwrap();
+
+        // Fail step 3 — triggers compensation
+        executor.fail_step(&mut state, 2, "step3 failed".into()).await.unwrap();
+
+        // Step 2 is branch_backed — get_next_action should skip compensation
+        let action = executor.get_next_action(&state);
+        assert_eq!(action, Some(SagaAction::SkipCompensation { step_index: 1 }));
+    }
+
+    #[cfg(feature = "kv-branch")]
+    #[tokio::test]
+    async fn test_branch_backed_step_success() {
+        use aspen_kv_types::WriteRequest;
+        use aspen_traits::KeyValueStore;
+
+        let store = Arc::new(DeterministicKeyValueStore::default());
+        let executor = SagaExecutor::new(Arc::clone(&store));
+
+        let saga = SagaBuilder::new("branch_success").step("branched_step").branch_backed().done().build();
+
+        let mut state = executor.start_saga(saga, None).await.unwrap();
+
+        // Run step inside a branch — writes a key
+        executor
+            .run_step_in_branch(&mut state, 0, |branch| async move {
+                branch.write(WriteRequest::set("test-key", "test-value")).await.map_err(|e| e.to_string())?;
+                Ok(Some("wrote test-key".into()))
+            })
+            .await
+            .unwrap();
+
+        // Saga should be completed
+        assert!(matches!(state.state, SagaState::Completed));
+
+        // The key should be in the base store (committed)
+        let result = store.read(aspen_kv_types::ReadRequest::new("test-key")).await.unwrap();
+        assert_eq!(result.kv.unwrap().value, "test-value");
+    }
+
+    #[cfg(feature = "kv-branch")]
+    #[tokio::test]
+    async fn test_branch_backed_step_failure_no_orphans() {
+        use aspen_kv_types::WriteRequest;
+        use aspen_traits::KeyValueStore;
+
+        let store = Arc::new(DeterministicKeyValueStore::default());
+        let executor = SagaExecutor::new(Arc::clone(&store));
+
+        let saga = SagaBuilder::new("branch_fail").step("branched_step").branch_backed().done().build();
+
+        let mut state = executor.start_saga(saga, None).await.unwrap();
+
+        // Run step inside a branch — writes a key then fails
+        executor
+            .run_step_in_branch(&mut state, 0, |branch| async move {
+                branch
+                    .write(WriteRequest::set("orphan-key", "should-not-persist"))
+                    .await
+                    .map_err(|e| e.to_string())?;
+                Err("simulated failure".into())
+            })
+            .await
+            .unwrap();
+
+        // Saga should be in compensation state (or completed compensation
+        // since step 0 failed, there's nothing to compensate)
+        assert!(matches!(state.state, SagaState::CompensationCompleted { .. }), "got {:?}", state.state);
+
+        // The key should NOT be in the base store (branch was dropped)
+        let result = store.read(aspen_kv_types::ReadRequest::new("orphan-key")).await;
+        assert!(result.is_err() || result.unwrap().kv.is_none(), "orphan key should not exist in base store");
+    }
+
+    #[cfg(feature = "kv-branch")]
+    #[tokio::test]
+    async fn test_mixed_saga_branch_and_compensation() {
+        use aspen_kv_types::WriteRequest;
+        use aspen_traits::KeyValueStore;
+
+        let store = Arc::new(DeterministicKeyValueStore::default());
+        let executor = SagaExecutor::new(Arc::clone(&store));
+
+        let saga = SagaBuilder::new("mixed_saga")
+            .step("normal_step")
+            .done() // requires compensation
+            .step("branched_step")
+            .branch_backed()
+            .done() // branch-backed, no compensation needed
+            .build();
+
+        let mut state = executor.start_saga(saga, None).await.unwrap();
+
+        // Complete normal step (writes directly to store)
+        executor.complete_step(&mut state, 0, Some("step1 done".into())).await.unwrap();
+
+        // Run branched step — succeeds
+        executor
+            .run_step_in_branch(&mut state, 1, |branch| async move {
+                branch.write(WriteRequest::set("branch-key", "val")).await.map_err(|e| e.to_string())?;
+                Ok(None)
+            })
+            .await
+            .unwrap();
+
+        assert!(matches!(state.state, SagaState::Completed));
+
+        // branch-key should be committed
+        let result = store.read(aspen_kv_types::ReadRequest::new("branch-key")).await.unwrap();
+        assert_eq!(result.kv.unwrap().value, "val");
+    }
 }

@@ -116,6 +116,9 @@ pub struct AspenFs {
     ///
     /// Uses Mutex for interior mutability since FUSE's `init`/`destroy` take `&self`.
     flush_timer: Mutex<Option<FlushTimer>>,
+    /// Branch manager for @branch virtual paths (feature-gated).
+    #[cfg(feature = "kv-branch")]
+    branch_manager: crate::branch::BranchManager,
 }
 
 impl AspenFs {
@@ -132,6 +135,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            #[cfg(feature = "kv-branch")]
+            branch_manager: crate::branch::BranchManager::new(),
         }
     }
 
@@ -152,6 +157,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            #[cfg(feature = "kv-branch")]
+            branch_manager: crate::branch::BranchManager::new(),
         }
     }
 
@@ -169,6 +176,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            #[cfg(feature = "kv-branch")]
+            branch_manager: crate::branch::BranchManager::new(),
         }
     }
 
@@ -187,6 +196,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            #[cfg(feature = "kv-branch")]
+            branch_manager: crate::branch::BranchManager::new(),
         }
     }
 
@@ -208,6 +219,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            #[cfg(feature = "kv-branch")]
+            branch_manager: crate::branch::BranchManager::new(),
         };
         (fs, store)
     }
@@ -227,6 +240,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            #[cfg(feature = "kv-branch")]
+            branch_manager: crate::branch::BranchManager::new(),
         }
     }
 
@@ -250,6 +265,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            #[cfg(feature = "kv-branch")]
+            branch_manager: crate::branch::BranchManager::new(),
         }
     }
 

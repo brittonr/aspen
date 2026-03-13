@@ -46,6 +46,10 @@ blake3 = "1.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# KV branch support (optional)
+aspen-kv-branch = { path = "../aspen-kv-branch", optional = true }
+dashmap = { version = "6.1", optional = true }
+
 # Random number generation
 rand = "0.9"
 
@@ -62,6 +66,7 @@ virtiofs = [
     "dep:vmm-sys-util",
     "fuse-backend-rs/vhost-user-fs",
 ]
+kv-branch = ["dep:aspen-kv-branch", "dep:dashmap"]
 
 [dev-dependencies]
 tempfile = "3.4"

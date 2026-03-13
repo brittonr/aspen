@@ -54,6 +54,10 @@ impl FileSystem for AspenFs {
     }
 
     fn destroy(&self) {
+        // Drop all active branches (uncommitted state is discarded).
+        #[cfg(feature = "kv-branch")]
+        self.branch_manager.drop_all();
+
         // Stop the background flush timer
         if let Ok(mut guard) = self.flush_timer.lock()
             && let Some(mut timer) = guard.take()
