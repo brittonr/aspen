@@ -2642,6 +2642,48 @@
                 aspenCliPackage = bins.full-aspen-cli;
               };
 
+              # Worker PSI health: /proc/pressure data flows through heartbeats
+              # into __worker_stats: KV entries with pressure + disk free fields.
+              # Build: nix build .#checks.x86_64-linux.worker-psi-health-test
+              worker-psi-health-test = import ./nix/tests/worker-psi-health.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
+              };
+
+              # CI failure cache: failing nix build is cached, second run skips build.
+              # Build: nix build .#checks.x86_64-linux.ci-failure-cache-test --impure
+              ci-failure-cache-test = import ./nix/tests/ci-failure-cache.nix {
+                inherit pkgs kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+              };
+
+              # NixBuildSupervisor timeout: hanging nix build killed after timeout,
+              # worker recovers and processes subsequent jobs.
+              # Build: nix build .#checks.x86_64-linux.nix-build-supervisor-test --impure
+              nix-build-supervisor-test = import ./nix/tests/nix-build-supervisor.nix {
+                inherit pkgs kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+              };
+
+              # Deploy statefulness: deploy executor writes lifecycle state
+              # to _deploy:state:{id}:metadata and per-node KV entries.
+              # Build: nix build .#checks.x86_64-linux.deploy-statefulness-test --impure --option sandbox false
+              deploy-statefulness-test = import ./nix/tests/deploy-statefulness.nix {
+                inherit pkgs lib kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+                nixpkgsFlake = nixpkgs;
+              };
+
               # Automerge CRDT + SQL query test: create/get/list/delete
               # CRDT documents, execute SQL queries against KV store.
               # Build: nix build .#checks.x86_64-linux.automerge-sql-test --impure
