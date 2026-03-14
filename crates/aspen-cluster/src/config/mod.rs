@@ -324,6 +324,24 @@ pub struct NodeConfig {
     #[cfg(feature = "secrets")]
     #[serde(default)]
     pub secrets: aspen_secrets::SecretsConfig,
+
+    /// Nostr relay configuration.
+    ///
+    /// When enabled, the node runs a NIP-01 Nostr relay on a WebSocket port,
+    /// allowing standard Nostr clients to observe cluster state.
+    ///
+    /// Requires the `nostr-relay` feature.
+    #[cfg(feature = "nostr-relay")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nostr_relay: Option<aspen_nostr_relay::NostrRelayConfig>,
+
+    /// Hex-encoded secp256k1 secret key for Nostr event signing.
+    ///
+    /// If absent when `nostr-relay` is enabled, a new key is generated.
+    /// Save this value to persist the cluster's Nostr identity across restarts.
+    #[cfg(feature = "nostr-relay")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nostr_secret_key_hex: Option<String>,
 }
 
 impl Default for NodeConfig {
@@ -359,6 +377,10 @@ impl Default for NodeConfig {
             forge: ForgeConfig::default(),
             #[cfg(feature = "secrets")]
             secrets: aspen_secrets::SecretsConfig::default(),
+            #[cfg(feature = "nostr-relay")]
+            nostr_relay: None,
+            #[cfg(feature = "nostr-relay")]
+            nostr_secret_key_hex: None,
         }
     }
 }
@@ -418,6 +440,10 @@ impl NodeConfig {
             },
             #[cfg(feature = "secrets")]
             secrets: from_env_secrets(),
+            #[cfg(feature = "nostr-relay")]
+            nostr_relay: None,
+            #[cfg(feature = "nostr-relay")]
+            nostr_secret_key_hex: parse_env("ASPEN_NOSTR_SECRET_KEY_HEX"),
         }
     }
 

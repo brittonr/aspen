@@ -234,6 +234,41 @@ async fn async_main() -> Result<()> {
         )
     };
 
+    // Start Nostr relay if enabled
+    #[cfg(feature = "nostr-relay")]
+    let nostr_relay_service = {
+        let nostr_config = config.nostr_relay.clone().unwrap_or_default();
+        if nostr_config.enabled {
+            let identity = match config.nostr_secret_key_hex.as_deref() {
+                Some(hex) => {
+                    aspen_nostr_relay::NostrIdentity::from_persist(&aspen_nostr_relay::keys::NostrIdentityPersist {
+                        secret_key_hex: hex.to_string(),
+                    })
+                    .expect("invalid nostr secret key")
+                }
+                None => {
+                    let id = aspen_nostr_relay::NostrIdentity::generate();
+                    info!(
+                        nostr_pubkey = %id.public_key_hex(),
+                        "generated new nostr identity (save secret_key_hex to persist)"
+                    );
+                    id
+                }
+            };
+            let relay =
+                std::sync::Arc::new(aspen_nostr_relay::relay::new_dyn_relay(nostr_config, identity, kv_store.clone()));
+            let relay_clone = std::sync::Arc::clone(&relay);
+            tokio::spawn(async move {
+                if let Err(e) = relay_clone.run().await {
+                    error!(error = %e, "nostr relay exited with error");
+                }
+            });
+            Some(relay)
+        } else {
+            None
+        }
+    };
+
     // Extract signer before client_context is consumed by the handler.
     #[cfg(feature = "nix-cache-gateway")]
     let nix_cache_signer = client_context.nix_cache_signer.clone();
@@ -275,6 +310,13 @@ async fn async_main() -> Result<()> {
     if let Some(handle) = alert_evaluator_handle {
         info!("stopping periodic alert evaluator");
         handle.shutdown().await;
+    }
+
+    // Stop Nostr relay
+    #[cfg(feature = "nostr-relay")]
+    if let Some(ref relay) = nostr_relay_service {
+        info!("stopping nostr relay");
+        relay.shutdown();
     }
 
     // Stop deploy resume watcher

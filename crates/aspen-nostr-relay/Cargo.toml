@@ -1,0 +1,27 @@
+[package]
+name = "aspen-nostr-relay"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "NIP-01 Nostr relay engine for Aspen with KV-backed event storage"
+
+[dependencies]
+aspen-traits = { workspace = true }
+aspen-kv-types = { workspace = true }
+aspen-constants = { workspace = true }
+async-trait = "0.1"
+bytes = { workspace = true }
+futures = { workspace = true }
+nostr = { version = "0.44", default-features = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["net", "sync", "time"] }
+tokio-tungstenite = "0.28"
+tokio-util = { version = "0.7", features = ["rt"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+aspen-testing-core = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

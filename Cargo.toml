@@ -117,6 +117,7 @@ members = [
     "crates/aspen-federation",
     "crates/aspen-deploy",
     "crates/aspen-kv-branch",
+    "crates/aspen-nostr-relay",
     "crates/aspen-cli",
     "crates/aspen-tui",
     "crates/aspen-cluster-bridges",
@@ -291,6 +292,7 @@ aspen-cache = { path = "crates/aspen-cache" }
 aspen-castore = { path = "crates/aspen-castore" }
 aspen-snix = { path = "crates/aspen-snix" }
 
+aspen-nostr-relay = { path = "crates/aspen-nostr-relay" }
 aspen-nix-handler = { path = "crates/aspen-nix-handler" }
 aspen-federation = { path = "crates/aspen-federation" }
 aspen-plugin-api = { path = "crates/aspen-plugin-api" }
@@ -355,6 +357,7 @@ aspen-secrets = { workspace = true, optional = true }
 aspen-automerge = { workspace = true, optional = true }
 aspen-deploy = { workspace = true, optional = true }
 aspen-kv-branch = { workspace = true, optional = true }
+aspen-nostr-relay = { workspace = true, optional = true }
 aspen-ci = { workspace = true, optional = true }
 aspen-cache = { workspace = true, optional = true }
 aspen-snix = { workspace = true, optional = true }
@@ -447,7 +450,7 @@ cloud-hypervisor-client = "0.3"
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
 default = []
 
-full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "deploy", "kv-branch"]
+full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "deploy", "kv-branch", "nostr-relay"]
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
@@ -479,6 +482,7 @@ net = ["dep:aspen-net", "proxy", "aspen-rpc-handlers/net"]
 # contacts and calendar are now WASM plugins (aspen-plugins repo)
 deploy = ["dep:aspen-deploy", "aspen-cluster/deploy", "aspen-rpc-handlers/deploy"]
 kv-branch = ["dep:aspen-kv-branch"]
+nostr-relay = ["dep:aspen-nostr-relay", "hooks", "aspen-cluster/nostr-relay"]
 federation = ["aspen-cluster/federation"]
 relay-server = ["aspen-cluster/relay-server"]
 snix = ["dep:aspen-snix", "dep:aspen-castore", "dep:snix-castore", "dep:snix-store", "blob", "aspen-cluster/snix", "aspen-ci?/nix-executor-snix"]

@@ -35,6 +35,7 @@ aspen-nickel = { path = "../aspen-nickel", optional = true }
 aspen-secrets = { path = "../aspen-secrets", optional = true }
 aspen-castore = { path = "../aspen-castore", optional = true }
 aspen-deploy = { path = "../aspen-deploy", optional = true }
+aspen-nostr-relay = { path = "../aspen-nostr-relay", optional = true }
 aspen-constants = { path = "../aspen-constants" }
 
 # Networking and P2P
@@ -113,3 +114,4 @@ proxy = ["dep:aspen-proxy"]
 relay-server = ["dep:iroh-relay"]
 snix = ["dep:aspen-castore", "blob"]
 deploy = ["dep:aspen-deploy", "dep:nix"]
+nostr-relay = ["dep:aspen-nostr-relay"]

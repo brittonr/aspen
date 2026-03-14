@@ -147,6 +147,9 @@ pub struct PluginPermissions {
     /// Allow executing SQL queries via the sql_query host function.
     #[serde(default)]
     pub sql_query: bool,
+    /// Allow publishing events to the Nostr relay via nostr_publish_event.
+    #[serde(default)]
+    pub nostr_publish: bool,
 }
 
 impl Default for PluginPermissions {
@@ -163,6 +166,7 @@ impl Default for PluginPermissions {
             timers: false,
             hooks: false,
             sql_query: false,
+            nostr_publish: false,
         }
     }
 }
@@ -183,6 +187,7 @@ impl PluginPermissions {
             timers: true,
             hooks: true,
             sql_query: true,
+            nostr_publish: true,
         }
     }
 }
