@@ -639,6 +639,8 @@ mod tests {
             strategy: None,
             health_check_timeout_secs: None,
             max_concurrent: None,
+            expected_binary: None,
+            stateful: None,
         };
         let err = job.validate().unwrap_err();
         assert!(err.to_string().contains("requires artifact_from"), "got: {err}");
@@ -670,6 +672,8 @@ mod tests {
             strategy: Some("rolling".to_string()),
             health_check_timeout_secs: None,
             max_concurrent: None,
+            expected_binary: None,
+            stateful: None,
         };
         assert!(job.validate().is_ok());
     }
@@ -699,6 +703,8 @@ mod tests {
             strategy: None,
             health_check_timeout_secs: None,
             max_concurrent: None,
+            expected_binary: None,
+            stateful: None,
         }
     }
 
@@ -727,6 +733,8 @@ mod tests {
             strategy: Some("rolling".to_string()),
             health_check_timeout_secs: None,
             max_concurrent: None,
+            expected_binary: None,
+            stateful: None,
         }
     }
 
