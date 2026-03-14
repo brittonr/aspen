@@ -43,8 +43,8 @@ pub(super) struct UploadedStorePathSnix {
 impl LocalExecutorWorker {
     /// Upload store paths to SNIX storage as NAR archives.
     ///
-    /// Uses `nix nar dump-path` to create a NAR archive of each store path,
-    /// then ingests directly into SNIX storage using `ingest_nar_and_hash`.
+    /// Uses nix-compat NAR writer (via aspen_cache::nar) to create a NAR archive of each store
+    /// path, then ingests directly into SNIX storage using `ingest_nar_and_hash`.
     /// Creates PathInfo entries with proper metadata.
     ///
     /// This enables the cluster's Nix binary cache to serve built paths to
@@ -54,8 +54,6 @@ impl LocalExecutorWorker {
         job_id: &str,
         output_paths: &[String],
     ) -> Vec<UploadedStorePathSnix> {
-        use tokio::process::Command;
-
         let mut uploaded = Vec::new();
 
         info!(
@@ -105,27 +103,16 @@ impl LocalExecutorWorker {
                 "Uploading store path to SNIX storage"
             );
 
-            // Use nix nar dump-path to create a NAR archive
-            let output = match Command::new("nix").args(["nar", "dump-path", store_path]).output().await {
-                Ok(output) => output,
+            // Create NAR archive in-process using nix-compat writer.
+            let (nar_data, _nar_sha256_from_writer) = match aspen_cache::nar::dump_path_nar_async(store_path.into())
+                .await
+            {
+                Ok(result) => result,
                 Err(e) => {
                     warn!(job_id = %job_id, store_path = %store_path, error = %e, "Failed to create NAR archive for SNIX");
                     continue;
                 }
             };
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                warn!(
-                    job_id = %job_id,
-                    store_path = %store_path,
-                    stderr = %stderr,
-                    "nix nar dump-path failed for SNIX upload"
-                );
-                continue;
-            }
-
-            let nar_data = output.stdout;
             let nar_size = nar_data.len() as u64;
 
             // Ingest NAR into SNIX storage

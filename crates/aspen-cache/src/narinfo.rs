@@ -4,6 +4,9 @@
 //! in the Aspen distributed cache. The design follows the Nix narinfo format
 //! but stores data as JSON in the Raft KV store for easy querying.
 
+use nix_compat::narinfo;
+use nix_compat::nixbase32;
+use nix_compat::store_path::StorePathRef;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -154,13 +157,38 @@ impl CacheEntry {
 
     /// Compute the Nix narinfo fingerprint used for signing.
     ///
-    /// Format: `1;{store_path};{nar_hash};{nar_size};{sorted_refs}`
-    /// where refs are comma-separated, sorted store paths.
+    /// Uses `nix_compat::narinfo::fingerprint()` to produce the canonical format:
+    /// `1;{store_path};sha256:{nix32_nar_hash};{nar_size};{comma_separated_absolute_ref_paths}`
     pub fn fingerprint(&self) -> String {
-        let mut sorted_refs = self.references.clone();
-        sorted_refs.sort();
-        let refs_str = sorted_refs.join(",");
-        format!("1;{};{};{};{}", self.store_path, self.nar_hash, self.nar_size, refs_str)
+        // Parse our store path
+        let store_path = StorePathRef::from_bytes(
+            self.store_path.strip_prefix("/nix/store/").unwrap_or(&self.store_path).as_bytes(),
+        );
+
+        // Decode nar_hash from "sha256:<nix32>" to [u8; 32]
+        let nar_hash_bytes =
+            self.nar_hash.strip_prefix("sha256:").and_then(|h| nixbase32::decode_fixed::<32>(h.as_bytes()).ok());
+
+        // Parse references as store paths
+        let ref_paths: Vec<StorePathRef<'_>> = self
+            .references
+            .iter()
+            .filter_map(|r| {
+                let basename = r.strip_prefix("/nix/store/").unwrap_or(r);
+                StorePathRef::from_bytes(basename.as_bytes()).ok()
+            })
+            .collect();
+
+        // If we can use nix-compat's fingerprint function, do so
+        if let (Ok(sp), Some(hash)) = (store_path, nar_hash_bytes) {
+            narinfo::fingerprint(&sp, &hash, self.nar_size, ref_paths.iter())
+        } else {
+            // Fallback for entries with non-standard hashes (e.g., hex-encoded)
+            let mut sorted_refs = self.references.clone();
+            sorted_refs.sort();
+            let refs_str = sorted_refs.join(",");
+            format!("1;{};{};{};{}", self.store_path, self.nar_hash, self.nar_size, refs_str)
+        }
     }
 
     /// Render this cache entry as a Nix narinfo text document.
@@ -175,16 +203,16 @@ impl CacheEntry {
         lines.push(format!("StorePath: {}", self.store_path));
         lines.push(format!("URL: nar/{}.nar", self.blob_hash));
         lines.push("Compression: none".to_string());
+
+        // Use nix-compat nixbase32 for NarHash if possible
         lines.push(format!("NarHash: {}", self.nar_hash));
         lines.push(format!("NarSize: {}", self.nar_size));
 
-        // References: just the package name portion (after /nix/store/hash-)
-        // Nix expects basenames, not full store paths
+        // References: basenames (store path without /nix/store/ prefix)
         let ref_basenames: Vec<&str> = self.references.iter().filter_map(|r| r.strip_prefix("/nix/store/")).collect();
         lines.push(format!("References: {}", ref_basenames.join(" ")));
 
         if let Some(ref deriver) = self.deriver {
-            // Deriver is also a basename
             if let Some(basename) = deriver.strip_prefix("/nix/store/") {
                 lines.push(format!("Deriver: {basename}"));
             } else {
@@ -476,6 +504,40 @@ mod tests {
         for line in narinfo.trim().lines() {
             assert!(line.contains(": "), "narinfo line should be 'Key: Value', got: {line}");
         }
+    }
+
+    #[test]
+    fn test_narinfo_nix_compat_parseable() {
+        // Create a realistic entry with valid nix32 nar_hash and store path
+        let entry = CacheEntry::new(
+            "/nix/store/w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb-hello-2.12.1".to_string(),
+            "w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb".to_string(),
+            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2".to_string(),
+            226552,
+            "sha256:1b0ri7q2g18vi4ql05z4ni5g098drmi2w3sswgjyqqwdrbig0w08".to_string(),
+            1709000000,
+            1,
+        )
+        .with_references(vec!["/nix/store/7gx4kiv5m0i7d7qkixq2cwzbr10lvxwc-glibc-2.38-27".to_string()])
+        .unwrap()
+        .with_deriver(Some("/nix/store/dh3yb2m5p1s8dxaqzarq2kq8f1y7sz2m-hello-2.12.1.drv".to_string()))
+        .unwrap();
+
+        // Generate a real signature
+        let signing_key = crate::signing::CacheSigningKey::generate("test-cache").unwrap();
+        let fingerprint = entry.fingerprint();
+        let signature = signing_key.sign_fingerprint(&fingerprint);
+
+        let narinfo_str = entry.to_narinfo(Some(&signature));
+
+        // Parse with nix-compat to verify it's valid
+        let parsed =
+            nix_compat::narinfo::NarInfo::parse(&narinfo_str).expect("narinfo should be parseable by nix-compat");
+
+        assert_eq!(parsed.store_path.to_string(), "w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb-hello-2.12.1");
+        assert_eq!(parsed.nar_size, 226552);
+        assert_eq!(parsed.references.len(), 1);
+        assert!(!parsed.signatures.is_empty());
     }
 
     #[test]

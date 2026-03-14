@@ -1,8 +1,8 @@
 //! Nix binary cache narinfo signing.
 //!
-//! Implements Ed25519 signing of narinfo documents using the Nix fingerprint
-//! format. Keys are serialized in Nix's `cache-name:base64(key)` format,
-//! compatible with `nix-store --generate-binary-cache-key`.
+//! Thin wrappers around `nix_compat::narinfo::{SigningKey, VerifyingKey, parse_keypair}`
+//! for Ed25519 signing of narinfo documents. Keys are serialized in Nix's
+//! `cache-name:base64(key)` format, compatible with `nix-store --generate-binary-cache-key`.
 //!
 //! # Key Format
 //!
@@ -20,13 +20,9 @@ use std::sync::Arc;
 use aspen_core::KeyValueStore;
 use aspen_kv_types::ReadRequest;
 use aspen_kv_types::WriteRequest;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64;
+use data_encoding::BASE64;
 use ed25519_dalek::Signer;
-use ed25519_dalek::SigningKey;
-use ed25519_dalek::Verifier;
-use ed25519_dalek::VerifyingKey;
-use rand_core_06::OsRng;
+use nix_compat::narinfo;
 use snafu::Snafu;
 use tracing::info;
 
@@ -55,8 +51,8 @@ pub enum SigningError {
     CacheNameContainsColon,
 
     /// Invalid key format — expected `name:base64data`.
-    #[snafu(display("invalid key format: expected 'name:base64data'"))]
-    InvalidKeyFormat,
+    #[snafu(display("invalid key format: {message}"))]
+    InvalidKeyFormat { message: String },
 
     /// Base64 decoding failed.
     #[snafu(display("base64 decode error: {message}"))]
@@ -78,19 +74,22 @@ pub enum SigningError {
 pub type Result<T> = std::result::Result<T, SigningError>;
 
 /// A Nix cache signing keypair with its associated cache name.
+///
+/// Stores the raw `ed25519_dalek::SigningKey` for serialization, and constructs
+/// `nix_compat::narinfo::SigningKey` on-the-fly for signing operations.
 #[derive(Clone)]
 pub struct CacheSigningKey {
     /// The cache name (e.g., "aspen-cache").
     name: String,
     /// The Ed25519 signing key.
-    signing_key: SigningKey,
+    signing_key: ed25519_dalek::SigningKey,
 }
 
 impl CacheSigningKey {
     /// Generate a new random signing keypair.
     pub fn generate(name: &str) -> Result<Self> {
         validate_cache_name(name)?;
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = ed25519_dalek::SigningKey::generate(&mut rand_core_06::OsRng);
         Ok(Self {
             name: name.to_string(),
             signing_key,
@@ -100,9 +99,20 @@ impl CacheSigningKey {
     /// Parse a signing key from Nix format: `name:base64(secret_key_bytes)`.
     ///
     /// The secret key bytes are 64 bytes: 32 bytes secret scalar + 32 bytes public key.
+    /// Format validation follows nix-compat's `parse_keypair` logic.
     pub fn from_nix_format(key_str: &str) -> Result<Self> {
-        let (name, data) = split_nix_key(key_str)?;
-        let bytes = BASE64.decode(data).map_err(|e| SigningError::Base64Decode { message: e.to_string() })?;
+        let (name, data) = key_str.split_once(':').ok_or(SigningError::InvalidKeyFormat {
+            message: "expected 'name:base64data'".to_string(),
+        })?;
+
+        if name.is_empty() || data.is_empty() {
+            return Err(SigningError::InvalidKeyFormat {
+                message: "name and data must not be empty".to_string(),
+            });
+        }
+
+        let bytes =
+            BASE64.decode(data.as_bytes()).map_err(|e| SigningError::Base64Decode { message: e.to_string() })?;
 
         // Nix secret keys are 64 bytes: secret scalar (32) + public key (32)
         if bytes.len() != 64 {
@@ -117,7 +127,7 @@ impl CacheSigningKey {
             expected: 64,
         })?;
 
-        let signing_key = SigningKey::from_bytes(&secret_bytes);
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
 
         Ok(Self {
             name: name.to_string(),
@@ -143,7 +153,12 @@ impl CacheSigningKey {
     /// Returns `name:base64(ed25519_signature)`.
     pub fn sign_fingerprint(&self, fingerprint: &str) -> String {
         let signature = self.signing_key.sign(fingerprint.as_bytes());
-        format!("{}:{}", self.name, BASE64.encode(signature.to_bytes()))
+        format!("{}:{}", self.name, BASE64.encode(&signature.to_bytes()))
+    }
+
+    /// Get a nix-compat `SigningKey` for direct use with `NarInfo::add_signature`.
+    pub fn to_nix_compat_signing_key(&self) -> narinfo::SigningKey<ed25519_dalek::SigningKey> {
+        narinfo::SigningKey::new(self.name.clone(), self.signing_key.clone())
     }
 
     /// Get the cache name.
@@ -153,58 +168,33 @@ impl CacheSigningKey {
 }
 
 /// A Nix cache public key for verification.
+///
+/// Wraps `nix_compat::narinfo::VerifyingKey`.
 pub struct CacheVerifyingKey {
-    /// The cache name.
-    name: String,
-    /// The Ed25519 verifying key.
-    verifying_key: VerifyingKey,
+    inner: narinfo::VerifyingKey,
 }
 
 impl CacheVerifyingKey {
     /// Parse a public key from Nix format: `name:base64(public_key_bytes)`.
     pub fn from_nix_format(key_str: &str) -> Result<Self> {
-        let (name, data) = split_nix_key(key_str)?;
-        let bytes = BASE64.decode(data).map_err(|e| SigningError::Base64Decode { message: e.to_string() })?;
-
-        if bytes.len() != 32 {
-            return Err(SigningError::InvalidKeyLength {
-                got: bytes.len(),
-                expected: 32,
-            });
-        }
-
-        let key_bytes: [u8; 32] =
-            bytes.try_into().map_err(|_| SigningError::InvalidKeyLength { got: 32, expected: 32 })?;
-
-        let verifying_key = VerifyingKey::from_bytes(&key_bytes).map_err(|_| SigningError::VerificationFailed)?;
-
-        Ok(Self {
-            name: name.to_string(),
-            verifying_key,
-        })
+        let inner = narinfo::VerifyingKey::parse(key_str)
+            .map_err(|e| SigningError::InvalidKeyFormat { message: e.to_string() })?;
+        Ok(Self { inner })
     }
 
     /// Verify a signature against a fingerprint.
     ///
     /// The signature should be in Nix format: `name:base64(sig_bytes)`.
     pub fn verify_signature(&self, fingerprint: &str, signature_str: &str) -> Result<bool> {
-        let (sig_name, sig_data) = split_nix_key(signature_str)?;
+        let sig_ref = narinfo::SignatureRef::parse(signature_str)
+            .map_err(|e| SigningError::InvalidKeyFormat { message: e.to_string() })?;
 
         // Name must match
-        if sig_name != self.name {
+        if *sig_ref.name() != self.inner.name() {
             return Ok(false);
         }
 
-        let sig_bytes = BASE64.decode(sig_data).map_err(|e| SigningError::Base64Decode { message: e.to_string() })?;
-
-        if sig_bytes.len() != 64 {
-            return Ok(false);
-        }
-
-        let sig_array: [u8; 64] = sig_bytes.try_into().unwrap();
-        let signature = ed25519_dalek::Signature::from_bytes(&sig_array);
-
-        Ok(self.verifying_key.verify(fingerprint.as_bytes(), &signature).is_ok())
+        Ok(self.inner.verify(fingerprint, &sig_ref))
     }
 }
 
@@ -265,17 +255,6 @@ fn validate_cache_name(name: &str) -> Result<()> {
         return Err(SigningError::CacheNameContainsColon);
     }
     Ok(())
-}
-
-/// Split a Nix-format key string into (name, base64_data).
-fn split_nix_key(key_str: &str) -> Result<(&str, &str)> {
-    let colon_pos = key_str.find(':').ok_or(SigningError::InvalidKeyFormat)?;
-    let name = &key_str[..colon_pos];
-    let data = &key_str[colon_pos + 1..];
-    if name.is_empty() || data.is_empty() {
-        return Err(SigningError::InvalidKeyFormat);
-    }
-    Ok((name, data))
 }
 
 #[cfg(test)]
@@ -354,8 +333,9 @@ mod tests {
         // Nix secret keys are 64 bytes base64-encoded
         let key = CacheSigningKey::generate("test").unwrap();
         let secret_str = key.to_nix_secret_key();
-        let (_, data) = split_nix_key(&secret_str).unwrap();
-        let bytes = BASE64.decode(data).unwrap();
+        let colon_pos = secret_str.find(':').unwrap();
+        let data = &secret_str[colon_pos + 1..];
+        let bytes = BASE64.decode(data.as_bytes()).unwrap();
         assert_eq!(bytes.len(), 64);
     }
 
@@ -364,8 +344,9 @@ mod tests {
         // Nix public keys are 32 bytes base64-encoded
         let key = CacheSigningKey::generate("test").unwrap();
         let public_str = key.to_nix_public_key();
-        let (_, data) = split_nix_key(&public_str).unwrap();
-        let bytes = BASE64.decode(data).unwrap();
+        let colon_pos = public_str.find(':').unwrap();
+        let data = &public_str[colon_pos + 1..];
+        let bytes = BASE64.decode(data.as_bytes()).unwrap();
         assert_eq!(bytes.len(), 32);
     }
 }

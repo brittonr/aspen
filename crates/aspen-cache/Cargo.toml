@@ -28,13 +28,19 @@ tokio = { workspace = true, features = ["process"] }
 tracing = { workspace = true }
 
 # Encoding
-hex = "0.4"
+data-encoding = "2"
 
-# Narinfo signing
+# Nix format types (narinfo, nixbase32, store paths, signing, NAR writer)
+nix-compat = { workspace = true }
+
+# SHA-256 for NAR hashing
+sha2 = "0.10"
+
+# Narinfo signing (ed25519-dalek + rand used by CacheSigningKey::generate)
 ed25519-dalek = { workspace = true, features = ["rand_core"] }
 rand_core_06 = { package = "rand_core", version = "0.6", features = ["getrandom"] }
-base64 = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 aspen-testing = { workspace = true }
+tempfile = "3"

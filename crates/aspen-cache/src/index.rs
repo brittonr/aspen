@@ -58,6 +58,10 @@ impl<KV: KeyValueStore + ?Sized> KvCacheIndex<KV> {
     }
 
     /// Validate a store hash.
+    ///
+    /// Uses `nix_compat::store_path::StorePath` validation: the hash must be
+    /// exactly 32 nixbase32 characters from the nix alphabet
+    /// (`0123456789abcdfghijklmnpqrsvwxyz`).
     fn validate_store_hash(store_hash: &str) -> Result<()> {
         if store_hash.len() < MIN_STORE_HASH_LENGTH {
             return Err(CacheError::InvalidStoreHash {
@@ -73,12 +77,12 @@ impl<KV: KeyValueStore + ?Sized> KvCacheIndex<KV> {
             });
         }
 
-        // Nix store hashes are base32 (lowercase letters + digits, no 'e', 'o', 't', 'u')
-        // or base16 (hex). We accept both.
-        if !store_hash.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
+        // Validate using nix-compat's nixbase32 decode — this rejects
+        // characters outside the nix alphabet (e, o, t, u, uppercase)
+        if nix_compat::nixbase32::decode(store_hash.as_bytes()).is_err() {
             return Err(CacheError::InvalidStoreHash {
                 hash: store_hash.to_string(),
-                reason: "must contain only lowercase letters and digits".to_string(),
+                reason: "must contain only valid nixbase32 characters (0-9, a-z minus e,o,t,u)".to_string(),
             });
         }
 
@@ -247,49 +251,31 @@ impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {
     }
 }
 
-/// Parse a Nix store path and extract the hash component.
+/// Parse a Nix store path and extract the hash and name components.
+///
+/// Uses `nix_compat::store_path::StorePath::from_absolute_path()` for validation,
+/// which checks hash characters (exactly 32 nixbase32 chars) and name constraints.
 ///
 /// # Examples
 ///
 /// ```
 /// use aspen_cache::parse_store_path;
 ///
-/// let (hash, name) = parse_store_path("/nix/store/abc123def456-hello-2.10").unwrap();
-/// assert_eq!(hash, "abc123def456");
-/// assert_eq!(name, "hello-2.10");
+/// let (hash, name) = parse_store_path("/nix/store/w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb-hello-2.12.1").unwrap();
+/// assert_eq!(hash, "w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb");
+/// assert_eq!(name, "hello-2.12.1");
 /// ```
 pub fn parse_store_path(path: &str) -> Result<(String, String)> {
-    const NIX_STORE_PREFIX: &str = "/nix/store/";
+    use nix_compat::nixbase32;
+    use nix_compat::store_path::StorePath;
 
-    if !path.starts_with(NIX_STORE_PREFIX) {
-        return Err(CacheError::InvalidStorePath {
-            reason: format!("path must start with '{NIX_STORE_PREFIX}'"),
-        });
-    }
+    let store_path: StorePath<&str> = StorePath::from_absolute_path(path.as_bytes())
+        .map_err(|e| CacheError::InvalidStorePath { reason: e.to_string() })?;
 
-    let remainder = &path[NIX_STORE_PREFIX.len()..];
-    let Some(dash_pos) = remainder.find('-') else {
-        return Err(CacheError::InvalidStorePath {
-            reason: "path must contain hash-name format".to_string(),
-        });
-    };
+    let hash_str = nixbase32::encode(store_path.digest());
+    let name = store_path.name().to_string();
 
-    let hash = &remainder[..dash_pos];
-    let name = &remainder[dash_pos + 1..];
-
-    if hash.is_empty() {
-        return Err(CacheError::InvalidStorePath {
-            reason: "hash component is empty".to_string(),
-        });
-    }
-
-    if name.is_empty() {
-        return Err(CacheError::InvalidStorePath {
-            reason: "name component is empty".to_string(),
-        });
-    }
-
-    Ok((hash.to_string(), name.to_string()))
+    Ok((hash_str, name))
 }
 
 #[cfg(test)]
@@ -298,29 +284,40 @@ mod tests {
 
     #[test]
     fn test_parse_store_path() {
-        let (hash, name) = parse_store_path("/nix/store/abc123-hello").unwrap();
-        assert_eq!(hash, "abc123");
-        assert_eq!(name, "hello");
+        // Valid nix store path with proper 32-char nixbase32 hash
+        let (hash, name) = parse_store_path("/nix/store/w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb-hello-2.12.1").unwrap();
+        assert_eq!(hash, "w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb");
+        assert_eq!(name, "hello-2.12.1");
 
-        let (hash, name) = parse_store_path("/nix/store/abc123def456ghij-hello-2.10").unwrap();
-        assert_eq!(hash, "abc123def456ghij");
-        assert_eq!(name, "hello-2.10");
+        let (hash, name) = parse_store_path("/nix/store/7gx4kiv5m0i7d7qkixq2cwzbr10lvxwc-glibc-2.38-27").unwrap();
+        assert_eq!(hash, "7gx4kiv5m0i7d7qkixq2cwzbr10lvxwc");
+        assert_eq!(name, "glibc-2.38-27");
     }
 
     #[test]
     fn test_parse_store_path_invalid() {
+        // Not a /nix/store path
         assert!(parse_store_path("/usr/bin/hello").is_err());
+        // No dash separator (invalid store path format)
         assert!(parse_store_path("/nix/store/nohash").is_err());
-        assert!(parse_store_path("/nix/store/-noname").is_err());
-        assert!(parse_store_path("/nix/store/hash-").is_err());
+        // Hash too short
+        assert!(parse_store_path("/nix/store/abc-hello").is_err());
+    }
+
+    #[test]
+    fn test_parse_store_path_rejects_invalid_hash_chars() {
+        // Uppercase chars are invalid in nix store hashes
+        assert!(parse_store_path("/nix/store/ABCDEFGHIJKLMNOPQRSTUVWXYZ012345-hello").is_err());
+        // 'e', 'o', 't', 'u' are not in the nixbase32 alphabet
+        assert!(parse_store_path("/nix/store/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-hello").is_err());
     }
 
     #[test]
     fn test_validate_store_hash() {
-        // Valid hashes
+        // Valid nixbase32 hash (32 chars from nix alphabet: 0-9, a-z minus e,o,t,u)
         assert!(
             KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash(
-                "abcdefghijklmnopqrstuvwxyz012345"
+                "w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb"
             )
             .is_ok()
         );
@@ -332,6 +329,14 @@ mod tests {
         assert!(
             KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash(
                 "ABCDEF12345678901234567890123456"
+            )
+            .is_err()
+        );
+
+        // Contains invalid nixbase32 char 'e'
+        assert!(
+            KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash(
+                "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
             )
             .is_err()
         );

@@ -58,8 +58,8 @@
 
 pub mod error;
 pub mod index;
+pub mod nar;
 pub mod narinfo;
-pub mod nix32;
 pub mod signing;
 
 pub use error::CacheError;
@@ -73,6 +73,8 @@ pub use narinfo::CacheEntry;
 pub use narinfo::CacheStats;
 pub use narinfo::MAX_DERIVER_LENGTH;
 pub use narinfo::MAX_REFERENCES;
+/// Re-export of `nix_compat::nixbase32` — replaces the hand-rolled `nix32` module.
+pub use nix_compat::nixbase32;
 pub use signing::CACHE_NAME_KV;
 pub use signing::CACHE_PUBLIC_KEY_KV;
 pub use signing::CACHE_SIGNING_KEY_KV;

@@ -66,8 +66,8 @@ impl NixBuildWorker {
 
     /// Upload store paths to the blob store as NAR archives.
     ///
-    /// Uses `nix nar dump-path` to create a NAR archive of each store path,
-    /// then uploads the archive to the blob store. If a cache index is configured,
+    /// Uses nix-compat NAR writer (via aspen_cache::nar) to create a NAR archive of each store
+    /// path, then uploads the archive to the blob store. If a cache index is configured,
     /// also registers the store path in the distributed Nix binary cache.
     pub(crate) async fn upload_store_paths(
         &self,
@@ -102,40 +102,18 @@ impl NixBuildWorker {
                 continue;
             }
 
-            // Use nix nar dump-path to create a NAR archive
-            let output =
-                match Command::new(&self.config.nix_binary).args(["nar", "dump-path", store_path]).output().await {
-                    Ok(output) => output,
-                    Err(e) => {
-                        warn!(store_path = %store_path, error = %e, "Failed to create NAR archive");
-                        continue;
-                    }
-                };
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                warn!(
-                    store_path = %store_path,
-                    stderr = %stderr,
-                    "nix nar dump-path failed"
-                );
-                continue;
-            }
-
-            let nar_data = output.stdout;
-            let nar_size = nar_data.len() as u64;
-
-            // Compute SHA256 hash of NAR in nix32 format (Nix's native base32).
-            // Nix narinfo fingerprints and signature verification use nix32,
-            // not hex. Using hex here would cause signature mismatches.
-            use sha2::Digest;
-            use sha2::Sha256;
-            let nar_hash = {
-                let mut hasher = Sha256::new();
-                hasher.update(&nar_data);
-                let hash = hasher.finalize();
-                format!("sha256:{}", aspen_cache::nix32::encode(&hash))
+            // Create NAR archive in-process using nix-compat writer.
+            // SHA-256 is computed in the same write pass via HashingWriter.
+            let (nar_data, nar_sha256) = match aspen_cache::nar::dump_path_nar_async(store_path.into()).await {
+                Ok(result) => result,
+                Err(e) => {
+                    warn!(store_path = %store_path, error = %e, "Failed to create NAR archive");
+                    continue;
+                }
             };
+
+            let nar_size = nar_data.len() as u64;
+            let nar_hash = format!("sha256:{}", aspen_cache::nixbase32::encode(&nar_sha256));
 
             // Upload to blob store
             let blob_hash = match blob_store.add_bytes(&nar_data).await {
