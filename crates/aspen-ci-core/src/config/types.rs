@@ -169,6 +169,14 @@ pub struct JobConfig {
     /// Defaults to `bin/aspen-node`. Set to `bin/cowsay` for non-aspen deploys.
     #[serde(default)]
     pub expected_binary: Option<String>,
+
+    /// Whether to track deployment lifecycle state in Raft KV.
+    /// When `true`, the deploy executor writes metadata, per-node status,
+    /// and rollback points under `_deploy:state:{deploy_id}:`.
+    /// When `false`, only CI job logs are persisted (stateless push deploy).
+    /// Defaults to `true`.
+    #[serde(default)]
+    pub stateful: Option<bool>,
 }
 
 fn default_job_timeout() -> u64 {

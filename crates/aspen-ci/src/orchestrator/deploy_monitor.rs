@@ -61,6 +61,9 @@ pub struct DeployJobInfo {
     pub max_concurrent: Option<u32>,
     /// Binary to validate inside a Nix store path.
     pub expected_binary: Option<String>,
+    /// Whether to track deployment lifecycle state in Raft KV.
+    /// `None` defaults to `true` (stateful) for backwards compatibility.
+    pub stateful: Option<bool>,
 }
 
 // ============================================================================
@@ -102,6 +105,7 @@ pub fn extract_deploy_stages_for_ref(config: &PipelineConfig, ref_name: Option<&
                     health_timeout_secs: j.health_check_timeout_secs,
                     max_concurrent: j.max_concurrent,
                     expected_binary: j.expected_binary.clone(),
+                    stateful: j.stateful,
                 })
                 .collect(),
         })
@@ -250,6 +254,7 @@ async fn run_all_deploy_stages<S: KeyValueStore + ?Sized + 'static>(
                 health_timeout_secs: job.health_timeout_secs,
                 max_concurrent: job.max_concurrent,
                 expected_binary: job.expected_binary.as_deref(),
+                stateful: job.stateful,
                 pipeline_run: &pipeline_run,
                 dispatcher,
             };
@@ -550,6 +555,7 @@ mod tests {
             health_check_timeout_secs: None,
             max_concurrent: None,
             expected_binary: None,
+            stateful: None,
         }
     }
 }

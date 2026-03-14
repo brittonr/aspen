@@ -14,11 +14,12 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
 /// Request from host to execute a command in the guest VM.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ExecutionRequest {
     /// Unique job ID for correlation.
     pub id: String,
@@ -42,7 +43,7 @@ pub struct ExecutionRequest {
 }
 
 /// Final result of command execution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ExecutionResult {
     /// Job ID (echoed from request).
     pub id: String,
@@ -67,7 +68,7 @@ pub struct ExecutionResult {
 ///
 /// The agent sends these incrementally as output is produced,
 /// allowing the host to stream logs to the CI system in real-time.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", content = "data")]
 pub enum LogMessage {
     /// Chunk of stdout data.
@@ -84,7 +85,7 @@ pub enum LogMessage {
 }
 
 /// Control messages from host to agent.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type")]
 pub enum HostMessage {
     /// Execute a command.
@@ -103,7 +104,7 @@ pub enum HostMessage {
 /// Response messages from agent to host.
 ///
 /// Flat variants avoid nested tagged enum issues with serde.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type")]
 pub enum AgentMessage {
     /// Stdout output from execution.
@@ -396,5 +397,47 @@ mod tests {
             LogMessage::Stderr(data) => assert_eq!(data, "error output"),
             _ => panic!("expected Stderr"),
         }
+    }
+
+    /// Generate Nickel contracts for the CI agent protocol types.
+    fn generate_ci_agent_schema_ncl() -> String {
+        let host_schema = schemars::schema_for!(HostMessage);
+        let agent_schema = schemars::schema_for!(AgentMessage);
+        let exec_req_schema = schemars::schema_for!(ExecutionRequest);
+        let exec_result_schema = schemars::schema_for!(ExecutionResult);
+        let log_schema = schemars::schema_for!(LogMessage);
+
+        crate::schema_gen::schemas_to_nickel("CI agent protocol contracts", &[
+            ("HostMessage", &host_schema),
+            ("AgentMessage", &agent_schema),
+            ("ExecutionRequest", &exec_req_schema),
+            ("ExecutionResult", &exec_result_schema),
+            ("LogMessage", &log_schema),
+        ])
+    }
+
+    #[test]
+    fn test_ci_agent_protocol_schema_snapshot() {
+        let generated = generate_ci_agent_schema_ncl();
+
+        let snapshot_path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schemas/ci-agent-protocol.ncl");
+
+        if std::env::var("UPDATE_SNAPSHOTS").is_ok() {
+            std::fs::write(&snapshot_path, &generated).unwrap();
+            return;
+        }
+
+        if !snapshot_path.exists() {
+            // First run: create the snapshot.
+            std::fs::write(&snapshot_path, &generated).unwrap();
+            return;
+        }
+
+        let existing = std::fs::read_to_string(&snapshot_path).unwrap();
+        assert_eq!(
+            existing, generated,
+            "CI agent protocol schema has drifted. Run with UPDATE_SNAPSHOTS=1 to regenerate."
+        );
     }
 }

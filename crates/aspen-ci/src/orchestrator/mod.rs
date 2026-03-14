@@ -11,6 +11,7 @@
 
 pub mod deploy_executor;
 pub mod deploy_monitor;
+pub mod nix_build_supervisor;
 mod pipeline;
 mod recovery;
 
@@ -28,6 +29,10 @@ pub use deploy_monitor::DeployStageInfo;
 pub use deploy_monitor::extract_deploy_stages;
 pub use deploy_monitor::extract_deploy_stages_for_ref;
 pub use deploy_monitor::spawn_deploy_monitor;
+pub use nix_build_supervisor::BuildLog;
+pub use nix_build_supervisor::BuildRequest;
+pub use nix_build_supervisor::BuildResult;
+pub use nix_build_supervisor::NixBuildSupervisor;
 pub use pipeline::PipelineContext;
 pub use pipeline::PipelineOrchestrator;
 pub use pipeline::PipelineOrchestratorConfig;

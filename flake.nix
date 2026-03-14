@@ -17,6 +17,11 @@
 
     flake-utils.url = "github:numtide/flake-utils";
 
+    flake-parts = {
+      url = "github:hercules-ci/flake-parts";
+      inputs.nixpkgs-lib.follows = "nixpkgs";
+    };
+
     advisory-db = {
       url = "github:rustsec/advisory-db";
       flake = false;
@@ -95,11 +100,12 @@
     max-free = 10737418240; # 10GB - stop GC when this much free
   };
 
-  outputs = {
+  outputs = inputs @ {
     self,
     nixpkgs,
     crane,
     flake-utils,
+    flake-parts,
     advisory-db,
     rust-overlay,
     snix-src,
@@ -108,8 +114,53 @@
     unit2nix,
     ...
   }:
-    flake-utils.lib.eachDefaultSystem (
-      system: let
+    flake-parts.lib.mkFlake {inherit inputs;} {
+      systems = flake-utils.lib.defaultSystems;
+
+      imports = [
+        ./nix/flake-modules/dev.nix
+        ./nix/flake-modules/rust.nix
+        ./nix/flake-modules/checks.nix
+        ./nix/flake-modules/tests.nix
+        ./nix/flake-modules/apps.nix
+        ./nix/flake-modules/vms.nix
+        ./nix/flake-modules/verus.nix
+        ./nix/flake-modules/dogfood.nix
+      ];
+
+      # System-independent outputs
+      flake = {
+        # NixOS modules for Aspen services
+        nixosModules = {
+          aspen-node = import ./nix/modules/aspen-node.nix;
+          default = import ./nix/modules/aspen-node.nix;
+        };
+
+        # Library functions for building Aspen infrastructure
+        lib = let
+          defaultSystem = "x86_64-linux";
+          pkgs = import nixpkgs {system = defaultSystem;};
+        in {
+          mkDogfoodVm = {
+            nodeId,
+            cookie ? "dogfood-vm",
+            aspenPackage ? null,
+          }:
+            nixpkgs.lib.nixosSystem {
+              system = defaultSystem;
+              modules = [
+                microvm.nixosModules.microvm
+                ./nix/modules/aspen-node.nix
+                (import ./nix/vms/dogfood-node.nix {
+                  inherit (pkgs) lib;
+                  inherit nodeId cookie aspenPackage;
+                })
+              ];
+            };
+        };
+      };
+
+      perSystem = {system, ...}: let
         pname = "aspen";
         lib = nixpkgs.lib;
         pkgs = import nixpkgs {
@@ -4118,49 +4169,6 @@
         // {
           # Fuzzing development shell with nightly Rust
           # Usage: nix develop .#fuzz
-          devShells.fuzz = let
-            rustNightly = pkgs.rust-bin.nightly.latest.default.override {
-              extensions = ["rust-src" "llvm-tools-preview"];
-            };
-          in
-            pkgs.mkShell {
-              buildInputs = with pkgs; [
-                rustNightly
-                cargo-fuzz
-                llvmPackages_latest.llvm
-                llvmPackages_latest.libclang
-                pkg-config
-                openssl.dev
-              ];
-
-              LIBCLANG_PATH = "${pkgs.llvmPackages_latest.libclang.lib}/lib";
-              LLVM_COV = "${pkgs.llvmPackages_latest.llvm}/bin/llvm-cov";
-              LLVM_PROFDATA = "${pkgs.llvmPackages_latest.llvm}/bin/llvm-profdata";
-
-              shellHook = ''
-                echo "Fuzzing development environment ready!"
-                echo ""
-                echo "Nix apps (from project root):"
-                echo "  nix run .#fuzz           # Parallel fuzzing (1hr/target)"
-                echo "  nix run .#fuzz-quick     # Quick smoke test (5min/target)"
-                echo "  nix run .#fuzz-overnight # Overnight run (8hr, 4 parallel targets)"
-                echo "  nix run .#fuzz-intensive # Full campaign (6hr/target, sequential)"
-                echo "  nix run .#fuzz-coverage  # Generate coverage report"
-                echo "  nix run .#fuzz-corpus    # Generate seed corpus"
-                echo ""
-                echo "Manual commands (in this shell):"
-                echo "  cargo fuzz list"
-                echo "  cargo fuzz run fuzz_raft_rpc --sanitizer none -- -max_total_time=60"
-                echo "  cargo fuzz coverage fuzz_raft_rpc"
-                echo ""
-                echo "Outputs saved to:"
-                echo "  fuzz/corpus/          # Coverage-increasing inputs"
-                echo "  fuzz/artifacts/       # Crash-triggering inputs"
-                echo "  fuzz/dictionaries/    # Auto-generated dictionaries"
-                echo "  fuzz/coverage/        # Coverage reports"
-              '';
-            };
-
           # Verus formal verification development shell
           devShells.verus = verusDevShell;
 
@@ -4301,46 +4309,6 @@
               fi
             '';
           };
-        }
-    )
-    // {
-      # System-independent outputs
-
-      # NixOS modules for Aspen services
-      nixosModules = {
-        # Aspen node service module
-        # Usage: services.aspen.node = { enable = true; nodeId = 1; cookie = "..."; package = ...; };
-        aspen-node = import ./nix/modules/aspen-node.nix;
-
-        # Default module includes all Aspen NixOS modules
-        default = import ./nix/modules/aspen-node.nix;
-      };
-
-      # Library functions for building Aspen infrastructure
-      lib = let
-        # Use x86_64-linux as the default system for VM builds
-        defaultSystem = "x86_64-linux";
-        pkgs = import nixpkgs {system = defaultSystem;};
-      in {
-        # Build a dogfood VM for a specific node ID
-        # Returns a NixOS system with microvm configuration
-        # The runner is at: result.config.microvm.runner.<hypervisor>
-        mkDogfoodVm = {
-          nodeId,
-          cookie ? "dogfood-vm",
-          aspenPackage ? null,
-        }:
-          nixpkgs.lib.nixosSystem {
-            system = defaultSystem;
-            modules = [
-              microvm.nixosModules.microvm
-              ./nix/modules/aspen-node.nix
-              (import ./nix/vms/dogfood-node.nix {
-                inherit (pkgs) lib;
-                inherit nodeId cookie aspenPackage;
-              })
-            ];
-          };
-      };
-    };
+        };
+    }; # end of mkFlake
 }

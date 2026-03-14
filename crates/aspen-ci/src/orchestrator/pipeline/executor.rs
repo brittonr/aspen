@@ -436,6 +436,7 @@ mod tests {
             health_check_timeout_secs: None,
             max_concurrent: None,
             expected_binary: None,
+            stateful: None,
         }
     }
 
@@ -565,6 +566,7 @@ mod tests {
                         health_check_timeout_secs: None,
                         max_concurrent: None,
                         expected_binary: None,
+                        stateful: None,
                     }],
                     parallel: true,
                     depends_on: vec![],
@@ -597,6 +599,7 @@ mod tests {
                         health_check_timeout_secs: None,
                         max_concurrent: None,
                         expected_binary: None,
+                        stateful: None,
                     }],
                     parallel: true,
                     depends_on: vec!["build".to_string()],
@@ -665,6 +668,7 @@ mod deploy_ref_tests {
             health_check_timeout_secs: None,
             max_concurrent: None,
             expected_binary: None,
+            stateful: None,
         }
     }
 

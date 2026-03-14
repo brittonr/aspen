@@ -582,6 +582,7 @@ fn test_job(name: &str, command: &str) -> JobConfig {
         health_check_timeout_secs: None,
         max_concurrent: None,
         expected_binary: None,
+        stateful: None,
     }
 }
 

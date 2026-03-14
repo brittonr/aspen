@@ -64,6 +64,8 @@ pub mod config;
 pub mod error;
 pub mod log_writer;
 pub mod orchestrator;
+#[cfg(test)]
+mod schema_gen;
 pub mod trigger;
 /// CI build workers.
 pub mod workers;

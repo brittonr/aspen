@@ -22,6 +22,8 @@ use std::time::Duration;
 
 use aspen_core::KeyValueStore;
 use aspen_core::ReadRequest;
+use aspen_core::WriteRequest;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
@@ -63,8 +65,13 @@ impl DeployArtifact {
     }
 }
 
+/// Returns `true`; used as serde default for `DeployRequest::stateful`.
+fn default_true() -> bool {
+    true
+}
+
 /// Request to initiate a deployment.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct DeployRequest {
     /// Artifact reference (store path or blob hash).
     pub artifact: String,
@@ -77,10 +84,17 @@ pub struct DeployRequest {
     /// Binary to validate inside a Nix store path.
     /// `None` → default `bin/aspen-node`.
     pub expected_binary: Option<String>,
+    /// Whether to track deployment lifecycle state in Raft KV.
+    ///
+    /// When `true`, the executor writes state under `_deploy:state:{deploy_id}:`
+    /// including metadata, per-node status, and rollback points.
+    /// When `false`, only CI job logs are persisted (stateless push deploy).
+    #[serde(default = "default_true")]
+    pub stateful: bool,
 }
 
 /// Result of initiating a deployment.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct DeployInitResult {
     /// Whether the deployment was accepted.
     pub is_accepted: bool,
@@ -91,7 +105,7 @@ pub struct DeployInitResult {
 }
 
 /// Per-node deployment status entry.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct DeployNodeStatus {
     /// Node ID.
     pub node_id: u64,
@@ -102,7 +116,7 @@ pub struct DeployNodeStatus {
 }
 
 /// Status of an in-progress deployment.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct DeployStatusResult {
     /// Whether a deployment was found.
     pub is_found: bool,
@@ -148,6 +162,9 @@ pub struct DeployJobParams<'a> {
     pub max_concurrent: Option<u32>,
     /// Binary to validate inside a Nix store path (e.g., "bin/cowsay").
     pub expected_binary: Option<&'a str>,
+    /// Whether to track deployment lifecycle state in Raft KV.
+    /// Defaults to `true` for backwards compatibility.
+    pub stateful: Option<bool>,
     /// The pipeline run containing stage/job metadata.
     pub pipeline_run: &'a super::pipeline::PipelineRun,
     /// Dispatcher for deploy RPCs.
@@ -175,6 +192,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DeployExecutor<S> {
             health_timeout_secs,
             max_concurrent,
             expected_binary,
+            stateful,
             pipeline_run,
             dispatcher,
         } = params;
@@ -195,13 +213,21 @@ impl<S: KeyValueStore + ?Sized + 'static> DeployExecutor<S> {
         write_deploy_log(&mut log_writer, &format!("[deploy] Starting rolling deployment: {artifact_str}")).await?;
 
         // Step 2: Initiate deployment
+        let is_stateful = stateful.unwrap_or(true);
+
         let request = DeployRequest {
             artifact: artifact_str.clone(),
             strategy: strategy.unwrap_or(DEFAULT_STRATEGY).to_string(),
             max_concurrent: max_concurrent.unwrap_or(DEFAULT_MAX_CONCURRENT),
             health_timeout_secs: health_timeout_secs.unwrap_or(DEPLOY_HEALTH_TIMEOUT_SECS),
             expected_binary: expected_binary.map(|s| s.to_string()),
+            stateful: is_stateful,
         };
+
+        // Capture strategy for stateful metadata (before request is moved)
+        let deploy_strategy = request.strategy.clone();
+        let deploy_max_concurrent = request.max_concurrent;
+        let deploy_health_timeout = request.health_timeout_secs;
 
         let init_result = dispatcher.deploy(request).await.map_err(|e| CiError::ExecutionFailed {
             reason: format!("ClusterDeploy dispatch failed: {e}"),
@@ -218,6 +244,21 @@ impl<S: KeyValueStore + ?Sized + 'static> DeployExecutor<S> {
 
         let deploy_id = init_result.deploy_id.unwrap_or_default();
         info!(job = job_name, deploy_id = %deploy_id, "Deployment initiated");
+
+        // Write deployment metadata to KV (stateful only)
+        if is_stateful {
+            let metadata = serde_json::json!({
+                "artifact": &artifact_str,
+                "strategy": &deploy_strategy,
+                "max_concurrent": deploy_max_concurrent,
+                "health_timeout_secs": deploy_health_timeout,
+                "started_at": chrono::Utc::now().to_rfc3339(),
+                "run_id": run_id,
+                "job_name": job_name,
+            });
+            let metadata_key = format!("_deploy:state:{deploy_id}:metadata");
+            self.kv_store.write(WriteRequest::set(metadata_key, metadata.to_string())).await.ok();
+        }
 
         // Step 3: Poll status until completion or failure
         let poll_interval = Duration::from_secs(DEPLOY_STATUS_POLL_INTERVAL_SECS);
@@ -253,6 +294,17 @@ impl<S: KeyValueStore + ?Sized + 'static> DeployExecutor<S> {
                     };
                     log_writer.write_line(&line, "stdout").await.ok();
                     prev_snapshot.statuses.insert(node.node_id, node.status.clone());
+
+                    // Write per-node state to KV (stateful only)
+                    if is_stateful {
+                        let node_key = format!("_deploy:state:{deploy_id}:node:{}", node.node_id);
+                        let node_state = serde_json::json!({
+                            "status": &node.status,
+                            "error": &node.error,
+                            "updated_at": chrono::Utc::now().to_rfc3339(),
+                        });
+                        self.kv_store.write(WriteRequest::set(node_key, node_state.to_string())).await.ok();
+                    }
                 }
             }
 
@@ -264,6 +316,18 @@ impl<S: KeyValueStore + ?Sized + 'static> DeployExecutor<S> {
                     write_deploy_log(&mut log_writer, &format!("[deploy] Deployment completed ({elapsed_secs}s)"))
                         .await
                         .ok();
+
+                    // Record rollback point (stateful only)
+                    if is_stateful {
+                        let rollback = serde_json::json!({
+                            "artifact": &artifact_str,
+                            "completed_at": chrono::Utc::now().to_rfc3339(),
+                            "elapsed_secs": elapsed_secs,
+                        });
+                        let rollback_key = format!("_deploy:state:{deploy_id}:rollback");
+                        self.kv_store.write(WriteRequest::set(rollback_key, rollback.to_string())).await.ok();
+                    }
+
                     return Ok(DeployJobResult::Success {
                         deploy_id,
                         artifact: artifact_str,
@@ -698,5 +762,82 @@ mod tests {
         // All paths are secondary — fall back to first
         let paths = vec!["/nix/store/aaa-pkg-1.0-man", "/nix/store/bbb-pkg-1.0-doc"];
         assert_eq!(select_primary_output(&paths), Some("/nix/store/aaa-pkg-1.0-man"));
+    }
+
+    #[test]
+    fn test_deploy_request_stateful_default_true() {
+        // When `stateful` is not provided in JSON, it defaults to true
+        let json = r#"{
+            "artifact": "/nix/store/abc",
+            "strategy": "rolling",
+            "max_concurrent": 1,
+            "health_timeout_secs": 120
+        }"#;
+        let request: DeployRequest = serde_json::from_str(json).unwrap();
+        assert!(request.stateful, "stateful should default to true when omitted");
+    }
+
+    #[test]
+    fn test_deploy_request_stateful_explicit_false() {
+        let json = r#"{
+            "artifact": "/nix/store/abc",
+            "strategy": "rolling",
+            "max_concurrent": 1,
+            "health_timeout_secs": 120,
+            "stateful": false
+        }"#;
+        let request: DeployRequest = serde_json::from_str(json).unwrap();
+        assert!(!request.stateful, "stateful should be false when explicitly set");
+    }
+
+    #[test]
+    fn test_deploy_request_stateful_explicit_true() {
+        let json = r#"{
+            "artifact": "/nix/store/abc",
+            "strategy": "rolling",
+            "max_concurrent": 1,
+            "health_timeout_secs": 120,
+            "stateful": true
+        }"#;
+        let request: DeployRequest = serde_json::from_str(json).unwrap();
+        assert!(request.stateful, "stateful should be true when explicitly set");
+    }
+
+    /// Generate Nickel contracts for the deploy protocol types.
+    fn generate_deploy_schema_ncl() -> String {
+        let request_schema = schemars::schema_for!(DeployRequest);
+        let init_result_schema = schemars::schema_for!(DeployInitResult);
+        let status_result_schema = schemars::schema_for!(DeployStatusResult);
+        let node_status_schema = schemars::schema_for!(DeployNodeStatus);
+
+        crate::schema_gen::schemas_to_nickel("Deploy protocol contracts", &[
+            ("DeployRequest", &request_schema),
+            ("DeployInitResult", &init_result_schema),
+            ("DeployStatusResult", &status_result_schema),
+            ("DeployNodeStatus", &node_status_schema),
+        ])
+    }
+
+    #[test]
+    fn test_deploy_protocol_schema_snapshot() {
+        let generated = generate_deploy_schema_ncl();
+
+        let snapshot_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schemas/deploy-protocol.ncl");
+
+        if std::env::var("UPDATE_SNAPSHOTS").is_ok() {
+            std::fs::write(&snapshot_path, &generated).unwrap();
+            return;
+        }
+
+        if !snapshot_path.exists() {
+            std::fs::write(&snapshot_path, &generated).unwrap();
+            return;
+        }
+
+        let existing = std::fs::read_to_string(&snapshot_path).unwrap();
+        assert_eq!(
+            existing, generated,
+            "Deploy protocol schema has drifted. Run with UPDATE_SNAPSHOTS=1 to regenerate."
+        );
     }
 }
