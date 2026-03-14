@@ -2,6 +2,9 @@
 
 ## Corrections
 
+| 2026-03-14 | self | `aspen-testing-patchbay` crate added patchbay git dep but no stub/rewrite in flake.nix — `nix flake check` broken on eval (sandbox can't fetch git). `nix flake check` also pre-broken for `packages.*` due to snix.dev SSL cert failure in unit2nix IFD step. | Added patchbay stubs to fullSrc, ciSrc, u2nTestSrc. Stripped patchbay workspace member from u2nSrc. Added crate-hashes.json entry. snix.dev issue is separate/pre-existing. |
+| 2026-03-14 | self | `adopt-nixops4-patterns` added `expected_binary` and `stateful` fields to `JobConfig` but missed 5 test struct literals across 3 files (aspen-ci-core, aspen-ci-handler, madsim test) — workspace wouldn't compile | Always search ALL `StructName {` occurrences across the workspace when adding fields to widely-used structs. `rg "JobConfig \{" --glob '*.rs'` finds them all. |
+
 | 2026-03-12 | self | `substituter_args()` used `--trusted-public-keys` (replaces defaults) instead of `--extra-trusted-public-keys` (appends). Nix rejected cache.nixos.org substitutes because only the aspen-cache key was trusted. Shell executor and H3 proxy path already handled this by including the cache.nixos.org key. | Changed to `--extra-trusted-public-keys` to match `--extra-substituters`. Both use the `extra-` prefix to append rather than replace defaults. |
 | 2026-03-12 | self | NAR hash stored in hex format (`sha256:dc810f...`) but nix narinfo uses nix32 base32 (`sha256:14srlg7x...`). Fingerprint signed with hex hash didn't match what nix computes for verification → all narinfo signatures rejected | Added `aspen_cache::nix32` module (ported from nix source `printHash32`). NAR hash now computed in nix32 at upload time. Verified output matches cache.nixos.org for cowsay. |
 
