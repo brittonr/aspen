@@ -111,7 +111,8 @@ in
 
       with subtest("worker stats in KV contain PSI fields"):
           # Worker stats key: __worker_stats:<worker_id>
-          out = cli("kv scan --prefix '__worker_stats:' --limit 10", check=False)
+          # Note: 'prefix' is a positional argument in the CLI, not --prefix
+          out = cli("kv scan '__worker_stats:' --limit 10", check=False)
           node1.log(f"KV scan raw: {out}")
 
           # Handle both dict and string responses
@@ -155,7 +156,8 @@ in
       # ── job dispatches to healthy worker ─────────────────────────
 
       with subtest("job completes on healthy worker"):
-          out = cli("job submit test-job --payload 'psi-health-check'", check=False)
+          payload = '{"test":"psi-health-check"}'
+          out = cli(f"job submit test-job '{payload}'", check=False)
           assert isinstance(out, dict) and out.get("is_success"), f"submit failed: {out}"
           job_id = out["job_id"]
           node1.log(f"Submitted job: {job_id}")

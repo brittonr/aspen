@@ -69,6 +69,9 @@ pub struct WorkerService {
     /// Job manager for the cluster.
     pub(super) job_manager: Arc<JobManager<dyn KeyValueStore>>,
 
+    /// KV store for writing worker stats.
+    pub(super) store: Arc<dyn KeyValueStore>,
+
     /// Affinity manager for P2P-aware job routing.
     pub(super) affinity_manager: Arc<AffinityJobManager<dyn KeyValueStore>>,
 

@@ -120,6 +120,7 @@ impl WorkerService {
             iroh_node_id,
             config,
             job_manager,
+            store,
             affinity_manager,
             pool,
             distributed_pool,
