@@ -228,11 +228,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1773327063,
-        "narHash": "sha256-fgnPjXC7kNaB99DkTnDMa4vSfZGZ8QomnelKBgcgOh4=",
+        "lastModified": 1773517697,
+        "narHash": "sha256-YYf1Emh4BgVBJhQUsrkjGwyxlstZvBNybhJbnSudyVM=",
         "owner": "brittonr",
         "repo": "unit2nix",
-        "rev": "2c4327147b31d64787e80d64136fec6286fe0ab5",
+        "rev": "1ae16a83f34ce2feab1d86ca290df4b878005609",
         "type": "github"
       },
       "original": {
