@@ -732,6 +732,7 @@
           stub nix-compat async serde
           stub nix-compat-derive
           stub h3-iroh
+          stub patchbay
 
           # Rewrite git deps to path stubs in root Cargo.toml
           ${pkgs.gnused}/bin/sed -i \
@@ -753,6 +754,7 @@
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
             -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../../iroh-proxy-utils" }|' \
+            -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
             -e 's|bolero = { version = "0.11"|bolero = { version = "0.13"|g' \
             -e 's|bolero-generator = { version = "0.11"|bolero-generator = { version = "0.13"|g' \
             -e 's|bolero = "0.11"|bolero = "0.13"|g' \
@@ -827,6 +829,7 @@
           }
           stub mad-turmoil
           stub h3-iroh
+          stub patchbay
 
           # Rewrite non-snix git deps to path stubs in root Cargo.toml.
           # snix deps (snix-castore, snix-store, nix-compat) stay as git deps
@@ -851,6 +854,7 @@
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
             -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../../iroh-proxy-utils" }|' \
+            -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
             -e 's|bolero = { version = "0.11"|bolero = { version = "0.13"|g' \
             -e 's|bolero-generator = { version = "0.11"|bolero-generator = { version = "0.13"|g' \
             -e 's|bolero = "0.11"|bolero = "0.13"|g' \
@@ -1657,18 +1661,33 @@
             ])
           ''} $out
 
-          # Strip aspen-wasm-plugin and aspen-dns package blocks from Cargo.lock
-          ${pkgs.python3}/bin/python3 ${pkgs.writeText "strip-lockfile.py" ''
+          # Strip aspen-wasm-plugin, aspen-dns, aspen-testing-patchbay package blocks from Cargo.lock
+          ${pkgs.python3}/bin/python3 ${pkgs.writeText "strip-external-deps-lock.py" ''
             import re, sys
             lockfile = sys.argv[1]
             with open(lockfile) as f:
                 content = f.read()
-            for name in ["aspen-wasm-plugin", "aspen-dns"]:
+            for name in ["aspen-wasm-plugin", "aspen-dns", "aspen-testing-patchbay"]:
                 pattern = r"\[\[package\]\]\nname = \"" + name + r"\".*?(?=\n\[\[|\Z)"
                 content = re.sub(pattern, "", content, flags=re.DOTALL)
+            # Also strip the patchbay git dep block
+            pattern = r"\[\[package\]\]\nname = \"patchbay\".*?(?=\n\[\[|\Z)"
+            content = re.sub(pattern, "", content, flags=re.DOTALL)
             with open(lockfile, "w") as f:
                 f.write(content)
           ''} $out/aspen/Cargo.lock
+
+          # Strip aspen-testing-patchbay from workspace members (test-only crate with git dep)
+          ${pkgs.gnused}/bin/sed -i '/"crates\/aspen-testing-patchbay"/d' $out/aspen/Cargo.toml
+          ${pkgs.gnused}/bin/sed -i '/^aspen-testing-patchbay/d' $out/aspen/Cargo.toml
+
+          # Rewrite patchbay git dep in any remaining subcrates
+          find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
+            -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
+            {} \;
+
+          # Strip patchbay git source line from Cargo.lock
+          ${pkgs.gnused}/bin/sed -i '/^source = "git+.*patchbay/d' $out/aspen/Cargo.lock
         '';
 
         # Extended source for workspace-mode test builds.
@@ -1701,6 +1720,7 @@
           stub h3-iroh
           stub mad-turmoil
           stub iroh-proxy-utils
+          stub patchbay
 
           # Rewrite git deps to path stubs in root Cargo.toml
           ${pkgs.gnused}/bin/sed -i \
@@ -1716,6 +1736,7 @@
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
             -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../.nix-stubs/iroh-proxy-utils" }|' \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
+            -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
             {} \;
 
           # Strip git source lines from Cargo.lock (stubs are path deps now)
