@@ -150,6 +150,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             info.total_failed = stats.total_failed;
             info.avg_processing_time_ms = stats.avg_processing_time_ms;
             info.health = stats.health;
+            info.cpu_pressure_avg10 = stats.cpu_pressure_avg10;
+            info.memory_pressure_avg10 = stats.memory_pressure_avg10;
+            info.io_pressure_avg10 = stats.io_pressure_avg10;
+            info.disk_free_build_pct = stats.disk_free_build_pct;
+            info.disk_free_store_pct = stats.disk_free_store_pct;
 
             // Update in KV store
             let key = verified::worker_stats_key(worker_id);

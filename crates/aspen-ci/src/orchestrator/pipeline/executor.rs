@@ -68,7 +68,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     /// Deploy-only stages are excluded from the workflow — they execute
     /// in-process on the leader via `DeployExecutor` after the preceding
     /// stage completes. Transitions are adjusted to skip over them.
-    pub(crate) fn build_workflow_definition(
+    pub(crate) async fn build_workflow_definition(
         &self,
         config: &PipelineConfig,
         context: &PipelineContext,
@@ -87,12 +87,11 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             let step_name = format!("stage_{}", stage.name);
 
             // Convert jobs to JobSpecs (deploy jobs in mixed stages are skipped)
-            let job_specs: Vec<JobSpec> = stage
-                .jobs
-                .iter()
-                .filter(|job| job.job_type != JobType::Deploy)
-                .map(|job| self.job_config_to_spec(job, context, &config.env))
-                .collect::<Result<Vec<_>>>()?;
+            let mut job_specs = Vec::new();
+            for job in stage.jobs.iter().filter(|job| job.job_type != JobType::Deploy) {
+                let spec = self.job_config_to_spec(job, context, &config.env).await?;
+                job_specs.push(spec);
+            }
 
             // Determine transitions (using filtered stage list)
             let transitions = build_stage_transitions(stage, workflow_stages.get(idx + 1).copied());
@@ -146,7 +145,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     }
 
     /// Convert a JobConfig to a JobSpec for the job system.
-    pub(crate) fn job_config_to_spec(
+    pub(crate) async fn job_config_to_spec(
         &self,
         job: &JobConfig,
         context: &PipelineContext,
@@ -164,7 +163,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         env.insert("ASPEN_GIT_REF".to_string(), context.ref_name.clone());
         env.insert("ASPEN_REPO_ID".to_string(), context.repo_id.to_hex());
 
-        let payload = build_job_payload(job, context, &env)?;
+        let payload = build_job_payload(job, context, &env, self.kv_store.as_ref()).await?;
 
         let job_type = match job.job_type {
             JobType::Shell => "shell_command",
@@ -241,15 +240,16 @@ fn build_stage_transitions(
 }
 
 /// Build the job payload JSON based on job type.
-fn build_job_payload(
+async fn build_job_payload<S: KeyValueStore + ?Sized>(
     job: &JobConfig,
     context: &PipelineContext,
     env: &HashMap<String, String>,
+    #[allow(unused_variables)] store: &S,
 ) -> Result<serde_json::Value> {
     match job.job_type {
         JobType::Shell => build_shell_payload(job, context, env),
         #[cfg(feature = "nix-executor")]
-        JobType::Nix => build_nix_payload(job, context),
+        JobType::Nix => build_nix_payload(job, context, store).await,
         #[cfg(not(feature = "nix-executor"))]
         JobType::Nix => Err(CiError::InvalidConfig {
             reason: format!("Nix job type '{}' requires the 'nix-executor' feature to be enabled", job.name),
@@ -327,9 +327,41 @@ fn build_shell_payload(
 
 /// Build payload for Nix jobs.
 #[cfg(feature = "nix-executor")]
-fn build_nix_payload(job: &JobConfig, context: &PipelineContext) -> Result<serde_json::Value> {
+async fn build_nix_payload<S: KeyValueStore + ?Sized>(
+    job: &JobConfig,
+    context: &PipelineContext,
+    store: &S,
+) -> Result<serde_json::Value> {
     let flake_url = job.flake_url.clone().unwrap_or_else(|| ".".to_string());
     let attribute = job.flake_attr.clone().unwrap_or_default();
+
+    // Build flake reference for failure cache check
+    let flake_ref = if attribute.is_empty() {
+        flake_url.clone()
+    } else {
+        format!("{}#{}", flake_url, attribute)
+    };
+
+    // Check failure cache before creating the payload
+    match crate::failure_cache::check_failure(store, &flake_ref).await {
+        Ok(true) => {
+            // Cached failure found - return early failure
+            return Err(CiError::InvalidConfig {
+                reason: format!("Skipping Nix build - cached failure for flake reference: {}", flake_ref),
+            });
+        }
+        Ok(false) => {
+            // No cached failure, proceed with build
+        }
+        Err(e) => {
+            // Cache check failed, log warning but proceed with build
+            tracing::warn!(
+                flake_ref = %flake_ref,
+                error = %e,
+                "Failed to check build failure cache, proceeding with build"
+            );
+        }
+    }
 
     // Use job's working_dir if specified, otherwise fall back to checkout_dir
     let working_dir = job.working_dir.as_ref().map(std::path::PathBuf::from).or_else(|| context.checkout_dir.clone());

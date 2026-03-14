@@ -44,6 +44,16 @@ pub struct WorkerInfo {
     pub avg_processing_time_ms: u64,
     /// Worker group memberships.
     pub groups: HashSet<String>,
+    /// CPU pressure avg10 from /proc/pressure/cpu.
+    pub cpu_pressure_avg10: f32,
+    /// Memory pressure avg10 from /proc/pressure/memory.
+    pub memory_pressure_avg10: f32,
+    /// I/O pressure avg10 from /proc/pressure/io.
+    pub io_pressure_avg10: f32,
+    /// Build directory free space percentage.
+    pub disk_free_build_pct: f64,
+    /// Nix store free space percentage.
+    pub disk_free_store_pct: f64,
 }
 
 impl WorkerInfo {
@@ -60,6 +70,18 @@ impl WorkerInfo {
     /// Check if worker is alive based on heartbeat.
     pub fn is_alive(&self, timeout_ms: u64) -> bool {
         crate::verified::is_worker_alive(self.last_heartbeat_ms, now_unix_ms(), timeout_ms)
+    }
+
+    /// Check if worker is within pressure thresholds.
+    pub fn is_pressure_ok(&self, thresholds: &crate::verified::worker::PressureThresholds) -> bool {
+        crate::verified::worker::has_pressure_capacity(
+            self.cpu_pressure_avg10,
+            self.memory_pressure_avg10,
+            self.io_pressure_avg10,
+            self.disk_free_build_pct,
+            self.disk_free_store_pct,
+            thresholds,
+        )
     }
 }
 
@@ -185,6 +207,8 @@ pub struct WorkerCoordinatorConfig {
     pub max_workers: u32,
     /// Maximum groups to manage.
     pub max_groups: u32,
+    /// Pressure thresholds for capacity evaluation.
+    pub pressure_thresholds: crate::verified::worker::PressureThresholds,
 }
 
 impl Default for WorkerCoordinatorConfig {
@@ -201,6 +225,7 @@ impl Default for WorkerCoordinatorConfig {
             failover_check_interval_ms: 15_000, // 15 seconds
             max_workers: super::constants::MAX_WORKERS,
             max_groups: super::constants::MAX_GROUPS,
+            pressure_thresholds: crate::verified::worker::PressureThresholds::default(),
         }
     }
 }
@@ -237,4 +262,20 @@ pub struct WorkerStats {
     pub avg_processing_time_ms: u64,
     /// Health status.
     pub health: HealthStatus,
+    /// CPU pressure avg10 from /proc/pressure/cpu (0.0 if unavailable).
+    pub cpu_pressure_avg10: f32,
+    /// Memory pressure avg10 from /proc/pressure/memory (0.0 if unavailable).
+    pub memory_pressure_avg10: f32,
+    /// I/O pressure avg10 from /proc/pressure/io (0.0 if unavailable).
+    pub io_pressure_avg10: f32,
+    /// Build directory free space percentage (0.0-100.0).
+    pub disk_free_build_pct: f64,
+    /// Nix store free space percentage (0.0-100.0).
+    pub disk_free_store_pct: f64,
+    /// Total import time across all nix builds (ms).
+    pub total_import_time_ms: u64,
+    /// Total build time across all nix builds (ms).
+    pub total_build_time_ms: u64,
+    /// Total upload time across all nix builds (ms).
+    pub total_upload_time_ms: u64,
 }

@@ -4,6 +4,7 @@ use std::process::Stdio;
 #[cfg(feature = "nix-cache-proxy")]
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use aspen_ci_core::CiCoreError;
 use aspen_ci_core::Result;
@@ -23,6 +24,7 @@ use tracing::warn;
 use crate::config::MAX_LOG_SIZE;
 use crate::config::NixBuildWorkerConfig;
 use crate::payload::NixBuildPayload;
+use crate::timing::BuildPhaseTimings;
 
 /// Output from a Nix build.
 #[derive(Debug, Clone)]
@@ -33,6 +35,8 @@ pub(crate) struct NixBuildOutput {
     pub(crate) log: String,
     /// Whether the log was truncated.
     pub(crate) log_truncated: bool,
+    /// Build phase timings.
+    pub(crate) timings: BuildPhaseTimings,
 }
 
 /// Handles for concurrent stdout/stderr reader tasks.
@@ -75,11 +79,9 @@ impl NixBuildWorker {
         payload: &NixBuildPayload,
         log_sender: Option<mpsc::Sender<String>>,
     ) -> Result<NixBuildOutput> {
-        payload.validate()?;
+        let mut timings = BuildPhaseTimings::default();
 
-        // Lazy-resolve the cache public key in case it wasn't available at
-        // worker startup (signing key created after cluster init).
-        self.config.resolve_cache_public_key().await;
+        payload.validate()?;
 
         let flake_ref = payload.flake_ref();
         info!(
@@ -89,13 +91,32 @@ impl NixBuildWorker {
             "Starting Nix build"
         );
 
+        // Phase 1: Import/setup (resolve cache, start proxy)
+        let import_start = Instant::now();
+
+        // Lazy-resolve the cache public key in case it wasn't available at
+        // worker startup (signing key created after cluster init).
+        self.config.resolve_cache_public_key().await;
+
         #[cfg(feature = "nix-cache-proxy")]
         let cache_proxy = self.start_cache_proxy(&flake_ref).await?;
+        #[cfg(not(feature = "nix-cache-proxy"))]
+        let _cache_proxy = ();
+
+        timings.record_import(import_start.elapsed());
+
+        // Phase 2: Build execution
+        let build_start = Instant::now();
 
         let mut child = self.spawn_nix_build(payload, &flake_ref)?;
         let readers = Self::spawn_output_readers(&mut child, &flake_ref, self.config.is_verbose, log_sender)?;
         let (output_paths, log, log_size) = Self::collect_output(readers).await?;
         Self::wait_for_build_completion(&mut child, payload.timeout_secs, &flake_ref, &log).await?;
+
+        timings.record_build(build_start.elapsed());
+
+        // Phase 3: Upload/cleanup (proxy shutdown)
+        let upload_start = Instant::now();
 
         #[cfg(feature = "nix-cache-proxy")]
         if let Some(proxy) = cache_proxy {
@@ -103,10 +124,15 @@ impl NixBuildWorker {
             proxy.shutdown().await;
         }
 
+        timings.record_upload(upload_start.elapsed());
+
         info!(
             cluster_id = %self.config.cluster_id,
             node_id = self.config.node_id,
             output_paths = ?output_paths,
+            import_ms = timings.import_ms,
+            build_ms = timings.build_ms,
+            upload_ms = timings.upload_ms,
             "Nix build completed successfully"
         );
 
@@ -114,6 +140,7 @@ impl NixBuildWorker {
             output_paths,
             log,
             log_truncated: log_size >= MAX_LOG_SIZE,
+            timings,
         })
     }
 

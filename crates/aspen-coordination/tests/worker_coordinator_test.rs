@@ -37,6 +37,11 @@ fn create_test_worker(id: &str, node: &str, load: f32) -> WorkerInfo {
         total_failed: 0,
         avg_processing_time_ms: 50,
         groups: HashSet::new(),
+        cpu_pressure_avg10: 0.0,
+        memory_pressure_avg10: 0.0,
+        io_pressure_avg10: 0.0,
+        disk_free_build_pct: 100.0,
+        disk_free_store_pct: 100.0,
     }
 }
 
@@ -73,6 +78,14 @@ async fn test_worker_heartbeat() {
         total_failed: 2,
         avg_processing_time_ms: 45,
         health: HealthStatus::Healthy,
+        cpu_pressure_avg10: 0.0,
+        memory_pressure_avg10: 0.0,
+        io_pressure_avg10: 0.0,
+        disk_free_build_pct: 100.0,
+        disk_free_store_pct: 100.0,
+        total_import_time_ms: 0,
+        total_build_time_ms: 0,
+        total_upload_time_ms: 0,
     };
 
     coordinator.heartbeat("w1", stats).await.unwrap();

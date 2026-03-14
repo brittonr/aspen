@@ -70,6 +70,19 @@
 //! 10. **RETRY-3: Custom Consistency**: delays.len() >= max_attempts
 //!     - Custom policy has enough delays for all attempts
 //!
+//! ## Pressure Capacity
+//!
+//! 11. **PRESSURE-1: CPU Rejection**: cpu > cpu_max → has_pressure_capacity == false
+//! 12. **PRESSURE-2: Memory Rejection**: mem > mem_max → has_pressure_capacity == false
+//! 13. **PRESSURE-3: IO Rejection**: io > io_max → has_pressure_capacity == false
+//! 14. **PRESSURE-4: Disk Rejection**: free < min → has_pressure_capacity == false
+//! 15. **PRESSURE-5: All Within**: All metrics within limits → has_pressure_capacity == true
+//!
+//! ## Phase Timing Aggregation
+//!
+//! 16. **TIMING-1: Monotonicity**: aggregate result >= previous totals
+//! 17. **TIMING-2: Saturation**: aggregate result <= u64::MAX (no overflow)
+//!
 //! # Trusted Axioms
 //!
 //! The specifications assume:
@@ -85,7 +98,15 @@ verus! {
 
     // Re-export priority specifications
     pub use priority_spec::*;
+
+    // Re-export pressure specifications
+    pub use pressure_spec::*;
+
+    // Re-export timing specifications
+    pub use timing_spec::*;
 }
 
+mod pressure_spec;
 mod priority_spec;
 mod saga_spec;
+mod timing_spec;

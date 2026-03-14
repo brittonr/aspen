@@ -13,13 +13,17 @@
 //! - Saturating arithmetic for overflow safety
 
 mod dependency;
+pub mod pressure;
 mod retry;
 mod saga;
 mod schedule;
+pub mod timing;
 mod workflow;
 
 pub use dependency::*;
+pub use pressure::*;
 pub use retry::*;
 pub use saga::*;
 pub use schedule::*;
+pub use timing::*;
 pub use workflow::*;

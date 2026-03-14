@@ -62,6 +62,7 @@ pub mod agent;
 pub mod checkout;
 pub mod config;
 pub mod error;
+pub mod failure_cache;
 pub mod log_writer;
 pub mod orchestrator;
 #[cfg(test)]

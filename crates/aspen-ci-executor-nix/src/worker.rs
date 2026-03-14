@@ -1,11 +1,15 @@
 //! Worker trait implementation for NixBuildWorker.
 
 use aspen_ci_executor_shell::log_bridge;
+use aspen_core::KeyValueStore;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 use aspen_jobs::Job;
 use aspen_jobs::JobOutput;
 use aspen_jobs::JobResult;
 use aspen_jobs::Worker;
 use async_trait::async_trait;
+use serde::Serialize;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::warn;
@@ -57,6 +61,19 @@ impl Worker for NixBuildWorker {
                 if let Some(handle) = log_state {
                     let _ = handle.await;
                 }
+
+                // Record build failure in cache if KV store is available
+                if let Some(kv_store) = &self.config.kv_store {
+                    let flake_ref = payload.flake_ref();
+                    if let Err(cache_err) = record_build_failure(kv_store.as_ref(), &flake_ref).await {
+                        warn!(
+                            flake_ref = %flake_ref,
+                            error = %cache_err,
+                            "Failed to record build failure in cache"
+                        );
+                    }
+                }
+
                 return JobResult::failure(format!("Nix build failed: {e}"));
             }
         };
@@ -123,6 +140,17 @@ impl Worker for NixBuildWorker {
             build_output.log
         };
 
+        let mut metadata = [
+            ("build_log".to_string(), log),
+            ("node_id".to_string(), self.config.node_id.to_string()),
+            ("cluster_id".to_string(), self.config.cluster_id.clone()),
+        ]
+        .into_iter()
+        .collect::<std::collections::HashMap<String, String>>();
+
+        // Merge timing metadata
+        metadata.extend(build_output.timings.to_metadata());
+
         JobResult::Success(JobOutput {
             data: serde_json::json!({
                 "output_paths": build_output.output_paths,
@@ -133,16 +161,61 @@ impl Worker for NixBuildWorker {
                 "built_by_node": self.config.node_id,
                 "cluster_id": self.config.cluster_id,
             }),
-            metadata: [
-                ("build_log".to_string(), log),
-                ("node_id".to_string(), self.config.node_id.to_string()),
-                ("cluster_id".to_string(), self.config.cluster_id.clone()),
-            ]
-            .into_iter()
-            .collect(),
+            metadata,
         })
     }
 }
 
 // log_bridge and flush_chunk are now in aspen_ci_executor_shell::common
 // imported via `use aspen_ci_executor_shell::log_bridge;` at the top.
+
+// ============================================================================
+// Build Failure Cache
+// ============================================================================
+
+/// KV prefix for cached build failure paths.
+const KV_PREFIX_CI_FAILED_PATHS: &str = "_ci:failed-paths:";
+
+/// Default TTL for failure cache entries: 24 hours.
+const DEFAULT_FAILURE_CACHE_TTL_MS: u64 = 24 * 60 * 60 * 1000;
+
+/// A cached failure entry stored in the KV store.
+#[derive(Debug, Serialize)]
+struct FailureCacheEntry {
+    /// The flake reference that failed (e.g., ".#packages.x86_64-linux.default").
+    flake_ref: String,
+    /// When this entry was created (Unix ms).
+    created_at_ms: u64,
+    /// TTL in milliseconds.
+    ttl_ms: u64,
+}
+
+/// Record a failed flake reference in the failure cache.
+async fn record_build_failure<S: KeyValueStore + ?Sized>(
+    store: &S,
+    flake_ref: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let now_ms =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+
+    let key = generate_failure_cache_key(flake_ref);
+    let entry = FailureCacheEntry {
+        flake_ref: flake_ref.to_string(),
+        created_at_ms: now_ms,
+        ttl_ms: DEFAULT_FAILURE_CACHE_TTL_MS,
+    };
+
+    let value = serde_json::to_string(&entry)?;
+    let request = WriteRequest::from_command(WriteCommand::Set { key, value });
+
+    store.write(request).await?;
+    debug!(flake_ref = %flake_ref, "Cached build failure");
+
+    Ok(())
+}
+
+/// Generate cache key from a flake reference using BLAKE3 hash.
+fn generate_failure_cache_key(flake_ref: &str) -> String {
+    let hash = blake3::hash(flake_ref.as_bytes());
+    format!("{}{}", KV_PREFIX_CI_FAILED_PATHS, hash.to_hex())
+}

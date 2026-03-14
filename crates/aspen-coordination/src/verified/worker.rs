@@ -583,6 +583,57 @@ pub fn can_compute_lease_deadline(current_time_ms: u64, lease_duration_ms: u64) 
     current_time_ms <= u64::MAX - lease_duration_ms
 }
 
+// ============================================================================
+// Pressure-Based Capacity Evaluation
+// ============================================================================
+
+/// Thresholds for pressure-based capacity evaluation.
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct PressureThresholds {
+    /// CPU PSI avg10 threshold — reject worker above this.
+    pub cpu_psi_max: f32,
+    /// Memory PSI avg10 threshold — reject worker above this.
+    pub memory_psi_max: f32,
+    /// I/O PSI avg10 threshold — reject worker above this.
+    pub io_psi_max: f32,
+    /// Minimum build directory free space percentage.
+    pub disk_free_build_min_pct: f64,
+    /// Minimum nix store free space percentage.
+    pub disk_free_store_min_pct: f64,
+}
+
+impl Default for PressureThresholds {
+    fn default() -> Self {
+        Self {
+            cpu_psi_max: 75.0,
+            memory_psi_max: 50.0,
+            io_psi_max: 80.0,
+            disk_free_build_min_pct: 5.0,
+            disk_free_store_min_pct: 5.0,
+        }
+    }
+}
+
+/// Check if a worker has capacity based on pressure metrics.
+///
+/// Returns `true` if ALL pressure metrics are within thresholds.
+/// A worker that exceeds any single threshold is considered over-pressured.
+#[inline]
+pub fn has_pressure_capacity(
+    cpu_pressure_avg10: f32,
+    memory_pressure_avg10: f32,
+    io_pressure_avg10: f32,
+    disk_free_build_pct: f64,
+    disk_free_store_pct: f64,
+    thresholds: &PressureThresholds,
+) -> bool {
+    cpu_pressure_avg10 <= thresholds.cpu_psi_max
+        && memory_pressure_avg10 <= thresholds.memory_psi_max
+        && io_pressure_avg10 <= thresholds.io_psi_max
+        && disk_free_build_pct >= thresholds.disk_free_build_min_pct
+        && disk_free_store_pct >= thresholds.disk_free_store_min_pct
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -776,6 +827,75 @@ mod tests {
         let h1 = simple_hash("test1");
         let h2 = simple_hash("test2");
         assert_ne!(h1, h2);
+    }
+
+    // ========================================================================
+    // Pressure-Based Capacity Tests
+    // ========================================================================
+
+    #[test]
+    fn test_pressure_thresholds_default() {
+        let thresholds = PressureThresholds::default();
+        assert_eq!(thresholds.cpu_psi_max, 75.0);
+        assert_eq!(thresholds.memory_psi_max, 50.0);
+        assert_eq!(thresholds.io_psi_max, 80.0);
+        assert_eq!(thresholds.disk_free_build_min_pct, 5.0);
+        assert_eq!(thresholds.disk_free_store_min_pct, 5.0);
+    }
+
+    #[test]
+    fn test_has_pressure_capacity_all_within_thresholds() {
+        let thresholds = PressureThresholds::default();
+        assert!(has_pressure_capacity(50.0, 30.0, 60.0, 10.0, 15.0, &thresholds));
+    }
+
+    #[test]
+    fn test_has_pressure_capacity_cpu_exceeded() {
+        let thresholds = PressureThresholds::default();
+        assert!(!has_pressure_capacity(80.0, 30.0, 60.0, 10.0, 15.0, &thresholds));
+    }
+
+    #[test]
+    fn test_has_pressure_capacity_memory_exceeded() {
+        let thresholds = PressureThresholds::default();
+        assert!(!has_pressure_capacity(50.0, 60.0, 60.0, 10.0, 15.0, &thresholds));
+    }
+
+    #[test]
+    fn test_has_pressure_capacity_io_exceeded() {
+        let thresholds = PressureThresholds::default();
+        assert!(!has_pressure_capacity(50.0, 30.0, 90.0, 10.0, 15.0, &thresholds));
+    }
+
+    #[test]
+    fn test_has_pressure_capacity_build_disk_too_low() {
+        let thresholds = PressureThresholds::default();
+        assert!(!has_pressure_capacity(50.0, 30.0, 60.0, 2.0, 15.0, &thresholds));
+    }
+
+    #[test]
+    fn test_has_pressure_capacity_store_disk_too_low() {
+        let thresholds = PressureThresholds::default();
+        assert!(!has_pressure_capacity(50.0, 30.0, 60.0, 10.0, 2.0, &thresholds));
+    }
+
+    #[test]
+    fn test_has_pressure_capacity_all_exceeded() {
+        let thresholds = PressureThresholds::default();
+        assert!(!has_pressure_capacity(80.0, 60.0, 90.0, 2.0, 1.0, &thresholds));
+    }
+
+    #[test]
+    fn test_has_pressure_capacity_boundary_values() {
+        let thresholds = PressureThresholds::default();
+        // All exactly at thresholds - should pass
+        assert!(has_pressure_capacity(75.0, 50.0, 80.0, 5.0, 5.0, &thresholds));
+        // Just over thresholds - should fail
+        assert!(!has_pressure_capacity(75.1, 50.0, 80.0, 5.0, 5.0, &thresholds));
+        assert!(!has_pressure_capacity(75.0, 50.1, 80.0, 5.0, 5.0, &thresholds));
+        assert!(!has_pressure_capacity(75.0, 50.0, 80.1, 5.0, 5.0, &thresholds));
+        assert!(!has_pressure_capacity(75.0, 50.0, 80.0, 4.9, 5.0, &thresholds));
+        assert!(!has_pressure_capacity(75.0, 50.0, 80.0, 5.0, 4.9, &thresholds));
     }
 }
 

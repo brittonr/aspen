@@ -237,6 +237,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
                 total_failed: 0,
                 avg_processing_time_ms: 0,
                 groups: HashSet::new(),
+                cpu_pressure_avg10: 0.0,
+                memory_pressure_avg10: 0.0,
+                io_pressure_avg10: 0.0,
+                disk_free_build_pct: 100.0,
+                disk_free_store_pct: 100.0,
             };
 
             self.coordinator
@@ -285,6 +290,14 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
 
                         for info in worker_info {
                             if regs.get(&info.id).is_some() {
+                                // Read PSI pressure metrics
+                                let pressure_readings = crate::system_info::read_psi_pressure();
+
+                                // Read disk free space (using /tmp for build dir, /nix/store for store dir)
+                                let build_dir = Some(std::path::Path::new("/tmp"));
+                                let store_dir = Some(std::path::Path::new("/nix/store"));
+                                let disk_readings = crate::system_info::read_disk_free(build_dir, store_dir);
+
                                 let stats = WorkerStats {
                                     load: info.jobs_processed as f32 / 100.0,
                                     active_jobs: if info.status == WorkerStatus::Processing { 1 } else { 0 },
@@ -296,6 +309,14 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
                                         WorkerStatus::Failed(_) => HealthStatus::Unhealthy,
                                         _ => HealthStatus::Healthy,
                                     },
+                                    cpu_pressure_avg10: pressure_readings.cpu_avg10,
+                                    memory_pressure_avg10: pressure_readings.memory_avg10,
+                                    io_pressure_avg10: pressure_readings.io_avg10,
+                                    disk_free_build_pct: disk_readings.build_dir_free_pct,
+                                    disk_free_store_pct: disk_readings.store_dir_free_pct,
+                                    total_import_time_ms: 0,
+                                    total_build_time_ms: 0,
+                                    total_upload_time_ms: 0,
                                 };
 
                                 if let Err(e) = coordinator.heartbeat(&info.id, stats).await {

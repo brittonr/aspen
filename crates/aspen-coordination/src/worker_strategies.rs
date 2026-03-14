@@ -561,6 +561,11 @@ mod tests {
                 total_failed: 1,
                 avg_processing_time_ms: 50,
                 groups: HashSet::new(),
+                cpu_pressure_avg10: 0.0,
+                memory_pressure_avg10: 0.0,
+                io_pressure_avg10: 0.0,
+                disk_free_build_pct: 100.0,
+                disk_free_store_pct: 100.0,
             },
             WorkerInfo {
                 worker_id: "w2".to_string(),
@@ -579,6 +584,11 @@ mod tests {
                 total_failed: 5,
                 avg_processing_time_ms: 75,
                 groups: HashSet::new(),
+                cpu_pressure_avg10: 0.0,
+                memory_pressure_avg10: 0.0,
+                io_pressure_avg10: 0.0,
+                disk_free_build_pct: 100.0,
+                disk_free_store_pct: 100.0,
             },
             WorkerInfo {
                 worker_id: "w3".to_string(),
@@ -597,6 +607,11 @@ mod tests {
                 total_failed: 3,
                 avg_processing_time_ms: 60,
                 groups: HashSet::new(),
+                cpu_pressure_avg10: 0.0,
+                memory_pressure_avg10: 0.0,
+                io_pressure_avg10: 0.0,
+                disk_free_build_pct: 100.0,
+                disk_free_store_pct: 100.0,
             },
         ]
     }

@@ -35,6 +35,7 @@ mod executor;
 mod payload;
 #[cfg(feature = "snix")]
 mod snix;
+mod timing;
 mod worker;
 
 pub use cache::UploadedStorePath;

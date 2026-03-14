@@ -578,6 +578,11 @@ impl JobServiceExecutor {
             total_failed: 0,
             avg_processing_time_ms: 0,
             groups: Default::default(),
+            cpu_pressure_avg10: 0.0,
+            memory_pressure_avg10: 0.0,
+            io_pressure_avg10: 0.0,
+            disk_free_build_pct: 100.0,
+            disk_free_store_pct: 100.0,
         };
 
         match wc.register_worker(info).await {
@@ -611,6 +616,14 @@ impl JobServiceExecutor {
             total_failed: 0,
             avg_processing_time_ms: 0,
             health: aspen_coordination::HealthStatus::Healthy,
+            cpu_pressure_avg10: 0.0,
+            memory_pressure_avg10: 0.0,
+            io_pressure_avg10: 0.0,
+            disk_free_build_pct: 100.0,
+            disk_free_store_pct: 100.0,
+            total_import_time_ms: 0,
+            total_build_time_ms: 0,
+            total_upload_time_ms: 0,
         };
 
         match wc.heartbeat(&worker_id, stats).await {

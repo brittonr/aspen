@@ -23,6 +23,11 @@ fn test_worker_capacity() {
         total_failed: 2,
         avg_processing_time_ms: 50,
         groups: HashSet::new(),
+        cpu_pressure_avg10: 0.0,
+        memory_pressure_avg10: 0.0,
+        io_pressure_avg10: 0.0,
+        disk_free_build_pct: 100.0,
+        disk_free_store_pct: 100.0,
     };
 
     assert_eq!(worker.available_capacity(), 0.7);
@@ -50,6 +55,11 @@ fn test_worker_can_handle() {
         total_failed: 0,
         avg_processing_time_ms: 0,
         groups: HashSet::new(),
+        cpu_pressure_avg10: 0.0,
+        memory_pressure_avg10: 0.0,
+        io_pressure_avg10: 0.0,
+        disk_free_build_pct: 100.0,
+        disk_free_store_pct: 100.0,
     };
 
     assert!(worker.can_handle("email"));

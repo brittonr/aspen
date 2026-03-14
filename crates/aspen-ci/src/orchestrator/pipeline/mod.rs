@@ -443,7 +443,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         run.has_pending_deploys = Self::has_deploy_jobs_for_ref(&pipeline_config, &context.ref_name);
 
         // Convert to workflow definition (deploy-only stages are excluded)
-        let workflow_def = self.build_workflow_definition(&pipeline_config, &context)?;
+        let workflow_def = self.build_workflow_definition(&pipeline_config, &context).await?;
 
         // Build initial workflow data
         let workflow_data = build_workflow_data(&run, &pipeline_config, &context);
@@ -899,7 +899,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         run.has_pending_deploys = Self::has_deploy_jobs_for_ref(&pipeline_config, &run.context.ref_name);
 
         // Convert to workflow definition (deploy-only stages are excluded)
-        let workflow_def = self.build_workflow_definition(&pipeline_config, &run.context)?;
+        let workflow_def = self.build_workflow_definition(&pipeline_config, &run.context).await?;
 
         // Build workflow data
         let workflow_data = build_workflow_data(&run, &pipeline_config, &run.context);
