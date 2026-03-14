@@ -727,28 +727,29 @@
             echo '// stub' > "$dir/src/lib.rs"
           }
           stub mad-turmoil
-          stub snix-castore
-          stub snix-store
-          stub nix-compat async serde
-          stub nix-compat-derive
           stub h3-iroh
           stub patchbay
 
-          # Rewrite git deps to path stubs in root Cargo.toml
+          # Rewrite non-snix git deps to path stubs in root Cargo.toml.
+          # ALL snix deps (nix-compat, snix-castore, snix-store) stay as git deps
+          # because aspen-cache unconditionally depends on nix-compat. Cargo needs
+          # all crates from the snix git source resolvable even when the snix
+          # feature is off. They're vendored via overrideVendorGitCheckout in
+          # fullCargoVendorDir which substitutes the snix-src flake input.
           ${pkgs.gnused}/bin/sed -i \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
-            -e 's|snix-castore = { git = "[^"]*"[^}]*}|snix-castore = { path = ".nix-stubs/snix-castore" }|' \
-            -e 's|snix-store = { git = "[^"]*"[^}]*}|snix-store = { path = ".nix-stubs/snix-store" }|' \
-            -e 's|nix-compat = { git = "[^"]*"[^}]*}|nix-compat = { path = ".nix-stubs/nix-compat", features = ["async", "serde"] }|' \
             -e 's|h3-iroh = { git = "[^"]*"[^}]*}|h3-iroh = { path = ".nix-stubs/h3-iroh" }|' \
             $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
-          # Strip git source lines from Cargo.lock for ALL deps converted to
-          # path stubs. Without this, crane's vendorCargoDeps tries to git-clone
-          # these repos (creating FODs that need network), which fails in VMs
-          # where DNS/network is unreliable.
-          ${pkgs.gnused}/bin/sed -i '/^source = "git+/d' $out/aspen/Cargo.lock
+          # Strip git source lines from Cargo.lock for stubbed deps only.
+          # Keep snix.dev and tvlfyi (wu-manber, a snix dep) source lines —
+          # these are vendored via overrideVendorGitCheckout / normal FODs.
+          ${pkgs.gnused}/bin/sed -i '/^source = "git+/{
+            /snix\.dev/b
+            /tvlfyi/b
+            d
+          }' $out/aspen/Cargo.lock
 
           # Rewrite git deps in all subcrates too
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
@@ -925,6 +926,42 @@
               ));
           };
 
+        # ── CI-path VM test builds ───────────────────────────────
+        # Uses ciSrc instead of fullSrc for VM test binaries.
+        # fullSrc suffers from IFD caching issues that prevent snix dep
+        # changes from propagating through vendorCargoDeps. The ciSrc path
+        # works because it was built correctly from the start.
+
+        # Build aspen-node binary for VM tests via ciSrc path (no plugins)
+        ciVmTestBin = {
+          name,
+          features ? [],
+        }:
+          craneLib.buildPackage (
+            ciCommonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+              cargoExtraArgs =
+                "--bin ${name}"
+                + lib.optionalString (features != []) " --features ${lib.concatStringsSep "," features}";
+              doCheck = false;
+            }
+          );
+
+        # Build aspen-cli binary for VM tests via ciSrc path (no plugins)
+        ciVmTestCliBin = features:
+          craneLib.buildPackage (
+            ciCommonArgs
+            // {
+              pname = "aspen-cli";
+              version = "0.1.0";
+              cargoExtraArgs =
+                "-p aspen-cli --bin aspen-cli"
+                + lib.optionalString (features != []) " --features ${lib.concatStringsSep "," features}";
+              doCheck = false;
+            }
+          );
+
         # Full source with real snix dependencies (not stubs).
         # Required for builds that enable the snix feature.
         # Reverts snix from path stubs back to git deps so the cargo vendor
@@ -933,12 +970,9 @@
           cp -r ${fullSrc} $out
           chmod -R u+w $out
 
-          # Rewrite snix path stubs back to git deps in root Cargo.toml
-          ${pkgs.gnused}/bin/sed -i \
-            -e 's|snix-castore = { path = ".nix-stubs/snix-castore" }|snix-castore = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }|' \
-            -e 's|snix-store = { path = ".nix-stubs/snix-store" }|snix-store = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }|' \
-            -e 's|nix-compat = { path = ".nix-stubs/nix-compat", features = \["async", "serde"\] }|nix-compat = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac", features = ["async", "serde"] }|' \
-            $out/aspen/Cargo.toml
+          # All snix deps (nix-compat, snix-castore, snix-store) are already git deps
+          # in fullSrc — no rewriting needed. This just extends fullSrc with the
+          # real snix source tree for crates that need snix feature (aspen-snix, etc.).
 
           # Re-add source lines for snix crates in Cargo.lock
           ${pkgs.gawk}/bin/awk -v src='source = "git+https://git.snix.dev/snix/snix.git?rev=180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac#180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac"' '
@@ -987,8 +1021,18 @@
 
         fullCargoVendorDir = craneLib.vendorCargoDeps {
           src = fullSrc + "/aspen";
-          overrideVendorGitCheckout = _ps: drv:
-            ensureGitCheckoutLock drv;
+          overrideVendorGitCheckout = ps: drv: let
+            isSnixRepo =
+              builtins.any (
+                p:
+                  builtins.isString (p.source or null)
+                  && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
+              )
+              ps;
+          in
+            if isSnixRepo
+            then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
+            else ensureGitCheckoutLock drv;
         };
 
         fullNodeCargoArtifacts = craneLib.buildDepsOnly (
@@ -1989,8 +2033,115 @@
                 }
               );
             }
-            # Full-source builds for VM integration tests.
-            # Node/CLI only need aspen-wasm-plugin as external dep (--impure).
+            # CI-path builds for VM integration tests (no plugins).
+            # Uses ciSrc path which handles snix deps correctly.
+            // {
+              ci-aspen-node = ciVmTestBin {
+                name = "aspen-node";
+                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "net"];
+              };
+              ci-aspen-cli = ciVmTestCliBin [];
+              ci-git-remote-aspen = ciVmTestBin {
+                name = "git-remote-aspen";
+                features = ["git-bridge"];
+              };
+            }
+            # CI-path builds with plugins (requires --impure for aspen-wasm-plugin).
+            # Uses ciSrc with the stub replaced by real aspen-wasm-plugin source.
+            // lib.optionalAttrs hasExternalRepos (let
+              ciPluginsSrc = pkgs.runCommand "aspen-ci-plugins-src" {} ''
+                cp -r ${ciSrc} $out
+                chmod -R u+w $out
+                # Replace aspen-wasm-plugin stub with real source
+                rm -rf $out/aspen-wasm-plugin
+                cp -r ${wasmPluginRepo} $out/aspen-wasm-plugin
+                chmod -R u+w $out
+              '';
+              ciPluginsBasicArgs =
+                basicArgs
+                // {
+                  src = ciPluginsSrc;
+                  postUnpack = ''sourceRoot="$sourceRoot/aspen"'';
+                  cargoToml = ./Cargo.toml;
+                  cargoLock = ciPluginsSrc + "/aspen/Cargo.lock";
+                  cargoExtraArgs = "";
+                };
+              ciPluginsCargoVendorDir = patchVendorForHyperlight (craneLib.vendorCargoDeps {
+                src = ciPluginsSrc + "/aspen";
+                overrideVendorGitCheckout = ps: drv: let
+                  isSnixRepo =
+                    builtins.any (
+                      p:
+                        builtins.isString (p.source or null)
+                        && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
+                    )
+                    ps;
+                in
+                  if isSnixRepo
+                  then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
+                  else ensureGitCheckoutLock drv;
+              });
+              ciPluginsCargoArtifacts = craneLib.buildDepsOnly (
+                ciPluginsBasicArgs
+                // {
+                  cargoVendorDir = ciPluginsCargoVendorDir;
+                  HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+                  pnameSuffix = "-ci-plugins-deps";
+                  cargoExtraArgs = "--features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy,proxy";
+                }
+              );
+              ciPluginsCommonArgs =
+                ciPluginsBasicArgs
+                // {
+                  cargoArtifacts = ciPluginsCargoArtifacts;
+                  cargoVendorDir = ciPluginsCargoVendorDir;
+                  HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+                  nativeBuildInputs =
+                    basicArgs.nativeBuildInputs
+                    ++ (with pkgs; [autoPatchelfHook]);
+                  buildInputs =
+                    basicArgs.buildInputs
+                    ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
+                      with pkgs; [darwin.apple_sdk.frameworks.Security]
+                    ));
+                };
+              ciPluginsBin = {name, features ? []}:
+                craneLib.buildPackage (
+                  ciPluginsCommonArgs
+                  // {
+                    inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                    cargoExtraArgs =
+                      "--bin ${name}"
+                      + lib.optionalString (features != []) " --features ${lib.concatStringsSep "," features}";
+                    doCheck = false;
+                  }
+                );
+              ciPluginsCliBin = features:
+                craneLib.buildPackage (
+                  ciPluginsCommonArgs
+                  // {
+                    pname = "aspen-cli";
+                    version = "0.1.0";
+                    cargoExtraArgs =
+                      "-p aspen-cli --bin aspen-cli"
+                      + lib.optionalString (features != []) " --features ${lib.concatStringsSep "," features}";
+                    doCheck = false;
+                  }
+                );
+            in {
+              ci-aspen-node-plugins = craneLib.buildPackage (
+                ciPluginsCommonArgs
+                // {
+                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy";
+                  doCheck = false;
+                }
+              );
+              ci-aspen-cli-e2e = ciPluginsCliBin ["ci" "forge"];
+              ci-aspen-cli-plugins = ciPluginsCliBin ["plugins-rpc" "ci" "automerge"];
+            })
+            # Full-source builds for VM integration tests (legacy, requires --impure).
+            # These have IFD caching issues — prefer ci-* variants above.
             // lib.optionalAttrs hasExternalRepos {
               full-aspen-node = fullBin {
                 name = "aspen-node";
@@ -2647,40 +2798,40 @@
               # Build: nix build .#checks.x86_64-linux.worker-psi-health-test
               worker-psi-health-test = import ./nix/tests/worker-psi-health.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.full-aspen-node;
-                aspenCliPackage = bins.full-aspen-cli;
+                aspenNodePackage = bins.ci-aspen-node;
+                aspenCliPackage = bins.ci-aspen-cli;
               };
 
               # CI failure cache: failing nix build is cached, second run skips build.
-              # Build: nix build .#checks.x86_64-linux.ci-failure-cache-test --impure
+              # Build: nix build .#checks.x86_64-linux.ci-failure-cache-test
               ci-failure-cache-test = import ./nix/tests/ci-failure-cache.nix {
                 inherit pkgs kvPluginWasm forgePluginWasm;
-                aspenNodePackage = bins.full-aspen-node-plugins;
-                aspenCliPackage = bins.full-aspen-cli-e2e;
-                aspenCliPlugins = bins.full-aspen-cli-plugins;
-                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+                aspenNodePackage = bins.ci-aspen-node-plugins;
+                aspenCliPackage = bins.ci-aspen-cli-e2e;
+                aspenCliPlugins = bins.ci-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.ci-git-remote-aspen;
               };
 
               # NixBuildSupervisor timeout: hanging nix build killed after timeout,
               # worker recovers and processes subsequent jobs.
-              # Build: nix build .#checks.x86_64-linux.nix-build-supervisor-test --impure
+              # Build: nix build .#checks.x86_64-linux.nix-build-supervisor-test
               nix-build-supervisor-test = import ./nix/tests/nix-build-supervisor.nix {
                 inherit pkgs kvPluginWasm forgePluginWasm;
-                aspenNodePackage = bins.full-aspen-node-plugins;
-                aspenCliPackage = bins.full-aspen-cli-e2e;
-                aspenCliPlugins = bins.full-aspen-cli-plugins;
-                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+                aspenNodePackage = bins.ci-aspen-node-plugins;
+                aspenCliPackage = bins.ci-aspen-cli-e2e;
+                aspenCliPlugins = bins.ci-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.ci-git-remote-aspen;
               };
 
               # Deploy statefulness: deploy executor writes lifecycle state
               # to _deploy:state:{id}:metadata and per-node KV entries.
-              # Build: nix build .#checks.x86_64-linux.deploy-statefulness-test --impure --option sandbox false
+              # Build: nix build .#checks.x86_64-linux.deploy-statefulness-test --option sandbox false
               deploy-statefulness-test = import ./nix/tests/deploy-statefulness.nix {
                 inherit pkgs lib kvPluginWasm forgePluginWasm;
-                aspenNodePackage = bins.full-aspen-node-plugins;
-                aspenCliPackage = bins.full-aspen-cli-e2e;
-                aspenCliPlugins = bins.full-aspen-cli-plugins;
-                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+                aspenNodePackage = bins.ci-aspen-node-plugins;
+                aspenCliPackage = bins.ci-aspen-cli-e2e;
+                aspenCliPlugins = bins.ci-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.ci-git-remote-aspen;
                 nixpkgsFlake = nixpkgs;
               };
 

@@ -48,6 +48,7 @@ in
 
     testScript = ''
       import json, time
+      from typing import Any
 
       def get_ticket():
           return node1.succeed("cat /var/lib/aspen/cluster-ticket.txt").strip()
@@ -114,9 +115,9 @@ in
           node1.log(f"KV scan raw: {out}")
 
           # Handle both dict and string responses
-          entries = []
+          entries: list[Any] = []
           if isinstance(out, dict):
-              entries = out.get("entries", out.get("kvs", []))
+              entries = out.get("entries", out.get("kvs", [])) or []
 
           assert len(entries) > 0, \
               f"No __worker_stats: entries in KV. Got: {out}"
