@@ -51,10 +51,10 @@
 ## 7. Plugin Host Function
 
 - [x] 7.1 Add `nostr_publish: bool` field to `PluginPermissions` in `crates/aspen-plugin-api/src/manifest.rs`, defaulting to `false`
-- [ ] 7.2 Define `nostr_publish_event` host function signature in plugin API
-- [ ] 7.3 Implement host-side `nostr_publish_event`: validate event JSON, verify signature, pass to `NostrRelayService::publish()`, return event ID or error
-- [ ] 7.4 Wire permission check: reject calls when `nostr_publish` is `false` or relay feature is not active
-- [ ] 7.5 Write tests: permission denied without `nostr_publish`, successful publish flows through to relay, invalid event rejected at host boundary
+- [x] 7.2 Define `nostr_publish_event` host function signature in plugin API
+- [x] 7.3 Implement host-side `nostr_publish_event`: validate event JSON, verify signature, pass to `NostrRelayService::publish()`, return event ID or error
+- [x] 7.4 Wire permission check: reject calls when `nostr_publish` is `false` or relay feature is not active
+- [x] 7.5 Write tests: permission denied without `nostr_publish`, successful publish flows through to relay, invalid event rejected at host boundary
 
 ## 8. Node Integration
 
@@ -66,17 +66,17 @@
 
 ## 9. Forge Bridge Plugin
 
-- [ ] 9.1 Create `plugins/nostr-forge-bridge/` WASM plugin project with manifest declaring `hooks` and `nostr_publish` permissions, KV read access for `forge:` prefix
-- [ ] 9.2 Implement hook handler for repo creation: read `RepoIdentity` from KV, build `kind:30617` event with `d`, `name`, `description`, `clone`, `maintainers` tags, sign with cluster key, call `nostr_publish_event`
-- [ ] 9.3 Implement hook handler for ref updates: read updated refs, build `kind:30618` event with `d` and `refs/*` tags, sign, publish
-- [ ] 9.4 Implement hook handler for issue creation: read issue data, build `kind:1621` event with `a`, `p`, `subject`, `t` tags, sign, publish
-- [ ] 9.5 Implement hook handler for patch submission: read patch data, build `kind:1617` event with patch content, `a`, `p`, `commit` tags, sign, publish
-- [ ] 9.6 Write tests: mock hook events → verify correct NIP-34 event structure and tags for each event type
+- [x] 9.1 Create `plugins/nostr-forge-bridge/` WASM plugin project with manifest declaring `hooks` and `nostr_publish` permissions, KV read access for `forge:` prefix
+- [x] 9.2 Implement hook handler for repo creation: read `RepoIdentity` from KV, build `kind:30617` event with `d`, `name`, `description`, `clone`, `maintainers` tags, sign with cluster key, call `nostr_publish_event`
+- [x] 9.3 Implement hook handler for ref updates: read updated refs, build `kind:30618` event with `d` and `refs/*` tags, sign, publish
+- [x] 9.4 Implement hook handler for issue creation: read issue data, build `kind:1621` event with `a`, `p`, `subject`, `t` tags, sign, publish
+- [x] 9.5 Implement hook handler for patch submission: read patch data, build `kind:1617` event with patch content, `a`, `p`, `commit` tags, sign, publish
+- [x] 9.6 Write tests: mock hook events → verify correct NIP-34 event structure and tags for each event type
 
 ## 10. End-to-End Testing
 
-- [ ] 10.1 Integration test: start aspen-node with `nostr-relay` enabled, connect Nostr client, verify NIP-11 relay info
-- [ ] 10.2 Integration test: publish event via WebSocket client, query it back via REQ subscription
-- [ ] 10.3 Integration test: install forge-bridge plugin, create Forge repo, verify `kind:30617` event appears on relay
-- [ ] 10.4 Integration test: push to Forge repo, verify `kind:30618` state event appears with correct ref tags
-- [ ] 10.5 Test resource bounds: exceed connection limit, subscription limit, event size limit — verify clean rejection
+- [x] 10.1 Integration test: start aspen-node with `nostr-relay` enabled, connect Nostr client, verify NIP-11 relay info
+- [x] 10.2 Integration test: publish event via WebSocket client, query it back via REQ subscription
+- [x] 10.3 Integration test: install forge-bridge plugin, create Forge repo, verify `kind:30617` event appears on relay
+- [x] 10.4 Integration test: push to Forge repo, verify `kind:30618` state event appears with correct ref tags
+- [x] 10.5 Test resource bounds: exceed connection limit, subscription limit, event size limit — verify clean rejection
