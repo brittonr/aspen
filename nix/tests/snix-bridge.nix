@@ -72,9 +72,9 @@ pkgs.testers.nixosTest {
 
         # Import via snix-store, pointing at the bridge socket
         out = machine.succeed(
-            "BLOB_SERVICE_ADDR=grpc+unix:///tmp/snix-bridge.sock "
-            "DIRECTORY_SERVICE_ADDR=grpc+unix:///tmp/snix-bridge.sock "
-            "PATH_INFO_SERVICE_ADDR=grpc+unix:///tmp/snix-bridge.sock "
+            "BLOB_SERVICE_ADDR=grpc+unix:/tmp/snix-bridge.sock "
+            "DIRECTORY_SERVICE_ADDR=grpc+unix:/tmp/snix-bridge.sock "
+            "PATH_INFO_SERVICE_ADDR=grpc+unix:/tmp/snix-bridge.sock "
             "snix-store import /tmp/test-file.txt 2>&1"
         ).strip()
         machine.log(f"import output: {out}")
@@ -93,9 +93,9 @@ pkgs.testers.nixosTest {
         machine.succeed("echo 'file B' > /tmp/test-dir/sub/b.txt")
 
         out = machine.succeed(
-            "BLOB_SERVICE_ADDR=grpc+unix:///tmp/snix-bridge.sock "
-            "DIRECTORY_SERVICE_ADDR=grpc+unix:///tmp/snix-bridge.sock "
-            "PATH_INFO_SERVICE_ADDR=grpc+unix:///tmp/snix-bridge.sock "
+            "BLOB_SERVICE_ADDR=grpc+unix:/tmp/snix-bridge.sock "
+            "DIRECTORY_SERVICE_ADDR=grpc+unix:/tmp/snix-bridge.sock "
+            "PATH_INFO_SERVICE_ADDR=grpc+unix:/tmp/snix-bridge.sock "
             "snix-store import /tmp/test-dir 2>&1"
         ).strip()
         machine.log(f"dir import output: {out}")

@@ -18,9 +18,9 @@
 //!
 //! Then point snix-store at the bridge:
 //! ```bash
-//! BLOB_SERVICE_ADDR=grpc+unix:///tmp/aspen-castore.sock \
-//! DIRECTORY_SERVICE_ADDR=grpc+unix:///tmp/aspen-castore.sock \
-//! PATH_INFO_SERVICE_ADDR=grpc+unix:///tmp/aspen-castore.sock \
+//! BLOB_SERVICE_ADDR=grpc+unix:/tmp/aspen-castore.sock \
+//! DIRECTORY_SERVICE_ADDR=grpc+unix:/tmp/aspen-castore.sock \
+//! PATH_INFO_SERVICE_ADDR=grpc+unix:/tmp/aspen-castore.sock \
 //!   snix-store virtiofs /tmp/snix.sock
 //! ```
 

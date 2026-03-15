@@ -81,9 +81,9 @@ pkgs.testers.nixosTest {
         # Capture stderr separately for debugging.
         # Use RUST_LOG=debug for detailed tracing from the bridge.
         rc, import_out = host.execute(
-            "BLOB_SERVICE_ADDR=grpc+unix:///tmp/bridge.sock "
-            "DIRECTORY_SERVICE_ADDR=grpc+unix:///tmp/bridge.sock "
-            "PATH_INFO_SERVICE_ADDR=grpc+unix:///tmp/bridge.sock "
+            "BLOB_SERVICE_ADDR=grpc+unix:/tmp/bridge.sock "
+            "DIRECTORY_SERVICE_ADDR=grpc+unix:/tmp/bridge.sock "
+            "PATH_INFO_SERVICE_ADDR=grpc+unix:/tmp/bridge.sock "
             "RUST_LOG=info "
             "snix-store import /tmp/input.txt 2>/tmp/import_stderr.txt"
         )
@@ -123,9 +123,9 @@ pkgs.testers.nixosTest {
         # Point the virtiofs daemon at the bridge via env vars.
         # The VM will mount /nix/store, run find, and shut down.
         out = host.succeed(
-            "BLOB_SERVICE_ADDR=grpc+unix:///tmp/bridge.sock "
-            "DIRECTORY_SERVICE_ADDR=grpc+unix:///tmp/bridge.sock "
-            "PATH_INFO_SERVICE_ADDR=grpc+unix:///tmp/bridge.sock "
+            "BLOB_SERVICE_ADDR=grpc+unix:/tmp/bridge.sock "
+            "DIRECTORY_SERVICE_ADDR=grpc+unix:/tmp/bridge.sock "
+            "PATH_INFO_SERVICE_ADDR=grpc+unix:/tmp/bridge.sock "
             "CH_CMDLINE='snix.find' "
             "timeout 60 run-snix-vm 2>&1 || true"
         )

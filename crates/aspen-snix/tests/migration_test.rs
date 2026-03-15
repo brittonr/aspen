@@ -176,8 +176,8 @@ async fn test_migration_aware_get_from_legacy() {
 
     // Put entry in legacy store
     let entry = make_cache_entry(
-        "0123456789abcdef0123456789abcdef01234567",
-        "/nix/store/0123456789abcdef0123456789abcdef01234567-test",
+        "0123456789abcd0g0123456789abcd0g01234567",
+        "/nix/store/0123456789abcd0g0123456789abcd0g01234567-test",
         1024,
     );
     infra.legacy_index.put(entry.clone()).await.unwrap();
@@ -206,7 +206,7 @@ async fn test_migration_aware_exists_legacy() {
     let infra = TestInfra::new();
     let index = infra.migration_aware_index();
 
-    let entry = make_cache_entry("0123456789abcdef0123456789abcdef01234567", "/nix/store/test", 1024);
+    let entry = make_cache_entry("0123456789abcd0g0123456789abcd0g01234567", "/nix/store/test", 1024);
     infra.legacy_index.put(entry.clone()).await.unwrap();
 
     assert!(index.exists(&entry.store_hash).await.unwrap());
@@ -219,7 +219,7 @@ async fn test_migration_aware_put_to_legacy() {
     let infra = TestInfra::new();
     let index = infra.migration_aware_index();
 
-    let entry = make_cache_entry("0123456789abcdef0123456789abcdef01234567", "/nix/store/test", 1024);
+    let entry = make_cache_entry("0123456789abcd0g0123456789abcd0g01234567", "/nix/store/test", 1024);
     index.put(entry.clone()).await.unwrap();
 
     // Should be in legacy store
@@ -234,7 +234,7 @@ async fn test_migration_aware_stats() {
 
     // Put some entries
     for i in 0..5 {
-        let entry = make_cache_entry(&format!("{:040x}", i), &format!("/nix/store/pkg-{}", i), (i * 100) as u64);
+        let entry = make_cache_entry(&format!("{:040}", i), &format!("/nix/store/pkg-{}", i), (i * 100) as u64);
         index.put(entry).await.unwrap();
     }
 
@@ -248,7 +248,7 @@ async fn test_migration_aware_is_migrated_false() {
     let index = infra.migration_aware_index();
 
     // Entry only in legacy
-    let entry = make_cache_entry("0123456789abcdef0123456789abcdef01234567", "/nix/store/test", 1024);
+    let entry = make_cache_entry("0123456789abcd0g0123456789abcd0g01234567", "/nix/store/test", 1024);
     infra.legacy_index.put(entry.clone()).await.unwrap();
 
     // Should not be marked as migrated
@@ -320,7 +320,7 @@ async fn test_concurrent_migration_aware_reads() {
 
     // Pre-populate
     for i in 0..10 {
-        let entry = make_cache_entry(&format!("{:040x}", i), &format!("/nix/store/pkg-{}", i), i * 100);
+        let entry = make_cache_entry(&format!("{:040}", i), &format!("/nix/store/pkg-{}", i), i * 100);
         infra.legacy_index.put(entry).await.unwrap();
     }
 
@@ -329,7 +329,7 @@ async fn test_concurrent_migration_aware_reads() {
     let handles: Vec<_> = (0..10)
         .map(|i| {
             let idx = Arc::clone(&index);
-            let hash = format!("{:040x}", i);
+            let hash = format!("{:040}", i);
             tokio::spawn(async move { idx.get(&hash).await })
         })
         .collect();
@@ -349,7 +349,7 @@ async fn test_concurrent_migration_aware_writes() {
         .map(|i| {
             let idx = Arc::clone(&index);
             tokio::spawn(async move {
-                let entry = make_cache_entry(&format!("{:040x}", i), &format!("/nix/store/pkg-{}", i), i * 100);
+                let entry = make_cache_entry(&format!("{:040}", i), &format!("/nix/store/pkg-{}", i), i * 100);
                 idx.put(entry).await
             })
         })
@@ -361,7 +361,7 @@ async fn test_concurrent_migration_aware_writes() {
 
     // Verify all written
     for i in 0..20 {
-        let hash = format!("{:040x}", i);
+        let hash = format!("{:040}", i);
         assert!(index.exists(&hash).await.unwrap());
     }
 }

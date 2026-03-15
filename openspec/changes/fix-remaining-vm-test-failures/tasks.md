@@ -12,8 +12,8 @@
 
 ## 3. Snix Bridge Import Fix (snix-bridge-virtiofs)
 
-- [ ] 3.1 Run `snix-bridge-test` (the simpler non-virtiofs test) to confirm whether import alone fails or only the virtiofs step
+- [x] 3.1 Run `snix-bridge-test` (the simpler non-virtiofs test) to confirm whether import alone fails or only the virtiofs step
 - [x] 3.2 Add diagnostic tracing to `IrohBlobService::open_write()`, `BlobWriter::close()`, `RaftPathInfoService::put()`, and `RaftDirectoryPutter::put()/close()` in `crates/aspen-snix/src/`
 - [x] 3.3 Check for proto/API version mismatch between snix-store binary (built from `snix-src` flake input) and aspen-snix crate deps — confirmed same rev `180bfc4`, no mismatch
-- [ ] 3.4 Fix the root cause based on debugging findings (run interactive test with `nix build .#checks.x86_64-linux.snix-bridge-virtiofs-test.driverInteractive --impure`)
-- [ ] 3.5 Verify the `snix-bridge-virtiofs-test` passes end-to-end
+- [x] 3.4 Fix the root cause based on debugging findings (run interactive test with `nix build .#checks.x86_64-linux.snix-bridge-virtiofs-test.driverInteractive --impure`)
+- [x] 3.5 Verify the `snix-bridge-virtiofs-test` passes end-to-end
