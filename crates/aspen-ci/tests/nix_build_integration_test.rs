@@ -14,7 +14,7 @@
 //! 3. **Build Failures** - Invalid flakes, timeouts, attribute errors
 //! 4. **Configuration** - Missing services, partial configs, validation
 
-#![cfg(feature = "snix")]
+#![cfg(feature = "nix-executor")]
 //! 5. **Edge Cases** - Large outputs, long logs, concurrent builds
 //!
 //! # Tiger Style
@@ -173,6 +173,7 @@ fn create_test_payload(flake_url: &str, attribute: Option<&str>) -> NixBuildPayl
         should_upload_result: true,
         artifacts: vec![],
         job_name: Some("test-build".to_string()),
+        run_id: Some("test-run".to_string()),
         extra_args: vec![],
         working_dir: None,
         cache_key: None,

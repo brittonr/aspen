@@ -24,6 +24,8 @@ use snix_store::nar::SimpleRenderer;
 use snix_store::pathinfoservice::PathInfoService;
 use tracing::debug;
 use tracing::info;
+#[cfg(feature = "nix-cli-fallback")]
+use tracing::warn;
 
 use crate::config::MAX_FLAKE_URL_LENGTH;
 

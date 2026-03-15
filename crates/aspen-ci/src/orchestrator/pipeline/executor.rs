@@ -473,6 +473,7 @@ mod tests {
             max_concurrent: None,
             expected_binary: None,
             stateful: None,
+            validate_only: None,
         }
     }
 
@@ -489,36 +490,43 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_build_nix_payload_publish_to_cache_true() {
+    fn test_store() -> std::sync::Arc<aspen_testing_core::DeterministicKeyValueStore> {
+        aspen_testing_core::DeterministicKeyValueStore::new()
+    }
+
+    #[tokio::test]
+    async fn test_build_nix_payload_publish_to_cache_true() {
         let job = test_job_config();
         let context = test_context();
+        let store = test_store();
 
-        let value = build_nix_payload(&job, &context).unwrap();
+        let value = build_nix_payload(&job, &context, &store).await.unwrap();
         let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
 
         assert!(payload.publish_to_cache);
         assert!(payload.should_upload_result);
     }
 
-    #[test]
-    fn test_build_nix_payload_publish_to_cache_false() {
+    #[tokio::test]
+    async fn test_build_nix_payload_publish_to_cache_false() {
         let mut job = test_job_config();
         job.publish_to_cache = false;
         let context = test_context();
+        let store = test_store();
 
-        let value = build_nix_payload(&job, &context).unwrap();
+        let value = build_nix_payload(&job, &context, &store).await.unwrap();
         let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
 
         assert!(!payload.publish_to_cache);
     }
 
-    #[test]
-    fn test_build_nix_payload_preserves_flake_fields() {
+    #[tokio::test]
+    async fn test_build_nix_payload_preserves_flake_fields() {
         let job = test_job_config();
         let context = test_context();
+        let store = test_store();
 
-        let value = build_nix_payload(&job, &context).unwrap();
+        let value = build_nix_payload(&job, &context, &store).await.unwrap();
         let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
 
         assert_eq!(payload.flake_url, ".");
@@ -531,12 +539,13 @@ mod tests {
     /// PipelineContext with empty run_id, which then got serialized into
     /// NixBuildPayload. Log chunks were written as `_ci:logs::<job>:<chunk>`
     /// (empty run_id), making them invisible to `ci logs` queries.
-    #[test]
-    fn test_build_nix_payload_preserves_run_id() {
+    #[tokio::test]
+    async fn test_build_nix_payload_preserves_run_id() {
         let job = test_job_config();
         let context = test_context();
+        let store = test_store();
 
-        let value = build_nix_payload(&job, &context).unwrap();
+        let value = build_nix_payload(&job, &context, &store).await.unwrap();
         let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
 
         assert_eq!(
@@ -547,13 +556,14 @@ mod tests {
     }
 
     /// Verify that empty run_id would cause the log streaming bug.
-    #[test]
-    fn test_build_nix_payload_empty_run_id_detected() {
+    #[tokio::test]
+    async fn test_build_nix_payload_empty_run_id_detected() {
         let job = test_job_config();
         let mut context = test_context();
         context.run_id = String::new(); // Simulates the bug
+        let store = test_store();
 
-        let value = build_nix_payload(&job, &context).unwrap();
+        let value = build_nix_payload(&job, &context, &store).await.unwrap();
         let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
 
         // Empty run_id means log keys will have double colon: _ci:logs::<job>:<chunk>
@@ -603,6 +613,7 @@ mod tests {
                         max_concurrent: None,
                         expected_binary: None,
                         stateful: None,
+                        validate_only: None,
                     }],
                     parallel: true,
                     depends_on: vec![],
@@ -636,6 +647,7 @@ mod tests {
                         max_concurrent: None,
                         expected_binary: None,
                         stateful: None,
+                        validate_only: None,
                     }],
                     parallel: true,
                     depends_on: vec!["build".to_string()],

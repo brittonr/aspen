@@ -332,12 +332,12 @@ mod tests {
         assert!(result.is_success());
 
         // Drain remaining logs
-        let mut stdout_lines = 0u32;
-        let mut stderr_lines = 0u32;
+        let mut _stdout_lines = 0u32;
+        let mut _stderr_lines = 0u32;
         while let Ok(log) = log_rx.try_recv() {
             match log {
-                BuildLog::Stdout(_) => stdout_lines += 1,
-                BuildLog::Stderr(_) => stderr_lines += 1,
+                BuildLog::Stdout(_) => _stdout_lines += 1,
+                BuildLog::Stderr(_) => _stderr_lines += 1,
             }
         }
         // At minimum the stdout should have captured lines

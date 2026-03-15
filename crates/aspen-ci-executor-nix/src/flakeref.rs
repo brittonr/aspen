@@ -20,7 +20,16 @@ impl ParsedFlakeRef {
     ///
     /// Returns `Err` if the flake URL is not a valid flake reference.
     pub fn parse(flake_url: &str, attribute: &str) -> Result<Self, FlakeRefParseError> {
-        let flake_ref: FlakeRef = flake_url.parse().map_err(|e| FlakeRefParseError {
+        // Normalize bare paths to path: URLs. The nix CLI accepts "/foo" and "./foo"
+        // as shorthand for "path:/foo" and "path:./foo", but nix-compat's FlakeRef
+        // parser requires the explicit scheme.
+        let normalized = if flake_url.starts_with('/') || flake_url == "." || flake_url.starts_with("./") {
+            format!("path:{flake_url}")
+        } else {
+            flake_url.to_string()
+        };
+
+        let flake_ref: FlakeRef = normalized.parse().map_err(|e| FlakeRefParseError {
             url: flake_url.to_string(),
             reason: format!("{e}"),
         })?;

@@ -876,6 +876,7 @@ dependencies = [
  "aspen-forge",
  "aspen-jobs",
  "aspen-nickel",
+ "aspen-testing-core",
  "aspen-ticket",
  "async-trait",
  "blake3",
