@@ -1,13 +1,19 @@
 //! Nix binary cache gateway for Aspen.
 //!
-//! A lightweight HTTP/1.1 server that translates Nix binary cache protocol
-//! requests into Aspen cluster RPC calls. This is a protocol bridge, like
-//! `git-remote-aspen` bridges Git protocol to Aspen.
+//! A lightweight HTTP server that translates Nix binary cache protocol
+//! requests into Aspen cluster operations. Two backends:
+//!
+//! - **nar-bridge** (feature `snix-http`): Uses nar-bridge's axum router with Aspen's
+//!   `BlobService`/`DirectoryService`/`PathInfoService` trait impls. Supports GET, HEAD, PUT, range
+//!   requests, and compression.
+//!
+//! - **legacy** (feature `legacy-http`): Hand-rolled hyper server using RPC calls. Read-only (GET
+//!   only), no range requests.
 //!
 //! # Usage
 //!
 //! ```bash
-//! aspen-nix-cache-gateway --ticket <cluster-ticket> [--port 8380] [--cache-name aspen-cache]
+//! aspen-nix-cache-gateway --ticket <cluster-ticket> [--port 8380]
 //! ```
 //!
 //! Then configure Nix:
@@ -16,22 +22,18 @@
 //! ```
 
 mod client_kv;
+
+#[cfg(feature = "snix-http")]
+mod server_nar_bridge;
+
+#[cfg(feature = "legacy-http")]
 mod server;
 
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
-
-use anyhow::Context;
-use aspen_cache::CacheSigningKey;
 use aspen_cache::DEFAULT_CACHE_NAME;
-use aspen_cache::signing::ensure_signing_key;
-use aspen_client::AspenClient;
 use clap::Parser;
-use client_kv::ClientKvAdapter;
 use tracing::info;
 
-/// Nix binary cache gateway — translates HTTP cache requests to Aspen RPC.
+/// Nix binary cache gateway — translates HTTP cache requests to Aspen storage.
 #[derive(Parser)]
 #[command(name = "aspen-nix-cache-gateway")]
 #[command(about = "HTTP gateway for Aspen's distributed Nix binary cache")]
@@ -57,12 +59,22 @@ struct Cli {
     timeout_secs: u64,
 }
 
-/// Shared state for the HTTP server.
+/// Configuration extracted from CLI args, shared between backends.
+pub struct GatewayConfig {
+    pub ticket: String,
+    pub port: u16,
+    pub bind: String,
+    pub cache_name: String,
+    pub timeout_secs: u64,
+}
+
+/// Shared state for the legacy HTTP server.
+#[cfg(feature = "legacy-http")]
 pub struct GatewayState {
     /// Aspen client for cluster communication.
-    pub client: AspenClient,
+    pub client: aspen_client::AspenClient,
     /// Cache signing key.
-    pub signing_key: CacheSigningKey,
+    pub signing_key: aspen_cache::CacheSigningKey,
 }
 
 #[tokio::main]
@@ -83,18 +95,54 @@ async fn main() -> anyhow::Result<()> {
         "starting nix cache gateway"
     );
 
-    // Connect to cluster
-    let timeout = Duration::from_secs(cli.timeout_secs);
-    let client = AspenClient::connect(&cli.ticket, timeout, None).await.context("failed to connect to cluster")?;
+    let config = GatewayConfig {
+        ticket: cli.ticket,
+        port: cli.port,
+        bind: cli.bind,
+        cache_name: cli.cache_name,
+        timeout_secs: cli.timeout_secs,
+    };
+
+    #[cfg(feature = "snix-http")]
+    {
+        info!("using nar-bridge backend");
+        server_nar_bridge::run(&config).await
+    }
+
+    #[cfg(all(feature = "legacy-http", not(feature = "snix-http")))]
+    {
+        info!("using legacy HTTP backend");
+        run_legacy(&config).await
+    }
+
+    #[cfg(not(any(feature = "snix-http", feature = "legacy-http")))]
+    {
+        let _ = config;
+        anyhow::bail!("no HTTP backend enabled — build with 'snix-http' or 'legacy-http' feature")
+    }
+}
+
+/// Run the legacy hyper-based HTTP server.
+#[cfg(feature = "legacy-http")]
+async fn run_legacy(config: &GatewayConfig) -> anyhow::Result<()> {
+    use std::net::SocketAddr;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use anyhow::Context;
+    use aspen_cache::signing::ensure_signing_key;
+    use aspen_client::AspenClient;
+
+    let timeout = Duration::from_secs(config.timeout_secs);
+    let client = AspenClient::connect(&config.ticket, timeout, None).await.context("failed to connect to cluster")?;
 
     info!("connected to cluster");
 
-    // Reuse the same client for signing key management (shares the iroh endpoint)
-    let kv_store: Arc<dyn aspen_traits::KeyValueStore> = Arc::new(ClientKvAdapter::new(Arc::new(client.clone())));
+    let kv_store: Arc<dyn aspen_traits::KeyValueStore> =
+        Arc::new(client_kv::ClientKvAdapter::new(Arc::new(client.clone())));
 
-    // Ensure signing key exists (generates if first time)
     let (signing_key, public_key) =
-        ensure_signing_key(&kv_store, &cli.cache_name).await.context("failed to ensure signing key")?;
+        ensure_signing_key(&kv_store, &config.cache_name).await.context("failed to ensure signing key")?;
 
     info!(
         public_key = %public_key,
@@ -103,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
 
     let state = Arc::new(GatewayState { client, signing_key });
 
-    let addr: SocketAddr = format!("{}:{}", cli.bind, cli.port).parse().context("invalid bind address")?;
+    let addr: SocketAddr = format!("{}:{}", config.bind, config.port).parse().context("invalid bind address")?;
 
     server::run(state, addr).await
 }

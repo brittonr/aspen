@@ -46,7 +46,7 @@ use tokio_stream::wrappers::UnixListenerStream;
 use tonic::transport::Server;
 use tracing::info;
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(name = "aspen-snix-bridge")]
 #[command(about = "gRPC bridge: snix-store ↔ Aspen distributed storage")]
 struct Args {
@@ -62,18 +62,32 @@ struct Args {
     /// RPC timeout in seconds for cluster communication.
     #[arg(long, default_value_t = 10)]
     timeout_secs: u64,
+
+    /// Enable HTTP castore browser for debugging store contents.
+    #[cfg(feature = "snix-http")]
+    #[arg(long)]
+    browse: bool,
+
+    /// Port for the HTTP castore browser.
+    #[cfg(feature = "snix-http")]
+    #[arg(long, default_value_t = 9000)]
+    browse_port: u16,
+
+    /// Tracing configuration (verbosity, OTLP export, tracers).
+    #[clap(flatten)]
+    tracing: snix_tracing::TracingArgs,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
-
     let args = Args::parse();
+
+    // Use snix-tracing for unified tracing setup (supports OTLP via --tracer otlp
+    // and OTEL_EXPORTER_OTLP_ENDPOINT env var)
+    let _tracing_handle = snix_tracing::TracingBuilder::default()
+        .handle_tracing_args(&args.tracing)
+        .build()
+        .expect("failed to initialize tracing");
 
     // Remove stale socket
     if args.socket.exists() {

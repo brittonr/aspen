@@ -18,10 +18,22 @@ aspen-kv-types = { workspace = true }
 aspen-traits = { workspace = true }
 async-trait = "0.1"
 
-# HTTP server
-hyper = { version = "1.6", features = ["http1", "server"] }
-hyper-util = { version = "0.1", features = ["tokio"] }
-http-body-util = "0.1"
+# Aspen snix service trait implementations (for nar-bridge backend)
+aspen-snix = { workspace = true, optional = true }
+aspen-blob = { workspace = true, optional = true }
+aspen-core = { workspace = true, optional = true }
+snix-castore = { workspace = true, optional = true }
+snix-store = { workspace = true, optional = true }
+# Note: aspen-client needs blob-store feature for RpcBlobStore when snix-http is enabled
+
+# nar-bridge: axum-based Nix binary cache HTTP server
+nar-bridge = { workspace = true, optional = true }
+axum = { version = "0.7", optional = true }
+
+# Legacy HTTP server (used when snix-http feature is disabled)
+hyper = { version = "1.6", features = ["http1", "server"], optional = true }
+hyper-util = { version = "0.1", features = ["tokio"], optional = true }
+http-body-util = { version = "0.1", optional = true }
 bytes = { workspace = true }
 
 # CLI
@@ -39,3 +51,10 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 # Serialization
 serde_json = { workspace = true }
+
+[features]
+default = ["legacy-http"]
+# Use nar-bridge axum router (replaces hand-rolled hyper server)
+snix-http = ["dep:nar-bridge", "dep:axum", "dep:aspen-snix", "dep:aspen-blob", "dep:aspen-core", "dep:snix-castore", "dep:snix-store", "aspen-client/blob-store"]
+# Legacy hand-rolled hyper HTTP server
+legacy-http = ["dep:hyper", "dep:hyper-util", "dep:http-body-util"]

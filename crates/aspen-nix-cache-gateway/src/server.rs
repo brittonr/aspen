@@ -1,4 +1,7 @@
-//! HTTP/1.1 server implementing the Nix binary cache protocol.
+//! Legacy HTTP/1.1 server implementing the Nix binary cache protocol.
+//!
+//! This is the hand-rolled hyper implementation, retained behind the `legacy-http`
+//! feature flag. The preferred backend is nar-bridge (`snix-http` feature).
 //!
 //! Routes:
 //! - `GET /nix-cache-info` — cache metadata

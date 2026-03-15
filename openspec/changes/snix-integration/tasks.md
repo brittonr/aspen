@@ -1,44 +1,44 @@
 ## 1. Dependency and Feature Flag Setup
 
-- [ ] 1.1 Add `snix-build`, `snix-eval`, `snix-glue`, `snix-serde`, `nix-daemon`, `nar-bridge`, `snix-castore-http`, `snix-tracing` to workspace `Cargo.toml` dependencies (same git rev as existing snix deps)
-- [ ] 1.2 Define new feature flags in workspace `Cargo.toml`: `snix-http`, `snix-daemon`, `snix-eval`, `snix-build`
-- [ ] 1.3 Add `nix-cli-fallback` feature flag to `aspen-ci-executor-nix` for subprocess retention
-- [ ] 1.4 Update `full` feature to include all new snix features
-- [ ] 1.5 Verify `cargo check --features full` compiles with all new dependencies
+- [x] 1.1 Add `snix-build`, `snix-eval`, `snix-glue`, `snix-serde`, `nix-daemon`, `nar-bridge`, `snix-castore-http`, `snix-tracing` to workspace `Cargo.toml` dependencies (same git rev as existing snix deps)
+- [x] 1.2 Define new feature flags in workspace `Cargo.toml`: `snix-http`, `snix-daemon`, `snix-eval`, `snix-build`
+- [x] 1.3 Add `nix-cli-fallback` feature flag to `aspen-ci-executor-nix` for subprocess retention
+- [x] 1.4 Update `full` feature to include all new snix features
+- [x] 1.5 Verify `cargo check --features full` compiles with all new dependencies
 
 ## 2. Tier 1: nar-bridge Adoption (Replace Cache Gateway)
 
-- [ ] 2.1 Add `nar-bridge` dependency to `aspen-nix-cache-gateway` behind `snix-http` feature
-- [ ] 2.2 Create adapter to construct `nar_bridge::AppState` from Aspen's `BlobService`/`DirectoryService`/`PathInfoService`
-- [ ] 2.3 Replace custom hyper HTTP server in `aspen-nix-cache-gateway/src/server.rs` with nar-bridge axum router
-- [ ] 2.4 Integrate cluster signing key into nar-bridge's narinfo response pipeline
-- [ ] 2.5 Add PUT endpoint support (narinfo + NAR upload) via nar-bridge
-- [ ] 2.6 Remove custom hyper/http-body-util dependencies from `aspen-nix-cache-gateway`
-- [ ] 2.7 Update `aspen-nix-cache-gateway/src/main.rs` to use nar-bridge initialization
-- [ ] 2.8 Port existing `gateway_test.rs` to validate nar-bridge-backed gateway serves same protocol
-- [ ] 2.9 Test range request support on NAR downloads
+- [x] 2.1 Add `nar-bridge` dependency to `aspen-nix-cache-gateway` behind `snix-http` feature
+- [x] 2.2 Create adapter to construct `nar_bridge::AppState` from Aspen's `BlobService`/`DirectoryService`/`PathInfoService`
+- [x] 2.3 Replace custom hyper HTTP server in `aspen-nix-cache-gateway/src/server.rs` with nar-bridge axum router
+- [x] 2.4 Integrate cluster signing key into nar-bridge's narinfo response pipeline
+- [x] 2.5 Add PUT endpoint support (narinfo + NAR upload) via nar-bridge
+- [x] 2.6 Remove custom hyper/http-body-util dependencies from `aspen-nix-cache-gateway`
+- [x] 2.7 Update `aspen-nix-cache-gateway/src/main.rs` to use nar-bridge initialization
+- [x] 2.8 Port existing `gateway_test.rs` to validate nar-bridge-backed gateway serves same protocol
+- [x] 2.9 Test range request support on NAR downloads
 
 ## 3. Tier 1: FlakeRef Parsing
 
-- [ ] 3.1 Add `nix-compat` `flakeref` feature/module usage to `aspen-ci-executor-nix`
-- [ ] 3.2 Replace `NixBuildPayload::flake_ref()` string concatenation with `FlakeRef` parsing and formatting
-- [ ] 3.3 Add flake URL validation in `NixBuildPayload::validate()` using `FlakeRef` parser
-- [ ] 3.4 Extract `rev`/`ref` from parsed `FlakeRef` for cache key computation
-- [ ] 3.5 Write tests for GitHub, GitLab, Path, Git, and Indirect flake ref round-trips
+- [x] 3.1 Add `nix-compat` `flakeref` feature/module usage to `aspen-ci-executor-nix`
+- [x] 3.2 Replace `NixBuildPayload::flake_ref()` string concatenation with `FlakeRef` parsing and formatting
+- [x] 3.3 Add flake URL validation in `NixBuildPayload::validate()` using `FlakeRef` parser
+- [x] 3.4 Extract `rev`/`ref` from parsed `FlakeRef` for cache key computation
+- [x] 3.5 Write tests for GitHub, GitLab, Path, Git, and Indirect flake ref round-trips
 
 ## 4. Tier 1: snix-tracing Adoption
 
-- [ ] 4.1 Add `snix-tracing` dependency to `aspen-snix-bridge`
-- [ ] 4.2 Replace manual `tracing_subscriber` setup in `aspen-snix-bridge/src/main.rs` with `snix-tracing::TracingBuilder`
-- [ ] 4.3 Integrate snix-tracing clap args into bridge CLI parser
-- [ ] 4.4 Verify OTLP export works when `OTEL_EXPORTER_OTLP_ENDPOINT` is set
+- [x] 4.1 Add `snix-tracing` dependency to `aspen-snix-bridge`
+- [x] 4.2 Replace manual `tracing_subscriber` setup in `aspen-snix-bridge/src/main.rs` with `snix-tracing::TracingBuilder`
+- [x] 4.3 Integrate snix-tracing clap args into bridge CLI parser
+- [x] 4.4 Verify OTLP export works when `OTEL_EXPORTER_OTLP_ENDPOINT` is set
 
 ## 5. Tier 1: snix-castore-http Browse
 
-- [ ] 5.1 Add `snix-castore-http` dependency to `aspen-snix-bridge` behind `snix-http` feature
-- [ ] 5.2 Add `--browse` and `--browse-port` CLI flags to `aspen-snix-bridge`
-- [ ] 5.3 Wire `snix-castore-http` router to serve store path contents when `--browse` is passed
-- [ ] 5.4 Test directory listing, file download, and symlink redirect via HTTP browser
+- [x] 5.1 Add `snix-castore-http` dependency to `aspen-snix-bridge` behind `snix-http` feature
+- [x] 5.2 Add `--browse` and `--browse-port` CLI flags to `aspen-snix-bridge`
+- [x] 5.3 Wire `snix-castore-http` router to serve store path contents when `--browse` is passed
+- [x] 5.4 Test directory listing, file download, and symlink redirect via HTTP browser
 
 ## 6. Tier 2: nix-daemon Protocol
 

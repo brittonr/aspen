@@ -88,6 +88,9 @@ pub struct NixBuildPayload {
 
 impl NixBuildPayload {
     /// Validate the payload.
+    ///
+    /// Validates size limits and, for non-path flake URLs, checks that the URL
+    /// is a valid flake reference using `nix_compat::flakeref::FlakeRef`.
     pub fn validate(&self) -> Result<()> {
         if self.flake_url.is_empty() {
             return Err(CiCoreError::InvalidConfig {
@@ -113,15 +116,44 @@ impl NixBuildPayload {
             });
         }
 
+        // Validate flake URL structure via FlakeRef parser.
+        // Bare "." is a common shorthand that FlakeRef doesn't parse directly,
+        // so we skip validation for simple relative paths.
+        if self.flake_url != "." && !self.flake_url.starts_with("./") && !self.flake_url.starts_with("../") {
+            self.parsed_flake_ref().map_err(|e| CiCoreError::InvalidConfig { reason: e.to_string() })?;
+        }
+
         Ok(())
     }
 
-    /// Build the flake reference string.
+    /// Parse the flake URL into a structured `ParsedFlakeRef`.
+    ///
+    /// Returns `Err` if the URL is not a valid flake reference.
+    pub fn parsed_flake_ref(
+        &self,
+    ) -> std::result::Result<crate::flakeref::ParsedFlakeRef, crate::flakeref::FlakeRefParseError> {
+        crate::flakeref::ParsedFlakeRef::parse(&self.flake_url, &self.attribute)
+    }
+
+    /// Build the flake reference string for passing to `nix build`.
+    ///
+    /// Uses the original URL string (not FlakeRef.to_uri()) to preserve
+    /// the exact format nix CLI expects (e.g., `github:owner/repo`).
     pub fn flake_ref(&self) -> String {
         if self.attribute.is_empty() {
             self.flake_url.clone()
         } else {
             format!("{}#{}", self.flake_url, self.attribute)
         }
+    }
+
+    /// Extract the `rev` from the flake URL, if present.
+    pub fn flake_rev(&self) -> Option<String> {
+        self.parsed_flake_ref().ok().and_then(|p| p.rev().map(String::from))
+    }
+
+    /// Extract the `ref` (branch/tag) from the flake URL, if present.
+    pub fn flake_git_ref(&self) -> Option<String> {
+        self.parsed_flake_ref().ok().and_then(|p| p.git_ref().map(String::from))
     }
 }

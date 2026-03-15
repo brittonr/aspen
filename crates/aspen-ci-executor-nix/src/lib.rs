@@ -32,6 +32,7 @@ mod artifacts;
 mod cache;
 mod config;
 mod executor;
+pub mod flakeref;
 mod payload;
 #[cfg(feature = "snix")]
 mod snix;

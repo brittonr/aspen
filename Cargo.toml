@@ -320,7 +320,15 @@ schemars = "0.8"  # JSON Schema generation (0.8 for Draft 7 compatibility with j
 # SNIX dependencies for Nix store integration
 snix-castore = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }
 snix-store = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }
-nix-compat = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac", features = ["async", "serde"] }
+nix-compat = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac", features = ["async", "serde", "flakeref"] }
+snix-build = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }
+snix-eval = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }
+snix-glue = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }
+snix-serde = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }
+nix-daemon = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }
+nar-bridge = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }
+snix-castore-http = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }
+snix-tracing = { git = "https://git.snix.dev/snix/snix.git", rev = "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac" }
 prost = "0.13"  # Protobuf encoding for SNIX types
 tonic = { version = "0.12", features = ["transport"] }  # gRPC for SNIX services
 async-stream = "0.3"  # Async stream utilities for SNIX
@@ -364,6 +372,14 @@ aspen-snix = { workspace = true, optional = true }
 aspen-castore = { workspace = true, optional = true }
 snix-castore = { workspace = true, optional = true }
 snix-store = { workspace = true, optional = true }
+snix-build = { workspace = true, optional = true }
+snix-eval = { workspace = true, optional = true }
+snix-glue = { workspace = true, optional = true }
+snix-serde = { workspace = true, optional = true }
+nix-daemon = { workspace = true, optional = true }
+nar-bridge = { workspace = true, optional = true }
+snix-castore-http = { workspace = true, optional = true }
+snix-tracing = { workspace = true, optional = true }
 
 aspen-proxy = { workspace = true, optional = true }
 aspen-net = { workspace = true, optional = true }
@@ -450,7 +466,7 @@ cloud-hypervisor-client = "0.3"
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
 default = []
 
-full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "deploy", "kv-branch", "nostr-relay"]
+full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "snix-http", "snix-daemon", "snix-eval", "snix-build", "deploy", "kv-branch", "nostr-relay"]
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
@@ -486,10 +502,14 @@ nostr-relay = ["dep:aspen-nostr-relay", "hooks", "aspen-cluster/nostr-relay"]
 federation = ["aspen-cluster/federation"]
 relay-server = ["aspen-cluster/relay-server"]
 snix = ["dep:aspen-snix", "dep:aspen-castore", "dep:snix-castore", "dep:snix-store", "blob", "aspen-cluster/snix", "aspen-ci?/nix-executor-snix"]
+snix-http = ["snix", "dep:nar-bridge", "dep:snix-castore-http"]
+snix-daemon = ["snix", "dep:nix-daemon"]
+snix-eval = ["snix", "dep:snix-eval", "dep:snix-glue", "dep:snix-serde"]
+snix-build = ["snix-eval", "dep:snix-build"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\", \"kv-branch\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"snix-http\", \"snix-daemon\", \"snix-eval\", \"snix-build\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\", \"kv-branch\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit

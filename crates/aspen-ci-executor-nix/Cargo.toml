@@ -18,10 +18,11 @@ aspen-jobs = { workspace = true }
 # Iroh for P2P networking
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 
-# SNIX dependencies for direct NAR ingestion (optional)
+# SNIX dependencies
 snix-castore = { workspace = true, optional = true }
 snix-store = { workspace = true, optional = true }
-nix-compat = { workspace = true, optional = true }
+# nix-compat: always needed for FlakeRef parsing; also used for NAR ingestion with snix feature
+nix-compat = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
@@ -42,7 +43,9 @@ glob = "0.3"
 [features]
 default = []
 # SNIX integration for decomposed content-addressed cache uploads
-snix = ["dep:snix-castore", "dep:snix-store", "dep:nix-compat"]
+snix = ["dep:snix-castore", "dep:snix-store"]
+# Retain nix CLI subprocess as fallback when snix-build is unavailable
+nix-cli-fallback = []
 # Re-enable when iroh is upgraded to 0.96+:
 # nix-cache-proxy = ["dep:h3", "dep:h3-iroh", "aspen-ci-executor-shell/nix-cache-proxy"]
 nix-cache-proxy = ["aspen-ci-executor-shell/nix-cache-proxy"]

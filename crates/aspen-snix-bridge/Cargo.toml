@@ -39,3 +39,15 @@ tokio-stream = { version = "0.1", features = ["net"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.5", features = ["derive"] }
+
+# snix-tracing for unified tracing setup with OTLP support
+snix-tracing = { workspace = true, features = ["clap", "otlp"] }
+
+# Optional: castore HTTP browser for debugging store contents
+snix-castore-http = { workspace = true, optional = true }
+axum = { version = "0.7", optional = true }
+
+[features]
+default = []
+# HTTP browser for castore contents (debugging)
+snix-http = ["dep:snix-castore-http", "dep:axum"]
