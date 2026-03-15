@@ -10,9 +10,6 @@
 #   - SOPS file decrypt using Transit
 #   - SOPS key rotation (rewrap data key after Transit key rotate)
 #   - Multi-key-group: Transit + age
-#   - gRPC key service bridge (Go SOPS compat layer)
-#   - Go SOPS interop: aspen-sops encrypt → Go sops decrypt via keyservice
-#   - Multi-key-group interop: Transit + age, cross-tool decrypt
 #
 # Run:
 #   nix build .#checks.x86_64-linux.sops-transit-test --impure
@@ -30,20 +27,6 @@
 }: let
   # Deterministic Iroh secret key (64 hex chars = 32 bytes).
   secretKey = "0000000000000002000000000000000200000000000000020000000000000002";
-
-  # Plaintext JSON file for interop test — Go SOPS doesn't support TOML,
-  # so interop tests use JSON format. (pkgs.writeText avoids heredoc-in-Python issues)
-  interopJson = pkgs.writeText "secrets-interop.json" (builtins.toJSON {
-    database = {
-      host = "db.internal.example.com";
-      port = 5432;
-      password = "super-secret-password-123";
-    };
-    api = {
-      key = "sk-live-interop-test-key-abc123";
-      endpoint = "https://api.example.com/v1";
-    };
-  });
 
   # Shared cluster cookie.
   cookie = "sops-transit-test";
@@ -90,7 +73,6 @@ in
         environment.systemPackages = [
           aspenCliPackage
           aspenSopsPackage
-          pkgs.sops
           pkgs.age
         ];
 
@@ -340,132 +322,12 @@ in
             node1.log("Transit rewrap flow: OK")
 
         # ================================================================
-        # GO SOPS INTEROP: aspen-sops encrypt → Go sops decrypt
+        # MULTI-KEY-GROUP: Transit + age
         # ================================================================
-        # Task 12.3: Full round-trip interop via gRPC key service bridge.
-        #
-        # Flow:
-        #   1. Create a plaintext TOML file
-        #   2. Encrypt it with aspen-sops (native mode, directly via Iroh QUIC)
-        #   3. Start aspen-sops keyservice (gRPC bridge on Unix socket)
-        #   4. Decrypt the encrypted file with Go sops via --keyservice
-        #   5. Compare decrypted output with original plaintext
+        # Encrypt with both Transit + age key groups.
+        # aspen-sops decrypts with Transit or with age identity.
 
-        with subtest("go-sops interop: aspen-sops encrypt then go-sops decrypt"):
-            ticket = get_ticket()
-
-            # Step 1: Create a plaintext JSON file (copy from nix store so it's mutable)
-            # Go SOPS doesn't support TOML, so interop uses JSON format.
-            node1.succeed("cp ${interopJson} /tmp/secrets-interop.json")
-            node1.succeed("chmod 644 /tmp/secrets-interop.json")
-
-            # Keep a copy of the original for comparison
-            original = node1.succeed("cat /tmp/secrets-interop.json").strip()
-            node1.log(f"Original plaintext ({len(original)} bytes)")
-
-            # Step 2: Encrypt with aspen-sops
-            rc, enc_out = node1.execute(
-                f"aspen-sops encrypt /tmp/secrets-interop.json "
-                f"--cluster-ticket '{ticket}' "
-                f"--transit-key ${transitKeyName} "
-                f"--in-place 2>&1"
-            )
-            if rc != 0:
-                node1.log(f"aspen-sops encrypt failed (exit {rc}): {enc_out}")
-            assert rc == 0, f"aspen-sops encrypt failed (exit {rc}): {enc_out}"
-
-            encrypted = node1.succeed("cat /tmp/secrets-interop.json").strip()
-            node1.log(f"Encrypted file ({len(encrypted)} bytes)")
-
-            # Verify values are actually encrypted (contain ENC[AES256_GCM,...])
-            assert "ENC[AES256_GCM," in encrypted, \
-                f"encrypted file doesn't contain ENC[AES256_GCM,: {encrypted[:200]}"
-            # Keys should still be in plaintext
-            assert "password" in encrypted, \
-                f"key names should be in plaintext: {encrypted[:200]}"
-            assert "super-secret-password-123" not in encrypted, \
-                f"values should be encrypted: {encrypted[:200]}"
-            node1.log("aspen-sops encrypt: OK (values encrypted, keys plaintext)")
-
-            # Verify hc_vault_transit is present for Go SOPS interop
-            assert "hc_vault_transit" in encrypted, \
-                f"hc_vault_transit missing from encrypted file — Go SOPS interop requires it"
-
-            # Step 3: Start the keyservice bridge in the background
-            # Use absolute path — systemd-run transient units don't inherit
-            # environment.systemPackages PATH.
-            sops_bin = "${aspenSopsPackage}/bin/aspen-sops"
-            node1.succeed(
-                f"systemd-run --unit=aspen-keyservice "
-                f"{sops_bin} keyservice "
-                f"--cluster-ticket '{ticket}' "
-                f"--transit-key ${transitKeyName} "
-                f"--socket /tmp/aspen-sops.sock"
-            )
-
-            # Wait for the Unix socket to appear
-            node1.wait_until_succeeds(
-                "test -S /tmp/aspen-sops.sock",
-                timeout=30,
-            )
-            node1.log("keyservice bridge started on /tmp/aspen-sops.sock")
-
-            # Step 4: Decrypt with Go sops via keyservice
-            #
-            # Go sops reads the hc_vault_transit metadata from the encrypted
-            # JSON file and sends Decrypt RPCs to the keyservice bridge.
-            # The bridge translates VaultKey decrypt calls to Aspen Transit RPCs.
-            node1.succeed(
-                f"sops decrypt "
-                f"--keyservice 'unix:///tmp/aspen-sops.sock' "
-                f"/tmp/secrets-interop.json "
-                f"> /tmp/secrets-interop-decrypted.json"
-            )
-
-            decrypted = node1.succeed("cat /tmp/secrets-interop-decrypted.json").strip()
-            node1.log(f"Go sops decrypted ({len(decrypted)} bytes)")
-
-            # Step 5: Compare decrypted output with original
-            node1.succeed("""
-              python3 -c "
-        import json
-
-        with open('/tmp/secrets-interop-decrypted.json') as f:
-            decrypted = json.load(f)
-
-        # Verify all original values survived the round-trip
-        assert decrypted['database']['host'] == 'db.internal.example.com', \
-            f'host mismatch: {decrypted[\"database\"][\"host\"]}'
-        assert decrypted['database']['port'] == 5432, \
-            f'port mismatch: {decrypted[\"database\"][\"port\"]}'
-        assert decrypted['database']['password'] == 'super-secret-password-123', \
-            f'password mismatch: {decrypted[\"database\"][\"password\"]}'
-        assert decrypted['api']['key'] == 'sk-live-interop-test-key-abc123', \
-            f'api key mismatch: {decrypted[\"api\"][\"key\"]}'
-        assert decrypted['api']['endpoint'] == 'https://api.example.com/v1', \
-            f'endpoint mismatch: {decrypted[\"api\"][\"endpoint\"]}'
-
-        # Verify sops metadata is NOT in the decrypted output
-        assert 'sops' not in decrypted, \
-            f'sops metadata should be stripped: {list(decrypted.keys())}'
-
-        print('All values match — Go SOPS interop OK')
-              "
-            """.strip())
-
-            node1.log("Go SOPS interop round-trip: PASSED")
-
-            # Stop keyservice
-            node1.succeed("systemctl stop aspen-keyservice || true")
-            node1.succeed("rm -f /tmp/aspen-sops.sock")
-
-        # ================================================================
-        # MULTI-KEY-GROUP INTEROP: Transit + age, cross-tool decrypt
-        # ================================================================
-        # Task 12.4: Encrypt with both Transit + age key groups.
-        # Go SOPS decrypts with age identity. aspen-sops decrypts with Transit.
-
-        with subtest("multi-key-group interop: Transit + age cross-tool decrypt"):
+        with subtest("multi-key-group: Transit + age cross-tool decrypt"):
             ticket = get_ticket()
 
             # Step 1: Generate an age keypair
@@ -526,13 +388,10 @@ in
             """.strip())
             node1.log("Multi-key Transit decrypt: PASSED")
 
-            # Step 5: Decrypt with Go sops using age identity (no keyservice needed)
-            #
-            # Go sops can decrypt with age directly using SOPS_AGE_KEY_FILE.
-            # It only needs to decrypt one key group — age is sufficient.
+            # Step 5: Decrypt with aspen-sops using age identity (no cluster needed)
             node1.succeed(
-                f"SOPS_AGE_KEY_FILE=/tmp/age-identity.txt "
-                f"sops decrypt /tmp/secrets-multikey.toml "
+                f"aspen-sops decrypt /tmp/secrets-multikey.toml "
+                f"--age-identity /tmp/age-identity.txt "
                 f"> /tmp/multikey-age-decrypted.toml"
             )
 
@@ -550,9 +409,9 @@ in
         print('Age decrypt: OK')
               "
             """.strip())
-            node1.log("Multi-key age decrypt (Go SOPS): PASSED")
+            node1.log("Multi-key age decrypt (aspen-sops): PASSED")
 
-            node1.log("Multi-key-group cross-tool interop: ALL PASSED")
+            node1.log("Multi-key-group: ALL PASSED")
 
         # ── summary ──────────────────────────────────────────────────────
         node1.log("All SOPS Transit integration tests completed successfully!")

@@ -160,6 +160,7 @@ members = [
 
     # SOPS backend
     "crates/aspen-sops",
+    "crates/aspen-sops-install-secrets",
 
     # RPC handlers (feature-gated)
     "crates/aspen-blob-handler",

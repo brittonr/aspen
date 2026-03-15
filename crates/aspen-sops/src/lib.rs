@@ -1,10 +1,7 @@
 //! SOPS CLI using Aspen Transit for key management.
 //!
 //! All SOPS library code (encrypt, decrypt, edit, rotate, MAC, format handling)
-//! now lives in `aspen_secrets::sops`. This crate provides:
-//!
-//! 1. The `aspen-sops` CLI binary
-//! 2. The gRPC key service bridge (feature-gated behind `keyservice`)
+//! now lives in `aspen_secrets::sops`. This crate provides the `aspen-sops` CLI binary.
 //!
 //! ## Usage
 //!
@@ -34,6 +31,3 @@ pub use aspen_secrets::sops::sops_constants as constants;
 pub use aspen_secrets::sops::sops_error as error;
 pub use aspen_secrets::sops::updatekeys;
 pub use aspen_secrets::verified;
-
-#[cfg(feature = "keyservice")]
-pub mod keyservice;

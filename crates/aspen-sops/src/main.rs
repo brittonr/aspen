@@ -131,22 +131,6 @@ async fn run(command: Commands) -> aspen_sops::Result<()> {
                 print!("{output}");
             }
         }
-
-        #[cfg(feature = "keyservice")]
-        Commands::Keyservice {
-            cluster_ticket,
-            transit_key,
-            transit_mount,
-            socket,
-        } => {
-            let config = aspen_sops::keyservice::KeyserviceConfig {
-                cluster_ticket,
-                transit_key,
-                transit_mount,
-                socket_path: socket,
-            };
-            aspen_sops::keyservice::start_keyservice(&config).await?;
-        }
     }
 
     Ok(())

@@ -2,8 +2,6 @@
 
 use std::path::PathBuf;
 
-#[cfg(feature = "keyservice")]
-use aspen_secrets::sops::sops_constants::DEFAULT_SOCKET_PATH;
 use aspen_secrets::sops::sops_constants::DEFAULT_TRANSIT_KEY;
 use aspen_secrets::sops::sops_constants::DEFAULT_TRANSIT_MOUNT;
 use clap::Parser;
@@ -142,25 +140,5 @@ pub enum Commands {
         /// Update in place.
         #[arg(long, short)]
         in_place: bool,
-    },
-
-    /// Start a gRPC key service for Go SOPS compatibility.
-    #[cfg(feature = "keyservice")]
-    Keyservice {
-        /// Aspen cluster ticket.
-        #[arg(long, env = "ASPEN_CLUSTER_TICKET")]
-        cluster_ticket: String,
-
-        /// Transit key name.
-        #[arg(long, default_value = DEFAULT_TRANSIT_KEY)]
-        transit_key: String,
-
-        /// Transit mount point.
-        #[arg(long, default_value = DEFAULT_TRANSIT_MOUNT)]
-        transit_mount: String,
-
-        /// Unix socket path.
-        #[arg(long, default_value = DEFAULT_SOCKET_PATH)]
-        socket: PathBuf,
     },
 }

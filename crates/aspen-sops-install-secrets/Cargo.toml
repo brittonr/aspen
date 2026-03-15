@@ -1,0 +1,47 @@
+[package]
+name = "aspen-sops-install-secrets"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Drop-in replacement for sops-nix's sops-install-secrets, using Aspen Transit + age"
+
+[[bin]]
+name = "sops-install-secrets"
+path = "src/main.rs"
+
+[dependencies]
+# SOPS decryption library
+aspen-secrets = { path = "../aspen-secrets", features = ["sops"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Serialization (manifest parsing)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# SSH key parsing for ssh-to-age conversion
+ssh-key = { version = "0.6", features = ["ed25519"] }
+age = { version = "0.11", features = ["armor"] }
+sha2 = "0.10"
+bech32 = "0.11"
+
+# Linux syscalls (mount, chown, user lookup)
+nix = { version = "0.29", features = ["mount", "fs", "user"] }
+
+# Temp files for atomic writes
+tempfile = "3.10"
+
+# Error handling
+anyhow = "1.0"
+
+# Async runtime (for aspen-secrets decrypt)
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "fs"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3.10"

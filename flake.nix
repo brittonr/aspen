@@ -1836,10 +1836,7 @@
             ring = attrs: {
               RING_CORE_PREFIX = "";
             };
-            # aspen-sops: build.rs runs tonic-build for keyservice proto codegen
-            aspen-sops = attrs: {
-              nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [pkgs.protobuf];
-            };
+            # aspen-sops: no special overrides needed (keyservice removed).
           };
 
         # Common args shared across all auto-mode builds
@@ -1890,13 +1887,19 @@
           });
         aspenGitRemote = u2nGitRemoteWorkspace.workspaceMembers."aspen".build;
 
-        # aspen-sops (features: keyservice) — Go SOPS interop via gRPC bridge
+        # aspen-sops CLI
         u2nSopsWorkspace = unit2nix.lib.${system}.buildFromUnitGraphAuto (u2nAutoCommon
           // {
             package = "aspen-sops";
-            features = "keyservice";
           });
         aspenSops = u2nSopsWorkspace.workspaceMembers."aspen-sops".build;
+
+        # aspen-sops-install-secrets: drop-in replacement for sops-nix's Go binary
+        u2nSopsInstallWorkspace = unit2nix.lib.${system}.buildFromUnitGraphAuto (u2nAutoCommon
+          // {
+            package = "aspen-sops-install-secrets";
+          });
+        aspenSopsInstallSecrets = u2nSopsInstallWorkspace.workspaceMembers."aspen-sops-install-secrets".build;
 
         bins = let
           bin = {
@@ -2563,6 +2566,8 @@
                     "aspen-ci"
                     # CARGO_BIN_EXE_* not set by buildRustCrate
                     "aspen-sops"
+                    # Needs root for mount/chown — tested in NixOS VM tests
+                    "aspen-sops-install-secrets"
                     # Vendored (tested upstream)
                     "openraft"
                     "openraft-macros"
@@ -2898,6 +2903,15 @@
                 aspenCliPackage = bins.full-aspen-cli-secrets;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
                 aspenSopsPackage = aspenSops;
+              };
+
+              # sops-install-secrets integration test: age-only decrypt at boot,
+              # template rendering, permissions, generation pruning.
+              # Build: nix build .#checks.x86_64-linux.sops-install-secrets-test --impure
+              sops-install-secrets-test = import ./nix/tests/sops-install-secrets.nix {
+                inherit pkgs;
+                aspenSopsPackage = aspenSops;
+                aspenSopsInstallSecretsPackage = aspenSopsInstallSecrets;
               };
 
               # CI pipeline and Nix binary cache test: CI lifecycle
