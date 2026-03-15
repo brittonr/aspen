@@ -2,16 +2,16 @@
 
 ### Requirement: Serve nix-cache-info
 
-The gateway SHALL respond to `GET /nix-cache-info` with a valid Nix binary cache info document containing `StoreDir`, `WantMassQuery`, and `Priority` fields.
+The gateway SHALL respond to `GET /nix-cache-info` with a valid Nix binary cache info document containing `StoreDir`, `WantMassQuery`, and `Priority` fields. The HTTP layer SHALL be provided by `nar-bridge`'s axum router backed by Aspen's `BlobService`/`DirectoryService`/`PathInfoService`.
 
 #### Scenario: Nix client discovers cache
 
 - **WHEN** a client sends `GET /nix-cache-info`
-- **THEN** the gateway SHALL respond with HTTP 200 and body containing `StoreDir: /nix/store`, `WantMassQuery: 1`, `Priority: 40`
+- **THEN** the gateway SHALL respond with HTTP 200 and body containing `StoreDir: /nix/store`, `WantMassQuery: 1`, `Priority: 30`
 
 ### Requirement: Serve narinfo by store hash
 
-The gateway SHALL respond to `GET /{hash}.narinfo` with a Nix narinfo document for cached store paths, or HTTP 404 for uncached paths.
+The gateway SHALL respond to `GET /{hash}.narinfo` with a Nix narinfo document for cached store paths, or HTTP 404 for uncached paths. Narinfo rendering and signature generation SHALL be handled by `nar-bridge` using Aspen-backed services.
 
 #### Scenario: Cache hit
 
@@ -30,7 +30,7 @@ The gateway SHALL respond to `GET /{hash}.narinfo` with a Nix narinfo document f
 
 ### Requirement: Serve NAR archive by blob hash
 
-The gateway SHALL respond to `GET /nar/{blob_hash}.nar` by streaming the NAR archive from iroh-blobs.
+The gateway SHALL respond to `GET /nar/{hash}.nar` with NAR data rendered from BlobService and DirectoryService via `nar-bridge`'s NAR rendering pipeline.
 
 #### Scenario: NAR download
 
