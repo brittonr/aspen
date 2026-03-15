@@ -5,6 +5,10 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "gRPC bridge between snix-store CLI and Aspen's distributed storage"
 
+[lib]
+name = "aspen_snix_bridge"
+path = "src/lib.rs"
+
 [[bin]]
 name = "aspen-snix-bridge"
 path = "src/main.rs"
@@ -47,7 +51,13 @@ snix-tracing = { workspace = true, features = ["clap", "otlp"] }
 snix-castore-http = { workspace = true, optional = true }
 axum = { version = "0.7", optional = true }
 
+# Optional: nix-daemon protocol support
+nix-daemon = { workspace = true, optional = true }
+nix-compat = { workspace = true, optional = true }
+
 [features]
 default = []
 # HTTP browser for castore contents (debugging)
 snix-http = ["dep:snix-castore-http", "dep:axum"]
+# nix-daemon protocol over Unix socket
+snix-daemon = ["dep:nix-daemon", "dep:nix-compat"]

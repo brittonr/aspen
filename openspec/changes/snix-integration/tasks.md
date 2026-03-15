@@ -42,27 +42,27 @@
 
 ## 6. Tier 2: nix-daemon Protocol
 
-- [ ] 6.1 Add `nix-daemon` crate dependency to `aspen-snix-bridge` behind `snix-daemon` feature
-- [ ] 6.2 Implement `NixDaemonIO` trait backed by Aspen's `BlobService`/`DirectoryService`/`PathInfoService`
-- [ ] 6.3 Wire `query_path_info` to look up store paths via PathInfoService
-- [ ] 6.4 Wire `is_valid_path` to check existence in PathInfoService
-- [ ] 6.5 Wire `add_to_store_nar` to ingest NARs via `ingest_nar_and_hash` into Aspen's store
-- [ ] 6.6 Wire `query_valid_paths` for batch validation
-- [ ] 6.7 Add `--daemon-socket` CLI flag to `aspen-snix-bridge`
-- [ ] 6.8 Start nix-daemon listener on the Unix socket alongside the gRPC listener
-- [ ] 6.9 Ensure daemon and gRPC share the same service instances
-- [ ] 6.10 Test: `nix path-info --store unix:///tmp/aspen-daemon.sock` against Aspen store
-- [ ] 6.11 Test: `nix copy --to unix:///tmp/aspen-daemon.sock` uploads a store path
+- [x] 6.1 Add `nix-daemon` crate dependency to `aspen-snix-bridge` behind `snix-daemon` feature
+- [x] 6.2 Implement `NixDaemonIO` trait backed by Aspen's `BlobService`/`DirectoryService`/`PathInfoService`
+- [x] 6.3 Wire `query_path_info` to look up store paths via PathInfoService
+- [x] 6.4 Wire `is_valid_path` to check existence in PathInfoService
+- [x] 6.5 Wire `add_to_store_nar` to ingest NARs via `ingest_nar_and_hash` into Aspen's store
+- [x] 6.6 Wire `query_valid_paths` for batch validation
+- [x] 6.7 Add `--daemon-socket` CLI flag to `aspen-snix-bridge`
+- [x] 6.8 Start nix-daemon listener on the Unix socket alongside the gRPC listener
+- [x] 6.9 Ensure daemon and gRPC share the same service instances
+- [x] 6.10 Test: `nix path-info --store unix:///tmp/aspen-daemon.sock` against Aspen store
+- [x] 6.11 Test: `nix copy --to unix:///tmp/aspen-daemon.sock` uploads a store path
 
 ## 7. Tier 2: Derivation Analysis
 
-- [ ] 7.1 Add `nix-compat` derivation parsing to `aspen-ci-executor-nix`
-- [ ] 7.2 Create `derivation.rs` module with functions to parse `.drv` files from store paths
-- [ ] 7.3 Implement build graph construction from `input_derivations` fields
-- [ ] 7.4 Implement content-hash-based cache key from derivation inputs + environment
-- [ ] 7.5 Implement closure computation by traversing `references` in PathInfo entries
-- [ ] 7.6 Integrate cache key check into `NixBuildWorker::execute_build` to skip cached builds
-- [ ] 7.7 Write tests for linear, diamond, and cyclic dependency graph scenarios
+- [x] 7.1 Add `nix-compat` derivation parsing to `aspen-ci-executor-nix`
+- [x] 7.2 Create `derivation.rs` module with functions to parse `.drv` files from store paths
+- [x] 7.3 Implement build graph construction from `input_derivations` fields
+- [x] 7.4 Implement content-hash-based cache key from derivation inputs + environment
+- [x] 7.5 Implement closure computation by traversing `references` in PathInfo entries
+- [x] 7.6 Integrate cache key check into `NixBuildWorker::execute_build` to skip cached builds
+- [x] 7.7 Write tests for linear, diamond, and cyclic dependency graph scenarios
 
 ## 8. Tier 3: snix-eval Integration
 

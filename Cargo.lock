@@ -2388,6 +2388,8 @@ dependencies = [
  "async-trait",
  "axum 0.7.9",
  "clap",
+ "nix-compat",
+ "nix-daemon",
  "snix-castore",
  "snix-castore-http",
  "snix-store",

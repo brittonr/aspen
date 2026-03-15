@@ -31,6 +31,7 @@
 mod artifacts;
 mod cache;
 mod config;
+pub mod derivation;
 mod executor;
 pub mod flakeref;
 mod payload;

@@ -63,6 +63,13 @@ struct Args {
     #[arg(long, default_value_t = 10)]
     timeout_secs: u64,
 
+    /// Unix socket path for nix-daemon protocol.
+    /// Allows standard `nix` CLI to use Aspen as its store:
+    ///   nix path-info --store unix:///tmp/aspen-nix-daemon.sock /nix/store/...
+    #[cfg(feature = "snix-daemon")]
+    #[arg(long)]
+    daemon_socket: Option<PathBuf>,
+
     /// Enable HTTP castore browser for debugging store contents.
     #[cfg(feature = "snix-http")]
     #[arg(long)]
@@ -110,6 +117,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             build_inmemory_services()
         };
 
+    // Shutdown coordination — a single Ctrl-C shuts down both gRPC and daemon
+    let (shutdown_tx, _shutdown_rx) = tokio::sync::watch::channel(false);
+
+    // Start nix-daemon listener if configured (shares same service instances)
+    #[cfg(feature = "snix-daemon")]
+    let daemon_handle = if let Some(ref daemon_socket) = args.daemon_socket {
+        let daemon_blob = blob_svc.clone();
+        let daemon_dir = dir_svc.clone();
+        let daemon_pathinfo = pathinfo_svc.clone();
+        let daemon_path = daemon_socket.clone();
+        let daemon_shutdown = _shutdown_rx.clone();
+        Some(tokio::spawn(async move {
+            if let Err(e) = aspen_snix_bridge::daemon::serve_daemon(
+                &daemon_path,
+                daemon_blob,
+                daemon_dir,
+                daemon_pathinfo,
+                daemon_shutdown,
+            )
+            .await
+            {
+                tracing::error!(error = %e, "nix-daemon listener failed");
+            }
+        }))
+    } else {
+        None
+    };
+
     // Create NAR calculation service (renders NARs from blob+dir data)
     let nar_calc = Box::new(SimpleRenderer::new(blob_svc.clone(), dir_svc.clone()));
 
@@ -122,8 +157,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = UnixListener::bind(&args.socket)?;
     let incoming = UnixListenerStream::new(listener);
 
-    info!(socket = %args.socket.display(), "starting snix gRPC bridge");
-
     let (_health_reporter, health_service) = tonic_health::server::health_reporter();
 
     Server::builder()
@@ -134,8 +167,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .serve_with_incoming_shutdown(incoming, async {
             tokio::signal::ctrl_c().await.ok();
             info!("shutting down gRPC bridge");
+            let _ = shutdown_tx.send(true);
         })
         .await?;
+
+    // Wait for daemon to finish if it was started
+    #[cfg(feature = "snix-daemon")]
+    if let Some(handle) = daemon_handle {
+        let _ = handle.await;
+    }
 
     // Clean up socket
     let _ = tokio::fs::remove_file(&args.socket).await;
