@@ -2268,7 +2268,7 @@
                 // {
                   pname = "aspen-snix-bridge";
                   version = "0.1.0";
-                  cargoExtraArgs = "-p aspen-snix-bridge --bin aspen-snix-bridge";
+                  cargoExtraArgs = "-p aspen-snix-bridge --bin aspen-snix-bridge --features snix-daemon";
                   doCheck = false;
                 }
               );
@@ -3146,6 +3146,13 @@
                   inherit lib pkgs snix-src crane;
                   rust-overlay = rust-overlay;
                 };
+              };
+
+              # snix nix-daemon protocol test: nix CLI talks to Aspen via Unix socket
+              # Build: nix build .#checks.x86_64-linux.snix-daemon-test --impure
+              snix-daemon-test = import ./nix/tests/snix-daemon.nix {
+                inherit pkgs;
+                snixBridgePackage = bins.full-aspen-snix-bridge;
               };
 
               # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.

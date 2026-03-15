@@ -102,8 +102,8 @@
 
 ## 11. Cleanup and Documentation
 
-- [ ] 11.1 Remove `aspen-nix-cache-gateway` custom HTTP server code after nar-bridge adoption is validated
-- [ ] 11.2 Update `AGENTS.md` with new snix feature flags and their purpose
-- [ ] 11.3 Update `docs/` design documents for nix integration architecture
-- [ ] 11.4 Add integration test: push flake to Forge → CI builds via snix-build → result served via nar-bridge
-- [ ] 11.5 Add NixOS VM test for nix-daemon protocol access to Aspen cluster
+- [x] 11.1 Remove `aspen-nix-cache-gateway` custom HTTP server code after nar-bridge adoption is validated
+- [x] 11.2 Update `AGENTS.md` with new snix feature flags and their purpose
+- [x] 11.3 Update `docs/` design documents for nix integration architecture
+- [x] 11.4 Add integration test: push flake to Forge → CI builds via snix-build → result served via nar-bridge
+- [x] 11.5 Add NixOS VM test for nix-daemon protocol access to Aspen cluster

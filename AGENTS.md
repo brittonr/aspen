@@ -22,6 +22,7 @@ This "eating our own dog food" approach ensures Aspen is robust enough for produ
 - **redb**: Unified Raft log + state machine storage (single-fsync writes, ~2-3ms latency)
 - **iroh**: P2P networking via QUIC (all client and inter-node communication)
 - **iroh-blobs/iroh-docs**: Content-addressed blob storage and CRDT replication
+- **snix**: Nix integration via snix crates (eval, build, store, daemon protocol)
 - **madsim**: Deterministic simulation testing
 - **DataFusion**: SQL over KV data (optional, `sql` feature)
 - **snafu/anyhow**: Error handling (snafu for library, anyhow for application)
@@ -43,6 +44,11 @@ Default features are empty — users opt-in as needed. The `full` feature enable
 - **jobs**: Job execution framework
 - **federation**: Cross-cluster federation
 - **proxy**: Reverse proxy
+- **snix**: Content-addressed store via snix-castore/snix-store (BlobService, DirectoryService, PathInfoService)
+- **snix-http**: nar-bridge HTTP server for Nix binary cache protocol
+- **snix-daemon**: nix-daemon Unix socket protocol (nix path-info, nix copy)
+- **snix-eval**: In-process Nix evaluation via snix-eval/snix-glue (flake eval, config parsing via snix-serde)
+- **snix-build**: Native build execution via snix-build BuildService (bubblewrap/OCI sandbox, replaces `nix build` subprocess)
 
 Dev features: testing, fuzzing, bolero, simulation
 
@@ -111,10 +117,14 @@ Both implemented by `RaftNode` for production; deterministic in-memory versions 
 - **crates/aspen-forge/**: Forge - decentralized Git hosting
 - **crates/aspen-client-api/**: Client RPC protocol definitions
 - **crates/aspen-sql/**: DataFusion SQL over Redb KV (optional)
+- **crates/aspen-snix/**: Raft-backed snix trait impls (BlobService, DirectoryService, PathInfoService)
+- **crates/aspen-snix-bridge/**: gRPC + nix-daemon bridge between snix-store and Aspen cluster
+- **crates/aspen-nix-cache-gateway/**: HTTP binary cache gateway (nar-bridge backed)
+- **crates/aspen-ci-executor-nix/**: Nix build executor with snix integration (eval, build, cache upload)
 - **crates/aspen-tui/**: Terminal UI (separate binary)
 - **crates/aspen-cli/**: Command-line client (separate binary)
 
-See `docs/` for design documents (federation, forge, plugins, simulations).
+See `docs/` for design documents (federation, forge, plugins, simulations, nix integration).
 
 ## Development Commands
 
@@ -221,6 +231,8 @@ cp result/disk.qcow2 /tmp/dogfood-serial.qcow2 && chmod +w /tmp/dogfood-serial.q
 - **aspen-ci-agent**: CI job agent (separate crate: `aspen-ci`)
 - **aspen-fuse**: FUSE filesystem (separate crate: `aspen-fuse`)
 - **aspen-net**: Service mesh daemon with SOCKS5 proxy, DNS, port forwarding (separate crate: `aspen-net`)
+- **aspen-snix-bridge**: gRPC + nix-daemon bridge for snix-store ↔ Aspen cluster (separate crate: `aspen-snix-bridge`)
+- **aspen-nix-cache-gateway**: HTTP binary cache gateway via nar-bridge (separate crate: `aspen-nix-cache-gateway`)
 - **git-remote-aspen**: Git remote helper (requires `git-bridge` feature)
 - **aspen-generate-schema**: Schema generator (requires `ci` feature)
 - **aspen-cli token**: Capability token management (generate, inspect, delegate)

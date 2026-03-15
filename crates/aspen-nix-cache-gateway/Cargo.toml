@@ -30,10 +30,7 @@ snix-store = { workspace = true, optional = true }
 nar-bridge = { workspace = true, optional = true }
 axum = { version = "0.7", optional = true }
 
-# Legacy HTTP server (used when snix-http feature is disabled)
-hyper = { version = "1.6", features = ["http1", "server"], optional = true }
-hyper-util = { version = "0.1", features = ["tokio"], optional = true }
-http-body-util = { version = "0.1", optional = true }
+# Keep bytes as it may be needed elsewhere
 bytes = { workspace = true }
 
 # CLI
@@ -53,8 +50,6 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 serde_json = { workspace = true }
 
 [features]
-default = ["legacy-http"]
-# Use nar-bridge axum router (replaces hand-rolled hyper server)
+default = ["snix-http"]
+# Use nar-bridge axum router (only HTTP backend)
 snix-http = ["dep:nar-bridge", "dep:axum", "dep:aspen-snix", "dep:aspen-blob", "dep:aspen-core", "dep:snix-castore", "dep:snix-store", "aspen-client/blob-store"]
-# Legacy hand-rolled hyper HTTP server
-legacy-http = ["dep:hyper", "dep:hyper-util", "dep:http-body-util"]
