@@ -1762,18 +1762,34 @@
           }
           stub snix-castore
           stub snix-store
-          stub nix-compat async serde
+          stub nix-compat async serde flakeref
           stub nix-compat-derive
+          stub snix-build
+          stub snix-eval
+          stub snix-glue
+          stub snix-serde
+          stub nix-daemon
+          stub nar-bridge
+          stub snix-castore-http
+          stub snix-tracing clap otlp
           stub h3-iroh
           stub mad-turmoil
           stub iroh-proxy-utils
           stub patchbay
 
-          # Rewrite git deps to path stubs in root Cargo.toml
+          # Rewrite ALL git deps to path stubs in root Cargo.toml
           ${pkgs.gnused}/bin/sed -i \
             -e 's|snix-castore = { git = "[^"]*"[^}]*}|snix-castore = { path = ".nix-stubs/snix-castore" }|' \
             -e 's|snix-store = { git = "[^"]*"[^}]*}|snix-store = { path = ".nix-stubs/snix-store" }|' \
             -e 's|nix-compat = { git = "[^"]*"[^}]*}|nix-compat = { path = ".nix-stubs/nix-compat", features = ["async", "serde"] }|' \
+            -e 's|snix-build = { git = "[^"]*"[^}]*}|snix-build = { path = ".nix-stubs/snix-build" }|' \
+            -e 's|snix-eval = { git = "[^"]*"[^}]*}|snix-eval = { path = ".nix-stubs/snix-eval" }|' \
+            -e 's|snix-glue = { git = "[^"]*"[^}]*}|snix-glue = { path = ".nix-stubs/snix-glue" }|' \
+            -e 's|snix-serde = { git = "[^"]*"[^}]*}|snix-serde = { path = ".nix-stubs/snix-serde" }|' \
+            -e 's|nix-daemon = { git = "[^"]*"[^}]*}|nix-daemon = { path = ".nix-stubs/nix-daemon" }|' \
+            -e 's|nar-bridge = { git = "[^"]*"[^}]*}|nar-bridge = { path = ".nix-stubs/nar-bridge" }|' \
+            -e 's|snix-castore-http = { git = "[^"]*"[^}]*}|snix-castore-http = { path = ".nix-stubs/snix-castore-http" }|' \
+            -e 's|snix-tracing = { git = "[^"]*"[^}]*}|snix-tracing = { path = ".nix-stubs/snix-tracing" }|' \
             -e 's|h3-iroh = { git = "[^"]*"[^}]*}|h3-iroh = { path = ".nix-stubs/h3-iroh" }|' \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
             $out/aspen/Cargo.toml
@@ -1819,6 +1835,10 @@
             # ring: needs cc + LLVM for assembly.
             ring = attrs: {
               RING_CORE_PREFIX = "";
+            };
+            # aspen-sops: build.rs runs tonic-build for keyservice proto codegen
+            aspen-sops = attrs: {
+              nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [pkgs.protobuf];
             };
           };
 
@@ -1869,6 +1889,14 @@
             features = "git-bridge";
           });
         aspenGitRemote = u2nGitRemoteWorkspace.workspaceMembers."aspen".build;
+
+        # aspen-sops (features: keyservice) — Go SOPS interop via gRPC bridge
+        u2nSopsWorkspace = unit2nix.lib.${system}.buildFromUnitGraphAuto (u2nAutoCommon
+          // {
+            package = "aspen-sops";
+            features = "keyservice";
+          });
+        aspenSops = u2nSopsWorkspace.workspaceMembers."aspen-sops".build;
 
         bins = let
           bin = {
@@ -2252,16 +2280,6 @@
                 name = "git-remote-aspen";
                 features = ["git-bridge"];
               };
-              # aspen-sops CLI with keyservice bridge for Go SOPS interop
-              full-aspen-sops = craneLib.buildPackage (
-                fullCommonArgs
-                // {
-                  pname = "aspen-sops";
-                  version = "0.1.0";
-                  cargoExtraArgs = "-p aspen-sops --bin aspen-sops --features keyservice";
-                  doCheck = false;
-                }
-              );
               # gRPC bridge: snix-store CLI ↔ Aspen distributed storage
               full-aspen-snix-bridge = craneLib.buildPackage (
                 fullCommonArgs
@@ -2879,7 +2897,7 @@
                 aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-secrets;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
-                aspenSopsPackage = bins.full-aspen-sops;
+                aspenSopsPackage = aspenSops;
               };
 
               # CI pipeline and Nix binary cache test: CI lifecycle
