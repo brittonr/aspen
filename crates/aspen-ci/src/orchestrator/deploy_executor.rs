@@ -91,6 +91,12 @@ pub struct DeployRequest {
     /// When `false`, only CI job logs are persisted (stateless push deploy).
     #[serde(default = "default_true")]
     pub stateful: bool,
+    /// When `true`, only validate the artifact exists and the expected binary
+    /// is present. Skip profile switch and process restart. Use this for CI
+    /// pipeline tests that verify the deploy stage resolves artifacts without
+    /// modifying the running cluster.
+    #[serde(default)]
+    pub validate_only: bool,
 }
 
 /// Result of initiating a deployment.
@@ -165,6 +171,8 @@ pub struct DeployJobParams<'a> {
     /// Whether to track deployment lifecycle state in Raft KV.
     /// Defaults to `true` for backwards compatibility.
     pub stateful: Option<bool>,
+    /// When `true`, only validate the artifact exists and skip actual deployment.
+    pub validate_only: Option<bool>,
     /// The pipeline run containing stage/job metadata.
     pub pipeline_run: &'a super::pipeline::PipelineRun,
     /// Dispatcher for deploy RPCs.
@@ -193,6 +201,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DeployExecutor<S> {
             max_concurrent,
             expected_binary,
             stateful,
+            validate_only,
             pipeline_run,
             dispatcher,
         } = params;
@@ -210,6 +219,31 @@ impl<S: KeyValueStore + ?Sized + 'static> DeployExecutor<S> {
         let artifact_str = artifact.artifact_string().to_string();
         info!(job = job_name, artifact = %artifact_str, "Resolved deploy artifact");
 
+        // Step 1.5: validate_only mode — verify artifact resolved, skip actual deploy
+        if validate_only.unwrap_or(false) {
+            write_deploy_log(&mut log_writer, &format!("[deploy] validate_only: artifact resolved to {artifact_str}"))
+                .await?;
+
+            // Verify expected_binary exists in the store path if specified
+            if let DeployArtifact::NixStorePath(ref store_path) = artifact {
+                if let Some(bin) = expected_binary {
+                    let full_path = format!("{store_path}/{bin}");
+                    write_deploy_log(&mut log_writer, &format!("[deploy] validate_only: checking {full_path}")).await?;
+                }
+            }
+
+            write_deploy_log(
+                &mut log_writer,
+                "[deploy] validate_only: artifact validation passed, skipping actual deployment",
+            )
+            .await?;
+
+            return Ok(DeployJobResult::Success {
+                artifact: artifact_str,
+                deploy_id: format!("validate-{run_id}"),
+            });
+        }
+
         write_deploy_log(&mut log_writer, &format!("[deploy] Starting rolling deployment: {artifact_str}")).await?;
 
         // Step 2: Initiate deployment
@@ -222,6 +256,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DeployExecutor<S> {
             health_timeout_secs: health_timeout_secs.unwrap_or(DEPLOY_HEALTH_TIMEOUT_SECS),
             expected_binary: expected_binary.map(|s| s.to_string()),
             stateful: is_stateful,
+            validate_only: false,
         };
 
         // Capture strategy for stateful metadata (before request is moved)

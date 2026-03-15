@@ -141,88 +141,90 @@ in
       status = cli("cluster status")
       node1.log(f"Cluster status: {status}")
 
-      # ── AUTOMERGE tests ─────────────────────────────────────────────
+      # ── AUTOMERGE tests (require WASM plugin) ───────────────────────
+      # Skip automerge subtests if plugins didn't load (Hyperlight needs KVM).
+      # SQL tests below work natively without plugins.
+      if not _plugins_loaded:
+          node1.log("Skipping automerge subtests (WASM plugins unavailable)")
+      else:
+          with subtest("automerge create"):
+              out = cli("automerge create test-doc-1", check=False)
+              if isinstance(out, dict):
+                  is_success = out.get("is_success")
+                  doc_id = out.get("document_id")
+                  error = out.get("error")
+                  node1.log(f"automerge create: is_success={is_success}, doc_id={doc_id}, error={error}")
+                  if is_success:
+                      assert doc_id is not None, f"should have document_id: {out}"
+              else:
+                  node1.log(f"automerge create: {out}")
 
-      with subtest("automerge create"):
-          out = cli("automerge create test-doc-1", check=False)
-          if isinstance(out, dict):
-              is_success = out.get("is_success")
-              doc_id = out.get("document_id")
-              error = out.get("error")
-              node1.log(f"automerge create: is_success={is_success}, doc_id={doc_id}, error={error}")
-              if is_success:
-                  assert doc_id is not None, f"should have document_id: {out}"
-          else:
-              node1.log(f"automerge create: {out}")
+          with subtest("automerge exists"):
+              out = cli("automerge exists test-doc-1", check=False)
+              if isinstance(out, dict):
+                  existed = out.get("existed")
+                  node1.log(f"automerge exists: existed={existed}")
+              else:
+                  node1.log(f"automerge exists: {out}")
 
-      with subtest("automerge exists"):
-          out = cli("automerge exists test-doc-1", check=False)
-          if isinstance(out, dict):
-              existed = out.get("existed")
-              node1.log(f"automerge exists: existed={existed}")
-          else:
-              node1.log(f"automerge exists: {out}")
+          with subtest("automerge get"):
+              out = cli("automerge get test-doc-1", check=False)
+              if isinstance(out, dict):
+                  was_found = out.get("was_found")
+                  doc_id = out.get("document_id")
+                  node1.log(f"automerge get: was_found={was_found}, doc_id={doc_id}")
+              else:
+                  node1.log(f"automerge get: {out}")
 
-      with subtest("automerge get"):
-          out = cli("automerge get test-doc-1", check=False)
-          if isinstance(out, dict):
-              was_found = out.get("was_found")
-              doc_id = out.get("document_id")
-              node1.log(f"automerge get: was_found={was_found}, doc_id={doc_id}")
-          else:
-              node1.log(f"automerge get: {out}")
+          with subtest("automerge create second"):
+              out = cli("automerge create test-doc-2", check=False)
+              if isinstance(out, dict):
+                  node1.log(f"automerge create second: is_success={out.get('is_success')}")
+              else:
+                  node1.log(f"automerge create second: {out}")
 
-      with subtest("automerge create second"):
-          out = cli("automerge create test-doc-2", check=False)
-          if isinstance(out, dict):
-              node1.log(f"automerge create second: is_success={out.get('is_success')}")
-          else:
-              node1.log(f"automerge create second: {out}")
+          with subtest("automerge list"):
+              out = cli("automerge list", check=False)
+              if isinstance(out, dict):
+                  docs = out.get("documents", [])
+                  count = out.get("count", 0)
+                  node1.log(f"automerge list: count={count}, docs={len(docs)}")
+              else:
+                  node1.log(f"automerge list: {out}")
 
-      with subtest("automerge list"):
-          out = cli("automerge list", check=False)
-          if isinstance(out, dict):
-              docs = out.get("documents", [])
-              count = out.get("count", 0)
-              node1.log(f"automerge list: count={count}, docs={len(docs)}")
-          else:
-              node1.log(f"automerge list: {out}")
+          with subtest("automerge get-metadata"):
+              out = cli("automerge get-metadata test-doc-1", check=False)
+              if isinstance(out, dict):
+                  node1.log(f"automerge get-metadata: {out}")
+              else:
+                  node1.log(f"automerge get-metadata: {out}")
 
-      with subtest("automerge get-metadata"):
-          out = cli("automerge get-metadata test-doc-1", check=False)
-          if isinstance(out, dict):
-              node1.log(f"automerge get-metadata: {out}")
-          else:
-              node1.log(f"automerge get-metadata: {out}")
+          with subtest("automerge delete"):
+              out = cli("automerge delete test-doc-1", check=False)
+              if isinstance(out, dict):
+                  node1.log(f"automerge delete: is_success={out.get('is_success')}")
+              else:
+                  node1.log(f"automerge delete: {out}")
 
-      with subtest("automerge delete"):
-          out = cli("automerge delete test-doc-1", check=False)
-          if isinstance(out, dict):
-              node1.log(f"automerge delete: is_success={out.get('is_success')}")
-          else:
-              node1.log(f"automerge delete: {out}")
+          with subtest("automerge exists after delete"):
+              out = cli("automerge exists test-doc-1", check=False)
+              if isinstance(out, dict):
+                  existed = out.get("existed")
+                  node1.log(f"automerge exists after delete: existed={existed}")
+                  if existed is not None:
+                      assert existed is False, \
+                          f"document should not exist after delete: {out}"
+              else:
+                  node1.log(f"automerge exists after delete: {out}")
 
-      with subtest("automerge exists after delete"):
-          out = cli("automerge exists test-doc-1", check=False)
-          if isinstance(out, dict):
-              existed = out.get("existed")
-              node1.log(f"automerge exists after delete: existed={existed}")
-              # After delete, should not exist
-              if existed is not None:
-                  assert existed is False, \
-                      f"document should not exist after delete: {out}"
-          else:
-              node1.log(f"automerge exists after delete: {out}")
-
-      with subtest("automerge list after delete"):
-          out = cli("automerge list", check=False)
-          if isinstance(out, dict):
-              docs = out.get("documents", [])
-              count = out.get("count", 0)
-              node1.log(f"automerge list after delete: count={count}")
-              # Should have 1 less document
-          else:
-              node1.log(f"automerge list after delete: {out}")
+          with subtest("automerge list after delete"):
+              out = cli("automerge list", check=False)
+              if isinstance(out, dict):
+                  docs = out.get("documents", [])
+                  count = out.get("count", 0)
+                  node1.log(f"automerge list after delete: count={count}")
+              else:
+                  node1.log(f"automerge list after delete: {out}")
 
       # ── SQL tests ──────────────────────────────────────────────────
 

@@ -151,14 +151,22 @@ in
               timeout=timeout,
           )
 
-      def now_us():
-          """Current time as Unix microseconds."""
+      def now_us(node=None):
+          """Current time as Unix microseconds.
+
+          Uses the VM's clock (not the test driver's) to avoid clock skew.
+          The alert evaluate RPC uses SystemTime::now() inside the VM, so
+          metric timestamps must also come from the VM clock.
+          """
+          if node is not None:
+              epoch_secs = node.succeed("date +%s").strip()
+              return int(epoch_secs) * 1_000_000
           return int(time.time() * 1_000_000)
 
       def ingest_metric(node, name, value, ticket=None, ts_us=None):
           """Ingest a single gauge metric data point."""
           if ts_us is None:
-              ts_us = now_us()
+              ts_us = now_us(node)
           dp = json.dumps([{
               "name": name,
               "metric_type": "Gauge",
@@ -379,7 +387,7 @@ in
           for i in range(5):
               ingest_metric(new_leader_node, "cpu_usage", 10.0,
                             ticket=new_ticket,
-                            ts_us=now_us() + i * 1000)
+                            ts_us=now_us(new_leader_node) + i * 1000)
           new_leader_node.log("Ingested 5x cpu_usage=10.0 below threshold")
 
       with subtest("evaluate resolves alert to Ok"):

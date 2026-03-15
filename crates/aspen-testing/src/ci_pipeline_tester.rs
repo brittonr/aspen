@@ -583,6 +583,7 @@ fn test_job(name: &str, command: &str) -> JobConfig {
         max_concurrent: None,
         expected_binary: None,
         stateful: None,
+        validate_only: None,
     }
 }
 

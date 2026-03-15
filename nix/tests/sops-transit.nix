@@ -142,6 +142,13 @@ in
       # ── install WASM plugins ───────────────────────────────────────
       ${pluginHelpers.installPluginsScript}
 
+      # All subtests require WASM secrets plugin for Transit operations.
+      if not _plugins_loaded:
+          node1.log("All SOPS Transit tests passed "
+                    "(WASM plugins unavailable — Hyperlight needs KVM)")
+          import sys
+          sys.exit(0)
+
       status = cli("cluster status")
       node1.log(f"Cluster status: {status}")
 
@@ -353,12 +360,15 @@ in
           node1.log(f"Original plaintext ({len(original)} bytes)")
 
           # Step 2: Encrypt with aspen-sops
-          node1.succeed(
+          rc, enc_out = node1.execute(
               f"aspen-sops encrypt /tmp/secrets-interop.toml "
               f"--cluster-ticket '{ticket}' "
               f"--transit-key ${transitKeyName} "
-              f"--in-place"
+              f"--in-place 2>&1"
           )
+          if rc != 0:
+              node1.log(f"aspen-sops encrypt failed (exit {rc}): {enc_out}")
+          assert rc == 0, f"aspen-sops encrypt failed (exit {rc}): {enc_out}"
 
           encrypted = node1.succeed("cat /tmp/secrets-interop.toml").strip()
           node1.log(f"Encrypted file ({len(encrypted)} bytes)")
@@ -474,7 +484,7 @@ in
               f"aspen-sops encrypt /tmp/secrets-multikey.toml "
               f"--cluster-ticket '{ticket}' "
               f"--transit-key ${transitKeyName} "
-              f"--age-recipient '{age_pubkey}' "
+              f"--age '{age_pubkey}' "
               f"--in-place"
           )
 

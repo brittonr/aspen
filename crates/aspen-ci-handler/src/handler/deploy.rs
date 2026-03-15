@@ -337,6 +337,7 @@ mod tests {
             max_concurrent: None,
             expected_binary: None,
             stateful: None,
+            validate_only: None,
         }
     }
 }

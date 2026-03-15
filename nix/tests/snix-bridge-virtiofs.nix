@@ -76,15 +76,28 @@ pkgs.testers.nixosTest {
     with subtest("import file via bridge"):
         host.succeed("echo 'hello from bridge virtiofs test' > /tmp/input.txt")
 
-        out = host.succeed(
+        # Import via snix-store through the bridge gRPC socket.
+        # Capture stderr separately for debugging.
+        rc, import_out = host.execute(
             "BLOB_SERVICE_ADDR=grpc+unix:///tmp/bridge.sock "
             "DIRECTORY_SERVICE_ADDR=grpc+unix:///tmp/bridge.sock "
             "PATH_INFO_SERVICE_ADDR=grpc+unix:///tmp/bridge.sock "
-            "snix-store import /tmp/input.txt 2>&1"
-        ).strip()
-        host.log(f"import output: {out}")
+            "snix-store import /tmp/input.txt 2>/tmp/import_stderr.txt"
+        )
+        import_stderr = host.succeed("cat /tmp/import_stderr.txt 2>/dev/null || true").strip()
+        out = import_out.strip()
+        host.log(f"import output (rc={rc}): {out}")
+        if import_stderr:
+            host.log(f"import stderr: {import_stderr}")
 
-        assert "/nix/store/" in out, f"expected store path: {out}"
+        if rc != 0 or "/nix/store/" not in out:
+            # Check bridge logs for diagnostic info
+            bridge_log = host.succeed(
+                "journalctl -u snix-bridge --no-pager -n 30 2>/dev/null || true"
+            ).strip()
+            host.log(f"bridge logs: {bridge_log}")
+
+        assert "/nix/store/" in out, f"expected store path (rc={rc}): stdout={out}, stderr={import_stderr}"
 
         # Save the store path for verification in microVM
         store_path = out.strip().split("\n")[-1].strip()

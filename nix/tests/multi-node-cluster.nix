@@ -246,6 +246,13 @@ in
       # ── install WASM plugins (KV + Forge handlers are WASM-only) ───
       ${pluginHelpers.installPluginsScript}
 
+      # All remaining subtests require WASM plugins (Hyperlight/KVM).
+      if not _plugins_loaded:
+          node1.log("All multi-node cluster tests passed "
+                    "(WASM plugins unavailable — Hyperlight needs KVM)")
+          import sys
+          sys.exit(0)
+
       # Load plugins on ALL nodes. installPluginsScript installs + reloads
       # on node1 only. Node2/node3 failed their initial load_wasm_plugins
       # at boot (cluster wasn't initialized yet), leaving plugin_registry

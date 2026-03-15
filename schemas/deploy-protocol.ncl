@@ -17,6 +17,8 @@ let DeployRequest = {
   stateful | Bool | default = true,
   # Deployment strategy (e.g., "rolling").
   strategy | String,
+  # When `true`, only validate the artifact exists and the expected binary is present. Skip profile switch and process restart. Use this for CI pipeline tests that verify the deploy stage resolves artifacts without modifying the running cluster.
+  validate_only | Bool | default = false,
 }in
 
 # Result of initiating a deployment.

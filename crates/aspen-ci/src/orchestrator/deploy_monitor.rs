@@ -64,6 +64,8 @@ pub struct DeployJobInfo {
     /// Whether to track deployment lifecycle state in Raft KV.
     /// `None` defaults to `true` (stateful) for backwards compatibility.
     pub stateful: Option<bool>,
+    /// When `true`, only validate the artifact without deploying.
+    pub validate_only: Option<bool>,
 }
 
 // ============================================================================
@@ -106,6 +108,7 @@ pub fn extract_deploy_stages_for_ref(config: &PipelineConfig, ref_name: Option<&
                     max_concurrent: j.max_concurrent,
                     expected_binary: j.expected_binary.clone(),
                     stateful: j.stateful,
+                    validate_only: j.validate_only,
                 })
                 .collect(),
         })
@@ -255,6 +258,7 @@ async fn run_all_deploy_stages<S: KeyValueStore + ?Sized + 'static>(
                 max_concurrent: job.max_concurrent,
                 expected_binary: job.expected_binary.as_deref(),
                 stateful: job.stateful,
+                validate_only: job.validate_only,
                 pipeline_run: &pipeline_run,
                 dispatcher,
             };
@@ -556,6 +560,7 @@ mod tests {
             max_concurrent: None,
             expected_binary: None,
             stateful: None,
+            validate_only: None,
         }
     }
 }

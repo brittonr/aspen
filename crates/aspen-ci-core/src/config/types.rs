@@ -177,6 +177,14 @@ pub struct JobConfig {
     /// Defaults to `true`.
     #[serde(default)]
     pub stateful: Option<bool>,
+
+    /// When `true`, only validate the artifact exists and the expected binary
+    /// is present. Skip profile switch and process restart. Use this for CI
+    /// pipeline tests that verify the deploy stage resolves artifacts without
+    /// modifying the running cluster.
+    /// Defaults to `false`.
+    #[serde(default)]
+    pub validate_only: Option<bool>,
 }
 
 fn default_job_timeout() -> u64 {
@@ -641,6 +649,7 @@ mod tests {
             max_concurrent: None,
             expected_binary: None,
             stateful: None,
+            validate_only: None,
         };
         let err = job.validate().unwrap_err();
         assert!(err.to_string().contains("requires artifact_from"), "got: {err}");
@@ -674,6 +683,7 @@ mod tests {
             max_concurrent: None,
             expected_binary: None,
             stateful: None,
+            validate_only: None,
         };
         assert!(job.validate().is_ok());
     }
@@ -705,6 +715,7 @@ mod tests {
             max_concurrent: None,
             expected_binary: None,
             stateful: None,
+            validate_only: None,
         }
     }
 
@@ -735,6 +746,7 @@ mod tests {
             max_concurrent: None,
             expected_binary: None,
             stateful: None,
+            validate_only: None,
         }
     }
 
