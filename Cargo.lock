@@ -935,6 +935,8 @@ dependencies = [
  "aspen-jobs",
  "async-trait",
  "blake3",
+ "bstr",
+ "bytes",
  "glob",
  "hex",
  "iroh 0.95.1",

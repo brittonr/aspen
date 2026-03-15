@@ -29,6 +29,8 @@
 //! ```
 
 mod artifacts;
+#[cfg(feature = "snix-build")]
+pub mod build_service;
 mod cache;
 mod config;
 pub mod derivation;
@@ -42,6 +44,8 @@ mod snix;
 mod timing;
 mod worker;
 
+#[cfg(feature = "snix-build")]
+pub use build_service::NativeBuildService;
 pub use cache::UploadedStorePath;
 pub use config::NixBuildWorkerConfig;
 #[cfg(feature = "snix-eval")]

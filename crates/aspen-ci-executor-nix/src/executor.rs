@@ -55,19 +55,58 @@ struct OutputReaders {
 /// 3. Captures build logs
 /// 4. Optionally stores artifacts in the blob store
 /// 5. Returns build output paths and artifact hashes
+///
+/// When the `snix-build` feature is enabled, builds execute in-process
+/// via snix-build's `BuildService` (bubblewrap/OCI sandbox) instead of
+/// shelling out to `nix build`. The subprocess path is retained behind
+/// the `nix-cli-fallback` feature flag.
 pub struct NixBuildWorker {
     pub(crate) config: NixBuildWorkerConfig,
+    /// Native build service for in-process builds (when snix-build feature is enabled).
+    #[cfg(feature = "snix-build")]
+    pub(crate) native_build_service: Option<crate::build_service::NativeBuildService>,
 }
 
 impl NixBuildWorker {
     /// Create a new Nix build worker with the given configuration.
     pub fn new(config: NixBuildWorkerConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            #[cfg(feature = "snix-build")]
+            native_build_service: None,
+        }
     }
 
     /// Create a worker with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(NixBuildWorkerConfig::default())
+    }
+
+    /// Initialize the native build service from the worker's config.
+    ///
+    /// Call this after construction to enable in-process builds.
+    /// If initialization fails (missing services, sandbox unavailable),
+    /// the worker falls back to subprocess execution.
+    #[cfg(feature = "snix-build")]
+    pub async fn init_native_build_service(&mut self) {
+        match crate::build_service::init_from_config(&self.config).await {
+            Some((service, backend)) => {
+                info!(
+                    backend = %backend,
+                    "native build service initialized"
+                );
+                self.native_build_service = Some(service);
+            }
+            None => {
+                info!("native build service not available, using subprocess fallback");
+            }
+        }
+    }
+
+    /// Check if native builds are available.
+    #[cfg(feature = "snix-build")]
+    pub fn has_native_builds(&self) -> bool {
+        self.native_build_service.is_some()
     }
 
     /// Execute a Nix build.

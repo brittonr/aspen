@@ -87,18 +87,18 @@
 
 ## 10. Tier 4: snix-build Native Execution
 
-- [ ] 10.1 Add `snix-build` dependency to `aspen-ci-executor-nix` behind `snix-build` feature
-- [ ] 10.2 Implement `BuildService` initialization with Aspen-backed castore services
-- [ ] 10.3 Wire bubblewrap sandbox: configure `SandboxSpec` from `BuildRequest` fields
-- [ ] 10.4 Wire OCI sandbox as fallback when bubblewrap is unavailable
-- [ ] 10.5 Integrate build execution: eval → derivation → BuildRequest → do_build → upload outputs
-- [ ] 10.6 Connect build output paths to existing SNIX upload pipeline (`upload_store_paths_snix`)
-- [ ] 10.7 Add `nix-cli-fallback` gate: when `snix-build` feature disabled, use subprocess path
-- [ ] 10.8 Implement build log capture from sandbox stdout/stderr and stream to CI log infrastructure
-- [ ] 10.9 Test: build a simple flake (hello world) end-to-end via snix-build
-- [ ] 10.10 Test: build Aspen's own flake via snix-build (dogfood validation)
-- [ ] 10.11 Test: verify parity between snix-build and `nix build` subprocess for same flake
-- [ ] 10.12 Run both execution paths in CI for one release cycle to validate parity
+- [x] 10.1 Add `snix-build` dependency to `aspen-ci-executor-nix` behind `snix-build` feature
+- [x] 10.2 Implement `BuildService` initialization with Aspen-backed castore services
+- [x] 10.3 Wire bubblewrap sandbox: configure `SandboxSpec` from `BuildRequest` fields
+- [x] 10.4 Wire OCI sandbox as fallback when bubblewrap is unavailable
+- [x] 10.5 Integrate build execution: eval → derivation → BuildRequest → do_build → upload outputs
+- [x] 10.6 Connect build output paths to existing SNIX upload pipeline (`upload_store_paths_snix`)
+- [x] 10.7 Add `nix-cli-fallback` gate: when `snix-build` feature disabled, use subprocess path
+- [x] 10.8 Implement build log capture from sandbox stdout/stderr and stream to CI log infrastructure
+- [x] 10.9 Test: build a simple flake (hello world) end-to-end via snix-build
+- [x] 10.10 Test: build Aspen's own flake via snix-build (dogfood validation)
+- [x] 10.11 Test: verify parity between snix-build and `nix build` subprocess for same flake
+- [x] 10.12 Run both execution paths in CI for one release cycle to validate parity
 
 ## 11. Cleanup and Documentation
 

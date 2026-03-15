@@ -41,6 +41,8 @@ tracing = { workspace = true }
 
 # Utilities
 blake3 = { workspace = true }
+bstr = { version = "1.0", optional = true }
+bytes = { version = "1.0", optional = true }
 hex = "0.4"
 glob = "0.3"
 
@@ -50,6 +52,8 @@ default = []
 snix = ["dep:snix-castore", "dep:snix-store"]
 # In-process Nix evaluation via snix-eval + snix-glue
 snix-eval = ["snix", "dep:snix-eval", "dep:snix-glue", "dep:snix-build"]
+# Native build execution via snix-build BuildService (bubblewrap/OCI sandbox)
+snix-build = ["snix-eval", "dep:bstr", "dep:bytes"]
 # Retain nix CLI subprocess as fallback when snix-build is unavailable
 nix-cli-fallback = []
 # Re-enable when iroh is upgraded to 0.96+:

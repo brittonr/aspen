@@ -90,6 +90,10 @@ plugins-vm = ["dep:aspen-ci-executor-vm", "aspen-jobs/plugins-vm"]
 nix-executor = ["dep:aspen-ci-executor-nix"]
 # Nix executor with SNIX integration for decomposed cache uploads
 nix-executor-snix = ["nix-executor", "aspen-ci-executor-nix/snix"]
+# Nix executor with in-process evaluation (snix-eval + snix-glue)
+nix-executor-snix-eval = ["nix-executor-snix", "aspen-ci-executor-nix/snix-eval"]
+# Nix executor with native build execution (bubblewrap/OCI sandbox)
+nix-executor-snix-build = ["nix-executor-snix-eval", "aspen-ci-executor-nix/snix-build"]
 # SNIX storage (forwarded to executor crates)
 # In-process Nix evaluation for config deserialization via snix-serde
 nix-config = ["dep:snix-serde", "dep:snix-eval"]
