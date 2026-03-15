@@ -538,8 +538,8 @@
               ps;
           in
             if isSnixRepo
-            then drv.overrideAttrs (_old: {src = snix-src;})
-            else drv;
+            then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
+            else ensureGitCheckoutLock drv;
         };
 
         # ── Cargo Dependency Artifacts ───────────────────────────────
@@ -2105,7 +2105,10 @@
                       with pkgs; [darwin.apple_sdk.frameworks.Security]
                     ));
                 };
-              ciPluginsBin = {name, features ? []}:
+              ciPluginsBin = {
+                name,
+                features ? [],
+              }:
                 craneLib.buildPackage (
                   ciPluginsCommonArgs
                   // {

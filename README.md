@@ -1,5 +1,7 @@
 # Aspen
 
+![Aspen](docs/assets/aspen.png)
+
 Distributed systems orchestration in Rust. Built on [iroh](https://github.com/n0-computer/iroh) (P2P QUIC), a vendored [OpenRaft](https://github.com/databendlabs/openraft) (consensus), and [redb](https://github.com/cberner/redb) (storage).
 
 ## Why
