@@ -1001,6 +1001,9 @@
             # the workspace root. aspen-wasm-plugin at ../aspen-wasm-plugin/ resolves naturally.
             postUnpack = ''sourceRoot="$sourceRoot/aspen"'';
             cargoToml = ./Cargo.toml;
+            # Explicit cargoLock ensures buildDepsOnly includes the lockfile
+            # in its dummy source — without it cargo can't resolve git dep revisions.
+            cargoLock = fullSrc + "/aspen/Cargo.lock";
             cargoExtraArgs = "";
           };
 
