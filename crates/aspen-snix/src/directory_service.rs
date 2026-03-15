@@ -236,6 +236,7 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static + ?Sized
 
         // Write to KV store
         let key = format!("{}{}", DIRECTORY_KEY_PREFIX, hex::encode(digest.as_ref()));
+        tracing::info!(key = %key, digest = %digest, "directory putter: storing directory");
         self.kv
             .write(aspen_core::kv::WriteRequest {
                 command: aspen_core::kv::WriteCommand::Set { key, value },
@@ -250,7 +251,9 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static + ?Sized
     }
 
     async fn close(&mut self) -> Result<B3Digest, Error> {
-        self.last_digest.take().ok_or_else(|| -> Error { "no directories were put".into() })
+        let digest = self.last_digest.take().ok_or_else(|| -> Error { "no directories were put".into() })?;
+        tracing::info!(root_digest = %digest, "directory putter: closed with root");
+        Ok(digest)
     }
 }
 

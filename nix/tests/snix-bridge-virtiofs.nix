@@ -61,6 +61,7 @@ pkgs.testers.nixosTest {
 
         host.succeed(
             "systemd-run --unit=snix-bridge "
+            "--setenv=RUST_LOG=info,aspen_snix=debug "
             "aspen-snix-bridge --socket /tmp/bridge.sock"
         )
         host.wait_until_succeeds(
@@ -78,26 +79,36 @@ pkgs.testers.nixosTest {
 
         # Import via snix-store through the bridge gRPC socket.
         # Capture stderr separately for debugging.
+        # Use RUST_LOG=debug for detailed tracing from the bridge.
         rc, import_out = host.execute(
             "BLOB_SERVICE_ADDR=grpc+unix:///tmp/bridge.sock "
             "DIRECTORY_SERVICE_ADDR=grpc+unix:///tmp/bridge.sock "
             "PATH_INFO_SERVICE_ADDR=grpc+unix:///tmp/bridge.sock "
+            "RUST_LOG=info "
             "snix-store import /tmp/input.txt 2>/tmp/import_stderr.txt"
         )
         import_stderr = host.succeed("cat /tmp/import_stderr.txt 2>/dev/null || true").strip()
         out = import_out.strip()
         host.log(f"import output (rc={rc}): {out}")
         if import_stderr:
-            host.log(f"import stderr: {import_stderr}")
+            host.log(f"import stderr: {import_stderr[:2000]}")
 
         if rc != 0 or "/nix/store/" not in out:
             # Check bridge logs for diagnostic info
             bridge_log = host.succeed(
-                "journalctl -u snix-bridge --no-pager -n 30 2>/dev/null || true"
+                "journalctl -u snix-bridge --no-pager -n 50 2>/dev/null || true"
             ).strip()
-            host.log(f"bridge logs: {bridge_log}")
+            host.log(f"bridge logs:\n{bridge_log}")
 
-        assert "/nix/store/" in out, f"expected store path (rc={rc}): stdout={out}, stderr={import_stderr}"
+            # Check if the bridge process is still alive
+            bridge_status = host.succeed("systemctl is-active snix-bridge 2>/dev/null || echo dead").strip()
+            host.log(f"bridge status: {bridge_status}")
+
+            # Check socket
+            socket_check = host.succeed("ls -la /tmp/bridge.sock 2>/dev/null || echo missing").strip()
+            host.log(f"socket: {socket_check}")
+
+        assert "/nix/store/" in out, f"expected store path (rc={rc}): stdout={out}, stderr={import_stderr[:500]}"
 
         # Save the store path for verification in microVM
         store_path = out.strip().split("\n")[-1].strip()

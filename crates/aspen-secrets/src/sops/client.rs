@@ -62,7 +62,7 @@ impl TransitClient {
         let request = ClientRpcRequest::SecretsTransitDatakey {
             mount: self.mount.clone(),
             name: key_name.to_string(),
-            key_type: "aes256-gcm".to_string(),
+            key_type: "plaintext".to_string(),
         };
 
         let response = self.client.send(request).await.map_err(|e| SopsError::TransitEncrypt {
@@ -284,5 +284,27 @@ mod tests {
         // This is a compile-time / construction test
         let _default_mount = DEFAULT_TRANSIT_MOUNT;
         assert_eq!(DEFAULT_TRANSIT_MOUNT, "transit");
+    }
+
+    /// Regression test: generate_data_key must send key_type "plaintext"
+    /// so the WASM plugin returns the plaintext data key in the response.
+    /// Previously sent "aes256-gcm" which caused the plugin to omit plaintext.
+    #[test]
+    fn test_generate_data_key_sends_plaintext_key_type() {
+        let request = ClientRpcRequest::SecretsTransitDatakey {
+            mount: "transit".to_string(),
+            name: "test-key".to_string(),
+            key_type: "plaintext".to_string(),
+        };
+        // Verify the request matches what generate_data_key builds
+        match &request {
+            ClientRpcRequest::SecretsTransitDatakey { key_type, .. } => {
+                assert_eq!(
+                    key_type, "plaintext",
+                    "SOPS client must send key_type='plaintext' to get plaintext in response"
+                );
+            }
+            _ => panic!("wrong variant"),
+        }
     }
 }

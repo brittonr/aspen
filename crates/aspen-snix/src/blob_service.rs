@@ -103,6 +103,7 @@ where S: aspen_blob::BlobStore + 'static
 
     #[instrument(skip(self))]
     async fn open_write(&self) -> Box<dyn BlobWriter> {
+        debug!("opening blob writer");
         Box::new(IrohBlobWriter::new(Arc::clone(&self.store)))
     }
 
@@ -213,6 +214,8 @@ where S: aspen_blob::BlobStore + Send + Sync + 'static
 
         self.is_closed = true;
 
+        tracing::info!(buffer_size = self.buffer.len(), "blob writer closing, writing to store");
+
         // Write to blob store
         let result = self
             .store
@@ -223,7 +226,7 @@ where S: aspen_blob::BlobStore + Send + Sync + 'static
         let digest = iroh_hash_to_b3_digest(&result.blob_ref.hash);
         self.digest = Some(digest);
 
-        debug!(digest = %digest, size = self.buffer.len(), "blob written");
+        tracing::info!(digest = %digest, size = self.buffer.len(), "blob written to store");
 
         // Clear buffer to free memory
         self.buffer.clear();

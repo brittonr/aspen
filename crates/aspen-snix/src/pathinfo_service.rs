@@ -124,6 +124,8 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static + ?Sized
 
     #[instrument(skip(self, path_info), fields(store_path = %path_info.store_path))]
     async fn put(&self, path_info: PathInfo) -> Result<PathInfo, Error> {
+        tracing::info!(store_path = %path_info.store_path, "pathinfo put called");
+
         // Get the store path digest (20 bytes)
         let digest: [u8; 20] = *path_info.store_path.digest();
 
@@ -138,6 +140,7 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static + ?Sized
 
         // Write to KV store
         let key = Self::make_key(&digest);
+        tracing::info!(key = %key, value_len = value.len(), "writing pathinfo to KV");
         self.kv
             .write(aspen_core::kv::WriteRequest {
                 command: aspen_core::kv::WriteCommand::Set { key, value },
@@ -145,7 +148,7 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static + ?Sized
             .await
             .map_err(|e| -> Error { Box::new(std::io::Error::other(format!("KV write error: {}", e))) })?;
 
-        debug!(store_path = %path_info.store_path, "path info stored");
+        tracing::info!(store_path = %path_info.store_path, "pathinfo stored successfully");
         Ok(path_info)
     }
 
