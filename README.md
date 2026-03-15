@@ -2,7 +2,10 @@
 
 ![Aspen](docs/assets/aspen.png)
 
-Distributed systems orchestration in Rust. Built on [iroh](https://github.com/n0-computer/iroh) (P2P QUIC), a vendored [OpenRaft](https://github.com/databendlabs/openraft) (consensus), and [redb](https://github.com/cberner/redb) (storage).
+
+**This project is in heavy development and experimentation. Expect lots of breakages, outdated, generated docs, etc.**
+
+Hybrid Consensus Distributed Systems Framework in Rust. Built on [iroh](https://github.com/n0-computer/iroh) (P2P QUIC).
 
 ## Why
 
