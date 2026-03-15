@@ -342,13 +342,17 @@ async fn build_nix_payload<S: KeyValueStore + ?Sized>(
         format!("{}#{}", flake_url, attribute)
     };
 
-    // Check failure cache before creating the payload
+    // Check failure cache (advisory only — new commits may fix the issue)
     match crate::failure_cache::check_failure(store, &flake_ref).await {
         Ok(true) => {
-            // Cached failure found - return early failure
-            return Err(CiError::InvalidConfig {
-                reason: format!("Skipping Nix build - cached failure for flake reference: {}", flake_ref),
-            });
+            // Cached failure found — log but proceed anyway since the source
+            // may have changed (new commit pushed). The failure cache key is
+            // based on flake ref, not commit hash, so it can't distinguish
+            // "same broken code" from "new code that might work".
+            tracing::warn!(
+                flake_ref = %flake_ref,
+                "Previous build failure cached for this flake ref, retrying anyway (new commit may fix it)"
+            );
         }
         Ok(false) => {
             // No cached failure, proceed with build
