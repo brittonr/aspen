@@ -66,24 +66,24 @@
 
 ## 8. Tier 3: snix-eval Integration
 
-- [ ] 8.1 Add `snix-eval` and `snix-glue` dependencies behind `snix-eval` feature
-- [ ] 8.2 Create `aspen-ci-executor-nix/src/eval.rs` module for in-process evaluation
-- [ ] 8.3 Wire `SnixStoreIO` from `snix-glue` to Aspen's `BlobService`/`DirectoryService`/`PathInfoService`
-- [ ] 8.4 Implement flake evaluation: parse `flake.nix`, resolve inputs from `flake.lock`, evaluate attribute
-- [ ] 8.5 Implement pre-flight validation: evaluate flake and report errors before queuing builds
-- [ ] 8.6 Implement derivation-to-`BuildRequest` conversion using snix-glue utilities
-- [ ] 8.7 Add subprocess fallback: detect IFD and fall back to `nix eval` when `nix-cli-fallback` enabled
-- [ ] 8.8 Test evaluation of Aspen's own `flake.nix` to verify coverage for dogfood pipeline
-- [ ] 8.9 Test evaluation error reporting (syntax errors, undefined variables, type mismatches)
+- [x] 8.1 Add `snix-eval` and `snix-glue` dependencies behind `snix-eval` feature
+- [x] 8.2 Create `aspen-ci-executor-nix/src/eval.rs` module for in-process evaluation
+- [x] 8.3 Wire `SnixStoreIO` from `snix-glue` to Aspen's `BlobService`/`DirectoryService`/`PathInfoService`
+- [x] 8.4 Implement flake evaluation: parse `flake.nix`, resolve inputs from `flake.lock`, evaluate attribute
+- [x] 8.5 Implement pre-flight validation: evaluate flake and report errors before queuing builds
+- [x] 8.6 Implement derivation-to-`BuildRequest` conversion using snix-glue utilities
+- [x] 8.7 Add subprocess fallback: detect IFD and fall back to `nix eval` when `nix-cli-fallback` enabled
+- [x] 8.8 Test evaluation of Aspen's own `flake.nix` to verify coverage for dogfood pipeline
+- [x] 8.9 Test evaluation error reporting (syntax errors, undefined variables, type mismatches)
 
 ## 9. Tier 3: snix-serde Config
 
-- [ ] 9.1 Add `snix-serde` dependency behind `snix-eval` feature (transitive dep on snix-eval)
-- [ ] 9.2 Create `aspen-ci/src/nix_config.rs` for Nix-based pipeline config deserialization
-- [ ] 9.3 Define `serde::Deserialize` structs for CI pipeline definitions (stages, jobs, attributes)
-- [ ] 9.4 Implement `.aspen/ci.nix` loading: read file, evaluate with `snix_serde::from_str`, validate
-- [ ] 9.5 Enforce pure evaluation (no I/O builtins) for config parsing
-- [ ] 9.6 Write tests: valid config, nested config, type mismatch errors, impure rejection
+- [x] 9.1 Add `snix-serde` dependency behind `snix-eval` feature (transitive dep on snix-eval)
+- [x] 9.2 Create `aspen-ci/src/nix_config.rs` for Nix-based pipeline config deserialization
+- [x] 9.3 Define `serde::Deserialize` structs for CI pipeline definitions (stages, jobs, attributes)
+- [x] 9.4 Implement `.aspen/ci.nix` loading: read file, evaluate with `snix_serde::from_str`, validate
+- [x] 9.5 Enforce pure evaluation (no I/O builtins) for config parsing
+- [x] 9.6 Write tests: valid config, nested config, type mismatch errors, impure rejection
 
 ## 10. Tier 4: snix-build Native Execution
 

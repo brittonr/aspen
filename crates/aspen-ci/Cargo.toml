@@ -30,6 +30,8 @@ aspen-ci-executor-nix = { path = "../aspen-ci-executor-nix", optional = true }
 aspen-nickel = { path = "../aspen-nickel", optional = true }
 
 # SNIX dependencies for direct NAR ingestion (optional, forwarded to executor crates)
+snix-serde = { workspace = true, optional = true }
+snix-eval = { workspace = true, optional = true }
 
 # Nickel language for config parsing (optional)
 nickel-lang = { workspace = true, optional = true }
@@ -89,6 +91,8 @@ nix-executor = ["dep:aspen-ci-executor-nix"]
 # Nix executor with SNIX integration for decomposed cache uploads
 nix-executor-snix = ["nix-executor", "aspen-ci-executor-nix/snix"]
 # SNIX storage (forwarded to executor crates)
+# In-process Nix evaluation for config deserialization via snix-serde
+nix-config = ["dep:snix-serde", "dep:snix-eval"]
 # HTTP/3 cache proxy for Nix binary cache substitution
 nix-cache-proxy = ["aspen-ci-executor-shell?/nix-cache-proxy"]
 

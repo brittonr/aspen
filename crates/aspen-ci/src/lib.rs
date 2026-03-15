@@ -64,6 +64,8 @@ pub mod config;
 pub mod error;
 pub mod failure_cache;
 pub mod log_writer;
+#[cfg(feature = "nix-config")]
+pub mod nix_config;
 pub mod orchestrator;
 #[cfg(test)]
 mod schema_gen;

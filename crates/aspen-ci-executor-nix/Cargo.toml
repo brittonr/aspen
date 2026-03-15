@@ -23,6 +23,10 @@ snix-castore = { workspace = true, optional = true }
 snix-store = { workspace = true, optional = true }
 # nix-compat: always needed for FlakeRef parsing; also used for NAR ingestion with snix feature
 nix-compat = { workspace = true }
+# snix-eval: in-process Nix evaluation (Tier 3)
+snix-eval = { workspace = true, optional = true }
+snix-glue = { workspace = true, optional = true }
+snix-build = { workspace = true, optional = true }
 
 # Serialization
 serde = { workspace = true }
@@ -44,6 +48,8 @@ glob = "0.3"
 default = []
 # SNIX integration for decomposed content-addressed cache uploads
 snix = ["dep:snix-castore", "dep:snix-store"]
+# In-process Nix evaluation via snix-eval + snix-glue
+snix-eval = ["snix", "dep:snix-eval", "dep:snix-glue", "dep:snix-build"]
 # Retain nix CLI subprocess as fallback when snix-build is unavailable
 nix-cli-fallback = []
 # Re-enable when iroh is upgraded to 0.96+:
@@ -54,3 +60,4 @@ nix-cache-proxy = ["aspen-ci-executor-shell/nix-cache-proxy"]
 tempfile = "3.4.0"
 tokio-test = "0.4"
 proptest = "1.0"
+rnix = "0.11.0"

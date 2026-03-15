@@ -32,6 +32,8 @@ mod artifacts;
 mod cache;
 mod config;
 pub mod derivation;
+#[cfg(feature = "snix-eval")]
+pub mod eval;
 mod executor;
 pub mod flakeref;
 mod payload;
@@ -42,6 +44,8 @@ mod worker;
 
 pub use cache::UploadedStorePath;
 pub use config::NixBuildWorkerConfig;
+#[cfg(feature = "snix-eval")]
+pub use eval::NixEvaluator;
 pub use executor::NixBuildWorker;
 pub use payload::NixBuildPayload;
 #[cfg(feature = "snix")]
