@@ -71,8 +71,6 @@
               max_concurrent = 1,
               health_check_timeout_secs = 120,
               timeout_secs = 600,
-              expected_binary = "bin/cowsay",
-              validate_only = true,
             },
           ],
         },

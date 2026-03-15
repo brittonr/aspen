@@ -2,24 +2,11 @@
 
 ![Aspen](docs/assets/aspen.png)
 
+**Heavy development. Expect breakages and outdated docs.**
 
-**This project is in heavy development and experimentation. Expect lots of breakages, outdated, generated docs, etc.**
+Distributed systems primitives in Rust, built on [iroh](https://github.com/n0-computer/iroh) P2P QUIC. Ordered transactional KV at the bottom (Raft consensus), everything else built on top as key reads and writes.
 
-Hybrid Consensus Distributed Systems Framework in Rust. Built on [iroh](https://github.com/n0-computer/iroh) (P2P QUIC).
-
-## Why
-
-| | Typical stack | Aspen |
-|---|---|---|
-| Code | GitHub | Forge |
-| Builds | GitHub Actions | Built-in CI |
-| Artifacts | External registry | iroh-blobs (BLAKE3, P2P) |
-| Secrets | Vault | SOPS in KV store |
-| Auth | Per-service | Cluster identity |
-| Transport | HTTP + DNS | P2P QUIC |
-| Discovery | DNS, load balancers | Gossip, mDNS, DHT |
-
-Aspen builds and hosts itself: source in its own Forge, built by its own CI, deployed to its own cluster.
+Aspen's source lives in its own Git forge, built by its own CI, deployed to its own cluster. `nix run .#dogfood-local` runs this end-to-end.
 
 ## Architecture
 
@@ -31,17 +18,78 @@ Consensus        OpenRaft (vendored) + Redb (single-fsync writes)
 Transport        Iroh QUIC (ALPN multiplexing, gossip, mDNS, DHT)
 ```
 
-FoundationDB-style layered design: ordered transactional KV at the bottom, everything else built on top as key reads and writes.
+A single QUIC endpoint handles Raft replication, client RPCs, blob transfer, gossip, and federation through ALPN routing. No HTTP, no REST -- all communication goes through iroh.
 
-| Decision | Detail |
-|---|---|
-| Single fsync | Log + state machine apply in one redb transaction |
-| Write batching | Concurrent writes batched into one Raft proposal |
-| Vendored consensus | Full OpenRaft copy, patchable without upstream |
-| Content-addressed storage | Git objects, CI artifacts, WASM, Nix paths through iroh-blobs |
-| ALPN multiplexing | One QUIC endpoint for Raft, RPC, blobs, gossip, federation |
+Storage uses redb with the Raft log and state machine applied in a single transaction (one fsync per write batch). Concurrent client writes get batched into one Raft proposal. OpenRaft is vendored at `openraft/openraft` for direct patching.
 
-Core traits: `ClusterController` (membership) and `KeyValueStore` (KV ops), implemented by `RaftNode`.
+Core traits are `ClusterController` (membership) and `KeyValueStore` (KV ops), both implemented by `RaftNode`.
+
+## Coordination
+
+Distributed primitives on the KV layer's compare-and-swap. All linearizable through Raft.
+
+- `DistributedLock` / `DistributedRwLock` -- mutual exclusion with fencing tokens, reader-writer with fairness
+- `LeaderElection` -- lease-based with automatic renewal
+- `DistributedBarrier` -- N-party synchronization
+- `Semaphore`, `AtomicCounter`, `SequenceGenerator` -- bounded access, counters, monotonic IDs
+- `DistributedRateLimiter` -- token bucket
+- `QueueManager` -- FIFO with visibility timeout, ack/nack, dead letter queue
+- `ServiceRegistry` -- discovery with health checks
+- `WorkerCoordinator` -- work stealing, load balancing, failover
+
+```rust
+let lock = DistributedLock::new(store, "my_lock", "client_1", LockConfig::default());
+let guard = lock.acquire().await?;
+let token = guard.fencing_token(); // pass to external services
+// released on drop
+
+let election = LeaderElection::new(store, "service-leader", "node-1", ElectionConfig::default());
+let handle = election.start().await?;
+if handle.is_leader() { /* lead */ }
+```
+
+Pure business logic in `src/verified/`, with formal proofs in `verus/` covering properties like fencing token monotonicity and mutual exclusion.
+
+## Forge
+
+Git hosting on Aspen's storage layers. Git objects go into iroh-blobs (BLAKE3), refs go into Raft KV. Issues, patches, and reviews stored as immutable DAGs. iroh-gossip announces new commits to peers.
+
+```bash
+git remote add aspen aspen://cluster-ticket/my-repo
+git push aspen main
+```
+
+## CI/CD
+
+Pipelines auto-trigger on Forge pushes. Three executor backends:
+
+- **Shell** -- host-level, fast builds in pre-isolated environments
+- **Nix** -- sandbox, reproducible flake builds, artifacts to iroh-blobs + binary cache
+- **VM** -- Cloud Hypervisor microVM for untrusted workloads
+
+Pipelines defined in [Nickel](https://nickel-lang.org/) (`.aspen/ci.ncl`). Jobs distributed across the cluster via the Raft-backed job queue.
+
+## Federation
+
+Independent clusters can sync over P2P. Each cluster runs its own consensus and works offline. Discovery uses BitTorrent Mainline DHT (BEP-44). Clusters identify with Ed25519 keypairs. Within a cluster: strong consistency via Raft. Across clusters: pull-based sync with cryptographic verification, eventual consistency.
+
+Sync is application-level. Two Forge instances sync repos. Two CI systems share artifacts. The core provides transport and blob transfer; applications decide what to sync and when.
+
+See [Federation Guide](docs/FEDERATION.md).
+
+## AspenFS
+
+FUSE filesystem that mounts a cluster as a POSIX directory. Paths map to KV keys.
+
+```bash
+aspen-fuse --mount-point /mnt/aspen --ticket <cluster-ticket>
+
+echo "hello" > /mnt/aspen/myapp/config    # KV write
+cat /mnt/aspen/myapp/config                # KV read
+ls /mnt/aspen/myapp/                       # virtual directory from key prefixes
+```
+
+Also ships a VirtioFS backend for Cloud Hypervisor and QEMU. The VM CI executor uses this to give build jobs direct access to cluster storage.
 
 ## Usage
 
@@ -52,22 +100,21 @@ cargo build --features full    # everything
 ```
 
 ```bash
+# run a node
 cargo run --features jobs,docs,blob,hooks,automerge \
   --bin aspen-node -- --node-id 1 --cookie my-cluster
 
+# CLI
 cargo run -p aspen-cli -- kv get mykey
 
-nix run .#cluster              # 3-node local cluster
+# 3-node local cluster
+nix run .#cluster
+
+# self-hosted build pipeline
+nix run .#dogfood-local
 ```
 
-Self-hosting:
-
-```bash
-nix run .#dogfood-local              # full pipeline
-nix run .#dogfood-local -- full-loop # start -> push -> build -> deploy -> verify
-```
-
-## Testing and Verification
+## Testing
 
 ```bash
 cargo nextest run                                    # all tests
@@ -75,16 +122,9 @@ cargo nextest run -P quick                           # skip slow tests
 cargo nextest run -E 'test(/raft/)'                  # filter
 nix build .#checks.x86_64-linux.kv-operations-test   # NixOS VM test
 nix run .#verify-verus                               # Verus proofs
-nix run .#verify-verus coordination                  # single crate
 ```
 
-| Approach | Tool | |
-|---|---|---|
-| Deterministic simulation | madsim | Reproducible distributed scenarios |
-| Property-based testing | proptest, Bolero | Edge cases, fuzzing |
-| VM integration | NixOS + QEMU | Full cluster tests |
-| Fault injection | buggify | FoundationDB-style chaos |
-| Formal verification | [Verus](https://github.com/verus-lang/verus) | Proofs in `verus/`, code in `src/verified/` |
+madsim for deterministic simulation, proptest/Bolero for property-based testing and fuzzing, NixOS+QEMU for full cluster VM tests, buggify for fault injection, [Verus](https://github.com/verus-lang/verus) for formal verification (`verus/` specs, `src/verified/` code).
 
 ## Docs
 

@@ -250,414 +250,413 @@ in
       if not _plugins_loaded:
           node1.log("All multi-node cluster tests passed "
                     "(WASM plugins unavailable — Hyperlight needs KVM)")
-          import sys
-          sys.exit(0)
 
-      # Load plugins on ALL nodes. installPluginsScript installs + reloads
-      # on node1 only. Node2/node3 failed their initial load_wasm_plugins
-      # at boot (cluster wasn't initialized yet), leaving plugin_registry
-      # as None. Reload can't work without an initialized registry.
-      # Fix: restart node2/node3 ONE AT A TIME (to maintain quorum) so
-      # their startup load_wasm_plugins runs with initialized cluster.
-      # Pre-stage WASM blobs on follower nodes. Plugin loading requires
-      # linearizable KV reads (leader-only), so we can't reload on
-      # followers. Instead we ensure blobs are in each node's local
-      # blob store; after failover the new leader will reload plugins.
-      with subtest("stage plugin blobs on all nodes"):
-          for _other in [node2, node3]:
-              _other_ticket = get_ticket(_other)
-              for _pname in ["kv", "forge"]:
-                  _other.succeed(
-                      f"aspen-cli --ticket '{_other_ticket}' "
-                      f"blob add /etc/aspen-plugins/{_pname}-plugin.wasm "
-                      f">/dev/null 2>/dev/null"
-                  )
-              _other.log("plugin blobs staged")
+      if _plugins_loaded:
+        # Load plugins on ALL nodes. installPluginsScript installs + reloads
+        # on node1 only. Node2/node3 failed their initial load_wasm_plugins
+        # at boot (cluster wasn't initialized yet), leaving plugin_registry
+        # as None. Reload can't work without an initialized registry.
+        # Fix: restart node2/node3 ONE AT A TIME (to maintain quorum) so
+        # their startup load_wasm_plugins runs with initialized cluster.
+        # Pre-stage WASM blobs on follower nodes. Plugin loading requires
+        # linearizable KV reads (leader-only), so we can't reload on
+        # followers. Instead we ensure blobs are in each node's local
+        # blob store; after failover the new leader will reload plugins.
+        with subtest("stage plugin blobs on all nodes"):
+            for _other in [node2, node3]:
+                _other_ticket = get_ticket(_other)
+                for _pname in ["kv", "forge"]:
+                    _other.succeed(
+                        f"aspen-cli --ticket '{_other_ticket}' "
+                        f"blob add /etc/aspen-plugins/{_pname}-plugin.wasm "
+                        f">/dev/null 2>/dev/null"
+                    )
+                _other.log("plugin blobs staged")
 
-      # ── raft consensus verification ──────────────────────────────────
+        # ── raft consensus verification ──────────────────────────────────
 
-      with subtest("all nodes agree on leader"):
-          time.sleep(2)
-          leaders = set()
-          for node_ref, name in [(node1, "node1"), (node2, "node2"), (node3, "node3")]:
-              metrics = cli(node_ref, "cluster metrics")
-              leader = metrics.get("current_leader")
-              node_ref.log(
-                  f"{name} sees leader={leader}, "
-                  f"term={metrics.get('current_term')}"
-              )
-              if leader is not None:
-                  leaders.add(leader)
+        with subtest("all nodes agree on leader"):
+            time.sleep(2)
+            leaders = set()
+            for node_ref, name in [(node1, "node1"), (node2, "node2"), (node3, "node3")]:
+                metrics = cli(node_ref, "cluster metrics")
+                leader = metrics.get("current_leader")
+                node_ref.log(
+                    f"{name} sees leader={leader}, "
+                    f"term={metrics.get('current_term')}"
+                )
+                if leader is not None:
+                    leaders.add(leader)
 
-          assert len(leaders) == 1, f"nodes disagree on leader: {leaders}"
-          leader_id = leaders.pop()
-          node1.log(f"All nodes agree: leader is node {leader_id}")
+            assert len(leaders) == 1, f"nodes disagree on leader: {leaders}"
+            leader_id = leaders.pop()
+            node1.log(f"All nodes agree: leader is node {leader_id}")
 
-      with subtest("raft terms are consistent"):
-          terms = set()
-          for node_ref, name in [
-              (node1, "node1"), (node2, "node2"), (node3, "node3")
-          ]:
-              metrics = cli(node_ref, "cluster metrics")
-              term = metrics.get("current_term")
-              terms.add(term)
-              node_ref.log(f"{name} term={term}")
+        with subtest("raft terms are consistent"):
+            terms = set()
+            for node_ref, name in [
+                (node1, "node1"), (node2, "node2"), (node3, "node3")
+            ]:
+                metrics = cli(node_ref, "cluster metrics")
+                term = metrics.get("current_term")
+                terms.add(term)
+                node_ref.log(f"{name} term={term}")
 
-          assert len(terms) == 1, f"term mismatch across nodes: {terms}"
+            assert len(terms) == 1, f"term mismatch across nodes: {terms}"
 
-      # ── data replication: write on leader, read from followers ───────
+        # ── data replication: write on leader, read from followers ───────
 
-      with subtest("create repo on leader, visible from all nodes"):
-          out = cli(
-              node1,
-              "git init repl-test --description 'Replication test repo'"
-          )
-          repo_id = out.get("id") or out.get("repo_id", "")
-          assert repo_id, f"repo init should return id: {out}"
-          node1.log(f"Created repo {repo_id} on node1")
+        with subtest("create repo on leader, visible from all nodes"):
+            out = cli(
+                node1,
+                "git init repl-test --description 'Replication test repo'"
+            )
+            repo_id = out.get("id") or out.get("repo_id", "")
+            assert repo_id, f"repo init should return id: {out}"
+            node1.log(f"Created repo {repo_id} on node1")
 
-          # Give replication a moment
-          time.sleep(3)
+            # Give replication a moment
+            time.sleep(3)
 
-          # Verify the repo is visible from all three nodes
-          for node_ref, name in [
-              (node1, "node1"), (node2, "node2"), (node3, "node3")
-          ]:
-              repos = cli(node_ref, "git list")
-              repo_names = [r["name"] for r in repos.get("repos", [])]
-              assert "repl-test" in repo_names, \
-                  f"repl-test not visible on {name}: {repo_names}"
-              node_ref.log(f"{name} can see repo repl-test")
+            # Verify the repo is visible from all three nodes
+            for node_ref, name in [
+                (node1, "node1"), (node2, "node2"), (node3, "node3")
+            ]:
+                repos = cli(node_ref, "git list")
+                repo_names = [r["name"] for r in repos.get("repos", [])]
+                assert "repl-test" in repo_names, \
+                    f"repl-test not visible on {name}: {repo_names}"
+                node_ref.log(f"{name} can see repo repl-test")
 
-      with subtest("store blob on node1, retrieve from node2 and node3"):
-          node1.succeed("echo -n 'Replicated blob content' > /tmp/repl-blob.txt")
-          blob_out = cli(
-              node1, f"git store-blob -r {repo_id} /tmp/repl-blob.txt"
-          )
-          blob_hash = blob_out.get("hash", "")
-          assert len(blob_hash) == 64, f"bad blob hash: {blob_hash}"
-          node1.log(f"Stored blob {blob_hash} via node1")
+        with subtest("store blob on node1, retrieve from node2 and node3"):
+            node1.succeed("echo -n 'Replicated blob content' > /tmp/repl-blob.txt")
+            blob_out = cli(
+                node1, f"git store-blob -r {repo_id} /tmp/repl-blob.txt"
+            )
+            blob_hash = blob_out.get("hash", "")
+            assert len(blob_hash) == 64, f"bad blob hash: {blob_hash}"
+            node1.log(f"Stored blob {blob_hash} via node1")
 
-          time.sleep(3)
+            time.sleep(3)
 
-          # Retrieve from node2
-          ticket1 = get_ticket(node1)
-          node2.succeed(
-              f"aspen-cli --ticket '{ticket1}' "
-              f"git get-blob {blob_hash} -o /tmp/got-blob.txt 2>/dev/null"
-          )
-          content = node2.succeed("cat /tmp/got-blob.txt").strip()
-          assert content == "Replicated blob content", \
-              f"blob mismatch on node2: {content!r}"
-          node2.log("node2 retrieved replicated blob successfully")
+            # Retrieve from node2
+            ticket1 = get_ticket(node1)
+            node2.succeed(
+                f"aspen-cli --ticket '{ticket1}' "
+                f"git get-blob {blob_hash} -o /tmp/got-blob.txt 2>/dev/null"
+            )
+            content = node2.succeed("cat /tmp/got-blob.txt").strip()
+            assert content == "Replicated blob content", \
+                f"blob mismatch on node2: {content!r}"
+            node2.log("node2 retrieved replicated blob successfully")
 
-          # Retrieve from node3
-          node3.succeed(
-              f"aspen-cli --ticket '{ticket1}' "
-              f"git get-blob {blob_hash} -o /tmp/got-blob.txt 2>/dev/null"
-          )
-          content = node3.succeed("cat /tmp/got-blob.txt").strip()
-          assert content == "Replicated blob content", \
-              f"blob mismatch on node3: {content!r}"
-          node3.log("node3 retrieved replicated blob successfully")
+            # Retrieve from node3
+            node3.succeed(
+                f"aspen-cli --ticket '{ticket1}' "
+                f"git get-blob {blob_hash} -o /tmp/got-blob.txt 2>/dev/null"
+            )
+            content = node3.succeed("cat /tmp/got-blob.txt").strip()
+            assert content == "Replicated blob content", \
+                f"blob mismatch on node3: {content!r}"
+            node3.log("node3 retrieved replicated blob successfully")
 
-      with subtest("full commit chain replicates across nodes"):
-          tree_out = cli(
-              node1,
-              f"git create-tree -r {repo_id} "
-              f"-e '100644:README.md:{blob_hash}'"
-          )
-          tree_hash = tree_out.get("hash", "")
+        with subtest("full commit chain replicates across nodes"):
+            tree_out = cli(
+                node1,
+                f"git create-tree -r {repo_id} "
+                f"-e '100644:README.md:{blob_hash}'"
+            )
+            tree_hash = tree_out.get("hash", "")
 
-          commit_out = cli(
-              node1,
-              f"git commit -r {repo_id} --tree {tree_hash} "
-              f"-m 'Replicated commit'"
-          )
-          commit_hash = commit_out.get("hash", "")
-          assert len(commit_hash) == 64, f"bad commit hash: {commit_hash}"
+            commit_out = cli(
+                node1,
+                f"git commit -r {repo_id} --tree {tree_hash} "
+                f"-m 'Replicated commit'"
+            )
+            commit_hash = commit_out.get("hash", "")
+            assert len(commit_hash) == 64, f"bad commit hash: {commit_hash}"
 
-          # Push ref
-          cli_text(
-              node1,
-              f"git push -r {repo_id} --ref-name heads/main "
-              f"--hash {commit_hash} -f"
-          )
-          time.sleep(3)
+            # Push ref
+            cli_text(
+                node1,
+                f"git push -r {repo_id} --ref-name heads/main "
+                f"--hash {commit_hash} -f"
+            )
+            time.sleep(3)
 
-          # Verify commit visible from node2
-          log2 = cli(node2, f"git log -r {repo_id}")
-          assert log2.get("count", 0) >= 1, \
-              f"log empty on node2: {log2}"
-          node2.log("node2 sees replicated commit log")
+            # Verify commit visible from node2
+            log2 = cli(node2, f"git log -r {repo_id}")
+            assert log2.get("count", 0) >= 1, \
+                f"log empty on node2: {log2}"
+            node2.log("node2 sees replicated commit log")
 
-          # Verify ref visible from node3
-          ref3 = cli(node3, f"git get-ref -r {repo_id} heads/main")
-          assert ref3.get("hash") == commit_hash, \
-              f"ref mismatch on node3: expected {commit_hash}, got {ref3}"
-          node3.log("node3 sees replicated ref heads/main")
+            # Verify ref visible from node3
+            ref3 = cli(node3, f"git get-ref -r {repo_id} heads/main")
+            assert ref3.get("hash") == commit_hash, \
+                f"ref mismatch on node3: expected {commit_hash}, got {ref3}"
+            node3.log("node3 sees replicated ref heads/main")
 
-      # ── cross-node forge operations ──────────────────────────────────
+        # ── cross-node forge operations ──────────────────────────────────
 
-      with subtest("create issue on node2, read from node3"):
-          issue = cli(
-              node2,
-              f"issue create -r {repo_id} -t 'Cross-node issue' "
-              f"-b 'Created on node2' -l multinode"
-          )
-          issue_id = issue.get("id", "")
-          assert issue_id, f"issue create should return id: {issue}"
-          node2.log(f"Created issue {issue_id} on node2")
+        with subtest("create issue on node2, read from node3"):
+            issue = cli(
+                node2,
+                f"issue create -r {repo_id} -t 'Cross-node issue' "
+                f"-b 'Created on node2' -l multinode"
+            )
+            issue_id = issue.get("id", "")
+            assert issue_id, f"issue create should return id: {issue}"
+            node2.log(f"Created issue {issue_id} on node2")
 
-          time.sleep(2)
+            time.sleep(2)
 
-          si = cli(node3, f"issue show -r {repo_id} {issue_id}")
-          assert si.get("title") == "Cross-node issue", \
-              f"issue title mismatch on node3: {si}"
-          node3.log("node3 can read issue created on node2")
+            si = cli(node3, f"issue show -r {repo_id} {issue_id}")
+            assert si.get("title") == "Cross-node issue", \
+                f"issue title mismatch on node3: {si}"
+            node3.log("node3 can read issue created on node2")
 
-      with subtest("create branch on node3, list from node1"):
-          cli_text(
-              node3,
-              f"branch create -r {repo_id} multi-node-branch "
-              f"--from {commit_hash}"
-          )
-          time.sleep(2)
+        with subtest("create branch on node3, list from node1"):
+            cli_text(
+                node3,
+                f"branch create -r {repo_id} multi-node-branch "
+                f"--from {commit_hash}"
+            )
+            time.sleep(2)
 
-          bl = cli(node1, f"branch list -r {repo_id}")
-          branch_names = [r["name"] for r in bl.get("refs", [])]
-          assert any("multi-node-branch" in n for n in branch_names), \
-              f"multi-node-branch not visible on node1: {branch_names}"
-          node1.log("node1 sees branch created on node3")
+            bl = cli(node1, f"branch list -r {repo_id}")
+            branch_names = [r["name"] for r in bl.get("refs", [])]
+            assert any("multi-node-branch" in n for n in branch_names), \
+                f"multi-node-branch not visible on node1: {branch_names}"
+            node1.log("node1 sees branch created on node3")
 
-      # ── leader failover ──────────────────────────────────────────────
+        # ── leader failover ──────────────────────────────────────────────
 
-      with subtest("identify current leader"):
-          metrics = cli(node1, "cluster metrics")
-          old_leader = metrics.get("current_leader")
-          node1.log(f"Current leader before failover: node {old_leader}")
+        with subtest("identify current leader"):
+            metrics = cli(node1, "cluster metrics")
+            old_leader = metrics.get("current_leader")
+            node1.log(f"Current leader before failover: node {old_leader}")
 
-          # Map leader ID to node reference
-          leader_node = {1: node1, 2: node2, 3: node3}[old_leader]
-          follower_nodes = [
-              (nid, nref)
-              for nid, nref in [(1, node1), (2, node2), (3, node3)]
-              if nid != old_leader
-          ]
+            # Map leader ID to node reference
+            leader_node = {1: node1, 2: node2, 3: node3}[old_leader]
+            follower_nodes = [
+                (nid, nref)
+                for nid, nref in [(1, node1), (2, node2), (3, node3)]
+                if nid != old_leader
+            ]
 
-      with subtest("stop leader node"):
-          leader_node.succeed("systemctl stop aspen-node.service")
-          leader_node.log(
-              f"Stopped aspen-node on leader (node {old_leader})"
-          )
-          # Allow Raft election timeout to trigger re-election
-          time.sleep(8)
+        with subtest("stop leader node"):
+            leader_node.succeed("systemctl stop aspen-node.service")
+            leader_node.log(
+                f"Stopped aspen-node on leader (node {old_leader})"
+            )
+            # Allow Raft election timeout to trigger re-election
+            time.sleep(8)
 
-      with subtest("verify new leader elected"):
-          new_leader = None
-          for nid, nref in follower_nodes:
-              try:
-                  ticket = get_ticket(nref)
-                  nref.wait_until_succeeds(
-                      f"aspen-cli --ticket '{ticket}' "
-                      f"cluster health 2>/dev/null",
-                      timeout=30,
-                  )
-                  metrics = cli(nref, "cluster metrics", ticket=ticket)
-                  leader = metrics.get("current_leader")
-                  nref.log(f"node{nid} sees new leader: {leader}")
-                  if leader is not None and leader != old_leader:
-                      new_leader = leader
-              except Exception as e:
-                  nref.log(f"node{nid} not ready yet: {e}")
+        with subtest("verify new leader elected"):
+            new_leader = None
+            for nid, nref in follower_nodes:
+                try:
+                    ticket = get_ticket(nref)
+                    nref.wait_until_succeeds(
+                        f"aspen-cli --ticket '{ticket}' "
+                        f"cluster health 2>/dev/null",
+                        timeout=30,
+                    )
+                    metrics = cli(nref, "cluster metrics", ticket=ticket)
+                    leader = metrics.get("current_leader")
+                    nref.log(f"node{nid} sees new leader: {leader}")
+                    if leader is not None and leader != old_leader:
+                        new_leader = leader
+                except Exception as e:
+                    nref.log(f"node{nid} not ready yet: {e}")
 
-          assert new_leader is not None, \
-              "no new leader elected after failover"
-          assert new_leader != old_leader, \
-              f"leader unchanged: old={old_leader}, new={new_leader}"
-          node1.log(f"New leader after failover: node {new_leader}")
+            assert new_leader is not None, \
+                "no new leader elected after failover"
+            assert new_leader != old_leader, \
+                f"leader unchanged: old={old_leader}, new={new_leader}"
+            node1.log(f"New leader after failover: node {new_leader}")
 
-      with subtest("reload plugins on new leader"):
-          new_leader_node = {1: node1, 2: node2, 3: node3}[new_leader]
-          new_leader_ticket = get_ticket(new_leader_node)
-          # New leader can now do linearizable KV reads, so plugin
-          # reload will find manifests and load WASM from local blob store.
-          new_leader_node.wait_until_succeeds(
-              f"aspen-plugin-cli --ticket '{new_leader_ticket}' --json plugin reload "
-              f">/tmp/_plugin_cli_out.json 2>/dev/null",
-              timeout=60,
-          )
-          raw = new_leader_node.succeed("cat /tmp/_plugin_cli_out.json")
-          reload_result = json.loads(raw)
-          assert reload_result.get("is_success"), \
-              f"plugin reload failed on new leader: {reload_result}"
-          assert reload_result.get("plugin_count", 0) > 0, \
-              f"no plugins loaded after reload: {reload_result}"
-          new_leader_node.log(f"Plugins reloaded on new leader: {reload_result}")
+        with subtest("reload plugins on new leader"):
+            new_leader_node = {1: node1, 2: node2, 3: node3}[new_leader]
+            new_leader_ticket = get_ticket(new_leader_node)
+            # New leader can now do linearizable KV reads, so plugin
+            # reload will find manifests and load WASM from local blob store.
+            new_leader_node.wait_until_succeeds(
+                f"aspen-plugin-cli --ticket '{new_leader_ticket}' --json plugin reload "
+                f">/tmp/_plugin_cli_out.json 2>/dev/null",
+                timeout=60,
+            )
+            raw = new_leader_node.succeed("cat /tmp/_plugin_cli_out.json")
+            reload_result = json.loads(raw)
+            assert reload_result.get("is_success"), \
+                f"plugin reload failed on new leader: {reload_result}"
+            assert reload_result.get("plugin_count", 0) > 0, \
+                f"no plugins loaded after reload: {reload_result}"
+            new_leader_node.log(f"Plugins reloaded on new leader: {reload_result}")
 
-      with subtest("cluster operations work after failover"):
-          # Route writes through the NEW leader, not just any survivor
-          new_leader_ticket = get_ticket(new_leader_node)
+        with subtest("cluster operations work after failover"):
+            # Route writes through the NEW leader, not just any survivor
+            new_leader_ticket = get_ticket(new_leader_node)
 
-          # Create a new repo after failover — via the new leader.
-          # After failover the new leader needs time to commit a no-op
-          # entry before it can serve writes. Retry until ready.
-          new_leader_node.wait_until_succeeds(
-              f"aspen-cli --ticket '{new_leader_ticket}' --json "
-              f"git init failover-test "
-              f"--description 'Created after failover' "
-              f">/tmp/_cli_out.json 2>/dev/null",
-              timeout=30,
-          )
-          raw = new_leader_node.succeed("cat /tmp/_cli_out.json")
-          out = json.loads(raw)
-          failover_repo_id = out.get("id") or out.get("repo_id", "")
-          assert failover_repo_id, \
-              f"repo init after failover failed: {out}"
-          new_leader_node.log(
-              f"Created repo after failover: {failover_repo_id}"
-          )
+            # Create a new repo after failover — via the new leader.
+            # After failover the new leader needs time to commit a no-op
+            # entry before it can serve writes. Retry until ready.
+            new_leader_node.wait_until_succeeds(
+                f"aspen-cli --ticket '{new_leader_ticket}' --json "
+                f"git init failover-test "
+                f"--description 'Created after failover' "
+                f">/tmp/_cli_out.json 2>/dev/null",
+                timeout=30,
+            )
+            raw = new_leader_node.succeed("cat /tmp/_cli_out.json")
+            out = json.loads(raw)
+            failover_repo_id = out.get("id") or out.get("repo_id", "")
+            assert failover_repo_id, \
+                f"repo init after failover failed: {out}"
+            new_leader_node.log(
+                f"Created repo after failover: {failover_repo_id}"
+            )
 
-          time.sleep(3)
+            time.sleep(3)
 
-          # Verify visible from the other surviving node
-          other_nid, other_node = [
-              (nid, nref) for nid, nref in follower_nodes
-              if nid != new_leader
-          ][0]
-          repos = cli(
-              other_node, "git list", ticket=new_leader_ticket
-          )
-          repo_names = [r["name"] for r in repos.get("repos", [])]
-          assert "failover-test" in repo_names, \
-              f"failover-test not on node{other_nid}: {repo_names}"
-          other_node.log(
-              f"node{other_nid} sees repo created after failover"
-          )
+            # Verify visible from the other surviving node
+            other_nid, other_node = [
+                (nid, nref) for nid, nref in follower_nodes
+                if nid != new_leader
+            ][0]
+            repos = cli(
+                other_node, "git list", ticket=new_leader_ticket
+            )
+            repo_names = [r["name"] for r in repos.get("repos", [])]
+            assert "failover-test" in repo_names, \
+                f"failover-test not on node{other_nid}: {repo_names}"
+            other_node.log(
+                f"node{other_nid} sees repo created after failover"
+            )
 
-      with subtest("writes to follower auto-route to new leader"):
-          # Send a write through a follower using the leader's ticket.
-          # The follower's own ticket only has its own address, so
-          # NOT_LEADER rotation can't discover the new leader.
-          # Instead, we use the new leader's ticket (which has routable
-          # addresses) and issue the command from the follower node.
-          follower_nid, follower_node = [
-              (nid, nref) for nid, nref in follower_nodes
-              if nid != new_leader
-          ][0]
+        with subtest("writes to follower auto-route to new leader"):
+            # Send a write through a follower using the leader's ticket.
+            # The follower's own ticket only has its own address, so
+            # NOT_LEADER rotation can't discover the new leader.
+            # Instead, we use the new leader's ticket (which has routable
+            # addresses) and issue the command from the follower node.
+            follower_nid, follower_node = [
+                (nid, nref) for nid, nref in follower_nodes
+                if nid != new_leader
+            ][0]
 
-          out = cli(
-              follower_node,
-              "git init follower-write-test "
-              "--description 'Written via follower'",
-              ticket=new_leader_ticket,
-          )
-          fwt_id = out.get("id") or out.get("repo_id", "")
-          assert fwt_id, \
-              f"write via follower should succeed via NOT_LEADER rotation: {out}"
-          follower_node.log(
-              f"node{follower_nid} (follower) write routed to leader"
-          )
+            out = cli(
+                follower_node,
+                "git init follower-write-test "
+                "--description 'Written via follower'",
+                ticket=new_leader_ticket,
+            )
+            fwt_id = out.get("id") or out.get("repo_id", "")
+            assert fwt_id, \
+                f"write via follower should succeed via NOT_LEADER rotation: {out}"
+            follower_node.log(
+                f"node{follower_nid} (follower) write routed to leader"
+            )
 
-          time.sleep(2)
+            time.sleep(2)
 
-          # Verify the repo is visible from the leader
-          repos = cli(
-              new_leader_node, "git list",
-              ticket=new_leader_ticket
-          )
-          repo_names = [r["name"] for r in repos.get("repos", [])]
-          assert "follower-write-test" in repo_names, \
-              f"follower-write-test not visible on leader: {repo_names}"
+            # Verify the repo is visible from the leader
+            repos = cli(
+                new_leader_node, "git list",
+                ticket=new_leader_ticket
+            )
+            repo_names = [r["name"] for r in repos.get("repos", [])]
+            assert "follower-write-test" in repo_names, \
+                f"follower-write-test not visible on leader: {repo_names}"
 
-      with subtest("raft reads work with 2-node quorum"):
-          repos = cli(
-              new_leader_node, "git list",
-              ticket=new_leader_ticket
-          )
-          repo_names = [r["name"] for r in repos.get("repos", [])]
-          assert "repl-test" in repo_names, \
-              f"repl-test missing after failover: {repo_names}"
-          assert "failover-test" in repo_names, \
-              f"failover-test missing: {repo_names}"
-          new_leader_node.log(
-              "Raft KV reads work with 2-node quorum"
-          )
+        with subtest("raft reads work with 2-node quorum"):
+            repos = cli(
+                new_leader_node, "git list",
+                ticket=new_leader_ticket
+            )
+            repo_names = [r["name"] for r in repos.get("repos", [])]
+            assert "repl-test" in repo_names, \
+                f"repl-test missing after failover: {repo_names}"
+            assert "failover-test" in repo_names, \
+                f"failover-test missing: {repo_names}"
+            new_leader_node.log(
+                "Raft KV reads work with 2-node quorum"
+            )
 
-      # ── rejoin: bring failed node back ───────────────────────────────
+        # ── rejoin: bring failed node back ───────────────────────────────
 
-      with subtest("restart failed leader node"):
-          leader_node.succeed("systemctl start aspen-node.service")
-          leader_node.wait_for_unit("aspen-node.service")
-          leader_node.wait_for_file(
-              "/var/lib/aspen/cluster-ticket.txt", timeout=30
-          )
-          time.sleep(8)  # Allow time to rejoin and catch up
+        with subtest("restart failed leader node"):
+            leader_node.succeed("systemctl start aspen-node.service")
+            leader_node.wait_for_unit("aspen-node.service")
+            leader_node.wait_for_file(
+                "/var/lib/aspen/cluster-ticket.txt", timeout=30
+            )
+            time.sleep(8)  # Allow time to rejoin and catch up
 
-          old_leader_ticket = get_ticket(leader_node)
-          leader_node.wait_until_succeeds(
-              f"aspen-cli --ticket '{old_leader_ticket}' "
-              f"cluster health 2>/dev/null",
-              timeout=30,
-          )
-          leader_node.log(f"node{old_leader} restarted and healthy")
+            old_leader_ticket = get_ticket(leader_node)
+            leader_node.wait_until_succeeds(
+                f"aspen-cli --ticket '{old_leader_ticket}' "
+                f"cluster health 2>/dev/null",
+                timeout=30,
+            )
+            leader_node.log(f"node{old_leader} restarted and healthy")
 
-      with subtest("restarted node has caught up"):
-          time.sleep(5)
+        with subtest("restarted node has caught up"):
+            time.sleep(5)
 
-          # All 3 nodes are back — repos should all be visible
-          repos = cli(
-              new_leader_node, "git list",
-              ticket=new_leader_ticket
-          )
-          repo_names = [r["name"] for r in repos.get("repos", [])]
-          assert "failover-test" in repo_names, \
-              f"failover-test missing after rejoin: {repo_names}"
-          assert "repl-test" in repo_names, \
-              f"repl-test missing after rejoin: {repo_names}"
-          leader_node.log(
-              f"node{old_leader} rejoined — cluster data intact"
-          )
+            # All 3 nodes are back — repos should all be visible
+            repos = cli(
+                new_leader_node, "git list",
+                ticket=new_leader_ticket
+            )
+            repo_names = [r["name"] for r in repos.get("repos", [])]
+            assert "failover-test" in repo_names, \
+                f"failover-test missing after rejoin: {repo_names}"
+            assert "repl-test" in repo_names, \
+                f"repl-test missing after rejoin: {repo_names}"
+            leader_node.log(
+                f"node{old_leader} rejoined — cluster data intact"
+            )
 
-      with subtest("kv and blob operations work after full rejoin"):
-          # KV-backed operations (branch list, repo list)
-          branches = cli(
-              new_leader_node,
-              f"branch list -r {repo_id}",
-              ticket=new_leader_ticket,
-          )
-          branch_names = [
-              r["name"] for r in branches.get("refs", [])
-          ]
-          assert any("main" in n for n in branch_names), \
-              f"main branch missing after rejoin: {branch_names}"
-          assert any("multi-node-branch" in n for n in branch_names), \
-              f"multi-node-branch missing after rejoin: {branch_names}"
-          new_leader_node.log(
-              "KV operations work with all 3 nodes after rejoin"
-          )
+        with subtest("kv and blob operations work after full rejoin"):
+            # KV-backed operations (branch list, repo list)
+            branches = cli(
+                new_leader_node,
+                f"branch list -r {repo_id}",
+                ticket=new_leader_ticket,
+            )
+            branch_names = [
+                r["name"] for r in branches.get("refs", [])
+            ]
+            assert any("main" in n for n in branch_names), \
+                f"main branch missing after rejoin: {branch_names}"
+            assert any("multi-node-branch" in n for n in branch_names), \
+                f"multi-node-branch missing after rejoin: {branch_names}"
+            new_leader_node.log(
+                "KV operations work with all 3 nodes after rejoin"
+            )
 
-          # Blob-backed operations: issue show requires fetching
-          # signed COB objects from the blob store. Blob replication
-          # may not have caught up yet after restart — this is
-          # best-effort. (Blob reads fail fast at 5s now.)
-          si = cli(
-              new_leader_node,
-              f"issue show -r {repo_id} {issue_id}",
-              ticket=new_leader_ticket,
-              check=False,
-          )
-          if isinstance(si, dict) and si.get("title") == "Cross-node issue":
-              new_leader_node.log(
-                  "Blob-backed issue show works after full rejoin"
-              )
-          else:
-              new_leader_node.log(
-                  f"Blob-backed issue show not yet available after rejoin "
-                  f"(expected — blob replication lag): {si}"
-              )
+            # Blob-backed operations: issue show requires fetching
+            # signed COB objects from the blob store. Blob replication
+            # may not have caught up yet after restart — this is
+            # best-effort. (Blob reads fail fast at 5s now.)
+            si = cli(
+                new_leader_node,
+                f"issue show -r {repo_id} {issue_id}",
+                ticket=new_leader_ticket,
+                check=False,
+            )
+            if isinstance(si, dict) and si.get("title") == "Cross-node issue":
+                new_leader_node.log(
+                    "Blob-backed issue show works after full rejoin"
+                )
+            else:
+                new_leader_node.log(
+                    f"Blob-backed issue show not yet available after rejoin "
+                    f"(expected — blob replication lag): {si}"
+                )
 
-      # ── done ─────────────────────────────────────────────────────────
-      node1.log("All multi-node cluster integration tests passed!")
+        # ── done ─────────────────────────────────────────────────────────
+        node1.log("All multi-node cluster integration tests passed!")
     '';
   }
