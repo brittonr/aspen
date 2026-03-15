@@ -62,6 +62,8 @@ pub use encrypt::encrypt_file;
 #[cfg(feature = "sops")]
 pub use metadata::AspenTransitRecipient;
 #[cfg(feature = "sops")]
+pub use metadata::HcVaultTransitRecipient;
+#[cfg(feature = "sops")]
 pub use metadata::SopsFileMetadata;
 pub use provider::SecretsManager;
 pub use provider::SecretsProvider;

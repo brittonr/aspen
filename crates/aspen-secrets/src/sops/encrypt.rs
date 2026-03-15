@@ -88,13 +88,16 @@ pub async fn encrypt_file(config: &EncryptConfig) -> Result<String> {
     let mut metadata = SopsFileMetadata::new();
     metadata.encrypted_regex = config.encrypted_regex.clone();
 
-    metadata.add_aspen_recipient(AspenTransitRecipient {
+    let aspen_recipient = AspenTransitRecipient {
         cluster_ticket: config.cluster_ticket.clone(),
         mount: config.transit_mount.clone(),
         name: config.transit_key.clone(),
         enc: encrypted_data_key,
         key_version,
-    });
+    };
+    // Also add hc_vault_transit entry for Go SOPS keyservice interop
+    metadata.add_hc_vault_mirror(&aspen_recipient);
+    metadata.add_aspen_recipient(aspen_recipient);
 
     // Encrypt data key for age recipients if configured
     for age_recipient in &config.age_recipients {
@@ -118,6 +121,9 @@ pub async fn encrypt_file(config: &EncryptConfig) -> Result<String> {
     // Compute and encrypt MAC
     let encrypted_mac = encrypt_mac(&data_key_array, &values)?;
     metadata.mac = encrypted_mac;
+
+    // Sync key_groups for Go SOPS 3.7+ interop
+    metadata.sync_key_groups();
 
     // Re-render with final metadata (includes MAC)
     let (output, _) = format::encrypt_document(

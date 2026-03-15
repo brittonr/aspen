@@ -31,17 +31,19 @@
   # Deterministic Iroh secret key (64 hex chars = 32 bytes).
   secretKey = "0000000000000002000000000000000200000000000000020000000000000002";
 
-  # Plaintext TOML file for interop test (pkgs.writeText avoids heredoc-in-Python issues)
-  interopToml = pkgs.writeText "secrets-interop.toml" ''
-    [database]
-    host = "db.internal.example.com"
-    port = 5432
-    password = "super-secret-password-123"
-
-    [api]
-    key = "sk-live-interop-test-key-abc123"
-    endpoint = "https://api.example.com/v1"
-  '';
+  # Plaintext JSON file for interop test — Go SOPS doesn't support TOML,
+  # so interop tests use JSON format. (pkgs.writeText avoids heredoc-in-Python issues)
+  interopJson = pkgs.writeText "secrets-interop.json" (builtins.toJSON {
+    database = {
+      host = "db.internal.example.com";
+      port = 5432;
+      password = "super-secret-password-123";
+    };
+    api = {
+      key = "sk-live-interop-test-key-abc123";
+      endpoint = "https://api.example.com/v1";
+    };
+  });
 
   # Shared cluster cookie.
   cookie = "sops-transit-test";
@@ -352,17 +354,18 @@ in
         with subtest("go-sops interop: aspen-sops encrypt then go-sops decrypt"):
             ticket = get_ticket()
 
-            # Step 1: Create a plaintext TOML file (copy from nix store so it's mutable)
-            node1.succeed("cp ${interopToml} /tmp/secrets-interop.toml")
-            node1.succeed("chmod 644 /tmp/secrets-interop.toml")
+            # Step 1: Create a plaintext JSON file (copy from nix store so it's mutable)
+            # Go SOPS doesn't support TOML, so interop uses JSON format.
+            node1.succeed("cp ${interopJson} /tmp/secrets-interop.json")
+            node1.succeed("chmod 644 /tmp/secrets-interop.json")
 
             # Keep a copy of the original for comparison
-            original = node1.succeed("cat /tmp/secrets-interop.toml").strip()
+            original = node1.succeed("cat /tmp/secrets-interop.json").strip()
             node1.log(f"Original plaintext ({len(original)} bytes)")
 
             # Step 2: Encrypt with aspen-sops
             rc, enc_out = node1.execute(
-                f"aspen-sops encrypt /tmp/secrets-interop.toml "
+                f"aspen-sops encrypt /tmp/secrets-interop.json "
                 f"--cluster-ticket '{ticket}' "
                 f"--transit-key ${transitKeyName} "
                 f"--in-place 2>&1"
@@ -371,7 +374,7 @@ in
                 node1.log(f"aspen-sops encrypt failed (exit {rc}): {enc_out}")
             assert rc == 0, f"aspen-sops encrypt failed (exit {rc}): {enc_out}"
 
-            encrypted = node1.succeed("cat /tmp/secrets-interop.toml").strip()
+            encrypted = node1.succeed("cat /tmp/secrets-interop.json").strip()
             node1.log(f"Encrypted file ({len(encrypted)} bytes)")
 
             # Verify values are actually encrypted (contain ENC[AES256_GCM,...])
@@ -384,13 +387,20 @@ in
                 f"values should be encrypted: {encrypted[:200]}"
             node1.log("aspen-sops encrypt: OK (values encrypted, keys plaintext)")
 
+            # Verify hc_vault_transit is present for Go SOPS interop
+            assert "hc_vault_transit" in encrypted, \
+                f"hc_vault_transit missing from encrypted file — Go SOPS interop requires it"
+
             # Step 3: Start the keyservice bridge in the background
+            # Use absolute path — systemd-run transient units don't inherit
+            # environment.systemPackages PATH.
+            sops_bin = "${aspenSopsPackage}/bin/aspen-sops"
             node1.succeed(
                 f"systemd-run --unit=aspen-keyservice "
-                f"bash -c 'exec aspen-sops keyservice "
-                f"--cluster-ticket \"{ticket}\" "
+                f"{sops_bin} keyservice "
+                f"--cluster-ticket '{ticket}' "
                 f"--transit-key ${transitKeyName} "
-                f"--socket /tmp/aspen-sops.sock'"
+                f"--socket /tmp/aspen-sops.sock"
             )
 
             # Wait for the Unix socket to appear
@@ -402,32 +412,26 @@ in
 
             # Step 4: Decrypt with Go sops via keyservice
             #
-            # Go sops uses --hc-vault-transit to identify the key type (VaultKey),
-            # and --keyservice to specify the gRPC endpoint. The bridge translates
-            # VaultKey encrypt/decrypt calls to Aspen Transit RPCs.
-            #
-            # The --hc-vault-transit value format: vault_address:engine_path/keys/key_name
-            # vault_address is ignored by our bridge (uses cluster ticket instead).
+            # Go sops reads the hc_vault_transit metadata from the encrypted
+            # JSON file and sends Decrypt RPCs to the keyservice bridge.
+            # The bridge translates VaultKey decrypt calls to Aspen Transit RPCs.
             node1.succeed(
                 f"sops decrypt "
                 f"--keyservice 'unix:///tmp/aspen-sops.sock' "
-                f"--hc-vault-transit 'http://ignored:transit/keys/${transitKeyName}' "
-                f"/tmp/secrets-interop.toml "
-                f"> /tmp/secrets-interop-decrypted.toml"
+                f"/tmp/secrets-interop.json "
+                f"> /tmp/secrets-interop-decrypted.json"
             )
 
-            decrypted = node1.succeed("cat /tmp/secrets-interop-decrypted.toml").strip()
+            decrypted = node1.succeed("cat /tmp/secrets-interop-decrypted.json").strip()
             node1.log(f"Go sops decrypted ({len(decrypted)} bytes)")
 
             # Step 5: Compare decrypted output with original
-            # TOML round-trip may reorder keys or change whitespace, so compare
-            # by parsing both as TOML and checking values.
             node1.succeed("""
               python3 -c "
-        import tomllib
+        import json
 
-        with open('/tmp/secrets-interop-decrypted.toml', 'rb') as f:
-            decrypted = tomllib.load(f)
+        with open('/tmp/secrets-interop-decrypted.json') as f:
+            decrypted = json.load(f)
 
         # Verify all original values survived the round-trip
         assert decrypted['database']['host'] == 'db.internal.example.com', \

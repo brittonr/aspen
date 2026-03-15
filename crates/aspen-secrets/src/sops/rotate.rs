@@ -70,6 +70,23 @@ pub async fn rotate_file(config: &RotateConfig) -> Result<String> {
         recipient.key_version = new_version;
     }
 
+    // Sync hc_vault_transit entries with updated aspen_transit data
+    let hc_mirrors: Vec<_> = metadata
+        .aspen_transit
+        .iter()
+        .map(|a| super::metadata::HcVaultTransitRecipient {
+            vault_address: "aspen".into(),
+            engine_path: a.mount.clone(),
+            key_name: a.name.clone(),
+            enc: a.enc.clone(),
+            created_at: metadata.lastmodified.clone(),
+        })
+        .collect();
+    metadata.hc_vault_transit = hc_mirrors;
+
+    // Sync key_groups for Go SOPS 3.7+ interop
+    metadata.sync_key_groups();
+
     metadata.touch();
 
     // Update metadata in the document (format-agnostic)

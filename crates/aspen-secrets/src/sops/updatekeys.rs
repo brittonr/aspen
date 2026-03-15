@@ -99,6 +99,23 @@ pub async fn update_keys(config: &UpdateKeysConfig) -> Result<String> {
         info!(recipient = age_recipient, "Added age recipient");
     }
 
+    // Sync hc_vault_transit entries with aspen_transit
+    let hc_mirrors: Vec<_> = metadata
+        .aspen_transit
+        .iter()
+        .map(|a| super::metadata::HcVaultTransitRecipient {
+            vault_address: "aspen".into(),
+            engine_path: a.mount.clone(),
+            key_name: a.name.clone(),
+            enc: a.enc.clone(),
+            created_at: metadata.lastmodified.clone(),
+        })
+        .collect();
+    metadata.hc_vault_transit = hc_mirrors;
+
+    // Sync key_groups for Go SOPS 3.7+ interop
+    metadata.sync_key_groups();
+
     metadata.touch();
 
     // Zeroize data key

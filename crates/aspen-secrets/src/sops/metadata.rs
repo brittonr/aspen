@@ -25,6 +25,25 @@ pub struct AspenTransitRecipient {
     pub key_version: u32,
 }
 
+/// HashiCorp Vault Transit recipient in SOPS metadata.
+///
+/// Go SOPS compatible format. Stored as `[[sops.hc_vault_transit]]`.
+/// The keyservice bridge translates these into Aspen Transit RPCs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HcVaultTransitRecipient {
+    /// Vault server address (unused by keyservice bridge, but required by Go SOPS).
+    pub vault_address: String,
+    /// Transit engine mount path (e.g., "transit").
+    pub engine_path: String,
+    /// Transit key name.
+    pub key_name: String,
+    /// Encrypted data key (Aspen Transit ciphertext: `aspen:v<ver>:<base64>`).
+    #[serde(default)]
+    pub enc: String,
+    /// Creation timestamp (RFC 3339).
+    pub created_at: String,
+}
+
 /// Age recipient in SOPS metadata.
 ///
 /// Stored as `[[sops.age]]` in the encrypted file.
@@ -37,6 +56,20 @@ pub struct AgeRecipient {
     pub enc: Option<String>,
 }
 
+/// A key group for Go SOPS 3.7+ `key_groups` format.
+///
+/// Each key group contains one or more key types. SOPS requires decrypting
+/// with at least one key from each key group.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct SopsKeyGroup {
+    /// Vault Transit keys in this group.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hc_vault_transit: Vec<HcVaultTransitRecipient>,
+    /// Age keys in this group.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub age: Vec<AgeRecipient>,
+}
+
 /// Complete SOPS file metadata section.
 ///
 /// Represents the `[sops]` table in a SOPS-encrypted TOML file.
@@ -45,6 +78,21 @@ pub struct SopsFileMetadata {
     /// Aspen Transit key groups.
     #[serde(default)]
     pub aspen_transit: Vec<AspenTransitRecipient>,
+
+    /// HashiCorp Vault Transit key groups (Go SOPS interop).
+    ///
+    /// Populated alongside `aspen_transit` during encryption so Go SOPS can
+    /// decrypt via `--keyservice` without understanding `aspen_transit`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hc_vault_transit: Vec<HcVaultTransitRecipient>,
+
+    /// Key groups (Go SOPS 3.7+ format).
+    ///
+    /// Go SOPS 3.12+ requires keys to be in `key_groups` rather than flat
+    /// at the top of the `sops` section. This is populated automatically
+    /// from `hc_vault_transit` and `age` entries.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub key_groups: Vec<SopsKeyGroup>,
 
     /// Age key groups.
     #[serde(default)]
@@ -76,6 +124,8 @@ impl SopsFileMetadata {
     pub fn new() -> Self {
         Self {
             aspen_transit: Vec::new(),
+            hc_vault_transit: Vec::new(),
+            key_groups: Vec::new(),
             age: Vec::new(),
             lastmodified: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
             mac: String::new(),
@@ -119,6 +169,33 @@ impl SopsFileMetadata {
         self.aspen_transit.retain(|r| r.cluster_ticket != cluster_ticket);
     }
 
+    /// Add a Go SOPS compatible Vault Transit recipient (mirrors an Aspen Transit entry).
+    pub fn add_hc_vault_recipient(&mut self, recipient: HcVaultTransitRecipient) {
+        if let Some(existing) = self
+            .hc_vault_transit
+            .iter_mut()
+            .find(|r| r.engine_path == recipient.engine_path && r.key_name == recipient.key_name)
+        {
+            *existing = recipient;
+        } else {
+            self.hc_vault_transit.push(recipient);
+        }
+    }
+
+    /// Add a Go SOPS compatible Vault Transit entry that mirrors an Aspen Transit recipient.
+    ///
+    /// Maps: mount → engine_path, name → key_name, enc → enc.
+    /// `vault_address` is set to "aspen" (unused by keyservice bridge).
+    pub fn add_hc_vault_mirror(&mut self, aspen: &AspenTransitRecipient) {
+        self.add_hc_vault_recipient(HcVaultTransitRecipient {
+            vault_address: "aspen".into(),
+            engine_path: aspen.mount.clone(),
+            key_name: aspen.name.clone(),
+            enc: aspen.enc.clone(),
+            created_at: self.lastmodified.clone(),
+        });
+    }
+
     /// Add an age recipient.
     pub fn add_age_recipient(&mut self, recipient: AgeRecipient) {
         if let Some(existing) = self.age.iter_mut().find(|r| r.recipient == recipient.recipient) {
@@ -131,6 +208,22 @@ impl SopsFileMetadata {
     /// Remove an age recipient by public key.
     pub fn remove_age_recipient(&mut self, public_key: &str) {
         self.age.retain(|r| r.recipient != public_key);
+    }
+
+    /// Rebuild `key_groups` from `hc_vault_transit` and `age` entries.
+    ///
+    /// Go SOPS 3.12+ reads `key_groups` instead of flat key arrays.
+    /// Call this before serialization to ensure interop.
+    pub fn sync_key_groups(&mut self) {
+        let group = SopsKeyGroup {
+            hc_vault_transit: self.hc_vault_transit.clone(),
+            age: self.age.clone(),
+        };
+        if !group.hc_vault_transit.is_empty() || !group.age.is_empty() {
+            self.key_groups = vec![group];
+        } else {
+            self.key_groups.clear();
+        }
     }
 
     /// Update the lastmodified timestamp to now.
