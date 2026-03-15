@@ -31,6 +31,18 @@
   # Deterministic Iroh secret key (64 hex chars = 32 bytes).
   secretKey = "0000000000000002000000000000000200000000000000020000000000000002";
 
+  # Plaintext TOML file for interop test (pkgs.writeText avoids heredoc-in-Python issues)
+  interopToml = pkgs.writeText "secrets-interop.toml" ''
+    [database]
+    host = "db.internal.example.com"
+    port = 5432
+    password = "super-secret-password-123"
+
+    [api]
+    key = "sk-live-interop-test-key-abc123"
+    endpoint = "https://api.example.com/v1"
+  '';
+
   # Shared cluster cookie.
   cookie = "sops-transit-test";
 
@@ -340,19 +352,9 @@ in
         with subtest("go-sops interop: aspen-sops encrypt then go-sops decrypt"):
             ticket = get_ticket()
 
-            # Step 1: Create a plaintext TOML file
-            node1.succeed("""
-              cat > /tmp/secrets-interop.toml <<'TOML_END'
-        [database]
-        host = "db.internal.example.com"
-        port = 5432
-        password = "super-secret-password-123"
-
-        [api]
-        key = "sk-live-interop-test-key-abc123"
-        endpoint = "https://api.example.com/v1"
-        TOML_END
-            """.strip())
+            # Step 1: Create a plaintext TOML file (copy from nix store so it's mutable)
+            node1.succeed("cp ${interopToml} /tmp/secrets-interop.toml")
+            node1.succeed("chmod 644 /tmp/secrets-interop.toml")
 
             # Keep a copy of the original for comparison
             original = node1.succeed("cat /tmp/secrets-interop.toml").strip()
