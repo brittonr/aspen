@@ -33,8 +33,6 @@ pkgs.testers.nixosTest {
   };
 
   testScript = ''
-    import time
-
     start_all()
 
     # ================================================================

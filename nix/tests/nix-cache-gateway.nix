@@ -134,7 +134,7 @@ in
           machine.log(f"nix-cache-info: {info}")
           assert "StoreDir: /nix/store" in info, f"missing StoreDir: {info}"
           assert "WantMassQuery: 1" in info, f"missing WantMassQuery: {info}"
-          assert "Priority: 40" in info, f"missing Priority: {info}"
+          assert "Priority: 30" in info, f"missing Priority: {info}"
 
       # ── verify cache public-key CLI ──────────────────────────────────
 

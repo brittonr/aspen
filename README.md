@@ -9,36 +9,17 @@ Hybrid Consensus Distributed Systems Framework in Rust. Built on [iroh](https://
 
 ## Why
 
-Most developer infrastructure depends on a handful of companies. Code on GitHub, builds on GitHub Actions, artifacts in someone else's registry, secrets in someone else's vault. Each piece works fine in isolation but they're all different services with different auth, different APIs, different failure modes, and you don't control any of them.
+| | Typical stack | Aspen |
+|---|---|---|
+| Code | GitHub | Forge |
+| Builds | GitHub Actions | Built-in CI |
+| Artifacts | External registry | iroh-blobs (BLAKE3, P2P) |
+| Secrets | Vault | SOPS in KV store |
+| Auth | Per-service | Cluster identity |
+| Transport | HTTP + DNS | P2P QUIC |
+| Discovery | DNS, load balancers | Gossip, mDNS, DHT |
 
-Aspen replaces that stack with one system. A cluster of nodes that talk to each other over P2P QUIC, agree on state through Raft, and store everything -- code, builds, secrets, coordination -- in a shared KV store and content-addressed blob store. Nodes find each other through gossip and DHT, punch through NATs, and work on a laptop or across continents. The whole thing runs without HTTP, DNS, or cloud accounts.
-
-The design follows FoundationDB's layered approach: get an ordered, transactional KV store right, then build everything else on top without touching the core. A distributed lock is a KV entry with a CAS-guarded owner field. A CI pipeline is a state machine that triggers on ref updates. Git hosting is refs in the KV store and objects in the blob store. Each feature reads and writes keys. Adding one doesn't make the others more complex.
-
-The end goal is self-hosting. Aspen's source lives in its own Forge, gets built by its own CI, and deploys to its own cluster. If it can build and ship itself reliably, it can handle other workloads too.
-
-## Build
-
-```bash
-nix develop                    # dev shell (mold linker, all tools)
-cargo build                    # core workspace
-cargo nextest run              # tests
-cargo nextest run -P quick     # skip slow tests
-```
-
-## Run
-
-```bash
-# Single node
-cargo run --features jobs,docs,blob,hooks,automerge \
-  --bin aspen-node -- --node-id 1 --cookie my-cluster
-
-# CLI
-cargo run -p aspen-cli -- kv get mykey
-
-# 3-node local cluster
-nix run .#cluster
-```
+Aspen builds and hosts itself: source in its own Forge, built by its own CI, deployed to its own cluster.
 
 ## Architecture
 
@@ -47,71 +28,75 @@ Applications     Forge, CI/CD, Secrets, DNS, Automerge, FUSE
 Coordination     Locks, Elections, Queues, Barriers, Semaphores, Counters
 Core             KV Store (Raft) + Blob Store (iroh-blobs) + Docs (iroh-docs)
 Consensus        OpenRaft (vendored) + Redb (single-fsync writes)
-Transport        Iroh QUIC with ALPN multiplexing, gossip, mDNS, DHT
+Transport        Iroh QUIC (ALPN multiplexing, gossip, mDNS, DHT)
 ```
 
-A single QUIC endpoint multiplexes Raft, client RPC, blobs, gossip, and federation via ALPN protocol tags.
+FoundationDB-style layered design: ordered transactional KV at the bottom, everything else built on top as key reads and writes.
 
-## Key Design Choices
+| Decision | Detail |
+|---|---|
+| Single fsync | Log + state machine apply in one redb transaction |
+| Write batching | Concurrent writes batched into one Raft proposal |
+| Vendored consensus | Full OpenRaft copy, patchable without upstream |
+| Content-addressed storage | Git objects, CI artifacts, WASM, Nix paths through iroh-blobs |
+| ALPN multiplexing | One QUIC endpoint for Raft, RPC, blobs, gossip, federation |
 
-Traditional Raft does two fsyncs per write (log append, then state machine apply). Aspen does one by putting both in a single redb transaction. On top of that, concurrent writes get batched into one Raft proposal -- a configurable batch window that trades latency for throughput.
+Core traits: `ClusterController` (membership) and `KeyValueStore` (KV ops), implemented by `RaftNode`.
 
-OpenRaft is vendored as a full copy in `openraft/`, not a submodule. This lets us patch consensus internals without waiting on upstream.
-
-Git objects, CI artifacts, WASM plugin binaries, and Nix store paths all go through iroh-blobs with BLAKE3 hashing and P2P transfer. Same blob store for everything, automatic deduplication.
-
-## Workspace
-
-Monorepo with 82 crates under `crates/`, plus vendored OpenRaft and a few external repos (`aspen-plugins`, `aspen-wasm-plugin`, etc.).
-
-Core traits: `ClusterController` (cluster membership) and `KeyValueStore` (distributed KV). Both implemented by `RaftNode` for production and in-memory fakes for testing.
-
-Feature-gated -- default builds give you Raft + KV + coordination. Opt in to heavier features:
+## Usage
 
 ```bash
-cargo build --features full          # everything
-cargo build --features forge-full    # git hosting
-cargo build --features ci-full       # CI/CD pipelines
+nix develop                    # dev shell
+cargo build                    # build
+cargo build --features full    # everything
 ```
 
-See `Cargo.toml` `[features]` for the full list.
+```bash
+cargo run --features jobs,docs,blob,hooks,automerge \
+  --bin aspen-node -- --node-id 1 --cookie my-cluster
 
-## Self-Hosting
+cargo run -p aspen-cli -- kv get mykey
+
+nix run .#cluster              # 3-node local cluster
+```
+
+Self-hosting:
 
 ```bash
 nix run .#dogfood-local              # full pipeline
-nix run .#dogfood-local -- start     # just the cluster
 nix run .#dogfood-local -- full-loop # start -> push -> build -> deploy -> verify
 ```
 
-## Verification
-
-Pure business logic lives in `src/verified/` directories across crates. Corresponding [Verus](https://github.com/verus-lang/verus) specs in `verus/` directories prove correctness properties (fencing token monotonicity, lock mutual exclusion, overflow safety, etc.). Production code compiles normally; Verus runs separately.
+## Testing and Verification
 
 ```bash
-nix run .#verify-verus               # verify all specs
-nix run .#verify-verus coordination  # verify one crate
+cargo nextest run                                    # all tests
+cargo nextest run -P quick                           # skip slow tests
+cargo nextest run -E 'test(/raft/)'                  # filter
+nix build .#checks.x86_64-linux.kv-operations-test   # NixOS VM test
+nix run .#verify-verus                               # Verus proofs
+nix run .#verify-verus coordination                  # single crate
 ```
 
-## Testing
-
-```bash
-cargo nextest run                                        # all tests
-cargo nextest run -P quick                               # skip proptest/chaos/madsim
-cargo nextest run -E 'test(/raft/)'                      # filter by name
-nix build .#checks.x86_64-linux.kv-operations-test       # NixOS VM test
-```
-
-Deterministic simulation with madsim, property-based testing with proptest and Bolero, 46 NixOS VM integration tests under real QEMU, and FoundationDB-style buggify for fault injection.
+| Approach | Tool | |
+|---|---|---|
+| Deterministic simulation | madsim | Reproducible distributed scenarios |
+| Property-based testing | proptest, Bolero | Edge cases, fuzzing |
+| VM integration | NixOS + QEMU | Full cluster tests |
+| Fault injection | buggify | FoundationDB-style chaos |
+| Formal verification | [Verus](https://github.com/verus-lang/verus) | Proofs in `verus/`, code in `src/verified/` |
 
 ## Docs
 
+- [Deploy](docs/deploy.md)
 - [Federation](docs/FEDERATION.md)
 - [Forge](docs/forge.md)
+- [Host ABI](docs/HOST_ABI.md)
+- [Identity Persistence](docs/identity-persistence.md)
+- [KV Branching](docs/kv-branching.md)
 - [Plugin Development](docs/PLUGIN_DEVELOPMENT.md)
-- [Deploy](docs/deploy.md)
-- [Tiger Style](docs/tigerstyle.md)
 - [SOPS Secrets](docs/sops.md)
+- [Tiger Style](docs/tigerstyle.md)
 - [VM Jobs](docs/VM_JOB_SUBMISSION.md)
 
 ## License

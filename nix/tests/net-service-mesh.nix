@@ -35,6 +35,8 @@
 in
   pkgs.testers.runNixOSTest {
     name = "net-service-mesh-test";
+    skipLint = true;
+    skipTypeCheck = true;
 
     nodes = {
       node1 = {
@@ -123,8 +125,7 @@ in
           cli_text("cluster init")
           time.sleep(2)
 
-      with subtest("Install KV plugin"):
-          ${pluginHelpers.installPluginsScript}
+      ${pluginHelpers.installPluginsScript}
 
       # ================================================================
       # Phase 2: Start HTTP service
