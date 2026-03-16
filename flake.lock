@@ -181,15 +181,15 @@
     "snix-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1772226452,
-        "narHash": "sha256-iakuRuZy9pIOFTRXoO2b4z0DVNEaELwFIVlx0BJKj6w=",
-        "rev": "180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac",
+        "lastModified": 1773660859,
+        "narHash": "sha256-OAJLtIQITbEwsSZPkarguY4b/bZMxMvVlh5bJazXIpE=",
+        "rev": "e20f82dd6fdebe953fb71bb2fde2f32841015c47",
         "type": "tarball",
-        "url": "https://git.snix.dev/api/v1/repos/snix/snix/archive/180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac.tar.gz"
+        "url": "https://git.snix.dev/api/v1/repos/snix/snix/archive/e20f82dd6fdebe953fb71bb2fde2f32841015c47.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://git.snix.dev/api/v1/repos/snix/snix/archive/180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac.tar.gz"
+        "url": "https://git.snix.dev/api/v1/repos/snix/snix/archive/e20f82dd6fdebe953fb71bb2fde2f32841015c47.tar.gz"
       }
     },
     "spectrum": {

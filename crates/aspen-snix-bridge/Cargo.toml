@@ -49,7 +49,7 @@ snix-tracing = { workspace = true, features = ["clap", "otlp"] }
 
 # Optional: castore HTTP browser for debugging store contents
 snix-castore-http = { workspace = true, optional = true }
-axum = { version = "0.7", optional = true }
+axum = { version = "0.8", optional = true }
 
 # Optional: nix-daemon protocol support
 nix-daemon = { workspace = true, optional = true }

@@ -28,7 +28,7 @@ snix-store = { workspace = true, optional = true }
 
 # nar-bridge: axum-based Nix binary cache HTTP server
 nar-bridge = { workspace = true, optional = true }
-axum = { version = "0.7", optional = true }
+axum = { version = "0.8", optional = true }
 
 # Keep bytes as it may be needed elsewhere
 bytes = { workspace = true }

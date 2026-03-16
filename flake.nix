@@ -33,7 +33,7 @@
     # the narHash from flake.lock against the store path, so VMs with a
     # shared /nix/store (virtiofs) never hit the network for this input.
     snix-src = {
-      url = "https://git.snix.dev/api/v1/repos/snix/snix/archive/180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac.tar.gz";
+      url = "https://git.snix.dev/api/v1/repos/snix/snix/archive/e20f82dd6fdebe953fb71bb2fde2f32841015c47.tar.gz";
       flake = false;
     };
 
@@ -312,7 +312,7 @@
           allRefs = true;
         };
 
-        snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac#180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac"'';
+        snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd6fdebe953fb71bb2fde2f32841015c47"'';
         src = pkgs.runCommand "aspen-src-patched" {} ''
           cp -r ${rawSrc} $out
           chmod -R u+w $out
