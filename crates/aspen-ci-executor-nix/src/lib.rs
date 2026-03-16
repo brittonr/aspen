@@ -168,4 +168,100 @@ mod tests {
 
         assert_eq!(payload.flake_ref(), ".");
     }
+
+    /// Verify that NixBuildWorker compiles and can be constructed without
+    /// snix-build feature — subprocess path only, no native service field.
+    #[test]
+    fn test_worker_construction_default_features() {
+        let config = NixBuildWorkerConfig::default();
+        let _worker = NixBuildWorker::new(config);
+        // Worker should be constructible; no native_build_service field
+        // when snix-build is off (won't even compile if struct is wrong).
+    }
+
+    /// Verify that try_native_build returns error when native service is None.
+    /// This confirms the fallback path is taken.
+    #[cfg(feature = "snix-build")]
+    #[tokio::test]
+    async fn test_try_native_build_no_service_returns_error() {
+        let config = NixBuildWorkerConfig::default();
+        let worker = NixBuildWorker::new(config);
+
+        // native_build_service is None by default
+        assert!(!worker.has_native_builds());
+
+        let payload = NixBuildPayload {
+            run_id: None,
+            job_name: None,
+            flake_url: ".".to_string(),
+            attribute: "packages.x86_64-linux.default".to_string(),
+            extra_args: vec![],
+            working_dir: None,
+            timeout_secs: 1800,
+            sandbox: true,
+            cache_key: None,
+            artifacts: vec![],
+            should_upload_result: false,
+            publish_to_cache: false,
+            cache_outputs: vec![],
+            source_hash: None,
+        };
+
+        let result = worker.try_native_build(&payload, &payload.flake_ref(), None).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let err_msg = format!("{err}");
+        assert!(err_msg.contains("not initialized"), "expected 'not initialized' error, got: {err_msg}");
+    }
+
+    /// Verify resolve_drv_path validates the output format.
+    /// Uses a fake nix binary that prints a non-drv path.
+    #[cfg(feature = "snix-build")]
+    #[tokio::test]
+    async fn test_resolve_drv_path_rejects_invalid_output() {
+        use std::io::Write;
+
+        // Create a fake nix binary that prints garbage
+        let tmpdir = tempfile::tempdir().unwrap();
+        let fake_nix = tmpdir.path().join("nix");
+        {
+            let mut f = std::fs::File::create(&fake_nix).unwrap();
+            writeln!(f, "#!/bin/sh").unwrap();
+            writeln!(f, "echo '/not/a/drv/path'").unwrap();
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&fake_nix, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let config = NixBuildWorkerConfig {
+            nix_binary: fake_nix.to_string_lossy().to_string(),
+            ..Default::default()
+        };
+        let worker = NixBuildWorker::new(config);
+
+        let payload = NixBuildPayload {
+            run_id: None,
+            job_name: None,
+            flake_url: ".".to_string(),
+            attribute: "default".to_string(),
+            extra_args: vec![],
+            working_dir: None,
+            timeout_secs: 1800,
+            sandbox: true,
+            cache_key: None,
+            artifacts: vec![],
+            should_upload_result: false,
+            publish_to_cache: false,
+            cache_outputs: vec![],
+            source_hash: None,
+        };
+
+        let result: std::result::Result<std::path::PathBuf, _> = worker.resolve_drv_path(&payload, ".#default").await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains("unexpected drv path"), "expected 'unexpected drv path' error, got: {err_msg}");
+    }
 }

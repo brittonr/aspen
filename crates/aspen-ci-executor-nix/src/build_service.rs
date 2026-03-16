@@ -587,7 +587,7 @@ pub async fn init_from_config(config: &NixBuildWorkerConfig) -> Option<(NativeBu
 /// to the same `NixBuildOutput` format used by the subprocess path.
 ///
 /// Streams build progress to `log_sender` when provided.
-#[allow(dead_code)] // wired in executor.rs via #[cfg(feature = "snix-build")]
+#[allow(dead_code)] // Available for callers that don't need NativeBuildResult for upload
 pub(crate) async fn execute_native(
     service: &NativeBuildService,
     drv: &Derivation,

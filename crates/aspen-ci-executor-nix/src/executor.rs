@@ -18,7 +18,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tracing::debug;
 use tracing::info;
-#[cfg(feature = "nix-cache-proxy")]
+#[cfg(any(feature = "snix-build", feature = "nix-cache-proxy"))]
 use tracing::warn;
 
 use crate::config::MAX_LOG_SIZE;
@@ -109,6 +109,173 @@ impl NixBuildWorker {
         self.native_build_service.is_some()
     }
 
+    /// Resolve a flake ref to a `.drv` file path via `nix eval --raw`.
+    ///
+    /// Runs `nix eval --raw <flake_ref>.drvPath` to get the derivation
+    /// store path. This is the bridge between flake evaluation and the
+    /// native build pipeline — cheap (~100ms) compared to the build itself.
+    #[cfg(feature = "snix-build")]
+    pub(crate) async fn resolve_drv_path(
+        &self,
+        payload: &NixBuildPayload,
+        flake_ref: &str,
+    ) -> std::result::Result<std::path::PathBuf, CiCoreError> {
+        // Build the eval expression: "<flake_ref>.drvPath"
+        let eval_expr = format!("{flake_ref}.drvPath");
+
+        let mut cmd = Command::new(&self.config.nix_binary);
+        cmd.arg("eval").arg("--raw").arg("--expr").arg(&eval_expr);
+
+        if let Some(ref dir) = payload.working_dir {
+            cmd.current_dir(dir);
+        }
+
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+
+        let child = cmd.spawn().map_err(|e| CiCoreError::NixBuildFailed {
+            flake: flake_ref.to_string(),
+            reason: format!("failed to spawn nix eval for drv path: {e}"),
+        })?;
+
+        // Timeout: 60 seconds for eval (generous, most take <5s)
+        let timeout = Duration::from_secs(60);
+        let output = tokio::time::timeout(timeout, child.wait_with_output())
+            .await
+            .map_err(|_| CiCoreError::NixBuildFailed {
+                flake: flake_ref.to_string(),
+                reason: "nix eval --raw timed out after 60s resolving .drvPath".to_string(),
+            })?
+            .map_err(|e| CiCoreError::NixBuildFailed {
+                flake: flake_ref.to_string(),
+                reason: format!("nix eval failed: {e}"),
+            })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(CiCoreError::NixBuildFailed {
+                flake: flake_ref.to_string(),
+                reason: format!("nix eval .drvPath failed (exit {}): {stderr}", output.status.code().unwrap_or(-1)),
+            });
+        }
+
+        let drv_path_str = String::from_utf8_lossy(&output.stdout);
+        let drv_path = std::path::PathBuf::from(drv_path_str.trim());
+
+        if !drv_path.to_string_lossy().starts_with("/nix/store/") || !drv_path.to_string_lossy().ends_with(".drv") {
+            return Err(CiCoreError::NixBuildFailed {
+                flake: flake_ref.to_string(),
+                reason: format!("nix eval returned unexpected drv path: {}", drv_path.display()),
+            });
+        }
+
+        debug!(
+            drv_path = %drv_path.display(),
+            flake_ref = %flake_ref,
+            "resolved flake to derivation path"
+        );
+
+        Ok(drv_path)
+    }
+
+    /// Attempt a native in-process build via snix-build.
+    ///
+    /// Resolves the flake to a `.drv` path, parses the derivation,
+    /// executes via NativeBuildService, uploads outputs to PathInfoService,
+    /// and returns the build output. Falls back on any error.
+    #[cfg(feature = "snix-build")]
+    pub(crate) async fn try_native_build(
+        &self,
+        payload: &NixBuildPayload,
+        flake_ref: &str,
+        log_sender: Option<mpsc::Sender<String>>,
+    ) -> std::result::Result<NixBuildOutput, CiCoreError> {
+        let service = self.native_build_service.as_ref().ok_or_else(|| CiCoreError::NixBuildFailed {
+            flake: flake_ref.to_string(),
+            reason: "native build service not initialized".to_string(),
+        })?;
+
+        // Step 1: Resolve flake ref to .drv path
+        let drv_path = self.resolve_drv_path(payload, flake_ref).await?;
+
+        // Step 2: Read and parse the .drv file
+        let drv_bytes = tokio::fs::read(&drv_path).await.map_err(|e| CiCoreError::NixBuildFailed {
+            flake: flake_ref.to_string(),
+            reason: format!("failed to read {}: {e}", drv_path.display()),
+        })?;
+
+        let (drv, _output_paths) =
+            crate::eval::parse_derivation(&drv_bytes).map_err(|e| CiCoreError::NixBuildFailed {
+                flake: flake_ref.to_string(),
+                reason: format!("failed to parse {}: {e}", drv_path.display()),
+            })?;
+
+        info!(
+            drv_path = %drv_path.display(),
+            output_count = drv.outputs.len(),
+            system = %drv.system,
+            "parsed derivation, starting native build"
+        );
+
+        if let Some(ref tx) = log_sender {
+            let _ = tx.send(format!("native build: resolved {} → {}\n", flake_ref, drv_path.display())).await;
+        }
+
+        // Step 3: Execute native build — call build_derivation directly so
+        // we keep the NativeBuildResult for upload_native_outputs below.
+        let build_result =
+            service.build_derivation(&drv, log_sender.clone()).await.map_err(|e| CiCoreError::NixBuildFailed {
+                flake: flake_ref.to_string(),
+                reason: format!("native build failed: {e}"),
+            })?;
+
+        let output_paths: Vec<String> = build_result.outputs.iter().map(|o| o.store_path.to_absolute_path()).collect();
+
+        info!(
+            output_paths = ?output_paths,
+            resolve_ms = build_result.resolve_ms,
+            build_ms = build_result.build_ms,
+            "native build succeeded"
+        );
+
+        // Step 4: Upload outputs to PathInfoService (more efficient than the
+        // subprocess path — we already have the Nodes from the build, no need
+        // to re-read from disk and re-create NAR archives).
+        if let (Some(pathinfo_svc), Some(blob_svc), Some(dir_svc)) = (
+            &self.config.snix_pathinfo_service,
+            &self.config.snix_blob_service,
+            &self.config.snix_directory_service,
+        ) {
+            let nar_calc =
+                snix_store::nar::SimpleRenderer::new(std::sync::Arc::clone(blob_svc), std::sync::Arc::clone(dir_svc));
+            let uploaded =
+                crate::build_service::upload_native_outputs(pathinfo_svc.as_ref(), &nar_calc, &build_result.outputs)
+                    .await;
+            if !uploaded.is_empty() {
+                info!(count = uploaded.len(), "uploaded native build outputs to PathInfoService");
+            }
+        }
+
+        // Convert to NixBuildOutput format
+        let log = format!(
+            "native build completed: {} outputs, resolve={}ms build={}ms\n",
+            output_paths.len(),
+            build_result.resolve_ms,
+            build_result.build_ms,
+        );
+
+        let mut timings = BuildPhaseTimings::default();
+        timings.record_import(Duration::from_millis(build_result.resolve_ms));
+        timings.record_build(Duration::from_millis(build_result.build_ms));
+
+        Ok(NixBuildOutput {
+            output_paths,
+            log,
+            log_truncated: false,
+            timings,
+        })
+    }
+
     /// Execute a Nix build.
     ///
     /// If `log_sender` is provided, stderr lines are also forwarded to it
@@ -145,14 +312,75 @@ impl NixBuildWorker {
         timings.record_import(import_start.elapsed());
 
         // Phase 2: Build execution
-        let build_start = Instant::now();
+        //
+        // Try native snix-build path first when available. Falls back to
+        // subprocess on any error (eval failure, sandbox issue, etc.).
+
+        #[cfg(feature = "snix-build")]
+        let native_result = if self.has_native_builds() {
+            let build_start = Instant::now();
+            match self.try_native_build(payload, &flake_ref, log_sender.clone()).await {
+                Ok(output) => {
+                    timings.record_build(build_start.elapsed());
+                    Some(output)
+                }
+                Err(e) => {
+                    warn!(
+                        error = %e,
+                        flake_ref = %flake_ref,
+                        "native build failed, falling back to subprocess"
+                    );
+                    if let Some(ref tx) = log_sender {
+                        let _ =
+                            tx.send(format!("native build failed ({e}), falling back to nix build subprocess\n")).await;
+                    }
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        #[cfg(feature = "snix-build")]
+        if let Some(native_output) = native_result {
+            // Phase 3: Upload/cleanup for native builds
+            let upload_start = Instant::now();
+
+            #[cfg(feature = "nix-cache-proxy")]
+            if let Some(proxy) = cache_proxy {
+                debug!("Shutting down cache proxy");
+                proxy.shutdown().await;
+            }
+
+            timings.record_upload(upload_start.elapsed());
+
+            info!(
+                cluster_id = %self.config.cluster_id,
+                node_id = self.config.node_id,
+                output_paths = ?native_output.output_paths,
+                import_ms = timings.import_ms,
+                build_ms = timings.build_ms,
+                upload_ms = timings.upload_ms,
+                "Nix build completed successfully (native)"
+            );
+
+            return Ok(NixBuildOutput {
+                output_paths: native_output.output_paths,
+                log: native_output.log,
+                log_truncated: native_output.log_truncated,
+                timings,
+            });
+        }
+
+        // Subprocess fallback path
+        let build_start_sub = Instant::now();
 
         let mut child = self.spawn_nix_build(payload, &flake_ref)?;
         let readers = Self::spawn_output_readers(&mut child, &flake_ref, self.config.is_verbose, log_sender)?;
         let (output_paths, log, log_size) = Self::collect_output(readers).await?;
         Self::wait_for_build_completion(&mut child, payload.timeout_secs, &flake_ref, &log).await?;
 
-        timings.record_build(build_start.elapsed());
+        timings.record_build(build_start_sub.elapsed());
 
         // Phase 3: Upload/cleanup (proxy shutdown)
         let upload_start = Instant::now();

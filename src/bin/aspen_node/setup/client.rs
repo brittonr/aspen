@@ -715,7 +715,13 @@ async fn initialize_job_system(
                         );
                     }
 
-                    let nix_worker = NixBuildWorker::new(nix_config);
+                    let mut nix_worker = NixBuildWorker::new(nix_config);
+
+                    // Initialize native build service (snix-build) when available.
+                    // Falls back to subprocess if sandbox isn't detected.
+                    #[cfg(feature = "snix-build")]
+                    nix_worker.init_native_build_service().await;
+
                     worker_service
                         .register_handler("ci_nix_build", nix_worker)
                         .await
