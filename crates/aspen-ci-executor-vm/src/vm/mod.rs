@@ -21,6 +21,7 @@
 
 mod cleanup;
 mod lifecycle;
+pub mod memory;
 mod monitoring;
 mod provisioning;
 mod restore;

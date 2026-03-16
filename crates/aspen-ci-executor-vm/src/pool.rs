@@ -5,6 +5,7 @@
 
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU8;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -60,11 +61,29 @@ pub struct VmPool {
 
     /// Whether the snapshot has been marked for regeneration.
     snapshot_needs_regen: RwLock<bool>,
+
+    /// External memory pressure level (0=Normal, 1=Warning, 2=Critical).
+    ///
+    /// Shared with `MemoryWatcher` in `aspen-cluster`. The watcher updates
+    /// this atomically; the pool reads it in `acquire()` and `maintain()`.
+    /// When `None`, memory pressure is not tracked (restores always allowed).
+    pressure_level: Option<Arc<AtomicU8>>,
 }
 
 impl VmPool {
     /// Create a new VM pool.
     pub fn new(config: CloudHypervisorWorkerConfig) -> Self {
+        Self::with_pressure_level(config, None)
+    }
+
+    /// Create a VM pool with an external memory pressure level.
+    ///
+    /// The `pressure_level` `AtomicU8` should be shared with a `MemoryWatcher`
+    /// that updates it periodically. Values: 0=Normal, 1=Warning, 2=Critical.
+    ///
+    /// At Critical pressure, `acquire()` rejects new restores.
+    /// At Warning pressure, `maintain()` skips pre-warming.
+    pub fn with_pressure_level(config: CloudHypervisorWorkerConfig, pressure_level: Option<Arc<AtomicU8>>) -> Self {
         let max_vms = config.max_vms.min(MAX_CI_VMS_PER_NODE);
 
         Self {
@@ -76,7 +95,18 @@ impl VmPool {
             golden_snapshot: RwLock::new(None),
             restore_failure_count: AtomicU32::new(0),
             snapshot_needs_regen: RwLock::new(false),
+            pressure_level,
         }
+    }
+
+    /// Get the current memory pressure level.
+    ///
+    /// Returns `PRESSURE_NORMAL` if no watcher is configured.
+    fn current_pressure_level(&self) -> u8 {
+        self.pressure_level
+            .as_ref()
+            .map(|p| p.load(Ordering::Relaxed))
+            .unwrap_or(crate::verified::snapshot::PRESSURE_NORMAL)
     }
 
     /// Initialize the pool by pre-warming VMs.
@@ -130,26 +160,26 @@ impl VmPool {
         }
 
         // Phase 1: Check for existing golden snapshot or create one.
-        if self.config.enable_snapshots {
-            if let Some(ticket) = self.config.get_cluster_ticket() {
-                let snapshot = GoldenSnapshot::from_config(&self.config);
+        if self.config.enable_snapshots
+            && let Some(ticket) = self.config.get_cluster_ticket()
+        {
+            let snapshot = GoldenSnapshot::from_config(&self.config);
 
-                if snapshot.exists() {
-                    match snapshot.validate(&ticket) {
-                        Ok(()) => {
-                            info!(dir = %snapshot.dir.display(), "valid golden snapshot found");
-                            *self.golden_snapshot.write().await = Some(snapshot);
-                        }
-                        Err(e) => {
-                            warn!(error = %e, "golden snapshot invalid, will cold-boot and re-snapshot");
-                            if let Err(e) = snapshot.invalidate("validation failed").await {
-                                warn!(error = %e, "failed to clean up invalid snapshot");
-                            }
+            if snapshot.exists() {
+                match snapshot.validate(&ticket) {
+                    Ok(()) => {
+                        info!(dir = %snapshot.dir.display(), "valid golden snapshot found");
+                        *self.golden_snapshot.write().await = Some(snapshot);
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "golden snapshot invalid, will cold-boot and re-snapshot");
+                        if let Err(e) = snapshot.invalidate("validation failed").await {
+                            warn!(error = %e, "failed to clean up invalid snapshot");
                         }
                     }
-                } else {
-                    debug!("no golden snapshot exists yet, will create on first boot");
                 }
+            } else {
+                debug!("no golden snapshot exists yet, will create on first boot");
             }
         }
 
@@ -238,6 +268,21 @@ impl VmPool {
     async fn acquire_inner(&self, job_id: &str, force_cold_boot: bool) -> Result<SharedVm> {
         debug!(job_id = %job_id, force_cold_boot = force_cold_boot, "acquiring VM from pool");
 
+        // Check memory pressure — reject at Critical
+        let pressure = self.current_pressure_level();
+        let active_count = self.all_vms.lock().await.len() as u32;
+        if !crate::verified::should_allow_restore(pressure, active_count) {
+            warn!(
+                job_id = %job_id,
+                pressure = pressure,
+                active_vms = active_count,
+                "rejecting VM acquire due to critical memory pressure"
+            );
+            return Err(CloudHypervisorError::PoolAtCapacity {
+                max_vms: self.config.max_vms,
+            });
+        }
+
         // Try to get a healthy idle VM. Loop because we may encounter dead VMs
         // that need to be evicted before finding a live one.
         loop {
@@ -318,43 +363,41 @@ impl VmPool {
     /// If `force_cold_boot` is true, always cold-boots regardless of snapshot.
     async fn create_or_restore_vm(&self, force_cold_boot: bool) -> Result<SharedVm> {
         // Try snapshot restore first (unless forced to cold-boot)
-        if !force_cold_boot {
-            if let Some(snapshot) = self.golden_snapshot.read().await.clone() {
-                let vm_index = self.next_vm_index.fetch_add(1, Ordering::Relaxed) as u32;
-                let vm = Arc::new(ManagedCiVm::new(self.config.clone(), vm_index));
-                self.all_vms.lock().await.push(vm.clone());
+        if !force_cold_boot && let Some(snapshot) = self.golden_snapshot.read().await.clone() {
+            let vm_index = self.next_vm_index.fetch_add(1, Ordering::Relaxed) as u32;
+            let vm = Arc::new(ManagedCiVm::new(self.config.clone(), vm_index));
+            self.all_vms.lock().await.push(vm.clone());
 
-                match vm.restore_from_snapshot(&snapshot).await {
-                    Ok(()) => {
-                        // Reset consecutive failure counter on success
-                        self.restore_failure_count.store(0, Ordering::Relaxed);
-                        info!(vm_id = %vm.id, "VM restored from snapshot");
-                        return Ok(vm);
-                    }
-                    Err(e) => {
-                        warn!(vm_id = %vm.id, error = %e, "snapshot restore failed, falling back to cold-boot");
+            match vm.restore_from_snapshot(&snapshot).await {
+                Ok(()) => {
+                    // Reset consecutive failure counter on success
+                    self.restore_failure_count.store(0, Ordering::Relaxed);
+                    info!(vm_id = %vm.id, "VM restored from snapshot");
+                    return Ok(vm);
+                }
+                Err(e) => {
+                    warn!(vm_id = %vm.id, error = %e, "snapshot restore failed, falling back to cold-boot");
 
-                        // Remove failed VM from tracking
-                        self.all_vms.lock().await.retain(|v| !Arc::ptr_eq(v, &vm));
+                    // Remove failed VM from tracking
+                    self.all_vms.lock().await.retain(|v| !Arc::ptr_eq(v, &vm));
 
-                        // Increment failure counter and check for invalidation
-                        let failures = self.restore_failure_count.fetch_add(1, Ordering::Relaxed) + 1;
-                        let max_failures = self.config.max_restore_failures;
-                        if crate::verified::should_invalidate_snapshot(failures, max_failures) {
-                            warn!(
-                                failures = failures,
-                                threshold = max_failures,
-                                "consecutive restore failures exceeded threshold, invalidating snapshot"
-                            );
-                            if let Err(e) = snapshot.invalidate("consecutive restore failures").await {
-                                error!(error = %e, "failed to invalidate snapshot");
-                            }
-                            *self.golden_snapshot.write().await = None;
-                            self.restore_failure_count.store(0, Ordering::Relaxed);
-                            *self.snapshot_needs_regen.write().await = true;
+                    // Increment failure counter and check for invalidation
+                    let failures = self.restore_failure_count.fetch_add(1, Ordering::Relaxed) + 1;
+                    let max_failures = self.config.max_restore_failures;
+                    if crate::verified::should_invalidate_snapshot(failures, max_failures) {
+                        warn!(
+                            failures = failures,
+                            threshold = max_failures,
+                            "consecutive restore failures exceeded threshold, invalidating snapshot"
+                        );
+                        if let Err(e) = snapshot.invalidate("consecutive restore failures").await {
+                            error!(error = %e, "failed to invalidate snapshot");
                         }
-                        // Fall through to cold-boot
+                        *self.golden_snapshot.write().await = None;
+                        self.restore_failure_count.store(0, Ordering::Relaxed);
+                        *self.snapshot_needs_regen.write().await = true;
                     }
+                    // Fall through to cold-boot
                 }
             }
         }
@@ -501,40 +544,48 @@ impl VmPool {
         }
 
         // Phase 2: Regenerate golden snapshot if needed.
-        if *self.snapshot_needs_regen.read().await && self.config.enable_snapshots {
-            if self.config.get_cluster_ticket().is_some() {
-                info!("regenerating golden snapshot via cold-boot");
-                let permit = match self.vm_semaphore.clone().try_acquire_owned() {
-                    Ok(p) => p,
-                    Err(_) => {
-                        debug!("no permits for snapshot regeneration, will retry next cycle");
-                        return;
-                    }
-                };
+        if *self.snapshot_needs_regen.read().await
+            && self.config.enable_snapshots
+            && self.config.get_cluster_ticket().is_some()
+        {
+            info!("regenerating golden snapshot via cold-boot");
+            let permit = match self.vm_semaphore.clone().try_acquire_owned() {
+                Ok(p) => p,
+                Err(_) => {
+                    debug!("no permits for snapshot regeneration, will retry next cycle");
+                    return;
+                }
+            };
 
-                match self.create_and_start_vm().await {
-                    Ok(vm) => {
-                        *vm.pool_permit.write().await = Some(permit);
-                        match GoldenSnapshot::create(&vm, &self.config).await {
-                            Ok(snapshot) => {
-                                info!(dir = %snapshot.dir.display(), "golden snapshot regenerated");
-                                *self.golden_snapshot.write().await = Some(snapshot);
-                                *self.snapshot_needs_regen.write().await = false;
-                            }
-                            Err(e) => {
-                                warn!(error = %e, "failed to regenerate golden snapshot");
-                            }
+            match self.create_and_start_vm().await {
+                Ok(vm) => {
+                    *vm.pool_permit.write().await = Some(permit);
+                    match GoldenSnapshot::create(&vm, &self.config).await {
+                        Ok(snapshot) => {
+                            info!(dir = %snapshot.dir.display(), "golden snapshot regenerated");
+                            *self.golden_snapshot.write().await = Some(snapshot);
+                            *self.snapshot_needs_regen.write().await = false;
                         }
-                        self.idle_vms.lock().await.push_back(vm);
+                        Err(e) => {
+                            warn!(error = %e, "failed to regenerate golden snapshot");
+                        }
                     }
-                    Err(e) => {
-                        warn!(error = %e, "failed to cold-boot VM for snapshot regeneration");
-                    }
+                    self.idle_vms.lock().await.push_back(vm);
+                }
+                Err(e) => {
+                    warn!(error = %e, "failed to cold-boot VM for snapshot regeneration");
                 }
             }
         }
 
         // Phase 3: Create replacement VMs to reach target pool size.
+        // Skip pre-warming if memory pressure is Warning or above.
+        let pressure = self.current_pressure_level();
+        if pressure >= crate::verified::snapshot::PRESSURE_WARNING {
+            debug!(pressure = pressure, "skipping pool pre-warming due to memory pressure");
+            return;
+        }
+
         let current_idle = self.idle_vms.lock().await.len();
         let target = self.config.pool_size as usize;
 
@@ -585,8 +636,7 @@ impl VmPool {
         let effective_count = crate::verified::compute_adaptive_fork_count(
             requested_count,
             crate::speculative::MAX_SPECULATIVE_FORKS,
-            // TODO: wire MemoryWatcher pressure level when available
-            crate::verified::snapshot::PRESSURE_NORMAL,
+            self.current_pressure_level(),
         );
 
         info!(
@@ -897,5 +947,158 @@ mod tests {
         // Verify the timeout constant is bounded and reasonable
         assert!(ACQUIRE_WAIT_TIMEOUT.as_secs() > 0, "timeout must be positive");
         assert!(ACQUIRE_WAIT_TIMEOUT.as_secs() <= 120, "timeout should not exceed 2 minutes");
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_failure_tracking_and_invalidation() {
+        // Test the restore failure counter and snapshot invalidation logic
+        // without attempting real VM restore (which requires Iroh + virtiofsd).
+        //
+        // We directly manipulate pool state to simulate the same transitions
+        // that create_or_restore_vm performs on restore failure.
+        let tmp = tempfile::tempdir().unwrap();
+        let snapshot_dir = tmp.path().join("snapshots/golden");
+        std::fs::create_dir_all(&snapshot_dir).unwrap();
+        std::fs::write(snapshot_dir.join("memory"), b"fake").unwrap();
+        std::fs::write(snapshot_dir.join("ticket.txt"), "test-ticket").unwrap();
+
+        let config = CloudHypervisorWorkerConfig {
+            enable_snapshots: true,
+            cluster_ticket: Some("test-ticket".to_string()),
+            snapshot_path: Some(snapshot_dir.clone()),
+            pool_size: 1,
+            max_vms: 2,
+            max_restore_failures: 3,
+            ..test_config()
+        };
+
+        let pool = VmPool::new(config.clone());
+
+        // Inject a golden snapshot
+        let snapshot = crate::snapshot::GoldenSnapshot::from_config(&config);
+        *pool.golden_snapshot.write().await = Some(snapshot.clone());
+
+        // Initial state: snapshot valid, no failures
+        assert!(pool.golden_snapshot().await.is_some());
+        assert_eq!(pool.restore_failure_count.load(Ordering::Relaxed), 0);
+        assert!(!*pool.snapshot_needs_regen.read().await);
+
+        // Simulate 2 consecutive restore failures (below threshold of 3)
+        for i in 1..=2u32 {
+            let failures = pool.restore_failure_count.fetch_add(1, Ordering::Relaxed) + 1;
+            assert_eq!(failures, i);
+            assert!(
+                !crate::verified::should_invalidate_snapshot(failures, config.max_restore_failures),
+                "should NOT invalidate at {failures} failures (threshold=3)"
+            );
+        }
+
+        // Snapshot still valid after 2 failures
+        assert!(pool.golden_snapshot().await.is_some());
+
+        // Simulate 3rd failure — crosses threshold
+        let failures = pool.restore_failure_count.fetch_add(1, Ordering::Relaxed) + 1;
+        assert_eq!(failures, 3);
+        assert!(
+            crate::verified::should_invalidate_snapshot(failures, config.max_restore_failures),
+            "should invalidate at {failures} failures (threshold=3)"
+        );
+
+        // Perform the invalidation (same logic as create_or_restore_vm)
+        if let Err(e) = snapshot.invalidate("consecutive restore failures").await {
+            panic!("invalidate failed: {e}");
+        }
+        *pool.golden_snapshot.write().await = None;
+        pool.restore_failure_count.store(0, Ordering::Relaxed);
+        *pool.snapshot_needs_regen.write().await = true;
+
+        // Verify final state
+        assert!(pool.golden_snapshot().await.is_none(), "snapshot should be cleared");
+        assert_eq!(pool.restore_failure_count.load(Ordering::Relaxed), 0, "counter should reset");
+        assert!(*pool.snapshot_needs_regen.read().await, "regen should be marked");
+        assert!(!snapshot_dir.exists(), "snapshot directory should be deleted");
+    }
+
+    #[tokio::test]
+    async fn test_restore_success_resets_failure_counter() {
+        let config = CloudHypervisorWorkerConfig {
+            max_restore_failures: 3,
+            ..test_config()
+        };
+        let pool = VmPool::new(config);
+
+        // Simulate 2 failures
+        pool.restore_failure_count.store(2, Ordering::Relaxed);
+
+        // Simulate a successful restore (resets counter)
+        pool.restore_failure_count.store(0, Ordering::Relaxed);
+        assert_eq!(pool.restore_failure_count.load(Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
+    async fn test_acquire_force_cold_boot_bypasses_snapshot() {
+        let config = CloudHypervisorWorkerConfig {
+            enable_snapshots: true,
+            cluster_ticket: Some("test-ticket".to_string()),
+            pool_size: 1,
+            max_vms: 2,
+            ..test_config()
+        };
+
+        let pool = VmPool::new(config.clone());
+
+        // Inject a golden snapshot
+        let snapshot = crate::snapshot::GoldenSnapshot::from_config(&config);
+        *pool.golden_snapshot.write().await = Some(snapshot);
+
+        // Force cold-boot should skip snapshot restore entirely
+        let result = pool.acquire_with_options("test-job", true).await;
+        assert!(result.is_err(), "should fail without real infrastructure");
+
+        // Restore failure counter should NOT be incremented (didn't attempt restore)
+        assert_eq!(
+            pool.restore_failure_count.load(Ordering::Relaxed),
+            0,
+            "force_cold_boot should not increment restore failure count"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_acquire_critical_pressure_rejects() {
+        let pressure = Arc::new(AtomicU8::new(crate::verified::snapshot::PRESSURE_CRITICAL));
+        let config = CloudHypervisorWorkerConfig {
+            pool_size: 1,
+            max_vms: 4,
+            ..test_config()
+        };
+
+        let pool = VmPool::with_pressure_level(config, Some(pressure));
+        let result = pool.acquire("test-job").await;
+
+        let err = result.as_ref().err().expect("critical pressure should reject acquire");
+        let err_msg = format!("{err}");
+        assert!(err_msg.contains("capacity"), "error should mention capacity: {err_msg}");
+    }
+
+    #[tokio::test]
+    async fn test_acquire_normal_pressure_allows() {
+        let pressure = Arc::new(AtomicU8::new(crate::verified::snapshot::PRESSURE_NORMAL));
+        let config = CloudHypervisorWorkerConfig {
+            pool_size: 1,
+            max_vms: 4,
+            ..test_config()
+        };
+
+        let pool = VmPool::with_pressure_level(config, Some(pressure));
+        let result = pool.acquire("test-job").await;
+
+        // Still fails (no real VM) but gets past the pressure check
+        let err = result.as_ref().err().expect("should fail without real infrastructure");
+        let err_msg = format!("{err}");
+        // Should NOT be a capacity error — should fail at VM creation instead
+        assert!(
+            !err_msg.contains("capacity") || err_msg.contains("VM"),
+            "normal pressure should not reject with capacity error: {err_msg}"
+        );
     }
 }

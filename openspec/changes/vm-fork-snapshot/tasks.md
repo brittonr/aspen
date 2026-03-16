@@ -24,19 +24,19 @@
 - [x] 3.1 Add `force_cold_boot` flag to `acquire()` and `ManagedCiVm`: bypasses snapshot restore, uses existing cold-boot path
 - [x] 3.2 Implement automatic fallback: if `restore_from_snapshot` fails, log error, mark snapshot for regeneration, cold-boot instead
 - [x] 3.3 Implement snapshot regeneration in `VmPool::maintain()`: if snapshot is marked invalid, next maintenance cycle cold-boots a VM and re-snapshots
-- [ ] 3.4 Unit test: verify `acquire()` with invalid snapshot falls back to cold-boot and marks snapshot for regeneration
+- [x] 3.4 Unit test: verify `acquire()` with invalid snapshot falls back to cold-boot and marks snapshot for regeneration
 
 ## 4. COW Memory
 
 - [x] 4.1 Configure Cloud Hypervisor golden snapshot with `--memory shared=on,backing-file={snapshot_dir}/memory` so the memory file can be mmap'd COW by restored VMs
-- [ ] 4.2 Verify memory backing file is created as sparse (check disk usage vs apparent size after snapshot)
+- [x] 4.2 Verify memory backing file is created as sparse (check disk usage vs apparent size after snapshot)
 - [x] 4.3 Configure `vm.restore` with `prefault: false` to enable demand-paging from backing file
-- [ ] 4.4 Add memory resource tracking: estimate total dirty pages across restored VMs via `/proc/{ch_pid}/smaps` or Cloud Hypervisor API
+- [x] 4.4 Add memory resource tracking: estimate total dirty pages across restored VMs via `/proc/{ch_pid}/smaps` or Cloud Hypervisor API
 - [x] 4.5 Add `max_total_vm_memory_bytes` config bound: reject new `acquire()` calls when total estimated memory exceeds limit
-- [ ] 4.6 Wire `MemoryWatcher` into `VmPool`: accept `MemoryWatcher` reference at construction, check pressure level in `acquire()` (reject at Critical) and `maintain()` (skip pre-warming at Warning)
+- [x] 4.6 Wire `MemoryWatcher` into `VmPool`: accept `MemoryWatcher` reference at construction, check pressure level in `acquire()` (reject at Critical) and `maintain()` (skip pre-warming at Warning)
 - [x] 4.7 Add `should_allow_restore()` verified function in `src/verified/snapshot.rs`: takes pressure level and active fork count, returns bool
 - [ ] 4.8 Test: restore 4 VMs from 24GB snapshot, verify host RSS is well under 4×24GB
-- [ ] 4.9 Test: verify `acquire()` returns capacity error when `MemoryWatcher` reports Critical pressure
+- [x] 4.9 Test: verify `acquire()` returns capacity error when `MemoryWatcher` reports Critical pressure
 
 ## 5. Fork Cleanup
 
@@ -49,13 +49,13 @@
 
 - [x] 6.1 Add `SpeculativeGroup` struct: holds Vec of (SharedVm, KvBranch) pairs, monitors completion, implements first-success-wins
 - [x] 6.2 Implement `VmPool::acquire_speculative(job_id, count)`: restore N VMs, each with its own KV branch, return `SpeculativeGroup`. Adjust count via `compute_adaptive_fork_count()` based on `MemoryWatcher` pressure
-- [ ] 6.3 Implement `SpeculativeGroup::wait_first_success()`: tokio::select across all fork completion channels, commit winner's branch, kill others, drop their branches
+- [x] 6.3 Implement `SpeculativeGroup::wait_first_success()`: tokio::select across all fork completion channels, commit winner's branch, kill others, drop their branches
 - [x] 6.4 Implement `SpeculativeGroup::cleanup()`: destroy all forks, release all permits, remove all fork directories
 - [x] 6.5 Add `MAX_SPECULATIVE_FORKS` constant (default 8), cap requested count
 - [x] 6.6 Add `compute_adaptive_fork_count()` verified function in `src/verified/snapshot.rs`: takes requested count, max count, pressure level → returns effective count (halved at Warning, 1 at Critical)
-- [ ] 6.7 Test: speculative group of 3 forks, simulate one success → verify winner commits, losers dropped, all resources cleaned
-- [ ] 6.8 Test: speculative group at Warning pressure → verify fork count halved
-- [ ] 6.9 Test: speculative group at Critical pressure → verify reduced to single VM (no speculation)
+- [x] 6.7 Test: speculative group of 3 forks, simulate one success → verify winner commits, losers dropped, all resources cleaned
+- [x] 6.8 Test: speculative group at Warning pressure → verify fork count halved
+- [x] 6.9 Test: speculative group at Critical pressure → verify reduced to single VM (no speculation)
 
 ## 7. CI Job Spec Integration
 

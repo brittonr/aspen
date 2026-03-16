@@ -263,10 +263,10 @@ impl ManagedCiVm {
     /// Clean up fork-specific directory and its contents.
     pub(super) async fn cleanup_fork_dir(&self) {
         let fork_dir = self.config.fork_dir(&self.id);
-        if fork_dir.exists() {
-            if let Err(e) = tokio::fs::remove_dir_all(&fork_dir).await {
-                warn!(vm_id = %self.id, dir = %fork_dir.display(), error = %e, "failed to clean up fork directory");
-            }
+        if fork_dir.exists()
+            && let Err(e) = tokio::fs::remove_dir_all(&fork_dir).await
+        {
+            warn!(vm_id = %self.id, dir = %fork_dir.display(), error = %e, "failed to clean up fork directory");
         }
     }
 }

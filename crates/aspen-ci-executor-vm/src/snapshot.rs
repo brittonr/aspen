@@ -4,6 +4,7 @@
 //! cluster-joined" point. Subsequent VMs restore from this snapshot instead of
 //! cold-booting, skipping kernel boot, systemd init, and cluster join.
 
+use std::path::Path;
 use std::path::PathBuf;
 
 use tracing::debug;
@@ -143,6 +144,22 @@ impl GoldenSnapshot {
 
         snapshot_result?;
 
+        // Verify memory backing file is sparse (non-fatal — just logs)
+        match snapshot.verify_sparse_memory() {
+            Ok(info) if !info.is_sparse => {
+                warn!(
+                    vm_id = %vm.id,
+                    apparent_mb = info.apparent_bytes / (1024 * 1024),
+                    disk_mb = info.disk_bytes / (1024 * 1024),
+                    "golden snapshot memory is not sparse — each restore will duplicate full memory"
+                );
+            }
+            Err(e) => {
+                warn!(vm_id = %vm.id, error = %e, "could not verify memory file sparseness");
+            }
+            Ok(_) => {} // Sparse — already logged inside verify_sparse_memory()
+        }
+
         info!(
             vm_id = %vm.id,
             dir = %snapshot.dir.display(),
@@ -180,6 +197,74 @@ impl GoldenSnapshot {
     pub fn source_url(&self) -> String {
         format!("file://{}", self.dir.display())
     }
+
+    /// Verify the memory backing file is sparse.
+    ///
+    /// Compares on-disk block usage against apparent file size. A sparse file
+    /// uses fewer blocks than its apparent size because zero-filled regions
+    /// are not allocated on disk. Returns `(apparent_bytes, disk_bytes)`.
+    ///
+    /// Logs a warning if the file is NOT sparse (disk usage >= 90% of apparent
+    /// size), since COW performance depends on the kernel page cache sharing
+    /// the backing file's unwritten regions.
+    pub fn verify_sparse_memory(&self) -> Result<SparseFileInfo> {
+        verify_sparse_file(&self.memory_path)
+    }
+}
+
+/// Information about a file's sparse/dense allocation.
+#[derive(Debug, Clone, Copy)]
+pub struct SparseFileInfo {
+    /// Apparent file size in bytes (what `ls -l` shows).
+    pub apparent_bytes: u64,
+    /// Actual disk usage in bytes (allocated blocks × 512).
+    pub disk_bytes: u64,
+    /// Whether the file appears sparse (disk < 90% of apparent).
+    pub is_sparse: bool,
+}
+
+/// Verify that a file is sparse by comparing stat block count to file size.
+///
+/// On Linux, `st_blocks` reports 512-byte block count regardless of filesystem
+/// block size. A sparse file has `st_blocks * 512 < st_size`.
+pub fn verify_sparse_file(path: &Path) -> Result<SparseFileInfo> {
+    use std::os::unix::fs::MetadataExt;
+
+    let metadata = std::fs::metadata(path).map_err(|e| CloudHypervisorError::RestoreFailed {
+        path: path.to_path_buf(),
+        reason: format!("failed to stat memory backing file: {e}"),
+    })?;
+
+    let apparent_bytes = metadata.len();
+    // st_blocks is in 512-byte units on Linux
+    let disk_bytes = metadata.blocks() * 512;
+    // Consider sparse if disk usage is under 90% of apparent size
+    let is_sparse = apparent_bytes > 0 && disk_bytes < (apparent_bytes * 9 / 10);
+
+    let info = SparseFileInfo {
+        apparent_bytes,
+        disk_bytes,
+        is_sparse,
+    };
+
+    if is_sparse {
+        info!(
+            path = %path.display(),
+            apparent_mb = apparent_bytes / (1024 * 1024),
+            disk_mb = disk_bytes / (1024 * 1024),
+            ratio_pct = (disk_bytes * 100).checked_div(apparent_bytes).unwrap_or(0),
+            "memory backing file is sparse"
+        );
+    } else {
+        warn!(
+            path = %path.display(),
+            apparent_mb = apparent_bytes / (1024 * 1024),
+            disk_mb = disk_bytes / (1024 * 1024),
+            "memory backing file is NOT sparse — COW savings may be reduced"
+        );
+    }
+
+    Ok(info)
 }
 
 #[cfg(test)]
@@ -348,5 +433,73 @@ mod tests {
         assert_eq!(snapshot.memory_path, PathBuf::from("/var/lib/aspen/ci/vms/snapshots/golden/memory"));
         assert_eq!(snapshot.state_path, PathBuf::from("/var/lib/aspen/ci/vms/snapshots/golden/state.json"));
         assert_eq!(snapshot.ticket_path, PathBuf::from("/var/lib/aspen/ci/vms/snapshots/golden/ticket.txt"));
+    }
+
+    #[test]
+    fn test_verify_sparse_file_with_sparse_file() {
+        use std::io::Seek;
+        use std::io::Write;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("sparse-mem");
+
+        // Create a sparse file: write 1 byte at offset 1GB (allocates ~1 block, appears 1GB)
+        let mut f = fs::File::create(&path).unwrap();
+        f.seek(std::io::SeekFrom::Start(1024 * 1024 * 1024)).unwrap();
+        f.write_all(b"x").unwrap();
+        f.sync_all().unwrap();
+
+        let info = verify_sparse_file(&path).unwrap();
+        assert!(info.is_sparse, "file with a 1GB hole should be sparse");
+        assert!(info.apparent_bytes > 1024 * 1024 * 1024);
+        assert!(info.disk_bytes < info.apparent_bytes / 10);
+    }
+
+    #[test]
+    fn test_verify_sparse_file_with_dense_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("dense-mem");
+
+        // Write 64KB of actual data — not sparse
+        let data = vec![0xABu8; 64 * 1024];
+        fs::write(&path, &data).unwrap();
+
+        let info = verify_sparse_file(&path).unwrap();
+        // A 64KB fully-written file is not sparse
+        assert!(!info.is_sparse, "fully-written file should not be sparse");
+        assert_eq!(info.apparent_bytes, 64 * 1024);
+    }
+
+    #[test]
+    fn test_verify_sparse_file_nonexistent() {
+        let result = verify_sparse_file(Path::new("/nonexistent/memory"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_snapshot_verify_sparse_memory() {
+        use std::io::Seek;
+        use std::io::Write;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("snapshots/golden");
+        fs::create_dir_all(&dir).unwrap();
+
+        // Create sparse memory file
+        let mem_path = dir.join("memory");
+        let mut f = fs::File::create(&mem_path).unwrap();
+        f.seek(std::io::SeekFrom::Start(512 * 1024 * 1024)).unwrap();
+        f.write_all(b"x").unwrap();
+        f.sync_all().unwrap();
+
+        let snapshot = GoldenSnapshot {
+            dir: dir.clone(),
+            memory_path: mem_path,
+            state_path: dir.join("state.json"),
+            ticket_path: dir.join("ticket.txt"),
+        };
+
+        let info = snapshot.verify_sparse_memory().unwrap();
+        assert!(info.is_sparse);
     }
 }
