@@ -17,7 +17,7 @@
 - [x] 2.6 Implement consecutive restore failure tracking: local `AtomicU32` counter, reset on success, increment on failure. Add `should_invalidate_snapshot()` verified function in `src/verified/snapshot.rs`
 - [x] 2.7 Wire `restore_from_snapshot` into `VmPool::acquire()`: check for valid golden snapshot → restore instead of cold-boot → fallback to cold-boot on restore failure → auto-invalidate after `max_restore_failures` consecutive failures
 - [x] 2.8 Wire `restore_from_snapshot` into `VmPool::maintain()`: replenish idle pool via restore instead of cold-boot
-- [ ] 2.9 Integration test: create golden snapshot → restore from it → verify VirtioFS probe passes → verify VM reaches Idle → verify it can process a simple command
+- [x] 2.9 Integration test: create golden snapshot → restore from it → verify VirtioFS probe passes → verify VM reaches Idle → verify it can process a simple command
 
 ## 3. Cold-Boot Fallback
 
@@ -35,7 +35,7 @@
 - [x] 4.5 Add `max_total_vm_memory_bytes` config bound: reject new `acquire()` calls when total estimated memory exceeds limit
 - [x] 4.6 Wire `MemoryWatcher` into `VmPool`: accept `MemoryWatcher` reference at construction, check pressure level in `acquire()` (reject at Critical) and `maintain()` (skip pre-warming at Warning)
 - [x] 4.7 Add `should_allow_restore()` verified function in `src/verified/snapshot.rs`: takes pressure level and active fork count, returns bool
-- [ ] 4.8 Test: restore 4 VMs from 24GB snapshot, verify host RSS is well under 4×24GB
+- [x] 4.8 Test: restore 4 VMs from 24GB snapshot, verify host RSS is well under 4×24GB
 - [x] 4.9 Test: verify `acquire()` returns capacity error when `MemoryWatcher` reports Critical pressure
 
 ## 5. Fork Cleanup
@@ -43,7 +43,7 @@
 - [x] 5.1 Extend `ManagedCiVm::shutdown()` to clean up fork-specific resources: kill virtiofsd, shutdown AspenFs daemon, remove socket directory, delete COW overlay files
 - [x] 5.2 Extend `VmPool::destroy_vm()` to call fork cleanup before releasing semaphore permit
 - [x] 5.3 Ensure `should_destroy_after_job` works correctly with snapshot-restored VMs (destroy fork, don't destroy golden snapshot)
-- [ ] 5.4 Test: restore → destroy → verify no leaked socket files, processes, or COW overlay files
+- [x] 5.4 Test: restore → destroy → verify no leaked socket files, processes, or COW overlay files
 
 ## 6. Speculative Execution
 
@@ -67,15 +67,15 @@
 
 ## 8. VirtioFS Snapshot Compatibility Testing
 
-- [ ] 8.1 Test Cloud Hypervisor snapshot/restore with active VirtioFS connections on v49.0 — specifically: guest-side virtio-fs driver (in snapshot) reconnecting to new host-side virtiofsd (not in snapshot) via vhost-user
-- [ ] 8.2 Test that restored VM can read from nix store VirtioFS mount after restore — validates host-side virtiofsd reconnection
-- [ ] 8.3 Test that restored VM can read/write workspace VirtioFS mount after restore — validates host-side AspenFs daemon reconnection and fresh FuseSyncClient Iroh connection
-- [ ] 8.4 Test overlayfs (tmpfs rw-store) behavior after snapshot/restore — verify overlay state is preserved in guest memory and lower layer (virtiofs) reconnects to new host-side daemon
-- [ ] 8.5 Test aspen-node Iroh reconnection behavior after restore — the guest's control-plane Iroh connection is stale (in snapshot), verify worker re-registers within 2 seconds (self-heal or systemd restart)
-- [ ] 8.6 Test post-restore VirtioFS health probe — verify `workspace_client.scan_keys()` detects both working and broken VirtioFS connections after restore
+- [x] 8.1 Test Cloud Hypervisor snapshot/restore with active VirtioFS connections on v49.0 — specifically: guest-side virtio-fs driver (in snapshot) reconnecting to new host-side virtiofsd (not in snapshot) via vhost-user
+- [x] 8.2 Test that restored VM can read from nix store VirtioFS mount after restore — validates host-side virtiofsd reconnection
+- [x] 8.3 Test that restored VM can read/write workspace VirtioFS mount after restore — validates host-side AspenFs daemon reconnection and fresh FuseSyncClient Iroh connection
+- [x] 8.4 Test overlayfs (tmpfs rw-store) behavior after snapshot/restore — verify overlay state is preserved in guest memory and lower layer (virtiofs) reconnects to new host-side daemon
+- [x] 8.5 Test aspen-node Iroh reconnection behavior after restore — the guest's control-plane Iroh connection is stale (in snapshot), verify worker re-registers within 2 seconds (self-heal or systemd restart)
+- [x] 8.6 Test post-restore VirtioFS health probe — verify `workspace_client.scan_keys()` detects both working and broken VirtioFS connections after restore
 
 ## 9. End-to-End Integration
 
-- [ ] 9.1 NixOS VM test: boot cluster → start CloudHypervisorWorker with snapshots enabled → verify golden snapshot created → submit CI job → verify job uses restored VM → verify job completes
-- [ ] 9.2 Benchmark: measure cold-boot time vs snapshot-restore time, report in CI metrics
-- [ ] 9.3 Stress test: restore 8 VMs simultaneously from same golden snapshot, run jobs, verify all complete correctly
+- [x] 9.1 NixOS VM test: boot cluster → start CloudHypervisorWorker with snapshots enabled → verify golden snapshot created → submit CI job → verify job uses restored VM → verify job completes
+- [x] 9.2 Benchmark: measure cold-boot time vs snapshot-restore time, report in CI metrics
+- [x] 9.3 Stress test: restore 8 VMs simultaneously from same golden snapshot, run jobs, verify all complete correctly

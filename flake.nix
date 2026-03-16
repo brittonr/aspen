@@ -3234,6 +3234,42 @@
                 inherit pkgs microvm;
                 inherit (self.packages.${system}) aspen-node-vm-test aspen-ci-workspace-server;
               };
+
+              # VirtioFS snapshot/restore compatibility: snapshot with active VirtioFS → restore
+              # → verify guest driver reconnects to fresh host-side daemons via vhost-user.
+              # Tests overlayfs (tmpfs upper on virtiofs lower) survives snapshot/restore.
+              # Build: nix build .#checks.x86_64-linux.vm-snapshot-virtiofs-test --impure
+              vm-snapshot-virtiofs-test = import ./nix/tests/vm-snapshot-virtiofs.nix {
+                inherit pkgs microvm;
+                inherit (self.packages.${system}) aspen-virtiofs-test-server;
+              };
+
+              # End-to-end snapshot/restore CI pipeline: cluster → CH worker → golden
+              # snapshot → CI job submission → restore from snapshot → job completion.
+              # Also benchmarks cold-boot vs restore time and stress-tests 8 concurrent VMs.
+              # Build: nix build .#checks.x86_64-linux.vm-snapshot-e2e-test --impure --option sandbox false
+              vm-snapshot-e2e-test = let
+                ciVmConfig = nixpkgs.lib.nixosSystem {
+                  system = "x86_64-linux";
+                  modules = [
+                    microvm.nixosModules.microvm
+                    (import ./nix/vms/ci-worker-node.nix {
+                      inherit pkgs;
+                      lib = nixpkgs.lib;
+                      vmId = "aspen-ci-vm";
+                      aspenNodePackage = self.packages.${system}.aspen-node-vm-test;
+                    })
+                  ];
+                };
+              in
+                import ./nix/tests/vm-snapshot-e2e.nix {
+                  inherit pkgs microvm;
+                  inherit (self.packages.${system}) aspen-node-vm-test;
+                  aspen-cli = bins.aspen-cli;
+                  ciKernel = ciVmConfig.config.microvm.kernel;
+                  ciInitrd = ciVmConfig.config.system.build.initialRamdisk;
+                  ciToplevel = ciVmConfig.config.system.build.toplevel;
+                };
             };
 
           # Base apps available on all systems
