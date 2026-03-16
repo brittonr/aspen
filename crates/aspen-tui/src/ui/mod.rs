@@ -122,8 +122,8 @@ fn draw_content(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Draw status bar at bottom.
 fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
-    let status = if let Some((msg, _)) = &app.status_message {
-        msg.clone()
+    let status = if let Some(notif) = &app.notification {
+        notif.message.clone()
     } else if app.refreshing {
         "Refreshing...".to_string()
     } else if let Some(last) = app.last_refresh {

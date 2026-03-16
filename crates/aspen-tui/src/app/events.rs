@@ -50,11 +50,9 @@ impl App {
         // Drain CI log watch channel for real-time log updates.
         self.drain_ci_log_watch();
 
-        // Clear old status messages (after 5 seconds)
-        if let Some((_, timestamp)) = &self.status_message
-            && timestamp.elapsed() > Duration::from_secs(5)
-        {
-            self.status_message = None;
+        // Clear expired notifications
+        if self.notification.as_ref().is_some_and(|n| n.is_expired()) {
+            self.notification = None;
         }
     }
 
@@ -131,17 +129,10 @@ impl App {
                 self.set_status(&format!("Consistency: {}", self.sql_state.consistency.as_str()));
             }
             Command::SqlScrollLeft => {
-                if self.sql_state.result_scroll_col > 0 {
-                    self.sql_state.result_scroll_col -= 1;
-                }
+                self.sql_table.scroll_left();
             }
             Command::SqlScrollRight => {
-                if let Some(result) = &self.sql_state.last_result {
-                    let max = (result.columns.len().saturating_sub(1)) as u32;
-                    if self.sql_state.result_scroll_col < max {
-                        self.sql_state.result_scroll_col += 1;
-                    }
-                }
+                self.sql_table.scroll_right();
             }
 
             // Log operations
@@ -194,33 +185,20 @@ impl App {
                 }
             }
             Command::CiLogScrollUp => {
-                if self.ci_state.log_stream.scroll_position > 0 {
-                    self.ci_state.log_stream.scroll_position =
-                        self.ci_state.log_stream.scroll_position.saturating_sub(10);
-                    self.ci_state.log_stream.auto_scroll = false;
-                }
+                self.ci_log_output.scroll_up(10);
             }
             Command::CiLogScrollDown => {
-                let max_scroll = (self.ci_state.log_stream.lines.len().saturating_sub(1)) as u32;
-                if self.ci_state.log_stream.scroll_position < max_scroll {
-                    self.ci_state.log_stream.scroll_position =
-                        (self.ci_state.log_stream.scroll_position + 10).min(max_scroll);
-                }
+                self.ci_log_output.scroll_down(10, 40); // approximate visible height
             }
             Command::CiLogScrollToEnd => {
-                self.ci_state.log_stream.scroll_position =
-                    (self.ci_state.log_stream.lines.len().saturating_sub(1)) as u32;
-                self.ci_state.log_stream.auto_scroll = true;
+                self.ci_log_output.scroll_to_bottom();
             }
             Command::CiLogScrollToStart => {
-                self.ci_state.log_stream.scroll_position = 0;
-                self.ci_state.log_stream.auto_scroll = false;
+                self.ci_log_output.scroll_to_top();
             }
             Command::CiLogToggleFollow => {
-                self.ci_state.log_stream.auto_scroll = !self.ci_state.log_stream.auto_scroll;
-                if self.ci_state.log_stream.auto_scroll {
-                    self.ci_state.log_stream.scroll_position =
-                        (self.ci_state.log_stream.lines.len().saturating_sub(1)) as u32;
+                self.ci_log_output.toggle_auto_follow();
+                if self.ci_log_output.auto_follow() {
                     self.set_status("Follow mode enabled");
                 } else {
                     self.set_status("Follow mode disabled");
@@ -250,7 +228,7 @@ impl App {
             InputMode::SqlEditing => {
                 if self.sql_state.query_buffer.len() < MAX_SQL_QUERY_SIZE {
                     self.sql_state.query_buffer.push(c);
-                    self.sql_state.history_browsing = false;
+                    self.sql_state.history.reset_browse();
                 }
             }
             InputMode::Normal => {}
@@ -265,7 +243,7 @@ impl App {
             }
             InputMode::SqlEditing => {
                 self.sql_state.query_buffer.pop();
-                self.sql_state.history_browsing = false;
+                self.sql_state.history.reset_browse();
             }
             InputMode::Normal => {}
         }
@@ -276,9 +254,9 @@ impl App {
         match self.input_mode {
             InputMode::Editing => {
                 let is_ticket_connect = self
-                    .status_message
+                    .notification
                     .as_ref()
-                    .map(|(msg, _)| msg.contains("Paste Iroh cluster ticket"))
+                    .map(|n| n.message.contains("Paste Iroh cluster ticket"))
                     .unwrap_or(false);
 
                 if is_ticket_connect {

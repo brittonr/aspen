@@ -20,7 +20,6 @@ impl App {
         match self.client.ci_list_runs(self.ci_state.repo_filter.clone(), status_filter, limit).await {
             Ok(runs) => {
                 self.ci_state.runs = runs;
-                // Reset selection if out of bounds
                 let runs_len = self.ci_state.runs.len() as u32;
                 if self.ci_state.selected_run >= runs_len && !self.ci_state.runs.is_empty() {
                     self.ci_state.selected_run = runs_len.saturating_sub(1);
@@ -73,7 +72,6 @@ impl App {
         match self.client.ci_cancel_run(&run_id, Some("Cancelled from TUI".to_string())).await {
             Ok(()) => {
                 self.set_status(&format!("CI run {} cancelled", run_id));
-                // Refresh to show updated status
                 self.refresh_ci_runs().await;
             }
             Err(e) => {
@@ -83,10 +81,7 @@ impl App {
     }
 
     /// Open the CI log viewer for the selected job.
-    ///
-    /// Fetches logs for the currently selected job in the CI run details view.
     pub(crate) async fn open_ci_log_viewer(&mut self) {
-        // Need details view to select a job
         if !self.ci_state.show_details {
             self.set_status("Press 'd' to show details first, then 'l' to view logs");
             return;
@@ -125,16 +120,13 @@ impl App {
             return;
         };
 
-        // Clear existing logs and prepare for new stream
+        // Reset log viewer state
         self.ci_state.log_stream.run_id = Some(run_id.clone());
         self.ci_state.log_stream.job_id = Some(job_id.clone());
-        self.ci_state.log_stream.lines.clear();
-        self.ci_state.log_stream.scroll_position = 0;
-        self.ci_state.log_stream.auto_scroll = true;
         self.ci_state.log_stream.is_streaming = true;
-        self.ci_state.log_stream.last_chunk_index = 0;
         self.ci_state.log_stream.error = None;
         self.ci_state.log_stream.is_visible = true;
+        self.ci_log_output = rat_streaming::StreamingOutput::new();
 
         self.set_status("Loading logs...");
 
@@ -147,24 +139,18 @@ impl App {
                     return;
                 }
 
-                // Parse log chunks into lines
-                for chunk in result.chunks {
-                    self.parse_log_chunk_into_lines(&chunk.content, chunk.timestamp_ms);
+                // Push log chunks into StreamingOutput
+                for chunk in &result.chunks {
+                    self.ci_log_output.push_text(&chunk.content);
                 }
 
                 self.ci_state.log_stream.last_chunk_index = result.last_index;
                 self.ci_state.log_stream.is_streaming = !result.is_complete;
 
-                if self.ci_state.log_stream.auto_scroll && !self.ci_state.log_stream.lines.is_empty() {
-                    self.ci_state.log_stream.scroll_position =
-                        (self.ci_state.log_stream.lines.len().saturating_sub(1)) as u32;
-                }
-
-                let line_count = self.ci_state.log_stream.lines.len();
+                let line_count = self.ci_log_output.total_lines();
                 if result.is_complete {
                     self.set_status(&format!("Loaded {} log lines (complete)", line_count));
                 } else {
-                    // Job still running — try to start a watch-based stream.
                     self.start_ci_log_watch(&run_id, &job_id, result.last_index);
                     self.set_status(&format!("Loaded {} log lines (streaming...)", line_count));
                 }
@@ -177,9 +163,6 @@ impl App {
     }
 
     /// Spawn a background task to stream CI log lines via WatchSession.
-    ///
-    /// Connects to the cluster's log subscriber and sends parsed log lines
-    /// through an mpsc channel. The on_tick handler drains this channel.
     fn start_ci_log_watch(&mut self, run_id: &str, job_id: &str, last_chunk_index: u32) {
         let Some(watch_info) = self.client.watch_connection_info() else {
             debug!("watch not available: client does not support watch connections");
@@ -204,100 +187,41 @@ impl App {
         });
     }
 
-    /// Drain the CI log watch channel and append new lines.
-    ///
-    /// Called from on_tick to process watch events without blocking the UI.
+    /// Drain the CI log watch channel and push lines into StreamingOutput.
     pub(crate) fn drain_ci_log_watch(&mut self) {
         let Some(rx) = self.ci_log_watch_rx.as_mut() else {
             return;
         };
 
-        let mut received_any = false;
-
         // Drain up to 500 lines per tick to avoid blocking the UI.
         for _ in 0..500 {
             match rx.try_recv() {
                 Ok(line) => {
-                    self.ci_state.log_stream.lines.push(line);
-
-                    // Enforce bounded buffer.
-                    if self.ci_state.log_stream.lines.len() > aspen_core::MAX_TUI_LOG_LINES {
-                        self.ci_state.log_stream.lines.remove(0);
-                    }
-
-                    received_any = true;
+                    self.ci_log_output.push_line(&line.content);
                 }
                 Err(mpsc::error::TryRecvError::Empty) => break,
                 Err(mpsc::error::TryRecvError::Disconnected) => {
-                    // Watch task ended — stream complete or connection dropped.
                     self.ci_log_watch_rx = None;
                     self.ci_state.log_stream.is_streaming = false;
                     break;
                 }
             }
         }
-
-        if received_any && self.ci_state.log_stream.auto_scroll && !self.ci_state.log_stream.lines.is_empty() {
-            self.ci_state.log_stream.scroll_position = (self.ci_state.log_stream.lines.len().saturating_sub(1)) as u32;
-        }
-    }
-
-    /// Parse a log chunk content into individual lines.
-    fn parse_log_chunk_into_lines(&mut self, content: &str, timestamp_ms: u64) {
-        use crate::types::CiLogLine;
-
-        for line in content.lines() {
-            // Parse lines with format: [stream] content
-            let (stream, content) = if let Some(rest) = line.strip_prefix("[stdout] ") {
-                ("stdout".to_string(), rest.to_string())
-            } else if let Some(rest) = line.strip_prefix("[stderr] ") {
-                ("stderr".to_string(), rest.to_string())
-            } else if let Some(rest) = line.strip_prefix("[build] ") {
-                ("build".to_string(), rest.to_string())
-            } else {
-                // Unknown format - treat as stdout
-                ("stdout".to_string(), line.to_string())
-            };
-
-            self.ci_state.log_stream.lines.push(CiLogLine {
-                content,
-                stream,
-                timestamp_ms,
-            });
-
-            // Enforce bounded buffer
-            if self.ci_state.log_stream.lines.len() > aspen_core::MAX_TUI_LOG_LINES {
-                self.ci_state.log_stream.lines.remove(0);
-            }
-        }
     }
 
     /// Close the CI log viewer.
-    ///
-    /// Drops the watch channel receiver, which signals the background
-    /// watch task to exit (its send will fail).
     pub(crate) fn close_ci_log_viewer(&mut self) {
         self.ci_log_watch_rx = None;
         self.ci_state.log_stream.is_visible = false;
         self.ci_state.log_stream.is_streaming = false;
-        self.ci_state.log_stream.lines.clear();
         self.ci_state.log_stream.run_id = None;
         self.ci_state.log_stream.job_id = None;
+        self.ci_log_output = rat_streaming::StreamingOutput::new();
         self.set_status("Log viewer closed");
     }
 }
 
 /// Background task that streams CI log lines via WatchSession.
-///
-/// Connects to the cluster's log subscriber, subscribes to the job's
-/// log key prefix, parses `CiLogChunk` from Set events, and sends
-/// individual lines through the mpsc channel.
-///
-/// The task exits when:
-/// - The completion marker (`__complete__`) is received
-/// - The watch stream ends (EndOfStream)
-/// - The channel receiver is dropped (log viewer closed)
-/// - The watch connection fails
 async fn ci_log_watch_task(
     endpoint: iroh::Endpoint,
     peer_addr: iroh::EndpointAddr,
@@ -330,7 +254,6 @@ async fn ci_log_watch_task(
                 let key_str = String::from_utf8_lossy(&key);
 
                 if key_str.ends_with("__complete__") {
-                    // Stream is done.
                     return;
                 }
 
@@ -339,13 +262,11 @@ async fn ci_log_watch_task(
                     Err(_) => continue,
                 };
 
-                // Skip chunks already shown during historical catch-up.
                 if chunk.index < last_seen {
                     continue;
                 }
                 last_seen = chunk.index + 1;
 
-                // Parse chunk content into individual lines and send them.
                 for line in chunk.content.lines() {
                     let (stream, content) = if let Some(rest) = line.strip_prefix("[stdout] ") {
                         ("stdout".to_string(), rest.to_string())
@@ -366,7 +287,6 @@ async fn ci_log_watch_task(
                         .await
                         .is_err()
                     {
-                        // Receiver dropped — log viewer closed.
                         return;
                     }
                 }

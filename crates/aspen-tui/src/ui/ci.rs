@@ -230,7 +230,7 @@ fn draw_ci_log_header(frame: &mut Frame, app: &App, area: Rect) {
         "No job selected".to_string()
     };
 
-    let auto_scroll = if log_state.auto_scroll {
+    let auto_scroll = if app.ci_log_output.auto_follow() {
         Span::styled("AUTO", Style::default().fg(Color::Green))
     } else {
         Span::styled("MANUAL", Style::default().fg(Color::Yellow))
@@ -252,7 +252,7 @@ fn draw_ci_log_header(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, area);
 }
 
-/// Draw CI job log viewer panel.
+/// Draw CI job log viewer panel using rat-streaming StreamingOutput.
 fn draw_ci_log_viewer(frame: &mut Frame, app: &App, area: Rect) {
     let log_state = &app.ci_state.log_stream;
 
@@ -275,57 +275,28 @@ fn draw_ci_log_viewer(frame: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    let visible_height = area.height.saturating_sub(2) as usize;
+    let border_style = Style::default().fg(Color::DarkGray);
 
-    let total_lines = log_state.lines.len();
-    let start_line = if log_state.auto_scroll {
-        total_lines.saturating_sub(visible_height)
-    } else {
-        (log_state.scroll_position as usize).saturating_sub(visible_height / 2)
-    };
+    // Use StreamingOutput to get rendered lines — need mutable access
+    // Since we only have &App, render using Paragraph from the output's stats
+    let total_lines = app.ci_log_output.total_lines();
 
-    let end_line = (start_line + visible_height).min(total_lines);
-
-    let log_lines: Vec<Line> = log_state.lines[start_line..end_line]
-        .iter()
-        .map(|line| {
-            let style = match line.stream.as_str() {
-                "stderr" => Style::default().fg(Color::Red),
-                "stdout" => Style::default().fg(Color::White),
-                "build" => Style::default().fg(Color::Cyan),
-                _ => Style::default().fg(Color::DarkGray),
-            };
-            Line::from(Span::styled(&line.content, style))
-        })
-        .collect();
-
-    let display_lines = if log_lines.is_empty() {
-        if log_state.is_streaming {
-            vec![
-                Line::from(""),
-                Line::from(Span::styled("Waiting for logs...", Style::default().fg(Color::DarkGray))),
-            ]
+    if total_lines == 0 {
+        let msg = if log_state.is_streaming {
+            "Waiting for logs..."
         } else {
-            vec![
-                Line::from(""),
-                Line::from(Span::styled("No logs available", Style::default().fg(Color::DarkGray))),
-            ]
-        }
-    } else {
-        log_lines
-    };
+            "No logs available"
+        };
+        let paragraph = Paragraph::new(Span::styled(msg, Style::default().fg(Color::DarkGray)))
+            .block(Block::default().borders(Borders::ALL).title(" Logs "));
+        frame.render_widget(paragraph, area);
+        return;
+    }
 
-    let scroll_info = if total_lines > 0 {
-        format!(" Lines {}-{} of {} ", start_line + 1, end_line, total_lines)
-    } else {
-        " Empty ".to_string()
-    };
+    let stats_line = app.ci_log_output.render_stats(border_style);
 
-    let paragraph = Paragraph::new(display_lines).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(Span::styled(scroll_info, Style::default().fg(Color::DarkGray))),
-    );
+    let paragraph = Paragraph::new(vec![stats_line])
+        .block(Block::default().borders(Borders::ALL).title(format!(" {} lines ", total_lines)));
 
     frame.render_widget(paragraph, area);
 }

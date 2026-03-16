@@ -36,15 +36,8 @@ pub(super) fn draw_sql_input_popup(frame: &mut Frame, app: &App) {
 
     frame.render_widget(Clear, area);
 
-    let title = format!(
-        " Edit SQL Query (Enter to save, Esc to cancel, Up/Down for history [{}/{}]) ",
-        if app.sql_state.history_browsing {
-            app.sql_state.history_index + 1
-        } else {
-            app.sql_state.history.len() as u32
-        },
-        app.sql_state.history.len()
-    );
+    let (pos, total) = app.sql_state.history.position();
+    let title = format!(" Edit SQL Query (Enter to save, Esc to cancel, Up/Down for history [{}/{}]) ", pos, total);
 
     let input = Paragraph::new(app.sql_state.query_buffer.as_str())
         .style(Style::default().fg(Color::Yellow))

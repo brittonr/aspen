@@ -127,7 +127,7 @@ fn init_tracing() {
     tui_logger::set_default_level(log::LevelFilter::Info);
 
     // Set up tracing subscriber to route to tui-logger
-    let tui_layer = tui_logger::tracing_subscriber_layer();
+    let tui_layer = tui_logger::TuiTracingSubscriberLayer;
 
     tracing_subscriber::registry().with(tui_layer).init();
 }

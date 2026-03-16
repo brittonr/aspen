@@ -95,11 +95,6 @@ pub struct ClusterMetrics {
 /// Tiger Style: Bounded to prevent memory issues.
 pub const MAX_SQL_QUERY_SIZE: usize = 65536;
 
-/// Maximum SQL history entries.
-///
-/// Tiger Style: Bounded to prevent unbounded memory use.
-pub const MAX_SQL_HISTORY: usize = 100;
-
 /// SQL history file name.
 pub const SQL_HISTORY_FILE: &str = "sql_history.json";
 
@@ -140,84 +135,37 @@ impl SqlConsistency {
 }
 
 /// SQL view state.
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct SqlState {
     /// Current query buffer.
     pub query_buffer: String,
-    /// Query history.
-    pub history: Vec<String>,
-    /// Current history navigation index (bounded by MAX_SQL_HISTORY).
-    pub history_index: u32,
-    /// Whether navigating history (vs editing).
-    pub history_browsing: bool,
+    /// Query history (managed by rat-widgets CommandHistory).
+    pub history: rat_widgets::CommandHistory,
     /// Consistency level for queries.
     pub consistency: SqlConsistency,
     /// Last query result.
     pub last_result: Option<SqlQueryResult>,
-    /// Vertical scroll position in results.
-    pub result_scroll_row: u32,
-    /// Horizontal scroll position in results.
-    pub result_scroll_col: u32,
-    /// Selected row index.
-    pub selected_row: u32,
 }
 
 impl SqlState {
-    /// Add a query to history (avoid duplicates).
+    /// Add a query to history.
     pub fn add_to_history(&mut self, query: String) {
-        // Don't add empty queries or duplicates at the end
-        if query.trim().is_empty() {
-            return;
-        }
-        if self.history.last().map(|s| s == &query).unwrap_or(false) {
-            return;
-        }
-
-        self.history.push(query);
-
-        // Tiger Style: Bounded history
-        if self.history.len() > MAX_SQL_HISTORY {
-            self.history.remove(0);
-        }
-
-        // Reset navigation (cast len() safely since bounded by MAX_SQL_HISTORY)
-        self.history_index = self.history.len() as u32;
-        self.history_browsing = false;
+        self.history.add(query);
     }
 
     /// Navigate to previous history entry.
     pub fn history_prev(&mut self) {
-        if self.history.is_empty() {
-            return;
-        }
-
-        if !self.history_browsing {
-            // Start browsing from the end
-            self.history_browsing = true;
-            self.history_index = self.history.len() as u32;
-        }
-
-        if self.history_index > 0 {
-            self.history_index -= 1;
-            self.query_buffer = self.history[self.history_index as usize].clone();
+        if let Some(entry) = self.history.prev() {
+            self.query_buffer = entry.to_string();
         }
     }
 
     /// Navigate to next history entry.
     pub fn history_next(&mut self) {
-        if !self.history_browsing || self.history.is_empty() {
-            return;
-        }
-
-        let history_len = self.history.len() as u32;
-        if self.history_index < history_len.saturating_sub(1) {
-            self.history_index += 1;
-            self.query_buffer = self.history[self.history_index as usize].clone();
+        if let Some(entry) = self.history.next() {
+            self.query_buffer = entry.to_string();
         } else {
-            // At the end, clear buffer
-            self.history_index = history_len;
             self.query_buffer.clear();
-            self.history_browsing = false;
         }
     }
 }
@@ -305,43 +253,26 @@ fn config_dir() -> Option<PathBuf> {
     dirs::config_dir().map(|p| p.join("aspen"))
 }
 
-/// Load SQL history from disk.
-///
-/// Returns empty vec if file doesn't exist or can't be read.
-pub fn load_sql_history() -> Vec<String> {
+/// Load SQL command history from disk using CommandHistory persistence.
+pub fn load_sql_history() -> rat_widgets::CommandHistory {
     let Some(dir) = config_dir() else {
-        return vec![];
+        return rat_widgets::CommandHistory::new(100);
     };
     let path = dir.join(SQL_HISTORY_FILE);
-
-    std::fs::read_to_string(&path)
-        .inspect_err(|e| tracing::debug!("failed to read SQL history: {e}"))
-        .ok()
-        .and_then(|s| {
-            serde_json::from_str(&s).inspect_err(|e| tracing::debug!("failed to parse SQL history: {e}")).ok()
-        })
-        .unwrap_or_default()
+    rat_widgets::CommandHistory::load_json(&path, 100)
 }
 
-/// Save SQL history to disk.
-///
-/// Creates config directory if it doesn't exist.
-/// Silently ignores errors (non-critical operation).
-pub fn save_sql_history(history: &[String]) {
+/// Save SQL command history to disk.
+pub fn save_sql_history(history: &rat_widgets::CommandHistory) {
     let Some(dir) = config_dir() else {
         return;
     };
-
-    // Create directory if needed
     if let Err(e) = std::fs::create_dir_all(&dir) {
         tracing::debug!("failed to create config directory: {e}");
         return;
     }
-
     let path = dir.join(SQL_HISTORY_FILE);
-    if let Err(e) = std::fs::write(&path, serde_json::to_string_pretty(history).unwrap_or_default()) {
-        tracing::debug!("failed to save SQL history: {e}");
-    }
+    history.save_json(&path);
 }
 
 // =============================================================================
@@ -773,13 +704,7 @@ pub struct CiState {
 // CI Log Streaming Types
 // ============================================================================
 
-/// Maximum log lines retained in TUI display buffer.
-///
-/// Tiger Style: Bounded buffer prevents unbounded memory use.
-/// Older lines are dropped when limit is reached.
-pub const MAX_TUI_LOG_LINES: usize = aspen_core::MAX_TUI_LOG_LINES;
-
-/// A single log line for display in the TUI.
+/// A single log line for display in the TUI (used by watch channel).
 #[derive(Debug, Clone)]
 pub struct CiLogLine {
     /// Log content (single line).
@@ -790,19 +715,15 @@ pub struct CiLogLine {
     pub timestamp_ms: u64,
 }
 
-/// Log stream state for viewing CI job logs.
+/// Log stream metadata for CI job log viewing.
+///
+/// Line storage and scrolling are handled by `rat_streaming::StreamingOutput`.
 #[derive(Debug, Clone, Default)]
 pub struct CiLogStreamState {
     /// Pipeline run ID being watched.
     pub run_id: Option<String>,
     /// Job ID being watched.
     pub job_id: Option<String>,
-    /// Log lines buffer (bounded to MAX_TUI_LOG_LINES).
-    pub lines: Vec<CiLogLine>,
-    /// Scroll position in the log view (line index, bounded by MAX_TUI_LOG_LINES).
-    pub scroll_position: u32,
-    /// Whether auto-scroll is enabled (follow mode).
-    pub auto_scroll: bool,
     /// Whether the stream is active (job still running).
     pub is_streaming: bool,
     /// Last received chunk index.
@@ -813,136 +734,5 @@ pub struct CiLogStreamState {
     pub is_visible: bool,
 }
 
-impl CiLogStreamState {
-    /// Create a new log stream state.
-    pub fn new() -> Self {
-        Self {
-            auto_scroll: true,
-            ..Default::default()
-        }
-    }
-
-    /// Add a log line, maintaining bounded buffer.
-    pub fn add_line(&mut self, line: CiLogLine) {
-        if self.lines.len() >= MAX_TUI_LOG_LINES {
-            self.lines.remove(0); // Drop oldest
-        }
-        self.lines.push(line);
-
-        if self.auto_scroll {
-            self.scroll_position = (self.lines.len().saturating_sub(1)) as u32;
-        }
-    }
-
-    /// Add multiple log lines from a chunk.
-    pub fn add_chunk(&mut self, content: &str, timestamp_ms: u64) {
-        for line in content.lines() {
-            // Parse stream prefix: [stdout] content or [stderr] content
-            let (stream, text) = if line.starts_with('[') {
-                if let Some(end) = line.find(']') {
-                    (line[1..end].to_string(), line[end + 2..].to_string())
-                } else {
-                    ("unknown".to_string(), line.to_string())
-                }
-            } else {
-                ("unknown".to_string(), line.to_string())
-            };
-
-            self.add_line(CiLogLine {
-                content: text,
-                stream,
-                timestamp_ms,
-            });
-        }
-    }
-
-    /// Clear the log buffer and reset state.
-    pub fn clear(&mut self) {
-        self.lines.clear();
-        self.scroll_position = 0;
-        self.last_chunk_index = 0;
-        self.error = None;
-        self.run_id = None;
-        self.job_id = None;
-        self.is_streaming = false;
-    }
-
-    /// Toggle auto-scroll mode.
-    pub fn toggle_auto_scroll(&mut self) {
-        self.auto_scroll = !self.auto_scroll;
-        if self.auto_scroll {
-            self.scroll_position = (self.lines.len().saturating_sub(1)) as u32;
-        }
-    }
-
-    /// Scroll up by one line.
-    pub fn scroll_up(&mut self) {
-        if self.scroll_position > 0 {
-            self.scroll_position -= 1;
-            self.auto_scroll = false;
-        }
-    }
-
-    /// Scroll down by one line.
-    pub fn scroll_down(&mut self) {
-        let max_pos = (self.lines.len().saturating_sub(1)) as u32;
-        if self.scroll_position < max_pos {
-            self.scroll_position += 1;
-        }
-        // Re-enable auto-scroll if at bottom
-        if self.scroll_position >= max_pos {
-            self.auto_scroll = true;
-        }
-    }
-
-    /// Scroll up by a page (half the visible height).
-    pub fn page_up(&mut self, visible_lines: u32) {
-        let half_page = visible_lines / 2;
-        self.scroll_position = self.scroll_position.saturating_sub(half_page);
-        self.auto_scroll = false;
-    }
-
-    /// Scroll down by a page (half the visible height).
-    pub fn page_down(&mut self, visible_lines: u32) {
-        let half_page = visible_lines / 2;
-        let max_pos = (self.lines.len().saturating_sub(1)) as u32;
-        self.scroll_position = (self.scroll_position + half_page).min(max_pos);
-        // Re-enable auto-scroll if at bottom
-        if self.scroll_position >= max_pos {
-            self.auto_scroll = true;
-        }
-    }
-
-    /// Jump to the beginning of logs.
-    pub fn jump_to_start(&mut self) {
-        self.scroll_position = 0;
-        self.auto_scroll = false;
-    }
-
-    /// Jump to the end of logs.
-    pub fn jump_to_end(&mut self) {
-        self.scroll_position = (self.lines.len().saturating_sub(1)) as u32;
-        self.auto_scroll = true;
-    }
-
-    /// Start streaming logs for a job.
-    pub fn start_stream(&mut self, run_id: String, job_id: String) {
-        self.clear();
-        self.run_id = Some(run_id);
-        self.job_id = Some(job_id);
-        self.is_streaming = true;
-        self.is_visible = true;
-        self.auto_scroll = true;
-    }
-
-    /// Mark the stream as complete.
-    pub fn complete_stream(&mut self) {
-        self.is_streaming = false;
-    }
-
-    /// Set an error message.
-    pub fn set_error(&mut self, error: String) {
-        self.error = Some(error);
-        self.is_streaming = false;
-    }
-}
+// CiLogStreamState methods removed — line storage and scrolling
+// now handled by rat_streaming::StreamingOutput in App.ci_log_output

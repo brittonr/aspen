@@ -64,8 +64,8 @@ pub struct App {
     /// Refresh in progress flag.
     pub refreshing: bool,
 
-    /// Status message for display.
-    pub status_message: Option<(String, Instant)>,
+    /// Status notification for display.
+    pub notification: Option<rat_widgets::Notification>,
 
     /// Input buffer for text entry.
     pub input_buffer: String,
@@ -100,6 +100,9 @@ pub struct App {
     /// SQL view state.
     pub sql_state: SqlState,
 
+    /// SQL results data table widget.
+    pub sql_table: rat_table::DataTable,
+
     /// Jobs view state.
     pub jobs_state: JobsState,
 
@@ -108,6 +111,9 @@ pub struct App {
 
     /// CI view state.
     pub ci_state: CiState,
+
+    /// CI log streaming output buffer.
+    pub ci_log_output: rat_streaming::StreamingOutput,
 
     /// Receiver for CI log watch events from background task.
     /// Set when a watch-based log viewer is active, None otherwise.
@@ -126,7 +132,6 @@ impl App {
         // Load SQL history from disk
         let mut sql_state = SqlState::default();
         sql_state.history = load_sql_history();
-        sql_state.history_index = sql_state.history.len() as u32;
 
         Self {
             should_quit: false,
@@ -140,7 +145,7 @@ impl App {
             selected_node: 0,
             last_refresh: None,
             refreshing: false,
-            status_message: None,
+            notification: None,
             input_buffer: String::new(),
             key_buffer: String::new(),
             value_buffer: String::new(),
@@ -152,9 +157,11 @@ impl App {
             selected_vault_key: 0,
             active_vault: None,
             sql_state,
+            sql_table: rat_table::DataTable::new(vec![], vec![]),
             jobs_state: JobsState::default(),
             workers_state: WorkersState::default(),
             ci_state: CiState::default(),
+            ci_log_output: rat_streaming::StreamingOutput::new(),
             ci_log_watch_rx: None,
         }
     }
@@ -180,7 +187,6 @@ impl App {
         // Load SQL history from disk
         let mut sql_state = SqlState::default();
         sql_state.history = load_sql_history();
-        sql_state.history_index = sql_state.history.len() as u32;
 
         Ok(Self {
             should_quit: false,
@@ -194,7 +200,7 @@ impl App {
             selected_node: 0,
             last_refresh: None,
             refreshing: false,
-            status_message: None,
+            notification: None,
             input_buffer: String::new(),
             key_buffer: String::new(),
             value_buffer: String::new(),
@@ -206,9 +212,11 @@ impl App {
             selected_vault_key: 0,
             active_vault: None,
             sql_state,
+            sql_table: rat_table::DataTable::new(vec![], vec![]),
             jobs_state: JobsState::default(),
             workers_state: WorkersState::default(),
             ci_state: CiState::default(),
+            ci_log_output: rat_streaming::StreamingOutput::new(),
             ci_log_watch_rx: None,
         })
     }
@@ -224,7 +232,6 @@ impl App {
         // Load SQL history from disk
         let mut sql_state = SqlState::default();
         sql_state.history = load_sql_history();
-        sql_state.history_index = sql_state.history.len() as u32;
 
         Self {
             should_quit: false,
@@ -238,9 +245,8 @@ impl App {
             selected_node: 0,
             last_refresh: None,
             refreshing: false,
-            status_message: Some((
-                "Not connected - Press 'c' to connect to nodes or 't' for ticket".to_string(),
-                Instant::now(),
+            notification: Some(rat_widgets::Notification::info(
+                "Not connected - Press 'c' to connect to nodes or 't' for ticket",
             )),
             input_buffer: String::new(),
             key_buffer: String::new(),
@@ -253,16 +259,18 @@ impl App {
             selected_vault_key: 0,
             active_vault: None,
             sql_state,
+            sql_table: rat_table::DataTable::new(vec![], vec![]),
             jobs_state: JobsState::default(),
             workers_state: WorkersState::default(),
             ci_state: CiState::default(),
+            ci_log_output: rat_streaming::StreamingOutput::new(),
             ci_log_watch_rx: None,
         }
     }
 
-    /// Set status message.
+    /// Set status notification.
     pub(crate) fn set_status(&mut self, message: &str) {
-        self.status_message = Some((message.to_string(), Instant::now()));
+        self.notification = Some(rat_widgets::Notification::info(message));
     }
 
     /// Get the currently selected node info.

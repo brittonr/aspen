@@ -49,9 +49,7 @@ impl App {
                 }
             }
             ActiveView::Sql => {
-                if self.sql_state.selected_row > 0 {
-                    self.sql_state.selected_row -= 1;
-                }
+                self.sql_table.select_prev();
             }
             ActiveView::Jobs => {
                 if self.jobs_state.selected_job > 0 {
@@ -93,12 +91,7 @@ impl App {
                 }
             }
             ActiveView::Sql => {
-                if let Some(result) = &self.sql_state.last_result {
-                    let max = (result.rows.len().saturating_sub(1)) as u32;
-                    if self.sql_state.selected_row < max {
-                        self.sql_state.selected_row += 1;
-                    }
-                }
+                self.sql_table.select_next();
             }
             ActiveView::Jobs => {
                 let max = (self.jobs_state.jobs.len().saturating_sub(1)) as u32;

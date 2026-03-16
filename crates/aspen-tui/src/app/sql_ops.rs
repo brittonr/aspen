@@ -27,8 +27,7 @@ impl App {
         save_sql_history(&self.sql_state.history);
 
         // Reset result state
-        self.sql_state.selected_row = 0;
-        self.sql_state.result_scroll_col = 0;
+        self.sql_table.clear();
 
         self.set_status("Executing query...");
 
@@ -49,13 +48,16 @@ impl App {
                     let exec_time = result.execution_time_ms.unwrap_or(0);
                     let is_truncated = result.is_truncated.unwrap_or(false);
 
-                    self.sql_state.last_result = Some(SqlQueryResult::from_response(
-                        result.columns.unwrap_or_default(),
-                        result.rows.unwrap_or_default(),
-                        row_count,
-                        is_truncated,
-                        exec_time,
-                    ));
+                    let columns = result.columns.unwrap_or_default();
+                    let raw_rows = result.rows.unwrap_or_default();
+
+                    // Populate DataTable widget (needs pre-stringified rows)
+                    let string_rows: Vec<Vec<String>> =
+                        raw_rows.iter().map(|row| row.iter().map(|val| val.to_display_string()).collect()).collect();
+                    self.sql_table.set_data(columns.clone(), string_rows);
+
+                    self.sql_state.last_result =
+                        Some(SqlQueryResult::from_response(columns, raw_rows, row_count, is_truncated, exec_time));
 
                     let truncated_msg = if is_truncated { " (truncated)" } else { "" };
                     self.set_status(&format!("{} rows in {}ms{}", row_count, exec_time, truncated_msg));

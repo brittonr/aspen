@@ -12,8 +12,6 @@ use ratatui::style::Style;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
-use ratatui::widgets::Row;
-use ratatui::widgets::Table;
 use ratatui::widgets::Wrap;
 
 use crate::app::App;
@@ -57,7 +55,7 @@ fn draw_sql_editor(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, area);
 }
 
-/// Draw SQL results table.
+/// Draw SQL results table using rat-table DataTable widget.
 fn draw_sql_results(frame: &mut Frame, app: &App, area: Rect) {
     if let Some(result) = &app.sql_state.last_result {
         if !result.is_success {
@@ -68,66 +66,33 @@ fn draw_sql_results(frame: &mut Frame, app: &App, area: Rect) {
             frame.render_widget(paragraph, area);
             return;
         }
-
-        if result.rows.is_empty() {
-            let paragraph =
-                Paragraph::new("No results").block(Block::default().borders(Borders::ALL).title(" Results "));
-            frame.render_widget(paragraph, area);
-            return;
-        }
-
-        let header_cells: Vec<&str> = result.columns.iter().map(|c| c.as_str()).collect();
-        let header = Row::new(header_cells)
-            .style(Style::default().add_modifier(Modifier::BOLD).fg(Color::Yellow))
-            .bottom_margin(1);
-
-        let rows: Vec<Row> = result
-            .rows
-            .iter()
-            .enumerate()
-            .map(|(i, row)| {
-                let cells: Vec<String> = row
-                    .iter()
-                    .map(|cell| {
-                        if cell.len() > 40 {
-                            format!("{}...", &cell[..37])
-                        } else {
-                            cell.clone()
-                        }
-                    })
-                    .collect();
-
-                let style = if i as u32 == app.sql_state.selected_row {
-                    Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default()
-                };
-
-                Row::new(cells).style(style)
-            })
-            .collect();
-
-        let widths: Vec<Constraint> =
-            result.column_widths.iter().map(|&w| Constraint::Length(w.min(40) as u16)).collect();
-
-        let title = format!(
-            " Results ({} rows, {} columns) [j/k navigate, h/l scroll] ",
-            result.rows.len(),
-            result.columns.len()
-        );
-
-        let table = Table::new(rows, widths)
-            .header(header)
-            .block(Block::default().borders(Borders::ALL).title(title))
-            .column_spacing(1)
-            .highlight_style(Style::default().bg(Color::DarkGray));
-
-        frame.render_widget(table, area);
-    } else {
-        let paragraph = Paragraph::new("Execute a query to see results")
-            .block(Block::default().borders(Borders::ALL).title(" Results "));
-        frame.render_widget(paragraph, area);
     }
+
+    if app.sql_table.is_empty() {
+        let msg = if app.sql_state.last_result.is_some() {
+            "No results"
+        } else {
+            "Execute a query to see results"
+        };
+        let paragraph = Paragraph::new(msg).block(Block::default().borders(Borders::ALL).title(" Results "));
+        frame.render_widget(paragraph, area);
+        return;
+    }
+
+    let info = app.sql_table.info();
+    let title =
+        format!(" Results ({} rows, {} columns) [j/k navigate, h/l scroll] ", info.row_count, info.column_count);
+    let block = Block::default().borders(Borders::ALL).title(title);
+
+    let style = rat_table::DataTableStyle {
+        header_style: Style::default().add_modifier(Modifier::BOLD).fg(Color::Yellow),
+        selected_style: Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD),
+        normal_style: Style::default(),
+        truncation_suffix: "...".to_string(),
+        column_spacing: 1,
+    };
+
+    app.sql_table.render(frame, area, Some(block), &style);
 }
 
 /// Draw SQL info bar with execution stats.
