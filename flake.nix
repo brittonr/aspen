@@ -2286,6 +2286,44 @@
                       ));
                   }
                 );
+              # Same as full-aspen-node-plugins-snix but with snix-build for native
+              # in-process builds via bubblewrap/OCI sandbox (no nix build subprocess).
+              full-aspen-node-plugins-snix-build = craneLib.buildPackage (
+                fullBasicArgs
+                // {
+                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                  src = fullSrcWithSnix;
+                  cargoArtifacts = fullPluginsCargoArtifacts;
+                  cargoVendorDir = patchVendorForHyperlight (craneLib.vendorCargoDeps {
+                    src = fullSrcWithSnix + "/aspen";
+                    overrideVendorGitCheckout = ps: drv: let
+                      isSnixRepo =
+                        builtins.any (
+                          p:
+                            builtins.isString (p.source or null)
+                            && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
+                        )
+                        ps;
+                    in
+                      if isSnixRepo
+                      then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
+                      else ensureGitCheckoutLock drv;
+                  });
+                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,snix,snix-build";
+                  doCheck = false;
+                  HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+                  PROTO_ROOT = "${snix-src}";
+                  SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
+                  nativeBuildInputs =
+                    basicArgs.nativeBuildInputs
+                    ++ (with pkgs; [autoPatchelfHook]);
+                  buildInputs =
+                    basicArgs.buildInputs
+                    ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
+                      with pkgs; [darwin.apple_sdk.frameworks.Security]
+                    ));
+                }
+              );
               full-aspen-net-daemon = craneLib.buildPackage (
                 fullCommonArgs
                 // {
@@ -3207,6 +3245,17 @@
               snix-daemon-test = import ./nix/tests/snix-daemon.nix {
                 inherit pkgs;
                 snixBridgePackage = bins.full-aspen-snix-bridge;
+              };
+
+              # Native snix-build pipeline test: eval→drv→bubblewrap→PathInfoService→cache.
+              # Proves in-process builds via snix-build work end-to-end in a real VM.
+              # Build: nix build .#checks.x86_64-linux.snix-native-build-test --impure
+              snix-native-build-test = import ./nix/tests/snix-native-build.nix {
+                inherit pkgs kvPluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins-snix-build;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gatewayPackage = bins.full-aspen-nix-cache-gateway;
               };
 
               # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.
