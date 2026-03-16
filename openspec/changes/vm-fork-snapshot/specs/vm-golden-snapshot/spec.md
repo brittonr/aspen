@@ -63,11 +63,26 @@ The golden snapshot SHALL be stored at `{state_dir}/snapshots/golden/` containin
 
 ### Requirement: Snapshot regeneration on failure
 
-If a restored VM fails to boot or reach Idle state, the golden snapshot SHALL be marked invalid and regenerated on the next pool maintenance cycle.
+If a restored VM fails to reach Idle state or fails the post-restore VirtioFS health probe, the failure SHALL be counted. After `max_restore_failures` (default 3) consecutive failures, the golden snapshot SHALL be invalidated and regenerated.
 
-#### Scenario: Restore failure triggers regeneration
+#### Scenario: Single restore failure is retried
 
 - **WHEN** a VM is restored from the golden snapshot
-- **AND** the restored VM fails to reach `VmState::Idle` within `boot_timeout_ms`
+- **AND** the restore fails (VM unreachable, VirtioFS probe fails, or boot timeout)
+- **AND** the consecutive failure count is below `max_restore_failures`
+- **THEN** the failure counter SHALL be incremented
+- **AND** the pool SHALL fall back to cold-boot for this acquisition
+- **AND** the golden snapshot SHALL NOT be deleted yet
+
+#### Scenario: Consecutive failures trigger regeneration
+
+- **WHEN** `max_restore_failures` consecutive restores fail
 - **THEN** the golden snapshot SHALL be deleted
+- **AND** the failure counter SHALL be reset
 - **AND** the next `pool.maintain()` cycle SHALL create a new golden snapshot via cold-boot
+
+#### Scenario: Successful restore resets failure counter
+
+- **WHEN** a VM is restored from the golden snapshot
+- **AND** the restore succeeds (VM reaches Idle, VirtioFS probe passes)
+- **THEN** the consecutive failure counter SHALL be reset to zero

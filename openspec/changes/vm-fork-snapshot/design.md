@@ -12,6 +12,28 @@ Cold boot takes 5-15 seconds depending on hardware. The config already has `enab
 
 Cloud Hypervisor snapshot/restore serializes VM state (CPU registers, device state, memory) to a directory. Restore loads it back. With `shared=on` memory (already configured) and a `backing-file`, memory can be mapped copy-on-write so restored VMs share physical pages with the snapshot.
 
+### Snapshot Boundary: What's Inside vs. Outside
+
+The snapshot captures guest state only (CPU, memory, device state). The host-side processes that service the VM are NOT captured:
+
+**Outside the snapshot (host-side, fresh per fork):**
+
+- `virtiofsd` — host process serving `/nix/store` via vhost-user
+- `AspenFs` VirtioFS daemon — host in-process daemon for workspace, backed by `FuseSyncClient` with its own Iroh connection to the cluster
+- `workspace_client` (`FuseSyncClient`) — host-side Iroh/QUIC connection to the KV store
+- Cloud Hypervisor process itself — manages the VM, created per fork
+- TAP network device — host-side, created by Cloud Hypervisor on boot/restore
+
+**Inside the snapshot (guest-side, restored from frozen state):**
+
+- Guest kernel + systemd + all guest processes
+- `aspen-node --worker-only` — including its in-process Iroh endpoint and QUIC connection state
+- Guest virtio-fs driver state — vrings, shared memory mappings (must reconnect to new host-side daemons)
+- Guest virtio-net driver state — resumed by Cloud Hypervisor's restored net backend
+- tmpfs rw-store overlay — in guest memory, restored with the snapshot
+
+**Consequence:** The heavy data path (nix store reads, workspace I/O, artifact uploads) flows through host-side VirtioFS daemons with fresh Iroh connections per fork. These work immediately after restore. Only the guest's control-plane Iroh connection (job queue, worker registration) is stale — and it self-heals via aspen-node's reconnection logic or systemd restart (`RestartSec = 1s`).
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -83,20 +105,76 @@ Cloud Hypervisor snapshot/restore serializes VM state (CPU registers, device sta
 
 **Rationale:** Cluster restarts change the ticket. Node upgrades change the kernel/initrd. The golden snapshot must match the current deployment. Validation is cheap (file existence + ticket comparison). Regeneration is the existing cold-boot path plus a snapshot step.
 
+### 7. Post-restore VirtioFS health probe
+
+**Decision:** After `vm.restore` succeeds, the pool SHALL verify the VirtioFS data path is functional by issuing a KV read through the fork's `workspace_client` (`FuseSyncClient`). If the probe fails, the fork is destroyed and the restore is considered failed.
+
+**Rationale:** The snapshot captures the guest-side vhost-user device state, but the host-side VirtioFS daemons are fresh per fork. The vhost-user handshake between the restored guest driver and the new host daemon is the most fragile part of snapshot/restore. Since the `workspace_client` is a host-side object (not in the snapshot), the pool can probe the end-to-end path (host daemon → vhost-user → guest driver → vhost-user → host daemon → KV) without guest cooperation. A simple `scan_keys(prefix, 1)` call is sufficient.
+
+**Consecutive failure tracking:** If `max_restore_failures` consecutive restores fail the VirtioFS probe, the golden snapshot is auto-invalidated. This uses a local counter (not distributed — snapshot validity is per-node). The verified layer encodes the invalidation decision:
+
+```rust
+// src/verified/snapshot.rs
+pub fn should_invalidate_snapshot(
+    restore_failures_consecutive: u32,
+    max_restore_failures: u32,
+) -> bool {
+    restore_failures_consecutive >= max_restore_failures
+}
+```
+
+### 8. Memory-pressure-aware restore via MemoryWatcher
+
+**Decision:** Wire the existing `MemoryWatcher` (in `aspen-cluster`) into the snapshot restore path. At `Critical` pressure, `acquire()` rejects new restores with a capacity error. At `Warning` pressure, `maintain()` stops pre-warming additional VMs but existing forks continue.
+
+**Rationale:** Restored VMs share base memory pages via the page cache. Under memory pressure, the kernel evicts those pages, causing page faults on the next access. Restoring additional VMs at that point makes things worse. The `MemoryWatcher` already polls `/proc/meminfo` and provides `MemoryPressureLevel::{Normal, Warning, Critical}` with `should_pause_jobs()` — we just need to check it in the restore path.
+
+**Alternative considered:** Cluster-wide memory coordination via the distributed semaphore. Deferred — per-node `MemoryWatcher` is sufficient for Phase 1. Cluster-wide coordination can layer on top later via gossip-advertised memory stats and the existing `LeastLoadedStrategy` for job routing.
+
+### 9. Golden snapshot distribution via iroh-blobs
+
+**Decision:** Per-node snapshots for Phase 1. Optionally share golden snapshots across nodes via iroh-blobs in a future phase.
+
+**Rationale:** After creating a golden snapshot, the memory backing file can be added to `iroh-blobs` (`blob_store.add_file(memory_path)`) to get a BLAKE3 hash. The hash is written to `{snapshot_dir}/blob-hash.txt`. Other nodes can fetch the snapshot from any peer that has it instead of cold-booting their own. Content-addressing means identical snapshots (same kernel, initrd, cluster config) are stored once across the cluster. The existing `BlobAnnouncement` gossip in `content_discovery.rs` announces availability.
+
+This resolves the open question "per-node or shared?" — start per-node, add sharing when multi-node pools are needed.
+
+### 10. Adaptive speculative fork count
+
+**Decision:** When speculative execution is requested, the pool SHALL adjust the fork count based on memory pressure and optionally historical job variance. At `Warning` pressure, halve the requested count. At `Critical`, reduce to 1 (no speculation).
+
+**Rationale:** Speculative forks share base memory but consume CPU and dirty page allocations. The `MemoryWatcher` provides pressure signals. Historical job profiles from `JobProfile.resource_samples` (in `aspen-jobs`) can inform whether speculation is worthwhile — low-variance builds gain nothing from parallel attempts.
+
+```rust
+// src/verified/snapshot.rs
+pub fn compute_adaptive_fork_count(
+    requested_count: u32,
+    max_count: u32,
+    pressure_level: u8, // 0=normal, 1=warning, 2=critical
+) -> u32 {
+    let count = match pressure_level {
+        2 => 1,
+        1 => (requested_count / 2).max(1),
+        _ => requested_count,
+    };
+    count.min(max_count)
+}
+```
+
 ## Risks / Trade-offs
 
-**[VirtioFS socket reconnection is fragile]** → The vhost-user protocol is stateful. Snapshot/restore of VMs with active vhost-user connections is not well-tested upstream. Mitigation: test extensively with Cloud Hypervisor's test suite. Fallback: if socket reconnection fails, tear down the fork and cold-boot a fresh VM. The pool already handles this (dead VM eviction).
+**[VirtioFS socket reconnection is fragile]** → The vhost-user protocol is stateful. The guest-side virtio-fs driver state is IN the snapshot, but the host-side daemons (virtiofsd, AspenFs) are NOT. The restored guest driver must handshake with fresh host daemons at the same socket paths. Mitigation: post-restore VirtioFS health probe via `workspace_client.scan_keys()` (Decision 7). Consecutive failure tracking auto-invalidates the snapshot after `max_restore_failures` (default 3). Fallback: cold-boot a fresh VM. The pool already handles dead VM eviction.
 
-**[Memory backing file consumes disk space]** → A 24GB golden snapshot memory file uses 24GB on disk (even though most pages are zero). Mitigation: use a sparse file (most pages are zero-filled and don't consume disk blocks). Or use `fallocate` with `FALLOC_FL_PUNCH_HOLE` to reclaim zero pages after snapshot creation.
+**[Memory backing file consumes disk space]** → A 24GB golden snapshot memory file uses 24GB on disk (even though most pages are zero). Mitigation: use a sparse file (most pages are zero-filled and don't consume disk blocks). Or use `fallocate` with `FALLOC_FL_PUNCH_HOLE` to reclaim zero pages after snapshot creation. Future: distribute via iroh-blobs (Decision 9) to avoid each node maintaining its own copy.
 
-**[Snapshot memory becomes stale as host memory pressure increases]** → The kernel may evict snapshot pages from the page cache under memory pressure, causing page faults on restore. Mitigation: `mlock` the snapshot memory file (or its hot pages) if memory is available. Accept higher restore latency under pressure — it's still faster than cold boot.
+**[Snapshot memory becomes stale as host memory pressure increases]** → The kernel may evict snapshot pages from the page cache under pressure, causing page faults on restore. Mitigation: wire `MemoryWatcher` into the restore path (Decision 8). At `Critical` pressure, reject new restores. At `Warning`, stop pre-warming. Accept higher restore latency under moderate pressure — it's still faster than cold boot.
 
-**[Golden snapshot includes Iroh connection state that may be stale]** → Restored VMs inherit TCP/QUIC connections from the snapshot that are no longer valid. Mitigation: aspen-node's Iroh stack handles reconnection automatically. The worker will re-register after restore. Budget 100-500ms for reconnection.
+**[Guest Iroh connection state is stale after restore]** → The guest's `aspen-node --worker-only` has an Iroh endpoint in the snapshot whose QUIC connections are dead. However, this is only the control-plane connection (job queue, worker registration). The heavy data path (workspace I/O, nix store reads, artifact uploads) flows through host-side VirtioFS daemons with fresh Iroh connections per fork — those work immediately. The guest's stale Iroh self-heals: aspen-node handles reconnection automatically, and systemd restarts the process within 1 second if needed. Budget 1-2 seconds for re-registration, not 100-500ms.
 
-**[Speculative execution wastes resources on unsuccessful forks]** → N forks use N× CPU. Mitigation: speculative execution is opt-in, default count is 1 (no speculation). Resource limits via existing `MAX_CI_VMS_PER_NODE` cap.
+**[Speculative execution wastes resources on unsuccessful forks]** → N forks use N× CPU. Mitigation: speculative execution is opt-in, default count is 1 (no speculation). Adaptive fork count (Decision 10) reduces speculation under memory pressure. Resource limits via existing `MAX_CI_VMS_PER_NODE` cap. Future: use historical `JobProfile` data to skip speculation for low-variance builds.
 
 ## Open Questions
 
-- Should the golden snapshot be per-node or shared across nodes? Per-node is simpler (no snapshot distribution). Shared via iroh-blobs would allow heterogeneous clusters to share golden images.
-- How does snapshot/restore interact with the tmpfs rw-store overlay inside the VM? The overlay state is in the snapshot's memory. Restoring the snapshot restores the overlay. Need to verify overlayfs doesn't break on resume.
-- What's the minimum Cloud Hypervisor version that supports reliable snapshot/restore with VirtioFS? Need to test with v49.0 (currently vendored).
+- ~~Should the golden snapshot be per-node or shared across nodes?~~ **Resolved (Decision 9):** Per-node for Phase 1. iroh-blobs sharing available as a future optimization — content-addressing and gossip announcements are already in the codebase.
+- How does snapshot/restore interact with the tmpfs rw-store overlay inside the VM? The overlay state is in guest memory (inside the snapshot). Restoring the snapshot restores the overlay. The overlay's upper layer (tmpfs) and lower layer (virtiofs) are both preserved in guest state. The lower layer reconnects to the new host-side virtiofsd via the vhost-user handshake. Need to verify overlayfs doesn't break when the lower layer reconnects to a different daemon.
+- What's the minimum Cloud Hypervisor version that supports reliable snapshot/restore with VirtioFS? Need to test with v49.0 (currently vendored). The vhost-user reconnection after restore is the key capability to validate — the guest driver state is in the snapshot but the host daemon is new.

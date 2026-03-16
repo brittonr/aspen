@@ -23,6 +23,7 @@ mod cleanup;
 mod lifecycle;
 mod monitoring;
 mod provisioning;
+mod restore;
 mod types;
 
 use tokio::process::Child;

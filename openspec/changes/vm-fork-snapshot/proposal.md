@@ -19,10 +19,10 @@ ix.dev forks running VMs in 26ms with full state (memory + disk + processes). Th
 
 ### New Capabilities
 
-- `vm-golden-snapshot`: Automated creation and management of golden VM snapshots at the "idle and cluster-joined" state
-- `vm-snapshot-restore-pool`: Snapshot-based VM acquisition in VmPool — restore from golden snapshot instead of cold-booting
-- `vm-cow-memory`: Copy-on-write memory backing for restored VMs using shared memory files and dirty page tracking
-- `vm-speculative-execution`: Fork multiple VMs from the same snapshot to run parallel strategies, commit the first success
+- `vm-golden-snapshot`: Automated creation and management of golden VM snapshots at the "idle and cluster-joined" state, with consecutive-failure-based auto-invalidation
+- `vm-snapshot-restore-pool`: Snapshot-based VM acquisition in VmPool — restore from golden snapshot instead of cold-booting, with post-restore VirtioFS health probe to verify host-side daemon reconnection
+- `vm-cow-memory`: Copy-on-write memory backing for restored VMs using shared memory files and dirty page tracking, with memory-pressure-aware gating via existing `MemoryWatcher`
+- `vm-speculative-execution`: Fork multiple VMs from the same snapshot to run parallel strategies, commit the first success, with adaptive fork count based on memory pressure
 
 ### Modified Capabilities
 

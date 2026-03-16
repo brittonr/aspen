@@ -1,7 +1,8 @@
-//! VM cleanup: process termination and socket file removal.
+//! VM cleanup: process termination, socket file removal, and fork directory cleanup.
 
 use aspen_core::CI_VM_NIX_STORE_TAG;
 use aspen_core::CI_VM_WORKSPACE_TAG;
+use tracing::debug;
 use tracing::warn;
 
 use super::ManagedCiVm;
@@ -45,8 +46,24 @@ impl ManagedCiVm {
 
         for socket in &sockets {
             if let Err(e) = tokio::fs::remove_file(socket).await {
-                warn!(path = %socket.display(), "failed to remove socket file: {e}");
+                // ENOENT is fine — socket may not have been created
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    warn!(path = %socket.display(), "failed to remove socket file: {e}");
+                }
             }
         }
+    }
+
+    /// Full cleanup for a restored fork: processes, sockets, and fork directory.
+    ///
+    /// This should be called instead of (or in addition to) the standard cleanup
+    /// when destroying a snapshot-restored VM. It ensures no leaked socket files,
+    /// processes, or COW overlay state remains.
+    pub(crate) async fn full_fork_cleanup(&self) {
+        debug!(vm_id = %self.id, "running full fork cleanup");
+
+        self.kill_processes().await;
+        self.cleanup_sockets().await;
+        self.cleanup_fork_dir().await;
     }
 }

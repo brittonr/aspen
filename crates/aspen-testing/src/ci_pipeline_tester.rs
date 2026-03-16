@@ -584,6 +584,8 @@ fn test_job(name: &str, command: &str) -> JobConfig {
         expected_binary: None,
         stateful: None,
         validate_only: None,
+        force_cold_boot: false,
+        speculative_count: None,
     }
 }
 

@@ -60,3 +60,28 @@ Total memory consumed by restored VMs (shared base + all dirty pages) SHALL be b
 - **AND** a new `acquire()` is called
 - **THEN** the acquire SHALL return a capacity error
 - **AND** no existing VM SHALL be affected
+
+### Requirement: Memory-pressure-aware restore
+
+The pool SHALL consult the existing `MemoryWatcher` (from `aspen-cluster`) before restoring VMs from snapshot. Memory pressure levels SHALL gate restore and pre-warming behavior.
+
+#### Scenario: Critical pressure blocks new restores
+
+- **WHEN** `MemoryWatcher` reports `MemoryPressureLevel::Critical` (usage ≥ 90%)
+- **AND** `acquire()` is called
+- **THEN** the acquire SHALL return a capacity error
+- **AND** no new VM SHALL be created (neither restore nor cold-boot)
+- **AND** existing running VMs SHALL NOT be affected
+
+#### Scenario: Warning pressure stops pre-warming
+
+- **WHEN** `MemoryWatcher` reports `MemoryPressureLevel::Warning` (usage ≥ 80%)
+- **AND** `maintain()` runs to replenish the idle pool
+- **THEN** `maintain()` SHALL skip creating new VMs
+- **AND** existing idle VMs SHALL remain in the pool
+
+#### Scenario: Normal pressure allows full operation
+
+- **WHEN** `MemoryWatcher` reports `MemoryPressureLevel::Normal` (usage < 80%)
+- **THEN** `acquire()` and `maintain()` SHALL operate normally
+- **AND** restores and pre-warming SHALL proceed as configured

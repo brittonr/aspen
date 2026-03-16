@@ -65,3 +65,26 @@ Speculative execution SHALL be opt-in via job spec. The default speculative coun
 - **WHEN** a CI job specifies `speculative_count: 20`
 - **AND** `MAX_SPECULATIVE_FORKS` is 8
 - **THEN** the speculative count SHALL be capped to 8
+
+### Requirement: Adaptive speculative fork count
+
+The effective fork count SHALL be adjusted based on host memory pressure. Under pressure, the pool reduces speculation to conserve resources for running VMs.
+
+#### Scenario: Critical pressure disables speculation
+
+- **WHEN** a CI job specifies `speculative_count: 4`
+- **AND** `MemoryWatcher` reports `MemoryPressureLevel::Critical`
+- **THEN** the effective fork count SHALL be 1 (no speculation)
+- **AND** the job SHALL execute on a single VM
+
+#### Scenario: Warning pressure halves speculation
+
+- **WHEN** a CI job specifies `speculative_count: 4`
+- **AND** `MemoryWatcher` reports `MemoryPressureLevel::Warning`
+- **THEN** the effective fork count SHALL be 2 (halved, minimum 1)
+
+#### Scenario: Normal pressure uses requested count
+
+- **WHEN** a CI job specifies `speculative_count: 4`
+- **AND** `MemoryWatcher` reports `MemoryPressureLevel::Normal`
+- **THEN** the effective fork count SHALL be 4 (as requested, subject to `MAX_SPECULATIVE_FORKS` cap)

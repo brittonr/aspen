@@ -185,6 +185,26 @@ pub struct JobConfig {
     /// Defaults to `false`.
     #[serde(default)]
     pub validate_only: Option<bool>,
+
+    /// Force cold-boot for VM jobs, bypassing snapshot restore.
+    ///
+    /// When `true`, the VM pool will cold-boot a fresh VM even if a golden
+    /// snapshot is available. Useful for debugging snapshot issues or when
+    /// the job requires a completely pristine VM.
+    /// Only applies to `JobType::Vm` jobs.
+    /// Defaults to `false`.
+    #[serde(default)]
+    pub force_cold_boot: bool,
+
+    /// Number of parallel speculative VMs to fork from the golden snapshot.
+    ///
+    /// When > 1, the pool forks N VMs from the same snapshot, each running
+    /// the same job with independent workspace state (KV branch). The first
+    /// VM to succeed commits its results; others are killed.
+    /// Only applies to `JobType::Vm` jobs with snapshots enabled.
+    /// Defaults to `None` (single VM, no speculation).
+    #[serde(default)]
+    pub speculative_count: Option<u32>,
 }
 
 fn default_job_timeout() -> u64 {
@@ -650,6 +670,8 @@ mod tests {
             expected_binary: None,
             stateful: None,
             validate_only: None,
+            force_cold_boot: false,
+            speculative_count: None,
         };
         let err = job.validate().unwrap_err();
         assert!(err.to_string().contains("requires artifact_from"), "got: {err}");
@@ -684,6 +706,8 @@ mod tests {
             expected_binary: None,
             stateful: None,
             validate_only: None,
+            force_cold_boot: false,
+            speculative_count: None,
         };
         assert!(job.validate().is_ok());
     }
@@ -716,6 +740,8 @@ mod tests {
             expected_binary: None,
             stateful: None,
             validate_only: None,
+            force_cold_boot: false,
+            speculative_count: None,
         }
     }
 
@@ -747,6 +773,8 @@ mod tests {
             expected_binary: None,
             stateful: None,
             validate_only: None,
+            force_cold_boot: false,
+            speculative_count: None,
         }
     }
 

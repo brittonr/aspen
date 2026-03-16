@@ -134,6 +134,17 @@ pub struct CloudHypervisorWorkerConfig {
     /// which may not be reachable from the VM network.
     pub host_iroh_port: Option<u16>,
 
+    /// Maximum total VM memory across all restored VMs (bytes).
+    ///
+    /// When total estimated memory (shared base + dirty pages) exceeds this
+    /// limit, new `acquire()` calls are rejected with a capacity error.
+    /// Default: 0 (no limit — bounded by `max_vms` and OS memory instead)
+    pub max_total_vm_memory_bytes: u64,
+
+    /// Maximum consecutive restore failures before snapshot invalidation.
+    /// Default: 3
+    pub max_restore_failures: u32,
+
     /// Network mode for VM connectivity.
     ///
     /// Controls how VMs get network access:
@@ -187,6 +198,10 @@ impl Default for CloudHypervisorWorkerConfig {
             should_destroy_after_job: true,
             // No host Iroh port by default - must be set from the running endpoint
             host_iroh_port: None,
+            // No total memory limit by default
+            max_total_vm_memory_bytes: 0,
+            // 3 consecutive failures before snapshot invalidation
+            max_restore_failures: 3,
             // Default to no networking (fully isolated)
             network_mode: NetworkMode::default(),
             // No TAP helper by default
@@ -313,6 +328,37 @@ impl CloudHypervisorWorkerConfig {
             let ip: IpAddr = bridge_ip.parse().ok()?;
             Some(SocketAddr::new(ip, port))
         })
+    }
+
+    /// Get the golden snapshot directory.
+    ///
+    /// Default: `{state_dir}/snapshots/golden/`
+    pub fn snapshot_dir(&self) -> PathBuf {
+        self.snapshot_path.clone().unwrap_or_else(|| self.state_dir.join("snapshots").join("golden"))
+    }
+
+    /// Get the snapshot memory backing file path.
+    pub fn snapshot_memory_path(&self) -> PathBuf {
+        self.snapshot_dir().join("memory")
+    }
+
+    /// Get the snapshot VM state file path.
+    pub fn snapshot_state_path(&self) -> PathBuf {
+        self.snapshot_dir().join("state.json")
+    }
+
+    /// Get the snapshot ticket file path.
+    ///
+    /// Stores the cluster ticket at snapshot time for validation.
+    pub fn snapshot_ticket_path(&self) -> PathBuf {
+        self.snapshot_dir().join("ticket.txt")
+    }
+
+    /// Get the COW directory for a fork.
+    ///
+    /// Each restored VM gets a fork-specific directory for sockets and state.
+    pub fn fork_dir(&self, fork_id: &str) -> PathBuf {
+        self.state_dir.join("cow").join(fork_id)
     }
 
     /// Get the cluster ticket, reading from file if necessary.

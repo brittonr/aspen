@@ -29,21 +29,49 @@ When a golden snapshot is available, `VmPool::acquire()` SHALL restore a new VM 
 
 ### Requirement: Per-fork VirtioFS socket setup
 
-Each restored VM SHALL have its own VirtioFS daemon instances. Before calling `vm.restore`, the pool SHALL start virtiofsd (nix store) and AspenFs VirtioFS daemon (workspace) at socket paths matching the golden snapshot's expected socket layout.
+Each restored VM SHALL have its own host-side VirtioFS daemon instances. The host-side daemons (virtiofsd, AspenFs) are NOT part of the snapshot — they must be started fresh per fork. The guest-side virtio-fs driver state IS in the snapshot and will reconnect to the new host daemons via vhost-user. Before calling `vm.restore`, the pool SHALL start virtiofsd (nix store) and AspenFs VirtioFS daemon (workspace) at socket paths matching the golden snapshot's expected socket layout.
 
-#### Scenario: Fork gets independent virtiofsd
+#### Scenario: Fork gets independent host-side daemons
 
 - **WHEN** a VM is restored from the golden snapshot
-- **THEN** a new virtiofsd process SHALL be started for the nix store share
-- **AND** a new AspenFs VirtioFS daemon SHALL be started for the workspace share
+- **THEN** a new virtiofsd host process SHALL be started for the nix store share
+- **AND** a new AspenFs host daemon SHALL be started for the workspace share with a fresh `FuseSyncClient` Iroh connection
 - **AND** socket paths SHALL match the paths the golden VM's vhost-user connections expect
 - **AND** the workspace daemon SHALL use a fork-specific KV prefix for isolation
 
 #### Scenario: VirtioFS sockets ready before restore
 
 - **WHEN** the pool prepares to restore a VM from snapshot
-- **THEN** all VirtioFS sockets SHALL be created and ready to accept connections
+- **THEN** all host-side VirtioFS sockets SHALL be created and ready to accept connections
 - **AND** only then SHALL `vm.restore` be called
+- **AND** the restored guest's virtio-fs driver SHALL reconnect to the new host daemons
+
+### Requirement: Post-restore VirtioFS health probe
+
+After `vm.restore` succeeds, the pool SHALL verify the end-to-end VirtioFS data path is functional by issuing a KV read through the fork's host-side `workspace_client`. The probe validates that the host daemon → vhost-user → guest driver → vhost-user → host daemon → KV path works.
+
+#### Scenario: Probe succeeds
+
+- **WHEN** a VM is restored from the golden snapshot
+- **AND** `vm.restore` returns success
+- **THEN** the pool SHALL issue a `scan_keys(prefix, 1)` call via the fork's `workspace_client`
+- **AND** if the call succeeds (even returning zero keys), the restore SHALL be considered successful
+- **AND** the VM SHALL transition to `VmState::Idle`
+
+#### Scenario: Probe fails
+
+- **WHEN** a VM is restored from the golden snapshot
+- **AND** the post-restore VirtioFS probe fails (timeout or I/O error)
+- **THEN** the fork SHALL be destroyed
+- **AND** the restore failure counter SHALL be incremented
+- **AND** the pool SHALL fall back to cold-boot for this acquisition
+
+#### Scenario: Consecutive probe failures invalidate snapshot
+
+- **WHEN** `max_restore_failures` (default 3) consecutive restores fail the VirtioFS probe
+- **THEN** the golden snapshot SHALL be invalidated
+- **AND** the next `pool.maintain()` cycle SHALL regenerate the snapshot via cold-boot
+- **AND** the failure counter SHALL be reset
 
 ### Requirement: Pool pre-warming via snapshot restore
 
