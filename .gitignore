@@ -104,3 +104,5 @@ aspen-extracted/
 !.pi/prompts/opsx-*.md
 !.claude/commands/opsx/
 !.claude/skills/openspec-*
+ciui
+nixninja
