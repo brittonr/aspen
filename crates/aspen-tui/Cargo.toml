@@ -22,9 +22,15 @@ tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "
 async-trait = "0.1"
 
 # Terminal UI
-ratatui = { version = "0.28", features = ["crossterm"] }
-crossterm = { version = "0.28", features = ["event-stream"] }
-tui-logger = { version = "0.13", features = ["tracing-support"] }
+ratatui = { version = "0.30", features = ["crossterm"] }
+crossterm = { version = "0.29", features = ["event-stream"] }
+tui-logger = { version = "0.18", features = ["tracing-support"] }
+
+# Rattoolkit TUI widgets
+rat-table = { path = "../../vendor/rattoolkit/rat-table" }
+rat-widgets = { path = "../../vendor/rattoolkit/rat-widgets", features = ["persistence"] }
+rat-streaming = { path = "../../vendor/rattoolkit/rat-streaming" }
+rat-editor = { path = "../../vendor/rattoolkit/rat-editor" }
 
 # Error handling
 color-eyre = "0.6"
