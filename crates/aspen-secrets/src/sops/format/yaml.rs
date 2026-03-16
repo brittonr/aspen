@@ -5,6 +5,7 @@
 
 use serde_yaml::Value;
 
+use super::common::build_aad;
 use super::common::check_value_count;
 use super::common::decrypt_sops_value_with_type;
 use super::common::encrypt_sops_value;
@@ -56,8 +57,8 @@ pub fn encrypt_yaml_values(
 /// Decrypt all `ENC[...]` values in a YAML document.
 ///
 /// Walks the YAML tree, decrypting encrypted values back to their
-/// original types. Returns collected `(path, plaintext)` pairs for
-/// MAC verification.
+/// original types. Returns collected `(path, plaintext)` pairs in
+/// tree-walk order for MAC verification.
 pub fn decrypt_yaml_values(root: &mut Value, data_key: &[u8; 32]) -> Result<Vec<(String, String)>> {
     let mut values = Vec::new();
 
@@ -74,7 +75,6 @@ pub fn decrypt_yaml_values(root: &mut Value, data_key: &[u8; 32]) -> Result<Vec<
         }
     }
 
-    values.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(values)
 }
 
@@ -323,7 +323,8 @@ fn decrypt_value_recursive(
         }
         Value::String(s) => {
             if is_sops_encrypted(s) {
-                let (plaintext, value_type) = decrypt_sops_value_with_type(s, data_key)?;
+                let aad = build_aad(path);
+                let (plaintext, value_type) = decrypt_sops_value_with_type(s, data_key, &aad)?;
                 values.push((path.to_string(), plaintext.clone()));
 
                 *value = restore_typed_yaml_value(&plaintext, &value_type);
@@ -392,8 +393,9 @@ database:
 
         // Decrypt
         let mut root2: Value = serde_yaml::from_str(&encrypted_str).unwrap();
-        let dec_values = decrypt_yaml_values(&mut root2, &key).unwrap();
+        let mut dec_values = decrypt_yaml_values(&mut root2, &key).unwrap();
 
+        dec_values.sort_by(|a, b| a.0.cmp(&b.0));
         assert_eq!(values, dec_values);
         assert_eq!(root2["api_key"], Value::String("sk-test-123".into()));
         assert_eq!(root2["database"]["password"], Value::String("s3cret".into()));
@@ -468,8 +470,9 @@ config:
         // Decrypt roundtrip
         let encrypted = serde_yaml::to_string(&root).unwrap();
         let mut root2: Value = serde_yaml::from_str(&encrypted).unwrap();
-        let dec_values = decrypt_yaml_values(&mut root2, &key).unwrap();
+        let mut dec_values = decrypt_yaml_values(&mut root2, &key).unwrap();
 
+        dec_values.sort_by(|a, b| a.0.cmp(&b.0));
         assert_eq!(values, dec_values);
         assert_eq!(root2["config"]["nested"]["deep_secret"], Value::String("hidden".into()));
     }
@@ -526,7 +529,9 @@ optional: null
         assert!(encrypted.contains("ENC["));
         assert!(encrypted.contains("sops:"));
 
-        let (decrypted, dec_values) = decrypt_document(&encrypted, &key, std::path::Path::new("test.yaml")).unwrap();
+        let (decrypted, mut dec_values) =
+            decrypt_document(&encrypted, &key, std::path::Path::new("test.yaml")).unwrap();
+        dec_values.sort_by(|a, b| a.0.cmp(&b.0));
         assert_eq!(values, dec_values);
         assert!(!decrypted.contains("sops:"));
         assert!(decrypted.contains("sk-123"));

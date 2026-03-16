@@ -8,7 +8,6 @@
 //! with AES-256-GCM. When both age and Transit key groups are present,
 //! Transit is tried first (fast network call), falling back to age (local).
 
-use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
 
@@ -392,102 +391,95 @@ fn decrypt_toml_value(value: &toml::Value, data_key: &[u8; 32]) -> Result<toml::
 }
 
 /// Check if a string is SOPS-encrypted.
-///
-/// SOPS encrypted values have the format:
-/// `ENC[AES256_GCM,data:base64...,iv:base64...,tag:base64...,type:str]`
 fn is_sops_encrypted(s: &str) -> bool {
     s.starts_with("ENC[") && s.ends_with(']')
 }
 
 /// Decrypt a single SOPS-encrypted value.
 ///
-/// Format: `ENC[AES256_GCM,data:base64,iv:base64,tag:base64,type:str]`
+/// Delegates to the canonical implementation in `format::common` when
+/// the `sops` feature is enabled (handles both 12-byte and 32-byte nonces).
+/// Falls back to inline 12-byte-only implementation otherwise.
 fn decrypt_sops_value(encrypted: &str, data_key: &[u8; 32]) -> Result<String> {
+    #[cfg(feature = "sops")]
+    {
+        crate::sops::format::common::decrypt_sops_value(encrypted, data_key)
+            .map_err(|e| SecretsError::Decryption { reason: e.to_string() })
+    }
+    #[cfg(not(feature = "sops"))]
+    {
+        decrypt_sops_value_inline(encrypted, data_key)
+    }
+}
+
+#[cfg(not(feature = "sops"))]
+fn decrypt_sops_value_inline(encrypted: &str, data_key: &[u8; 32]) -> Result<String> {
+    use std::collections::HashMap;
+
     use aes_gcm::Aes256Gcm;
     use aes_gcm::aead::Aead;
     use aes_gcm::aead::KeyInit;
     use aes_gcm::aead::generic_array::GenericArray;
     use base64::Engine;
 
-    // Parse the SOPS format
     let inner =
         encrypted
             .strip_prefix("ENC[")
             .and_then(|s| s.strip_suffix(']'))
             .ok_or_else(|| SecretsError::Decryption {
-                reason: "invalid SOPS encrypted value format".into(),
+                reason: "invalid SOPS format".into(),
             })?;
 
     let parts: HashMap<&str, &str> = inner
         .split(',')
-        .filter_map(|part| {
-            let mut kv = part.splitn(2, ':');
+        .filter_map(|p| {
+            let mut kv = p.splitn(2, ':');
             Some((kv.next()?, kv.next()?))
         })
         .collect();
 
-    // Verify this is AES256_GCM (SOPS standard)
-    // The cipher type is the first part before any colon
-    let first_part = inner.split(',').next().unwrap_or("");
-    if !first_part.starts_with("AES256_GCM") {
-        return Err(SecretsError::Decryption {
-            reason: format!("unsupported cipher type: {first_part}"),
-        });
-    }
-
-    let data_b64 = parts.get("data").ok_or_else(|| SecretsError::Decryption {
-        reason: "missing 'data' in SOPS value".into(),
-    })?;
-
-    let iv_b64 = parts.get("iv").ok_or_else(|| SecretsError::Decryption {
-        reason: "missing 'iv' in SOPS value".into(),
-    })?;
-
-    let tag_b64 = parts.get("tag").ok_or_else(|| SecretsError::Decryption {
-        reason: "missing 'tag' in SOPS value".into(),
-    })?;
-
     let b64 = base64::engine::general_purpose::STANDARD;
+    let data = b64
+        .decode(parts.get("data").ok_or_else(|| SecretsError::Decryption {
+            reason: "missing data".into(),
+        })?)
+        .map_err(|e| SecretsError::Decryption {
+            reason: format!("bad base64: {e}"),
+        })?;
+    let iv = b64
+        .decode(parts.get("iv").ok_or_else(|| SecretsError::Decryption {
+            reason: "missing iv".into(),
+        })?)
+        .map_err(|e| SecretsError::Decryption {
+            reason: format!("bad base64: {e}"),
+        })?;
+    let tag = b64
+        .decode(parts.get("tag").ok_or_else(|| SecretsError::Decryption {
+            reason: "missing tag".into(),
+        })?)
+        .map_err(|e| SecretsError::Decryption {
+            reason: format!("bad base64: {e}"),
+        })?;
 
-    let ciphertext = b64.decode(data_b64).map_err(|e| SecretsError::Decryption {
-        reason: format!("invalid base64 in data: {e}"),
-    })?;
-
-    let iv = b64.decode(iv_b64).map_err(|e| SecretsError::Decryption {
-        reason: format!("invalid base64 in iv: {e}"),
-    })?;
-
-    let tag = b64.decode(tag_b64).map_err(|e| SecretsError::Decryption {
-        reason: format!("invalid base64 in tag: {e}"),
-    })?;
-
-    // For AES-256-GCM, the IV is 12 bytes and tag is 16 bytes
     if iv.len() != 12 {
         return Err(SecretsError::Decryption {
-            reason: format!("invalid IV length: {} (expected 12)", iv.len()),
+            reason: format!("IV length {} != 12", iv.len()),
         });
     }
 
-    if tag.len() != 16 {
-        return Err(SecretsError::Decryption {
-            reason: format!("invalid tag length: {} (expected 16)", tag.len()),
-        });
-    }
-
-    // Use AES-256-GCM for SOPS compatibility
     let cipher = Aes256Gcm::new(GenericArray::from_slice(data_key));
-    let nonce = GenericArray::from_slice(&iv);
-
-    // Combine ciphertext and tag (AEAD format expects tag appended)
-    let mut combined = ciphertext;
+    let mut combined = data;
     combined.extend_from_slice(&tag);
 
-    let plaintext = cipher.decrypt(nonce, combined.as_ref()).map_err(|e| SecretsError::Decryption {
-        reason: format!("AES-GCM decryption failed: {e}"),
-    })?;
+    let plaintext =
+        cipher
+            .decrypt(GenericArray::from_slice(&iv), combined.as_ref())
+            .map_err(|e| SecretsError::Decryption {
+                reason: format!("AES-GCM failed: {e}"),
+            })?;
 
     String::from_utf8(plaintext).map_err(|e| SecretsError::Decryption {
-        reason: format!("decrypted value is not valid UTF-8: {e}"),
+        reason: format!("not UTF-8: {e}"),
     })
 }
 

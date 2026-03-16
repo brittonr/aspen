@@ -17,6 +17,7 @@ age = { version = "0.11", features = ["armor"] }
 # Symmetric encryption (Transit engine)
 chacha20poly1305 = "0.10"
 aes-gcm = "0.10"  # SOPS compatibility (AES-256-GCM)
+aes = "0.8"       # AesGcm<Aes256, U32> for Go sops 32-byte nonce compat
 
 # Cryptographic utilities
 blake3 = "1.5"
@@ -35,7 +36,7 @@ ed25519-dalek = "2.1"
 # Serialization
 schemars = "0.8"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_json = { version = "1.0", features = ["preserve_order"] }
 toml = "0.8"
 postcard = { version = "1.0", features = ["alloc"] }
 base64 = "0.22"

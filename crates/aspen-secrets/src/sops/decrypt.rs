@@ -84,7 +84,7 @@ pub async fn decrypt_file(config: &DecryptConfig) -> Result<String> {
 
     // Verify MAC
     if !metadata.mac.is_empty() {
-        verify_mac(&metadata.mac, &data_key_array, &values)?;
+        verify_mac(&metadata.mac, &data_key_array, &values, &metadata.lastmodified)?;
         debug!("MAC verification passed");
     } else {
         warn!("No MAC found in SOPS metadata — skipping verification");

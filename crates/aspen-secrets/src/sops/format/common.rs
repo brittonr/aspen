@@ -4,8 +4,10 @@
 //! across all file formats (TOML, JSON, YAML).
 
 use aes_gcm::Aes256Gcm;
+use aes_gcm::AesGcm;
 use aes_gcm::aead::Aead;
 use aes_gcm::aead::KeyInit;
+use aes_gcm::aead::Payload;
 use aes_gcm::aead::generic_array::GenericArray;
 use base64::Engine;
 use rand::RngCore;
@@ -58,12 +60,19 @@ pub fn encrypt_sops_value(plaintext: &str, data_key: &[u8; 32], value_type: &str
 
 /// Decrypt a single SOPS-encrypted value, returning plaintext.
 pub fn decrypt_sops_value(encrypted: &str, data_key: &[u8; 32]) -> Result<String> {
-    let (plaintext, _type) = decrypt_sops_value_with_type(encrypted, data_key)?;
+    let (plaintext, _type) = decrypt_sops_value_with_type(encrypted, data_key, &[])?;
     Ok(plaintext)
 }
 
 /// Decrypt a SOPS value, returning both plaintext and the type tag.
-pub fn decrypt_sops_value_with_type(encrypted: &str, data_key: &[u8; 32]) -> Result<(String, String)> {
+///
+/// `aad` is the additional authenticated data. Go sops passes the colon-
+/// separated key path (e.g. `"database:password:"`) as AAD during both
+/// encrypt and decrypt. aspen-sops encrypts with empty AAD and 12-byte
+/// nonces, so pass `&[]` for files we encrypted ourselves. The nonce
+/// length tells us which variant we're dealing with: 12 = aspen-sops,
+/// 32 = Go sops.
+pub fn decrypt_sops_value_with_type(encrypted: &str, data_key: &[u8; 32], aad: &[u8]) -> Result<(String, String)> {
     let inner = encrypted.strip_prefix("ENC[").and_then(|s| s.strip_suffix(']')).ok_or_else(|| {
         SopsError::InvalidCiphertext {
             reason: "not in ENC[...] format".into(),
@@ -114,25 +123,47 @@ pub fn decrypt_sops_value_with_type(encrypted: &str, data_key: &[u8; 32]) -> Res
 
     let value_type = parts.get("type").unwrap_or(&"str").to_string();
 
-    if iv.len() != AES_GCM_NONCE_SIZE {
-        return Err(SopsError::InvalidCiphertext {
-            reason: format!("invalid IV length: {} (expected {})", iv.len(), AES_GCM_NONCE_SIZE),
-        });
-    }
     if tag.len() != AES_GCM_TAG_SIZE {
         return Err(SopsError::InvalidCiphertext {
             reason: format!("invalid tag length: {} (expected {})", tag.len(), AES_GCM_TAG_SIZE),
         });
     }
 
-    let cipher = Aes256Gcm::new(GenericArray::from_slice(data_key));
-    let nonce = GenericArray::from_slice(&iv);
-
     // Combine ciphertext + tag (AEAD expects tag appended)
     let mut combined = data;
     combined.extend_from_slice(&tag);
 
-    let plaintext = cipher.decrypt(nonce, combined.as_ref()).map_err(|e| SopsError::InvalidCiphertext {
+    // Go sops uses 32-byte nonces via cipher.NewGCMWithNonceSize(aes, 32)
+    // and passes the key path as AAD. aspen-sops uses standard 12-byte
+    // nonces with empty AAD. The nonce length tells us which variant
+    // we're dealing with — only apply caller-supplied AAD for Go sops.
+    let plaintext = match iv.len() {
+        AES_GCM_NONCE_SIZE => {
+            // aspen-sops: 12-byte nonce, no AAD
+            let cipher = Aes256Gcm::new(GenericArray::from_slice(data_key));
+            let nonce = GenericArray::from_slice(&iv);
+            let payload = Payload {
+                msg: &combined,
+                aad: &[],
+            };
+            cipher.decrypt(nonce, payload)
+        }
+        32 => {
+            // Go sops: 32-byte nonce, key path as AAD
+            use aes_gcm::aead::generic_array::typenum::U32;
+            type Aes256Gcm32 = AesGcm<aes::Aes256, U32>;
+            let cipher = Aes256Gcm32::new(GenericArray::from_slice(data_key));
+            let nonce = GenericArray::from_slice(&iv);
+            let payload = Payload { msg: &combined, aad };
+            cipher.decrypt(nonce, payload)
+        }
+        n => {
+            return Err(SopsError::InvalidCiphertext {
+                reason: format!("unsupported IV length: {n} (expected 12 or 32)"),
+            });
+        }
+    }
+    .map_err(|e| SopsError::InvalidCiphertext {
         reason: format!("AES-GCM decryption failed: {e}"),
     })?;
 
@@ -141,6 +172,34 @@ pub fn decrypt_sops_value_with_type(encrypted: &str, data_key: &[u8; 32]) -> Res
     })?;
 
     Ok((plaintext_str, value_type))
+}
+
+/// Build the additional authenticated data (AAD) string for a key path.
+///
+/// Go sops passes `strings.Join(pathSegments, ":") + ":"` as AAD for every
+/// encrypted value. Array indices are not part of the path — all elements
+/// in an array share the parent's path. Our internal paths use dot
+/// separators with array indices like `servers[0].host`, so we strip the
+/// indices and convert dots to colons: `servers:host:`.
+pub fn build_aad(path: &str) -> Vec<u8> {
+    // Strip [N] array indices, replace '.' with ':', append ':'
+    let stripped: String = path
+        .chars()
+        .fold((String::new(), false), |(mut out, in_bracket), ch| match ch {
+            '[' => (out, true),
+            ']' => (out, false),
+            '.' if !in_bracket => {
+                out.push(':');
+                (out, false)
+            }
+            _ if in_bracket => (out, true),
+            _ => {
+                out.push(ch);
+                (out, false)
+            }
+        })
+        .0;
+    format!("{stripped}:").into_bytes()
 }
 
 /// Validate that a key path is within resource bounds.
@@ -189,7 +248,7 @@ mod tests {
     fn test_decrypt_with_type() {
         let key = [42u8; 32];
         let encrypted = encrypt_sops_value("42", &key, "int").unwrap();
-        let (val, typ) = decrypt_sops_value_with_type(&encrypted, &key).unwrap();
+        let (val, typ) = decrypt_sops_value_with_type(&encrypted, &key, &[]).unwrap();
         assert_eq!(val, "42");
         assert_eq!(typ, "int");
     }
@@ -214,5 +273,18 @@ mod tests {
         assert!(validate_key_path("a.b.c").is_ok());
         let long = "x".repeat(MAX_KEY_PATH_LENGTH as usize + 1);
         assert!(validate_key_path(&long).is_err());
+    }
+
+    #[test]
+    fn test_build_aad() {
+        // Top-level key
+        assert_eq!(build_aad("api_key"), b"api_key:");
+        // Nested key
+        assert_eq!(build_aad("database.password"), b"database:password:");
+        // Array element — index stripped
+        assert_eq!(build_aad("servers[0].host"), b"servers:host:");
+        assert_eq!(build_aad("servers[1].host"), b"servers:host:");
+        // Deeply nested
+        assert_eq!(build_aad("a.b.c"), b"a:b:c:");
     }
 }

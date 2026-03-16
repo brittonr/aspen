@@ -7,6 +7,7 @@ use toml_edit::DocumentMut;
 use toml_edit::Item;
 use toml_edit::Value;
 
+use super::common::build_aad;
 use super::common::check_value_count;
 // Re-export common functions for backwards compatibility
 pub use super::common::decrypt_sops_value;
@@ -254,7 +255,8 @@ fn decrypt_item(item: &mut Item, path: &str, data_key: &[u8; 32], values: &mut V
         Item::Value(val) => {
             if let Some(s) = val.as_str() {
                 if is_sops_encrypted(s) {
-                    let (plaintext, value_type) = decrypt_sops_value_with_type(s, data_key)?;
+                    let aad = build_aad(path);
+                    let (plaintext, value_type) = decrypt_sops_value_with_type(s, data_key, &aad)?;
                     values.push((path.to_string(), plaintext.clone()));
 
                     // Restore the original TOML type

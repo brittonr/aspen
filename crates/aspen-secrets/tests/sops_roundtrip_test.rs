@@ -110,7 +110,7 @@ fn test_mac_encrypt_verify_roundtrip() {
     assert!(is_sops_encrypted(&encrypted_mac));
 
     // Verify should succeed
-    assert!(verify_mac(&encrypted_mac, &key, &values).is_ok());
+    assert!(verify_mac(&encrypted_mac, &key, &values, "").is_ok());
 }
 
 #[test]
@@ -129,7 +129,7 @@ fn test_mac_tampered_values_fail() {
         ("database.password".to_string(), "TAMPERED".to_string()),
     ];
 
-    assert!(verify_mac(&encrypted_mac, &key, &tampered_values).is_err());
+    assert!(verify_mac(&encrypted_mac, &key, &tampered_values, "").is_err());
 }
 
 #[test]
@@ -142,7 +142,7 @@ fn test_mac_tampered_keys_fail() {
     // Tamper: rename key path
     let tampered_values = vec![("api.token".to_string(), "secret".to_string())];
 
-    assert!(verify_mac(&encrypted_mac, &key, &tampered_values).is_err());
+    assert!(verify_mac(&encrypted_mac, &key, &tampered_values, "").is_err());
 }
 
 #[test]
@@ -155,7 +155,7 @@ fn test_mac_added_value_fails() {
     // Tamper: add extra value
     let tampered_values = vec![("a".to_string(), "1".to_string()), ("b".to_string(), "2".to_string())];
 
-    assert!(verify_mac(&encrypted_mac, &key, &tampered_values).is_err());
+    assert!(verify_mac(&encrypted_mac, &key, &tampered_values, "").is_err());
 }
 
 // ============================================================================
@@ -270,7 +270,7 @@ debug = true
             .unwrap();
 
     // Verify MAC
-    assert!(verify_mac(&meta_with_mac.mac, &key, &dec_values).is_ok());
+    assert!(verify_mac(&meta_with_mac.mac, &key, &dec_values, "").is_ok());
 
     // Decrypted output should not contain ENC[...]
     assert!(!decrypted_output.contains("ENC["), "decrypted output should be plaintext");

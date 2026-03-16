@@ -40,7 +40,21 @@ struct Cli {
 
 #[tokio::main]
 async fn main() {
-    let cli = Cli::parse();
+    // Go's `flag` package accepts single-dash long flags: `-check-mode=sopsfile`.
+    // sops-nix's manifest-for.nix calls us with that syntax. Clap expects `--`.
+    // Rewrite args before parsing.
+    let args: Vec<String> = std::env::args()
+        .map(|a| {
+            if let Some(rest) = a.strip_prefix("-check-mode") {
+                format!("--check-mode{rest}")
+            } else if let Some(rest) = a.strip_prefix("-ignore-passwd") {
+                format!("--ignore-passwd{rest}")
+            } else {
+                a
+            }
+        })
+        .collect();
+    let cli = Cli::parse_from(args);
 
     let filter = tracing_subscriber::EnvFilter::from_default_env();
     tracing_subscriber::fmt().with_env_filter(filter).with_target(false).init();

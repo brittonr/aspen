@@ -231,14 +231,23 @@ pub fn atomic_symlink(target: &Path, link_path: &str) -> Result<()> {
 /// Create per-secret symlinks at their configured paths.
 pub fn create_secret_symlinks(
     gen_dir: &Path,
-    _symlink_path: &str,
+    symlink_path: &str,
     secrets: &[SecretEntry],
     ignore_passwd: bool,
 ) -> Result<()> {
     for secret in secrets {
         let target_file = gen_dir.join(&secret.name);
 
-        // If the target == path, no symlink needed
+        // Skip when the secret path is under the symlink dir. The main
+        // /run/secrets → /run/secrets.d/N symlink already makes these
+        // accessible, and creating a per-file symlink would be circular
+        // (the path resolves through the same generation dir).
+        let expected_default = format!("{}/{}", symlink_path.trim_end_matches('/'), secret.name);
+        if secret.path == expected_default {
+            continue;
+        }
+
+        // Also skip if the target == path exactly
         let target_str = target_file.to_string_lossy();
         if target_str == secret.path {
             continue;

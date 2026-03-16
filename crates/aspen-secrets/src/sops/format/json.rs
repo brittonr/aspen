@@ -5,6 +5,7 @@
 
 use serde_json::Value;
 
+use super::common::build_aad;
 use super::common::check_value_count;
 use super::common::decrypt_sops_value_with_type;
 use super::common::encrypt_sops_value;
@@ -58,8 +59,9 @@ pub fn encrypt_json_values(
 /// Decrypt all `ENC[...]` values in a JSON document.
 ///
 /// Walks the JSON tree, decrypting encrypted values back to their
-/// original types. Returns collected `(path, plaintext)` pairs for
-/// MAC verification.
+/// original types. Returns collected `(path, plaintext)` pairs in
+/// tree-walk order (JSON insertion order) for MAC verification.
+/// Go sops computes MAC over values in this order.
 pub fn decrypt_json_values(root: &mut Value, data_key: &[u8; 32]) -> Result<Vec<(String, String)>> {
     let mut values = Vec::new();
 
@@ -75,7 +77,6 @@ pub fn decrypt_json_values(root: &mut Value, data_key: &[u8; 32]) -> Result<Vec<
         }
     }
 
-    values.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(values)
 }
 
@@ -305,7 +306,8 @@ fn decrypt_value_recursive(
         }
         Value::String(s) => {
             if is_sops_encrypted(s) {
-                let (plaintext, value_type) = decrypt_sops_value_with_type(s, data_key)?;
+                let aad = build_aad(path);
+                let (plaintext, value_type) = decrypt_sops_value_with_type(s, data_key, &aad)?;
                 values.push((path.to_string(), plaintext.clone()));
 
                 // Restore the original JSON type
@@ -376,9 +378,10 @@ mod tests {
 
         // Decrypt
         let mut root2: Value = serde_json::from_str(&encrypted_str).unwrap();
-        let dec_values = decrypt_json_values(&mut root2, &key).unwrap();
+        let mut dec_values = decrypt_json_values(&mut root2, &key).unwrap();
 
-        // Values should match (sorted)
+        // Values should match once both are sorted
+        dec_values.sort_by(|a, b| a.0.cmp(&b.0));
         assert_eq!(values, dec_values);
 
         // Check actual decrypted values
@@ -458,8 +461,9 @@ mod tests {
         // Decrypt roundtrip
         let encrypted = serde_json::to_string(&root).unwrap();
         let mut root2: Value = serde_json::from_str(&encrypted).unwrap();
-        let dec_values = decrypt_json_values(&mut root2, &key).unwrap();
+        let mut dec_values = decrypt_json_values(&mut root2, &key).unwrap();
 
+        dec_values.sort_by(|a, b| a.0.cmp(&b.0));
         assert_eq!(values, dec_values);
         assert_eq!(root2["config"]["nested"]["deep_secret"], "hidden");
     }
@@ -518,7 +522,9 @@ mod tests {
         assert!(encrypted.contains("ENC["));
         assert!(encrypted.contains("\"sops\""));
 
-        let (decrypted, dec_values) = decrypt_document(&encrypted, &key, std::path::Path::new("test.json")).unwrap();
+        let (decrypted, mut dec_values) =
+            decrypt_document(&encrypted, &key, std::path::Path::new("test.json")).unwrap();
+        dec_values.sort_by(|a, b| a.0.cmp(&b.0));
         assert_eq!(values, dec_values);
         assert!(!decrypted.contains("sops"));
         assert!(decrypted.contains("sk-123"));
