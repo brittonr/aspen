@@ -84,6 +84,7 @@ in
           relayMode = "disabled";
           enableWorkers = true;
           enableCi = true;
+          enableSnix = true;
           features = ["blob"];
         };
 
@@ -92,8 +93,14 @@ in
           gatewayPackage
           pkgs.nix
           pkgs.curl
+          pkgs.git
           pkgs.bubblewrap
+          pkgs.fuse3
         ];
+
+        # FUSE is required by snix-build's bubblewrap sandbox — it mounts
+        # the castore inputs via a FUSE filesystem (/dev/fuse).
+        boot.kernelModules = ["fuse"];
 
         # Nix daemon for eval (nix eval --raw .drvPath)
         nix.settings.experimental-features = ["nix-command" "flakes"];
@@ -206,14 +213,25 @@ in
 
       # ── verify nix eval works ────────────────────────────────────────
 
-      with subtest("nix eval resolves drvPath"):
-          # Prepare the test flake
-          node1.succeed("mkdir -p /tmp/test-flake")
-          node1.succeed("cp ${testFlake} /tmp/test-flake/flake.nix")
+      with subtest("prepare test flake"):
+          # The flake must be in a git repo for nix to recognize it.
+          # Use /root/test-flake (not /tmp) because aspen-node runs with
+          # PrivateTmp=true, giving it a private /tmp invisible from here.
+          # /root is in ReadWritePaths and visible to both test driver and service.
+          node1.succeed("mkdir -p /root/test-flake")
+          node1.succeed("cp ${testFlake} /root/test-flake/flake.nix")
+          node1.succeed(
+              "cd /root/test-flake && "
+              "git init && "
+              "git config user.email 'test@test' && "
+              "git config user.name 'test' && "
+              "git add -A && "
+              "git commit -m 'init'"
+          )
 
           # Verify nix eval --raw can resolve the drvPath
           drv_path = node1.succeed(
-              "cd /tmp/test-flake && "
+              "cd /root/test-flake && "
               "nix eval --raw .#packages.x86_64-linux.default.drvPath"
           ).strip()
           node1.log(f"Resolved drvPath: {drv_path}")
@@ -226,7 +244,7 @@ in
           # Submit a ci_nix_build job directly via the job system.
           # The payload matches what the CI pipeline would create.
           payload = json.dumps({
-              "flake_url": "/tmp/test-flake",
+              "flake_url": "/root/test-flake",
               "attribute": "packages.x86_64-linux.default",
               "extra_args": [],
               "timeout_secs": 300,
@@ -250,23 +268,28 @@ in
           deadline = time.time() + 300
           final_status = None
           while time.time() < deadline:
-              status = cli(f"job status {job_id}", check=False)
-              if isinstance(status, dict):
-                  state = status.get("status") or status.get("state")
+              result = cli(f"job status {job_id}", check=False)
+              if isinstance(result, dict):
+                  # job status returns {was_found, job: {status, ...}}
+                  job = result.get("job") or result
+                  state = job.get("status")
                   node1.log(f"Job {job_id}: state={state}")
-                  if state in ("success", "completed", "failed"):
-                      final_status = status
+                  if state in ("success", "completed", "failed", "dead"):
+                      final_status = result
                       break
               time.sleep(5)
 
           assert final_status is not None, \
               f"Job {job_id} did not complete within 300s"
 
-          state = final_status.get("status") or final_status.get("state")
+          job = final_status.get("job") or final_status
+          state = job.get("status")
 
           if state == "failed":
               # Dump detailed failure info
               node1.log(f"Job FAILED: {json.dumps(final_status, indent=2)[:3000]}")
+              error_msg = job.get("error_message", "")
+              node1.log(f"Error: {error_msg}")
               # Also check journal for native build logs
               logs = node1.succeed(
                   "journalctl -u aspen-node.service --no-pager -n 100 "
@@ -279,7 +302,13 @@ in
           node1.log("Nix build job completed successfully!")
 
           # Extract output paths from job result
-          data = final_status.get("data") or final_status.get("output", {}).get("data", {})
+          job_result = job.get("result") or {}
+          if isinstance(job_result, str):
+              try:
+                  job_result = json.loads(job_result)
+              except (json.JSONDecodeError, ValueError):
+                  job_result = {}
+          data = job_result.get("data") or job_result
           if isinstance(data, str):
               try:
                   data = json.loads(data)

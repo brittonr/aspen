@@ -120,11 +120,14 @@ impl NixBuildWorker {
         payload: &NixBuildPayload,
         flake_ref: &str,
     ) -> std::result::Result<std::path::PathBuf, CiCoreError> {
-        // Build the eval expression: "<flake_ref>.drvPath"
-        let eval_expr = format!("{flake_ref}.drvPath");
+        // Build the installable ref: "<flake_ref>.drvPath"
+        // NOTE: we pass this as a positional installable, NOT --expr.
+        // With --expr, nix interprets absolute paths like /tmp/foo as Nix
+        // path literals, which are forbidden in pure evaluation mode.
+        let installable = format!("{flake_ref}.drvPath");
 
         let mut cmd = Command::new(&self.config.nix_binary);
-        cmd.arg("eval").arg("--raw").arg("--expr").arg(&eval_expr);
+        cmd.arg("eval").arg("--raw").arg(&installable);
 
         if let Some(ref dir) = payload.working_dir {
             cmd.current_dir(dir);
@@ -451,7 +454,10 @@ impl NixBuildWorker {
     /// working directory, and piped stdout/stderr, then spawns the child process.
     fn spawn_nix_build(&self, payload: &NixBuildPayload, flake_ref: &str) -> Result<Child> {
         let mut cmd = Command::new(&self.config.nix_binary);
-        cmd.arg("build").arg(flake_ref).arg("--out-link").arg("result").arg("--print-out-paths");
+        // Use --no-link instead of --out-link to avoid creating a "result"
+        // symlink in cwd. Under ProtectSystem=strict the working directory
+        // is often read-only (/). We parse output paths from --print-out-paths.
+        cmd.arg("build").arg(flake_ref).arg("--no-link").arg("--print-out-paths");
 
         if payload.sandbox {
             cmd.arg("--sandbox");
