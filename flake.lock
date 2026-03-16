@@ -153,6 +153,7 @@
         "nixpkgs": "nixpkgs",
         "rust-overlay": "rust-overlay",
         "snix-src": "snix-src",
+        "subwayrat": "subwayrat",
         "unit2nix": "unit2nix",
         "verus-src": "verus-src"
       }
@@ -205,6 +206,23 @@
       "original": {
         "type": "git",
         "url": "https://spectrum-os.org/git/spectrum"
+      }
+    },
+    "subwayrat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1773689377,
+        "narHash": "sha256-9UdlGRwqWS19uJ0+Spp0QBPFFeBiqYo/KbP2/9CeLHk=",
+        "owner": "brittonr",
+        "repo": "subwayrat",
+        "rev": "d96176104f464d8e3948d2ea27540a8ef5d806ab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "brittonr",
+        "repo": "subwayrat",
+        "rev": "d96176104f464d8e3948d2ea27540a8ef5d806ab",
+        "type": "github"
       }
     },
     "systems": {
