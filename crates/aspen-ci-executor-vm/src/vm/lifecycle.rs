@@ -95,30 +95,40 @@ impl ManagedCiVm {
         {
             use std::sync::Arc;
 
-            // Get cluster ticket for AspenFs client connection
-            let ticket_str =
-                self.config.get_cluster_ticket().ok_or_else(|| CloudHypervisorError::StartVirtioFsDaemon {
-                    reason: "no cluster ticket configured - cannot create AspenFs client".to_string(),
-                })?;
-
-            // If bridge socket address is configured, inject it into the ticket
-            let final_ticket = if let Some(bridge_addr) = self.config.bridge_socket_addr() {
-                inject_bridge_addr(&ticket_str, bridge_addr, &self.id)
+            // Use shared workspace client if already injected by the pool,
+            // otherwise create a new one (standalone / test usage).
+            let existing_client = self.workspace_client.read().await.clone();
+            let client: aspen_fuse::SharedClient = if let Some(c) = existing_client {
+                debug!(vm_id = %self.id, "using shared workspace client from pool");
+                c
             } else {
-                ticket_str.clone()
-            };
+                // Get cluster ticket for AspenFs client connection
+                let ticket_str =
+                    self.config.get_cluster_ticket().ok_or_else(|| CloudHypervisorError::StartVirtioFsDaemon {
+                        reason: "no cluster ticket configured - cannot create AspenFs client".to_string(),
+                    })?;
 
-            // Create FuseSyncClient from ticket (blocking - runs inside spawn_blocking)
-            let client: aspen_fuse::SharedClient = Arc::new(
-                tokio::task::spawn_blocking(move || aspen_fuse::FuseSyncClient::from_ticket(&final_ticket))
-                    .await
-                    .map_err(|e| CloudHypervisorError::StartVirtioFsDaemon {
-                        reason: format!("spawn_blocking join error: {e}"),
-                    })?
-                    .map_err(|e| CloudHypervisorError::StartVirtioFsDaemon {
-                        reason: format!("failed to create AspenFs client: {e}"),
-                    })?,
-            );
+                // If bridge socket address is configured, inject it into the ticket
+                let final_ticket = if let Some(bridge_addr) = self.config.bridge_socket_addr() {
+                    inject_bridge_addr(&ticket_str, bridge_addr, &self.id)
+                } else {
+                    ticket_str.clone()
+                };
+
+                info!(vm_id = %self.id, "creating new workspace client (no shared client available)");
+                let new_client: aspen_fuse::SharedClient = Arc::new(
+                    tokio::task::spawn_blocking(move || aspen_fuse::FuseSyncClient::from_ticket(&final_ticket))
+                        .await
+                        .map_err(|e| CloudHypervisorError::StartVirtioFsDaemon {
+                            reason: format!("spawn_blocking join error: {e}"),
+                        })?
+                        .map_err(|e| CloudHypervisorError::StartVirtioFsDaemon {
+                            reason: format!("failed to create AspenFs client: {e}"),
+                        })?,
+                );
+                *self.workspace_client.write().await = Some(new_client.clone());
+                new_client
+            };
 
             // Create AspenFs with per-VM key prefix for namespace isolation
             let prefix = format!("ci/workspaces/{}/", self.id);
@@ -133,7 +143,6 @@ impl ManagedCiVm {
                 .map_err(|e| CloudHypervisorError::StartVirtioFsDaemon { reason: format!("{e}") })?;
 
             *self.virtiofs_workspace_handle.write().await = Some(handle);
-            *self.workspace_client.write().await = Some(client);
         }
 
         // Write cluster ticket to workspace for VM's aspen-node to read.

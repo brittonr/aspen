@@ -27,6 +27,8 @@ mod provisioning;
 mod restore;
 mod types;
 
+use std::sync::Arc;
+
 use tokio::process::Child;
 use tokio::process::ChildStderr;
 use tokio::sync::OwnedSemaphorePermit;
@@ -99,11 +101,31 @@ impl ManagedCiVm {
             pool_permit: RwLock::new(None),
         }
     }
+
+    /// Set the workspace client from a pool-level shared client.
+    ///
+    /// When provided, the VM reuses the shared Iroh endpoint instead of
+    /// creating its own, avoiding ~25s of relay discovery overhead.
+    pub async fn set_shared_workspace_client(&self, client: aspen_fuse::SharedClient) {
+        *self.workspace_client.write().await = Some(client);
+    }
 }
 
 impl Drop for ManagedCiVm {
     fn drop(&mut self) {
         // Processes are killed on drop due to kill_on_drop(true)
         // Socket cleanup happens in shutdown()
+
+        // FuseSyncClient holds an internal tokio Runtime that cannot be dropped
+        // inside an async context. Only the *last* Arc reference triggers the
+        // actual Runtime drop, so check strong_count before spawning a thread.
+        if let Some(client) = self.workspace_client.get_mut().take()
+            && Arc::strong_count(&client) == 1
+        {
+            // Last reference — dropping will destroy the tokio Runtime.
+            // Use std::thread::spawn rather than tokio::task::spawn_blocking
+            // because Drop can run outside any tokio context.
+            std::thread::spawn(move || drop(client));
+        }
     }
 }

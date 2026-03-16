@@ -338,8 +338,10 @@ impl CloudHypervisorWorkerConfig {
     }
 
     /// Get the snapshot memory backing file path.
+    ///
+    /// Cloud Hypervisor v49.0+ uses `memory-ranges` instead of `memory`.
     pub fn snapshot_memory_path(&self) -> PathBuf {
-        self.snapshot_dir().join("memory")
+        self.snapshot_dir().join("memory-ranges")
     }
 
     /// Get the snapshot VM state file path.

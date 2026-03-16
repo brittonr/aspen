@@ -430,7 +430,7 @@ mod tests {
         let snapshot = GoldenSnapshot::from_config(&config);
 
         assert_eq!(snapshot.dir, PathBuf::from("/var/lib/aspen/ci/vms/snapshots/golden"));
-        assert_eq!(snapshot.memory_path, PathBuf::from("/var/lib/aspen/ci/vms/snapshots/golden/memory"));
+        assert_eq!(snapshot.memory_path, PathBuf::from("/var/lib/aspen/ci/vms/snapshots/golden/memory-ranges"));
         assert_eq!(snapshot.state_path, PathBuf::from("/var/lib/aspen/ci/vms/snapshots/golden/state.json"));
         assert_eq!(snapshot.ticket_path, PathBuf::from("/var/lib/aspen/ci/vms/snapshots/golden/ticket.txt"));
     }

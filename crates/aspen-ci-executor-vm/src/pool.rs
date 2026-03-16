@@ -68,6 +68,13 @@ pub struct VmPool {
     /// this atomically; the pool reads it in `acquire()` and `maintain()`.
     /// When `None`, memory pressure is not tracked (restores always allowed).
     pressure_level: Option<Arc<AtomicU8>>,
+
+    /// Shared workspace client (single Iroh endpoint) used by all VMs.
+    ///
+    /// Created once during `initialize()`. Each VM clones this `Arc` instead
+    /// of creating its own `FuseSyncClient` + Iroh endpoint, avoiding ~25s
+    /// of relay discovery overhead per VM.
+    shared_workspace_client: RwLock<Option<aspen_fuse::SharedClient>>,
 }
 
 impl VmPool {
@@ -96,6 +103,7 @@ impl VmPool {
             restore_failure_count: AtomicU32::new(0),
             snapshot_needs_regen: RwLock::new(false),
             pressure_level,
+            shared_workspace_client: RwLock::new(None),
         }
     }
 
@@ -157,6 +165,35 @@ impl VmPool {
             }
         } else {
             warn!("no cluster ticket file configured - VMs will not be able to join cluster");
+        }
+
+        // Create shared workspace client (single Iroh endpoint for all VMs).
+        // This avoids ~25s of relay discovery overhead per VM by sharing one endpoint.
+        if let Some(ticket_str) = self.config.get_cluster_ticket() {
+            let final_ticket = if let Some(bridge_addr) = self.config.bridge_socket_addr() {
+                match aspen_ticket::AspenClusterTicket::deserialize(&ticket_str) {
+                    Ok(mut ticket) => {
+                        ticket.inject_direct_addr(bridge_addr);
+                        ticket.serialize()
+                    }
+                    Err(_) => ticket_str.clone(),
+                }
+            } else {
+                ticket_str.clone()
+            };
+
+            match tokio::task::spawn_blocking(move || aspen_fuse::FuseSyncClient::from_ticket(&final_ticket)).await {
+                Ok(Ok(client)) => {
+                    info!("shared workspace client created (single Iroh endpoint for all VMs)");
+                    *self.shared_workspace_client.write().await = Some(Arc::new(client));
+                }
+                Ok(Err(e)) => {
+                    warn!(error = %e, "failed to create shared workspace client, VMs will create individual clients");
+                }
+                Err(e) => {
+                    warn!(error = %e, "spawn_blocking failed for shared workspace client");
+                }
+            }
         }
 
         // Phase 1: Check for existing golden snapshot or create one.
@@ -366,6 +403,12 @@ impl VmPool {
         if !force_cold_boot && let Some(snapshot) = self.golden_snapshot.read().await.clone() {
             let vm_index = self.next_vm_index.fetch_add(1, Ordering::Relaxed) as u32;
             let vm = Arc::new(ManagedCiVm::new(self.config.clone(), vm_index));
+
+            // Inject shared workspace client so the VM reuses the pool's Iroh endpoint
+            if let Some(ref client) = *self.shared_workspace_client.read().await {
+                vm.set_shared_workspace_client(client.clone()).await;
+            }
+
             self.all_vms.lock().await.push(vm.clone());
 
             match vm.restore_from_snapshot(&snapshot).await {
@@ -481,6 +524,13 @@ impl VmPool {
             if let Err(e) = vm.shutdown().await {
                 warn!(vm_id = %vm.id, error = ?e, "error shutting down VM");
             }
+        }
+
+        // Drop the shared workspace client on a blocking thread.
+        // FuseSyncClient owns a tokio Runtime that cannot be dropped inside
+        // another Runtime (panics). Move the final Arc to a blocking thread.
+        if let Some(client) = self.shared_workspace_client.write().await.take() {
+            tokio::task::spawn_blocking(move || drop(client));
         }
 
         info!("VM pool shutdown complete");
@@ -697,6 +747,11 @@ impl VmPool {
         let vm_index = self.next_vm_index.fetch_add(1, Ordering::Relaxed) as u32;
 
         let vm = Arc::new(ManagedCiVm::new(self.config.clone(), vm_index));
+
+        // Inject shared workspace client so the VM reuses the pool's Iroh endpoint
+        if let Some(ref client) = *self.shared_workspace_client.read().await {
+            vm.set_shared_workspace_client(client.clone()).await;
+        }
 
         // Track in all_vms
         self.all_vms.lock().await.push(vm.clone());

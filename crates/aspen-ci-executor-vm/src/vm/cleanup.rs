@@ -1,5 +1,7 @@
 //! VM cleanup: process termination, socket file removal, and fork directory cleanup.
 
+use std::sync::Arc;
+
 use aspen_core::CI_VM_NIX_STORE_TAG;
 use aspen_core::CI_VM_WORKSPACE_TAG;
 use tracing::debug;
@@ -30,8 +32,14 @@ impl ManagedCiVm {
         {
             warn!("failed to shutdown AspenFs workspace daemon: {e}");
         }
-        // Drop the shared client
-        let _ = self.workspace_client.write().await.take();
+        // Drop the workspace client reference. When using a shared client from the pool,
+        // this just decrements the Arc refcount. Only the last reference triggers
+        // the actual Runtime teardown, which must happen off the async thread.
+        if let Some(client) = self.workspace_client.write().await.take()
+            && Arc::strong_count(&client) == 1
+        {
+            tokio::task::spawn_blocking(move || drop(client));
+        }
     }
 
     /// Clean up socket files.
