@@ -1,9 +1,0 @@
-[package]
-name = "rat-streaming"
-version = "0.1.0"
-edition = "2024"
-license = "MIT"
-description = "Streaming output buffer with head/tail truncation and incremental search for ratatui"
-
-[dependencies]
-ratatui = "0.30"

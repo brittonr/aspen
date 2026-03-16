@@ -51,6 +51,12 @@
       flake = false;
     };
 
+    # Rattoolkit TUI widgets for aspen-tui
+    subwayrat = {
+      url = "github:brittonr/subwayrat/d96176104f464d8e3948d2ea27540a8ef5d806ab";
+      flake = false;
+    };
+
     # unit2nix - Per-crate Nix builds from Cargo's unit graph
     unit2nix = {
       url = "github:brittonr/unit2nix";
@@ -111,6 +117,7 @@
     snix-src,
     microvm,
     verus-src,
+    subwayrat,
     unit2nix,
     ...
   }:
@@ -1795,11 +1802,26 @@
             $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
+          # Copy subwayrat source for rat-* path deps (../../subwayrat from crates/aspen-tui/)
+          cp -r ${subwayrat} $out/aspen/subwayrat
+          chmod -R u+w $out/aspen/subwayrat
+          # Inline workspace-inherited fields (these crates aren't in aspen's workspace)
+          find $out/aspen/subwayrat/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
+            -e 's|edition\.workspace = true|edition = "2024"|' \
+            -e 's|license\.workspace = true|license = "MIT"|' \
+            -e 's|ratatui\.workspace = true|ratatui = "0.30"|' \
+            -e 's|unicode-width\.workspace = true|unicode-width = "0.2"|' \
+            {} \;
+
           # Rewrite git deps in subcrates
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
             -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../.nix-stubs/iroh-proxy-utils" }|' \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
             -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
+            -e 's|rat-table = { git = "[^"]*"[^}]*}|rat-table = { path = "../../subwayrat/crates/rat-table" }|' \
+            -e 's|rat-widgets = { git = "[^"]*"[^}]*}|rat-widgets = { path = "../../subwayrat/crates/rat-widgets", features = ["persistence"] }|' \
+            -e 's|rat-streaming = { git = "[^"]*"[^}]*}|rat-streaming = { path = "../../subwayrat/crates/rat-streaming" }|' \
+            -e 's|rat-editor = { git = "[^"]*"[^}]*}|rat-editor = { path = "../../subwayrat/crates/rat-editor" }|' \
             {} \;
 
           # Strip git source lines from Cargo.lock (stubs are path deps now)
