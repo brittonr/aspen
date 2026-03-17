@@ -320,15 +320,16 @@ impl NixBuildWorker {
 
         let evaluator = crate::eval::NixEvaluator::new(blob_svc, dir_svc, pathinfo_svc);
 
-        // Step 1: Resolve drvPath via snix-eval (no subprocess)
+        // Step 1: Evaluate to Derivation via snix-eval (no subprocess, no disk I/O).
+        // The Derivation is extracted from KnownPaths in-memory — no .drv file needed.
         if let Some(ref tx) = log_sender {
-            let _ = tx.send("npins native eval: resolving drvPath via snix-eval\n".to_string()).await;
+            let _ = tx.send("npins native eval: resolving derivation via snix-eval\n".to_string()).await;
         }
 
         let dir = project_dir.clone();
         let attr = attribute.clone();
-        let drv_path =
-            tokio::task::spawn_blocking(move || evaluator.evaluate_npins_drv_path(&dir, "default.nix", &attr))
+        let (_drv_store_path, drv) =
+            tokio::task::spawn_blocking(move || evaluator.evaluate_npins_derivation(&dir, "default.nix", &attr))
                 .await
                 .map_err(|e| CiCoreError::NixBuildFailed {
                     flake: project_dir.clone(),
@@ -339,30 +340,17 @@ impl NixBuildWorker {
                     reason: format!("npins eval failed: {e}"),
                 })?;
 
-        info!(drv_path = %drv_path.display(), "npins eval resolved drvPath (zero subprocesses)");
-
-        if let Some(ref tx) = log_sender {
-            let _ = tx.send(format!("npins native eval: {} → {}\n", project_dir, drv_path.display())).await;
-        }
-
-        // Step 2: Read and parse the .drv file
-        let drv_bytes = tokio::fs::read(&drv_path).await.map_err(|e| CiCoreError::NixBuildFailed {
-            flake: project_dir.clone(),
-            reason: format!("failed to read {}: {e}", drv_path.display()),
-        })?;
-
-        let (drv, _output_paths) =
-            crate::eval::parse_derivation(&drv_bytes).map_err(|e| CiCoreError::NixBuildFailed {
-                flake: project_dir.clone(),
-                reason: format!("failed to parse {}: {e}", drv_path.display()),
-            })?;
-
+        let drv_path_str = _drv_store_path.to_absolute_path();
         info!(
-            drv_path = %drv_path.display(),
+            drv_path = %drv_path_str,
             output_count = drv.outputs.len(),
             system = %drv.system,
-            "parsed derivation from npins eval, starting native build"
+            "npins eval resolved derivation (zero subprocesses)"
         );
+
+        if let Some(ref tx) = log_sender {
+            let _ = tx.send(format!("npins native eval: {} → {}\n", project_dir, drv_path_str)).await;
+        }
 
         // Step 3: Execute native build
         let build_result =

@@ -286,22 +286,20 @@ impl NixEvaluator {
         self.evaluate_with_store(&eval_code, Some(PathBuf::from(&flake_path)))
     }
 
-    /// Evaluate an npins-based project to a `.drvPath` string, fully in-process.
+    /// Evaluate an npins-based project to a `Derivation`, fully in-process.
     ///
-    /// Constructs a Nix expression that imports the project's `npins/default.nix`,
-    /// selects the requested attribute, and extracts `.drvPath`. Evaluation uses
-    /// snix-eval with snix-glue's fetcher builtins — no subprocess spawned.
+    /// Constructs a Nix expression that imports the project's `default.nix`,
+    /// selects the requested attribute, and forces `derivationStrict`. The
+    /// `Derivation` object is extracted from snix-glue's `KnownPaths` —
+    /// no `.drv` file needs to exist on disk.
     ///
-    /// Returns `Ok(PathBuf)` with the `/nix/store/*.drv` path, or `Err` if
-    /// evaluation fails (e.g., unsupported builtins like `fetchGit`).
-    pub fn evaluate_npins_drv_path(
+    /// Returns `Ok((StorePath, Derivation))` or `Err` on eval failure.
+    pub fn evaluate_npins_derivation(
         &self,
         project_dir: &str,
         default_nix: &str,
         attribute: &str,
-    ) -> Result<PathBuf, NixEvalError> {
-        // Build the Nix expression that selects the attribute and gets .drvPath.
-        // The default.nix can be any Nix file that returns an attrset of derivations.
+    ) -> Result<(nix_compat::store_path::StorePath<String>, Derivation), NixEvalError> {
         let nix_path = format!("{project_dir}/{default_nix}");
 
         let attr_path = attribute
@@ -316,49 +314,95 @@ impl NixEvaluator {
             .collect::<Vec<_>>()
             .join(".");
 
+        // Evaluate to .drvPath — this triggers derivationStrict internally,
+        // populating KnownPaths with the Derivation object.
         let eval_code = format!("(import {nix_path}).{attr_path}.drvPath");
 
         info!(
             project_dir = %project_dir,
             attribute = %attribute,
-            "evaluating npins project to drvPath via snix-eval"
+            "evaluating npins project via snix-eval"
         );
 
-        let result = self.evaluate_with_store(&eval_code, Some(PathBuf::from(&nix_path)));
+        // Inline the evaluate_with_store logic so we can access KnownPaths after eval.
+        let tokio_handle = tokio::runtime::Handle::current();
+        let nar_calc = Arc::new(SimpleRenderer::new(self.blob_service.clone(), self.directory_service.clone()));
+        let build_service = Arc::new(DummyBuildService {});
 
-        if !result.errors.is_empty() {
-            let msg = result.errors.iter().map(|e| e.message.as_str()).collect::<Vec<_>>().join("; ");
+        let snix_store_io = Rc::new(SnixStoreIO::new(
+            self.blob_service.clone(),
+            self.directory_service.clone(),
+            self.pathinfo_service.clone(),
+            nar_calc,
+            build_service,
+            tokio_handle,
+            vec![],
+        ));
+
+        let io: Box<dyn EvalIO> = Box::new(SnixIO::new(snix_store_io.clone() as Rc<dyn EvalIO>));
+        let eval = snix_eval::Evaluation::builder(io).enable_import().mode(snix_eval::EvalMode::Strict);
+        let eval = snix_glue::builtins::add_derivation_builtins(eval, snix_store_io.clone());
+        let eval = snix_glue::builtins::add_fetcher_builtins(eval, snix_store_io.clone());
+        let eval = snix_glue::builtins::add_import_builtins(eval, snix_store_io.clone());
+        let eval = snix_glue::configure_nix_path(eval, &None);
+
+        let result = eval.build().evaluate(&eval_code, Some(PathBuf::from(&nix_path)));
+        let output = convert_eval_result(result);
+
+        if !output.errors.is_empty() {
+            let msg = output.errors.iter().map(|e| e.message.as_str()).collect::<Vec<_>>().join("; ");
             return Err(NixEvalError {
                 message: format!("npins eval failed: {msg}"),
-                is_ifd: result.errors.iter().any(|e| e.is_ifd),
+                is_ifd: output.errors.iter().any(|e| e.is_ifd),
             });
         }
 
-        match result.value {
-            Some(snix_eval::Value::String(s)) => {
-                let drv_str = std::str::from_utf8(s.as_bytes()).map_err(|e| NixEvalError {
+        // Extract drvPath string from the evaluated value.
+        let drv_path_str = match output.value {
+            Some(snix_eval::Value::String(s)) => std::str::from_utf8(s.as_bytes())
+                .map_err(|e| NixEvalError {
                     message: format!("drvPath is not valid UTF-8: {e}"),
                     is_ifd: false,
-                })?;
-                let drv_path = PathBuf::from(drv_str);
-                if !drv_str.starts_with("/nix/store/") || !drv_str.ends_with(".drv") {
-                    return Err(NixEvalError {
-                        message: format!("unexpected drvPath: {drv_str}"),
-                        is_ifd: false,
-                    });
-                }
-                info!(drv_path = %drv_path.display(), "npins eval resolved drvPath");
-                Ok(drv_path)
+                })?
+                .to_string(),
+            Some(other) => {
+                return Err(NixEvalError {
+                    message: format!("expected string for drvPath, got {:?}", std::mem::discriminant(&other)),
+                    is_ifd: false,
+                });
             }
-            Some(other) => Err(NixEvalError {
-                message: format!("expected string for drvPath, got {:?}", std::mem::discriminant(&other)),
+            None => {
+                return Err(NixEvalError {
+                    message: "evaluation produced no value".to_string(),
+                    is_ifd: false,
+                });
+            }
+        };
+
+        if !drv_path_str.starts_with("/nix/store/") || !drv_path_str.ends_with(".drv") {
+            return Err(NixEvalError {
+                message: format!("unexpected drvPath: {drv_path_str}"),
                 is_ifd: false,
-            }),
-            None => Err(NixEvalError {
-                message: "evaluation produced no value".to_string(),
-                is_ifd: false,
-            }),
+            });
         }
+
+        // Parse the store path and look up the Derivation in KnownPaths.
+        let store_path =
+            nix_compat::store_path::StorePath::from_absolute_path(drv_path_str.as_bytes()).map_err(|e| {
+                NixEvalError {
+                    message: format!("invalid store path {drv_path_str}: {e}"),
+                    is_ifd: false,
+                }
+            })?;
+
+        let known_paths = snix_store_io.known_paths.borrow();
+        let drv = known_paths.get_drv_by_drvpath(&store_path).ok_or_else(|| NixEvalError {
+            message: format!("derivation not found in KnownPaths for {drv_path_str}"),
+            is_ifd: false,
+        })?;
+
+        info!(drv_path = %drv_path_str, "npins eval resolved derivation (zero subprocesses)");
+        Ok((store_path, drv.clone()))
     }
 
     /// Evaluate a Nix expression, falling back to `nix eval` subprocess
