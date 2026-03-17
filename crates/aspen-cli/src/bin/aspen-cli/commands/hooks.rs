@@ -545,7 +545,7 @@ async fn hook_trigger_url(args: TriggerUrlArgs, json: bool) -> Result<()> {
 
     // Create an Iroh endpoint for connecting
     let secret_key = iroh::SecretKey::generate(&mut rand::rng());
-    let endpoint = Endpoint::builder()
+    let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
         .secret_key(secret_key)
         .alpns(vec![CLIENT_ALPN.to_vec()])
         .bind()

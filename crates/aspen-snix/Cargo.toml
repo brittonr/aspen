@@ -18,7 +18,7 @@ aspen-cache = { workspace = true }
 aspen-client-api = { workspace = true }
 
 # Iroh for RPC communication
-iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
 
 # Async runtime
 tokio = { workspace = true, features = ["rt", "io-util", "sync", "fs"] }
@@ -47,7 +47,7 @@ blake3 = { workspace = true }
 tracing = { workspace = true }
 
 # Iroh types for hash conversion
-iroh-blobs = "0.97"
+iroh-blobs = "0.99.0"
 
 [dev-dependencies]
 # Testing frameworks

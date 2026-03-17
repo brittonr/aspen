@@ -10,8 +10,21 @@ use iroh::Endpoint as IrohEndpoint;
 use iroh::EndpointAddr;
 use iroh::RelayMode;
 use iroh::SecretKey;
+use iroh::endpoint::Builder;
+use iroh::endpoint::presets::Preset;
 use iroh::protocol::Router;
 use iroh_gossip::net::Gossip;
+
+/// Empty preset that doesn't configure any defaults.
+/// Aspen manages relay, address lookup, and transport config itself.
+#[derive(Debug, Clone, Copy)]
+struct EmptyPreset;
+
+impl Preset for EmptyPreset {
+    fn apply(self, builder: Builder) -> Builder {
+        builder
+    }
+}
 
 use crate::IrohEndpointConfig;
 use crate::RouterBuilder;
@@ -65,12 +78,12 @@ impl IrohEndpointManager {
         let transport_config = Self::build_transport_config();
 
         // Build endpoint with explicit configuration
-        let mut builder = IrohEndpoint::builder();
+        let mut builder = IrohEndpoint::builder(EmptyPreset);
         builder = builder.secret_key(secret_key.clone());
         builder = builder.transport_config(transport_config);
 
         // Configure bind addresses if port is specified
-        builder = Self::configure_bind_addresses(builder, &config);
+        builder = Self::configure_bind_addresses(builder, &config)?;
 
         // Configure relay mode
         let relay_mode = Self::resolve_relay_mode(&config);
@@ -79,8 +92,8 @@ impl IrohEndpointManager {
         // Configure ALPNs if provided
         builder = Self::configure_alpns(builder, &config);
 
-        // Configure discovery services
-        builder = Self::configure_discovery(builder, &config);
+        // Configure address lookup services
+        builder = Self::configure_address_lookup(builder, &config);
 
         let endpoint = builder.bind().await.context("failed to bind Iroh endpoint")?;
 
@@ -108,10 +121,9 @@ impl IrohEndpointManager {
     }
 
     /// Build transport config with larger windows for git bridge operations.
-    fn build_transport_config() -> iroh::endpoint::TransportConfig {
-        use iroh::endpoint::TransportConfig;
+    fn build_transport_config() -> iroh::endpoint::QuicTransportConfig {
+        use iroh::endpoint::QuicTransportConfig;
         use iroh::endpoint::VarInt;
-        let mut transport_config = TransportConfig::default();
 
         // Tiger Style: validate transport config constants
         const STREAM_WINDOW_BYTES: u32 = 64 * 1024 * 1024; // 64MB
@@ -121,10 +133,6 @@ impl IrohEndpointManager {
             "ENDPOINT: stream window must not exceed connection window"
         );
 
-        // Set stream receive window to 64MB to handle large git objects
-        transport_config.stream_receive_window(VarInt::from_u32(STREAM_WINDOW_BYTES));
-        // Set connection receive window to 256MB
-        transport_config.receive_window(VarInt::from_u32(CONNECTION_WINDOW_BYTES));
         // Set idle timeout high enough for server-side processing of large git batches.
         // Processing 5000+ tree objects sequentially can take 30-60 seconds.
         // Default QUIC idle timeout is often 30-60s, which is too short.
@@ -134,34 +142,40 @@ impl IrohEndpointManager {
             Ok(timeout) => timeout,
             Err(_) => {
                 debug_assert!(false, "600 seconds should be a valid idle timeout");
-                // Fall back to default if conversion somehow fails
-                return transport_config;
+                // Fall back to defaults if conversion somehow fails
+                return QuicTransportConfig::default();
             }
         };
-        transport_config.max_idle_timeout(Some(idle_timeout));
-        transport_config
+
+        QuicTransportConfig::builder()
+            // Set stream receive window to 64MB to handle large git objects
+            .stream_receive_window(VarInt::from_u32(STREAM_WINDOW_BYTES))
+            // Set connection receive window to 256MB
+            .receive_window(VarInt::from_u32(CONNECTION_WINDOW_BYTES))
+            .max_idle_timeout(Some(idle_timeout))
+            .build()
     }
 
     /// Configure bind addresses based on port and IPv6 settings.
     fn configure_bind_addresses(
         mut builder: iroh::endpoint::Builder,
         config: &IrohEndpointConfig,
-    ) -> iroh::endpoint::Builder {
+    ) -> anyhow::Result<iroh::endpoint::Builder> {
         // Tiger Style: Support both IPv4 and IPv6 for dual-stack connectivity
         if config.bind_port > 0 {
             // Always bind IPv4
             let bind_addr_v4 = std::net::SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, config.bind_port);
-            builder = builder.bind_addr_v4(bind_addr_v4);
+            builder = builder.bind_addr(bind_addr_v4)?;
             tracing::info!(port = config.bind_port, "bound IPv4 address");
 
             // Optionally bind IPv6 for dual-stack
             if config.enable_ipv6 {
                 let bind_addr_v6 = std::net::SocketAddrV6::new(std::net::Ipv6Addr::UNSPECIFIED, config.bind_port, 0, 0);
-                builder = builder.bind_addr_v6(bind_addr_v6);
+                builder = builder.bind_addr(bind_addr_v6)?;
                 tracing::info!(port = config.bind_port, "bound IPv6 address (dual-stack)");
             }
         }
-        builder
+        Ok(builder)
     }
 
     /// Resolve relay mode from configuration.
@@ -229,49 +243,56 @@ impl IrohEndpointManager {
         builder
     }
 
-    /// Configure discovery services on the endpoint builder.
-    fn configure_discovery(
+    /// Configure address lookup services on the endpoint builder.
+    fn configure_address_lookup(
         mut builder: iroh::endpoint::Builder,
         config: &IrohEndpointConfig,
     ) -> iroh::endpoint::Builder {
-        // mDNS: Local network discovery (default enabled for dev/testing)
+        // mDNS: Local network address lookup (default enabled for dev/testing)
         if config.enable_mdns {
-            builder = builder.discovery(iroh::discovery::mdns::MdnsDiscovery::builder());
-            tracing::info!("mDNS discovery enabled for local network peer discovery");
+            builder = builder.address_lookup(iroh::address_lookup::mdns::MdnsAddressLookup::builder());
+            tracing::info!("mDNS address lookup enabled for local network peer discovery");
         }
 
-        // DNS Discovery: Production peer discovery via DNS lookups
+        // DNS Address Lookup: Production peer lookup via DNS lookups
         if config.enable_dns_discovery {
             let dns_discovery_builder = if let Some(ref url) = config.dns_discovery_url {
-                iroh::discovery::dns::DnsDiscovery::builder(url.clone())
+                iroh::address_lookup::dns::DnsAddressLookup::builder(url.clone())
             } else {
-                iroh::discovery::dns::DnsDiscovery::n0_dns()
+                iroh::address_lookup::dns::DnsAddressLookup::n0_dns()
             };
-            builder = builder.discovery(dns_discovery_builder);
+            builder = builder.address_lookup(dns_discovery_builder);
             tracing::info!(
-                "DNS discovery enabled with URL: {}",
+                "DNS address lookup enabled with URL: {}",
                 config.dns_discovery_url.as_deref().unwrap_or("n0 DNS service (iroh.link)")
             );
         }
 
-        // Pkarr DHT Discovery
+        // Pkarr DHT Address Lookup
         if config.enable_pkarr {
-            builder = Self::configure_pkarr_discovery(builder, config);
+            builder = Self::configure_pkarr_address_lookup(builder, config);
         }
 
         builder
     }
 
-    /// Configure Pkarr DHT discovery on the endpoint builder.
-    fn configure_pkarr_discovery(
+    /// Configure Pkarr DHT address lookup on the endpoint builder.
+    fn configure_pkarr_address_lookup(
         mut builder: iroh::endpoint::Builder,
         config: &IrohEndpointConfig,
     ) -> iroh::endpoint::Builder {
-        use iroh::discovery::pkarr::dht::DhtDiscovery;
+        use iroh::address_lookup::AddrFilter;
+        use iroh::address_lookup::pkarr::dht::DhtAddressLookup;
 
-        let mut dht_builder = DhtDiscovery::builder()
+        let addr_filter = if config.include_pkarr_direct_addresses {
+            AddrFilter::unfiltered()
+        } else {
+            AddrFilter::relay_only()
+        };
+
+        let mut dht_builder = DhtAddressLookup::builder()
             .dht(config.enable_pkarr_dht)
-            .include_direct_addresses(config.include_pkarr_direct_addresses)
+            .addr_filter(addr_filter)
             .republish_delay(std::time::Duration::from_secs(config.pkarr_republish_delay_secs));
 
         // Add relay if enabled
@@ -279,14 +300,14 @@ impl IrohEndpointManager {
             dht_builder = Self::configure_pkarr_relay(dht_builder, config);
         }
 
-        builder = builder.discovery(dht_builder);
+        builder = builder.address_lookup(dht_builder);
         tracing::info!(
             dht_enabled = config.enable_pkarr_dht,
             relay_enabled = config.enable_pkarr_relay,
             custom_relay = config.pkarr_relay_url.is_some(),
             include_direct_addrs = config.include_pkarr_direct_addresses,
             republish_delay_secs = config.pkarr_republish_delay_secs,
-            "Pkarr DHT discovery enabled (publish + resolve)"
+            "Pkarr DHT address lookup enabled (publish + resolve)"
         );
 
         builder
@@ -294,9 +315,9 @@ impl IrohEndpointManager {
 
     /// Configure Pkarr relay settings on the DHT builder.
     fn configure_pkarr_relay(
-        mut dht_builder: iroh::discovery::pkarr::dht::Builder,
+        mut dht_builder: iroh::address_lookup::pkarr::dht::Builder,
         config: &IrohEndpointConfig,
-    ) -> iroh::discovery::pkarr::dht::Builder {
+    ) -> iroh::address_lookup::pkarr::dht::Builder {
         if let Some(ref relay_url) = config.pkarr_relay_url {
             // Use custom pkarr relay URL (private infrastructure)
             match relay_url.parse::<url::Url>() {

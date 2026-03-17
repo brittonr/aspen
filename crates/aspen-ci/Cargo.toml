@@ -58,8 +58,8 @@ blake3 = { workspace = true }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { workspace = true }
 hex = "0.4"
-iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
-iroh-blobs = "0.97"
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-blobs = "0.99.0"
 tokio-util = { version = "0.7", features = ["rt"] }
 postcard = { version = "1.0", features = ["alloc"] }
 rand = { workspace = true }

@@ -8,7 +8,7 @@ publish = false
 [dependencies]
 blake3 = "1.5"
 hex = "0.4"
-iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
 rand = "0.9"
 thiserror = "2.0"
 tokio = { version = "1.48.0", features = ["fs"] }

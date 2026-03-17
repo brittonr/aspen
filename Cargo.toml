@@ -305,7 +305,7 @@ aspen-docs-handler = { path = "crates/aspen-docs-handler" }
 aspen-secrets-handler = { path = "crates/aspen-secrets-handler" }
 aspen-ci-handler = { path = "crates/aspen-ci-handler" }
 aspen-job-handler = { path = "crates/aspen-job-handler" }
-irpc = { version = "0.11.0", features = ["derive"] }
+irpc = { version = "0.13.0", features = ["derive"] }
 n0-future = "0.3.2"
 nickel-lang = "2.0"
 postcard = { version = "1.0", features = ["alloc"] }
@@ -334,9 +334,10 @@ prost = "0.13"  # Protobuf encoding for SNIX types
 tonic = { version = "0.12", features = ["transport"] }  # gRPC for SNIX services
 async-stream = "0.3"  # Async stream utilities for SNIX
 
-# h3-iroh for HTTP/3 over Iroh QUIC (Nix binary cache gateway)
+# iroh-h3 for HTTP/3 over Iroh QUIC (Nix binary cache gateway)
 h3 = "0.0.8"
-h3-iroh = { git = "https://github.com/n0-computer/iroh-experiments" }
+iroh-h3 = { path = "vendor/iroh-h3" }
+iroh-h3-axum = { path = "vendor/iroh-h3-axum" }
 ed25519-dalek = "2.1"  # Narinfo signing
 
 [dependencies]
@@ -384,12 +385,12 @@ snix-tracing = { workspace = true, optional = true }
 
 aspen-proxy = { workspace = true, optional = true }
 aspen-net = { workspace = true, optional = true }
-iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
-iroh-base = "0.95.1"
-iroh-gossip = "0.95"
-iroh-blobs = { version = "0.97", optional = true }
-iroh-docs = { version = "0.95", optional = true }
-iroh-tickets = "0.2"
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-base = "0.97.0"
+iroh-gossip = "0.97.0"
+iroh-blobs = { version = "0.99.0", optional = true }
+iroh-docs = { version = "0.97.0", optional = true }
+iroh-tickets = "0.4.0"
 blake3 = { workspace = true }
 bytes = "1.7"
 rand = "0.9"
@@ -413,7 +414,7 @@ postcard = { version = "1.0", features = ["alloc"] }
 openraft = { workspace = true }
 redb = "2.0.0"
 snafu = "0.8.9"
-irpc = { version = "0.11.0", features = ["derive"] }
+irpc = { version = "0.13.0", features = ["derive"] }
 madsim = { version = "0.2.34", features = ["macros"], optional = true }
 mad-turmoil = { git = "https://github.com/s2-streamstore/mad-turmoil", rev = "ef75169ec299c4160af3052b2194b3ee5b048b0a", optional = true }
 n0-future = { workspace = true }

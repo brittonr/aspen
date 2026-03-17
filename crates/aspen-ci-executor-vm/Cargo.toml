@@ -18,7 +18,7 @@ aspen-jobs = { workspace = true }
 aspen-ticket = { workspace = true }
 
 # Iroh for blob hashes
-iroh-blobs = "0.97"
+iroh-blobs = "0.99.0"
 
 # HTTP dependencies for Cloud Hypervisor REST API (Unix socket)
 hyper = { version = "1.0", features = ["server", "http1"] }

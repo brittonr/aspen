@@ -20,8 +20,8 @@ anyhow = "1.0"
 tracing = "0.1"
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["rt"] }
-iroh = { version = "0.95.1" }
-iroh-blobs = "0.97"
+iroh = { version = "0.97.0" }
+iroh-blobs = "0.99.0"
 
 [features]
 default = []

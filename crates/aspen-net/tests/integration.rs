@@ -66,7 +66,12 @@ fn test_entry(name: &str, port: u16) -> ServiceEntry {
 /// The handshake-only tests never reach the tunnel code, so the endpoint
 /// doesn't need to be connected to anything.
 async fn test_endpoint() -> Arc<iroh::Endpoint> {
-    Arc::new(iroh::Endpoint::builder().bind().await.expect("test endpoint should bind"))
+    Arc::new(
+        iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+            .bind()
+            .await
+            .expect("test endpoint should bind"),
+    )
 }
 
 /// Build a signed token with NetConnect for all services.

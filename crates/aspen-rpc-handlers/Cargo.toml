@@ -42,7 +42,6 @@ aspen-nix-handler = { path = "../aspen-nix-handler", optional = true }
 # aspen-query-handler removed — replaced by WASM plugin (aspen-sql-plugin)
 # aspen-hooks-handler removed — replaced by WASM plugin (aspen-hooks-plugin)
 aspen-job-handler = { path = "../aspen-job-handler", optional = true }
-# aspen-nix-cache-gateway removed: h3-iroh requires iroh 0.96+ (we use 0.95.1)
 aspen-net = { path = "../aspen-net", optional = true }
 # aspen-contacts-handler removed — replaced by WASM plugin (aspen-contacts-plugin)
 # aspen-calendar-handler removed — replaced by WASM plugin (aspen-calendar-plugin)
@@ -60,8 +59,8 @@ serde_json = "1.0"
 async-trait = "0.1"
 
 # Iroh dependencies
-iroh = { version = "0.95.1", features = ["metrics"] }
-iroh-gossip = "0.95"
+iroh = { version = "0.97.0", features = ["metrics"] }
+iroh-gossip = "0.97.0"
 
 # Hash and data dependencies
 blake3 = { workspace = true }
@@ -80,7 +79,6 @@ git-bridge = ["forge", "aspen-forge/git-bridge", "aspen-forge-handler/git-bridge
 secrets = ["dep:aspen-secrets", "dep:aspen-secrets-handler"]
 automerge = ["aspen-client-api/automerge"]
 ci = ["dep:aspen-ci", "dep:aspen-ci-handler", "dep:aspen-nix-handler", "aspen-nix-handler?/cache", "forge", "aspen-ci-handler/forge", "aspen-ci-handler/blob", "aspen-client-api/ci", "aspen-rpc-core/ci", "aspen-rpc-core/nickel", "aspen-ci?/nickel"]
-# nix-cache-gateway removed: h3-iroh requires iroh 0.96+ (we use 0.95.1)
 snix = ["dep:aspen-nix-handler", "aspen-nix-handler?/snix"]
 hooks = ["dep:aspen-hooks", "aspen-rpc-core/hooks", "aspen-wasm-plugin?/hooks"]
 jobs = ["dep:aspen-jobs", "dep:aspen-job-handler", "aspen-rpc-core/jobs", "aspen-rpc-core/worker"]

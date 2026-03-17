@@ -13,8 +13,8 @@ aspen-core = { path = "../aspen-core" }
 aspen-client-api = { path = "../aspen-client-api" }
 
 # Iroh P2P and blobs
-iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
-iroh-blobs = "0.97"
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-blobs = "0.99.0"
 
 # Async traits
 async-trait = "0.1"

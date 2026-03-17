@@ -123,7 +123,6 @@ pub struct ClientProtocolContext {
     /// Requires both `ci` and `nickel` features since TriggerService depends on Nickel config.
     #[cfg(all(feature = "ci", feature = "nickel"))]
     pub ci_trigger_service: Option<Arc<aspen_ci::TriggerService>>,
-    // nix-cache-gateway removed: h3-iroh requires iroh 0.96+ (we use 0.95.1)
     /// Service executors for WASM plugin host function dispatch.
     ///
     /// Each executor handles a domain (docs, jobs, etc.) and is called
@@ -274,7 +273,7 @@ pub mod test_support {
             let secret_key = iroh::SecretKey::from_bytes(&key_bytes);
 
             // Build endpoint without discovery (isolated)
-            let endpoint = iroh::Endpoint::builder()
+            let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
                 .secret_key(secret_key.clone())
                 .bind_addr_v4("127.0.0.1:0".parse().unwrap())
                 .bind()

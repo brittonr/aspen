@@ -40,7 +40,7 @@ async fn make_store(doc_id: &DocumentId, content: Option<&str>) -> Arc<Store> {
 /// Spin up an endpoint + router with the automerge sync handler.
 /// Returns (endpoint, router, store).
 async fn make_server(store: Arc<Store>, auth_key: Option<iroh::PublicKey>) -> (Endpoint, Router, Arc<Store>) {
-    let endpoint = Endpoint::builder().bind().await.unwrap();
+    let endpoint = Endpoint::builder(iroh::endpoint::presets::N0).bind().await.unwrap();
     let handler: Arc<AutomergeSyncHandler<Store>> = match auth_key {
         Some(key) => Arc::new(AutomergeSyncHandler::with_capability_auth(store.clone(), key)),
         None => Arc::new(AutomergeSyncHandler::new(store.clone())),
@@ -56,7 +56,7 @@ async fn try_sync(
     doc_id: &DocumentId,
     capability: Option<&CapabilityToken>,
 ) -> Result<(), aspen_automerge::SyncError> {
-    let client_ep = Endpoint::builder().bind().await.unwrap();
+    let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).bind().await.unwrap();
     let server_addr = server_endpoint.addr();
     let conn = client_ep
         .connect(server_addr, AUTOMERGE_SYNC_ALPN)

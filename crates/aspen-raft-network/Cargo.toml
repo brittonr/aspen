@@ -17,7 +17,7 @@ aspen-sharding = { workspace = true }
 aspen-time = { workspace = true }
 
 # Networking
-iroh = { version = "0.95.1" }
+iroh = { version = "0.97.0" }
 irpc = { workspace = true }
 
 # OpenRaft consensus

@@ -89,8 +89,10 @@ impl DocsWriter for IrohDocsWriter {
         // hash_and_insert computes the BLAKE3 hash and inserts the entry
         // Note: This stores the entry metadata (hash, size, timestamp) in the replica,
         // but the actual content data needs to be stored separately in a blob store.
-        let _hash =
-            replica.hash_and_insert(&key, &self.author, &value).context("failed to insert entry into replica")?;
+        let _hash = replica
+            .hash_and_insert(&key, &self.author, &value)
+            .await
+            .context("failed to insert entry into replica")?;
 
         debug!(namespace = %self.namespace_id, "entry inserted into docs");
         Ok(())
@@ -108,7 +110,7 @@ impl DocsWriter for IrohDocsWriter {
         // The delete_prefix method does this by inserting an empty entry at the key.
         // Note: delete_prefix signature is (prefix, author)
         let _deleted_count =
-            replica.delete_prefix(&key, &self.author).context("failed to delete entry from replica")?;
+            replica.delete_prefix(&key, &self.author).await.context("failed to delete entry from replica")?;
 
         debug!(namespace = %self.namespace_id, "entry deleted from docs");
         Ok(())

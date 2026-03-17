@@ -114,7 +114,7 @@ impl RouterBuilder {
 
     /// Register the Nix cache HTTP/3 gateway protocol handler (optional).
     ///
-    /// This serves a Nix binary cache over HTTP/3 using h3-iroh.
+    /// This serves a Nix binary cache over HTTP/3 using iroh-h3.
     ///
     /// ALPN: `iroh+h3`
     pub fn nix_cache<N: iroh::protocol::ProtocolHandler>(mut self, handler: N) -> Self {

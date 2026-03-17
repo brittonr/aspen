@@ -91,7 +91,11 @@ const NAR_COMPLICATED: [u8; 840] = [
 
 /// Spin up a server endpoint + router, return clients.
 async fn setup() -> (Arc<IrpcBlobService>, Arc<IrpcDirectoryService>, Router, Endpoint) {
-    let server_ep = Endpoint::builder().clear_discovery().bind().await.expect("bind server");
+    let server_ep = Endpoint::builder(iroh::endpoint::presets::N0)
+        .clear_address_lookup()
+        .bind()
+        .await
+        .expect("bind server");
 
     let blob_svc = MemoryBlobService::default();
     let dir_svc = RedbDirectoryService::new_temporary("nar-test".to_string(), RedbDirectoryServiceConfig::default())
@@ -111,7 +115,11 @@ async fn setup() -> (Arc<IrpcBlobService>, Arc<IrpcDirectoryService>, Router, En
         addr.addrs.insert(iroh::TransportAddr::Ip(fixed));
     }
 
-    let client_ep = Endpoint::builder().clear_discovery().bind().await.expect("bind client");
+    let client_ep = Endpoint::builder(iroh::endpoint::presets::N0)
+        .clear_address_lookup()
+        .bind()
+        .await
+        .expect("bind client");
 
     let blob = Arc::new(IrpcBlobService::new(client_ep.clone(), addr.clone()));
     let dir = Arc::new(IrpcDirectoryService::new(client_ep, addr));

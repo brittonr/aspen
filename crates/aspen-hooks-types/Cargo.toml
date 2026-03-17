@@ -11,8 +11,8 @@ aspen-hlc = { path = "../aspen-hlc" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schemars = "0.8"
-iroh = { version = "0.95.1" }
-iroh-tickets = "0.2"
+iroh = { version = "0.97.0" }
+iroh-tickets = "0.4.0"
 postcard = { version = "1", features = ["alloc"] }
 anyhow = "1"
 snafu = "0.8"

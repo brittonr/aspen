@@ -7,9 +7,9 @@ description = "Aspen cluster ticket types for peer discovery and bootstrap"
 
 [dependencies]
 # P2P networking
-iroh = { version = "0.95.1" }
-iroh-gossip = "0.95"
-iroh-tickets = "0.2"
+iroh = { version = "0.97.0" }
+iroh-gossip = "0.97.0"
+iroh-tickets = "0.4.0"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

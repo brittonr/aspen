@@ -132,7 +132,7 @@ async fn run_server(
                 };
 
                 info!(
-                    remote_addr = ?incoming.remote_address(),
+                    remote_addr = ?incoming.remote_addr(),
                     "received incoming connection"
                 );
 

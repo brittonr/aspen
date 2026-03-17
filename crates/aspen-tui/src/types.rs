@@ -162,7 +162,7 @@ impl SqlState {
 
     /// Navigate to next history entry.
     pub fn history_next(&mut self) {
-        if let Some(entry) = self.history.next() {
+        if let Some(entry) = self.history.next_entry() {
             self.query_buffer = entry.to_string();
         } else {
             self.query_buffer.clear();

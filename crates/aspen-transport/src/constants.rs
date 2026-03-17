@@ -51,7 +51,7 @@ pub const NET_TUNNEL_ALPN: &[u8] = b"/aspen/net-tunnel/0";
 
 /// ALPN protocol identifier for Nix binary cache HTTP/3 gateway.
 ///
-/// Uses the standard h3-iroh ALPN to enable HTTP/3 semantics over Iroh QUIC.
+/// Uses the standard iroh-h3 ALPN to enable HTTP/3 semantics over Iroh QUIC.
 /// This allows standard HTTP/3 clients to connect while satisfying Aspen's
 /// "Iroh-only networking" architecture constraint.
 pub const NIX_CACHE_H3_ALPN: &[u8] = b"iroh+h3";

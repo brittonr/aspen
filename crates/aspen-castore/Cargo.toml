@@ -16,7 +16,7 @@ aspen-blob = { workspace = true }
 irpc = { workspace = true }
 
 # iroh for P2P networking
-iroh = { version = "0.95.1", features = ["discovery-local-network"] }
+iroh = { version = "0.97.0", features = ["address-lookup-mdns"] }
 
 # Async
 tokio = { workspace = true, features = ["rt", "sync", "io-util"] }

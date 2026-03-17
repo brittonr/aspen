@@ -229,7 +229,7 @@ async fn create_endpoint(seed: u64) -> Endpoint {
     key_bytes[0..8].copy_from_slice(&seed.to_le_bytes());
     let secret_key = iroh::SecretKey::from_bytes(&key_bytes);
 
-    Endpoint::builder()
+    Endpoint::builder(iroh::endpoint::presets::N0)
         .secret_key(secret_key)
         .alpns(vec![CLIENT_ALPN.to_vec()])
         .bind_addr_v4("127.0.0.1:0".parse().unwrap())

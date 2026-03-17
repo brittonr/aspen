@@ -126,8 +126,12 @@ impl TestCluster {
         let resource_settings = Arc::new(RwLock::new(HashMap::new()));
 
         // Build endpoint first
-        let endpoint =
-            Endpoint::builder().secret_key(secret_key).clear_discovery().bind().await.expect("bind endpoint");
+        let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
+            .secret_key(secret_key)
+            .clear_address_lookup()
+            .bind()
+            .await
+            .expect("bind endpoint");
 
         let hlc = Arc::new(aspen_hlc::create_hlc(name));
 

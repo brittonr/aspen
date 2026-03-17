@@ -114,7 +114,7 @@ impl ProxyCommand {
         // Create a lightweight iroh endpoint for the proxy client.
         // No ALPNs needed — DownstreamProxy uses HTTP_PROXY_ALPN internally.
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
-        let endpoint = Endpoint::builder()
+        let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
             .discovery(discovery)
             .bind()

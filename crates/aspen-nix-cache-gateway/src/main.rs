@@ -49,6 +49,10 @@ struct Cli {
     /// RPC timeout in seconds.
     #[arg(long, default_value_t = 30)]
     timeout_secs: u64,
+
+    /// Serve via HTTP/3 over iroh QUIC instead of TCP (requires h3-serving feature).
+    #[arg(long)]
+    h3: bool,
 }
 
 /// Configuration extracted from CLI args, shared between backends.
@@ -88,6 +92,17 @@ async fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "snix-http")]
     {
+        #[cfg(feature = "h3-serving")]
+        if cli.h3 {
+            info!("using nar-bridge backend with HTTP/3 over iroh QUIC");
+            return server_nar_bridge::run_h3(&config).await;
+        }
+
+        if cli.h3 {
+            #[cfg(not(feature = "h3-serving"))]
+            anyhow::bail!("h3 flag requires h3-serving feature — rebuild with 'h3-serving' feature");
+        }
+
         info!("using nar-bridge backend");
         server_nar_bridge::run(&config).await
     }

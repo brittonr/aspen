@@ -53,21 +53,23 @@ async fn build_cluster_services(
     Ok((blob_svc, dir_svc, pathinfo_svc))
 }
 
-/// Run the HTTP server using nar-bridge's axum router.
-pub async fn run(config: &GatewayConfig) -> anyhow::Result<()> {
-    // Build snix services backed by the cluster
+/// Build the nar-bridge axum router with cluster-backed snix services.
+async fn build_router(config: &GatewayConfig) -> anyhow::Result<axum::Router> {
     let (blob_svc, dir_svc, pathinfo_svc) = build_cluster_services(&config.ticket, config.timeout_secs).await?;
 
-    // Construct nar-bridge app state
     let cache_capacity = NonZeroUsize::new(ROOT_NODE_CACHE_CAPACITY).expect("ROOT_NODE_CACHE_CAPACITY is non-zero");
     let state = nar_bridge::AppState::new(blob_svc, dir_svc, pathinfo_svc, cache_capacity);
 
-    // Build the nar-bridge router with Aspen's preferred cache priority
-    let router = nar_bridge::gen_router(CACHE_PRIORITY).with_state(state);
+    Ok(nar_bridge::gen_router(CACHE_PRIORITY).with_state(state))
+}
+
+/// Run the HTTP server using nar-bridge's axum router over TCP.
+pub async fn run(config: &GatewayConfig) -> anyhow::Result<()> {
+    let router = build_router(config).await?;
 
     let addr: SocketAddr = format!("{}:{}", config.bind, config.port).parse().context("invalid bind address")?;
 
-    info!(%addr, "nix cache gateway listening (nar-bridge)");
+    info!(%addr, "nix cache gateway listening (nar-bridge, TCP)");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, router)
@@ -76,6 +78,37 @@ pub async fn run(config: &GatewayConfig) -> anyhow::Result<()> {
             info!("shutting down");
         })
         .await?;
+
+    Ok(())
+}
+
+/// Run the HTTP/3 server using nar-bridge's axum router over iroh QUIC.
+#[cfg(feature = "h3-serving")]
+pub async fn run_h3(config: &GatewayConfig) -> anyhow::Result<()> {
+    use iroh::endpoint::presets::N0;
+    use iroh_h3_axum::IrohAxum;
+
+    let router = build_router(config).await?;
+
+    // Create iroh endpoint for QUIC transport
+    let endpoint = iroh::Endpoint::builder(N0).bind().await.context("failed to bind iroh endpoint")?;
+
+    let addr = endpoint.addr();
+    info!(
+        endpoint_id = %addr.id.fmt_short(),
+        "nix cache gateway listening (nar-bridge, HTTP/3 over iroh QUIC)"
+    );
+
+    // Register axum router as HTTP/3 protocol handler
+    let h3_handler = IrohAxum::new(router);
+    let iroh_router = iroh::protocol::Router::builder(endpoint)
+        .accept(aspen_transport::constants::NIX_CACHE_H3_ALPN.to_vec(), h3_handler)
+        .spawn();
+
+    // Wait for shutdown signal
+    tokio::signal::ctrl_c().await.ok();
+    info!("shutting down");
+    iroh_router.shutdown().await.context("failed to shut down iroh router")?;
 
     Ok(())
 }

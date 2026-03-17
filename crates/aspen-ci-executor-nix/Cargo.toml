@@ -16,7 +16,7 @@ aspen-cache = { workspace = true }
 aspen-jobs = { workspace = true }
 
 # Iroh for P2P networking
-iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
 
 # SNIX dependencies
 snix-castore = { workspace = true, optional = true }
@@ -61,8 +61,6 @@ snix-eval = ["snix", "dep:snix-eval", "dep:snix-glue", "dep:snix-build"]
 snix-build = ["snix-eval", "dep:bstr", "dep:bytes", "dep:uuid", "dep:futures", "dep:tonic"]
 # Retain nix CLI subprocess as fallback when snix-build is unavailable
 nix-cli-fallback = []
-# Re-enable when iroh is upgraded to 0.96+:
-# nix-cache-proxy = ["dep:h3", "dep:h3-iroh", "aspen-ci-executor-shell/nix-cache-proxy"]
 nix-cache-proxy = ["aspen-ci-executor-shell/nix-cache-proxy"]
 
 [dev-dependencies]

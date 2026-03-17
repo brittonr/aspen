@@ -392,8 +392,8 @@ async fn forward_get_request(state: &ProxyState, path: &str) -> ProxyResult<Byte
             reason: e.to_string(),
         })?;
 
-    // Wrap with h3-iroh
-    let h3_conn = h3_iroh::Connection::new(conn);
+    // Wrap with iroh-h3
+    let h3_conn = iroh_h3::Connection::new(conn);
 
     // Create H3 client connection
     let (mut driver, mut send_request) = h3::client::new(h3_conn).await.context(H3ClientConnectionSnafu {})?;

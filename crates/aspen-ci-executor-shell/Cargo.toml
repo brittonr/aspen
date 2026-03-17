@@ -16,8 +16,8 @@ aspen-jobs = { workspace = true }
 aspen-kv-branch = { path = "../aspen-kv-branch", optional = true }
 
 # Iroh for P2P networking
-iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
-iroh-blobs = "0.97"
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-blobs = "0.99.0"
 
 # Serialization
 serde = { workspace = true }
@@ -52,7 +52,7 @@ nix-compat = { workspace = true, optional = true }
 
 # HTTP/3 cache proxy for Nix binary cache substitution (optional)
 h3 = { workspace = true, optional = true }
-h3-iroh = { workspace = true, optional = true }
+iroh-h3 = { workspace = true, optional = true }
 hyper = { version = "1.0", features = ["server", "http1"], optional = true }
 hyper-util = { version = "0.1", features = ["tokio", "server-auto"], optional = true }
 http-body-util = { version = "0.1", optional = true }
@@ -69,7 +69,7 @@ kv-branch = ["dep:aspen-kv-branch"]
 snix = ["dep:snix-castore", "dep:snix-store", "dep:nix-compat"]
 nix-cache-proxy = [
     "dep:h3",
-    "dep:h3-iroh",
+    "dep:iroh-h3",
     "dep:hyper",
     "dep:hyper-util",
     "dep:http-body-util",

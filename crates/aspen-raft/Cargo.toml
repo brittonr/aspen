@@ -34,8 +34,8 @@ openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"
 redb = "2.0.0"
 
 # Networking
-iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
-iroh-base = "0.95.1"
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-base = "0.97.0"
 irpc = { workspace = true }
 
 # Crypto

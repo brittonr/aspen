@@ -24,8 +24,8 @@ mad-turmoil = { git = "https://github.com/s2-streamstore/mad-turmoil", rev = "ef
 openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
 
 # Iroh networking (for test member info)
-iroh = "0.95.1"
-iroh-base = "0.95.1"
+iroh = "0.97.0"
+iroh-base = "0.97.0"
 
 # Async runtime
 tokio = { version = "1.48.0", features = ["sync", "time"] }

@@ -12,7 +12,7 @@ aspen-blob = { path = "../aspen-blob" }
 async-trait = "0.1"
 flate2 = "1.0"
 hex = "0.4"
-iroh-blobs = "0.97"
+iroh-blobs = "0.99.0"
 serde_json = "1.0"
 tracing = "0.1"
 zstd = "0.13"

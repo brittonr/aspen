@@ -247,7 +247,7 @@ mod tests {
         let mut key_bytes = [0u8; 32];
         key_bytes[0] = 42;
         let secret_key = iroh::SecretKey::from_bytes(&key_bytes);
-        let endpoint = Endpoint::builder().secret_key(secret_key).bind().await.unwrap();
+        let endpoint = Endpoint::builder(iroh::endpoint::presets::N0).secret_key(secret_key).bind().await.unwrap();
 
         let config = ProxyConfig {
             enabled: true,
@@ -282,7 +282,7 @@ mod tests {
         let mut key_bytes = [0u8; 32];
         key_bytes[0] = 43;
         let secret_key = iroh::SecretKey::from_bytes(&key_bytes);
-        let endpoint = Endpoint::builder().secret_key(secret_key).bind().await.unwrap();
+        let endpoint = Endpoint::builder(iroh::endpoint::presets::N0).secret_key(secret_key).bind().await.unwrap();
 
         let config = ProxyConfig::default();
         let service = ProxyService::new(endpoint.clone(), config);

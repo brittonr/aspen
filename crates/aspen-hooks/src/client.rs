@@ -262,7 +262,7 @@ impl HookClient {
         self.endpoint
             .get_or_try_init(|| async {
                 let secret_key = iroh::SecretKey::generate(&mut rand::rng());
-                let endpoint = Endpoint::builder()
+                let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
                     .secret_key(secret_key)
                     .alpns(vec![CLIENT_ALPN.to_vec()])
                     .bind()

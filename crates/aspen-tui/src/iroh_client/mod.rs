@@ -62,7 +62,7 @@ impl IrohClient {
         let secret_key = SecretKey::from(key_bytes);
 
         // Build the Iroh endpoint with TUI ALPN
-        let endpoint = Endpoint::builder()
+        let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
             .alpns(vec![CLIENT_ALPN.to_vec()])
             .bind()

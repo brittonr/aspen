@@ -32,12 +32,12 @@ uuid = { version = "1.0", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 # Iroh for endpoint access
-iroh = { version = "0.95.1" }
+iroh = { version = "0.97.0" }
 
 # Hash and encoding dependencies
 blake3 = { workspace = true }
 hex = "0.4"
-iroh-blobs = "0.97"
+iroh-blobs = "0.99.0"
 
 [features]
 default = []

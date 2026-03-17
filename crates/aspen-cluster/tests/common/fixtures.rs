@@ -35,7 +35,7 @@ impl MockEndpointProvider {
         let secret_key = SecretKey::from_bytes(&key_bytes);
 
         // Build endpoint without discovery (isolated)
-        let endpoint = iroh::Endpoint::builder()
+        let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key.clone())
             .bind_addr_v4("127.0.0.1:0".parse().unwrap())
             .bind()

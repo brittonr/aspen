@@ -8,9 +8,9 @@ authors = ["Aspen Contributors"]
 
 [dependencies]
 # Networking and P2P
-iroh = "0.95.1"
-iroh-base = "0.95.1"
-iroh-blobs = "0.97"
+iroh = "0.97.0"
+iroh-base = "0.97.0"
+iroh-blobs = "0.99.0"
 
 # Async runtime
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync"] }

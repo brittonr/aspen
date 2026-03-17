@@ -23,7 +23,7 @@ hex = "0.4"
 blake3 = "1.5"
 hmac = "0.12"
 sha2 = "0.10"
-iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
 
 # Error handling
 thiserror = "2.0"

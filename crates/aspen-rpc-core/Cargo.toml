@@ -36,10 +36,9 @@ aspen-forge = { path = "../aspen-forge", optional = true }
 # and defined in aspen-rpc-handlers. Handler extraction will need trait abstraction.
 aspen-ci = { path = "../aspen-ci", optional = true }
 aspen-cluster = { path = "../aspen-cluster", optional = true, features = ["federation"] }
-# aspen-nix-cache-gateway removed: h3-iroh requires iroh 0.96+ (we use 0.95.1)
 aspen-testing = { workspace = true, optional = true }
 # Iroh for mock endpoint provider in tests
-iroh = { version = "0.95.1", optional = true }
+iroh = { version = "0.97.0", optional = true }
 
 [features]
 default = []
@@ -50,7 +49,6 @@ forge = ["dep:aspen-forge", "dep:aspen-cluster"]
 ci = ["dep:aspen-ci", "forge"]
 # nickel feature enables TriggerService in ci_trigger_service context field
 nickel = ["aspen-ci?/nickel"]
-# nix-cache-gateway removed: h3-iroh requires iroh 0.96+ (we use 0.95.1)
 global-discovery = ["aspen-core/global-discovery"]
 worker = ["dep:aspen-cluster", "aspen-cluster/jobs"]
 deploy = ["dep:aspen-cluster", "aspen-cluster/deploy"]

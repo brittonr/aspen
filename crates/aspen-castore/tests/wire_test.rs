@@ -30,7 +30,11 @@ use tokio::io::AsyncWriteExt;
 /// Spin up a server endpoint + router, return the server's EndpointAddr
 /// and the Router handle (must be kept alive).
 async fn start_server() -> (EndpointAddr, Router, Endpoint) {
-    let endpoint = Endpoint::builder().clear_discovery().bind().await.expect("bind server endpoint");
+    let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
+        .clear_address_lookup()
+        .bind()
+        .await
+        .expect("bind server endpoint");
 
     let blob_svc = MemoryBlobService::default();
     let dir_svc = RedbDirectoryService::new_temporary("wire-test".to_string(), RedbDirectoryServiceConfig::default())
@@ -69,7 +73,7 @@ fn make_clients(endpoint: Endpoint, server_addr: EndpointAddr) -> (IrpcBlobServi
 #[ignore]
 async fn wire_blob_roundtrip() {
     let (addr, _router, _server_ep) = start_server().await;
-    let client_ep = Endpoint::builder().clear_discovery().bind().await.unwrap();
+    let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
     let (blob, _dir) = make_clients(client_ep, addr);
 
     let data = b"hello from the wire";
@@ -95,7 +99,7 @@ async fn wire_blob_roundtrip() {
 #[ignore]
 async fn wire_blob_not_found() {
     let (addr, _router, _server_ep) = start_server().await;
-    let client_ep = Endpoint::builder().clear_discovery().bind().await.unwrap();
+    let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
     let (blob, _dir) = make_clients(client_ep, addr);
 
     let missing = B3Digest::from(&[0u8; 32]);
@@ -107,7 +111,7 @@ async fn wire_blob_not_found() {
 #[ignore]
 async fn wire_blob_large() {
     let (addr, _router, _server_ep) = start_server().await;
-    let client_ep = Endpoint::builder().clear_discovery().bind().await.unwrap();
+    let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
     let (blob, _dir) = make_clients(client_ep, addr);
 
     // 1 MB blob
@@ -134,7 +138,7 @@ async fn wire_blob_large() {
 #[ignore]
 async fn wire_dir_put_get() {
     let (addr, _router, _server_ep) = start_server().await;
-    let client_ep = Endpoint::builder().clear_discovery().bind().await.unwrap();
+    let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
     let (_blob, dir) = make_clients(client_ep, addr);
 
     let directory = DIRECTORY_WITH_KEEP.clone();
@@ -151,7 +155,7 @@ async fn wire_dir_put_get() {
 #[ignore]
 async fn wire_dir_not_found() {
     let (addr, _router, _server_ep) = start_server().await;
-    let client_ep = Endpoint::builder().clear_discovery().bind().await.unwrap();
+    let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
     let (_blob, dir) = make_clients(client_ep, addr);
 
     let missing = B3Digest::from(&[0u8; 32]);
@@ -162,7 +166,7 @@ async fn wire_dir_not_found() {
 #[ignore]
 async fn wire_dir_get_recursive() {
     let (addr, _router, _server_ep) = start_server().await;
-    let client_ep = Endpoint::builder().clear_discovery().bind().await.unwrap();
+    let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
     let (_blob, dir) = make_clients(client_ep, addr);
 
     // Put leaf, then parent
@@ -187,7 +191,7 @@ async fn wire_dir_get_recursive() {
 #[ignore]
 async fn wire_dir_put_multiple() {
     let (addr, _router, _server_ep) = start_server().await;
-    let client_ep = Endpoint::builder().clear_discovery().bind().await.unwrap();
+    let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
     let (_blob, dir) = make_clients(client_ep, addr);
 
     let mut putter = dir.put_multiple_start();
@@ -215,7 +219,7 @@ async fn wire_dir_put_multiple() {
 #[ignore]
 async fn wire_blob_and_dir_combined() {
     let (addr, _router, _server_ep) = start_server().await;
-    let client_ep = Endpoint::builder().clear_discovery().bind().await.unwrap();
+    let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
     let (blob, dir) = make_clients(client_ep, addr);
 
     // Write blob
@@ -238,8 +242,8 @@ async fn wire_multiple_clients() {
     let (addr, _router, _server_ep) = start_server().await;
 
     // Two independent clients
-    let ep1 = Endpoint::builder().clear_discovery().bind().await.unwrap();
-    let ep2 = Endpoint::builder().clear_discovery().bind().await.unwrap();
+    let ep1 = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
+    let ep2 = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
 
     let (blob1, _) = make_clients(ep1, addr.clone());
     let (blob2, _) = make_clients(ep2, addr);

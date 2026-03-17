@@ -155,7 +155,7 @@ impl NodeHandle {
 pub async fn bootstrap_node(node_id: NodeId) -> Result<(NodeHandle, impl std::future::Future<Output = ()>)> {
     // Create iroh endpoint inside the namespace
     let secret_key = SecretKey::generate(&mut rand::rng());
-    let endpoint = Endpoint::builder()
+    let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
         .secret_key(secret_key.clone())
         .relay_mode(iroh::RelayMode::Disabled)
         .alpns(vec![

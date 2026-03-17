@@ -219,7 +219,7 @@ mod tests {
     #[tokio::test]
     async fn test_content_discovery_service_lifecycle() {
         let secret_key = SecretKey::generate(&mut rand::rng());
-        let endpoint = iroh::Endpoint::builder().bind().await.unwrap();
+        let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0).bind().await.unwrap();
 
         let config = ContentDiscoveryConfig {
             is_enabled: true,

@@ -29,7 +29,7 @@ snix-store = { workspace = true, optional = true }
 aspen-cache = { workspace = true, optional = true }
 aspen-blob = { workspace = true, optional = true }
 aspen-kv-types = { workspace = true, optional = true }
-iroh-blobs = { version = "0.97", optional = true }
+iroh-blobs = { version = "0.99.0", optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { version = "1.0", optional = true }
 

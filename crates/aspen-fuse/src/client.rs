@@ -156,7 +156,7 @@ impl FuseSyncClient {
             rand::rng().fill_bytes(&mut key_bytes);
             let secret_key = SecretKey::from(key_bytes);
 
-            Endpoint::builder()
+            Endpoint::builder(iroh::endpoint::presets::N0)
                 .secret_key(secret_key)
                 .alpns(vec![CLIENT_ALPN.to_vec()])
                 .bind()

@@ -42,7 +42,7 @@ hex = "0.4"
 base64 = "0.22"
 
 # P2P networking for sync protocol
-iroh = "0.95"
+iroh = "0.97.0"
 
 [dev-dependencies]
 aspen-auth = { workspace = true }

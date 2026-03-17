@@ -116,7 +116,10 @@ impl MultiNodeClient {
         let bind_timeout = Duration::from_secs(10);
         let endpoint = tokio::time::timeout(
             bind_timeout,
-            Endpoint::builder().secret_key(secret_key).alpns(vec![CLIENT_ALPN.to_vec()]).bind(),
+            Endpoint::builder(iroh::endpoint::presets::N0)
+                .secret_key(secret_key)
+                .alpns(vec![CLIENT_ALPN.to_vec()])
+                .bind(),
         )
         .await
         .context("timeout waiting for Iroh endpoint to bind")?
