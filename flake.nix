@@ -51,12 +51,6 @@
       flake = false;
     };
 
-    # Rattoolkit TUI widgets for aspen-tui
-    subwayrat = {
-      url = "github:brittonr/subwayrat/d96176104f464d8e3948d2ea27540a8ef5d806ab";
-      flake = false;
-    };
-
     # unit2nix - Per-crate Nix builds from Cargo's unit graph
     unit2nix = {
       url = "github:brittonr/unit2nix";
@@ -117,7 +111,6 @@
     snix-src,
     microvm,
     verus-src,
-    subwayrat,
     unit2nix,
     ...
   }:
@@ -750,11 +743,12 @@
           ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
           # Strip git source lines from Cargo.lock for stubbed deps only.
-          # Keep snix.dev and tvlfyi (wu-manber, a snix dep) source lines —
-          # these are vendored via overrideVendorGitCheckout / normal FODs.
+          # Keep snix.dev, tvlfyi (wu-manber), and subwayrat (aspen-tui) —
+          # these are vendored via overrideVendorGitCheckout / normal fetchGit.
           ${pkgs.gnused}/bin/sed -i '/^source = "git+/{
             /snix\.dev/b
             /tvlfyi/b
+            /subwayrat/b
             d
           }' $out/aspen/Cargo.lock
 
@@ -869,24 +863,24 @@
             -e 's|bolero-generator = "0.11"|bolero-generator = "0.13"|g' \
             {} \;
 
-          # Strip crates with unvendored git deps from workspace members + deps.
+          # Strip crates not built in CI from workspace members
           # aspen-testing-patchbay: patchbay git dep not vendored
-          # aspen-tui: rattoolkit/subwayrat git deps not vendored
+          # aspen-tui: CI doesn't build TUI, git source lines already stripped above
           ${pkgs.gnused}/bin/sed -i '/"crates\/aspen-testing-patchbay"/d' $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/^aspen-testing-patchbay/d' $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/"crates\/aspen-tui"/d' $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/^aspen-tui/d' $out/aspen/Cargo.toml
 
-          # Strip their [[package]] blocks + rat-* transitive deps from Cargo.lock
+          # Strip their [[package]] blocks + transitive deps from Cargo.lock
           ${pkgs.python3}/bin/python3 ${pkgs.writeText "strip-ciSrc-lock.py" ''
             import re, sys
             lockfile = sys.argv[1]
             with open(lockfile) as f:
                 content = f.read()
-            for name in ["aspen-testing-patchbay", "aspen-tui",
-                          "patchbay", "rat-cursor", "rat-editor", "rat-event", "rat-ftable",
-                          "rat-salsa", "rat-scrolled", "rat-streaming", "rat-table", "rat-text",
-                          "rat-widget", "rat-widgets"]:
+            for name in ["aspen-testing-patchbay", "patchbay",
+                          "aspen-tui", "rat-cursor", "rat-editor", "rat-event",
+                          "rat-ftable", "rat-salsa", "rat-scrolled", "rat-streaming",
+                          "rat-table", "rat-text", "rat-widget", "rat-widgets"]:
                 pattern = r"\[\[package\]\]\nname = \"" + name + r"\".*?(?=\n\[\[|\Z)"
                 content = re.sub(pattern, "", content, flags=re.DOTALL)
             with open(lockfile, "w") as f:
@@ -1762,7 +1756,7 @@
           ${pkgs.gnused}/bin/sed -i '/"crates\/aspen-testing-patchbay"/d' $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/^aspen-testing-patchbay/d' $out/aspen/Cargo.toml
 
-          # Strip aspen-tui from workspace members (rattoolkit/subwayrat git deps not vendored in ciSrc)
+          # Strip aspen-tui from workspace members (CI doesn't build TUI)
           ${pkgs.gnused}/bin/sed -i '/"crates\/aspen-tui"/d' $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/^aspen-tui/d' $out/aspen/Cargo.toml
 
@@ -1771,9 +1765,8 @@
             -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
             {} \;
 
-          # Strip patchbay and subwayrat git source lines from Cargo.lock
+          # Strip patchbay git source lines from Cargo.lock
           ${pkgs.gnused}/bin/sed -i '/^source = "git+.*patchbay/d' $out/aspen/Cargo.lock
-          ${pkgs.gnused}/bin/sed -i '/^source = "git+.*subwayrat/d' $out/aspen/Cargo.lock
         '';
 
         # Extended source for workspace-mode test builds.
@@ -1834,33 +1827,17 @@
             $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
-          # Copy subwayrat source for rat-* path deps (../../subwayrat from crates/aspen-tui/)
-          cp -r ${subwayrat} $out/aspen/subwayrat
-          chmod -R u+w $out/aspen/subwayrat
-          # Inline workspace-inherited fields (these crates aren't in aspen's workspace)
-          find $out/aspen/subwayrat/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
-            -e 's|edition\.workspace = true|edition = "2024"|' \
-            -e 's|license\.workspace = true|license = "MIT"|' \
-            -e 's|ratatui\.workspace = true|ratatui = "0.30"|' \
-            -e 's|unicode-width\.workspace = true|unicode-width = "0.2"|' \
-            {} \;
-
           # Rewrite git deps in subcrates
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
             -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../.nix-stubs/iroh-proxy-utils" }|' \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
             -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
-            -e 's|rat-table = { git = "[^"]*"[^}]*}|rat-table = { path = "../../subwayrat/crates/rat-table" }|' \
-            -e 's|rat-widgets = { git = "[^"]*"[^}]*}|rat-widgets = { path = "../../subwayrat/crates/rat-widgets", features = ["persistence"] }|' \
-            -e 's|rat-streaming = { git = "[^"]*"[^}]*}|rat-streaming = { path = "../../subwayrat/crates/rat-streaming" }|' \
-            -e 's|rat-editor = { git = "[^"]*"[^}]*}|rat-editor = { path = "../../subwayrat/crates/rat-editor" }|' \
             {} \;
 
           # Strip git source lines from Cargo.lock (stubs are path deps now)
           ${pkgs.gnused}/bin/sed -i '/^source = "git+/d' $out/aspen/Cargo.lock
 
-          # Strip aspen-tui from workspace (rattoolkit has ratatui API breakage,
-          # and subwayrat git fetch fails in sandbox even with path dep patches)
+          # Strip aspen-tui from workspace (u2n sandbox can't fetch git deps)
           ${pkgs.gnused}/bin/sed -i '/"crates\/aspen-tui"/d' $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/^aspen-tui/d' $out/aspen/Cargo.toml
         '';

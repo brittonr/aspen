@@ -27,10 +27,10 @@ crossterm = { version = "0.29", features = ["event-stream"] }
 tui-logger = { version = "0.18", features = ["tracing-support"] }
 
 # Rattoolkit TUI widgets (https://github.com/brittonr/subwayrat)
-rat-table = { git = "https://github.com/brittonr/subwayrat", rev = "d961761" }
-rat-widgets = { git = "https://github.com/brittonr/subwayrat", rev = "d961761", features = ["persistence"] }
-rat-streaming = { git = "https://github.com/brittonr/subwayrat", rev = "d961761" }
-rat-editor = { git = "https://github.com/brittonr/subwayrat", rev = "d961761" }
+rat-table = { git = "https://github.com/brittonr/subwayrat", rev = "66147cb" }
+rat-widgets = { git = "https://github.com/brittonr/subwayrat", rev = "66147cb", features = ["persistence"] }
+rat-streaming = { git = "https://github.com/brittonr/subwayrat", rev = "66147cb" }
+rat-editor = { git = "https://github.com/brittonr/subwayrat", rev = "66147cb" }
 
 # Error handling
 color-eyre = "0.6"
