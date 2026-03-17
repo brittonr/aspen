@@ -1721,12 +1721,15 @@
             lockfile = sys.argv[1]
             with open(lockfile) as f:
                 content = f.read()
-            for name in ["aspen-wasm-plugin", "aspen-dns", "aspen-testing-patchbay"]:
+            for name in ["aspen-wasm-plugin", "aspen-dns", "aspen-testing-patchbay", "aspen-tui"]:
                 pattern = r"\[\[package\]\]\nname = \"" + name + r"\".*?(?=\n\[\[|\Z)"
                 content = re.sub(pattern, "", content, flags=re.DOTALL)
-            # Also strip the patchbay git dep block
-            pattern = r"\[\[package\]\]\nname = \"patchbay\".*?(?=\n\[\[|\Z)"
-            content = re.sub(pattern, "", content, flags=re.DOTALL)
+            # Also strip git dep blocks not vendored in ciSrc
+            for name in ["patchbay", "rat-cursor", "rat-editor", "rat-event", "rat-ftable",
+                          "rat-salsa", "rat-scrolled", "rat-streaming", "rat-table", "rat-text",
+                          "rat-widget", "rat-widgets"]:
+                pattern = r"\[\[package\]\]\nname = \"" + name + r"\".*?(?=\n\[\[|\Z)"
+                content = re.sub(pattern, "", content, flags=re.DOTALL)
             with open(lockfile, "w") as f:
                 f.write(content)
           ''} $out/aspen/Cargo.lock
@@ -1735,13 +1738,18 @@
           ${pkgs.gnused}/bin/sed -i '/"crates\/aspen-testing-patchbay"/d' $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/^aspen-testing-patchbay/d' $out/aspen/Cargo.toml
 
+          # Strip aspen-tui from workspace members (rattoolkit/subwayrat git deps not vendored in ciSrc)
+          ${pkgs.gnused}/bin/sed -i '/"crates\/aspen-tui"/d' $out/aspen/Cargo.toml
+          ${pkgs.gnused}/bin/sed -i '/^aspen-tui/d' $out/aspen/Cargo.toml
+
           # Rewrite patchbay git dep in any remaining subcrates
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
             -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
             {} \;
 
-          # Strip patchbay git source line from Cargo.lock
+          # Strip patchbay and subwayrat git source lines from Cargo.lock
           ${pkgs.gnused}/bin/sed -i '/^source = "git+.*patchbay/d' $out/aspen/Cargo.lock
+          ${pkgs.gnused}/bin/sed -i '/^source = "git+.*subwayrat/d' $out/aspen/Cargo.lock
         '';
 
         # Extended source for workspace-mode test builds.
@@ -1826,6 +1834,11 @@
 
           # Strip git source lines from Cargo.lock (stubs are path deps now)
           ${pkgs.gnused}/bin/sed -i '/^source = "git+/d' $out/aspen/Cargo.lock
+
+          # Strip aspen-tui from workspace (rattoolkit has ratatui API breakage,
+          # and subwayrat git fetch fails in sandbox even with path dep patches)
+          ${pkgs.gnused}/bin/sed -i '/"crates\/aspen-tui"/d' $out/aspen/Cargo.toml
+          ${pkgs.gnused}/bin/sed -i '/^aspen-tui/d' $out/aspen/Cargo.toml
         '';
 
         # Shared crate overrides for all unit2nix builds.
