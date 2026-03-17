@@ -41,6 +41,7 @@ pub(crate) struct NixBuildOutput {
     /// by the native build path. When true, the worker skips the
     /// disk-based `upload_store_paths_snix` call (the output paths
     /// live in a temporary bwrap scratch dir that's already cleaned up).
+    #[cfg_attr(not(feature = "snix"), allow(dead_code))]
     pub(crate) native_uploaded: bool,
 }
 

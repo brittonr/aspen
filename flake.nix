@@ -2405,12 +2405,14 @@
               clippy = craneLib.cargoClippy (
                 ciCommonArgs
                 // {
-                  # Exclude crates that can't compile with stubbed deps:
+                  # Exclude crates that can't compile with stubbed/missing deps in ciSrc:
                   # - aspen-nix-cache-gateway: h3-iroh 0.96 vs iroh 0.95.1 mismatch
+                  # - aspen-testing-patchbay: patchbay git dep stubbed in ciSrc
+                  # - aspen-tui: rattoolkit git dep stubbed in ciSrc
                   # snix crates (aspen-castore, aspen-snix, aspen-snix-bridge) now
                   # compile in CI — snix deps are real (not stubbed), vendored via
                   # overrideVendorGitCheckout with snix-src flake input.
-                  cargoClippyExtraArgs = "--workspace --exclude aspen-nix-cache-gateway -- -D warnings";
+                  cargoClippyExtraArgs = "--workspace --exclude aspen-nix-cache-gateway --exclude aspen-testing-patchbay --exclude aspen-tui -- -D warnings";
                 }
               );
 
@@ -2646,8 +2648,11 @@
               clippy = craneLib.cargoClippy (
                 fullCommonArgs
                 // {
-                  # Exclude aspen-nix-cache-gateway: pre-existing h3-iroh 0.96 vs iroh 0.95.1 mismatch
-                  cargoClippyExtraArgs = "--workspace --exclude aspen-nix-cache-gateway -- -D warnings";
+                  # Exclude crates with build issues even in full source:
+                  # - aspen-nix-cache-gateway: h3-iroh 0.96 vs iroh 0.95.1 mismatch
+                  # - aspen-testing-patchbay: patchbay git dep not in fullSrc vendor
+                  # - aspen-tui: rattoolkit API breakage (deprecated ratatui methods)
+                  cargoClippyExtraArgs = "--workspace --exclude aspen-nix-cache-gateway --exclude aspen-testing-patchbay --exclude aspen-tui -- -D warnings";
                 }
               );
 
