@@ -37,6 +37,11 @@ pub(crate) struct NixBuildOutput {
     pub(crate) log_truncated: bool,
     /// Build phase timings.
     pub(crate) timings: BuildPhaseTimings,
+    /// Whether outputs were already uploaded to SNIX PathInfoService
+    /// by the native build path. When true, the worker skips the
+    /// disk-based `upload_store_paths_snix` call (the output paths
+    /// live in a temporary bwrap scratch dir that's already cleaned up).
+    pub(crate) native_uploaded: bool,
 }
 
 /// Handles for concurrent stdout/stderr reader tasks.
@@ -276,6 +281,7 @@ impl NixBuildWorker {
             log,
             log_truncated: false,
             timings,
+            native_uploaded: true,
         })
     }
 
@@ -400,6 +406,7 @@ impl NixBuildWorker {
             log,
             log_truncated: false,
             timings,
+            native_uploaded: true,
         })
     }
 
@@ -534,6 +541,7 @@ impl NixBuildWorker {
                 log: native_output.log,
                 log_truncated: native_output.log_truncated,
                 timings,
+                native_uploaded: native_output.native_uploaded,
             });
         }
 
@@ -573,6 +581,7 @@ impl NixBuildWorker {
             log,
             log_truncated: log_size >= MAX_LOG_SIZE,
             timings,
+            native_uploaded: false,
         })
     }
 

@@ -818,6 +818,7 @@ pub(crate) async fn execute_native(
         log,
         log_truncated: false,
         timings,
+        native_uploaded: true,
     })
 }
 

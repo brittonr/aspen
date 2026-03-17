@@ -91,9 +91,15 @@ impl Worker for NixBuildWorker {
             vec![]
         };
 
-        // Upload store paths to SNIX distributed cache if requested
+        // Upload store paths to SNIX distributed cache if requested.
+        // Skip when the native build path already uploaded outputs to
+        // PathInfoService — the output paths live in a temporary bwrap
+        // scratch dir that's cleaned up before we get here.
         #[cfg(feature = "snix")]
-        let uploaded_store_paths_snix = if payload.publish_to_cache {
+        let uploaded_store_paths_snix = if build_output.native_uploaded {
+            debug!("skipping SNIX upload — native build already uploaded outputs");
+            vec![]
+        } else if payload.publish_to_cache {
             let paths_to_publish = if payload.cache_outputs.is_empty() {
                 build_output.output_paths.clone()
             } else {
