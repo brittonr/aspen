@@ -2591,7 +2591,7 @@
                 ciCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,proxy";
+                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,proxy,forge,git-bridge,blob,sql,net,deploy,federation,global-discovery,jobs,kv-branch,nostr-relay,relay-server,snix,snix-http,snix-daemon,snix-eval,snix-build";
                   doCheck = false;
                 }
               );
@@ -2600,7 +2600,7 @@
                 ciCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features forge,ci,automerge";
+                  cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features forge,ci,automerge,sql,secrets,blob,proxy";
                   doCheck = false;
                 }
               );

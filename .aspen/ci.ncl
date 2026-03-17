@@ -2,14 +2,17 @@
 #
 # Stages:
 # 1. Check: format validation (shell) + clippy lint (nix check)
-# 2. Build: aspen-node + aspen-cli via unit2nix (parallel nix jobs)
+# 2. Build: near-full aspen-node + full aspen-cli (parallel nix jobs)
 # 3. Test: Quick test suite via nextest (nix check, ci-nix profile)
-# 4. Deploy (commented out): rolling deployment of CI-built aspen-node
+# 4. Deploy (tagged releases only): rolling deployment of CI-built aspen-node
+#
+# build-node enables all features except plugins (needs aspen-wasm-plugin
+# repo, not available in ciSrc). This covers: CI, forge, git-bridge, blob,
+# SQL, snix (eval+build+daemon+http), deploy, federation, net, proxy, etc.
 #
 # All stages use `type = 'nix` which runs `nix build` directly on the
 # CI worker via NixBuildWorker. Cargo deps are vendored inside the Nix
-# sandbox — no network access needed. The unit2nix build system compiles
-# each crate as a separate Nix derivation for fine-grained caching.
+# sandbox — no network access needed.
 #
 # Build outputs are automatically published to the Aspen nix binary cache
 # when `publish_to_cache = true`.
