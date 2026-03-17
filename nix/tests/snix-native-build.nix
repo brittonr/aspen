@@ -1,15 +1,16 @@
 # NixOS VM integration test: native snix-build pipeline end-to-end.
 #
-# Validates the full native build path wired in the previous commit:
+# Validates the full native build path:
 #   1. Boot aspen-node with snix-build feature enabled
-#   2. Verify init_native_build_service() detects bubblewrap
+#   2. Verify LocalStoreBuildService detects bubblewrap (no FUSE needed)
 #   3. Submit a nix build job for a trivial derivation
 #   4. Wait for the job to complete via the native snix-build path
 #   5. Verify output store path exists
 #   6. Start the cache gateway and confirm it serves narinfo
 #
-# This proves the native build pipeline works end-to-end without
-# relying on the `nix build` subprocess for the actual build step.
+# LocalStoreBuildService copies build inputs from the local /nix/store
+# into the bwrap sandbox instead of FUSE-mounting them from castore.
+# This avoids FUSE entirely, which fails under systemd ProtectSystem=strict.
 # The eval→drv bridge still uses `nix eval --raw .drvPath`.
 #
 # Run:
@@ -95,12 +96,7 @@ in
           pkgs.curl
           pkgs.git
           pkgs.bubblewrap
-          pkgs.fuse3
         ];
-
-        # FUSE is required by snix-build's bubblewrap sandbox — it mounts
-        # the castore inputs via a FUSE filesystem (/dev/fuse).
-        boot.kernelModules = ["fuse"];
 
         # Nix daemon for eval (nix eval --raw .drvPath)
         nix.settings.experimental-features = ["nix-command" "flakes"];
@@ -200,10 +196,11 @@ in
 
       with subtest("native build service detected"):
           # The node should log native build service initialization.
-          # Check the journal for the init message.
+          # With LocalStoreBuildService, look for "local-store bwrap" or
+          # "native build service" in the journal.
           log = node1.succeed(
               "journalctl -u aspen-node.service --no-pager "
-              "| grep -i 'native build service' || true"
+              "| grep -iE 'native build service|local-store bwrap' || true"
           )
           node1.log(f"Native build service log: {log}")
           # Note: the log may or may not appear depending on whether

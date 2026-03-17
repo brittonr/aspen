@@ -227,13 +227,15 @@ in {
           VIRTIOFSD_PATH = "${pkgs.virtiofsd}/bin/virtiofsd";
         };
 
-      # Use path attribute to add tools to PATH without conflicting with systemd
+      # Use path attribute to add tools to PATH without conflicting with systemd.
+      # bubblewrap: sandbox for native snix-build (LocalStoreBuildService).
       path =
         [
           pkgs.nix
           pkgs.git
           pkgs.coreutils
           pkgs.bash
+          pkgs.bubblewrap
           (pkgs.rustup or pkgs.cargo)
         ]
         ++ lib.optionals (cfg.ciVmKernelPath != null) [pkgs.cloud-hypervisor pkgs.virtiofsd];

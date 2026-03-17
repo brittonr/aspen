@@ -523,7 +523,7 @@
           LD_LIBRARY_PATH = lib.makeLibraryPath [pkgs.zlib pkgs.stdenv.cc.cc.lib];
 
           # Set environment variable required by snix-build at compile time
-          SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
+          SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
 
           # Set PROTO_ROOT for snix-castore build.rs to find proto files
           # Points to the snix source fetched as a flake input
@@ -2275,7 +2275,7 @@
                     doCheck = false;
                     HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
                     PROTO_ROOT = "${snix-src}";
-                    SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
+                    SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
                     nativeBuildInputs =
                       basicArgs.nativeBuildInputs
                       ++ (with pkgs; [autoPatchelfHook]);
@@ -2313,7 +2313,14 @@
                   doCheck = false;
                   HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
                   PROTO_ROOT = "${snix-src}";
-                  SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
+                  SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
+                  # The sandbox shell path is baked into the binary as a string
+                  # literal via env!(). Nix can't trace it as a runtime dep, so
+                  # we write the path to a file to keep busybox in the closure.
+                  postInstall = ''
+                    mkdir -p $out/share
+                    echo "${pkgs.busybox}/bin/sh" > $out/share/sandbox-shell-path
+                  '';
                   nativeBuildInputs =
                     basicArgs.nativeBuildInputs
                     ++ (with pkgs; [autoPatchelfHook]);
@@ -4609,7 +4616,7 @@
               ];
 
             env.RUST_SRC_PATH = "${rustToolChain}/lib/rustlib/src/rust/library";
-            env.SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
+            env.SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
 
             # LLVM coverage tool environment variables
             inherit (pkgs.cargo-llvm-cov) LLVM_COV LLVM_PROFDATA;

@@ -28,6 +28,11 @@ snix-eval = { workspace = true, optional = true }
 snix-glue = { workspace = true, optional = true }
 snix-build = { workspace = true, optional = true }
 
+# Build service utilities
+uuid = { version = "1", features = ["v4"], optional = true }
+futures = { version = "0.3", optional = true }
+tonic = { workspace = true, optional = true }
+
 # Serialization
 serde = { workspace = true }
 serde_json = "1.0"
@@ -53,7 +58,7 @@ snix = ["dep:snix-castore", "dep:snix-store"]
 # In-process Nix evaluation via snix-eval + snix-glue
 snix-eval = ["snix", "dep:snix-eval", "dep:snix-glue", "dep:snix-build"]
 # Native build execution via snix-build BuildService (bubblewrap/OCI sandbox)
-snix-build = ["snix-eval", "dep:bstr", "dep:bytes"]
+snix-build = ["snix-eval", "dep:bstr", "dep:bytes", "dep:uuid", "dep:futures", "dep:tonic"]
 # Retain nix CLI subprocess as fallback when snix-build is unavailable
 nix-cli-fallback = []
 # Re-enable when iroh is upgraded to 0.96+:
