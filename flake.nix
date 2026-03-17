@@ -3265,6 +3265,17 @@
                 gatewayPackage = bins.full-aspen-nix-cache-gateway;
               };
 
+              # Fully-native npins build pipeline (zero subprocesses).
+              # Uses snix-eval for .drvPath resolution instead of nix eval subprocess.
+              # Build: nix build .#checks.x86_64-linux.npins-native-eval-test --impure
+              npins-native-eval-test = import ./nix/tests/npins-native-eval.nix {
+                inherit pkgs kvPluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins-snix-build;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gatewayPackage = bins.full-aspen-nix-cache-gateway;
+              };
+
               # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.
               # MicroVM + AspenFs VirtioFS integration test: nginx in a Cloud
               # Hypervisor guest serving files from AspenFs in-memory KV store.

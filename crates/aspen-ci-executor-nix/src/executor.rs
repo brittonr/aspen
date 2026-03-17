@@ -279,6 +279,142 @@ impl NixBuildWorker {
         })
     }
 
+    /// Detect whether a project uses npins (has `npins/sources.json`).
+    #[cfg(feature = "snix-build")]
+    fn is_npins_project(project_dir: &str) -> bool {
+        std::path::Path::new(project_dir).join("npins/sources.json").exists()
+    }
+
+    /// Attempt a fully-native build for an npins project — zero subprocesses.
+    ///
+    /// Uses `NixEvaluator::evaluate_npins_drv_path()` to resolve the .drv path
+    /// via snix-eval, then follows the same build path as `try_native_build()`.
+    #[cfg(feature = "snix-build")]
+    pub(crate) async fn try_npins_native_build(
+        &self,
+        payload: &NixBuildPayload,
+        log_sender: Option<mpsc::Sender<String>>,
+    ) -> std::result::Result<NixBuildOutput, CiCoreError> {
+        let service = self.native_build_service.as_ref().ok_or_else(|| CiCoreError::NixBuildFailed {
+            flake: payload.flake_url.clone(),
+            reason: "native build service not initialized".to_string(),
+        })?;
+
+        let project_dir = payload.flake_url.clone();
+        let attribute = payload.attribute.clone();
+
+        // Construct evaluator from the same snix services the build uses
+        let (blob_svc, dir_svc, pathinfo_svc) = match (
+            &self.config.snix_blob_service,
+            &self.config.snix_directory_service,
+            &self.config.snix_pathinfo_service,
+        ) {
+            (Some(bs), Some(ds), Some(ps)) => (bs.clone(), ds.clone(), ps.clone()),
+            _ => {
+                return Err(CiCoreError::NixBuildFailed {
+                    flake: project_dir,
+                    reason: "snix services not configured for npins eval".to_string(),
+                });
+            }
+        };
+
+        let evaluator = crate::eval::NixEvaluator::new(blob_svc, dir_svc, pathinfo_svc);
+
+        // Step 1: Resolve drvPath via snix-eval (no subprocess)
+        if let Some(ref tx) = log_sender {
+            let _ = tx.send("npins native eval: resolving drvPath via snix-eval\n".to_string()).await;
+        }
+
+        let dir = project_dir.clone();
+        let attr = attribute.clone();
+        let drv_path =
+            tokio::task::spawn_blocking(move || evaluator.evaluate_npins_drv_path(&dir, "default.nix", &attr))
+                .await
+                .map_err(|e| CiCoreError::NixBuildFailed {
+                    flake: project_dir.clone(),
+                    reason: format!("eval task panicked: {e}"),
+                })?
+                .map_err(|e| CiCoreError::NixBuildFailed {
+                    flake: project_dir.clone(),
+                    reason: format!("npins eval failed: {e}"),
+                })?;
+
+        info!(drv_path = %drv_path.display(), "npins eval resolved drvPath (zero subprocesses)");
+
+        if let Some(ref tx) = log_sender {
+            let _ = tx.send(format!("npins native eval: {} → {}\n", project_dir, drv_path.display())).await;
+        }
+
+        // Step 2: Read and parse the .drv file
+        let drv_bytes = tokio::fs::read(&drv_path).await.map_err(|e| CiCoreError::NixBuildFailed {
+            flake: project_dir.clone(),
+            reason: format!("failed to read {}: {e}", drv_path.display()),
+        })?;
+
+        let (drv, _output_paths) =
+            crate::eval::parse_derivation(&drv_bytes).map_err(|e| CiCoreError::NixBuildFailed {
+                flake: project_dir.clone(),
+                reason: format!("failed to parse {}: {e}", drv_path.display()),
+            })?;
+
+        info!(
+            drv_path = %drv_path.display(),
+            output_count = drv.outputs.len(),
+            system = %drv.system,
+            "parsed derivation from npins eval, starting native build"
+        );
+
+        // Step 3: Execute native build
+        let build_result =
+            service.build_derivation(&drv, log_sender.clone()).await.map_err(|e| CiCoreError::NixBuildFailed {
+                flake: project_dir.clone(),
+                reason: format!("native build failed: {e}"),
+            })?;
+
+        let output_paths: Vec<String> = build_result.outputs.iter().map(|o| o.store_path.to_absolute_path()).collect();
+
+        info!(
+            output_paths = ?output_paths,
+            resolve_ms = build_result.resolve_ms,
+            build_ms = build_result.build_ms,
+            "npins native build succeeded (zero subprocesses)"
+        );
+
+        // Step 4: Upload outputs to PathInfoService
+        if let (Some(pathinfo_svc), Some(blob_svc), Some(dir_svc)) = (
+            &self.config.snix_pathinfo_service,
+            &self.config.snix_blob_service,
+            &self.config.snix_directory_service,
+        ) {
+            let nar_calc =
+                snix_store::nar::SimpleRenderer::new(std::sync::Arc::clone(blob_svc), std::sync::Arc::clone(dir_svc));
+            let uploaded =
+                crate::build_service::upload_native_outputs(pathinfo_svc.as_ref(), &nar_calc, &build_result.outputs)
+                    .await;
+            if !uploaded.is_empty() {
+                info!(count = uploaded.len(), "uploaded npins native build outputs to PathInfoService");
+            }
+        }
+
+        let log = format!(
+            "npins native build completed (zero subprocesses): {} outputs, resolve={}ms build={}ms\n",
+            output_paths.len(),
+            build_result.resolve_ms,
+            build_result.build_ms,
+        );
+
+        let mut timings = BuildPhaseTimings::default();
+        timings.record_import(Duration::from_millis(build_result.resolve_ms));
+        timings.record_build(Duration::from_millis(build_result.build_ms));
+
+        Ok(NixBuildOutput {
+            output_paths,
+            log,
+            log_truncated: false,
+            timings,
+        })
+    }
+
     /// Execute a Nix build.
     ///
     /// If `log_sender` is provided, stderr lines are also forwarded to it
@@ -316,11 +452,49 @@ impl NixBuildWorker {
 
         // Phase 2: Build execution
         //
-        // Try native snix-build path first when available. Falls back to
-        // subprocess on any error (eval failure, sandbox issue, etc.).
+        // Priority:
+        //   1. npins native eval (zero subprocesses) — if project has npins/sources.json
+        //   2. flake native build (nix eval subprocess + bwrap) — if snix-build enabled
+        //   3. nix build subprocess — always available as fallback
 
         #[cfg(feature = "snix-build")]
-        let native_result = if self.has_native_builds() {
+        let native_result = if self.has_native_builds() && Self::is_npins_project(&payload.flake_url) {
+            // npins project: try fully-native path (zero subprocesses)
+            let build_start = Instant::now();
+            match self.try_npins_native_build(payload, log_sender.clone()).await {
+                Ok(output) => {
+                    timings.record_build(build_start.elapsed());
+                    Some(output)
+                }
+                Err(e) => {
+                    warn!(
+                        error = %e,
+                        flake_ref = %flake_ref,
+                        "npins native build failed, trying flake native path"
+                    );
+                    if let Some(ref tx) = log_sender {
+                        let _ = tx.send(format!("npins eval failed ({e}), trying nix eval subprocess\n")).await;
+                    }
+                    // Fall through to try_native_build (uses nix eval subprocess)
+                    let build_start = Instant::now();
+                    match self.try_native_build(payload, &flake_ref, log_sender.clone()).await {
+                        Ok(output) => {
+                            timings.record_build(build_start.elapsed());
+                            Some(output)
+                        }
+                        Err(e) => {
+                            warn!(error = %e, "flake native build also failed, falling back to subprocess");
+                            if let Some(ref tx) = log_sender {
+                                let _ =
+                                    tx.send(format!("native build failed ({e}), falling back to nix build\n")).await;
+                            }
+                            None
+                        }
+                    }
+                }
+            }
+        } else if self.has_native_builds() {
+            // Flake project: try native build (nix eval subprocess + bwrap)
             let build_start = Instant::now();
             match self.try_native_build(payload, &flake_ref, log_sender.clone()).await {
                 Ok(output) => {

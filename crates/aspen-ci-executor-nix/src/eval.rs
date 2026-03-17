@@ -286,6 +286,81 @@ impl NixEvaluator {
         self.evaluate_with_store(&eval_code, Some(PathBuf::from(&flake_path)))
     }
 
+    /// Evaluate an npins-based project to a `.drvPath` string, fully in-process.
+    ///
+    /// Constructs a Nix expression that imports the project's `npins/default.nix`,
+    /// selects the requested attribute, and extracts `.drvPath`. Evaluation uses
+    /// snix-eval with snix-glue's fetcher builtins — no subprocess spawned.
+    ///
+    /// Returns `Ok(PathBuf)` with the `/nix/store/*.drv` path, or `Err` if
+    /// evaluation fails (e.g., unsupported builtins like `fetchGit`).
+    pub fn evaluate_npins_drv_path(
+        &self,
+        project_dir: &str,
+        default_nix: &str,
+        attribute: &str,
+    ) -> Result<PathBuf, NixEvalError> {
+        // Build the Nix expression that selects the attribute and gets .drvPath.
+        // The default.nix can be any Nix file that returns an attrset of derivations.
+        let nix_path = format!("{project_dir}/{default_nix}");
+
+        let attr_path = attribute
+            .split('.')
+            .map(|part| {
+                if part.contains('-') || part.starts_with(|c: char| c.is_ascii_digit()) {
+                    format!("\"{part}\"")
+                } else {
+                    part.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(".");
+
+        let eval_code = format!("(import {nix_path}).{attr_path}.drvPath");
+
+        info!(
+            project_dir = %project_dir,
+            attribute = %attribute,
+            "evaluating npins project to drvPath via snix-eval"
+        );
+
+        let result = self.evaluate_with_store(&eval_code, Some(PathBuf::from(&nix_path)));
+
+        if !result.errors.is_empty() {
+            let msg = result.errors.iter().map(|e| e.message.as_str()).collect::<Vec<_>>().join("; ");
+            return Err(NixEvalError {
+                message: format!("npins eval failed: {msg}"),
+                is_ifd: result.errors.iter().any(|e| e.is_ifd),
+            });
+        }
+
+        match result.value {
+            Some(snix_eval::Value::String(s)) => {
+                let drv_str = std::str::from_utf8(s.as_bytes()).map_err(|e| NixEvalError {
+                    message: format!("drvPath is not valid UTF-8: {e}"),
+                    is_ifd: false,
+                })?;
+                let drv_path = PathBuf::from(drv_str);
+                if !drv_str.starts_with("/nix/store/") || !drv_str.ends_with(".drv") {
+                    return Err(NixEvalError {
+                        message: format!("unexpected drvPath: {drv_str}"),
+                        is_ifd: false,
+                    });
+                }
+                info!(drv_path = %drv_path.display(), "npins eval resolved drvPath");
+                Ok(drv_path)
+            }
+            Some(other) => Err(NixEvalError {
+                message: format!("expected string for drvPath, got {:?}", std::mem::discriminant(&other)),
+                is_ifd: false,
+            }),
+            None => Err(NixEvalError {
+                message: "evaluation produced no value".to_string(),
+                is_ifd: false,
+            }),
+        }
+    }
+
     /// Evaluate a Nix expression, falling back to `nix eval` subprocess
     /// if in-process evaluation fails due to IFD or unsupported builtins.
     ///
