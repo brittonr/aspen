@@ -46,18 +46,18 @@ pub fn import_age_keys(manifest: &Manifest, mount_point: &str, log_imports: bool
     }
 
     // Append the age key file contents
-    if let Some(ref age_key_path) = manifest.age_key_file {
-        if !age_key_path.is_empty() {
-            match fs::read_to_string(age_key_path) {
-                Ok(contents) => {
-                    writeln!(keyfile, "{contents}")?;
-                    if log_imports {
-                        info!("Imported age key file: {age_key_path}");
-                    }
+    if let Some(ref age_key_path) = manifest.age_key_file
+        && !age_key_path.is_empty()
+    {
+        match fs::read_to_string(age_key_path) {
+            Ok(contents) => {
+                writeln!(keyfile, "{contents}")?;
+                if log_imports {
+                    info!("Imported age key file: {age_key_path}");
                 }
-                Err(e) => {
-                    warn!("Cannot read age key file '{age_key_path}': {e}");
-                }
+            }
+            Err(e) => {
+                warn!("Cannot read age key file '{age_key_path}': {e}");
             }
         }
     }

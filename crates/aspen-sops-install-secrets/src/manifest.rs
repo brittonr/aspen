@@ -32,10 +32,12 @@ pub struct Manifest {
 
     /// GPG SSH key paths (for GPG key import — not supported, ignored).
     #[serde(default)]
+    #[allow(dead_code)]
     pub ssh_key_paths: Vec<String>,
 
     /// GnuPG home directory (not supported, ignored).
     #[serde(default)]
+    #[allow(dead_code)]
     pub gnupg_home: Option<String>,
 
     /// Path to age key file.
@@ -52,6 +54,7 @@ pub struct Manifest {
 
     /// User-mode operation (non-root). Not supported in initial version.
     #[serde(default)]
+    #[allow(dead_code)]
     pub user_mode: bool,
 
     /// Logging configuration.

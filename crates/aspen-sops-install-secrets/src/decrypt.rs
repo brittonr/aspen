@@ -10,7 +10,6 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
 use tracing::debug;
-use tracing::warn;
 
 use crate::manifest::FormatType;
 use crate::manifest::Manifest;

@@ -12,7 +12,6 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
 use tracing::debug;
-use tracing::warn;
 
 use crate::manifest::SecretEntry;
 use crate::manifest::TemplateEntry;
@@ -121,11 +120,11 @@ pub fn write_secret(
     let file_path = gen_dir.join(&secret.name);
 
     // Create parent directories
-    if let Some(parent) = Path::new(&secret.name).parent() {
-        if parent != Path::new("") {
-            let full_parent = gen_dir.join(parent);
-            create_parent_dirs(&full_parent, keys_gid)?;
-        }
+    if let Some(parent) = Path::new(&secret.name).parent()
+        && parent != Path::new("")
+    {
+        let full_parent = gen_dir.join(parent);
+        create_parent_dirs(&full_parent, keys_gid)?;
     }
 
     fs::write(&file_path, value).with_context(|| format!("cannot write '{}'", file_path.display()))?;
@@ -166,11 +165,11 @@ pub fn write_template(
     let file_path = rendered_dir.join(&template.name);
 
     // Create parent directories for nested template names
-    if let Some(parent) = Path::new(&template.name).parent() {
-        if parent != Path::new("") {
-            let full_parent = rendered_dir.join(parent);
-            create_parent_dirs(&full_parent, keys_gid)?;
-        }
+    if let Some(parent) = Path::new(&template.name).parent()
+        && parent != Path::new("")
+    {
+        let full_parent = rendered_dir.join(parent);
+        create_parent_dirs(&full_parent, keys_gid)?;
     }
 
     // Write via tempfile + rename for atomicity
@@ -256,10 +255,10 @@ pub fn create_secret_symlinks(
         let link_path = Path::new(&secret.path);
 
         // Create parent directory
-        if let Some(parent) = link_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent).with_context(|| format!("cannot create parent of '{}'", secret.path))?;
-            }
+        if let Some(parent) = link_path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent).with_context(|| format!("cannot create parent of '{}'", secret.path))?;
         }
 
         // Remove existing link/file
@@ -285,7 +284,7 @@ pub fn create_secret_symlinks(
 /// Create symlink with specific ownership (matching Go's SecureSymlinkChown).
 fn secure_symlink_chown(target: &Path, link_path: &Path, uid: u32, gid: u32) -> Result<()> {
     let parent = link_path.parent().unwrap_or(Path::new("/tmp"));
-    let tmp_dir = tempfile::tempdir_in(parent).with_context(|| format!("cannot create temp dir for symlink chown"))?;
+    let tmp_dir = tempfile::tempdir_in(parent).context("cannot create temp dir for symlink chown")?;
 
     let tmp_link = tmp_dir.path().join(link_path.file_name().unwrap_or_default());
     std::os::unix::fs::symlink(target, &tmp_link)?;
@@ -314,10 +313,10 @@ pub fn create_template_symlinks(gen_dir: &Path, templates: &[TemplateEntry], ign
 
         let link_path = Path::new(&template.path);
 
-        if let Some(parent) = link_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = link_path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent)?;
         }
 
         if link_path.exists() || link_path.symlink_metadata().is_ok() {
