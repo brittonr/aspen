@@ -868,6 +868,30 @@
             -e 's|bolero = "0.11"|bolero = "0.13"|g' \
             -e 's|bolero-generator = "0.11"|bolero-generator = "0.13"|g' \
             {} \;
+
+          # Strip crates with unvendored git deps from workspace members + deps.
+          # aspen-testing-patchbay: patchbay git dep not vendored
+          # aspen-tui: rattoolkit/subwayrat git deps not vendored
+          ${pkgs.gnused}/bin/sed -i '/"crates\/aspen-testing-patchbay"/d' $out/aspen/Cargo.toml
+          ${pkgs.gnused}/bin/sed -i '/^aspen-testing-patchbay/d' $out/aspen/Cargo.toml
+          ${pkgs.gnused}/bin/sed -i '/"crates\/aspen-tui"/d' $out/aspen/Cargo.toml
+          ${pkgs.gnused}/bin/sed -i '/^aspen-tui/d' $out/aspen/Cargo.toml
+
+          # Strip their [[package]] blocks + rat-* transitive deps from Cargo.lock
+          ${pkgs.python3}/bin/python3 ${pkgs.writeText "strip-ciSrc-lock.py" ''
+            import re, sys
+            lockfile = sys.argv[1]
+            with open(lockfile) as f:
+                content = f.read()
+            for name in ["aspen-testing-patchbay", "aspen-tui",
+                          "patchbay", "rat-cursor", "rat-editor", "rat-event", "rat-ftable",
+                          "rat-salsa", "rat-scrolled", "rat-streaming", "rat-table", "rat-text",
+                          "rat-widget", "rat-widgets"]:
+                pattern = r"\[\[package\]\]\nname = \"" + name + r"\".*?(?=\n\[\[|\Z)"
+                content = re.sub(pattern, "", content, flags=re.DOTALL)
+            with open(lockfile, "w") as f:
+                f.write(content)
+          ''} $out/aspen/Cargo.lock
         '';
 
         # ── CI Build Args ─────────────────────────────────────────────
@@ -2413,6 +2437,38 @@
           # Set of checks that are run: `nix flake check`
           checks =
             {
+              # Verify ciSrc doesn't contain crates with unvendored git deps.
+              # These would fail in the nix sandbox (no network access).
+              # Catches the case where a new crate is added to the workspace
+              # but not excluded from ciSrc.
+              ciSrc-no-unvendored-git-deps = pkgs.runCommand "ciSrc-no-unvendored-git-deps" {} ''
+                cargo_toml="${ciSrc}/aspen/Cargo.toml"
+                cargo_lock="${ciSrc}/aspen/Cargo.lock"
+
+                # Crates that must NOT appear as workspace members or deps
+                # in ciSrc Cargo.toml (their git deps aren't vendored)
+                for crate in aspen-testing-patchbay aspen-tui; do
+                  # Match workspace member entries and [workspace.dependencies] lines,
+                  # skip comments (lines starting with #)
+                  if grep -v '^\s*#' "$cargo_toml" | grep -q "$crate" 2>/dev/null; then
+                    echo "ERROR: $crate still referenced in ciSrc Cargo.toml:"
+                    grep -v '^\s*#' "$cargo_toml" | grep "$crate"
+                    echo "Add to ciSrc stripping in flake.nix"
+                    exit 1
+                  fi
+                done
+
+                # No git+ source lines should remain in Cargo.lock except
+                # snix.dev and tvlfyi — these are vendored via overrideVendorGitCheckout
+                if grep '^source = "git+' "$cargo_lock" | grep -v -e 'snix\.dev' -e 'tvlfyi' 2>/dev/null | grep -q .; then
+                  echo "ERROR: ciSrc Cargo.lock still has unvendored git+ source lines:"
+                  grep '^source = "git+' "$cargo_lock" | grep -v -e 'snix\.dev' -e 'tvlfyi'
+                  exit 1
+                fi
+
+                echo "ciSrc has no unvendored git deps" > $out
+              '';
+
               # Clippy and doc checks using ciCommonArgs (stubbed aspen-wasm-plugin).
               # Works in pure evaluation without external repos.
               clippy = craneLib.cargoClippy (
