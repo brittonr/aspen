@@ -298,12 +298,6 @@
           name = "aspen-sibling-aspen-wasm-plugin";
         };
 
-        # External git dep: iroh-proxy-utils (used by aspen-proxy crate)
-        irohProxyUtilsSrc = builtins.fetchGit {
-          url = "https://github.com/n0-computer/iroh-proxy-utils";
-          rev = "38ef14f7bc215348d47987563bb1b5198cc91f40";
-          allRefs = true;
-        };
 
         snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd6fdebe953fb71bb2fde2f32841015c47"'';
         src = pkgs.runCommand "aspen-src-patched" {} ''
@@ -691,8 +685,6 @@
 
           # Only external sibling dep: aspen-wasm-plugin (for plugins-rpc feature)
           cp -r ${wasmPluginRepo} "$out/aspen-wasm-plugin"
-          # External git dep: iroh-proxy-utils (used by aspen-proxy)
-          cp -r ${irohProxyUtilsSrc} "$out/iroh-proxy-utils"
 
           # Stub aspen-dns (optional dep of aspen-net, dns feature disabled)
           # Path from crates/aspen-net/: ../../../aspen-dns/crates/aspen-dns → $out/aspen-dns/crates/aspen-dns
@@ -727,7 +719,6 @@
             echo '// stub' > "$dir/src/lib.rs"
           }
           stub mad-turmoil
-          stub h3-iroh
           stub patchbay
 
           # Rewrite non-snix git deps to path stubs in root Cargo.toml.
@@ -738,7 +729,6 @@
           # fullCargoVendorDir which substitutes the snix-src flake input.
           ${pkgs.gnused}/bin/sed -i \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
-            -e 's|h3-iroh = { git = "[^"]*"[^}]*}|h3-iroh = { path = ".nix-stubs/h3-iroh" }|' \
             $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
@@ -755,7 +745,6 @@
           # Rewrite git deps in all subcrates too
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
-            -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../../iroh-proxy-utils" }|' \
             -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
             -e 's|bolero = { version = "0.11"|bolero = { version = "0.13"|g' \
             -e 's|bolero-generator = { version = "0.11"|bolero-generator = { version = "0.13"|g' \
@@ -797,8 +786,6 @@
           EOF
           echo '// stub for CI builds' > "$out/aspen-wasm-plugin/crates/aspen-wasm-plugin/src/lib.rs"
 
-          # External git dep: iroh-proxy-utils (used by aspen-proxy)
-          cp -r ${irohProxyUtilsSrc} "$out/iroh-proxy-utils"
 
           # Stub aspen-dns (optional dep of aspen-net, dns feature disabled)
           mkdir -p "$out/aspen-dns/crates/aspen-dns/src"
@@ -830,7 +817,6 @@
             echo '// stub' > "$dir/src/lib.rs"
           }
           stub mad-turmoil
-          stub h3-iroh
           stub patchbay
 
           # Rewrite non-snix git deps to path stubs in root Cargo.toml.
@@ -839,7 +825,6 @@
           # real snix source for aspen-castore, aspen-snix, aspen-snix-bridge.
           ${pkgs.gnused}/bin/sed -i \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
-            -e 's|h3-iroh = { git = "[^"]*"[^}]*}|h3-iroh = { path = ".nix-stubs/h3-iroh" }|' \
             $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
@@ -855,7 +840,6 @@
           # Rewrite git deps in all subcrates too
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
-            -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../../iroh-proxy-utils" }|' \
             -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
             -e 's|bolero = { version = "0.11"|bolero = { version = "0.13"|g' \
             -e 's|bolero-generator = { version = "0.11"|bolero-generator = { version = "0.13"|g' \
@@ -1771,7 +1755,7 @@
 
         # Extended source for workspace-mode test builds.
         # Workspace mode resolves ALL members, including those with git deps
-        # (snix, h3-iroh, iroh-proxy-utils, mad-turmoil) that can't be fetched
+        # (snix, iroh-h3, iroh-proxy-utils, mad-turmoil) that can't be fetched
         # in the IFD sandbox. Stub them as empty path crates.
         u2nTestSrc = pkgs.runCommand "aspen-u2n-test-src" {} ''
           cp -r ${u2nSrc} $out
@@ -1804,9 +1788,7 @@
           stub nar-bridge
           stub snix-castore-http
           stub snix-tracing clap otlp
-          stub h3-iroh
           stub mad-turmoil
-          stub iroh-proxy-utils
           stub patchbay
 
           # Rewrite ALL git deps to path stubs in root Cargo.toml
@@ -1822,14 +1804,12 @@
             -e 's|nar-bridge = { git = "[^"]*"[^}]*}|nar-bridge = { path = ".nix-stubs/nar-bridge" }|' \
             -e 's|snix-castore-http = { git = "[^"]*"[^}]*}|snix-castore-http = { path = ".nix-stubs/snix-castore-http" }|' \
             -e 's|snix-tracing = { git = "[^"]*"[^}]*}|snix-tracing = { path = ".nix-stubs/snix-tracing" }|' \
-            -e 's|h3-iroh = { git = "[^"]*"[^}]*}|h3-iroh = { path = ".nix-stubs/h3-iroh" }|' \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
             $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
           # Rewrite git deps in subcrates
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
-            -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../.nix-stubs/iroh-proxy-utils" }|' \
             -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
             -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
             {} \;
@@ -2452,7 +2432,6 @@
                 ciCommonArgs
                 // {
                   # Exclude crates that can't compile with stubbed/missing deps in ciSrc:
-                  # - aspen-nix-cache-gateway: h3-iroh 0.96 vs iroh 0.95.1 mismatch
                   # - aspen-testing-patchbay: patchbay git dep stubbed in ciSrc
                   # - aspen-tui: rattoolkit git dep stubbed in ciSrc
                   # snix crates (aspen-castore, aspen-snix, aspen-snix-bridge) now
@@ -2659,7 +2638,7 @@
                 # openraft (tested upstream).
                   !builtins.elem name [
                     # Stubs themselves
-                    "h3-iroh"
+                    "iroh-h3"
                     "iroh-proxy-utils"
                     "mad-turmoil"
                     "nix-compat"
@@ -2695,7 +2674,6 @@
                 fullCommonArgs
                 // {
                   # Exclude crates with build issues even in full source:
-                  # - aspen-nix-cache-gateway: h3-iroh 0.96 vs iroh 0.95.1 mismatch
                   # - aspen-testing-patchbay: patchbay git dep not in fullSrc vendor
                   # - aspen-tui: rattoolkit API breakage (deprecated ratatui methods)
                   cargoClippyExtraArgs = "--workspace --exclude aspen-nix-cache-gateway --exclude aspen-testing-patchbay --exclude aspen-tui -- -D warnings";
@@ -4454,7 +4432,6 @@
                       echo '// stub' > "$dir/src/lib.rs"
                     }
                     stub mad-turmoil
-                    stub h3-iroh
 
                     # Rewrite non-snix git deps to path stubs in root Cargo.toml.
                     # snix deps (snix-castore, snix-store, nix-compat) stay as git deps
@@ -4462,7 +4439,6 @@
                     # real snix source — needed by aspen-cache (nix-compat::narinfo).
                     ${pkgs.gnused}/bin/sed -i \
                       -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
-                      -e 's|h3-iroh = { git = "[^"]*"[^}]*}|h3-iroh = { path = ".nix-stubs/h3-iroh" }|' \
                       $out/aspen/Cargo.toml
                     ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
@@ -4481,7 +4457,6 @@
                     # Rewrite git deps in subcrates
                     find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
                       -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = "../../.nix-stubs/mad-turmoil", optional = true }|' \
-                      -e 's|iroh-proxy-utils = { git = "[^"]*"[^}]*}|iroh-proxy-utils = { path = "../../../iroh-proxy-utils" }|' \
                       -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
                       -e 's|bolero = { version = "0.11"|bolero = { version = "0.13"|g' \
                       -e 's|bolero-generator = { version = "0.11"|bolero-generator = { version = "0.13"|g' \
