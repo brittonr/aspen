@@ -19,8 +19,6 @@ use aspen::node::Node;
 use aspen::node::NodeBuilder;
 use aspen::node::NodeId;
 use aspen::raft::storage::StorageBackend;
-use iroh::Watcher as _;
-use iroh::endpoint::ConnectionType;
 use tempfile::TempDir;
 use tokio::time::sleep;
 use tokio::time::timeout;
@@ -178,142 +176,11 @@ async fn test_relay_status_nodes_come_online() -> Result<()> {
     Ok(())
 }
 
-/// Test relay connectivity between peers in a formed cluster.
-///
-/// After forming a cluster, checks the connection type between each pair
-/// of nodes. Connections should be Direct, Relay, or Mixed — never None
-/// for active cluster members.
-#[tokio::test]
-#[ignore = "requires network access - not available in Nix sandbox"]
-async fn test_relay_status_connection_types_in_cluster() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,iroh=warn").try_init();
 
-    info!("Starting relay status test: connection types in cluster");
-
-    let temp_dir = TempDir::new()?;
-    let mut nodes: Vec<Node> = Vec::new();
-
-    // Create and form cluster
-    for id in 1..=NODE_COUNT {
-        let secret_key = generate_secret_key(id);
-        let node = create_node(id, &temp_dir, &secret_key).await?;
-        nodes.push(node);
-    }
-
-    form_cluster(&nodes).await?;
-    info!("cluster formed, checking connection types...");
-
-    // Allow connections to settle after cluster formation
-    sleep(Duration::from_secs(3)).await;
-
-    let mut total_connections: u32 = 0;
-    let mut direct_connections: u32 = 0;
-    let mut relay_connections: u32 = 0;
-    let mut mixed_connections: u32 = 0;
-    let mut none_connections: u32 = 0;
-    let mut unknown_connections: u32 = 0;
-
-    // Check connection type from each node to every other node
-    for (i, from_node) in nodes.iter().enumerate() {
-        let from_id = i as u64 + 1;
-        let from_endpoint = from_node.handle().network.iroh_manager.endpoint();
-
-        for (j, to_node) in nodes.iter().enumerate() {
-            if i == j {
-                continue; // Skip self
-            }
-            let to_id = j as u64 + 1;
-            let to_endpoint_id = to_node.endpoint_addr().id;
-
-            total_connections += 1;
-
-            match from_endpoint.conn_type(to_endpoint_id) {
-                Some(mut watcher) => {
-                    let conn_type = watcher.get();
-
-                    match &conn_type {
-                        ConnectionType::None => {
-                            none_connections += 1;
-                            tracing::warn!(
-                                from_node = from_id,
-                                to_node = to_id,
-                                "connection type is None — peer may be transitioning"
-                            );
-                        }
-                        ConnectionType::Direct(addr) => {
-                            direct_connections += 1;
-                            info!(
-                                from_node = from_id,
-                                to_node = to_id,
-                                addr = %addr,
-                                "direct UDP connection"
-                            );
-                        }
-                        ConnectionType::Relay(url) => {
-                            relay_connections += 1;
-                            info!(
-                                from_node = from_id,
-                                to_node = to_id,
-                                relay = %url,
-                                "relay connection"
-                            );
-                        }
-                        ConnectionType::Mixed(addr, url) => {
-                            mixed_connections += 1;
-                            info!(
-                                from_node = from_id,
-                                to_node = to_id,
-                                addr = %addr,
-                                relay = %url,
-                                "mixed connection (direct + relay)"
-                            );
-                        }
-                    }
-                }
-                None => {
-                    unknown_connections += 1;
-                    info!(from_node = from_id, to_node = to_id, "no address info for peer (not yet discovered)");
-                }
-            }
-        }
-    }
-
-    // Summary
-    info!(
-        total = total_connections,
-        direct = direct_connections,
-        relay = relay_connections,
-        mixed = mixed_connections,
-        none = none_connections,
-        unknown = unknown_connections,
-        "connection type summary"
-    );
-
-    // At least some connections should be established (direct, relay, or mixed)
-    let active_connections = direct_connections + relay_connections + mixed_connections;
-    assert!(
-        active_connections > 0,
-        "expected at least one active connection between cluster nodes, \
-         got {} direct, {} relay, {} mixed, {} none, {} unknown",
-        direct_connections,
-        relay_connections,
-        mixed_connections,
-        none_connections,
-        unknown_connections,
-    );
-
-    // Verify the leader can see all members
-    let state = nodes[0].raft_node().current_state().await?;
-    assert_eq!(state.members.len() as u64, NODE_COUNT, "leader should see all members");
-
-    // Shutdown
-    for node in nodes {
-        node.shutdown().await?;
-    }
-
-    info!("Relay status test: connection types — completed");
-    Ok(())
-}
+// NOTE: test_relay_status_connection_types_in_cluster was removed because
+// iroh 0.97 dropped Endpoint::conn_type() and the ConnectionType enum.
+// The remaining tests cover relay URL presence, addr consistency, and
+// single-node endpoint behavior without depending on connection type introspection.
 
 /// Test that endpoint addresses are consistent across the cluster.
 ///
