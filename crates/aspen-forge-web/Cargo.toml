@@ -1,0 +1,48 @@
+[package]
+name = "aspen-forge-web"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Web frontend for Aspen Forge served over HTTP/3 via iroh-h3"
+
+[dependencies]
+# Aspen client for cluster connection
+aspen-client = { workspace = true }
+aspen-client-api = { workspace = true }
+aspen-core = { workspace = true }
+aspen-transport = { workspace = true }
+aspen-forge-protocol = { path = "../aspen-forge-protocol" }
+
+# Web framework
+axum = { version = "0.8", features = ["macros"] }
+http = "1.0"
+
+# iroh-h3 serving
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-h3-axum = { workspace = true }
+
+# Templating
+maud = { version = "0.26", features = ["axum"] }
+
+# Runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal"] }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+# CLI
+clap = { workspace = true, features = ["derive"] }
+
+# Serialization
+serde = { workspace = true }
+
+# Time formatting
+chrono = { workspace = true }
+
+[[bin]]
+name = "aspen-forge-web"
+path = "src/main.rs"

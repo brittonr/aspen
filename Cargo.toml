@@ -109,6 +109,7 @@ members = [
     "crates/aspen-blob",
     "crates/aspen-sql",
     "crates/aspen-forge",
+    "crates/aspen-forge-web",
     "crates/aspen-docs",
     "crates/aspen-hooks",
     "crates/aspen-crypto",
