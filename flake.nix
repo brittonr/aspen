@@ -245,6 +245,7 @@
           fileset = lib.fileset.unions [
             ./Cargo.toml
             ./Cargo.lock
+            ./crate-hashes.json
             ./.cargo
             ./.config
             ./build.rs

@@ -51,4 +51,4 @@
 
 - [x] 6.1 Remove all `h3-iroh requires iroh 0.96+` comments from Cargo.tomls
 - [x] 6.2 Remove stale `quinn::` direct imports if any remain
-- [ ] 6.3 Merge worktree branch to main, push (after remaining verification)
+- [x] 6.3 Merge worktree branch to main
