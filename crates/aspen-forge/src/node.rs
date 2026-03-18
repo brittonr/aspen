@@ -137,6 +137,48 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         Ok(())
     }
 
+    /// Enable gossip with automatic DAG sync.
+    ///
+    /// This is the recommended way to set up gossip — it creates the
+    /// announcement handler, spawns a [`DagSyncWorker`] to process
+    /// incoming sync requests, and registers everything with the gossip
+    /// service.
+    ///
+    /// When a peer announces a ref update or COB change, the worker
+    /// automatically connects to the peer via DAG sync over QUIC and
+    /// pulls the missing objects.
+    ///
+    /// # Arguments
+    ///
+    /// * `gossip` - The iroh-gossip instance
+    /// * `endpoint` - Iroh endpoint for outbound DAG sync connections
+    /// * `cancel` - Cancellation token to stop the worker on shutdown
+    ///
+    /// # Returns
+    ///
+    /// The `JoinHandle` for the background worker task.
+    pub async fn enable_gossip_with_dag_sync(
+        &mut self,
+        gossip: Arc<iroh_gossip::net::Gossip>,
+        endpoint: iroh::Endpoint,
+        cancel: tokio_util::sync::CancellationToken,
+    ) -> ForgeResult<tokio::task::JoinHandle<()>>
+    where
+        B: Send + Sync + 'static,
+    {
+        let (handler, sync_rx, _seeding_rx) =
+            crate::gossip::ForgeAnnouncementHandler::with_channels(256);
+
+        let sync_service = Arc::new(SyncService::new(self.sync.blobs().clone()));
+        let worker = crate::sync::DagSyncWorker::new(sync_service, endpoint);
+        let worker_handle = worker.spawn(sync_rx, cancel);
+
+        self.enable_gossip(gossip, Some(Arc::new(handler))).await?;
+
+        tracing::info!("forge dag sync worker started");
+        Ok(worker_handle)
+    }
+
     /// Check if gossip is enabled.
     pub fn has_gossip(&self) -> bool {
         self.gossip.is_some()
@@ -194,6 +236,23 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         } else {
             Err(ForgeError::GossipNotInitialized)
         }
+    }
+
+    /// Create a `DagSyncProtocolHandler` for this node's blob store.
+    ///
+    /// Register the returned handler on the iroh Router to serve
+    /// DAG sync requests from peers:
+    ///
+    /// ```ignore
+    /// let handler = forge.dag_sync_handler();
+    /// router_builder.dag_sync(handler);
+    /// ```
+    pub fn dag_sync_handler(&self) -> aspen_dag::DagSyncProtocolHandler
+    where
+        B: Send + Sync + 'static,
+    {
+        let sync = Arc::new(SyncService::new(self.sync.blobs().clone()));
+        sync.into_dag_sync_handler()
     }
 
     /// Get the public key of this node.

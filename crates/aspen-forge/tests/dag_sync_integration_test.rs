@@ -666,6 +666,20 @@ async fn gossip_to_sync_request_pipeline() {
     }
 }
 
+/// ForgeNode exposes dag_sync_handler() for router registration.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn forge_node_dag_sync_handler() {
+    use aspen_forge::ForgeNode;
+
+    let blobs = Arc::new(InMemoryBlobStore::new());
+    let kv = Arc::new(aspen_testing_core::DeterministicKeyValueStore::new());
+    let key = iroh::SecretKey::generate(&mut rand::rng());
+
+    let forge = ForgeNode::new(blobs, kv, key);
+    let _handler = forge.dag_sync_handler();
+    // Compiles and returns a valid ProtocolHandler.
+}
+
 /// End-to-end: create objects on sender, pipe through sender handler,
 /// receive into a fresh store via receive_dag_sync_from_bytes, then
 /// verify the receiver can serve the same objects back via its own
