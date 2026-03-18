@@ -520,6 +520,13 @@
 
         # Vendor cargo dependencies with snix override
         # This substitutes git.snix.dev fetches with our snix-src flake input
+        # Subwayrat source (fetched separately to work around stale crane checkout cache)
+        subwayratSrc = builtins.fetchGit {
+          url = "https://github.com/brittonr/subwayrat";
+          rev = "66147cb60f8168c9fa71d79cf1b5ae604b6429f1";
+          allRefs = true;
+        };
+
         # Must use vendorCargoDeps directly to pass overrideVendorGitCheckout
         cargoVendorDir = craneLib.vendorCargoDeps {
           src = rawSrc;
@@ -531,9 +538,18 @@
                   && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
               )
               ps;
+            isSubwayrat =
+              builtins.any (
+                p:
+                  builtins.isString (p.source or null)
+                  && lib.hasPrefix "git+https://github.com/brittonr/subwayrat" (p.source or "")
+              )
+              ps;
           in
             if isSnixRepo
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
+            else if isSubwayrat
+            then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = subwayratSrc;}))
             else ensureGitCheckoutLock drv;
         };
 
@@ -898,9 +914,18 @@
                   && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
               )
               ps;
+            isSubwayrat =
+              builtins.any (
+                p:
+                  builtins.isString (p.source or null)
+                  && lib.hasPrefix "git+https://github.com/brittonr/subwayrat" (p.source or "")
+              )
+              ps;
           in
             if isSnixRepo
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
+            else if isSubwayrat
+            then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = subwayratSrc;}))
             else ensureGitCheckoutLock drv;
         });
 
@@ -1042,9 +1067,18 @@
                   && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
               )
               ps;
+            isSubwayrat =
+              builtins.any (
+                p:
+                  builtins.isString (p.source or null)
+                  && lib.hasPrefix "git+https://github.com/brittonr/subwayrat" (p.source or "")
+              )
+              ps;
           in
             if isSnixRepo
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
+            else if isSubwayrat
+            then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = subwayratSrc;}))
             else ensureGitCheckoutLock drv;
         };
 
