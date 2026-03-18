@@ -1132,6 +1132,7 @@
         # to use a pre-built wasm_runtime binary instead of nested cargo build.
         patchVendorForHyperlight = baseVendorDir:
           pkgs.runCommand "patched-vendor-for-plugins" {} ''
+                      # iroh 0.97 upgrade: force drv hash change to clear stale failure cache
                       cp -rL --no-preserve=mode ${baseVendorDir} $out
                       ${pkgs.gnused}/bin/sed -i "s|${baseVendorDir}|$out|g" $out/config.toml
 
