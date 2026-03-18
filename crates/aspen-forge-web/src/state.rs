@@ -165,19 +165,25 @@ impl AppState {
         }
     }
 
-    /// Get issue detail.
-    pub async fn get_issue(&self, repo_id: &str, issue_id: String) -> Result<ForgeIssueInfo> {
+    /// Get issue detail with comments.
+    pub async fn get_issue_with_comments(
+        &self,
+        repo_id: &str,
+        issue_id: &str,
+    ) -> Result<(ForgeIssueInfo, Vec<aspen_forge_protocol::ForgeCommentInfo>)> {
         let resp = self
             .client
             .send(ClientRpcRequest::ForgeGetIssue {
                 repo_id: repo_id.into(),
-                issue_id,
+                issue_id: issue_id.into(),
             })
             .await
             .context("get issue")?;
         match resp {
             ClientRpcResponse::ForgeIssueResult(r) => {
-                r.issue.ok_or_else(|| anyhow::anyhow!("issue not found"))
+                let issue = r.issue.ok_or_else(|| anyhow::anyhow!("issue not found"))?;
+                let comments = r.comments.unwrap_or_default();
+                Ok((issue, comments))
             }
             other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
         }
@@ -202,12 +208,12 @@ impl AppState {
     }
 
     /// Get patch detail.
-    pub async fn get_patch(&self, repo_id: &str, patch_id: String) -> Result<ForgePatchInfo> {
+    pub async fn get_patch(&self, repo_id: &str, patch_id: &str) -> Result<ForgePatchInfo> {
         let resp = self
             .client
             .send(ClientRpcRequest::ForgeGetPatch {
                 repo_id: repo_id.into(),
-                patch_id,
+                patch_id: patch_id.into(),
             })
             .await
             .context("get patch")?;

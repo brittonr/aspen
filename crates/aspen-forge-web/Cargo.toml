@@ -13,16 +13,15 @@ aspen-core = { workspace = true }
 aspen-transport = { workspace = true }
 aspen-forge-protocol = { path = "../aspen-forge-protocol" }
 
-# Web framework
-axum = { version = "0.8", features = ["macros"] }
-http = "1.0"
-
-# iroh-h3 serving
+# HTTP/3 serving via iroh
+h3 = { workspace = true }
 iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
-iroh-h3-axum = { workspace = true }
+iroh-h3 = { workspace = true }
+http = "1.0"
+bytes = { workspace = true }
 
 # Templating
-maud = { version = "0.26", features = ["axum"] }
+maud = "0.26"
 
 # Runtime
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal"] }
