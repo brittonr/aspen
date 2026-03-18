@@ -2882,8 +2882,8 @@
               # Build: nix build .#checks.x86_64-linux.kv-operations-test
               kv-operations-test = import ./nix/tests/kv-operations.nix {
                 inherit pkgs;
-                aspenNodePackage = bins.full-aspen-node;
-                aspenCliPackage = bins.full-aspen-cli;
+                aspenNodePackage = bins.ci-aspen-node;
+                aspenCliPackage = bins.ci-aspen-cli;
               };
 
               # FUSE mount test: write, read, mkdir, delete, large file (100KB).
