@@ -1,4 +1,5 @@
 //! Application state struct and constructors.
+#![allow(clippy::field_reassign_with_default)]
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

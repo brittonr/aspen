@@ -216,6 +216,7 @@ pub struct VaultKeyEntry {
 }
 
 /// Wrapper enum for different client types.
+#[allow(clippy::large_enum_variant)]
 pub enum ClientImpl {
     Iroh(crate::iroh_client::IrohClient),
     MultiNode(crate::iroh_client::MultiNodeClient),

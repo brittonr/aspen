@@ -1,3 +1,11 @@
+// Vendored dependency — suppress upstream clippy warnings
+#![allow(
+    clippy::needless_lifetimes,
+    clippy::useless_conversion,
+    clippy::collapsible_if,
+    clippy::needless_borrow,
+    clippy::single_match
+)]
 //! HTTP proxy utilities for [iroh](https://github.com/n0-computer/iroh) connections.
 //!
 //! This crate provides building blocks for HTTP proxies that bridge TCP traffic over
