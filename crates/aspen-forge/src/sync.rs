@@ -405,52 +405,7 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
                     message: format!("failed to connect for dag sync: {e}"),
                 })?;
 
-        let mut result = DagSyncResult::default();
-        let blobs = Arc::clone(&self.blobs);
-
-        let sync_stats = aspen_dag::recv_sync(&mut conn.recv, |frame| {
-            match frame {
-                aspen_dag::ReceivedFrame::Data { hash, data } => {
-                    let blake_hash = blake3::Hash::from_bytes(hash);
-
-                    // Insert into blob store. block_in_place is required because
-                    // recv_sync's callback is synchronous but add_bytes is async.
-                    let insert_result = tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current()
-                            .block_on(async { blobs.add_bytes(&data).await })
-                    });
-
-                    match insert_result {
-                        Ok(add_result) => {
-                            if add_result.was_new {
-                                result.objects_inserted += 1;
-                            } else {
-                                result.objects_already_present += 1;
-                            }
-                            result.bytes_received += data.len() as u64;
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                hash = %blake_hash.to_hex(),
-                                error = %e,
-                                "failed to insert received object"
-                            );
-                            result.insert_errors.push((blake_hash, e.to_string()));
-                        }
-                    }
-                }
-                aspen_dag::ReceivedFrame::HashOnly { hash } => {
-                    result.deferred_hashes.push(blake3::Hash::from_bytes(hash));
-                }
-            }
-            Ok(())
-        })
-        .await
-        .map_err(|e| ForgeError::SyncFailed {
-            message: format!("dag sync stream error: {e}"),
-        })?;
-
-        result.wire_stats = sync_stats;
+        let result = self.receive_frames(&mut conn.recv).await?;
 
         tracing::info!(
             inserted = result.objects_inserted,
@@ -469,20 +424,36 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
     /// instead of a QUIC connection. Useful for testing the receiver
     /// without network setup.
     pub async fn receive_dag_sync_from_bytes(&self, data: &[u8]) -> ForgeResult<DagSyncResult> {
+        let mut cursor = std::io::Cursor::new(data);
+        self.receive_frames(&mut cursor).await
+    }
+
+    /// Read response frames from a stream and insert objects into the blob store.
+    ///
+    /// Uses `read_frame` directly (async) instead of `recv_sync` (sync callback)
+    /// to avoid `block_in_place`. Works on both multi-threaded and current-thread
+    /// runtimes.
+    async fn receive_frames<R: tokio::io::AsyncRead + Unpin>(
+        &self,
+        reader: &mut R,
+    ) -> ForgeResult<DagSyncResult> {
         let mut result = DagSyncResult::default();
-        let blobs = Arc::clone(&self.blobs);
+        let mut bytes_received: u64 = 0;
 
-        let sync_stats = aspen_dag::recv_sync(&mut std::io::Cursor::new(data), |frame| {
+        loop {
+            let frame = aspen_dag::read_frame(reader, &mut bytes_received)
+                .await
+                .map_err(|e| ForgeError::SyncFailed {
+                    message: format!("dag sync stream error: {e}"),
+                })?;
+
             match frame {
-                aspen_dag::ReceivedFrame::Data { hash, data } => {
+                Some(aspen_dag::ReceivedFrame::Data { hash, data }) => {
                     let blake_hash = blake3::Hash::from_bytes(hash);
+                    result.wire_stats.data_frames =
+                        result.wire_stats.data_frames.saturating_add(1);
 
-                    let insert_result = tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current()
-                            .block_on(async { blobs.add_bytes(&data).await })
-                    });
-
-                    match insert_result {
+                    match self.blobs.add_bytes(&data).await {
                         Ok(add_result) => {
                             if add_result.was_new {
                                 result.objects_inserted += 1;
@@ -492,30 +463,37 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
                             result.bytes_received += data.len() as u64;
                         }
                         Err(e) => {
+                            tracing::warn!(
+                                hash = %blake_hash.to_hex(),
+                                error = %e,
+                                "failed to insert received object"
+                            );
                             result.insert_errors.push((blake_hash, e.to_string()));
                         }
                     }
                 }
-                aspen_dag::ReceivedFrame::HashOnly { hash } => {
+                Some(aspen_dag::ReceivedFrame::HashOnly { hash }) => {
+                    result.wire_stats.hash_only_frames =
+                        result.wire_stats.hash_only_frames.saturating_add(1);
                     result.deferred_hashes.push(blake3::Hash::from_bytes(hash));
                 }
+                None => break,
             }
-            Ok(())
-        })
-        .await
-        .map_err(|e| ForgeError::SyncFailed {
-            message: format!("dag sync stream error: {e}"),
-        })?;
+        }
 
-        result.wire_stats = sync_stats;
+        result.wire_stats.bytes_transferred = bytes_received;
         Ok(result)
     }
 
     /// Execute the sender side of a DAG sync.
     ///
-    /// Given a `DagSyncRequest`, runs a `FullTraversal` with the
-    /// appropriate link extractor, reads each object from the local blob
-    /// store, and writes response frames to the provided stream.
+    /// Given a `DagSyncRequest`, walks the git object graph using an
+    /// async DFS over the local blob store and writes response frames
+    /// to the provided stream.
+    ///
+    /// Uses direct async blob reads instead of `LinkExtractor` (which
+    /// requires `block_in_place`) so it works on both multi-threaded
+    /// and current-thread runtimes (including patchbay device namespaces).
     ///
     /// This is the handler callback meant for `DagSyncProtocolHandler::from_fn`.
     pub async fn handle_sync_request<W: tokio::io::AsyncWrite + Unpin + Send>(
@@ -523,10 +501,7 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
         request: aspen_dag::DagSyncRequest,
         writer: &mut W,
     ) -> Result<aspen_dag::SyncStats, aspen_dag::ProtocolError> {
-        use aspen_dag::DagTraversal;
-        use aspen_dag::FullTraversal;
-
-        let (root_bytes, known_heads_bytes, filter) = match &request.traversal {
+        let (root_bytes, known_heads, filter) = match &request.traversal {
             aspen_dag::TraversalOpts::Full(opts) => {
                 let known: HashSet<blake3::Hash> = opts
                     .known_heads
@@ -543,18 +518,14 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
         };
 
         let root = blake3::Hash::from_bytes(root_bytes);
-        let extractor = crate::dag_sync::GitLinkExtractor::new(Arc::clone(&self.blobs));
-        let mut traversal = FullTraversal::with_known_heads(root, (), extractor, known_heads_bytes);
-
         let mut stats = aspen_dag::SyncStats::default();
 
-        while let Some(hash) = traversal.next().await.map_err(|e| {
-            aspen_dag::ProtocolError::Io {
-                source: std::io::Error::other(format!("traversal error: {e}")),
-            }
-        })? {
-            // Apply wire-protocol filter.
-            if !self.passes_filter(&hash, filter) {
+        // Async DFS: no block_in_place needed since we await blob reads directly.
+        let mut stack: Vec<blake3::Hash> = vec![root];
+        let mut visited = HashSet::new();
+
+        while let Some(hash) = stack.pop() {
+            if !visited.insert(hash) || known_heads.contains(&hash) {
                 continue;
             }
 
@@ -568,6 +539,17 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
             let hash_bytes = *hash.as_bytes();
             match data {
                 Some(bytes) => {
+                    // Extract children and push onto stack (reversed for left-to-right order).
+                    let children = self.extract_children_from_bytes(&bytes);
+                    for child in children.into_iter().rev() {
+                        stack.push(child);
+                    }
+
+                    // Apply wire-protocol filter.
+                    if !self.passes_filter_from_bytes(&bytes, filter) {
+                        continue;
+                    }
+
                     let ctx = aspen_dag::InlineContext {
                         data_size: bytes.len() as u64,
                         type_tag: 0,
@@ -583,7 +565,6 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
                     stats.bytes_transferred = stats.bytes_transferred.saturating_add(written);
                 }
                 None => {
-                    // Object missing locally — send hash-only so receiver knows to fetch separately.
                     stats.hash_only_frames = stats.hash_only_frames.saturating_add(1);
                     let written = aspen_dag::write_hash_only(writer, hash_bytes).await?;
                     stats.bytes_transferred = stats.bytes_transferred.saturating_add(written);
@@ -648,40 +629,50 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
         Ok(stats)
     }
 
-    /// Check if a hash passes the wire-protocol traversal filter.
+    /// Extract child hashes from already-fetched object bytes.
     ///
-    /// For Forge, type classification requires reading the object to determine
-    /// if it's a commit/tree/tag/blob. To avoid double-reads, we classify
-    /// based on the object type from the blob store.
-    fn passes_filter(&self, hash: &blake3::Hash, filter: &aspen_dag::TraversalFilter) -> bool {
+    /// Parses the `SignedObject<GitObject>` and returns references
+    /// (tree hash, parent commits, tree entries, tag target).
+    /// Returns empty vec if parsing fails.
+    fn extract_children_from_bytes(&self, bytes: &[u8]) -> Vec<blake3::Hash> {
+        let signed: SignedObject<GitObject> = match SignedObject::from_bytes(bytes) {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+
+        match &signed.payload {
+            GitObject::Commit(c) => {
+                let mut refs = Vec::with_capacity(1 + c.parents.len());
+                refs.push(c.tree());
+                refs.extend(c.parents());
+                refs
+            }
+            GitObject::Tree(t) => t.entries.iter().map(|e| e.hash()).collect(),
+            GitObject::Tag(t) => vec![t.target()],
+            GitObject::Blob(_) => vec![],
+        }
+    }
+
+    /// Check if already-fetched object bytes pass the traversal filter.
+    ///
+    /// Classifies the object by parsing it and checking the type tag
+    /// against the filter. No async or `block_in_place` needed.
+    fn passes_filter_from_bytes(&self, bytes: &[u8], filter: &aspen_dag::TraversalFilter) -> bool {
         match filter {
             aspen_dag::TraversalFilter::All => true,
             aspen_dag::TraversalFilter::Exclude(_) | aspen_dag::TraversalFilter::Only(_) => {
-                // Classify the object. This requires a synchronous read because
-                // passes_filter is called from the sync loop. Use block_in_place.
-                let blobs = Arc::clone(&self.blobs);
-                let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
-
-                let node_type = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(async {
-                        let bytes = match blobs.get_bytes(&iroh_hash).await {
-                            Ok(Some(b)) => b,
-                            _ => return None,
-                        };
-                        let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes).ok()?;
-                        Some(match &signed.payload {
-                            GitObject::Commit(_) => crate::dag_sync::ForgeNodeType::Commit,
-                            GitObject::Tree(_) => crate::dag_sync::ForgeNodeType::Tree,
-                            GitObject::Blob(_) => crate::dag_sync::ForgeNodeType::Blob,
-                            GitObject::Tag(_) => crate::dag_sync::ForgeNodeType::Tag,
-                        })
-                    })
+                let node_type = SignedObject::<GitObject>::from_bytes(bytes).ok().map(|signed| {
+                    match &signed.payload {
+                        GitObject::Commit(_) => crate::dag_sync::ForgeNodeType::Commit,
+                        GitObject::Tree(_) => crate::dag_sync::ForgeNodeType::Tree,
+                        GitObject::Blob(_) => crate::dag_sync::ForgeNodeType::Blob,
+                        GitObject::Tag(_) => crate::dag_sync::ForgeNodeType::Tag,
+                    }
                 });
 
                 match (filter, node_type) {
                     (aspen_dag::TraversalFilter::Exclude(tags), Some(t)) => !tags.contains(&t.as_tag()),
                     (aspen_dag::TraversalFilter::Only(tags), Some(t)) => tags.contains(&t.as_tag()),
-                    // Can't classify → include (safe default).
                     _ => true,
                 }
             }
