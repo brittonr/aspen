@@ -137,6 +137,19 @@ impl RouterBuilder {
         self
     }
 
+    /// Register the DAG sync protocol handler (optional).
+    ///
+    /// Enables streaming deterministic DAG traversal for efficient
+    /// content-addressed graph synchronization (Forge, snix, etc.).
+    ///
+    /// ALPN: `/aspen/dag-sync/1`
+    pub fn dag_sync<D: iroh::protocol::ProtocolHandler>(mut self, handler: D) -> Self {
+        use aspen_dag::DAG_SYNC_ALPN;
+        self.builder = self.builder.accept(DAG_SYNC_ALPN, handler);
+        tracing::info!("registered DAG sync protocol handler (ALPN: /aspen/dag-sync/1)");
+        self
+    }
+
     /// Finalize the router configuration and spawn it.
     ///
     /// Automatically registers gossip if enabled on the endpoint.

@@ -9,6 +9,7 @@ description = "Forge: Git on Aspen - decentralized code collaboration"
 # Core Aspen types
 aspen-core = { path = "../aspen-core" }
 aspen-blob = { path = "../aspen-blob" }
+aspen-dag = { path = "../aspen-dag" }
 aspen-cluster = { path = "../aspen-cluster", features = ["federation"] }
 
 # P2P networking

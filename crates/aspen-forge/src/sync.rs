@@ -2,9 +2,14 @@
 //!
 //! This module handles fetching missing objects from peers.
 //!
-//! The sync service recursively traverses Git object DAGs and COB change DAGs,
-//! fetching any missing objects from peers. It uses BFS traversal with
-//! deduplication to efficiently sync entire object graphs.
+//! Two sync strategies are available:
+//!
+//! 1. **Legacy per-object sync**: BFS traversal with individual `download_from_peer` calls. Used by
+//!    `fetch_commits` and `fetch_cob_changes`.
+//!
+//! 2. **DAG sync** (new): Single-stream deterministic traversal via `aspen-dag`. Used by
+//!    `plan_git_sync`, `plan_cob_sync`, and the `build_*_request` methods. Converts to a
+//!    `DagSyncRequest` for wire transfer.
 
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -260,6 +265,137 @@ impl<B: BlobStore> SyncService<B> {
 
         Ok(result)
     }
+}
+
+// ============================================================================
+// DAG Sync Methods
+// ============================================================================
+
+impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
+    /// Fetch all objects reachable from the given commits using DAG sync.
+    ///
+    /// Uses a single-stream deterministic traversal instead of per-object
+    /// fetch loops. The traversal walks the commit→tree→blob graph and
+    /// transfers all missing objects in one streaming exchange.
+    ///
+    /// # Arguments
+    ///
+    /// * `root` - Root commit hash to start traversal from
+    /// * `known_heads` - Local branch tips. Traversal stops at these boundaries.
+    ///
+    /// # Returns
+    ///
+    /// A `DagSyncPlan` describing the traversal configuration.
+    /// The caller connects to a peer and runs the sync using `send_sync`/`recv_sync`.
+    pub fn plan_git_sync(&self, root: blake3::Hash, known_heads: HashSet<blake3::Hash>) -> DagSyncPlan {
+        DagSyncPlan {
+            root,
+            known_heads,
+            sync_type: DagSyncType::Git,
+        }
+    }
+
+    /// Plan a COB change sync using DAG traversal.
+    ///
+    /// Walks the change→parent graph from the given heads.
+    pub fn plan_cob_sync(&self, root: blake3::Hash, known_heads: HashSet<blake3::Hash>) -> DagSyncPlan {
+        DagSyncPlan {
+            root,
+            known_heads,
+            sync_type: DagSyncType::Cob,
+        }
+    }
+
+    /// Build a `DagSyncRequest` for sending to a peer.
+    ///
+    /// Converts local branch knowledge into a wire protocol request.
+    pub fn build_sync_request(&self, plan: &DagSyncPlan, inline: aspen_dag::InlinePolicy) -> aspen_dag::DagSyncRequest {
+        let known_heads_bytes: std::collections::BTreeSet<[u8; 32]> =
+            plan.known_heads.iter().map(|h| *h.as_bytes()).collect();
+
+        aspen_dag::DagSyncRequest {
+            traversal: aspen_dag::TraversalOpts::Full(aspen_dag::FullTraversalOpts {
+                root: *plan.root.as_bytes(),
+                known_heads: known_heads_bytes,
+                order: aspen_dag::TraversalOrder::DepthFirstPreOrder,
+                filter: aspen_dag::TraversalFilter::All,
+            }),
+            inline,
+        }
+    }
+
+    /// Build a stem-only `DagSyncRequest` (commits + trees + tags, no blobs).
+    ///
+    /// Used for the first phase of two-phase sync.
+    pub fn build_stem_sync_request(&self, plan: &DagSyncPlan) -> aspen_dag::DagSyncRequest {
+        let known_heads_bytes: std::collections::BTreeSet<[u8; 32]> =
+            plan.known_heads.iter().map(|h| *h.as_bytes()).collect();
+
+        aspen_dag::DagSyncRequest {
+            traversal: aspen_dag::TraversalOpts::Full(aspen_dag::FullTraversalOpts {
+                root: *plan.root.as_bytes(),
+                known_heads: known_heads_bytes,
+                order: aspen_dag::TraversalOrder::DepthFirstPreOrder,
+                filter: aspen_dag::TraversalFilter::Exclude(std::collections::BTreeSet::from([
+                    crate::dag_sync::ForgeNodeType::Blob.as_tag(),
+                ])),
+            }),
+            inline: aspen_dag::InlinePolicy::All,
+        }
+    }
+
+    /// Build a leaf-only `DagSyncRequest` (blobs only).
+    ///
+    /// Used for the second phase of two-phase sync. Requires the stem
+    /// to have been synced first so the traversal can discover blob hashes.
+    pub fn build_leaf_sync_request(&self, plan: &DagSyncPlan) -> aspen_dag::DagSyncRequest {
+        let known_heads_bytes: std::collections::BTreeSet<[u8; 32]> =
+            plan.known_heads.iter().map(|h| *h.as_bytes()).collect();
+
+        aspen_dag::DagSyncRequest {
+            traversal: aspen_dag::TraversalOpts::Full(aspen_dag::FullTraversalOpts {
+                root: *plan.root.as_bytes(),
+                known_heads: known_heads_bytes,
+                order: aspen_dag::TraversalOrder::DepthFirstPreOrder,
+                filter: aspen_dag::TraversalFilter::Only(std::collections::BTreeSet::from([
+                    crate::dag_sync::ForgeNodeType::Blob.as_tag(),
+                ])),
+            }),
+            inline: aspen_dag::InlinePolicy::All,
+        }
+    }
+
+    /// Convert a list of ref target hashes into known heads for incremental sync.
+    ///
+    /// The caller reads local branch refs and passes the target hashes here.
+    /// These become the `known_heads` in a `DagSyncPlan`, causing the
+    /// remote traversal to stop at objects we already have.
+    pub fn known_heads_from_refs(&self, ref_targets: &[blake3::Hash]) -> HashSet<blake3::Hash> {
+        ref_targets.iter().copied().collect()
+    }
+}
+
+/// Plan for a DAG sync operation.
+///
+/// Created by `SyncService::plan_git_sync` or `SyncService::plan_cob_sync`.
+/// Converted to a `DagSyncRequest` for sending over the wire.
+#[derive(Debug, Clone)]
+pub struct DagSyncPlan {
+    /// Root hash to start traversal from.
+    pub root: blake3::Hash,
+    /// Local known heads — traversal stops at these boundaries.
+    pub known_heads: HashSet<blake3::Hash>,
+    /// Type of sync (Git objects vs. COB changes).
+    pub sync_type: DagSyncType,
+}
+
+/// Type of DAG sync, determines which link extractor to use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DagSyncType {
+    /// Git object graph (commit → tree → blob).
+    Git,
+    /// COB change DAG (change → parent changes).
+    Cob,
 }
 
 /// Result of a fetch operation.

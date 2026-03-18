@@ -71,6 +71,7 @@
 //! 4. **Native BLAKE3**: All content addressing uses BLAKE3 (no SHA-1 compatibility layer).
 
 pub mod constants;
+pub mod dag_sync;
 pub mod error;
 pub mod federation;
 pub mod types;
@@ -97,6 +98,9 @@ pub use cob::ConflictingValue;
 pub use cob::FieldConflict;
 pub use cob::FieldResolution;
 pub use cob::MergeStrategy;
+pub use dag_sync::CobLinkExtractor;
+pub use dag_sync::ForgeNodeType;
+pub use dag_sync::GitLinkExtractor;
 pub use error::ForgeError;
 // Federation
 pub use federation::FORGE_RESOURCE_TYPE;
@@ -119,5 +123,7 @@ pub use identity::RepoIdentity;
 pub use node::ForgeNode;
 pub use refs::RefStore;
 pub use refs::RefUpdateEvent;
+pub use sync::DagSyncPlan;
+pub use sync::DagSyncType;
 pub use sync::SyncService;
 pub use types::SignedObject;
