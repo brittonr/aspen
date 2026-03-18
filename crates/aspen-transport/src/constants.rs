@@ -56,6 +56,12 @@ pub const NET_TUNNEL_ALPN: &[u8] = b"/aspen/net-tunnel/0";
 /// "Iroh-only networking" architecture constraint.
 pub const NIX_CACHE_H3_ALPN: &[u8] = b"iroh+h3";
 
+/// ALPN protocol identifier for Forge web frontend HTTP/3.
+///
+/// Serves the Forge web UI over HTTP/3 via iroh QUIC. Used by the h3
+/// compatibility proxy to bridge TCP HTTP/1.1 clients to the forge frontend.
+pub const FORGE_WEB_ALPN: &[u8] = b"aspen/forge-web/1";
+
 /// Maximum concurrent Client connections.
 ///
 /// Set high enough to handle bursts of short-lived CLI connections.

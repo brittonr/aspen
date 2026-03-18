@@ -1644,6 +1644,7 @@ dependencies = [
  "aspen-client-api",
  "aspen-core",
  "aspen-forge-protocol",
+ "aspen-h3-proxy",
  "aspen-transport",
  "bytes",
  "chrono",
@@ -1687,6 +1688,26 @@ dependencies = [
  "vm-memory 0.14.1",
  "vmm-sys-util 0.12.1",
  "xattr",
+]
+
+[[package]]
+name = "aspen-h3-proxy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-transport",
+ "bytes",
+ "clap",
+ "h3",
+ "http 1.4.0",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "iroh",
+ "iroh-h3",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

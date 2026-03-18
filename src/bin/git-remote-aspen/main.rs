@@ -161,7 +161,7 @@ impl RpcClient {
     /// For V2 tickets, these addresses include direct socket addresses for
     /// relay-less connectivity. For V1 tickets, only the node IDs are available.
     async fn connect(bootstrap_addrs: Vec<iroh::EndpointAddr>) -> io::Result<Self> {
-        use iroh::endpoint::TransportConfig;
+        use iroh::endpoint::QuicTransportConfig;
         use iroh::endpoint::VarInt;
 
         if bootstrap_addrs.is_empty() {
@@ -180,54 +180,54 @@ impl RpcClient {
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
 
         // Configure transport for large git operations
-        let mut transport_config = TransportConfig::default();
-        // Set stream receive window to 64MB to handle large git objects
-        transport_config.stream_receive_window(VarInt::from_u32(64 * 1024 * 1024));
-        // Set connection receive window to 256MB
-        transport_config.receive_window(VarInt::from_u32(256 * 1024 * 1024));
-        // Set idle timeout high enough to handle server-side processing of large batches.
-        // Server may take 30-60 seconds to process 5000+ tree objects sequentially.
-        // Default QUIC idle timeout is often 30-60s, which is too short.
-        // SAFETY: RPC_TIMEOUT (600 seconds) is well within QUIC IdleTimeout max (2^62 microseconds).
-        // The conversion from Duration to IdleTimeout only fails for durations > ~146 years.
-        transport_config
-            .max_idle_timeout(Some(RPC_TIMEOUT.try_into().expect("RPC_TIMEOUT of 600s is valid for QUIC IdleTimeout")));
+        let transport_config = QuicTransportConfig::builder()
+            // Set stream receive window to 64MB to handle large git objects
+            .stream_receive_window(VarInt::from_u32(64 * 1024 * 1024))
+            // Set connection receive window to 256MB
+            .receive_window(VarInt::from_u32(256 * 1024 * 1024))
+            // Set idle timeout high enough to handle server-side processing of large batches.
+            // Server may take 30-60 seconds to process 5000+ tree objects sequentially.
+            // Default QUIC idle timeout is often 30-60s, which is too short.
+            .max_idle_timeout(Some(RPC_TIMEOUT.try_into().expect("RPC_TIMEOUT of 600s is valid for QUIC IdleTimeout")))
+            .build();
 
         // Build endpoint with or without discovery based on ticket type.
         // V2 tickets have direct addresses - prefer direct connection but keep
         // discovery as fallback. V1 tickets require discovery to resolve addresses.
-        let mut builder = iroh::Endpoint::builder()
+        //
+        // For local-only connections, use empty_builder() to skip DNS/relay overhead.
+        // For remote connections, use N0 preset for relay fallback.
+        let all_local = has_direct_addrs
+            && bootstrap_addrs.iter().all(|addr| {
+                addr.addrs.iter().all(|a| match a {
+                    iroh::TransportAddr::Ip(sock) => {
+                        let ip = sock.ip();
+                        ip.is_loopback()
+                            || match ip {
+                                std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
+                                std::net::IpAddr::V6(v6) => v6.is_loopback(),
+                            }
+                    }
+                    _ => false,
+                })
+            });
+
+        let builder = if has_direct_addrs && all_local {
+            eprintln!("git-remote-aspen: using direct local connection (discovery disabled)");
+            iroh::Endpoint::empty_builder()
+        } else {
+            if !has_direct_addrs {
+                eprintln!("git-remote-aspen: discovery enabled (no direct addresses in ticket)");
+            } else {
+                eprintln!("git-remote-aspen: discovery enabled for relay fallback");
+            }
+            iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+        };
+
+        let builder = builder
             .secret_key(secret_key)
             .alpns(vec![aspen::CLIENT_ALPN.to_vec()])
             .transport_config(transport_config);
-
-        // Only clear discovery if we have direct addresses AND they're local/private.
-        // For remote connections, keep discovery enabled for relay fallback.
-        let all_local = bootstrap_addrs.iter().all(|addr| {
-            addr.addrs.iter().all(|a| match a {
-                iroh::TransportAddr::Ip(sock) => {
-                    let ip = sock.ip();
-                    ip.is_loopback()
-                        || match ip {
-                            std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
-                            std::net::IpAddr::V6(v6) => v6.is_loopback(),
-                        }
-                }
-                _ => false,
-            })
-        });
-
-        if has_direct_addrs && all_local {
-            // Local addresses: disable discovery to avoid DNS/relay overhead
-            eprintln!("git-remote-aspen: using direct local connection (discovery disabled)");
-            builder = builder.clear_discovery();
-        } else if !has_direct_addrs {
-            // No direct addresses: we NEED discovery, keep it enabled (default)
-            eprintln!("git-remote-aspen: discovery enabled (no direct addresses in ticket)");
-        } else {
-            // Remote addresses with discovery: keep discovery for relay fallback
-            eprintln!("git-remote-aspen: discovery enabled for relay fallback");
-        }
 
         let endpoint = builder.bind().await.map_err(io::Error::other)?;
 

@@ -36,6 +36,9 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 # CLI
 clap = { workspace = true, features = ["derive"] }
 
+# H3 compatibility proxy (optional, for embedded TCP bridging)
+aspen-h3-proxy = { path = "../aspen-h3-proxy" }
+
 # Serialization
 serde = { workspace = true }
 

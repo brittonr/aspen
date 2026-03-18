@@ -28,7 +28,7 @@ use tracing::info;
 /// Create a test endpoint with a random secret key.
 async fn create_test_endpoint() -> Result<Endpoint> {
     let secret_key = SecretKey::generate(&mut rand::rng());
-    let endpoint = Endpoint::builder().secret_key(secret_key).alpns(vec![DOCS_SYNC_ALPN.to_vec()]).bind().await?;
+    let endpoint = Endpoint::builder(iroh::endpoint::presets::N0).secret_key(secret_key).alpns(vec![DOCS_SYNC_ALPN.to_vec()]).bind().await?;
     Ok(endpoint)
 }
 

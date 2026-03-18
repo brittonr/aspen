@@ -95,7 +95,8 @@ pub async fn run_h3(config: &GatewayConfig) -> anyhow::Result<()> {
 
     let addr = endpoint.addr();
     info!(
-        endpoint_id = %addr.id.fmt_short(),
+        endpoint_id = %addr.id,
+        endpoint_id_short = %addr.id.fmt_short(),
         "nix cache gateway listening (nar-bridge, HTTP/3 over iroh QUIC)"
     );
 

@@ -22,6 +22,15 @@ struct Cli {
     /// RPC timeout in seconds.
     #[arg(long, default_value_t = 30)]
     timeout_secs: u64,
+
+    /// Start an embedded TCP proxy on this port for browser access.
+    /// Bridges HTTP/1.1 on localhost to the h3 endpoint.
+    #[arg(long)]
+    tcp_port: Option<u16>,
+
+    /// TCP proxy bind address (only used with --tcp-port).
+    #[arg(long, default_value = "127.0.0.1")]
+    tcp_bind: String,
 }
 
 #[tokio::main]
@@ -49,14 +58,33 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to bind iroh endpoint")?;
 
-    let addr = endpoint.addr();
+    let endpoint_id = endpoint.addr().id;
     info!(
-        endpoint_id = %addr.id.fmt_short(),
+        endpoint_id = %endpoint_id,
+        endpoint_id_short = %endpoint_id.fmt_short(),
         "forge web serving HTTP/3 over iroh QUIC"
     );
 
     let handler = aspen_forge_web::server::ForgeH3Handler::new(state);
     let _router = iroh::protocol::Router::builder(endpoint).accept(b"aspen/forge-web/1", handler).spawn();
+
+    // Optionally start embedded TCP proxy for browser access
+    if let Some(tcp_port) = cli.tcp_port {
+        let proxy_config = aspen_forge_web::ProxyConfig {
+            bind_addr: cli.tcp_bind.clone(),
+            port: tcp_port,
+            endpoint_id,
+            alpn: b"aspen/forge-web/1".to_vec(),
+            request_timeout: std::time::Duration::from_secs(cli.timeout_secs),
+        };
+        let proxy = aspen_forge_web::H3Proxy::new(proxy_config);
+        info!(port = tcp_port, "starting embedded TCP proxy for browser access");
+        tokio::spawn(async move {
+            if let Err(e) = proxy.run().await {
+                tracing::error!(error = %e, "TCP proxy failed");
+            }
+        });
+    }
 
     // Wait for shutdown
     tokio::signal::ctrl_c().await.ok();

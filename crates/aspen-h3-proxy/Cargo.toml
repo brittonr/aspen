@@ -1,0 +1,39 @@
+[package]
+name = "aspen-h3-proxy"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "TCP-to-iroh-h3 reverse proxy for browser and standard HTTP client access"
+
+[dependencies]
+# Aspen transport constants
+aspen-transport = { workspace = true }
+
+# HTTP/3 over iroh QUIC
+h3 = { workspace = true }
+iroh = { version = "0.97.0" }
+iroh-h3 = { workspace = true }
+http = "1.0"
+bytes = { workspace = true }
+
+# TCP HTTP/1.1 server
+hyper = { version = "1.0", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+
+# Runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "net", "time"] }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+# CLI
+clap = { workspace = true, features = ["derive"] }
+
+[[bin]]
+name = "aspen-h3-proxy"
+path = "src/main.rs"
