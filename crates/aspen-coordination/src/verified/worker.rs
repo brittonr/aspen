@@ -313,6 +313,35 @@ pub fn steal_hint_remaining_ttl(expires_at_ms: u64, now_ms: u64) -> u64 {
     expires_at_ms.saturating_sub(now_ms)
 }
 
+/// Check if a worker is ready to receive jobs.
+///
+/// A worker is ready when:
+/// - It is healthy
+/// - Its Raft log lag is known (Some)
+/// - The lag is below the threshold
+///
+/// # Arguments
+///
+/// * `lag` - Raft log lag (None if metrics unavailable)
+/// * `threshold` - Maximum acceptable lag (e.g., LEARNER_LAG_THRESHOLD = 100)
+/// * `is_healthy` - Whether the worker is healthy
+///
+/// # Returns
+///
+/// `true` if the worker is ready for job dispatch.
+///
+/// # Tiger Style
+///
+/// - Conservative: unknown lag (None) is never ready
+/// - Threshold is exclusive: lag must be strictly less than threshold
+#[inline]
+pub fn is_worker_ready(lag: Option<u64>, threshold: u64, is_healthy: bool) -> bool {
+    match lag {
+        Some(l) if is_healthy => l < threshold,
+        _ => false,
+    }
+}
+
 /// Check if a worker should be considered as a steal target.
 ///
 /// A worker is a good steal target (can receive stolen work) if:
@@ -827,6 +856,40 @@ mod tests {
         let h1 = simple_hash("test1");
         let h2 = simple_hash("test2");
         assert_ne!(h1, h2);
+    }
+
+    // ========================================================================
+    // Readiness Tests
+    // ========================================================================
+
+    #[test]
+    fn test_is_worker_ready_all_conditions_met() {
+        assert!(is_worker_ready(Some(50), 100, true));
+        assert!(is_worker_ready(Some(0), 100, true));
+        assert!(is_worker_ready(Some(99), 100, true));
+    }
+
+    #[test]
+    fn test_is_worker_ready_unhealthy() {
+        assert!(!is_worker_ready(Some(0), 100, false));
+        assert!(!is_worker_ready(Some(50), 100, false));
+    }
+
+    #[test]
+    fn test_is_worker_ready_lag_at_threshold() {
+        assert!(!is_worker_ready(Some(100), 100, true));
+    }
+
+    #[test]
+    fn test_is_worker_ready_lag_above_threshold() {
+        assert!(!is_worker_ready(Some(200), 100, true));
+        assert!(!is_worker_ready(Some(u64::MAX), 100, true));
+    }
+
+    #[test]
+    fn test_is_worker_ready_no_lag_data() {
+        assert!(!is_worker_ready(None, 100, true));
+        assert!(!is_worker_ready(None, 100, false));
     }
 
     // ========================================================================

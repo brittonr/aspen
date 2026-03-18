@@ -156,6 +156,13 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             info.disk_free_build_pct = stats.disk_free_build_pct;
             info.disk_free_store_pct = stats.disk_free_store_pct;
 
+            // Update readiness based on Raft log lag
+            info.is_ready = verified::is_worker_ready(
+                stats.raft_log_lag,
+                aspen_constants::raft::LEARNER_LAG_THRESHOLD,
+                info.health == crate::registry::HealthStatus::Healthy,
+            );
+
             // Update in KV store
             let key = verified::worker_stats_key(worker_id);
             let value = serde_json::to_string(&info)?;

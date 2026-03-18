@@ -41,7 +41,7 @@ use crate::worker::WorkerPool;
 use crate::worker::WorkerStatus;
 
 /// Configuration for distributed worker pool.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct DistributedPoolConfig {
     /// Base worker configuration.
     pub worker_config: WorkerConfig,
@@ -63,6 +63,31 @@ pub struct DistributedPoolConfig {
     pub specializations: Vec<String>,
     /// Tags for worker routing.
     pub tags: Vec<String>,
+    /// Callback to get current Raft log lag for readiness gating.
+    /// Returns `Some(lag)` when metrics are available, `None` otherwise.
+    /// If not set, heartbeat reports `raft_log_lag: None` and the worker
+    /// stays not-ready until another source provides the lag.
+    #[serde(skip)]
+    #[allow(clippy::type_complexity)]
+    pub raft_log_lag_fn: Option<Arc<dyn Fn() -> Option<u64> + Send + Sync>>,
+}
+
+impl std::fmt::Debug for DistributedPoolConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DistributedPoolConfig")
+            .field("worker_config", &self.worker_config)
+            .field("coordinator_config", &self.coordinator_config)
+            .field("node_id", &self.node_id)
+            .field("peer_id", &self.peer_id)
+            .field("enable_migration", &self.enable_migration)
+            .field("enable_work_stealing", &self.enable_work_stealing)
+            .field("steal_check_interval", &self.steal_check_interval)
+            .field("max_migration_batch", &self.max_migration_batch)
+            .field("specializations", &self.specializations)
+            .field("tags", &self.tags)
+            .field("raft_log_lag_fn", &self.raft_log_lag_fn.as_ref().map(|_| "..."))
+            .finish()
+    }
 }
 
 impl Default for DistributedPoolConfig {
@@ -78,6 +103,7 @@ impl Default for DistributedPoolConfig {
             max_migration_batch: 10_u32,
             specializations: vec![],
             tags: vec![],
+            raft_log_lag_fn: None,
         }
     }
 }
@@ -242,6 +268,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
                 io_pressure_avg10: 0.0,
                 disk_free_build_pct: 100.0,
                 disk_free_store_pct: 100.0,
+                is_ready: false,
             };
 
             self.coordinator
@@ -271,6 +298,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
     }
 
     /// Spawn the heartbeat background task that sends periodic health updates.
+    #[allow(clippy::type_complexity)]
     fn start_background_tasks_spawn_heartbeat(
         task_tracker: &TaskTracker,
         pool: Arc<WorkerPool<S>>,
@@ -278,6 +306,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
         registrations: Arc<RwLock<HashMap<String, WorkerRegistration>>>,
         shutdown: Arc<tokio::sync::Notify>,
         node_id: String,
+        raft_log_lag_fn: Option<Arc<dyn Fn() -> Option<u64> + Send + Sync>>,
     ) {
         task_tracker.spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(10));
@@ -314,6 +343,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
                                     io_pressure_avg10: pressure_readings.io_avg10,
                                     disk_free_build_pct: disk_readings.build_dir_free_pct,
                                     disk_free_store_pct: disk_readings.store_dir_free_pct,
+                                    raft_log_lag: raft_log_lag_fn.as_ref().and_then(|f| f()),
                                     total_import_time_ms: 0,
                                     total_build_time_ms: 0,
                                     total_upload_time_ms: 0,
@@ -372,6 +402,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
             self.registrations.clone(),
             self.shutdown.clone(),
             self.config.node_id.clone(),
+            self.config.raft_log_lag_fn.clone(),
         );
 
         // Spawn work stealing task if enabled

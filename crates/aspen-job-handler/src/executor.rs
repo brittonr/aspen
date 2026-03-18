@@ -583,6 +583,7 @@ impl JobServiceExecutor {
             io_pressure_avg10: 0.0,
             disk_free_build_pct: 100.0,
             disk_free_store_pct: 100.0,
+            is_ready: false,
         };
 
         match wc.register_worker(info).await {
@@ -621,6 +622,7 @@ impl JobServiceExecutor {
             io_pressure_avg10: 0.0,
             disk_free_build_pct: 100.0,
             disk_free_store_pct: 100.0,
+            raft_log_lag: None,
             total_import_time_ms: 0,
             total_build_time_ms: 0,
             total_upload_time_ms: 0,

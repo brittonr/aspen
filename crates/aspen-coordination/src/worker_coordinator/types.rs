@@ -54,12 +54,22 @@ pub struct WorkerInfo {
     pub disk_free_build_pct: f64,
     /// Nix store free space percentage.
     pub disk_free_store_pct: f64,
+    /// Whether the worker is ready to receive jobs (Raft log caught up).
+    /// Starts `false` on registration, transitions to `true` after Raft
+    /// catchup is confirmed via heartbeat.
+    #[serde(default)]
+    pub is_ready: bool,
 }
 
 impl WorkerInfo {
     /// Calculate available capacity (0.0 = no capacity, 1.0 = full capacity).
+    ///
+    /// Returns 0.0 if the worker is unhealthy or not ready (Raft log not caught up).
     pub fn available_capacity(&self) -> f32 {
-        crate::verified::calculate_available_capacity_f32(self.load, self.health == HealthStatus::Healthy)
+        crate::verified::calculate_available_capacity_f32(
+            self.load,
+            self.health == HealthStatus::Healthy && self.is_ready,
+        )
     }
 
     /// Check if worker can handle a job type.
@@ -272,6 +282,10 @@ pub struct WorkerStats {
     pub disk_free_build_pct: f64,
     /// Nix store free space percentage (0.0-100.0).
     pub disk_free_store_pct: f64,
+    /// Raft log lag relative to the leader (None if metrics unavailable).
+    /// Used by the coordinator to determine worker readiness.
+    #[serde(default)]
+    pub raft_log_lag: Option<u64>,
     /// Total import time across all nix builds (ms).
     pub total_import_time_ms: u64,
     /// Total build time across all nix builds (ms).

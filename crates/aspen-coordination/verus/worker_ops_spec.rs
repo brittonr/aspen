@@ -853,4 +853,43 @@ verus! {
     {
         current_time_ms <= u64::MAX - lease_duration_ms
     }
+
+    // ========================================================================
+    // Worker Readiness
+    // ========================================================================
+
+    /// Check if a worker is ready to receive jobs.
+    ///
+    /// A worker is ready only when healthy, lag is known, and lag is
+    /// below the threshold. Conservative: unknown lag is never ready.
+    ///
+    /// # Arguments
+    ///
+    /// * `lag` - Raft log lag (None if metrics unavailable)
+    /// * `threshold` - Maximum acceptable lag
+    /// * `is_healthy` - Whether the worker is healthy
+    ///
+    /// # Returns
+    ///
+    /// `true` if the worker is ready for job dispatch.
+    pub fn is_worker_ready(
+        lag: Option<u64>,
+        threshold: u64,
+        is_healthy: bool,
+    ) -> (result: bool)
+        ensures
+            // Unhealthy workers are never ready
+            !is_healthy ==> !result,
+            // Unknown lag is never ready
+            lag.is_none() ==> !result,
+            // Lag at or above threshold is never ready
+            (lag.is_some() && lag.unwrap() >= threshold) ==> !result,
+            // Ready only when healthy, lag known, and below threshold
+            result == (is_healthy && lag.is_some() && lag.unwrap() < threshold),
+    {
+        match lag {
+            Some(l) => is_healthy && l < threshold,
+            None => false,
+        }
+    }
 }

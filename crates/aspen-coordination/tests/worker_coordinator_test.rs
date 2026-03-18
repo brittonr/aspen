@@ -42,6 +42,7 @@ fn create_test_worker(id: &str, node: &str, load: f32) -> WorkerInfo {
         io_pressure_avg10: 0.0,
         disk_free_build_pct: 100.0,
         disk_free_store_pct: 100.0,
+        is_ready: true,
     }
 }
 
@@ -83,6 +84,7 @@ async fn test_worker_heartbeat() {
         io_pressure_avg10: 0.0,
         disk_free_build_pct: 100.0,
         disk_free_store_pct: 100.0,
+        raft_log_lag: Some(0),
         total_import_time_ms: 0,
         total_build_time_ms: 0,
         total_upload_time_ms: 0,
@@ -400,4 +402,72 @@ async fn test_max_groups_limit() {
     let result = coordinator.create_group(group).await;
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("maximum group limit"));
+}
+
+#[tokio::test]
+async fn test_worker_readiness_gating() {
+    let store = create_test_store().await;
+    let coordinator = DistributedWorkerCoordinator::new(store);
+
+    // Register a worker (starts not ready)
+    let mut worker = create_test_worker("w1", "n1", 0.0);
+    worker.is_ready = false;
+    coordinator.register_worker(worker).await.unwrap();
+
+    // Worker should have zero capacity (not ready)
+    let workers = coordinator.get_workers(WorkerFilter::default()).await.unwrap();
+    assert_eq!(workers.len(), 1);
+    assert!(!workers[0].is_ready);
+    assert_eq!(workers[0].available_capacity(), 0.0);
+
+    // Heartbeat with lag below threshold — worker becomes ready
+    let stats = WorkerStats {
+        load: 0.0,
+        active_jobs: 0,
+        queue_depth: 0,
+        total_processed: 0,
+        total_failed: 0,
+        avg_processing_time_ms: 0,
+        health: HealthStatus::Healthy,
+        cpu_pressure_avg10: 0.0,
+        memory_pressure_avg10: 0.0,
+        io_pressure_avg10: 0.0,
+        disk_free_build_pct: 100.0,
+        disk_free_store_pct: 100.0,
+        raft_log_lag: Some(10),
+        total_import_time_ms: 0,
+        total_build_time_ms: 0,
+        total_upload_time_ms: 0,
+    };
+    coordinator.heartbeat("w1", stats).await.unwrap();
+
+    // Worker should now be ready with full capacity
+    let workers = coordinator.get_workers(WorkerFilter::default()).await.unwrap();
+    assert!(workers[0].is_ready);
+    assert_eq!(workers[0].available_capacity(), 1.0);
+
+    // Heartbeat with unhealthy status — readiness resets
+    let stats_unhealthy = WorkerStats {
+        load: 0.0,
+        active_jobs: 0,
+        queue_depth: 0,
+        total_processed: 0,
+        total_failed: 0,
+        avg_processing_time_ms: 0,
+        health: HealthStatus::Unhealthy,
+        cpu_pressure_avg10: 0.0,
+        memory_pressure_avg10: 0.0,
+        io_pressure_avg10: 0.0,
+        disk_free_build_pct: 100.0,
+        disk_free_store_pct: 100.0,
+        raft_log_lag: Some(0),
+        total_import_time_ms: 0,
+        total_build_time_ms: 0,
+        total_upload_time_ms: 0,
+    };
+    coordinator.heartbeat("w1", stats_unhealthy).await.unwrap();
+
+    let workers = coordinator.get_workers(WorkerFilter::default()).await.unwrap();
+    assert!(!workers[0].is_ready);
+    assert_eq!(workers[0].available_capacity(), 0.0);
 }

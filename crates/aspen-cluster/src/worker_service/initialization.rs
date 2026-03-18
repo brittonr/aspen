@@ -81,6 +81,7 @@ impl WorkerService {
             max_migration_batch: 10,
             specializations: config.job_types.clone(),
             tags: config.tags.clone(),
+            raft_log_lag_fn: None,
         }
     }
 

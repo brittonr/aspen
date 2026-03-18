@@ -1,12 +1,17 @@
 //! Shared application state for the forge web frontend.
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use aspen_client::AspenClient;
-use aspen_client_api::messages::{ClientRpcRequest, ClientRpcResponse};
-use aspen_forge_protocol::{
-    ForgeBlobResultResponse, ForgeCommitInfo, ForgeIssueInfo, ForgePatchInfo, ForgeRefInfo,
-    ForgeRepoInfo, ForgeTreeEntry,
-};
+use aspen_client_api::messages::ClientRpcRequest;
+use aspen_client_api::messages::ClientRpcResponse;
+use aspen_forge_protocol::ForgeBlobResultResponse;
+use aspen_forge_protocol::ForgeCommitInfo;
+use aspen_forge_protocol::ForgeIssueInfo;
+use aspen_forge_protocol::ForgePatchInfo;
+use aspen_forge_protocol::ForgeRefInfo;
+use aspen_forge_protocol::ForgeRepoInfo;
+use aspen_forge_protocol::ForgeTreeEntry;
 
 /// Shared application state containing the client connection.
 #[derive(Clone)]
@@ -29,7 +34,10 @@ impl AppState {
     pub async fn list_repos(&self) -> Result<Vec<ForgeRepoInfo>> {
         let resp = self
             .client
-            .send(ClientRpcRequest::ForgeListRepos { limit: Some(100), offset: None })
+            .send(ClientRpcRequest::ForgeListRepos {
+                limit: Some(100),
+                offset: None,
+            })
             .await
             .context("list repos")?;
         match resp {
@@ -42,13 +50,13 @@ impl AppState {
     pub async fn get_repo(&self, repo_id: &str) -> Result<ForgeRepoInfo> {
         let resp = self
             .client
-            .send(ClientRpcRequest::ForgeGetRepo { repo_id: repo_id.into() })
+            .send(ClientRpcRequest::ForgeGetRepo {
+                repo_id: repo_id.into(),
+            })
             .await
             .context("get repo")?;
         match resp {
-            ClientRpcResponse::ForgeRepoResult(r) => {
-                r.repo.ok_or_else(|| anyhow::anyhow!("repo not found"))
-            }
+            ClientRpcResponse::ForgeRepoResult(r) => r.repo.ok_or_else(|| anyhow::anyhow!("repo not found")),
             other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
         }
     }
@@ -57,7 +65,9 @@ impl AppState {
     pub async fn list_branches(&self, repo_id: &str) -> Result<Vec<ForgeRefInfo>> {
         let resp = self
             .client
-            .send(ClientRpcRequest::ForgeListBranches { repo_id: repo_id.into() })
+            .send(ClientRpcRequest::ForgeListBranches {
+                repo_id: repo_id.into(),
+            })
             .await
             .context("list branches")?;
         match resp {
@@ -68,7 +78,10 @@ impl AppState {
 
     /// Get commit log.
     pub async fn get_log(
-        &self, repo_id: &str, ref_name: Option<String>, limit: Option<u32>,
+        &self,
+        repo_id: &str,
+        ref_name: Option<String>,
+        limit: Option<u32>,
     ) -> Result<Vec<ForgeCommitInfo>> {
         let resp = self
             .client
@@ -76,7 +89,6 @@ impl AppState {
                 repo_id: repo_id.into(),
                 ref_name,
                 limit,
-                
             })
             .await
             .context("get log")?;
@@ -106,26 +118,16 @@ impl AppState {
 
     /// Get tree entries.
     pub async fn get_tree(&self, hash: &str) -> Result<Vec<ForgeTreeEntry>> {
-        let resp = self
-            .client
-            .send(ClientRpcRequest::ForgeGetTree { hash: hash.into() })
-            .await
-            .context("get tree")?;
+        let resp = self.client.send(ClientRpcRequest::ForgeGetTree { hash: hash.into() }).await.context("get tree")?;
         match resp {
-            ClientRpcResponse::ForgeTreeResult(r) => {
-                r.entries.ok_or_else(|| anyhow::anyhow!("tree not found"))
-            }
+            ClientRpcResponse::ForgeTreeResult(r) => r.entries.ok_or_else(|| anyhow::anyhow!("tree not found")),
             other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
         }
     }
 
     /// Get blob content and size.
     pub async fn get_blob(&self, hash: &str) -> Result<ForgeBlobResultResponse> {
-        let resp = self
-            .client
-            .send(ClientRpcRequest::ForgeGetBlob { hash: hash.into() })
-            .await
-            .context("get blob")?;
+        let resp = self.client.send(ClientRpcRequest::ForgeGetBlob { hash: hash.into() }).await.context("get blob")?;
         match resp {
             ClientRpcResponse::ForgeBlobResult(r) => Ok(r),
             other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
@@ -140,9 +142,7 @@ impl AppState {
             .await
             .context("get commit")?;
         match resp {
-            ClientRpcResponse::ForgeCommitResult(r) => {
-                r.commit.ok_or_else(|| anyhow::anyhow!("commit not found"))
-            }
+            ClientRpcResponse::ForgeCommitResult(r) => r.commit.ok_or_else(|| anyhow::anyhow!("commit not found")),
             other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
         }
     }
@@ -155,7 +155,6 @@ impl AppState {
                 repo_id: repo_id.into(),
                 state: None,
                 limit: Some(50),
-                
             })
             .await
             .context("list issues")?;
@@ -197,7 +196,6 @@ impl AppState {
                 repo_id: repo_id.into(),
                 state: None,
                 limit: Some(50),
-                
             })
             .await
             .context("list patches")?;
@@ -218,9 +216,7 @@ impl AppState {
             .await
             .context("get patch")?;
         match resp {
-            ClientRpcResponse::ForgePatchResult(r) => {
-                r.patch.ok_or_else(|| anyhow::anyhow!("patch not found"))
-            }
+            ClientRpcResponse::ForgePatchResult(r) => r.patch.ok_or_else(|| anyhow::anyhow!("patch not found")),
             other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
         }
     }

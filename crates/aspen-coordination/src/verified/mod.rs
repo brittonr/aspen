@@ -466,6 +466,7 @@ pub use worker::is_worker_active;
 // Liveness
 pub use worker::is_worker_alive;
 pub use worker::is_worker_lease_expired;
+pub use worker::is_worker_ready;
 // Filtering
 pub use worker::matches_capability_filter;
 pub use worker::matches_load_filter;

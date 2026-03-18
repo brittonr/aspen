@@ -127,6 +127,7 @@ mod tests {
             io_pressure_avg10: io_pressure,
             disk_free_build_pct: disk_build_free,
             disk_free_store_pct: disk_store_free,
+            is_ready: true,
         }
     }
 

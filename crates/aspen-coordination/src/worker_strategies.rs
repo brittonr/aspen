@@ -566,6 +566,7 @@ mod tests {
                 io_pressure_avg10: 0.0,
                 disk_free_build_pct: 100.0,
                 disk_free_store_pct: 100.0,
+                is_ready: true,
             },
             WorkerInfo {
                 worker_id: "w2".to_string(),
@@ -589,6 +590,7 @@ mod tests {
                 io_pressure_avg10: 0.0,
                 disk_free_build_pct: 100.0,
                 disk_free_store_pct: 100.0,
+                is_ready: true,
             },
             WorkerInfo {
                 worker_id: "w3".to_string(),
@@ -612,6 +614,7 @@ mod tests {
                 io_pressure_avg10: 0.0,
                 disk_free_build_pct: 100.0,
                 disk_free_store_pct: 100.0,
+                is_ready: true,
             },
         ]
     }

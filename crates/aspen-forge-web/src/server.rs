@@ -8,9 +8,11 @@ use std::sync::Arc;
 use bytes::Bytes;
 use h3::server::RequestResolver;
 use http::Response;
-use iroh::protocol::{AcceptError, ProtocolHandler};
+use iroh::protocol::AcceptError;
+use iroh::protocol::ProtocolHandler;
 use iroh_h3::Connection as IrohH3Connection;
-use tracing::{debug, warn};
+use tracing::debug;
+use tracing::warn;
 
 use crate::routes;
 use crate::state::AppState;

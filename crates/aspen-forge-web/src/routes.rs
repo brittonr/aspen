@@ -13,7 +13,10 @@ pub struct HtmlResponse {
 }
 
 fn ok(markup: maud::Markup) -> HtmlResponse {
-    HtmlResponse { status: StatusCode::OK, body: markup.into_string() }
+    HtmlResponse {
+        status: StatusCode::OK,
+        body: markup.into_string(),
+    }
 }
 
 fn not_found(path: &str) -> HtmlResponse {
@@ -41,7 +44,11 @@ pub fn method_not_allowed() -> HtmlResponse {
 /// Dispatch a GET request to the appropriate handler.
 pub async fn dispatch(state: &AppState, path: &str) -> HtmlResponse {
     // Strip trailing slash (except root).
-    let path = if path.len() > 1 { path.trim_end_matches('/') } else { path };
+    let path = if path.len() > 1 {
+        path.trim_end_matches('/')
+    } else {
+        path
+    };
     let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
 
     match segments.as_slice() {

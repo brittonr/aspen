@@ -1,9 +1,15 @@
 //! HTML templates using maud for the Forge web frontend.
 
-use aspen_forge_protocol::{
-    ForgeCommitInfo, ForgeIssueInfo, ForgePatchInfo, ForgeRefInfo, ForgeRepoInfo, ForgeTreeEntry,
-};
-use maud::{html, Markup, PreEscaped, DOCTYPE};
+use aspen_forge_protocol::ForgeCommitInfo;
+use aspen_forge_protocol::ForgeIssueInfo;
+use aspen_forge_protocol::ForgePatchInfo;
+use aspen_forge_protocol::ForgeRefInfo;
+use aspen_forge_protocol::ForgeRepoInfo;
+use aspen_forge_protocol::ForgeTreeEntry;
+use maud::DOCTYPE;
+use maud::Markup;
+use maud::PreEscaped;
+use maud::html;
 
 /// Format ms-since-epoch as a human-readable date.
 fn format_time(ms: u64) -> String {
@@ -24,7 +30,13 @@ fn is_dir(mode: u32) -> bool {
 }
 
 fn file_icon(mode: u32) -> &'static str {
-    if mode == 0o40000 { "📁" } else if mode == 0o120000 { "🔗" } else { "📄" }
+    if mode == 0o40000 {
+        "📁"
+    } else if mode == 0o120000 {
+        "🔗"
+    } else {
+        "📄"
+    }
 }
 
 /// Base page layout.
@@ -71,11 +83,7 @@ pub fn repo_list(repos: &[ForgeRepoInfo]) -> Markup {
 }
 
 /// Repository overview page.
-pub fn repo_overview(
-    repo: &ForgeRepoInfo,
-    branches: &[ForgeRefInfo],
-    recent_commits: &[ForgeCommitInfo],
-) -> Markup {
+pub fn repo_overview(repo: &ForgeRepoInfo, branches: &[ForgeRefInfo], recent_commits: &[ForgeCommitInfo]) -> Markup {
     base_layout(&repo.name, html! {
         h1 { (&repo.name) }
         @if let Some(ref desc) = repo.description {
@@ -114,12 +122,7 @@ pub fn repo_overview(
 }
 
 /// File browser page (directory listing).
-pub fn file_browser(
-    repo: &ForgeRepoInfo,
-    ref_name: &str,
-    path: &str,
-    entries: &[ForgeTreeEntry],
-) -> Markup {
+pub fn file_browser(repo: &ForgeRepoInfo, ref_name: &str, path: &str, entries: &[ForgeTreeEntry]) -> Markup {
     base_layout(&format!("{} — {}", repo.name, if path.is_empty() { "/" } else { path }), html! {
         h1 {
             a href=(format!("/{}", repo.id)) { (&repo.name) }
@@ -159,13 +162,7 @@ pub fn file_browser(
 }
 
 /// Blob (file content) page.
-pub fn file_view(
-    repo: &ForgeRepoInfo,
-    ref_name: &str,
-    path: &str,
-    content: Option<&[u8]>,
-    size: u64,
-) -> Markup {
+pub fn file_view(repo: &ForgeRepoInfo, ref_name: &str, path: &str, content: Option<&[u8]>, size: u64) -> Markup {
     let is_text = content.as_ref().is_some_and(|c| is_likely_text(c));
     base_layout(&format!("{} — {}", repo.name, path), html! {
         h1 {
@@ -364,7 +361,11 @@ fn first_line(s: &str) -> &str {
 }
 
 fn entry_link(repo: &ForgeRepoInfo, ref_name: &str, path: &str, name: &str, mode: u32) -> String {
-    let full = if path.is_empty() { name.to_string() } else { format!("{path}/{name}") };
+    let full = if path.is_empty() {
+        name.to_string()
+    } else {
+        format!("{path}/{name}")
+    };
     if is_dir(mode) {
         format!("/{}/tree/{}/{}", repo.id, ref_name, full)
     } else {

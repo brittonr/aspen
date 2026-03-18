@@ -56,9 +56,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let handler = aspen_forge_web::server::ForgeH3Handler::new(state);
-    let _router = iroh::protocol::Router::builder(endpoint)
-        .accept(b"aspen/forge-web/1", handler)
-        .spawn();
+    let _router = iroh::protocol::Router::builder(endpoint).accept(b"aspen/forge-web/1", handler).spawn();
 
     // Wait for shutdown
     tokio::signal::ctrl_c().await.ok();
