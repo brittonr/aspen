@@ -128,6 +128,7 @@ pub use node::ForgeNode;
 pub use refs::RefStore;
 pub use refs::RefUpdateEvent;
 pub use sync::DagSyncPlan;
+pub use sync::DagSyncResult;
 pub use sync::DagSyncType;
 pub use sync::SyncService;
 pub use types::SignedObject;

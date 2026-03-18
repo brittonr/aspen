@@ -375,6 +375,142 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
         ref_targets.iter().copied().collect()
     }
 
+    /// Execute the receiver side of a DAG sync over QUIC.
+    ///
+    /// Connects to a remote peer, sends a `DagSyncRequest`, reads the
+    /// streamed response frames, and inserts received objects into the
+    /// local blob store. Hash-only frames (objects too large to inline,
+    /// or excluded by inline policy) are collected for later fetch via
+    /// iroh-blobs.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - Local iroh endpoint for QUIC connections
+    /// * `remote` - Remote peer address
+    /// * `request` - The sync request describing what to fetch
+    ///
+    /// # Returns
+    ///
+    /// A [`DagSyncResult`] with insertion stats and any deferred hashes.
+    pub async fn receive_dag_sync(
+        &self,
+        endpoint: &iroh::Endpoint,
+        remote: iroh::EndpointAddr,
+        request: aspen_dag::DagSyncRequest,
+    ) -> ForgeResult<DagSyncResult> {
+        let mut conn =
+            aspen_dag::connect_dag_sync(endpoint, remote, &request)
+                .await
+                .map_err(|e| ForgeError::SyncFailed {
+                    message: format!("failed to connect for dag sync: {e}"),
+                })?;
+
+        let mut result = DagSyncResult::default();
+        let blobs = Arc::clone(&self.blobs);
+
+        let sync_stats = aspen_dag::recv_sync(&mut conn.recv, |frame| {
+            match frame {
+                aspen_dag::ReceivedFrame::Data { hash, data } => {
+                    let blake_hash = blake3::Hash::from_bytes(hash);
+
+                    // Insert into blob store. block_in_place is required because
+                    // recv_sync's callback is synchronous but add_bytes is async.
+                    let insert_result = tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current()
+                            .block_on(async { blobs.add_bytes(&data).await })
+                    });
+
+                    match insert_result {
+                        Ok(add_result) => {
+                            if add_result.was_new {
+                                result.objects_inserted += 1;
+                            } else {
+                                result.objects_already_present += 1;
+                            }
+                            result.bytes_received += data.len() as u64;
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                hash = %blake_hash.to_hex(),
+                                error = %e,
+                                "failed to insert received object"
+                            );
+                            result.insert_errors.push((blake_hash, e.to_string()));
+                        }
+                    }
+                }
+                aspen_dag::ReceivedFrame::HashOnly { hash } => {
+                    result.deferred_hashes.push(blake3::Hash::from_bytes(hash));
+                }
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|e| ForgeError::SyncFailed {
+            message: format!("dag sync stream error: {e}"),
+        })?;
+
+        result.wire_stats = sync_stats;
+
+        tracing::info!(
+            inserted = result.objects_inserted,
+            already_present = result.objects_already_present,
+            deferred = result.deferred_hashes.len(),
+            bytes = result.bytes_received,
+            "dag sync receive completed"
+        );
+
+        Ok(result)
+    }
+
+    /// Receive a DAG sync from an in-memory stream (for testing).
+    ///
+    /// Same logic as `receive_dag_sync` but reads from a byte buffer
+    /// instead of a QUIC connection. Useful for testing the receiver
+    /// without network setup.
+    pub async fn receive_dag_sync_from_bytes(&self, data: &[u8]) -> ForgeResult<DagSyncResult> {
+        let mut result = DagSyncResult::default();
+        let blobs = Arc::clone(&self.blobs);
+
+        let sync_stats = aspen_dag::recv_sync(&mut std::io::Cursor::new(data), |frame| {
+            match frame {
+                aspen_dag::ReceivedFrame::Data { hash, data } => {
+                    let blake_hash = blake3::Hash::from_bytes(hash);
+
+                    let insert_result = tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current()
+                            .block_on(async { blobs.add_bytes(&data).await })
+                    });
+
+                    match insert_result {
+                        Ok(add_result) => {
+                            if add_result.was_new {
+                                result.objects_inserted += 1;
+                            } else {
+                                result.objects_already_present += 1;
+                            }
+                            result.bytes_received += data.len() as u64;
+                        }
+                        Err(e) => {
+                            result.insert_errors.push((blake_hash, e.to_string()));
+                        }
+                    }
+                }
+                aspen_dag::ReceivedFrame::HashOnly { hash } => {
+                    result.deferred_hashes.push(blake3::Hash::from_bytes(hash));
+                }
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|e| ForgeError::SyncFailed {
+            message: format!("dag sync stream error: {e}"),
+        })?;
+
+        result.wire_stats = sync_stats;
+        Ok(result)
+    }
+
     /// Execute the sender side of a DAG sync.
     ///
     /// Given a `DagSyncRequest`, runs a `FullTraversal` with the
@@ -567,6 +703,41 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
                 Ok(stats)
             }
         })
+    }
+}
+
+/// Result of a DAG sync receive operation.
+#[derive(Debug, Default)]
+pub struct DagSyncResult {
+    /// Number of new objects inserted into the local blob store.
+    pub objects_inserted: u32,
+
+    /// Number of objects that were already present locally.
+    pub objects_already_present: u32,
+
+    /// Total bytes of object data received (excludes wire framing overhead).
+    pub bytes_received: u64,
+
+    /// Hashes received as hash-only references (not inlined).
+    /// These need to be fetched separately, typically via iroh-blobs.
+    pub deferred_hashes: Vec<blake3::Hash>,
+
+    /// Errors encountered while inserting objects.
+    pub insert_errors: Vec<(blake3::Hash, String)>,
+
+    /// Wire-level statistics from the sync stream.
+    pub wire_stats: aspen_dag::SyncStats,
+}
+
+impl DagSyncResult {
+    /// Total objects processed (inserted + already present).
+    pub fn total_objects(&self) -> u32 {
+        self.objects_inserted.saturating_add(self.objects_already_present)
+    }
+
+    /// Whether all objects were received inline (no deferred hashes).
+    pub fn is_complete(&self) -> bool {
+        self.deferred_hashes.is_empty() && self.insert_errors.is_empty()
     }
 }
 

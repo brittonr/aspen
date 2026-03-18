@@ -21,6 +21,7 @@ use aspen_forge::SignedObject;
 use aspen_forge::TreeEntry;
 use aspen_forge::TreeObject;
 use aspen_forge::identity::Author;
+use aspen_forge::sync::DagSyncResult;
 use aspen_forge::sync::SyncService;
 
 // ============================================================================
@@ -339,4 +340,276 @@ async fn dag_sync_handler_construction() {
     let sync = Arc::new(SyncService::new(blobs));
     let _handler = sync.into_dag_sync_handler();
     // Handler exists and implements ProtocolHandler. If this compiles, it works.
+}
+
+// ============================================================================
+// Receiver Tests
+// ============================================================================
+
+/// Helper: run sender and pipe the output into a receiver backed by a fresh store.
+async fn send_then_receive(
+    sender: &SyncService<InMemoryBlobStore>,
+    receiver: &SyncService<InMemoryBlobStore>,
+    request: DagSyncRequest,
+) -> DagSyncResult {
+    let mut buf = Vec::new();
+    sender.handle_sync_request(request, &mut buf).await.unwrap();
+    receiver.receive_dag_sync_from_bytes(&buf).await.unwrap()
+}
+
+/// Full sender→receiver roundtrip: objects created on one store arrive in another.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dag_sync_receiver_full_roundtrip() {
+    let sender_blobs = Arc::new(InMemoryBlobStore::new());
+    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let sender = SyncService::new(Arc::clone(&sender_blobs));
+
+    let (commit, tree, blob_a, blob_b) = build_simple_repo(&sender_blobs, &key).await;
+
+    // Receiver has an empty store.
+    let receiver_blobs = Arc::new(InMemoryBlobStore::new());
+    let receiver = SyncService::new(Arc::clone(&receiver_blobs));
+
+    let request = DagSyncRequest {
+        traversal: TraversalOpts::Full(FullTraversalOpts {
+            root: *commit.as_bytes(),
+            known_heads: BTreeSet::new(),
+            order: TraversalOrder::DepthFirstPreOrder,
+            filter: TraversalFilter::All,
+        }),
+        inline: InlinePolicy::All,
+    };
+
+    let result = send_then_receive(&sender, &receiver, request).await;
+
+    assert_eq!(result.objects_inserted, 4);
+    assert_eq!(result.objects_already_present, 0);
+    assert!(result.is_complete());
+    assert!(result.deferred_hashes.is_empty());
+    assert!(result.insert_errors.is_empty());
+    assert!(result.bytes_received > 0);
+
+    // Verify every object is now in the receiver's blob store.
+    for hash in [commit, tree, blob_a, blob_b] {
+        let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
+        assert!(
+            receiver_blobs.has(&iroh_hash).await.unwrap(),
+            "object {} missing from receiver store",
+            hash.to_hex()
+        );
+    }
+
+    // Verify the received bytes deserialize to valid SignedObject<GitObject>.
+    for hash in [commit, tree, blob_a, blob_b] {
+        let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
+        let bytes = receiver_blobs.get_bytes(&iroh_hash).await.unwrap().unwrap();
+        let _signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes).unwrap();
+    }
+}
+
+/// Incremental receive: receiver already has some objects.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dag_sync_receiver_incremental() {
+    let sender_blobs = Arc::new(InMemoryBlobStore::new());
+    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let sender = SyncService::new(Arc::clone(&sender_blobs));
+
+    // Build a two-commit chain.
+    let (commit_1, tree_1, blob_a, blob_b) = build_simple_repo(&sender_blobs, &key).await;
+
+    let blob_c = store_git_object(
+        &sender_blobs,
+        &key,
+        GitObject::Blob(BlobObject::new(b"new file c")),
+    )
+    .await;
+    let tree_2 = store_git_object(
+        &sender_blobs,
+        &key,
+        GitObject::Tree(TreeObject::new(vec![TreeEntry::file("c.txt", blob_c)])),
+    )
+    .await;
+    let commit_2 = store_git_object(
+        &sender_blobs,
+        &key,
+        GitObject::Commit(CommitObject::new(
+            tree_2,
+            vec![commit_1],
+            test_author(),
+            "second commit",
+        )),
+    )
+    .await;
+
+    // Receiver already has commit_1 and below — sync only new objects.
+    let receiver_blobs = Arc::new(InMemoryBlobStore::new());
+    // Pre-populate receiver with commit_1's subgraph.
+    for hash in [commit_1, tree_1, blob_a, blob_b] {
+        let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
+        let bytes = sender_blobs.get_bytes(&iroh_hash).await.unwrap().unwrap();
+        receiver_blobs.add_bytes(&bytes).await.unwrap();
+    }
+
+    let receiver = SyncService::new(Arc::clone(&receiver_blobs));
+
+    let request = DagSyncRequest {
+        traversal: TraversalOpts::Full(FullTraversalOpts {
+            root: *commit_2.as_bytes(),
+            known_heads: BTreeSet::from([*commit_1.as_bytes()]),
+            order: TraversalOrder::DepthFirstPreOrder,
+            filter: TraversalFilter::All,
+        }),
+        inline: InlinePolicy::All,
+    };
+
+    let result = send_then_receive(&sender, &receiver, request).await;
+
+    // Only 3 new objects: commit_2, tree_2, blob_c.
+    assert_eq!(result.objects_inserted, 3);
+    assert!(result.is_complete());
+
+    // Old objects still present.
+    for hash in [commit_1, tree_1, blob_a, blob_b] {
+        let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
+        assert!(receiver_blobs.has(&iroh_hash).await.unwrap());
+    }
+    // New objects arrived.
+    for hash in [commit_2, tree_2, blob_c] {
+        let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
+        assert!(
+            receiver_blobs.has(&iroh_hash).await.unwrap(),
+            "new object {} missing",
+            hash.to_hex()
+        );
+    }
+}
+
+/// Receiver with hash-only policy collects deferred hashes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dag_sync_receiver_hash_only_deferred() {
+    let sender_blobs = Arc::new(InMemoryBlobStore::new());
+    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let sender = SyncService::new(Arc::clone(&sender_blobs));
+
+    let (commit, _tree, _blob_a, _blob_b) = build_simple_repo(&sender_blobs, &key).await;
+
+    let receiver_blobs = Arc::new(InMemoryBlobStore::new());
+    let receiver = SyncService::new(Arc::clone(&receiver_blobs));
+
+    // InlinePolicy::None → everything is hash-only.
+    let request = DagSyncRequest {
+        traversal: TraversalOpts::Full(FullTraversalOpts {
+            root: *commit.as_bytes(),
+            known_heads: BTreeSet::new(),
+            order: TraversalOrder::DepthFirstPreOrder,
+            filter: TraversalFilter::All,
+        }),
+        inline: InlinePolicy::None,
+    };
+
+    let result = send_then_receive(&sender, &receiver, request).await;
+
+    // Nothing inserted (all hash-only).
+    assert_eq!(result.objects_inserted, 0);
+    assert!(!result.is_complete());
+    assert_eq!(result.deferred_hashes.len(), 4);
+
+    // Receiver store is still empty.
+    let iroh_hash = iroh_blobs::Hash::from_bytes(*commit.as_bytes());
+    assert!(!receiver_blobs.has(&iroh_hash).await.unwrap());
+}
+
+/// Receiver with stem/leaf split: receive structure first, blobs second.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dag_sync_receiver_two_phase() {
+    let sender_blobs = Arc::new(InMemoryBlobStore::new());
+    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let sender = SyncService::new(Arc::clone(&sender_blobs));
+
+    let (commit, tree, blob_a, blob_b) = build_simple_repo(&sender_blobs, &key).await;
+
+    let receiver_blobs = Arc::new(InMemoryBlobStore::new());
+    let receiver = SyncService::new(Arc::clone(&receiver_blobs));
+
+    let plan = sender.plan_git_sync(commit, HashSet::new());
+
+    // Phase 1: stem only.
+    let stem_request = sender.build_stem_sync_request(&plan);
+    let stem_result = send_then_receive(&sender, &receiver, stem_request).await;
+
+    assert_eq!(stem_result.objects_inserted, 2); // commit + tree
+    assert!(stem_result.is_complete());
+
+    // Verify only structural objects arrived.
+    let commit_iroh = iroh_blobs::Hash::from_bytes(*commit.as_bytes());
+    let tree_iroh = iroh_blobs::Hash::from_bytes(*tree.as_bytes());
+    let blob_a_iroh = iroh_blobs::Hash::from_bytes(*blob_a.as_bytes());
+    let blob_b_iroh = iroh_blobs::Hash::from_bytes(*blob_b.as_bytes());
+
+    assert!(receiver_blobs.has(&commit_iroh).await.unwrap());
+    assert!(receiver_blobs.has(&tree_iroh).await.unwrap());
+    assert!(!receiver_blobs.has(&blob_a_iroh).await.unwrap());
+    assert!(!receiver_blobs.has(&blob_b_iroh).await.unwrap());
+
+    // Phase 2: leaf only.
+    let leaf_request = sender.build_leaf_sync_request(&plan);
+    let leaf_result = send_then_receive(&sender, &receiver, leaf_request).await;
+
+    assert_eq!(leaf_result.objects_inserted, 2); // blob_a + blob_b
+    assert!(leaf_result.is_complete());
+
+    // Now all objects are present.
+    assert!(receiver_blobs.has(&blob_a_iroh).await.unwrap());
+    assert!(receiver_blobs.has(&blob_b_iroh).await.unwrap());
+}
+
+/// Double-receive is idempotent: second sync inserts nothing new.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dag_sync_receiver_idempotent() {
+    let sender_blobs = Arc::new(InMemoryBlobStore::new());
+    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let sender = SyncService::new(Arc::clone(&sender_blobs));
+
+    let (commit, _, _, _) = build_simple_repo(&sender_blobs, &key).await;
+
+    let receiver_blobs = Arc::new(InMemoryBlobStore::new());
+    let receiver = SyncService::new(Arc::clone(&receiver_blobs));
+
+    let request = DagSyncRequest {
+        traversal: TraversalOpts::Full(FullTraversalOpts {
+            root: *commit.as_bytes(),
+            known_heads: BTreeSet::new(),
+            order: TraversalOrder::DepthFirstPreOrder,
+            filter: TraversalFilter::All,
+        }),
+        inline: InlinePolicy::All,
+    };
+
+    // First sync.
+    let mut buf = Vec::new();
+    sender.handle_sync_request(request.clone(), &mut buf).await.unwrap();
+    let first = receiver.receive_dag_sync_from_bytes(&buf).await.unwrap();
+    assert_eq!(first.objects_inserted, 4);
+
+    // Second sync — same data.
+    let second = receiver.receive_dag_sync_from_bytes(&buf).await.unwrap();
+    assert_eq!(second.objects_inserted, 0);
+    assert_eq!(second.objects_already_present, 4);
+    assert!(second.is_complete());
+}
+
+/// DagSyncResult helper methods.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dag_sync_result_helpers() {
+    let mut result = DagSyncResult::default();
+    assert_eq!(result.total_objects(), 0);
+    assert!(result.is_complete());
+
+    result.objects_inserted = 3;
+    result.objects_already_present = 2;
+    assert_eq!(result.total_objects(), 5);
+    assert!(result.is_complete());
+
+    result.deferred_hashes.push(blake3::hash(b"deferred"));
+    assert!(!result.is_complete());
 }

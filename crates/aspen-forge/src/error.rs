@@ -160,6 +160,10 @@ pub enum ForgeError {
     #[snafu(display("blob storage error: {message}"))]
     BlobStorage { message: String },
 
+    /// DAG sync failed.
+    #[snafu(display("dag sync failed: {message}"))]
+    SyncFailed { message: String },
+
     /// Blobs not available after timeout.
     ///
     /// Tree creation requires all referenced blobs to be available locally.
