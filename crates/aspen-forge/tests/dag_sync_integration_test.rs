@@ -613,3 +613,119 @@ async fn dag_sync_result_helpers() {
     result.deferred_hashes.push(blake3::hash(b"deferred"));
     assert!(!result.is_complete());
 }
+
+// ============================================================================
+// Worker Tests
+// ============================================================================
+
+/// Gossip handler → SyncRequest channel → verify the request arrives.
+///
+/// This tests the integration between ForgeAnnouncementHandler and the
+/// mpsc channel that DagSyncWorker would consume. We can't test the
+/// full worker (it needs a real endpoint), but we can verify the
+/// announcement→request pipeline.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn gossip_to_sync_request_pipeline() {
+    use aspen_forge::gossip::ForgeAnnouncementHandler;
+    use aspen_forge::gossip::SyncRequest;
+    use aspen_forge::Announcement;
+    use aspen_forge::AnnouncementCallback;
+    use aspen_forge::identity::RepoId;
+
+    let (handler, mut sync_rx, _seeding_rx) = ForgeAnnouncementHandler::with_channels(10);
+
+    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+    let commit_hash = blake3::hash(b"new-commit");
+
+    // Simulate a gossip announcement arriving.
+    let announcement = Announcement::RefUpdate {
+        repo_id,
+        ref_name: "heads/main".to_string(),
+        new_hash: *commit_hash.as_bytes(),
+        old_hash: None,
+    };
+
+    handler.on_announcement(&announcement, &key.public());
+
+    // Verify the sync request was queued.
+    let request = sync_rx.try_recv().expect("should receive sync request");
+    match request {
+        SyncRequest::RefUpdate {
+            repo_id: r,
+            ref_name,
+            commit_hash: c,
+            peer,
+        } => {
+            assert_eq!(r, repo_id);
+            assert_eq!(ref_name, "heads/main");
+            assert_eq!(c, commit_hash);
+            assert_eq!(peer, key.public());
+        }
+        _ => panic!("expected RefUpdate"),
+    }
+}
+
+/// End-to-end: create objects on sender, pipe through sender handler,
+/// receive into a fresh store via receive_dag_sync_from_bytes, then
+/// verify the receiver can serve the same objects back via its own
+/// handle_sync_request — proving the objects are fully usable.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dag_sync_full_loop_sender_receiver_sender() {
+    let key = iroh::SecretKey::generate(&mut rand::rng());
+
+    // Sender: create a repo.
+    let sender_blobs = Arc::new(InMemoryBlobStore::new());
+    let sender = SyncService::new(Arc::clone(&sender_blobs));
+    let (commit, tree, blob_a, blob_b) = build_simple_repo(&sender_blobs, &key).await;
+
+    // Sender → wire bytes.
+    let request = DagSyncRequest {
+        traversal: TraversalOpts::Full(FullTraversalOpts {
+            root: *commit.as_bytes(),
+            known_heads: BTreeSet::new(),
+            order: TraversalOrder::DepthFirstPreOrder,
+            filter: TraversalFilter::All,
+        }),
+        inline: InlinePolicy::All,
+    };
+    let mut wire_bytes = Vec::new();
+    sender
+        .handle_sync_request(request.clone(), &mut wire_bytes)
+        .await
+        .unwrap();
+
+    // Receiver: empty store, receive the bytes.
+    let receiver_blobs = Arc::new(InMemoryBlobStore::new());
+    let receiver = SyncService::new(Arc::clone(&receiver_blobs));
+    let result = receiver
+        .receive_dag_sync_from_bytes(&wire_bytes)
+        .await
+        .unwrap();
+    assert_eq!(result.objects_inserted, 4);
+
+    // Now the receiver serves the same DAG back.
+    let mut re_served = Vec::new();
+    let re_stats = receiver
+        .handle_sync_request(request, &mut re_served)
+        .await
+        .unwrap();
+    assert_eq!(re_stats.data_frames, 4);
+
+    // Third store receives from the receiver's output.
+    let third_blobs = Arc::new(InMemoryBlobStore::new());
+    let third = SyncService::new(Arc::clone(&third_blobs));
+    let third_result = third
+        .receive_dag_sync_from_bytes(&re_served)
+        .await
+        .unwrap();
+    assert_eq!(third_result.objects_inserted, 4);
+
+    // All objects present in all three stores.
+    for hash in [commit, tree, blob_a, blob_b] {
+        let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
+        assert!(sender_blobs.has(&iroh_hash).await.unwrap());
+        assert!(receiver_blobs.has(&iroh_hash).await.unwrap());
+        assert!(third_blobs.has(&iroh_hash).await.unwrap());
+    }
+}

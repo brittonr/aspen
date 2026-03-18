@@ -790,6 +790,228 @@ impl FetchResult {
     }
 }
 
+// ============================================================================
+// DAG Sync Worker
+// ============================================================================
+
+/// Worker that consumes gossip-driven sync requests and executes DAG sync.
+///
+/// Spawned as a background task, it reads [`SyncRequest`]s from the mpsc
+/// channel (produced by [`ForgeAnnouncementHandler`]) and runs
+/// `receive_dag_sync` against the announcing peer.
+///
+/// After a successful sync, the worker can optionally update the local
+/// ref store so subsequent gossip announcements for the same ref are
+/// treated as known heads (incremental sync).
+///
+/// ```text
+/// Gossip → ForgeAnnouncementHandler → mpsc → DagSyncWorker
+///                                              │
+///                                              ├─ receive_dag_sync()
+///                                              │     └─ objects inserted into blob store
+///                                              └─ ref_store.set() (optional)
+/// ```
+pub struct DagSyncWorker<B: BlobStore> {
+    sync: Arc<SyncService<B>>,
+    endpoint: iroh::Endpoint,
+    ref_store: Option<Arc<crate::refs::RefStore<dyn aspen_core::KeyValueStore>>>,
+}
+
+impl<B: BlobStore + Send + Sync + 'static> DagSyncWorker<B> {
+    /// Create a new DAG sync worker.
+    ///
+    /// # Arguments
+    ///
+    /// * `sync` - The sync service for DAG operations
+    /// * `endpoint` - Iroh endpoint for QUIC connections to peers
+    pub fn new(sync: Arc<SyncService<B>>, endpoint: iroh::Endpoint) -> Self {
+        Self {
+            sync,
+            endpoint,
+            ref_store: None,
+        }
+    }
+
+    /// Attach a ref store for automatic ref updates after successful sync.
+    pub fn with_ref_store(
+        mut self,
+        ref_store: Arc<crate::refs::RefStore<dyn aspen_core::KeyValueStore>>,
+    ) -> Self {
+        self.ref_store = Some(ref_store);
+        self
+    }
+
+    /// Spawn the worker as a background task.
+    ///
+    /// Reads `SyncRequest`s from `rx` until the channel closes or the
+    /// cancellation token fires. Returns a `JoinHandle` for the task.
+    pub fn spawn(
+        self,
+        mut rx: tokio::sync::mpsc::Receiver<crate::gossip::SyncRequest>,
+        cancel: tokio_util::sync::CancellationToken,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            tracing::info!("dag sync worker started");
+
+            loop {
+                tokio::select! {
+                    _ = cancel.cancelled() => {
+                        tracing::info!("dag sync worker shutting down");
+                        break;
+                    }
+                    request = rx.recv() => {
+                        match request {
+                            Some(req) => self.handle_request(req).await,
+                            None => {
+                                tracing::info!("dag sync worker channel closed");
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    /// Handle a single sync request.
+    async fn handle_request(&self, request: crate::gossip::SyncRequest) {
+        use crate::gossip::SyncRequest;
+
+        match request {
+            SyncRequest::RefUpdate {
+                repo_id,
+                ref_name,
+                commit_hash,
+                peer,
+            } => {
+                self.sync_ref_update(&repo_id, &ref_name, commit_hash, peer)
+                    .await;
+            }
+            SyncRequest::CobChange {
+                repo_id,
+                cob_type,
+                change_hash,
+                peer,
+                ..
+            } => {
+                self.sync_cob_change(&repo_id, cob_type, change_hash, peer)
+                    .await;
+            }
+        }
+    }
+
+    /// Sync a ref update: pull the commit graph from the peer.
+    async fn sync_ref_update(
+        &self,
+        repo_id: &crate::identity::RepoId,
+        ref_name: &str,
+        commit_hash: blake3::Hash,
+        peer: PublicKey,
+    ) {
+        // Build known heads from our current ref value (if any).
+        let known_heads = match &self.ref_store {
+            Some(refs) => match refs.get(repo_id, ref_name).await {
+                Ok(Some(current)) => HashSet::from([current]),
+                _ => HashSet::new(),
+            },
+            None => HashSet::new(),
+        };
+
+        let plan = self.sync.plan_git_sync(commit_hash, known_heads);
+        let request = self
+            .sync
+            .build_sync_request(&plan, aspen_dag::InlinePolicy::All);
+
+        let remote = iroh::EndpointAddr::new(peer);
+
+        tracing::info!(
+            repo = %repo_id.to_hex(),
+            ref_name = %ref_name,
+            commit = %commit_hash.to_hex(),
+            peer = %peer,
+            "starting dag sync for ref update"
+        );
+
+        match self.sync.receive_dag_sync(&self.endpoint, remote, request).await {
+            Ok(result) => {
+                tracing::info!(
+                    repo = %repo_id.to_hex(),
+                    ref_name = %ref_name,
+                    inserted = result.objects_inserted,
+                    deferred = result.deferred_hashes.len(),
+                    "dag sync completed for ref update"
+                );
+
+                // Update the ref to point to the new commit.
+                if let Some(refs) = &self.ref_store {
+                    if let Err(e) = refs.set(repo_id, ref_name, commit_hash).await {
+                        tracing::warn!(
+                            repo = %repo_id.to_hex(),
+                            ref_name = %ref_name,
+                            error = %e,
+                            "failed to update ref after sync"
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    repo = %repo_id.to_hex(),
+                    ref_name = %ref_name,
+                    peer = %peer,
+                    error = %e,
+                    "dag sync failed for ref update"
+                );
+            }
+        }
+    }
+
+    /// Sync a COB change: pull the change DAG from the peer.
+    async fn sync_cob_change(
+        &self,
+        repo_id: &crate::identity::RepoId,
+        cob_type: crate::cob::CobType,
+        change_hash: blake3::Hash,
+        peer: PublicKey,
+    ) {
+        let plan = self.sync.plan_cob_sync(change_hash, HashSet::new());
+        let request = self
+            .sync
+            .build_sync_request(&plan, aspen_dag::InlinePolicy::All);
+
+        let remote = iroh::EndpointAddr::new(peer);
+
+        tracing::info!(
+            repo = %repo_id.to_hex(),
+            cob_type = ?cob_type,
+            change = %change_hash.to_hex(),
+            peer = %peer,
+            "starting dag sync for cob change"
+        );
+
+        match self.sync.receive_dag_sync(&self.endpoint, remote, request).await {
+            Ok(result) => {
+                tracing::info!(
+                    repo = %repo_id.to_hex(),
+                    cob_type = ?cob_type,
+                    inserted = result.objects_inserted,
+                    deferred = result.deferred_hashes.len(),
+                    "dag sync completed for cob change"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    repo = %repo_id.to_hex(),
+                    cob_type = ?cob_type,
+                    peer = %peer,
+                    error = %e,
+                    "dag sync failed for cob change"
+                );
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use aspen_blob::InMemoryBlobStore;

@@ -60,6 +60,7 @@ mod service;
 mod types;
 
 pub use handler::ForgeAnnouncementHandler;
+pub use handler::SyncRequest;
 pub use rate_limiter::ForgeGossipRateLimiter;
 pub use rate_limiter::RateLimitReason;
 pub use service::AnnouncementCallback;

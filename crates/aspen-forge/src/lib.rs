@@ -130,5 +130,6 @@ pub use refs::RefUpdateEvent;
 pub use sync::DagSyncPlan;
 pub use sync::DagSyncResult;
 pub use sync::DagSyncType;
+pub use sync::DagSyncWorker;
 pub use sync::SyncService;
 pub use types::SignedObject;
