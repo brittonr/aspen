@@ -56,6 +56,15 @@ pub const NET_TUNNEL_ALPN: &[u8] = b"/aspen/net-tunnel/0";
 /// "Iroh-only networking" architecture constraint.
 pub const NIX_CACHE_H3_ALPN: &[u8] = b"iroh+h3";
 
+/// ALPN protocol identifier for DAG sync.
+///
+/// Used for streaming deterministic DAG traversal between nodes.
+/// Supports full traversal, partial sync (known heads), stem/leaf split,
+/// and inline predicates for selective data transfer.
+///
+/// Canonical source: `aspen_dag::protocol::DAG_SYNC_ALPN`
+pub const DAG_SYNC_ALPN: &[u8] = b"/aspen/dag-sync/1";
+
 /// Maximum concurrent Client connections.
 ///
 /// Set high enough to handle bursts of short-lived CLI connections.

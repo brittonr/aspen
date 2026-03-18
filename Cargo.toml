@@ -67,6 +67,9 @@ members = [
     "crates/aspen-coordination-protocol",
     "crates/aspen-dht-discovery",
 
+    # Tier 0.5: DAG traversal + sync
+    "crates/aspen-dag",
+
     # Tier 1: Core engine
     "crates/aspen-disk",
     "crates/aspen-core",

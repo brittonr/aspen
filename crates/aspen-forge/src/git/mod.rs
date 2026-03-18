@@ -24,7 +24,7 @@
 //! - Hash translation between SHA-1 and BLAKE3
 //! - The `git-remote-aspen` helper for transparent git integration
 
-mod object;
+pub(crate) mod object;
 mod store;
 
 #[cfg(feature = "git-bridge")]
