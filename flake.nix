@@ -2831,9 +2831,9 @@
               # Build: nix build .#checks.x86_64-linux.multi-node-cluster-test
               multi-node-cluster-test = import ./nix/tests/multi-node-cluster.nix {
                 inherit pkgs kvPluginWasm forgePluginWasm;
-                aspenNodePackage = bins.full-aspen-node-plugins;
-                aspenCliPackage = bins.full-aspen-cli-forge;
-                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                aspenNodePackage = bins.ci-aspen-node-plugins;
+                aspenCliPackage = bins.ci-aspen-cli-e2e;
+                aspenCliPlugins = bins.ci-aspen-cli-plugins;
               };
 
               # Alert failover test: alert rule fires, leadership transfer,
