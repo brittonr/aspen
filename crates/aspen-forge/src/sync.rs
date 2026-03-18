@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use aspen_blob::prelude::*;
 use iroh::PublicKey;
+use tokio::io::AsyncWriteExt;
 
 use crate::CobChange;
 use crate::GitObject;
@@ -372,6 +373,200 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
     /// remote traversal to stop at objects we already have.
     pub fn known_heads_from_refs(&self, ref_targets: &[blake3::Hash]) -> HashSet<blake3::Hash> {
         ref_targets.iter().copied().collect()
+    }
+
+    /// Execute the sender side of a DAG sync.
+    ///
+    /// Given a `DagSyncRequest`, runs a `FullTraversal` with the
+    /// appropriate link extractor, reads each object from the local blob
+    /// store, and writes response frames to the provided stream.
+    ///
+    /// This is the handler callback meant for `DagSyncProtocolHandler::from_fn`.
+    pub async fn handle_sync_request<W: tokio::io::AsyncWrite + Unpin + Send>(
+        &self,
+        request: aspen_dag::DagSyncRequest,
+        writer: &mut W,
+    ) -> Result<aspen_dag::SyncStats, aspen_dag::ProtocolError> {
+        use aspen_dag::DagTraversal;
+        use aspen_dag::FullTraversal;
+
+        let (root_bytes, known_heads_bytes, filter) = match &request.traversal {
+            aspen_dag::TraversalOpts::Full(opts) => {
+                let known: HashSet<blake3::Hash> = opts
+                    .known_heads
+                    .iter()
+                    .map(|h| blake3::Hash::from_bytes(*h))
+                    .collect();
+                (opts.root, known, &opts.filter)
+            }
+            aspen_dag::TraversalOpts::Sequence(hashes) => {
+                return self
+                    .handle_sequence_sync(hashes, &request.inline, writer)
+                    .await;
+            }
+        };
+
+        let root = blake3::Hash::from_bytes(root_bytes);
+        let extractor = crate::dag_sync::GitLinkExtractor::new(Arc::clone(&self.blobs));
+        let mut traversal = FullTraversal::with_known_heads(root, (), extractor, known_heads_bytes);
+
+        let mut stats = aspen_dag::SyncStats::default();
+
+        while let Some(hash) = traversal.next().await.map_err(|e| {
+            aspen_dag::ProtocolError::Io {
+                source: std::io::Error::other(format!("traversal error: {e}")),
+            }
+        })? {
+            // Apply wire-protocol filter.
+            if !self.passes_filter(&hash, filter) {
+                continue;
+            }
+
+            let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
+            let data = self.blobs.get_bytes(&iroh_hash).await.map_err(|e| {
+                aspen_dag::ProtocolError::Io {
+                    source: std::io::Error::other(format!("blob read error: {e}")),
+                }
+            })?;
+
+            let hash_bytes = *hash.as_bytes();
+            match data {
+                Some(bytes) => {
+                    let ctx = aspen_dag::InlineContext {
+                        data_size: bytes.len() as u64,
+                        type_tag: 0,
+                        is_leaf: false,
+                    };
+                    let written = if request.inline.should_inline(&ctx) {
+                        stats.data_frames = stats.data_frames.saturating_add(1);
+                        aspen_dag::write_data_inline(writer, hash_bytes, &bytes).await?
+                    } else {
+                        stats.hash_only_frames = stats.hash_only_frames.saturating_add(1);
+                        aspen_dag::write_hash_only(writer, hash_bytes).await?
+                    };
+                    stats.bytes_transferred = stats.bytes_transferred.saturating_add(written);
+                }
+                None => {
+                    // Object missing locally — send hash-only so receiver knows to fetch separately.
+                    stats.hash_only_frames = stats.hash_only_frames.saturating_add(1);
+                    let written = aspen_dag::write_hash_only(writer, hash_bytes).await?;
+                    stats.bytes_transferred = stats.bytes_transferred.saturating_add(written);
+                }
+            }
+        }
+
+        writer
+            .flush()
+            .await
+            .map_err(|e| aspen_dag::ProtocolError::Io { source: e })?;
+
+        Ok(stats)
+    }
+
+    /// Handle a sequence sync request (fixed list of hashes).
+    async fn handle_sequence_sync<W: tokio::io::AsyncWrite + Unpin + Send>(
+        &self,
+        hashes: &[[u8; 32]],
+        inline: &aspen_dag::InlinePolicy,
+        writer: &mut W,
+    ) -> Result<aspen_dag::SyncStats, aspen_dag::ProtocolError> {
+        let mut stats = aspen_dag::SyncStats::default();
+
+        for hash_bytes in hashes {
+            let iroh_hash = iroh_blobs::Hash::from_bytes(*hash_bytes);
+            let data = self.blobs.get_bytes(&iroh_hash).await.map_err(|e| {
+                aspen_dag::ProtocolError::Io {
+                    source: std::io::Error::other(format!("blob read error: {e}")),
+                }
+            })?;
+
+            match data {
+                Some(bytes) => {
+                    let ctx = aspen_dag::InlineContext {
+                        data_size: bytes.len() as u64,
+                        type_tag: 0,
+                        is_leaf: false,
+                    };
+                    let written = if inline.should_inline(&ctx) {
+                        stats.data_frames = stats.data_frames.saturating_add(1);
+                        aspen_dag::write_data_inline(writer, *hash_bytes, &bytes).await?
+                    } else {
+                        stats.hash_only_frames = stats.hash_only_frames.saturating_add(1);
+                        aspen_dag::write_hash_only(writer, *hash_bytes).await?
+                    };
+                    stats.bytes_transferred = stats.bytes_transferred.saturating_add(written);
+                }
+                None => {
+                    stats.hash_only_frames = stats.hash_only_frames.saturating_add(1);
+                    let written = aspen_dag::write_hash_only(writer, *hash_bytes).await?;
+                    stats.bytes_transferred = stats.bytes_transferred.saturating_add(written);
+                }
+            }
+        }
+
+        writer
+            .flush()
+            .await
+            .map_err(|e| aspen_dag::ProtocolError::Io { source: e })?;
+
+        Ok(stats)
+    }
+
+    /// Check if a hash passes the wire-protocol traversal filter.
+    ///
+    /// For Forge, type classification requires reading the object to determine
+    /// if it's a commit/tree/tag/blob. To avoid double-reads, we classify
+    /// based on the object type from the blob store.
+    fn passes_filter(&self, hash: &blake3::Hash, filter: &aspen_dag::TraversalFilter) -> bool {
+        match filter {
+            aspen_dag::TraversalFilter::All => true,
+            aspen_dag::TraversalFilter::Exclude(_) | aspen_dag::TraversalFilter::Only(_) => {
+                // Classify the object. This requires a synchronous read because
+                // passes_filter is called from the sync loop. Use block_in_place.
+                let blobs = Arc::clone(&self.blobs);
+                let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
+
+                let node_type = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(async {
+                        let bytes = match blobs.get_bytes(&iroh_hash).await {
+                            Ok(Some(b)) => b,
+                            _ => return None,
+                        };
+                        let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes).ok()?;
+                        Some(match &signed.payload {
+                            GitObject::Commit(_) => crate::dag_sync::ForgeNodeType::Commit,
+                            GitObject::Tree(_) => crate::dag_sync::ForgeNodeType::Tree,
+                            GitObject::Blob(_) => crate::dag_sync::ForgeNodeType::Blob,
+                            GitObject::Tag(_) => crate::dag_sync::ForgeNodeType::Tag,
+                        })
+                    })
+                });
+
+                match (filter, node_type) {
+                    (aspen_dag::TraversalFilter::Exclude(tags), Some(t)) => !tags.contains(&t.as_tag()),
+                    (aspen_dag::TraversalFilter::Only(tags), Some(t)) => tags.contains(&t.as_tag()),
+                    // Can't classify → include (safe default).
+                    _ => true,
+                }
+            }
+        }
+    }
+
+    /// Create a `DagSyncProtocolHandler` backed by this service's blob store.
+    ///
+    /// The returned handler can be registered on the iroh Router via
+    /// `router_builder.dag_sync(handler)`.
+    pub fn into_dag_sync_handler(self: Arc<Self>) -> aspen_dag::DagSyncProtocolHandler {
+        aspen_dag::DagSyncProtocolHandler::from_fn(move |request, mut send| {
+            let svc = Arc::clone(&self);
+            async move {
+                let stats = svc.handle_sync_request(request, &mut send).await?;
+                send.finish().map_err(|e| aspen_dag::ProtocolError::Io {
+                    source: std::io::Error::other(e.to_string()),
+                })?;
+                Ok(stats)
+            }
+        })
     }
 }
 

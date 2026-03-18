@@ -109,9 +109,7 @@ async fn full_traversal_depth_exceeded() {
 async fn full_traversal_too_many_children() {
     let root = hash("root");
     let over_limit = 1_000_001u32;
-    let children: Vec<blake3::Hash> = (0..over_limit)
-        .map(|i| blake3::hash(format!("child-{i}").as_bytes()))
-        .collect();
+    let children: Vec<blake3::Hash> = (0..over_limit).map(|i| blake3::hash(format!("child-{i}").as_bytes())).collect();
 
     let children_clone = children.clone();
     let links = FnLinkExtractor::new(move |h: &blake3::Hash| -> TraversalResult<Vec<blake3::Hash>> {
@@ -271,9 +269,7 @@ async fn sequence_traversal_duplicates_preserved() {
 #[tokio::test]
 async fn full_traversal_wide_node() {
     let root = hash("root");
-    let children: Vec<blake3::Hash> = (0..1000u32)
-        .map(|i| blake3::hash(format!("child-{i}").as_bytes()))
-        .collect();
+    let children: Vec<blake3::Hash> = (0..1000u32).map(|i| blake3::hash(format!("child-{i}").as_bytes())).collect();
 
     let children_clone = children.clone();
     let links = FnLinkExtractor::new(move |h: &blake3::Hash| -> TraversalResult<Vec<blake3::Hash>> {
@@ -324,12 +320,9 @@ async fn full_traversal_wide_node() {
 async fn realistic_git_dag() {
     let commit_count = 50u32;
 
-    let commits: Vec<blake3::Hash> = (0..commit_count)
-        .map(|i| blake3::hash(format!("commit-{i}").as_bytes()))
-        .collect();
-    let trees: Vec<blake3::Hash> = (0..commit_count)
-        .map(|i| blake3::hash(format!("tree-{i}").as_bytes()))
-        .collect();
+    let commits: Vec<blake3::Hash> =
+        (0..commit_count).map(|i| blake3::hash(format!("commit-{i}").as_bytes())).collect();
+    let trees: Vec<blake3::Hash> = (0..commit_count).map(|i| blake3::hash(format!("tree-{i}").as_bytes())).collect();
 
     let mut edges: HashMap<blake3::Hash, Vec<blake3::Hash>> = HashMap::new();
 
@@ -343,9 +336,7 @@ async fn realistic_git_dag() {
         edges.insert(commits[idx], children);
 
         // Each tree has 3 unique blobs.
-        let blobs: Vec<blake3::Hash> = (0..3u32)
-            .map(|j| blake3::hash(format!("blob-{i}-{j}").as_bytes()))
-            .collect();
+        let blobs: Vec<blake3::Hash> = (0..3u32).map(|j| blake3::hash(format!("blob-{i}-{j}").as_bytes())).collect();
         edges.insert(trees[idx], blobs);
     }
 
@@ -379,12 +370,9 @@ async fn realistic_git_dag() {
 async fn realistic_git_dag_incremental() {
     let commit_count = 50u32;
 
-    let commits: Vec<blake3::Hash> = (0..commit_count)
-        .map(|i| blake3::hash(format!("commit-{i}").as_bytes()))
-        .collect();
-    let trees: Vec<blake3::Hash> = (0..commit_count)
-        .map(|i| blake3::hash(format!("tree-{i}").as_bytes()))
-        .collect();
+    let commits: Vec<blake3::Hash> =
+        (0..commit_count).map(|i| blake3::hash(format!("commit-{i}").as_bytes())).collect();
+    let trees: Vec<blake3::Hash> = (0..commit_count).map(|i| blake3::hash(format!("tree-{i}").as_bytes())).collect();
 
     let mut edges: HashMap<blake3::Hash, Vec<blake3::Hash>> = HashMap::new();
 
@@ -396,9 +384,7 @@ async fn realistic_git_dag_incremental() {
         }
         edges.insert(commits[idx], children);
 
-        let blobs: Vec<blake3::Hash> = (0..3u32)
-            .map(|j| blake3::hash(format!("blob-{i}-{j}").as_bytes()))
-            .collect();
+        let blobs: Vec<blake3::Hash> = (0..3u32).map(|j| blake3::hash(format!("blob-{i}-{j}").as_bytes())).collect();
         edges.insert(trees[idx], blobs);
     }
 

@@ -212,11 +212,7 @@ async fn sync_stats_mixed() {
     let d3 = b"data-three";
     let h3 = *blake3::hash(d3).as_bytes();
 
-    let frames = vec![
-        (h1, Some(d1.to_vec())),
-        (h2, None),
-        (h3, Some(d3.to_vec())),
-    ];
+    let frames = vec![(h1, Some(d1.to_vec())), (h2, None), (h3, Some(d3.to_vec()))];
 
     let mut buf = Vec::new();
     let stats = send_sync(&mut buf, frames).await.unwrap();
@@ -239,11 +235,7 @@ async fn recv_stats_match_send_stats() {
     let d3 = b"frame-3-longer-data-for-variety";
     let h3 = *blake3::hash(d3).as_bytes();
 
-    let frames = vec![
-        (h1, Some(d1.to_vec())),
-        (h2, None),
-        (h3, Some(d3.to_vec())),
-    ];
+    let frames = vec![(h1, Some(d1.to_vec())), (h2, None), (h3, Some(d3.to_vec()))];
 
     let mut buf = Vec::new();
     let send_stats = send_sync(&mut buf, frames).await.unwrap();

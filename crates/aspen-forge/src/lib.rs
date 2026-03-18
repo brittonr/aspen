@@ -105,11 +105,15 @@ pub use error::ForgeError;
 // Federation
 pub use federation::FORGE_RESOURCE_TYPE;
 pub use federation::forge_repo_policy;
+pub use git::BlobObject;
+pub use git::CommitObject;
 #[cfg(feature = "git-bridge")]
 pub use git::GIT_BRIDGE_ALPN;
 pub use git::GitBlobStore;
 pub use git::GitObject;
+pub use git::TagObject;
 pub use git::TreeEntry;
+pub use git::TreeObject;
 pub use gossip::Announcement;
 pub use gossip::AnnouncementCallback;
 pub use gossip::ForgeAnnouncementHandler;
