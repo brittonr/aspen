@@ -44,8 +44,8 @@
 - [x] 5.3 `nix build .#checks.x86_64-linux.build-node` — nix build with near-full features
 - [x] 5.4 `nix build .#checks.x86_64-linux.clippy` — no new warnings
 - [x] 5.5 Update `flake.nix` — crate-hashes, h3-iroh vendor overrides if needed
-- [ ] 5.6 Run key NixOS VM tests: `kv-operations-test`, `multi-node-cluster`, `e2e-push-build-cache`
-- [ ] 5.7 Run `nix-cache-gateway-test` with h3-iroh transport
+- [ ] 5.6 Run key NixOS VM tests: `kv-operations-test`, `multi-node-cluster`, `e2e-push-build-cache` (BLOCKED: nix store corruption on vendor-cargo-deps FOD — needs `nix-store --verify --repair` with root)
+- [ ] 5.7 Run `nix-cache-gateway-test` with h3-iroh transport (BLOCKED: same store issue)
 
 ## 6. Cleanup and merge
 
