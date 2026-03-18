@@ -2422,6 +2422,7 @@ dependencies = [
  "aspen-cache",
  "aspen-client-api",
  "aspen-core",
+ "aspen-dag",
  "aspen-testing",
  "async-stream",
  "async-trait",

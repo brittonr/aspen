@@ -30,6 +30,7 @@
 
 pub mod blob_service;
 pub mod constants;
+pub mod dag_sync;
 pub mod directory_service;
 pub mod error;
 pub mod migration;
@@ -40,6 +41,9 @@ pub mod rpc_pathinfo_service;
 
 pub use blob_service::IrohBlobService;
 pub use constants::*;
+pub use dag_sync::DirectoryLinkExtractor;
+pub use dag_sync::SnixNodeType;
+pub use dag_sync::extract_directory_children;
 pub use directory_service::RaftDirectoryService;
 pub use error::Error;
 pub use error::Result;
