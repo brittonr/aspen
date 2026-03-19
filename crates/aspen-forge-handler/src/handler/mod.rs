@@ -22,8 +22,9 @@ mod tests {
     #[test]
     fn test_executor_handles_count() {
         let handles = crate::ForgeServiceExecutor::HANDLES;
-        // 2 repo ops + 9 federation + 7 git bridge = 18
-        assert_eq!(handles.len(), 18);
+        // 2 repo + 5 object + 3 commit + 6 ref + 6 issue + 7 patch + 1 delegate + 8 federation + 7 git
+        // bridge = 45
+        assert_eq!(handles.len(), 45);
     }
 
     #[test]
