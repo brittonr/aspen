@@ -7,11 +7,11 @@
 
 ## 2. Challenge-response authentication
 
-- [ ] 2.1 Add `NostrAuthService` with `create_challenge(npub) -> challenge_id + random bytes` and `verify_challenge(npub, challenge_id, secp256k1_signature) -> Result<UserContext>`
-- [ ] 2.2 Store pending challenges in a time-bounded in-memory map (60s TTL, max 1000 entries)
-- [ ] 2.3 On successful verification, issue a capability token carrying the npub via `TokenBuilder` (add npub claim to token)
-- [ ] 2.4 Add RPC operations: `NostrAuthChallenge { npub }` → `NostrAuthChallengeResponse { challenge_id, challenge }` and `NostrAuthVerify { npub, challenge_id, signature }` → `NostrAuthVerifyResponse { token }`
-- [ ] 2.5 Unit tests: full challenge-response cycle, expired challenge rejection, invalid signature rejection
+- [x] 2.1 Add `NostrAuthService` with `create_challenge(npub) -> challenge_id + random bytes` and `verify_challenge(npub, challenge_id, secp256k1_signature) -> Result<UserContext>`
+- [x] 2.2 Store pending challenges in a time-bounded in-memory map (60s TTL, max 1000 entries)
+- [x] 2.3 On successful verification, issue a capability token carrying the npub via `TokenBuilder` (add npub claim to token)
+- [x] 2.4 Add RPC operations: `NostrAuthChallenge { npub }` → `NostrAuthChallengeResponse { challenge_id, challenge }` and `NostrAuthVerify { npub, challenge_id, signature }` → `NostrAuthVerifyResponse { token }`
+- [x] 2.5 Unit tests: full challenge-response cycle, expired challenge rejection, invalid signature rejection
 
 ## 3. Author struct npub field
 
