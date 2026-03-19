@@ -6,43 +6,71 @@ use tracing::warn;
 use crate::state::AppState;
 use crate::templates;
 
-/// Response payload from a route handler.
-pub struct HtmlResponse {
-    pub status: StatusCode,
-    pub body: String,
+/// Response from a route handler — either an HTML page or raw bytes.
+pub enum RouteResponse {
+    /// HTML page (rendered with maud templates).
+    Html { status: StatusCode, body: String },
+    /// Raw content with a specific content type (for file downloads/viewing).
+    Raw {
+        status: StatusCode,
+        content_type: &'static str,
+        body: Vec<u8>,
+    },
 }
 
-fn ok(markup: maud::Markup) -> HtmlResponse {
-    HtmlResponse {
+impl RouteResponse {
+    pub fn status(&self) -> StatusCode {
+        match self {
+            Self::Html { status, .. } | Self::Raw { status, .. } => *status,
+        }
+    }
+
+    pub fn content_type(&self) -> &str {
+        match self {
+            Self::Html { .. } => "text/html; charset=utf-8",
+            Self::Raw { content_type, .. } => content_type,
+        }
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        match self {
+            Self::Html { body, .. } => body.into_bytes(),
+            Self::Raw { body, .. } => body,
+        }
+    }
+}
+
+fn ok(markup: maud::Markup) -> RouteResponse {
+    RouteResponse::Html {
         status: StatusCode::OK,
         body: markup.into_string(),
     }
 }
 
-fn not_found(path: &str) -> HtmlResponse {
-    HtmlResponse {
+fn not_found(path: &str) -> RouteResponse {
+    RouteResponse::Html {
         status: StatusCode::NOT_FOUND,
         body: templates::error_page("Not Found", &format!("No page at {path}")).into_string(),
     }
 }
 
-fn err(e: anyhow::Error) -> HtmlResponse {
+fn err(e: anyhow::Error) -> RouteResponse {
     warn!("handler error: {e:#}");
-    HtmlResponse {
+    RouteResponse::Html {
         status: StatusCode::INTERNAL_SERVER_ERROR,
         body: templates::error_page("Error", &e.to_string()).into_string(),
     }
 }
 
-pub fn method_not_allowed() -> HtmlResponse {
-    HtmlResponse {
+pub fn method_not_allowed() -> RouteResponse {
+    RouteResponse::Html {
         status: StatusCode::METHOD_NOT_ALLOWED,
         body: templates::error_page("Method Not Allowed", "Only GET is supported.").into_string(),
     }
 }
 
 /// Dispatch a GET request to the appropriate handler.
-pub async fn dispatch(state: &AppState, path: &str) -> HtmlResponse {
+pub async fn dispatch(state: &AppState, path: &str) -> RouteResponse {
     // Strip trailing slash (except root).
     let path = if path.len() > 1 {
         path.trim_end_matches('/')
@@ -63,6 +91,10 @@ pub async fn dispatch(state: &AppState, path: &str) -> HtmlResponse {
             let sub = rest.join("/");
             blob_view(state, repo_id, ref_name, &sub).await
         }
+        [repo_id, "raw", ref_name, rest @ ..] if !rest.is_empty() => {
+            let sub = rest.join("/");
+            raw_blob(state, repo_id, ref_name, &sub).await
+        }
         [repo_id, "commits"] => commits(state, repo_id).await,
         [repo_id, "issues"] => issues(state, repo_id).await,
         [repo_id, "issues", id] => issue_detail(state, repo_id, id).await,
@@ -74,14 +106,14 @@ pub async fn dispatch(state: &AppState, path: &str) -> HtmlResponse {
 
 // ── Handlers ────────────────────────────────────────────────────────
 
-async fn repo_list(st: &AppState) -> HtmlResponse {
+async fn repo_list(st: &AppState) -> RouteResponse {
     match st.list_repos().await {
         Ok(repos) => ok(templates::repo_list(&repos)),
         Err(e) => err(e),
     }
 }
 
-async fn repo_overview(st: &AppState, repo_id: &str) -> HtmlResponse {
+async fn repo_overview(st: &AppState, repo_id: &str) -> RouteResponse {
     let repo = match st.get_repo(repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
@@ -91,7 +123,7 @@ async fn repo_overview(st: &AppState, repo_id: &str) -> HtmlResponse {
     ok(templates::repo_overview(&repo, &branches, &recent))
 }
 
-async fn tree_root(st: &AppState, repo_id: &str) -> HtmlResponse {
+async fn tree_root(st: &AppState, repo_id: &str) -> RouteResponse {
     let repo = match st.get_repo(repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
@@ -100,7 +132,7 @@ async fn tree_root(st: &AppState, repo_id: &str) -> HtmlResponse {
     tree_at(st, &repo, ref_name, "").await
 }
 
-async fn tree_path(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> HtmlResponse {
+async fn tree_path(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> RouteResponse {
     let repo = match st.get_repo(repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
@@ -113,7 +145,7 @@ async fn tree_at(
     repo: &aspen_forge_protocol::ForgeRepoInfo,
     ref_name: &str,
     path: &str,
-) -> HtmlResponse {
+) -> RouteResponse {
     let commit_hash = match st.resolve_ref(&repo.id, ref_name).await {
         Ok(h) => h,
         Err(e) => return err(e),
@@ -132,7 +164,7 @@ async fn tree_at(
     }
 }
 
-async fn blob_view(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> HtmlResponse {
+async fn blob_view(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> RouteResponse {
     let repo = match st.get_repo(repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
@@ -159,7 +191,7 @@ async fn blob_view(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> 
     }
 }
 
-async fn commits(st: &AppState, repo_id: &str) -> HtmlResponse {
+async fn commits(st: &AppState, repo_id: &str) -> RouteResponse {
     let repo = match st.get_repo(repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
@@ -170,7 +202,7 @@ async fn commits(st: &AppState, repo_id: &str) -> HtmlResponse {
     }
 }
 
-async fn issues(st: &AppState, repo_id: &str) -> HtmlResponse {
+async fn issues(st: &AppState, repo_id: &str) -> RouteResponse {
     let repo = match st.get_repo(repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
@@ -181,7 +213,7 @@ async fn issues(st: &AppState, repo_id: &str) -> HtmlResponse {
     }
 }
 
-async fn issue_detail(st: &AppState, repo_id: &str, issue_id: &str) -> HtmlResponse {
+async fn issue_detail(st: &AppState, repo_id: &str, issue_id: &str) -> RouteResponse {
     let repo = match st.get_repo(repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
@@ -192,7 +224,7 @@ async fn issue_detail(st: &AppState, repo_id: &str, issue_id: &str) -> HtmlRespo
     }
 }
 
-async fn patches(st: &AppState, repo_id: &str) -> HtmlResponse {
+async fn patches(st: &AppState, repo_id: &str) -> RouteResponse {
     let repo = match st.get_repo(repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
@@ -203,13 +235,39 @@ async fn patches(st: &AppState, repo_id: &str) -> HtmlResponse {
     }
 }
 
-async fn patch_detail(st: &AppState, repo_id: &str, patch_id: &str) -> HtmlResponse {
+async fn patch_detail(st: &AppState, repo_id: &str, patch_id: &str) -> RouteResponse {
     let repo = match st.get_repo(repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
     };
     match st.get_patch(repo_id, patch_id).await {
         Ok(patch) => ok(templates::patch_detail(&repo, &patch)),
+        Err(e) => err(e),
+    }
+}
+
+async fn raw_blob(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> RouteResponse {
+    let commit_hash = match st.resolve_ref(repo_id, ref_name).await {
+        Ok(h) => h,
+        Err(e) => return err(e),
+    };
+    let commit = match st.get_commit(&commit_hash).await {
+        Ok(c) => c,
+        Err(e) => return err(e),
+    };
+    let blob_hash = match walk_to_blob(st, &commit.tree, path).await {
+        Ok(h) => h,
+        Err(e) => return err(e),
+    };
+    match st.get_blob(&blob_hash).await {
+        Ok(blob) => match blob.content {
+            Some(data) => RouteResponse::Raw {
+                status: StatusCode::OK,
+                content_type: content_type_for_path(path),
+                body: data,
+            },
+            None => not_found(path),
+        },
         Err(e) => err(e),
     }
 }
@@ -251,4 +309,104 @@ async fn walk_to_blob(st: &AppState, root_tree: &str, path: &str) -> anyhow::Res
         .find(|e| e.name == file[0])
         .ok_or_else(|| anyhow::anyhow!("file not found: {}", file[0]))?;
     Ok(entry.hash.clone())
+}
+
+// ── Content-type detection ──────────────────────────────────────────
+
+/// Derive a content-type from the file extension in a path.
+fn content_type_for_path(path: &str) -> &'static str {
+    let ext = path.rsplit('.').next().unwrap_or("");
+    match ext {
+        // Text
+        "html" | "htm" => "text/html; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "js" | "mjs" => "text/javascript; charset=utf-8",
+        "json" => "application/json",
+        "xml" => "application/xml",
+        "txt" | "md" | "rs" | "toml" | "yaml" | "yml" | "nix" | "sh" | "py" | "rb" | "go" | "c" | "h" | "cpp"
+        | "hpp" | "java" | "ts" | "tsx" | "jsx" | "lock" | "cfg" | "ini" | "conf" | "diff" | "patch" | "csv"
+        | "sql" | "graphql" | "proto" | "zig" | "el" | "ex" | "exs" | "erl" | "hrl" | "hs" | "ml" | "mli" | "lua"
+        | "vim" | "svelte" | "vue" | "tf" | "hcl" | "kdl" | "ncl" => "text/plain; charset=utf-8",
+        "svg" => "image/svg+xml",
+        // Images
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "ico" => "image/x-icon",
+        "avif" => "image/avif",
+        // Fonts
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "ttf" => "font/ttf",
+        "otf" => "font/otf",
+        // Archives / binaries
+        "wasm" => "application/wasm",
+        "pdf" => "application/pdf",
+        "zip" => "application/zip",
+        "gz" | "tgz" => "application/gzip",
+        "tar" => "application/x-tar",
+        "xz" => "application/x-xz",
+        "zst" => "application/zstd",
+        _ => "application/octet-stream",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn content_type_source_files() {
+        assert_eq!(content_type_for_path("lib.rs"), "text/plain; charset=utf-8");
+        assert_eq!(content_type_for_path("flake.nix"), "text/plain; charset=utf-8");
+        assert_eq!(content_type_for_path("Cargo.toml"), "text/plain; charset=utf-8");
+        assert_eq!(content_type_for_path("deep/nested/path.py"), "text/plain; charset=utf-8");
+    }
+
+    #[test]
+    fn content_type_web_assets() {
+        assert_eq!(content_type_for_path("style.css"), "text/css; charset=utf-8");
+        assert_eq!(content_type_for_path("app.js"), "text/javascript; charset=utf-8");
+        assert_eq!(content_type_for_path("index.html"), "text/html; charset=utf-8");
+        assert_eq!(content_type_for_path("data.json"), "application/json");
+    }
+
+    #[test]
+    fn content_type_images() {
+        assert_eq!(content_type_for_path("logo.png"), "image/png");
+        assert_eq!(content_type_for_path("photo.jpg"), "image/jpeg");
+        assert_eq!(content_type_for_path("icon.svg"), "image/svg+xml");
+    }
+
+    #[test]
+    fn content_type_binary_fallback() {
+        assert_eq!(content_type_for_path("binary"), "application/octet-stream");
+        assert_eq!(content_type_for_path("data.unknown"), "application/octet-stream");
+        assert_eq!(content_type_for_path("program.wasm"), "application/wasm");
+    }
+
+    #[test]
+    fn route_response_html_content_type() {
+        let resp = ok(maud::html! { p { "hello" } });
+        assert_eq!(resp.content_type(), "text/html; charset=utf-8");
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn route_response_raw_content_type() {
+        let resp = RouteResponse::Raw {
+            status: StatusCode::OK,
+            content_type: "image/png",
+            body: vec![0x89, 0x50, 0x4E, 0x47],
+        };
+        assert_eq!(resp.content_type(), "image/png");
+        assert_eq!(resp.into_bytes(), vec![0x89, 0x50, 0x4E, 0x47]);
+    }
+
+    #[test]
+    fn not_found_is_404() {
+        let resp = not_found("/missing");
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
 }

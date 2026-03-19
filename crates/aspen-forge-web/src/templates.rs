@@ -167,6 +167,7 @@ pub fn file_browser(repo: &ForgeRepoInfo, ref_name: &str, path: &str, entries: &
 /// Blob (file content) page.
 pub fn file_view(repo: &ForgeRepoInfo, ref_name: &str, path: &str, content: Option<&[u8]>, size: u64) -> Markup {
     let is_text = content.as_ref().is_some_and(|c| is_likely_text(c));
+    let raw_url = format!("/{}/raw/{}/{}", repo.id, ref_name, path);
     base_layout(&format!("{} — {}", repo.name, path), html! {
         h1 {
             a href=(format!("/{}", repo.id)) { (&repo.name) }
@@ -175,7 +176,11 @@ pub fn file_view(repo: &ForgeRepoInfo, ref_name: &str, path: &str, content: Opti
             " / " (path)
         }
 
-        p.meta { (size) " bytes" }
+        p.meta {
+            (size) " bytes"
+            " · "
+            a.raw-link href=(raw_url) { "Raw" }
+        }
 
         @if is_text {
             @if let Some(bytes) = content {
@@ -192,7 +197,10 @@ pub fn file_view(repo: &ForgeRepoInfo, ref_name: &str, path: &str, content: Opti
                 }
             }
         } @else {
-            p.muted { "Binary file (" (size) " bytes)" }
+            p.muted {
+                "Binary file (" (size) " bytes) · "
+                a href=(raw_url) { "Download" }
+            }
         }
     })
 }
@@ -456,6 +464,8 @@ ul{list-style:none;padding-left:0}
 li{padding:.25rem 0}
 footer{text-align:center;padding:2rem 1rem;color:#8b949e;font-size:.85rem;border-top:1px solid #30363d;margin-top:2rem}
 footer a{color:#58a6ff}
+a.raw-link{display:inline-block;padding:.15em .5em;border:1px solid #30363d;border-radius:4px;font-size:.8rem;color:#8b949e}
+a.raw-link:hover{color:#f0f6fc;border-color:#58a6ff;text-decoration:none}
 @media (max-width: 768px) {
     main{padding:0.75rem}
     table{font-size:0.85rem}

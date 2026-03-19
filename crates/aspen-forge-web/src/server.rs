@@ -67,20 +67,20 @@ async fn handle_request(
 
     debug!(%method, %path, "forge-web request");
 
-    let html = if *method == http::Method::GET {
+    let route_resp = if *method == http::Method::GET {
         routes::dispatch(&state, path).await
     } else {
         routes::method_not_allowed()
     };
 
     let resp = Response::builder()
-        .status(html.status)
-        .header("content-type", "text/html; charset=utf-8")
+        .status(route_resp.status())
+        .header("content-type", route_resp.content_type())
         .body(())
         .map_err(|e| anyhow::anyhow!("response build error: {e}"))?;
 
     stream.send_response(resp).await?;
-    stream.send_data(Bytes::from(html.body)).await?;
+    stream.send_data(Bytes::from(route_resp.into_bytes())).await?;
     stream.finish().await?;
 
     Ok(())
