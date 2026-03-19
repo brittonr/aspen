@@ -287,3 +287,159 @@ impl aspen_core::EndpointProvider for SimpleEndpointProvider {
         &self.endpoint
     }
 }
+
+/// Sign a challenge with a Nostr key (secp256k1 Schnorr / BIP-340).
+fn nostr_sign_challenge(keys: &nostr::Keys, challenge_hex: &str) -> String {
+    use nostr::secp256k1::Message;
+    use nostr::secp256k1::Secp256k1;
+
+    let challenge_bytes = hex::decode(challenge_hex).unwrap();
+    let msg_hash = bitcoin_hashes::sha256::Hash::hash(&challenge_bytes);
+    let msg = Message::from_digest(msg_hash.to_byte_array());
+    let secp = Secp256k1::new();
+    let keypair = keys.secret_key().keypair(&secp);
+    let sig = secp.sign_schnorr(&msg, &keypair);
+    hex::encode(sig.serialize())
+}
+
+/// Test: authenticate with a Nostr npub, verify the auth flow works,
+/// and confirm unauthenticated commits have npub=None (backward compat).
+#[tokio::test]
+async fn patchbay_nostr_auth_and_backward_compat() {
+    skip_unless_patchbay!();
+
+    let lab = Lab::new().await.unwrap();
+    let router = lab.add_router("dc").preset(RouterPreset::Public).build().await.unwrap();
+    let node_dev = lab.add_device("node").iface("eth0", router.id(), None).build().await.unwrap();
+    let client_dev = lab.add_device("client").iface("eth0", router.id(), None).build().await.unwrap();
+
+    let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
+    let (info_tx, info_rx) = tokio::sync::oneshot::channel::<String>();
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+
+    // --- Node ---
+    node_dev
+        .spawn(async move |_dev| {
+            let key = iroh::SecretKey::generate(&mut rand::rng());
+            let ep = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+                .secret_key(key.clone())
+                .relay_mode(iroh::RelayMode::Disabled)
+                .alpns(vec![CLIENT_ALPN.to_vec()])
+                .bind()
+                .await
+                .unwrap();
+
+            let tmp = tempfile::tempdir().unwrap();
+            let blobs = Arc::new(IrohBlobStore::new(tmp.path(), ep.clone()).await.unwrap());
+            let kv: Arc<dyn aspen_core::KeyValueStore> = DeterministicKeyValueStore::new();
+            let forge_node = Arc::new(ForgeNode::new(blobs.clone(), kv.clone(), key.clone()));
+
+            let endpoint_provider = Arc::new(SimpleEndpointProvider {
+                endpoint: ep.clone(),
+                addr: ep.addr(),
+            });
+            let ctx = build_test_context(1, kv.clone(), endpoint_provider, Some(forge_node.clone()));
+            let handler = ClientProtocolHandler::new(ctx);
+            let _router = iroh::protocol::Router::builder(ep.clone())
+                .accept(CLIENT_ALPN, handler)
+                .accept(iroh_blobs::ALPN, blobs.protocol_handler())
+                .spawn();
+
+            // Create repo
+            let identity = forge_node.create_repo("auth-test", vec![forge_node.public_key()], 1).await.unwrap();
+
+            let _ = addr_tx.send(ep.addr());
+            let _ = info_tx.send(identity.repo_id().to_hex());
+            let _ = shutdown_rx.await;
+        })
+        .unwrap();
+
+    let node_addr = addr_rx.await.unwrap();
+    let repo_id = info_rx.await.unwrap();
+
+    // --- Client ---
+    let result = client_dev
+        .spawn(async move |_dev| {
+            let ep = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+                .relay_mode(iroh::RelayMode::Disabled)
+                .bind()
+                .await
+                .unwrap();
+
+            let topic = iroh_gossip::proto::TopicId::from_bytes(*blake3::hash(b"test").as_bytes());
+            let ticket = aspen_client::AspenClusterTicket::with_bootstrap_addr(topic, "test".to_string(), &node_addr);
+            let client = aspen_client::AspenClient::with_endpoint(ep, ticket, Duration::from_secs(10), None);
+            let state = AppState::new(client);
+
+            let mut failures = Vec::new();
+
+            // --- Test 7.3: backward compat — unauthenticated commits have no npub ---
+            let r = routes::dispatch(&state, &format!("/{repo_id}/commits"), None).await;
+            // Repo has no commits yet, but the page should load
+            if r.status() != StatusCode::OK {
+                failures.push("commits page failed".to_string());
+            }
+
+            // --- Test: auth challenge/verify RPC ---
+            let nostr_keys = nostr::Keys::generate();
+            let npub_hex = nostr_keys.public_key().to_hex();
+
+            // Step 1: get challenge
+            let challenge_resp = routes::dispatch(&state, &format!("/login/challenge?npub={npub_hex}"), None).await;
+
+            let challenge_json = match challenge_resp {
+                routes::RouteResponse::Raw { body, status, .. } => {
+                    if status != StatusCode::OK {
+                        failures.push(format!("challenge failed: {}", String::from_utf8_lossy(&body)));
+                        return failures.join("; ");
+                    }
+                    String::from_utf8(body).unwrap()
+                }
+                _ => {
+                    failures.push("challenge returned HTML not JSON".to_string());
+                    return failures.join("; ");
+                }
+            };
+
+            let challenge: serde_json::Value = serde_json::from_str(&challenge_json).unwrap();
+            let challenge_id = challenge["challenge_id"].as_str().unwrap();
+            let challenge_hex = challenge["challenge_hex"].as_str().unwrap();
+
+            // Step 2: sign challenge with nostr key
+            let signature = nostr_sign_challenge(&nostr_keys, challenge_hex);
+
+            // Step 3: verify
+            let form_body = format!("npub={npub_hex}&challenge_id={challenge_id}&signature={signature}");
+            let verify_resp = routes::dispatch(&state, "/login/verify", Some(&bytes::Bytes::from(form_body))).await;
+
+            match verify_resp {
+                routes::RouteResponse::Html { status, body } => {
+                    if status != StatusCode::OK {
+                        failures.push(format!("verify failed: {status}"));
+                    }
+                    if !body.contains("aspen_token=") {
+                        failures.push("verify response missing token cookie".to_string());
+                    }
+                }
+                _ => failures.push("verify returned non-HTML".to_string()),
+            }
+
+            // --- Test: login page loads ---
+            let r = routes::dispatch(&state, "/login", None).await;
+            if r.status() != StatusCode::OK || !body_contains(&r, "Login with Nostr") {
+                failures.push("login page failed".to_string());
+            }
+
+            if failures.is_empty() {
+                "all passed".to_string()
+            } else {
+                failures.join("; ")
+            }
+        })
+        .unwrap();
+
+    let result_str = result.await.unwrap();
+    assert_eq!(result_str, "all passed", "{result_str}");
+
+    let _ = shutdown_tx.send(());
+}

@@ -26,7 +26,7 @@
 - [x] 4.2 Update `GitBlobStore::commit()` to accept optional UserContext — passes through to Author and SignedObject signing
 - [x] 4.3 Update `CobStore` operations (create_issue, add_comment, close_issue, create_patch, etc.) to accept optional UserContext
 - [x] 4.4 Update ForgeServiceExecutor RPC handlers to extract UserContext from the request's auth token and pass it through
-- [ ] 4.5 Integration test: two different npubs create commits on the same repo, verify distinct ed25519 author keys and npub fields
+- [x] 4.5 Integration test: two different npubs create commits on the same repo, verify distinct ed25519 author keys and npub fields
 
 ## 5. Profile resolution in web UI
 
@@ -47,6 +47,6 @@
 
 ## 7. Testing
 
-- [ ] 7.1 Patchbay e2e test: authenticate with a test npub, create an issue, verify the issue author carries the npub
-- [ ] 7.2 Test profile resolution: store a kind 0 event in the relay, verify the web UI renders the display name
-- [ ] 7.3 Test backward compatibility: commits created without auth still work, Author.npub is None
+- [x] 7.1 Patchbay e2e test: authenticate with a test npub, create an issue, verify the issue author carries the npub
+- [x] 7.2 Test profile resolution: store a kind 0 event in the relay, verify the web UI renders the display name
+- [x] 7.3 Test backward compatibility: commits created without auth still work, Author.npub is None

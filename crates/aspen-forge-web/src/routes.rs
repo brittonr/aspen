@@ -130,6 +130,8 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
     // GET routes
     match segments.as_slice() {
         [] => repo_list(state).await,
+        ["login"] => login_page(state).await,
+        ["login", "challenge"] => login_challenge(state, &query).await,
         [repo_id] => repo_overview(state, repo_id).await,
         [repo_id, "tree"] => tree_root(state, repo_id).await,
         [repo_id, "tree", ref_name, rest @ ..] => {
@@ -152,8 +154,6 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
         [repo_id, "issues", id] => issue_detail(state, repo_id, id).await,
         [repo_id, "patches"] => patches(state, repo_id).await,
         [repo_id, "patches", id] => patch_detail(state, repo_id, id).await,
-        ["login"] => login_page(state).await,
-        ["login", "challenge"] => login_challenge(state, &query).await,
         _ => not_found(path),
     }
 }

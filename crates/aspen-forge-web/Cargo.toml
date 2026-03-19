@@ -74,7 +74,11 @@ aspen-rpc-handlers = { path = "../aspen-rpc-handlers", features = ["forge", "blo
 aspen-testing-core = { path = "../aspen-testing-core" }
 aspen-testing-patchbay = { path = "../aspen-testing-patchbay" }
 aspen-transport = { workspace = true }
+bitcoin_hashes = "0.15"
 ctor = "0.4"
+hex = "0.4"
+nostr = { version = "0.44", default-features = true }
+serde_json = { workspace = true }
 patchbay = { git = "https://github.com/n0-computer/patchbay.git", rev = "e0c48e094ae11442b1ea374b6d4d8fd55a498ac1" }
 rand = "0.9"
 
