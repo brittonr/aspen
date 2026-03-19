@@ -443,3 +443,178 @@ async fn patchbay_nostr_auth_and_backward_compat() {
 
     let _ = shutdown_tx.send(());
 }
+
+/// Test: two users with different npubs create commits on the same repo.
+/// Verify distinct ed25519 author keys and npub fields appear in commit
+/// history and the web UI displays the npub-based author names.
+#[tokio::test]
+async fn patchbay_two_users_distinct_commits() {
+    skip_unless_patchbay!();
+
+    let lab = Lab::new().await.unwrap();
+    let router = lab.add_router("dc").preset(RouterPreset::Public).build().await.unwrap();
+    let node_dev = lab.add_device("node").iface("eth0", router.id(), None).build().await.unwrap();
+    let client_dev = lab.add_device("client").iface("eth0", router.id(), None).build().await.unwrap();
+
+    let (addr_tx, addr_rx) = tokio::sync::oneshot::channel();
+    let (info_tx, info_rx) = tokio::sync::oneshot::channel::<(String, String, String)>();
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+
+    // --- Node: create repo with commits from two users ---
+    node_dev
+        .spawn(async move |_dev| {
+            let node_key = iroh::SecretKey::generate(&mut rand::rng());
+            let ep = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+                .secret_key(node_key.clone())
+                .relay_mode(iroh::RelayMode::Disabled)
+                .alpns(vec![CLIENT_ALPN.to_vec()])
+                .bind()
+                .await
+                .unwrap();
+
+            let tmp = tempfile::tempdir().unwrap();
+            let blobs = Arc::new(IrohBlobStore::new(tmp.path(), ep.clone()).await.unwrap());
+            let kv: Arc<dyn aspen_core::KeyValueStore> = DeterministicKeyValueStore::new();
+            let forge_node = Arc::new(ForgeNode::new(blobs.clone(), kv.clone(), node_key.clone()));
+
+            let endpoint_provider = Arc::new(SimpleEndpointProvider {
+                endpoint: ep.clone(),
+                addr: ep.addr(),
+            });
+            let ctx = build_test_context(1, kv.clone(), endpoint_provider, Some(forge_node.clone()));
+            let handler = ClientProtocolHandler::new(ctx);
+            let _router = iroh::protocol::Router::builder(ep.clone())
+                .accept(CLIENT_ALPN, handler)
+                .accept(iroh_blobs::ALPN, blobs.protocol_handler())
+                .spawn();
+
+            // Create repo
+            let identity = forge_node.create_repo("multi-user", vec![forge_node.public_key()], 1).await.unwrap();
+            let repo_id = identity.repo_id();
+
+            // Two user contexts via identity store
+            let id_store = aspen_forge::identity::nostr_mapping::NostrIdentityStore::new(kv.clone(), &node_key);
+            let user_a = id_store.get_or_create(&"a".repeat(64)).await.unwrap();
+            let user_b = id_store.get_or_create(&"b".repeat(64)).await.unwrap();
+
+            // User A: first commit
+            let hlc = create_hlc("test");
+            let blob_a =
+                SignedObject::new(GitObject::Blob(BlobObject::new(b"from A")), &user_a.signing_key, &hlc).unwrap();
+            blobs.add_bytes(&blob_a.to_bytes()).await.unwrap();
+
+            let tree_a = SignedObject::new(
+                GitObject::Tree(TreeObject::new(vec![TreeEntry::file("a.txt", blob_a.hash())])),
+                &user_a.signing_key,
+                &hlc,
+            )
+            .unwrap();
+            blobs.add_bytes(&tree_a.to_bytes()).await.unwrap();
+
+            let commit_a = forge_node.git.commit_as(tree_a.hash(), vec![], "Commit by A", &user_a).await.unwrap();
+
+            // User B: second commit
+            let blob_b =
+                SignedObject::new(GitObject::Blob(BlobObject::new(b"from B")), &user_b.signing_key, &hlc).unwrap();
+            blobs.add_bytes(&blob_b.to_bytes()).await.unwrap();
+
+            let tree_b = SignedObject::new(
+                GitObject::Tree(TreeObject::new(vec![
+                    TreeEntry::file("a.txt", blob_a.hash()),
+                    TreeEntry::file("b.txt", blob_b.hash()),
+                ])),
+                &user_b.signing_key,
+                &hlc,
+            )
+            .unwrap();
+            blobs.add_bytes(&tree_b.to_bytes()).await.unwrap();
+
+            let commit_b =
+                forge_node.git.commit_as(tree_b.hash(), vec![commit_a], "Commit by B", &user_b).await.unwrap();
+
+            forge_node.refs.set(&repo_id, "heads/main", commit_b).await.unwrap();
+
+            let _ = addr_tx.send(ep.addr());
+            let _ = info_tx.send((repo_id.to_hex(), commit_a.to_hex().to_string(), commit_b.to_hex().to_string()));
+            let _ = shutdown_rx.await;
+        })
+        .unwrap();
+
+    let node_addr = addr_rx.await.unwrap();
+    let (repo_id, commit_a_hash, commit_b_hash) = info_rx.await.unwrap();
+
+    // --- Client: verify ---
+    let result = client_dev
+        .spawn(async move |_dev| {
+            let ep = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+                .relay_mode(iroh::RelayMode::Disabled)
+                .bind()
+                .await
+                .unwrap();
+
+            let topic = iroh_gossip::proto::TopicId::from_bytes(*blake3::hash(b"test").as_bytes());
+            let ticket = aspen_client::AspenClusterTicket::with_bootstrap_addr(topic, "test".to_string(), &node_addr);
+            let client = aspen_client::AspenClient::with_endpoint(ep, ticket, Duration::from_secs(10), None);
+            let state = AppState::new(client);
+            let mut failures = Vec::new();
+
+            // 1. Commit A has user A's npub
+            let ca = state.get_commit(&commit_a_hash).await.unwrap();
+            if ca.author_npub.as_deref() != Some(&"a".repeat(64)) {
+                failures.push(format!("commit A npub: {:?}", ca.author_npub));
+            }
+
+            // 2. Commit B has user B's npub
+            let cb = state.get_commit(&commit_b_hash).await.unwrap();
+            if cb.author_npub.as_deref() != Some(&"b".repeat(64)) {
+                failures.push(format!("commit B npub: {:?}", cb.author_npub));
+            }
+
+            // 3. Distinct ed25519 author keys
+            if ca.author_key == cb.author_key {
+                failures.push("same ed25519 key for both users".to_string());
+            }
+
+            // 4. Commits page shows npub-based author display for both
+            let r = routes::dispatch(&state, &format!("/{repo_id}/commits"), None).await;
+            if r.status() != StatusCode::OK {
+                failures.push("commits page failed".to_string());
+            } else {
+                let html = match &r {
+                    routes::RouteResponse::Html { body, .. } => body.as_str(),
+                    _ => "",
+                };
+                if !html.contains("npub:aaaaaaaa") {
+                    failures.push("commits missing user A npub display".to_string());
+                }
+                if !html.contains("npub:bbbbbbbb") {
+                    failures.push("commits missing user B npub display".to_string());
+                }
+            }
+
+            // 5. Commit detail shows npub in author
+            let r = routes::dispatch(&state, &format!("/{repo_id}/commit/{commit_b_hash}"), None).await;
+            if r.status() != StatusCode::OK {
+                failures.push("commit B detail failed".to_string());
+            } else if !body_contains(&r, "npub:bbbbbbbb") {
+                failures.push("commit B detail missing npub display".to_string());
+            }
+
+            // 6. Diff page shows added file
+            if body_contains(&r, "files changed") && !body_contains(&r, "b.txt") {
+                failures.push("commit B diff missing b.txt".to_string());
+            }
+
+            if failures.is_empty() {
+                "all passed".to_string()
+            } else {
+                failures.join("; ")
+            }
+        })
+        .unwrap();
+
+    let result_str = result.await.unwrap();
+    assert_eq!(result_str, "all passed", "{result_str}");
+
+    let _ = shutdown_tx.send(());
+}
