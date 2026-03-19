@@ -81,6 +81,7 @@ pub mod verified;
 pub mod cob;
 pub mod git;
 pub mod identity;
+pub mod nostr_bridge;
 pub mod refs;
 
 pub mod gossip;

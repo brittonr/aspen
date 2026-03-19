@@ -107,6 +107,9 @@ pub struct ForgeCommitInfo {
     /// Author Nostr public key (hex-encoded secp256k1).
     #[serde(default)]
     pub author_npub: Option<String>,
+    /// Resolved Nostr display name (from kind 0 profile).
+    #[serde(default)]
+    pub author_display_name: Option<String>,
     /// Commit message.
     pub message: String,
     /// Timestamp (ms since epoch).

@@ -13,6 +13,7 @@ use clap::Subcommand;
 
 use crate::client::AspenClient;
 use crate::commands::alert::AlertCommand;
+use crate::commands::auth::AuthCommand;
 #[cfg(feature = "automerge")]
 use crate::commands::automerge::AutomergeCommand;
 use crate::commands::barrier::BarrierCommand;
@@ -123,6 +124,12 @@ pub enum Commands {
     #[cfg(feature = "automerge")]
     #[command(subcommand)]
     Automerge(AutomergeCommand),
+
+    /// Nostr authentication.
+    ///
+    /// Login with your Nostr identity to attribute forge operations to your npub.
+    #[command(subcommand)]
+    Auth(AuthCommand),
 
     /// Distributed barrier operations.
     #[command(subcommand)]
@@ -377,6 +384,7 @@ impl Cli {
 
         // Dispatch to appropriate command handler
         match self.command {
+            Commands::Auth(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "automerge")]
             Commands::Automerge(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Barrier(cmd) => cmd.run(&client, self.global.is_json).await,

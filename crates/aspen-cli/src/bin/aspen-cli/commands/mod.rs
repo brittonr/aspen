@@ -3,6 +3,7 @@
 //! Each module handles a category of operations.
 
 pub mod alert;
+pub mod auth;
 #[cfg(feature = "automerge")]
 pub mod automerge;
 pub mod barrier;

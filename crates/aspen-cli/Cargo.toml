@@ -58,6 +58,10 @@ iroh-base = "0.97.0"
 # Encoding
 hex = "0.4"
 
+# Nostr authentication
+nostr = { version = "0.44", default-features = true }
+bitcoin_hashes = "0.15"
+
 # Random number generation
 rand = "0.9"
 

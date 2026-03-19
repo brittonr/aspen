@@ -24,6 +24,7 @@ fn commit_to_info(hash: blake3::Hash, c: &aspen_forge::git::CommitObject) -> asp
         author_email: Some(c.author.email.clone()),
         author_key: c.author.public_key.as_ref().map(|k| k.to_string()),
         author_npub: c.author.npub.clone(),
+        author_display_name: None, // Resolved separately if needed
         message: c.message.clone(),
         timestamp_ms: c.author.timestamp_ms,
     }
@@ -138,6 +139,7 @@ impl ForgeServiceExecutor {
         "GitBridgeProbeObjects",
         "NostrAuthChallenge",
         "NostrAuthVerify",
+        "NostrGetProfile",
     ];
 
     pub const SERVICE_NAME: &'static str = "forge";
@@ -1426,6 +1428,68 @@ impl ServiceExecutor for ForgeServiceExecutor {
                     error: Some(format!("{e}")),
                 }),
             },
+
+            #[allow(clippy::collapsible_if)]
+            ClientRpcRequest::NostrGetProfile { npub_hex } => {
+                // Query KV for kind 0 events by this author
+                let prefix = format!("nostr:au:{}:", npub_hex);
+                let scan = self
+                    .forge_node
+                    .kv()
+                    .scan(aspen_core::ScanRequest {
+                        prefix,
+                        limit_results: Some(20),
+                        continuation_token: None,
+                    })
+                    .await;
+
+                let mut display_name = None;
+                let mut nip05 = None;
+
+                if let Ok(results) = scan {
+                    for kv in &results.entries {
+                        // Fetch the event by ID (last segment of the key)
+                        let event_id = kv.key.rsplit(':').next().unwrap_or("");
+                        let event_key = format!("nostr:ev:{event_id}");
+                        if let Ok(ev_result) = self
+                            .forge_node
+                            .kv()
+                            .read(aspen_core::ReadRequest {
+                                key: event_key,
+                                consistency: aspen_core::ReadConsistency::Linearizable,
+                            })
+                            .await
+                        {
+                            if let Some(ev_kv) = ev_result.kv {
+                                // Parse the stored event JSON
+                                if let Ok(event) = serde_json::from_str::<serde_json::Value>(&ev_kv.value) {
+                                    let kind = event.get("kind").and_then(|k| k.as_u64()).unwrap_or(0);
+                                    if kind == 0 {
+                                        // Kind 0 = profile metadata, content is JSON
+                                        if let Some(content_str) = event.get("content").and_then(|c| c.as_str()) {
+                                            if let Ok(profile) = serde_json::from_str::<serde_json::Value>(content_str)
+                                            {
+                                                display_name = profile
+                                                    .get("display_name")
+                                                    .or_else(|| profile.get("name"))
+                                                    .and_then(|v| v.as_str())
+                                                    .map(|s| s.to_string());
+                                                nip05 = profile
+                                                    .get("nip05")
+                                                    .and_then(|v| v.as_str())
+                                                    .map(|s| s.to_string());
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Ok(ClientRpcResponse::NostrGetProfileResult { display_name, nip05 })
+            }
 
             _ => unreachable!("ForgeServiceExecutor received unhandled request"),
         }

@@ -688,6 +688,23 @@ impl AppState {
         }
     }
 
+    // ── Profile resolution ─────────────────────────────────────────
+
+    /// Resolve an npub to a display name via the Nostr relay's profile metadata.
+    pub async fn resolve_profile(&self, npub_hex: &str) -> Option<String> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::NostrGetProfile {
+                npub_hex: npub_hex.to_string(),
+            })
+            .await
+            .ok()?;
+        match resp {
+            ClientRpcResponse::NostrGetProfileResult { display_name, .. } => display_name,
+            _ => None,
+        }
+    }
+
     // ── Nostr auth ────────────────────────────────────────────────
 
     /// Request a challenge for npub authentication.

@@ -46,6 +46,8 @@ base64 = "0.22"
 
 # Auth tokens
 aspen-auth = { path = "../aspen-auth" }
+aspen-hooks-types = { path = "../aspen-hooks-types" }
+aspen-nostr-relay = { path = "../aspen-nostr-relay" }
 
 # Nostr identity and encryption
 chacha20poly1305 = "0.10"

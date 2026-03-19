@@ -3574,6 +3574,12 @@ pub enum ClientRpcRequest {
         npub_hex: String,
     },
 
+    /// Get Nostr profile (kind 0 metadata) for an npub.
+    NostrGetProfile {
+        /// Nostr public key (hex-encoded).
+        npub_hex: String,
+    },
+
     /// Verify a signed challenge and get a session token.
     NostrAuthVerify {
         /// Nostr public key (hex-encoded).
@@ -3931,6 +3937,7 @@ impl ClientRpcRequest {
             Self::PluginReload { .. } => "PluginReload",
             Self::NostrAuthChallenge { .. } => "NostrAuthChallenge",
             Self::NostrAuthVerify { .. } => "NostrAuthVerify",
+            Self::NostrGetProfile { .. } => "NostrGetProfile",
         }
     }
 }
@@ -4001,7 +4008,8 @@ impl ClientRpcRequest {
             | Self::IndexList
             | Self::PluginReload { .. }
             | Self::NostrAuthChallenge { .. }
-            | Self::NostrAuthVerify { .. } => None,
+            | Self::NostrAuthVerify { .. }
+            | Self::NostrGetProfile { .. } => None,
 
             // Coordination primitives
             Self::LockAcquire { .. }
@@ -5000,6 +5008,14 @@ pub enum ClientRpcResponse {
         challenge_id: String,
         /// Random challenge bytes (hex-encoded, 64 chars = 32 bytes).
         challenge_hex: String,
+    },
+
+    /// Nostr profile result.
+    NostrGetProfileResult {
+        /// Display name (from kind 0 event content.display_name or content.name).
+        display_name: Option<String>,
+        /// NIP-05 identifier.
+        nip05: Option<String>,
     },
 
     /// Nostr auth verification result.
