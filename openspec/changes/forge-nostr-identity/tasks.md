@@ -25,7 +25,7 @@
 - [x] 4.1 Add `sign_as(&self, ctx: Option<&UserContext>)` helper to ForgeNode that returns the signing key + npub (user's if provided, node default otherwise)
 - [x] 4.2 Update `GitBlobStore::commit()` to accept optional UserContext — passes through to Author and SignedObject signing
 - [x] 4.3 Update `CobStore` operations (create_issue, add_comment, close_issue, create_patch, etc.) to accept optional UserContext
-- [ ] 4.4 Update ForgeServiceExecutor RPC handlers to extract UserContext from the request's auth token and pass it through
+- [x] 4.4 Update ForgeServiceExecutor RPC handlers to extract UserContext from the request's auth token and pass it through
 - [ ] 4.5 Integration test: two different npubs create commits on the same repo, verify distinct ed25519 author keys and npub fields
 
 ## 5. Profile resolution in web UI
@@ -38,12 +38,12 @@
 
 ## 6. Web UI login
 
-- [ ] 6.1 Add `/login` page with "Login with Nostr" button — JavaScript calls NIP-07 `window.nostr.signEvent()` to sign the challenge
-- [ ] 6.2 Add `/login/manual` fallback page with nsec text input and security warning
-- [ ] 6.3 Add login RPC flow: fetch challenge from cluster, submit signed challenge, receive token, store as HTTP cookie
-- [ ] 6.4 Add session middleware to forge-web: extract token from cookie, resolve npub, pass to route handlers
-- [ ] 6.5 Show logged-in user's profile name in the nav bar, "Login" link when unauthenticated
-- [ ] 6.6 Pass UserContext through to issue/patch creation POST handlers so web-created content is attributed to the logged-in user
+- [x] 6.1 Add `/login` page with "Login with Nostr" button — JavaScript calls NIP-07 `window.nostr.signEvent()` to sign the challenge
+- [x] 6.2 Add `/login/manual` fallback page with nsec text input and security warning
+- [x] 6.3 Add login RPC flow: fetch challenge from cluster, submit signed challenge, receive token, store as HTTP cookie
+- [x] 6.4 Add session middleware to forge-web: extract token from cookie, resolve npub, pass to route handlers
+- [x] 6.5 Show logged-in user's profile name in the nav bar, "Login" link when unauthenticated
+- [x] 6.6 Pass UserContext through to issue/patch creation POST handlers so web-created content is attributed to the logged-in user
 
 ## 7. Testing
 

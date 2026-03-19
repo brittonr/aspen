@@ -688,6 +688,48 @@ impl AppState {
         }
     }
 
+    // ── Nostr auth ────────────────────────────────────────────────
+
+    /// Request a challenge for npub authentication.
+    pub async fn nostr_auth_challenge(&self, npub_hex: &str) -> Result<(String, String)> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::NostrAuthChallenge {
+                npub_hex: npub_hex.to_string(),
+            })
+            .await
+            .context("auth challenge")?;
+        match resp {
+            ClientRpcResponse::NostrAuthChallengeResult {
+                challenge_id,
+                challenge_hex,
+            } => Ok((challenge_id, challenge_hex)),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    /// Verify a signed challenge and get a session token.
+    pub async fn nostr_auth_verify(&self, npub_hex: &str, challenge_id: &str, signature_hex: &str) -> Result<String> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::NostrAuthVerify {
+                npub_hex: npub_hex.to_string(),
+                challenge_id: challenge_id.to_string(),
+                signature_hex: signature_hex.to_string(),
+            })
+            .await
+            .context("auth verify")?;
+        match resp {
+            ClientRpcResponse::NostrAuthVerifyResult {
+                is_success: true,
+                token: Some(token),
+                ..
+            } => Ok(token),
+            ClientRpcResponse::NostrAuthVerifyResult { error: Some(e), .. } => Err(anyhow::anyhow!("auth failed: {e}")),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
     /// Get patch detail.
     pub async fn get_patch(&self, repo_id: &str, patch_id: &str) -> Result<ForgePatchInfo> {
         let resp = self

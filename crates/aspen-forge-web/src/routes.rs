@@ -122,6 +122,7 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
             [repo_id, "issues", id, "comment"] => comment_issue_post(state, repo_id, id, &form).await,
             [repo_id, "issues", id, "close"] => close_issue_post(state, repo_id, id).await,
             [repo_id, "issues", id, "reopen"] => reopen_issue_post(state, repo_id, id).await,
+            ["login", "verify"] => login_verify_post(state, &form).await,
             _ => method_not_allowed(),
         };
     }
@@ -151,6 +152,8 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
         [repo_id, "issues", id] => issue_detail(state, repo_id, id).await,
         [repo_id, "patches"] => patches(state, repo_id).await,
         [repo_id, "patches", id] => patch_detail(state, repo_id, id).await,
+        ["login"] => login_page(state).await,
+        ["login", "challenge"] => login_challenge(state, &query).await,
         _ => not_found(path),
     }
 }
@@ -416,6 +419,67 @@ async fn reopen_issue_post(st: &AppState, repo_id: &str, issue_id: &str) -> Rout
         return err(e);
     }
     redirect(&format!("/{repo_id}/issues/{issue_id}"))
+}
+
+async fn login_page(_st: &AppState) -> RouteResponse {
+    ok(templates::login_page())
+}
+
+async fn login_challenge(st: &AppState, query: &HashMap<String, String>) -> RouteResponse {
+    let npub = match query.get("npub") {
+        Some(n) if n.len() == 64 => n.as_str(),
+        _ => {
+            return RouteResponse::Raw {
+                status: StatusCode::BAD_REQUEST,
+                content_type: "application/json",
+                body: b"{\"error\":\"npub query param required (64 hex chars)\"}".to_vec(),
+            };
+        }
+    };
+    match st.nostr_auth_challenge(npub).await {
+        Ok((challenge_id, challenge_hex)) => RouteResponse::Raw {
+            status: StatusCode::OK,
+            content_type: "application/json",
+            body: serde_json::json!({
+                "challenge_id": challenge_id,
+                "challenge_hex": challenge_hex,
+            })
+            .to_string()
+            .into_bytes(),
+        },
+        Err(e) => RouteResponse::Raw {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            content_type: "application/json",
+            body: format!("{{\"error\":\"{e}\"}}").into_bytes(),
+        },
+    }
+}
+
+async fn login_verify_post(st: &AppState, form: &HashMap<String, String>) -> RouteResponse {
+    let npub = form.get("npub").map(|s| s.as_str()).unwrap_or("");
+    let challenge_id = form.get("challenge_id").map(|s| s.as_str()).unwrap_or("");
+    let signature = form.get("signature").map(|s| s.as_str()).unwrap_or("");
+
+    if npub.is_empty() || challenge_id.is_empty() || signature.is_empty() {
+        return err(anyhow::anyhow!("missing npub, challenge_id, or signature"));
+    }
+
+    match st.nostr_auth_verify(npub, challenge_id, signature).await {
+        Ok(token) => {
+            // Set token as cookie and redirect to home
+            let body = format!(
+                r#"<!DOCTYPE html><html><head>
+                <meta http-equiv="refresh" content="0;url=/">
+                <script>document.cookie="aspen_token={token};path=/;SameSite=Strict;max-age=86400";location.replace("/")</script>
+                </head><body>Redirecting…</body></html>"#
+            );
+            RouteResponse::Html {
+                status: StatusCode::OK,
+                body,
+            }
+        }
+        Err(e) => err(e),
+    }
 }
 
 async fn raw_blob(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> RouteResponse {

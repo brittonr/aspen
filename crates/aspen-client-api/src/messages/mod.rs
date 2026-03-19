@@ -3564,6 +3564,25 @@ pub enum ClientRpcRequest {
         /// Plugin name to reload, or `None` to reload all.
         name: Option<String>,
     },
+
+    // =========================================================================
+    // Nostr identity authentication
+    // =========================================================================
+    /// Request a challenge to prove npub ownership.
+    NostrAuthChallenge {
+        /// Nostr public key (hex-encoded secp256k1 x-only, 64 chars).
+        npub_hex: String,
+    },
+
+    /// Verify a signed challenge and get a session token.
+    NostrAuthVerify {
+        /// Nostr public key (hex-encoded).
+        npub_hex: String,
+        /// Challenge ID from the challenge response.
+        challenge_id: String,
+        /// Schnorr signature over the challenge bytes (hex-encoded, 128 chars).
+        signature_hex: String,
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -3910,6 +3929,8 @@ impl ClientRpcRequest {
             Self::NodeRollback { .. } => "NodeRollback",
             Self::NodeUpgrade { .. } => "NodeUpgrade",
             Self::PluginReload { .. } => "PluginReload",
+            Self::NostrAuthChallenge { .. } => "NostrAuthChallenge",
+            Self::NostrAuthVerify { .. } => "NostrAuthVerify",
         }
     }
 }
@@ -3978,7 +3999,9 @@ impl ClientRpcRequest {
             | Self::IndexDrop { .. }
             | Self::IndexScan { .. }
             | Self::IndexList
-            | Self::PluginReload { .. } => None,
+            | Self::PluginReload { .. }
+            | Self::NostrAuthChallenge { .. }
+            | Self::NostrAuthVerify { .. } => None,
 
             // Coordination primitives
             Self::LockAcquire { .. }
@@ -4970,6 +4993,26 @@ pub enum ClientRpcResponse {
     /// after `#[cfg(feature)]` variants, its postcard discriminant would shift
     /// when features are toggled, breaking wire compatibility.
     PluginReloadResult(PluginReloadResultResponse),
+
+    /// Nostr auth challenge response.
+    NostrAuthChallengeResult {
+        /// Unique challenge ID.
+        challenge_id: String,
+        /// Random challenge bytes (hex-encoded, 64 chars = 32 bytes).
+        challenge_hex: String,
+    },
+
+    /// Nostr auth verification result.
+    NostrAuthVerifyResult {
+        /// Whether verification succeeded.
+        is_success: bool,
+        /// Serialized capability token (on success).
+        token: Option<String>,
+        /// Assigned ed25519 public key (hex-encoded, on success).
+        ed25519_public_key: Option<String>,
+        /// Error message (on failure).
+        error: Option<String>,
+    },
 
     // -------------------------------------------------------------------------
     // Net service mesh responses

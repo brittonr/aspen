@@ -84,6 +84,8 @@ pub struct ForgeServiceExecutor {
     /// Node ID for hook event metadata.
     #[cfg_attr(not(all(feature = "hooks", feature = "git-bridge")), allow(dead_code))]
     node_id: u64,
+    /// Nostr authentication service (created lazily from ForgeNode's key).
+    nostr_auth: Arc<aspen_forge::identity::nostr_auth::NostrAuthService<dyn aspen_core::KeyValueStore>>,
 }
 
 impl ForgeServiceExecutor {
@@ -134,6 +136,8 @@ impl ForgeServiceExecutor {
         "GitBridgePushChunk",
         "GitBridgePushComplete",
         "GitBridgeProbeObjects",
+        "NostrAuthChallenge",
+        "NostrAuthVerify",
     ];
 
     pub const SERVICE_NAME: &'static str = "forge";
@@ -153,6 +157,16 @@ impl ForgeServiceExecutor {
         #[cfg(all(feature = "hooks", feature = "git-bridge"))] hook_service: Option<Arc<aspen_hooks::HookService>>,
         node_id: u64,
     ) -> Self {
+        // Build auth service from the forge node's key and KV store
+        let identity_store = Arc::new(aspen_forge::identity::nostr_mapping::NostrIdentityStore::new(
+            forge_node.kv().clone(),
+            forge_node.secret_key(),
+        ));
+        let nostr_auth = Arc::new(aspen_forge::identity::nostr_auth::NostrAuthService::new(
+            identity_store,
+            forge_node.secret_key().clone(),
+        ));
+
         Self {
             forge_node,
             #[cfg(feature = "global-discovery")]
@@ -164,6 +178,7 @@ impl ForgeServiceExecutor {
             #[cfg(all(feature = "hooks", feature = "git-bridge"))]
             hook_service,
             node_id,
+            nostr_auth,
         }
     }
 }
@@ -1370,6 +1385,47 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 "GIT_BRIDGE_UNAVAILABLE",
                 "Git bridge feature not enabled. Rebuild with --features git-bridge",
             )),
+
+            // Nostr identity authentication
+            ClientRpcRequest::NostrAuthChallenge { npub_hex } => {
+                match self.nostr_auth.create_challenge(&npub_hex).await {
+                    Ok((challenge_id, challenge_bytes)) => Ok(ClientRpcResponse::NostrAuthChallengeResult {
+                        challenge_id,
+                        challenge_hex: hex::encode(challenge_bytes),
+                    }),
+                    Err(e) => Ok(ClientRpcResponse::error("AUTH_CHALLENGE_FAILED", format!("{e}"))),
+                }
+            }
+            ClientRpcRequest::NostrAuthVerify {
+                npub_hex,
+                challenge_id,
+                signature_hex,
+            } => match self.nostr_auth.verify_challenge(&npub_hex, &challenge_id, &signature_hex).await {
+                Ok(user_ctx) => match self.nostr_auth.issue_token(&user_ctx) {
+                    Ok(token) => {
+                        let token_bytes = postcard::to_stdvec(&token).unwrap_or_default();
+                        let token_b64 = base64::Engine::encode(&base64::prelude::BASE64_STANDARD, &token_bytes);
+                        Ok(ClientRpcResponse::NostrAuthVerifyResult {
+                            is_success: true,
+                            token: Some(token_b64),
+                            ed25519_public_key: Some(user_ctx.public_key.to_string()),
+                            error: None,
+                        })
+                    }
+                    Err(e) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
+                        is_success: false,
+                        token: None,
+                        ed25519_public_key: None,
+                        error: Some(format!("{e}")),
+                    }),
+                },
+                Err(e) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
+                    is_success: false,
+                    token: None,
+                    ed25519_public_key: None,
+                    error: Some(format!("{e}")),
+                }),
+            },
 
             _ => unreachable!("ForgeServiceExecutor received unhandled request"),
         }

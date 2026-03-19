@@ -14,6 +14,37 @@ use maud::html;
 /// Tiger Style: max markdown input size (1 MB) to bound rendering time.
 pub(crate) const MAX_MARKDOWN_BYTES: usize = 1024 * 1024;
 
+const LOGIN_JS: &str = r#"
+(async function() {
+  var msg = document.getElementById('login-msg');
+  if (!window.nostr) {
+    msg.textContent = 'No Nostr extension detected. Install nos2x, Alby, or another NIP-07 extension.';
+    return;
+  }
+  try {
+    msg.textContent = 'Getting your public key…';
+    var pubkey = await window.nostr.getPublicKey();
+    msg.textContent = 'Requesting challenge for ' + pubkey.substring(0, 12) + '…';
+
+    var resp = await fetch('/login/challenge?npub=' + pubkey);
+    var data = await resp.json();
+    if (data.error) { msg.textContent = 'Error: ' + data.error; return; }
+
+    msg.textContent = 'Please approve the signature in your extension…';
+    var event = { kind: 27235, created_at: Math.floor(Date.now()/1000),
+      tags: [['challenge', data.challenge_hex]], content: data.challenge_id, pubkey: pubkey };
+    var signed = await window.nostr.signEvent(event);
+
+    document.getElementById('form-npub').value = pubkey;
+    document.getElementById('form-challenge-id').value = data.challenge_id;
+    document.getElementById('form-sig').value = signed.sig;
+    document.getElementById('login-form').submit();
+  } catch(e) {
+    msg.textContent = 'Login failed: ' + e.message;
+  }
+})();
+"#;
+
 const REPO_FILTER_JS: &str = r#"
 document.getElementById('repo-filter').addEventListener('input', function() {
   var q = this.value.toLowerCase();
@@ -129,7 +160,10 @@ pub fn base_layout(title: &str, content: Markup) -> Markup {
                 style { (PreEscaped(CSS)) }
             }
             body {
-                nav { a href="/" { "🌲 Aspen Forge" } }
+                nav {
+                    a href="/" { "🌲 Aspen Forge" }
+                    a.nav-login href="/login" { "Login" }
+                }
                 main { (content) }
                 footer {
                     "Powered by " a href="https://github.com/aspen-lang/aspen" { "Aspen Forge" }
@@ -624,6 +658,33 @@ pub fn search_results(repo: &ForgeRepoInfo, query: &str, results: Option<&crate:
     })
 }
 
+/// Login page with NIP-07 browser extension support.
+pub fn login_page() -> Markup {
+    base_layout("Login", html! {
+        h1 { "Login with Nostr" }
+
+        div #login-status.card {
+            p #login-msg { "Checking for Nostr extension…" }
+        }
+
+        // Hidden form submitted by JS after signing
+        form #login-form method="post" action="/login/verify" style="display:none" {
+            input type="hidden" name="npub" #form-npub {}
+            input type="hidden" name="challenge_id" #form-challenge-id {}
+            input type="hidden" name="signature" #form-sig {}
+        }
+
+        script { (PreEscaped(LOGIN_JS)) }
+
+        noscript {
+            div.card {
+                p { "JavaScript is required for NIP-07 login." }
+                p.muted { "Your Nostr key never leaves your browser — the extension signs locally." }
+            }
+        }
+    })
+}
+
 /// Error page.
 pub fn error_page(title: &str, message: &str) -> Markup {
     base_layout(title, html! {
@@ -743,7 +804,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#c9
 a{color:#58a6ff;text-decoration:none}
 a:hover{text-decoration:underline}
 nav{background:#161b22;padding:.75rem 1.5rem;border-bottom:1px solid #30363d}
+nav{display:flex;justify-content:space-between;align-items:center}
 nav a{color:#f0f6fc;font-weight:600;font-size:1.1rem}
+.nav-login{font-weight:400 !important;font-size:.9rem !important;color:#8b949e !important}
+.nav-login:hover{color:#58a6ff !important}
 main{max-width:960px;margin:0 auto;padding:1.5rem}
 h1,h2,h3{color:#f0f6fc;margin:.75rem 0 .5rem}
 h1{font-size:1.5rem}
