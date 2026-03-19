@@ -29,6 +29,7 @@
 //! - Structured error handling via snafu
 
 pub mod blob_service;
+pub mod closure_sync;
 pub mod constants;
 pub mod dag_sync;
 pub mod directory_service;
@@ -40,6 +41,8 @@ pub mod rpc_directory_service;
 pub mod rpc_pathinfo_service;
 
 pub use blob_service::IrohBlobService;
+pub use closure_sync::ClosureSyncError;
+pub use closure_sync::StoreClosureSync;
 pub use constants::*;
 pub use dag_sync::DirectoryLinkExtractor;
 pub use dag_sync::SnixNodeType;
