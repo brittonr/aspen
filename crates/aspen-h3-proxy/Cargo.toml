@@ -16,6 +16,9 @@ iroh-h3 = { workspace = true }
 http = "1.0"
 bytes = { workspace = true }
 
+# HTTP body traits + utilities
+http-body = "1.0"
+
 # TCP HTTP/1.1 server
 hyper = { version = "1.0", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
