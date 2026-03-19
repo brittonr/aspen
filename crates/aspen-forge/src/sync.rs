@@ -399,11 +399,9 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
         request: aspen_dag::DagSyncRequest,
     ) -> ForgeResult<DagSyncResult> {
         let mut conn =
-            aspen_dag::connect_dag_sync(endpoint, remote, &request)
-                .await
-                .map_err(|e| ForgeError::SyncFailed {
-                    message: format!("failed to connect for dag sync: {e}"),
-                })?;
+            aspen_dag::connect_dag_sync(endpoint, remote, &request).await.map_err(|e| ForgeError::SyncFailed {
+                message: format!("failed to connect for dag sync: {e}"),
+            })?;
 
         let result = self.receive_frames(&mut conn.recv).await?;
 
@@ -433,25 +431,20 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
     /// Uses `read_frame` directly (async) instead of `recv_sync` (sync callback)
     /// to avoid `block_in_place`. Works on both multi-threaded and current-thread
     /// runtimes.
-    async fn receive_frames<R: tokio::io::AsyncRead + Unpin>(
-        &self,
-        reader: &mut R,
-    ) -> ForgeResult<DagSyncResult> {
+    async fn receive_frames<R: tokio::io::AsyncRead + Unpin>(&self, reader: &mut R) -> ForgeResult<DagSyncResult> {
         let mut result = DagSyncResult::default();
         let mut bytes_received: u64 = 0;
 
         loop {
-            let frame = aspen_dag::read_frame(reader, &mut bytes_received)
-                .await
-                .map_err(|e| ForgeError::SyncFailed {
+            let frame =
+                aspen_dag::read_frame(reader, &mut bytes_received).await.map_err(|e| ForgeError::SyncFailed {
                     message: format!("dag sync stream error: {e}"),
                 })?;
 
             match frame {
                 Some(aspen_dag::ReceivedFrame::Data { hash, data }) => {
                     let blake_hash = blake3::Hash::from_bytes(hash);
-                    result.wire_stats.data_frames =
-                        result.wire_stats.data_frames.saturating_add(1);
+                    result.wire_stats.data_frames = result.wire_stats.data_frames.saturating_add(1);
 
                     match self.blobs.add_bytes(&data).await {
                         Ok(add_result) => {
@@ -473,8 +466,7 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
                     }
                 }
                 Some(aspen_dag::ReceivedFrame::HashOnly { hash }) => {
-                    result.wire_stats.hash_only_frames =
-                        result.wire_stats.hash_only_frames.saturating_add(1);
+                    result.wire_stats.hash_only_frames = result.wire_stats.hash_only_frames.saturating_add(1);
                     result.deferred_hashes.push(blake3::Hash::from_bytes(hash));
                 }
                 None => break,
@@ -503,17 +495,12 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
     ) -> Result<aspen_dag::SyncStats, aspen_dag::ProtocolError> {
         let (root_bytes, known_heads, filter) = match &request.traversal {
             aspen_dag::TraversalOpts::Full(opts) => {
-                let known: HashSet<blake3::Hash> = opts
-                    .known_heads
-                    .iter()
-                    .map(|h| blake3::Hash::from_bytes(*h))
-                    .collect();
+                let known: HashSet<blake3::Hash> =
+                    opts.known_heads.iter().map(|h| blake3::Hash::from_bytes(*h)).collect();
                 (opts.root, known, &opts.filter)
             }
             aspen_dag::TraversalOpts::Sequence(hashes) => {
-                return self
-                    .handle_sequence_sync(hashes, &request.inline, writer)
-                    .await;
+                return self.handle_sequence_sync(hashes, &request.inline, writer).await;
             }
         };
 
@@ -530,10 +517,8 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
             }
 
             let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
-            let data = self.blobs.get_bytes(&iroh_hash).await.map_err(|e| {
-                aspen_dag::ProtocolError::Io {
-                    source: std::io::Error::other(format!("blob read error: {e}")),
-                }
+            let data = self.blobs.get_bytes(&iroh_hash).await.map_err(|e| aspen_dag::ProtocolError::Io {
+                source: std::io::Error::other(format!("blob read error: {e}")),
             })?;
 
             let hash_bytes = *hash.as_bytes();
@@ -572,10 +557,7 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
             }
         }
 
-        writer
-            .flush()
-            .await
-            .map_err(|e| aspen_dag::ProtocolError::Io { source: e })?;
+        writer.flush().await.map_err(|e| aspen_dag::ProtocolError::Io { source: e })?;
 
         Ok(stats)
     }
@@ -591,10 +573,8 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
 
         for hash_bytes in hashes {
             let iroh_hash = iroh_blobs::Hash::from_bytes(*hash_bytes);
-            let data = self.blobs.get_bytes(&iroh_hash).await.map_err(|e| {
-                aspen_dag::ProtocolError::Io {
-                    source: std::io::Error::other(format!("blob read error: {e}")),
-                }
+            let data = self.blobs.get_bytes(&iroh_hash).await.map_err(|e| aspen_dag::ProtocolError::Io {
+                source: std::io::Error::other(format!("blob read error: {e}")),
             })?;
 
             match data {
@@ -621,10 +601,7 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
             }
         }
 
-        writer
-            .flush()
-            .await
-            .map_err(|e| aspen_dag::ProtocolError::Io { source: e })?;
+        writer.flush().await.map_err(|e| aspen_dag::ProtocolError::Io { source: e })?;
 
         Ok(stats)
     }
@@ -661,13 +638,11 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
         match filter {
             aspen_dag::TraversalFilter::All => true,
             aspen_dag::TraversalFilter::Exclude(_) | aspen_dag::TraversalFilter::Only(_) => {
-                let node_type = SignedObject::<GitObject>::from_bytes(bytes).ok().map(|signed| {
-                    match &signed.payload {
-                        GitObject::Commit(_) => crate::dag_sync::ForgeNodeType::Commit,
-                        GitObject::Tree(_) => crate::dag_sync::ForgeNodeType::Tree,
-                        GitObject::Blob(_) => crate::dag_sync::ForgeNodeType::Blob,
-                        GitObject::Tag(_) => crate::dag_sync::ForgeNodeType::Tag,
-                    }
+                let node_type = SignedObject::<GitObject>::from_bytes(bytes).ok().map(|signed| match &signed.payload {
+                    GitObject::Commit(_) => crate::dag_sync::ForgeNodeType::Commit,
+                    GitObject::Tree(_) => crate::dag_sync::ForgeNodeType::Tree,
+                    GitObject::Blob(_) => crate::dag_sync::ForgeNodeType::Blob,
+                    GitObject::Tag(_) => crate::dag_sync::ForgeNodeType::Tag,
                 });
 
                 match (filter, node_type) {
@@ -824,10 +799,7 @@ impl<B: BlobStore + Send + Sync + 'static> DagSyncWorker<B> {
     }
 
     /// Attach a ref store for automatic ref updates after successful sync.
-    pub fn with_ref_store(
-        mut self,
-        ref_store: Arc<crate::refs::RefStore<dyn aspen_core::KeyValueStore>>,
-    ) -> Self {
+    pub fn with_ref_store(mut self, ref_store: Arc<crate::refs::RefStore<dyn aspen_core::KeyValueStore>>) -> Self {
         self.ref_store = Some(ref_store);
         self
     }
@@ -875,8 +847,7 @@ impl<B: BlobStore + Send + Sync + 'static> DagSyncWorker<B> {
                 commit_hash,
                 peer,
             } => {
-                self.sync_ref_update(&repo_id, &ref_name, commit_hash, peer)
-                    .await;
+                self.sync_ref_update(&repo_id, &ref_name, commit_hash, peer).await;
             }
             SyncRequest::CobChange {
                 repo_id,
@@ -885,8 +856,7 @@ impl<B: BlobStore + Send + Sync + 'static> DagSyncWorker<B> {
                 peer,
                 ..
             } => {
-                self.sync_cob_change(&repo_id, cob_type, change_hash, peer)
-                    .await;
+                self.sync_cob_change(&repo_id, cob_type, change_hash, peer).await;
             }
         }
     }
@@ -909,9 +879,7 @@ impl<B: BlobStore + Send + Sync + 'static> DagSyncWorker<B> {
         };
 
         let plan = self.sync.plan_git_sync(commit_hash, known_heads);
-        let request = self
-            .sync
-            .build_sync_request(&plan, aspen_dag::InlinePolicy::All);
+        let request = self.sync.build_sync_request(&plan, aspen_dag::InlinePolicy::All);
 
         let remote = iroh::EndpointAddr::new(peer);
 
@@ -934,15 +902,15 @@ impl<B: BlobStore + Send + Sync + 'static> DagSyncWorker<B> {
                 );
 
                 // Update the ref to point to the new commit.
-                if let Some(refs) = &self.ref_store {
-                    if let Err(e) = refs.set(repo_id, ref_name, commit_hash).await {
-                        tracing::warn!(
-                            repo = %repo_id.to_hex(),
-                            ref_name = %ref_name,
-                            error = %e,
-                            "failed to update ref after sync"
-                        );
-                    }
+                if let Some(refs) = &self.ref_store
+                    && let Err(e) = refs.set(repo_id, ref_name, commit_hash).await
+                {
+                    tracing::warn!(
+                        repo = %repo_id.to_hex(),
+                        ref_name = %ref_name,
+                        error = %e,
+                        "failed to update ref after sync"
+                    );
                 }
             }
             Err(e) => {
@@ -966,9 +934,7 @@ impl<B: BlobStore + Send + Sync + 'static> DagSyncWorker<B> {
         peer: PublicKey,
     ) {
         let plan = self.sync.plan_cob_sync(change_hash, HashSet::new());
-        let request = self
-            .sync
-            .build_sync_request(&plan, aspen_dag::InlinePolicy::All);
+        let request = self.sync.build_sync_request(&plan, aspen_dag::InlinePolicy::All);
 
         let remote = iroh::EndpointAddr::new(peer);
 

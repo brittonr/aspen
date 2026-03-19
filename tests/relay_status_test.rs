@@ -176,7 +176,6 @@ async fn test_relay_status_nodes_come_online() -> Result<()> {
     Ok(())
 }
 
-
 // NOTE: test_relay_status_connection_types_in_cluster was removed because
 // iroh 0.97 dropped Endpoint::conn_type() and the ConnectionType enum.
 // The remaining tests cover relay URL presence, addr consistency, and

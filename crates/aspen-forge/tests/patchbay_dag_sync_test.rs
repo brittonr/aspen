@@ -63,18 +63,12 @@ async fn build_repo(
     let tree = store_git_object(
         blobs,
         key,
-        GitObject::Tree(TreeObject::new(vec![
-            TreeEntry::file("a.txt", blob_a),
-            TreeEntry::file("b.txt", blob_b),
-        ])),
+        GitObject::Tree(TreeObject::new(vec![TreeEntry::file("a.txt", blob_a), TreeEntry::file("b.txt", blob_b)])),
     )
     .await;
-    let commit = store_git_object(
-        blobs,
-        key,
-        GitObject::Commit(CommitObject::new(tree, vec![], test_author(), "initial")),
-    )
-    .await;
+    let commit =
+        store_git_object(blobs, key, GitObject::Commit(CommitObject::new(tree, vec![], test_author(), "initial")))
+            .await;
     (commit, tree, blob_a, blob_b)
 }
 
@@ -115,9 +109,7 @@ async fn patchbay_forge_dag_sync_full() {
             let sync = Arc::new(SyncService::new(sender_blobs_clone));
             let handler = sync.into_dag_sync_handler();
 
-            let _router = iroh::protocol::Router::builder(ep.clone())
-                .accept(aspen_dag::DAG_SYNC_ALPN, handler)
-                .spawn();
+            let _router = iroh::protocol::Router::builder(ep.clone()).accept(aspen_dag::DAG_SYNC_ALPN, handler).spawn();
 
             let _ = addr_tx.send(ep.addr());
             let _ = shutdown_rx.await;
@@ -149,10 +141,7 @@ async fn patchbay_forge_dag_sync_full() {
                 .unwrap();
 
             let receiver_sync = SyncService::new(receiver_blobs_clone);
-            receiver_sync
-                .receive_dag_sync(&ep, sender_addr, request)
-                .await
-                .unwrap()
+            receiver_sync.receive_dag_sync(&ep, sender_addr, request).await.unwrap()
         })
         .unwrap();
 
@@ -192,12 +181,9 @@ async fn patchbay_forge_dag_sync_incremental() {
     let (commit_1, _tree_1, _blob_a, _blob_b) = build_repo(&sender_blobs, &key).await;
 
     let blob_c = store_git_object(&sender_blobs, &key, GitObject::Blob(BlobObject::new(b"file c"))).await;
-    let tree_2 = store_git_object(
-        &sender_blobs,
-        &key,
-        GitObject::Tree(TreeObject::new(vec![TreeEntry::file("c.txt", blob_c)])),
-    )
-    .await;
+    let tree_2 =
+        store_git_object(&sender_blobs, &key, GitObject::Tree(TreeObject::new(vec![TreeEntry::file("c.txt", blob_c)])))
+            .await;
     let commit_2 = store_git_object(
         &sender_blobs,
         &key,
@@ -221,9 +207,7 @@ async fn patchbay_forge_dag_sync_incremental() {
 
             let sync = Arc::new(SyncService::new(sender_blobs_clone));
             let handler = sync.into_dag_sync_handler();
-            let _router = iroh::protocol::Router::builder(ep.clone())
-                .accept(aspen_dag::DAG_SYNC_ALPN, handler)
-                .spawn();
+            let _router = iroh::protocol::Router::builder(ep.clone()).accept(aspen_dag::DAG_SYNC_ALPN, handler).spawn();
 
             let _ = addr_tx.send(ep.addr());
             let _ = shutdown_rx.await;
@@ -255,10 +239,7 @@ async fn patchbay_forge_dag_sync_incremental() {
                 .unwrap();
 
             let receiver_sync = SyncService::new(receiver_blobs_clone);
-            receiver_sync
-                .receive_dag_sync(&ep, sender_addr, request)
-                .await
-                .unwrap()
+            receiver_sync.receive_dag_sync(&ep, sender_addr, request).await.unwrap()
         })
         .unwrap();
 
@@ -310,9 +291,7 @@ async fn patchbay_forge_dag_sync_stem_leaf() {
 
             let sync = Arc::new(SyncService::new(sender_blobs_clone));
             let handler = sync.into_dag_sync_handler();
-            let _router = iroh::protocol::Router::builder(ep.clone())
-                .accept(aspen_dag::DAG_SYNC_ALPN, handler)
-                .spawn();
+            let _router = iroh::protocol::Router::builder(ep.clone()).accept(aspen_dag::DAG_SYNC_ALPN, handler).spawn();
 
             let _ = addr_tx.send(ep.addr());
             let _ = shutdown_rx.await;

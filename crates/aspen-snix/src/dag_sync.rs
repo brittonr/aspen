@@ -142,29 +142,20 @@ mod tests {
         let subdir_digest = B3Digest::from(blake3::hash(b"subdir"));
 
         let mut dir = snix_castore::Directory::new();
-        dir.add(
-            "hello.txt".try_into().unwrap(),
-            Node::File {
-                digest: file_digest.clone(),
-                size: 42,
-                executable: false,
-            },
-        )
+        dir.add("hello.txt".try_into().unwrap(), Node::File {
+            digest: file_digest.clone(),
+            size: 42,
+            executable: false,
+        })
         .unwrap();
-        dir.add(
-            "subdir".try_into().unwrap(),
-            Node::Directory {
-                digest: subdir_digest.clone(),
-                size: 100,
-            },
-        )
+        dir.add("subdir".try_into().unwrap(), Node::Directory {
+            digest: subdir_digest.clone(),
+            size: 100,
+        })
         .unwrap();
-        dir.add(
-            "link".try_into().unwrap(),
-            Node::Symlink {
-                target: "hello.txt".try_into().unwrap(),
-            },
-        )
+        dir.add("link".try_into().unwrap(), Node::Symlink {
+            target: "hello.txt".try_into().unwrap(),
+        })
         .unwrap();
 
         let children = extract_directory_children(&dir);
@@ -181,23 +172,17 @@ mod tests {
         let d2 = B3Digest::from(blake3::hash(b"bbb"));
 
         let mut dir = snix_castore::Directory::new();
-        dir.add(
-            "zzz".try_into().unwrap(),
-            Node::File {
-                digest: d1.clone(),
-                size: 1,
-                executable: false,
-            },
-        )
+        dir.add("zzz".try_into().unwrap(), Node::File {
+            digest: d1.clone(),
+            size: 1,
+            executable: false,
+        })
         .unwrap();
-        dir.add(
-            "aaa".try_into().unwrap(),
-            Node::File {
-                digest: d2.clone(),
-                size: 2,
-                executable: false,
-            },
-        )
+        dir.add("aaa".try_into().unwrap(), Node::File {
+            digest: d2.clone(),
+            size: 2,
+            executable: false,
+        })
         .unwrap();
 
         let children = extract_directory_children(&dir);

@@ -71,10 +71,7 @@ async fn build_simple_repo(
     let tree = store_git_object(
         blobs,
         key,
-        GitObject::Tree(TreeObject::new(vec![
-            TreeEntry::file("a.txt", blob_a),
-            TreeEntry::file("b.txt", blob_b),
-        ])),
+        GitObject::Tree(TreeObject::new(vec![TreeEntry::file("a.txt", blob_a), TreeEntry::file("b.txt", blob_b)])),
     )
     .await;
 
@@ -180,19 +177,10 @@ async fn dag_sync_incremental_with_known_heads() {
     let (commit_1, _tree_1, _blob_a, _blob_b) = build_simple_repo(&blobs, &key).await;
 
     // Second commit with new content, parent = commit_1.
-    let blob_c = store_git_object(
-        &blobs,
-        &key,
-        GitObject::Blob(BlobObject::new(b"new file c")),
-    )
-    .await;
+    let blob_c = store_git_object(&blobs, &key, GitObject::Blob(BlobObject::new(b"new file c"))).await;
 
-    let tree_2 = store_git_object(
-        &blobs,
-        &key,
-        GitObject::Tree(TreeObject::new(vec![TreeEntry::file("c.txt", blob_c)])),
-    )
-    .await;
+    let tree_2 =
+        store_git_object(&blobs, &key, GitObject::Tree(TreeObject::new(vec![TreeEntry::file("c.txt", blob_c)]))).await;
 
     let commit_2 = store_git_object(
         &blobs,
@@ -417,27 +405,14 @@ async fn dag_sync_receiver_incremental() {
     // Build a two-commit chain.
     let (commit_1, tree_1, blob_a, blob_b) = build_simple_repo(&sender_blobs, &key).await;
 
-    let blob_c = store_git_object(
-        &sender_blobs,
-        &key,
-        GitObject::Blob(BlobObject::new(b"new file c")),
-    )
-    .await;
-    let tree_2 = store_git_object(
-        &sender_blobs,
-        &key,
-        GitObject::Tree(TreeObject::new(vec![TreeEntry::file("c.txt", blob_c)])),
-    )
-    .await;
+    let blob_c = store_git_object(&sender_blobs, &key, GitObject::Blob(BlobObject::new(b"new file c"))).await;
+    let tree_2 =
+        store_git_object(&sender_blobs, &key, GitObject::Tree(TreeObject::new(vec![TreeEntry::file("c.txt", blob_c)])))
+            .await;
     let commit_2 = store_git_object(
         &sender_blobs,
         &key,
-        GitObject::Commit(CommitObject::new(
-            tree_2,
-            vec![commit_1],
-            test_author(),
-            "second commit",
-        )),
+        GitObject::Commit(CommitObject::new(tree_2, vec![commit_1], test_author(), "second commit")),
     )
     .await;
 
@@ -476,11 +451,7 @@ async fn dag_sync_receiver_incremental() {
     // New objects arrived.
     for hash in [commit_2, tree_2, blob_c] {
         let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
-        assert!(
-            receiver_blobs.has(&iroh_hash).await.unwrap(),
-            "new object {} missing",
-            hash.to_hex()
-        );
+        assert!(receiver_blobs.has(&iroh_hash).await.unwrap(), "new object {} missing", hash.to_hex());
     }
 }
 
@@ -626,10 +597,10 @@ async fn dag_sync_result_helpers() {
 /// announcement→request pipeline.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn gossip_to_sync_request_pipeline() {
-    use aspen_forge::gossip::ForgeAnnouncementHandler;
-    use aspen_forge::gossip::SyncRequest;
     use aspen_forge::Announcement;
     use aspen_forge::AnnouncementCallback;
+    use aspen_forge::gossip::ForgeAnnouncementHandler;
+    use aspen_forge::gossip::SyncRequest;
     use aspen_forge::identity::RepoId;
 
     let (handler, mut sync_rx, _seeding_rx) = ForgeAnnouncementHandler::with_channels(10);
@@ -704,35 +675,23 @@ async fn dag_sync_full_loop_sender_receiver_sender() {
         inline: InlinePolicy::All,
     };
     let mut wire_bytes = Vec::new();
-    sender
-        .handle_sync_request(request.clone(), &mut wire_bytes)
-        .await
-        .unwrap();
+    sender.handle_sync_request(request.clone(), &mut wire_bytes).await.unwrap();
 
     // Receiver: empty store, receive the bytes.
     let receiver_blobs = Arc::new(InMemoryBlobStore::new());
     let receiver = SyncService::new(Arc::clone(&receiver_blobs));
-    let result = receiver
-        .receive_dag_sync_from_bytes(&wire_bytes)
-        .await
-        .unwrap();
+    let result = receiver.receive_dag_sync_from_bytes(&wire_bytes).await.unwrap();
     assert_eq!(result.objects_inserted, 4);
 
     // Now the receiver serves the same DAG back.
     let mut re_served = Vec::new();
-    let re_stats = receiver
-        .handle_sync_request(request, &mut re_served)
-        .await
-        .unwrap();
+    let re_stats = receiver.handle_sync_request(request, &mut re_served).await.unwrap();
     assert_eq!(re_stats.data_frames, 4);
 
     // Third store receives from the receiver's output.
     let third_blobs = Arc::new(InMemoryBlobStore::new());
     let third = SyncService::new(Arc::clone(&third_blobs));
-    let third_result = third
-        .receive_dag_sync_from_bytes(&re_served)
-        .await
-        .unwrap();
+    let third_result = third.receive_dag_sync_from_bytes(&re_served).await.unwrap();
     assert_eq!(third_result.objects_inserted, 4);
 
     // All objects present in all three stores.

@@ -28,9 +28,7 @@ use snix_castore::directoryservice::DirectoryService;
 /// ```
 ///
 /// Returns (root_digest, sub_digest, empty_digest, h1, h2)
-async fn build_tree<D: DirectoryService>(
-    ds: &D,
-) -> (B3Digest, B3Digest, B3Digest, B3Digest, B3Digest) {
+async fn build_tree<D: DirectoryService>(ds: &D) -> (B3Digest, B3Digest, B3Digest, B3Digest, B3Digest) {
     let h1 = B3Digest::from(blake3::hash(b"hello content"));
     let h2 = B3Digest::from(blake3::hash(b"nested content"));
 
@@ -41,54 +39,39 @@ async fn build_tree<D: DirectoryService>(
     // Sub dir
     let mut sub_dir = snix_castore::Directory::new();
     sub_dir
-        .add(
-            "nested.txt".try_into().unwrap(),
-            Node::File {
-                digest: h2.clone(),
-                size: 14,
-                executable: false,
-            },
-        )
+        .add("nested.txt".try_into().unwrap(), Node::File {
+            digest: h2.clone(),
+            size: 14,
+            executable: false,
+        })
         .unwrap();
     sub_dir
-        .add(
-            "link".try_into().unwrap(),
-            Node::Symlink {
-                target: "../hello.txt".try_into().unwrap(),
-            },
-        )
+        .add("link".try_into().unwrap(), Node::Symlink {
+            target: "../hello.txt".try_into().unwrap(),
+        })
         .unwrap();
     let sub_digest = ds.put(sub_dir).await.unwrap();
 
     // Root dir
     let mut root_dir = snix_castore::Directory::new();
     root_dir
-        .add(
-            "hello.txt".try_into().unwrap(),
-            Node::File {
-                digest: h1.clone(),
-                size: 13,
-                executable: false,
-            },
-        )
+        .add("hello.txt".try_into().unwrap(), Node::File {
+            digest: h1.clone(),
+            size: 13,
+            executable: false,
+        })
         .unwrap();
     root_dir
-        .add(
-            "sub".try_into().unwrap(),
-            Node::Directory {
-                digest: sub_digest.clone(),
-                size: 100,
-            },
-        )
+        .add("sub".try_into().unwrap(), Node::Directory {
+            digest: sub_digest.clone(),
+            size: 100,
+        })
         .unwrap();
     root_dir
-        .add(
-            "empty".try_into().unwrap(),
-            Node::Directory {
-                digest: empty_digest.clone(),
-                size: 0,
-            },
-        )
+        .add("empty".try_into().unwrap(), Node::Directory {
+            digest: empty_digest.clone(),
+            size: 0,
+        })
         .unwrap();
     let root_digest = ds.put(root_dir).await.unwrap();
 
@@ -202,34 +185,25 @@ async fn directory_traversal_shared_subtree() {
     // Shared sub dir
     let mut shared = snix_castore::Directory::new();
     shared
-        .add(
-            "f.txt".try_into().unwrap(),
-            Node::File {
-                digest: file_digest.clone(),
-                size: 11,
-                executable: false,
-            },
-        )
+        .add("f.txt".try_into().unwrap(), Node::File {
+            digest: file_digest.clone(),
+            size: 11,
+            executable: false,
+        })
         .unwrap();
     let shared_digest = ds.put(shared).await.unwrap();
 
     // Root with two refs to the same sub
     let mut root = snix_castore::Directory::new();
-    root.add(
-        "a".try_into().unwrap(),
-        Node::Directory {
-            digest: shared_digest.clone(),
-            size: 50,
-        },
-    )
+    root.add("a".try_into().unwrap(), Node::Directory {
+        digest: shared_digest.clone(),
+        size: 50,
+    })
     .unwrap();
-    root.add(
-        "b".try_into().unwrap(),
-        Node::Directory {
-            digest: shared_digest.clone(),
-            size: 50,
-        },
-    )
+    root.add("b".try_into().unwrap(), Node::Directory {
+        digest: shared_digest.clone(),
+        size: 50,
+    })
     .unwrap();
     let root_digest = ds.put(root).await.unwrap();
 

@@ -166,8 +166,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     where
         B: Send + Sync + 'static,
     {
-        let (handler, sync_rx, _seeding_rx) =
-            crate::gossip::ForgeAnnouncementHandler::with_channels(256);
+        let (handler, sync_rx, _seeding_rx) = crate::gossip::ForgeAnnouncementHandler::with_channels(256);
 
         let sync_service = Arc::new(SyncService::new(self.sync.blobs().clone()));
         let worker = crate::sync::DagSyncWorker::new(sync_service, endpoint);
@@ -248,9 +247,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     /// router_builder.dag_sync(handler);
     /// ```
     pub fn dag_sync_handler(&self) -> aspen_dag::DagSyncProtocolHandler
-    where
-        B: Send + Sync + 'static,
-    {
+    where B: Send + Sync + 'static {
         let sync = Arc::new(SyncService::new(self.sync.blobs().clone()));
         sync.into_dag_sync_handler()
     }

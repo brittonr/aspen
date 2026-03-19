@@ -269,9 +269,14 @@ async fn async_main() -> Result<()> {
         }
     };
 
-    // Extract signer before client_context is consumed by the handler.
+    // Extract handlers before client_context is consumed by ClientProtocolHandler.
     #[cfg(feature = "nix-cache-gateway")]
     let nix_cache_signer = client_context.nix_cache_signer.clone();
+
+    // Build the DAG sync protocol handler from the forge node (if available).
+    // This serves incoming DAG sync requests from peers over QUIC.
+    #[cfg(feature = "forge")]
+    let dag_sync_handler = client_context.forge_node.as_ref().map(|forge| forge.dag_sync_handler());
 
     #[cfg(feature = "plugins-rpc")]
     let mut client_handler = ClientProtocolHandler::new(client_context);
@@ -290,6 +295,8 @@ async fn async_main() -> Result<()> {
         kv_store.clone(),
         #[cfg(feature = "nix-cache-gateway")]
         nix_cache_signer,
+        #[cfg(feature = "forge")]
+        dag_sync_handler,
     );
 
     // Get fresh endpoint address (may have discovered more addresses since startup)

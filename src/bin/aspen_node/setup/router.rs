@@ -29,6 +29,7 @@ pub fn setup_router(
     #[cfg(feature = "nix-cache-gateway")] nix_cache_signer: Option<
         Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>,
     >,
+    #[cfg(feature = "forge")] dag_sync_handler: Option<impl iroh::protocol::ProtocolHandler>,
 ) -> iroh::protocol::Router {
     use aspen::CLIENT_ALPN;
     use aspen::LOG_SUBSCRIBER_ALPN;
@@ -107,6 +108,14 @@ pub fn setup_router(
             builder = builder.accept(CASTORE_ALPN, castore_handler);
             info!("SNIX castore protocol handler registered (ALPN: aspen-castore/0)");
         }
+    }
+
+    // Add DAG sync protocol handler for streaming content-addressed graph sync.
+    // Serves incoming requests from peers doing forge repo sync or snix store closure sync.
+    #[cfg(feature = "forge")]
+    if let Some(handler) = dag_sync_handler {
+        builder = builder.accept(aspen_forge::DAG_SYNC_ALPN, handler);
+        info!("DAG sync protocol handler registered (ALPN: /aspen/dag-sync/1)");
     }
 
     // Add docs sync protocol handler if docs sync is enabled

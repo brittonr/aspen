@@ -113,22 +113,34 @@ pub async fn setup_client_protocol(
         Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
     };
 
-    // Enable Forge gossip BEFORE creating CI trigger service to avoid Arc::get_mut failure
+    // Enable Forge gossip with DAG sync BEFORE creating CI trigger service
+    // to avoid Arc::get_mut failure. DAG sync replaces legacy per-object fetch
+    // with single-stream deterministic traversal over QUIC.
     #[cfg(feature = "forge")]
-    if config.forge.enable_gossip
+    let _dag_sync_worker_handle = if config.forge.enable_gossip
         && let Some(ref mut forge_arc) = forge_node
         && let Some(gossip) = node_mode.iroh_manager().gossip()
     {
         if let Some(forge) = Arc::get_mut(forge_arc) {
-            forge.enable_gossip(gossip.clone(), None).await.context("failed to enable forge gossip")?;
-            info!("Forge gossip enabled (handler will be set after CI trigger service init)");
+            let endpoint = node_mode.iroh_manager().endpoint().clone();
+            let cancel = node_mode.shutdown_token();
+            let handle = forge
+                .enable_gossip_with_dag_sync(gossip.clone(), endpoint, cancel)
+                .await
+                .context("failed to enable forge gossip with dag sync")?;
+            info!("Forge gossip enabled with DAG sync worker");
+            Some(handle)
         } else {
             warn!("forge.enable_gossip: Arc has multiple owners, cannot enable gossip");
+            None
         }
     } else if config.forge.enable_gossip && forge_node.is_some() {
         #[cfg(feature = "forge")]
         warn!("forge.enable_gossip is true but gossip service not available");
-    }
+        None
+    } else {
+        None
+    };
 
     // Initialize CI orchestrator if CI is enabled
     #[cfg(feature = "ci")]

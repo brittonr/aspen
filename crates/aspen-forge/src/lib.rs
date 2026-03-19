@@ -88,6 +88,8 @@ mod node;
 pub mod sync;
 
 // Re-export primary types for convenient access
+pub use aspen_dag::DAG_SYNC_ALPN;
+pub use aspen_dag::DagSyncProtocolHandler;
 pub use cob::CobChange;
 pub use cob::CobOperation;
 pub use cob::CobStore;
