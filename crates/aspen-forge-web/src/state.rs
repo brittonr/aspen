@@ -285,6 +285,25 @@ impl AppState {
         }
     }
 
+    /// Fetch README content from a repo's default branch (if present).
+    ///
+    /// Resolves default branch → commit → root tree, scans for a
+    /// README file (case-insensitive), and returns the blob content.
+    pub async fn get_readme(&self, repo: &ForgeRepoInfo) -> Option<Vec<u8>> {
+        let commit_hash = self.resolve_ref(&repo.id, &repo.default_branch).await.ok()?;
+        let commit = self.get_commit(&commit_hash).await.ok()?;
+        let entries = self.get_tree(&commit.tree).await.ok()?;
+
+        // Look for README variants (case-insensitive).
+        let readme_entry = entries.iter().find(|e| {
+            let lower = e.name.to_ascii_lowercase();
+            lower == "readme.md" || lower == "readme" || lower == "readme.txt" || lower == "readme.rst"
+        })?;
+
+        let blob = self.get_blob(&readme_entry.hash).await.ok()?;
+        blob.content
+    }
+
     /// Get patch detail.
     pub async fn get_patch(&self, repo_id: &str, patch_id: &str) -> Result<ForgePatchInfo> {
         let resp = self

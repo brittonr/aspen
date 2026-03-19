@@ -23,6 +23,9 @@ bytes = { workspace = true }
 # Templating
 maud = "0.26"
 
+# Markdown rendering
+pulldown-cmark = "0.13"
+
 # Runtime
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal"] }
 

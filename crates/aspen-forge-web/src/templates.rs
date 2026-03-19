@@ -86,7 +86,12 @@ pub fn repo_list(repos: &[ForgeRepoInfo]) -> Markup {
 }
 
 /// Repository overview page.
-pub fn repo_overview(repo: &ForgeRepoInfo, branches: &[ForgeRefInfo], recent_commits: &[ForgeCommitInfo]) -> Markup {
+pub fn repo_overview(
+    repo: &ForgeRepoInfo,
+    branches: &[ForgeRefInfo],
+    recent_commits: &[ForgeCommitInfo],
+    readme_html: Option<&str>,
+) -> Markup {
     base_layout(&repo.name, html! {
         h1 { (&repo.name) }
         @if let Some(ref desc) = repo.description {
@@ -99,6 +104,13 @@ pub fn repo_overview(repo: &ForgeRepoInfo, branches: &[ForgeRefInfo], recent_com
             a href=(format!("/{}/commits", repo.id)) { "Commits" }
             a href=(format!("/{}/issues", repo.id)) { "Issues" }
             a href=(format!("/{}/patches", repo.id)) { "Patches" }
+        }
+
+        @if let Some(html) = readme_html {
+            div.readme {
+                h2 { "📖 README" }
+                div.markdown { (PreEscaped(html)) }
+            }
         }
 
         h2 { "Branches" }
@@ -533,6 +545,24 @@ button:hover{background:#2ea043}
 form.inline{display:inline}
 .btn-secondary{padding:.35rem .7rem;background:transparent;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;font-size:.8rem;cursor:pointer}
 .btn-secondary:hover{border-color:#da3633;color:#f85149}
+.readme{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:1.5rem;margin:1rem 0}
+.readme h2{margin-top:0}
+.markdown h1,.markdown h2,.markdown h3{color:#f0f6fc;border-bottom:1px solid #21262d;padding-bottom:.3em;margin:1.2em 0 .5em}
+.markdown h1{font-size:1.4rem}
+.markdown h2{font-size:1.2rem}
+.markdown h3{font-size:1rem}
+.markdown p{margin:.5em 0}
+.markdown pre{background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:.8rem;overflow-x:auto;font-size:.85rem}
+.markdown code{font-size:.85em;background:#0d1117;padding:.1em .3em;border-radius:3px}
+.markdown pre code{background:transparent;padding:0}
+.markdown blockquote{border-left:3px solid #30363d;padding-left:.8rem;color:#8b949e;margin:.5em 0}
+.markdown ul,.markdown ol{padding-left:1.5em;margin:.5em 0}
+.markdown table{border-collapse:collapse;margin:.5em 0}
+.markdown th,.markdown td{border:1px solid #30363d;padding:.4rem .6rem}
+.markdown th{background:#161b22}
+.markdown img{max-width:100%}
+.markdown hr{border:none;border-top:1px solid #30363d;margin:1em 0}
+.markdown input[type=checkbox]{margin-right:.4em}
 @media (max-width: 768px) {
     main{padding:0.75rem}
     table{font-size:0.85rem}

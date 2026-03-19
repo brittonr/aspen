@@ -154,7 +154,11 @@ async fn repo_overview(st: &AppState, repo_id: &str) -> RouteResponse {
     };
     let branches = st.list_branches(repo_id).await.unwrap_or_default();
     let recent = st.get_log(repo_id, None, Some(10)).await.unwrap_or_default();
-    ok(templates::repo_overview(&repo, &branches, &recent))
+    let readme_html = st.get_readme(&repo).await.and_then(|bytes| {
+        let text = String::from_utf8(bytes).ok()?;
+        Some(render_markdown(&text))
+    });
+    ok(templates::repo_overview(&repo, &branches, &recent, readme_html.as_deref()))
 }
 
 async fn tree_root(st: &AppState, repo_id: &str) -> RouteResponse {
@@ -372,6 +376,26 @@ async fn raw_blob(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> R
     }
 }
 
+// ── Markdown rendering ──────────────────────────────────────────────
+
+/// Tiger Style: max markdown input size (1 MB) to bound rendering time.
+const MAX_MARKDOWN_BYTES: usize = 1024 * 1024;
+
+fn render_markdown(source: &str) -> String {
+    let input = if source.len() > MAX_MARKDOWN_BYTES {
+        &source[..MAX_MARKDOWN_BYTES]
+    } else {
+        source
+    };
+    let opts = pulldown_cmark::Options::ENABLE_TABLES
+        | pulldown_cmark::Options::ENABLE_STRIKETHROUGH
+        | pulldown_cmark::Options::ENABLE_TASKLISTS;
+    let parser = pulldown_cmark::Parser::new_ext(input, opts);
+    let mut html = String::new();
+    pulldown_cmark::html::push_html(&mut html, parser);
+    html
+}
+
 // ── Tree walking ────────────────────────────────────────────────────
 
 async fn walk_tree(st: &AppState, root_tree: &str, path: &str) -> anyhow::Result<String> {
@@ -538,5 +562,30 @@ mod tests {
     fn method_not_allowed_is_405() {
         let resp = method_not_allowed();
         assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
+    }
+
+    #[test]
+    fn render_markdown_headings_and_code() {
+        let md = "# Hello\n\nSome `inline` code.\n\n```rust\nfn main() {}\n```\n";
+        let html = render_markdown(md);
+        assert!(html.contains("<h1>Hello</h1>"));
+        assert!(html.contains("<code>inline</code>"));
+        assert!(html.contains("<pre><code class=\"language-rust\">"));
+    }
+
+    #[test]
+    fn render_markdown_tables() {
+        let md = "| a | b |\n|---|---|\n| 1 | 2 |\n";
+        let html = render_markdown(md);
+        assert!(html.contains("<table>"));
+        assert!(html.contains("<td>1</td>"));
+    }
+
+    #[test]
+    fn render_markdown_truncates_large_input() {
+        let big = "x".repeat(MAX_MARKDOWN_BYTES + 100);
+        let html = render_markdown(&big);
+        // Should render without panic; output comes from truncated input.
+        assert!(!html.is_empty());
     }
 }
