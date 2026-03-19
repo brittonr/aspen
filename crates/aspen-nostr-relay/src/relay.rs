@@ -131,6 +131,9 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
                                 }
                             };
 
+                            let write_policy = self.config.write_policy;
+                            let relay_url = self.config.relay_url.clone();
+
                             tokio::spawn(async move {
                                 handle_connection(
                                     ws,
@@ -139,6 +142,8 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
                                     Arc::clone(&inner.registry),
                                     event_rx,
                                     cancel,
+                                    write_policy,
+                                    relay_url,
                                 ).await;
                                 inner.active_connections.fetch_sub(1, Ordering::Relaxed);
                             });
@@ -169,15 +174,34 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
 
     /// Get the NIP-11 relay information document as JSON.
     pub fn relay_info_json(&self) -> String {
-        serde_json::json!({
+        use crate::config::WritePolicy;
+
+        let mut doc = serde_json::json!({
             "name": "aspen-nostr-relay",
             "description": "Aspen cluster Nostr relay",
             "pubkey": self.identity.public_key_hex(),
-            "supported_nips": [1, 11, 34],
+            "supported_nips": [1, 11, 34, 42],
             "software": "aspen",
             "version": env!("CARGO_PKG_VERSION"),
-        })
-        .to_string()
+        });
+
+        // NIP-11 limitation object for auth/read-only policies
+        match self.config.write_policy {
+            WritePolicy::AuthRequired => {
+                doc["limitation"] = serde_json::json!({
+                    "auth_required": true,
+                });
+            }
+            WritePolicy::ReadOnly => {
+                doc["limitation"] = serde_json::json!({
+                    "auth_required": true,
+                    "read_only": true,
+                });
+            }
+            WritePolicy::Open => {}
+        }
+
+        doc.to_string()
     }
 
     /// Trigger graceful shutdown.

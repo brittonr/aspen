@@ -20,6 +20,23 @@ async fn free_port() -> u16 {
     listener.local_addr().unwrap().port()
 }
 
+/// Read and discard the NIP-42 AUTH challenge sent on connect.
+async fn drain_auth_challenge(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+) {
+    let msg = timeout(Duration::from_secs(5), ws.next())
+        .await
+        .expect("timeout waiting for AUTH")
+        .expect("stream ended")
+        .expect("ws error");
+    if let Message::Text(text) = msg {
+        let relay_msg: RelayMessage<'_> = RelayMessage::from_json(&text).unwrap();
+        assert!(matches!(relay_msg, RelayMessage::Auth { .. }), "expected AUTH challenge, got: {relay_msg:?}");
+    } else {
+        panic!("expected text message for AUTH, got: {msg:?}");
+    }
+}
+
 async fn start_relay() -> (
     NostrRelayConfig,
     NostrIdentity,
@@ -54,6 +71,7 @@ async fn test_publish_and_query() {
 
     // Connect client
     let (mut ws, _) = connect_async(&url).await.unwrap();
+    drain_auth_challenge(&mut ws).await;
 
     // Create and publish an event
     let keys = Keys::generate();
@@ -128,6 +146,7 @@ async fn test_invalid_signature_rejected() {
     let url = format!("ws://127.0.0.1:{}", config.bind_port);
 
     let (mut ws, _) = connect_async(&url).await.unwrap();
+    drain_auth_challenge(&mut ws).await;
 
     // Craft an event with wrong signature (sign with one key, set pubkey of another)
     let keys1 = Keys::generate();
@@ -163,6 +182,7 @@ async fn test_real_time_subscription_push() {
 
     // Client 1: subscriber
     let (mut ws1, _) = connect_async(&url).await.unwrap();
+    drain_auth_challenge(&mut ws1).await;
     let sub_id = SubscriptionId::new("realtime");
     let filter = Filter::new().kind(Kind::TextNote);
     let req = ClientMessage::Req {
@@ -179,6 +199,7 @@ async fn test_real_time_subscription_push() {
 
     // Client 2: publisher
     let (mut ws2, _) = connect_async(&url).await.unwrap();
+    drain_auth_challenge(&mut ws2).await;
     let keys = Keys::generate();
     let event = EventBuilder::text_note("real-time push test").sign_with_keys(&keys).unwrap();
     let event_msg = ClientMessage::Event(std::borrow::Cow::Borrowed(&event));
@@ -243,6 +264,6 @@ async fn test_relay_info_json() {
 
     assert_eq!(parsed["name"], "aspen-nostr-relay");
     assert_eq!(parsed["pubkey"], identity.public_key_hex());
-    assert_eq!(parsed["supported_nips"], serde_json::json!([1, 11, 34]));
+    assert_eq!(parsed["supported_nips"], serde_json::json!([1, 11, 34, 42]));
     assert_eq!(parsed["software"], "aspen");
 }

@@ -38,3 +38,17 @@ pub const KV_PREFIX_TAG: &str = "nostr:tg:";
 
 /// KV key for the stored event counter.
 pub const KV_EVENT_COUNT: &str = "nostr:meta:count";
+
+// ---------------------------------------------------------------------------
+// NIP-42 Authentication
+// ---------------------------------------------------------------------------
+
+/// Nostr event kind for NIP-42 authentication (kind 22242).
+pub const AUTH_EVENT_KIND: u16 = 22242;
+
+/// Number of random bytes in an AUTH challenge (32 bytes → 64 hex chars).
+pub const AUTH_CHALLENGE_BYTES: usize = 32;
+
+/// Maximum allowed time delta (seconds) between `created_at` in a kind 22242
+/// event and the relay's current time. Events outside this window are rejected.
+pub const AUTH_TIMESTAMP_WINDOW_SECS: u64 = 60;

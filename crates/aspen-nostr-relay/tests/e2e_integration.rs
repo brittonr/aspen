@@ -23,6 +23,24 @@ async fn free_port() -> u16 {
     listener.local_addr().unwrap().port()
 }
 
+/// Read and discard the NIP-42 AUTH challenge sent on connect.
+async fn drain_auth_challenge(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+) {
+    use nostr::prelude::*;
+    let msg = timeout(Duration::from_secs(5), ws.next())
+        .await
+        .expect("timeout waiting for AUTH")
+        .expect("stream ended")
+        .expect("ws error");
+    if let Message::Text(text) = msg {
+        let relay_msg: RelayMessage<'_> = RelayMessage::from_json(&text).unwrap();
+        assert!(matches!(relay_msg, RelayMessage::Auth { .. }), "expected AUTH challenge, got: {relay_msg:?}");
+    } else {
+        panic!("expected text message for AUTH, got: {msg:?}");
+    }
+}
+
 /// Start a relay with custom config overrides.
 async fn start_relay_with_config(config: NostrRelayConfig) -> Arc<NostrRelayService<DeterministicKeyValueStore>> {
     let identity = NostrIdentity::generate();
@@ -65,6 +83,7 @@ async fn nip11_relay_info_has_required_fields() {
     assert!(nips.contains(&serde_json::json!(1)));
     assert!(nips.contains(&serde_json::json!(11)));
     assert!(nips.contains(&serde_json::json!(34)));
+    assert!(nips.contains(&serde_json::json!(42)));
 }
 
 #[tokio::test]
@@ -92,6 +111,7 @@ async fn publish_and_query_back_via_req() {
     let url = format!("ws://127.0.0.1:{port}");
 
     let (mut ws, _) = connect_async(&url).await.unwrap();
+    drain_auth_challenge(&mut ws).await;
 
     // Publish event
     let keys = Keys::generate();
@@ -244,6 +264,7 @@ async fn subscription_limit_enforced() {
     let url = format!("ws://127.0.0.1:{port}");
 
     let (mut ws, _) = connect_async(&url).await.unwrap();
+    drain_auth_challenge(&mut ws).await;
 
     // Create 2 subscriptions (at limit)
     for i in 0..2 {
@@ -289,6 +310,7 @@ async fn oversized_event_rejected() {
     let url = format!("ws://127.0.0.1:{port}");
 
     let (mut ws, _) = connect_async(&url).await.unwrap();
+    drain_auth_challenge(&mut ws).await;
 
     // Create an event with content exceeding MAX_EVENT_SIZE
     let keys = Keys::generate();

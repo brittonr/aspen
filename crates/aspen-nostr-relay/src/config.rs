@@ -6,6 +6,24 @@ use serde::Serialize;
 
 use crate::constants;
 
+/// Controls whether the relay requires NIP-42 authentication before
+/// accepting EVENT submissions over the WebSocket connection.
+///
+/// This policy only affects external writes from WebSocket clients.
+/// Internal writes via `NostrRelayService::publish()` (bridges, plugins)
+/// always bypass the policy. Reads (REQ/CLOSE) are unaffected.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WritePolicy {
+    /// Any client can submit events (current behavior). No NIP-42 required.
+    #[default]
+    Open,
+    /// Clients must complete NIP-42 authentication before EVENT is accepted.
+    AuthRequired,
+    /// No external writes allowed. Only `publish()` API works.
+    ReadOnly,
+}
+
 /// Configuration for the Nostr relay service.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct NostrRelayConfig {
@@ -26,6 +44,21 @@ pub struct NostrRelayConfig {
 
     /// Maximum event size in bytes.
     pub max_event_size_bytes: u32,
+
+    /// Write policy controlling EVENT acceptance from WebSocket clients.
+    ///
+    /// - `open`: Any client can write (default, backward-compatible).
+    /// - `auth_required`: Must complete NIP-42 before EVENT is accepted.
+    /// - `read_only`: No external writes; only `publish()` API works.
+    #[serde(default)]
+    pub write_policy: WritePolicy,
+
+    /// Public relay URL used for NIP-42 challenge verification.
+    ///
+    /// The kind 22242 auth event must contain a `relay` tag matching this
+    /// URL. If `None`, the relay URL check is skipped.
+    #[serde(default)]
+    pub relay_url: Option<String>,
 }
 
 impl Default for NostrRelayConfig {
@@ -37,6 +70,8 @@ impl Default for NostrRelayConfig {
             max_connections: constants::MAX_NOSTR_CONNECTIONS,
             max_subscriptions_per_connection: constants::MAX_SUBSCRIPTIONS_PER_CONNECTION,
             max_event_size_bytes: constants::MAX_EVENT_SIZE,
+            write_policy: WritePolicy::default(),
+            relay_url: None,
         }
     }
 }
