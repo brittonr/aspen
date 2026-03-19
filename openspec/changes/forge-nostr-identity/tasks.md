@@ -15,16 +15,16 @@
 
 ## 3. Author struct npub field
 
-- [ ] 3.1 Add `pub npub: Option<String>` field to the `Author` struct in `crates/aspen-forge/src/identity/mod.rs`
-- [ ] 3.2 Update `Author::new()` and `Author::with_timezone()` to accept optional npub
-- [ ] 3.3 Update `CommitObject::new()` call sites to pass npub through from UserContext
-- [ ] 3.4 Ensure postcard serialization is backward-compatible (Option<String> defaults to None for old data)
+- [x] 3.1 Add `pub npub: Option<String>` field to the `Author` struct in `crates/aspen-forge/src/identity/mod.rs`
+- [x] 3.2 Update `Author::new()` and `Author::with_timezone()` to accept optional npub
+- [x] 3.3 Update `CommitObject::new()` call sites to pass npub through from UserContext
+- [x] 3.4 Ensure postcard serialization is backward-compatible (Option<String> defaults to None for old data)
 
 ## 4. Per-user signing in ForgeNode
 
-- [ ] 4.1 Add `sign_as(&self, ctx: Option<&UserContext>)` helper to ForgeNode that returns the signing key + npub (user's if provided, node default otherwise)
-- [ ] 4.2 Update `GitBlobStore::commit()` to accept optional UserContext — passes through to Author and SignedObject signing
-- [ ] 4.3 Update `CobStore` operations (create_issue, add_comment, close_issue, create_patch, etc.) to accept optional UserContext
+- [x] 4.1 Add `sign_as(&self, ctx: Option<&UserContext>)` helper to ForgeNode that returns the signing key + npub (user's if provided, node default otherwise)
+- [x] 4.2 Update `GitBlobStore::commit()` to accept optional UserContext — passes through to Author and SignedObject signing
+- [x] 4.3 Update `CobStore` operations (create_issue, add_comment, close_issue, create_patch, etc.) to accept optional UserContext
 - [ ] 4.4 Update ForgeServiceExecutor RPC handlers to extract UserContext from the request's auth token and pass it through
 - [ ] 4.5 Integration test: two different npubs create commits on the same repo, verify distinct ed25519 author keys and npub fields
 

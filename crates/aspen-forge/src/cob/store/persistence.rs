@@ -26,6 +26,26 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     ///
     /// After successful storage, emits a `CobUpdateEvent` for gossip broadcast.
     pub(super) async fn store_change(&self, repo_id: &RepoId, change: CobChange) -> ForgeResult<blake3::Hash> {
+        self.store_change_with_key(repo_id, change, &self.secret_key).await
+    }
+
+    /// Store a COB change signed with a specific key (for per-user signing).
+    #[allow(dead_code)]
+    pub(super) async fn store_change_as(
+        &self,
+        repo_id: &RepoId,
+        change: CobChange,
+        user: &crate::identity::nostr_mapping::UserContext,
+    ) -> ForgeResult<blake3::Hash> {
+        self.store_change_with_key(repo_id, change, &user.signing_key).await
+    }
+
+    async fn store_change_with_key(
+        &self,
+        repo_id: &RepoId,
+        change: CobChange,
+        signing_key: &iroh::SecretKey,
+    ) -> ForgeResult<blake3::Hash> {
         // Validate parents count
         if change.parents.len() as u32 > MAX_COB_PARENTS {
             return Err(ForgeError::TooManyParents {
@@ -35,7 +55,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         }
 
         // Sign and store with HLC timestamp
-        let signed = SignedObject::new(change.clone(), &self.secret_key, &self.hlc)?;
+        let signed = SignedObject::new(change.clone(), signing_key, &self.hlc)?;
         let hash = signed.hash();
         let bytes = signed.to_bytes();
 

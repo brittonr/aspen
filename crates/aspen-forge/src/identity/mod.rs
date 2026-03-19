@@ -212,6 +212,11 @@ pub struct Author {
     /// Preserved from git author lines for SHA-1 reproducibility.
     #[serde(default = "default_timezone")]
     pub timezone: String,
+
+    /// Nostr public key (hex-encoded, 64 chars) linking this author to a Nostr identity.
+    /// None for unauthenticated operations or pre-Nostr commits.
+    #[serde(default)]
+    pub npub: Option<String>,
 }
 
 /// Default timezone for backwards compatibility with existing serialized data.
@@ -234,6 +239,7 @@ impl Author {
                 .unwrap_or_default()
                 .as_millis() as u64,
             timezone: "+0000".to_string(),
+            npub: None,
         }
     }
 
@@ -248,6 +254,7 @@ impl Author {
                 .unwrap_or_default()
                 .as_millis() as u64,
             timezone: "+0000".to_string(),
+            npub: None,
         }
     }
 
@@ -264,7 +271,14 @@ impl Author {
             public_key: None,
             timestamp_ms,
             timezone: timezone.into(),
+            npub: None,
         }
+    }
+
+    /// Set the Nostr npub for this author.
+    pub fn with_npub(mut self, npub: impl Into<String>) -> Self {
+        self.npub = Some(npub.into());
+        self
     }
 }
 

@@ -172,6 +172,7 @@ mod tests {
             public_key: None,
             timestamp_ms: 0,
             timezone: "+0000".to_string(),
+            npub: None,
         }
     }
 

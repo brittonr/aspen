@@ -283,6 +283,47 @@ impl<B: BlobStore> GitBlobStore<B> {
         self.store_object(obj).await
     }
 
+    /// Create a commit signed by a specific user.
+    ///
+    /// Like `commit()` but uses the provided signing key and attaches
+    /// the user's npub to the commit author.
+    pub async fn commit_as(
+        &self,
+        tree: blake3::Hash,
+        parents: Vec<blake3::Hash>,
+        message: impl Into<String>,
+        user: &crate::identity::nostr_mapping::UserContext,
+    ) -> ForgeResult<blake3::Hash> {
+        let message = message.into();
+
+        if parents.len() as u32 > MAX_COMMIT_PARENTS {
+            return Err(ForgeError::TooManyParents {
+                count: parents.len() as u32,
+                max: MAX_COMMIT_PARENTS,
+            });
+        }
+
+        if message.len() as u32 > MAX_COMMIT_MESSAGE_BYTES {
+            return Err(ForgeError::ObjectTooLarge {
+                size: message.len() as u64,
+                max: MAX_COMMIT_MESSAGE_BYTES as u64,
+            });
+        }
+
+        let author = Author::from_public_key(user.public_key).with_npub(&user.npub);
+        let commit = CommitObject::new(tree, parents, author, message);
+        let obj = GitObject::Commit(commit);
+
+        // Sign with the user's key, not the node key
+        let signed = SignedObject::new(obj, &user.signing_key, &self.hlc)?;
+        let bytes = signed.to_bytes();
+        let hash = signed.hash();
+
+        self.blobs.add_bytes(&bytes).await.map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?;
+
+        Ok(hash)
+    }
+
     /// Get a commit by hash.
     ///
     /// # Errors

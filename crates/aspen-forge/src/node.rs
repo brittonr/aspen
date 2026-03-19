@@ -257,6 +257,20 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         self.secret_key.public()
     }
 
+    /// Resolve the signing key and npub for an operation.
+    ///
+    /// If a `UserContext` is provided, uses the user's assigned key and npub.
+    /// Otherwise falls back to the node's default key with no npub.
+    pub fn signing_context<'a>(
+        &'a self,
+        user: Option<&'a crate::identity::nostr_mapping::UserContext>,
+    ) -> (&'a iroh::SecretKey, Option<&'a str>) {
+        match user {
+            Some(ctx) => (&ctx.signing_key, Some(&ctx.npub)),
+            None => (&self.secret_key, None),
+        }
+    }
+
     /// Get the secret key of this node.
     ///
     /// # Security

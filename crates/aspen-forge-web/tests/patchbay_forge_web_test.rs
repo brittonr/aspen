@@ -118,6 +118,7 @@ async fn patchbay_forge_web_all_pages() {
                         public_key: None,
                         timestamp_ms: 1700000000000,
                         timezone: "+0000".into(),
+                        npub: None,
                     },
                     "Initial commit",
                 )),
