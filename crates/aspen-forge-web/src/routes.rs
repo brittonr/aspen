@@ -97,7 +97,15 @@ pub fn method_not_allowed() -> RouteResponse {
 }
 
 /// Dispatch a GET request to the appropriate handler.
+///
+/// `path` may include a query string (e.g., `/repo/search?q=term`).
 pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> RouteResponse {
+    // Split path from query string.
+    let (path, query_string) = path.split_once('?').unwrap_or((path, ""));
+    let query: HashMap<String, String> = form_urlencoded::parse(query_string.as_bytes())
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+
     // Strip trailing slash (except root).
     let path = if path.len() > 1 {
         path.trim_end_matches('/')
@@ -135,6 +143,7 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
             let sub = rest.join("/");
             raw_blob(state, repo_id, ref_name, &sub).await
         }
+        [repo_id, "search"] => search(state, repo_id, &query).await,
         [repo_id, "commit", hash] => commit_detail(state, repo_id, hash).await,
         [repo_id, "commits"] => commits(state, repo_id).await,
         [repo_id, "issues"] => issues(state, repo_id).await,
@@ -234,6 +243,21 @@ async fn blob_view(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> 
             let size = blob.size.unwrap_or(0);
             ok(templates::file_view(&repo, ref_name, path, content, size))
         }
+        Err(e) => err(e),
+    }
+}
+
+async fn search(st: &AppState, repo_id: &str, query: &HashMap<String, String>) -> RouteResponse {
+    let repo = match st.get_repo(repo_id).await {
+        Ok(r) => r,
+        Err(e) => return err(e),
+    };
+    let q = query.get("q").map(|s| s.as_str()).unwrap_or("");
+    if q.len() < 2 {
+        return ok(templates::search_results(&repo, q, None));
+    }
+    match st.search_code(repo_id, q).await {
+        Ok(results) => ok(templates::search_results(&repo, q, Some(&results))),
         Err(e) => err(e),
     }
 }

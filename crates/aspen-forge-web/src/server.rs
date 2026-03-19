@@ -64,7 +64,7 @@ async fn handle_request(
 
     let (parts, _body) = req.into_parts();
     let method = parts.method.clone();
-    let path = parts.uri.path();
+    let path = parts.uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
 
     debug!(%method, %path, "forge-web request");
 

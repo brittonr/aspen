@@ -185,6 +185,18 @@ async fn patchbay_forge_web_all_pages() {
             let r = routes::dispatch(&state, &format!("/{repo_id}/patches"), None).await;
             results.push(("patches", r.status(), true));
 
+            // 8. Search with results
+            let r = routes::dispatch(&state, &format!("/{repo_id}/search?q=Test"), None).await;
+            results.push(("search hit", r.status(), body_contains(&r, "README.md")));
+
+            // 9. Search with no results
+            let r = routes::dispatch(&state, &format!("/{repo_id}/search?q=nonexistent_xyz"), None).await;
+            results.push(("search miss", r.status(), body_contains(&r, "No results")));
+
+            // 10. Repo filter input present
+            let r = routes::dispatch(&state, "/", None).await;
+            results.push(("repo filter", r.status(), body_contains(&r, "repo-filter")));
+
             // Collect failures
             let failures: Vec<_> = results
                 .iter()

@@ -67,6 +67,41 @@ pub enum DiffLine {
     Hunk(String),
 }
 
+/// A single match within a file from code search.
+#[derive(Debug, Clone)]
+pub struct SearchMatch {
+    /// 1-indexed line number of the match.
+    pub line_number: usize,
+    /// The matching line content.
+    pub line: String,
+    /// Context lines before the match.
+    pub context_before: Vec<(usize, String)>,
+    /// Context lines after the match.
+    pub context_after: Vec<(usize, String)>,
+}
+
+/// A file that contained search matches.
+#[derive(Debug, Clone)]
+pub struct SearchFileResult {
+    /// Path relative to repo root.
+    pub path: String,
+    /// Matches within this file.
+    pub matches: Vec<SearchMatch>,
+}
+
+/// Overall search results.
+#[derive(Debug, Clone)]
+pub struct SearchResults {
+    /// Files with matches.
+    pub files: Vec<SearchFileResult>,
+    /// Total match count (may exceed files.matches if capped).
+    pub total_matches: usize,
+    /// Whether the search was truncated.
+    pub truncated: bool,
+    /// Number of files examined.
+    pub files_examined: usize,
+}
+
 /// Shared application state containing the client connection.
 #[derive(Clone)]
 pub struct AppState {
@@ -533,6 +568,124 @@ impl AppState {
         }
         let content = blob.content?;
         String::from_utf8(content).ok()
+    }
+
+    // ── Code search ──────────────────────────────────────────────
+
+    /// Max files to walk during a search.
+    const MAX_SEARCH_FILES: usize = 500;
+    /// Max blob size for searching (256KB).
+    const MAX_SEARCH_BLOB_BYTES: u64 = 256 * 1024;
+    /// Max result matches to return.
+    const MAX_SEARCH_MATCHES: usize = 50;
+    /// Context lines above/below a match.
+    const SEARCH_CONTEXT: usize = 2;
+
+    /// Search file contents at HEAD for a substring.
+    pub async fn search_code(&self, repo_id: &str, query: &str) -> Result<SearchResults> {
+        let query_lower = query.to_lowercase();
+        let commit_hash = self.resolve_ref(repo_id, "main").await?;
+        let commit = self.get_commit(&commit_hash).await?;
+
+        let mut files_to_search = Vec::new();
+        self.collect_search_files(&commit.tree, "", &mut files_to_search).await?;
+
+        let mut results = SearchResults {
+            files: Vec::new(),
+            total_matches: 0,
+            truncated: files_to_search.len() >= Self::MAX_SEARCH_FILES,
+            files_examined: files_to_search.len(),
+        };
+
+        for (path, hash) in &files_to_search {
+            if results.total_matches >= Self::MAX_SEARCH_MATCHES {
+                results.truncated = true;
+                break;
+            }
+            let remaining = Self::MAX_SEARCH_MATCHES - results.total_matches;
+            if let Some(file_result) = self.search_blob(path, hash, &query_lower, remaining).await {
+                results.total_matches += file_result.matches.len();
+                results.files.push(file_result);
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Recursively collect (path, blob_hash) for all files in a tree.
+    #[async_recursion::async_recursion]
+    async fn collect_search_files(&self, tree_hash: &str, prefix: &str, out: &mut Vec<(String, String)>) -> Result<()> {
+        if out.len() >= Self::MAX_SEARCH_FILES {
+            return Ok(());
+        }
+        let entries = self.get_tree(tree_hash).await?;
+        for entry in &entries {
+            if out.len() >= Self::MAX_SEARCH_FILES {
+                break;
+            }
+            let path = if prefix.is_empty() {
+                entry.name.clone()
+            } else {
+                format!("{prefix}/{}", entry.name)
+            };
+            if entry.mode == 0o40000 {
+                self.collect_search_files(&entry.hash, &path, out).await?;
+            } else {
+                out.push((path, entry.hash.clone()));
+            }
+        }
+        Ok(())
+    }
+
+    /// Search a single blob for matches, returning up to `max_matches`.
+    async fn search_blob(
+        &self,
+        path: &str,
+        hash: &str,
+        query_lower: &str,
+        max_matches: usize,
+    ) -> Option<SearchFileResult> {
+        let blob = self.get_blob(hash).await.ok()?;
+        if blob.size.unwrap_or(0) > Self::MAX_SEARCH_BLOB_BYTES {
+            return None;
+        }
+        let content = blob.content?;
+        let text = String::from_utf8(content).ok()?;
+        let lines: Vec<&str> = text.lines().collect();
+
+        let mut matches = Vec::new();
+        for (i, line) in lines.iter().enumerate() {
+            if matches.len() >= max_matches {
+                break;
+            }
+            if line.to_lowercase().contains(query_lower) {
+                let ctx_before: Vec<(usize, String)> = lines[i.saturating_sub(Self::SEARCH_CONTEXT)..i]
+                    .iter()
+                    .enumerate()
+                    .map(|(j, l)| (i.saturating_sub(Self::SEARCH_CONTEXT) + j + 1, l.to_string()))
+                    .collect();
+                let ctx_after: Vec<(usize, String)> = lines[i + 1..lines.len().min(i + 1 + Self::SEARCH_CONTEXT)]
+                    .iter()
+                    .enumerate()
+                    .map(|(j, l)| (i + 2 + j, l.to_string()))
+                    .collect();
+                matches.push(SearchMatch {
+                    line_number: i + 1,
+                    line: line.to_string(),
+                    context_before: ctx_before,
+                    context_after: ctx_after,
+                });
+            }
+        }
+
+        if matches.is_empty() {
+            None
+        } else {
+            Some(SearchFileResult {
+                path: path.to_string(),
+                matches,
+            })
+        }
     }
 
     /// Get patch detail.

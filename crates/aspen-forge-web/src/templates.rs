@@ -14,6 +14,20 @@ use maud::html;
 /// Tiger Style: max markdown input size (1 MB) to bound rendering time.
 pub(crate) const MAX_MARKDOWN_BYTES: usize = 1024 * 1024;
 
+const REPO_FILTER_JS: &str = r#"
+document.getElementById('repo-filter').addEventListener('input', function() {
+  var q = this.value.toLowerCase();
+  var cards = document.querySelectorAll('.repo-card');
+  var visible = 0;
+  cards.forEach(function(c) {
+    var show = !q || c.dataset.name.indexOf(q) !== -1;
+    c.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.getElementById('repo-no-match').style.display = visible ? 'none' : '';
+});
+"#;
+
 /// Render markdown to HTML.
 pub fn render_markdown(source: &str) -> String {
     let input = if source.len() > MAX_MARKDOWN_BYTES {
@@ -28,6 +42,31 @@ pub fn render_markdown(source: &str) -> String {
     let mut html = String::new();
     pulldown_cmark::html::push_html(&mut html, parser);
     html
+}
+
+/// Repo navigation tabs with optional search box.
+fn repo_tabs(repo: &ForgeRepoInfo, active: &str) -> Markup {
+    let tabs = [
+        ("Overview", format!("/{}", repo.id), "overview"),
+        ("Files", format!("/{}/tree", repo.id), "tree"),
+        ("Commits", format!("/{}/commits", repo.id), "commits"),
+        ("Issues", format!("/{}/issues", repo.id), "issues"),
+        ("Patches", format!("/{}/patches", repo.id), "patches"),
+    ];
+    html! {
+        div.tabs {
+            @for (label, href, key) in &tabs {
+                @if *key == active {
+                    a.active href=(href) { (label) }
+                } @else {
+                    a href=(href) { (label) }
+                }
+            }
+            form.tabs-search method="get" action=(format!("/{}/search", repo.id)) {
+                input type="text" name="q" placeholder="Search…" {}
+            }
+        }
+    }
 }
 
 /// Format ms-since-epoch as a human-readable date.
@@ -87,8 +126,10 @@ pub fn repo_list(repos: &[ForgeRepoInfo]) -> Markup {
         @if repos.is_empty() {
             p.muted { "No repositories yet." }
         } @else {
+            input #repo-filter type="text" placeholder="Filter repositories…" autocomplete="off" {}
+            p #repo-no-match.muted style="display:none" { "No matching repositories." }
             @for repo in repos {
-                div.card {
+                div.card.repo-card data-name=(repo.name.to_lowercase()) {
                     h3 { a href=(format!("/{}", repo.id)) { (&repo.name) } }
                     @if let Some(ref desc) = repo.description {
                         p.muted { (desc) }
@@ -100,6 +141,7 @@ pub fn repo_list(repos: &[ForgeRepoInfo]) -> Markup {
                     }
                 }
             }
+            script { (PreEscaped(REPO_FILTER_JS)) }
         }
     })
 }
@@ -124,13 +166,7 @@ pub fn repo_overview(
             code { (clone_cmd) }
         }
 
-        div.tabs {
-            a.active href=(format!("/{}", repo.id)) { "Overview" }
-            a href=(format!("/{}/tree", repo.id)) { "Files" }
-            a href=(format!("/{}/commits", repo.id)) { "Commits" }
-            a href=(format!("/{}/issues", repo.id)) { "Issues" }
-            a href=(format!("/{}/patches", repo.id)) { "Patches" }
-        }
+        (repo_tabs(repo, "overview"))
 
         @if let Some(html) = readme_html {
             div.readme {
@@ -174,13 +210,7 @@ pub fn file_browser(repo: &ForgeRepoInfo, ref_name: &str, path: &str, entries: &
             }
         }
 
-        div.tabs {
-            a href=(format!("/{}", repo.id)) { "Overview" }
-            a.active href=(format!("/{}/tree", repo.id)) { "Files" }
-            a href=(format!("/{}/commits", repo.id)) { "Commits" }
-            a href=(format!("/{}/issues", repo.id)) { "Issues" }
-            a href=(format!("/{}/patches", repo.id)) { "Patches" }
-        }
+        (repo_tabs(repo, "tree"))
 
         table.file-list {
             @if !path.is_empty() {
@@ -227,7 +257,7 @@ pub fn file_view(repo: &ForgeRepoInfo, ref_name: &str, path: &str, content: Opti
                         @let text = String::from_utf8_lossy(bytes);
                         @for (line_no, line) in text.lines().enumerate() {
                             tr {
-                                td.ln { (line_no + 1) }
+                                td.ln id=(format!("L{}", line_no + 1)) { (line_no + 1) }
                                 td.line { code { (line) } }
                             }
                         }
@@ -334,13 +364,7 @@ pub fn commit_log(repo: &ForgeRepoInfo, commits: &[ForgeCommitInfo]) -> Markup {
     base_layout(&format!("{} — Commits", repo.name), html! {
         h1 { a href=(format!("/{}", repo.id)) { (&repo.name) } " — Commits" }
 
-        div.tabs {
-            a href=(format!("/{}", repo.id)) { "Overview" }
-            a href=(format!("/{}/tree", repo.id)) { "Files" }
-            a.active href=(format!("/{}/commits", repo.id)) { "Commits" }
-            a href=(format!("/{}/issues", repo.id)) { "Issues" }
-            a href=(format!("/{}/patches", repo.id)) { "Patches" }
-        }
+        (repo_tabs(repo, "commits"))
 
         @if commits.is_empty() {
             p.muted { "No commits." }
@@ -355,13 +379,7 @@ pub fn issue_list(repo: &ForgeRepoInfo, issues: &[ForgeIssueInfo]) -> Markup {
     base_layout(&format!("{} — Issues", repo.name), html! {
         h1 { a href=(format!("/{}", repo.id)) { (&repo.name) } " — Issues" }
 
-        div.tabs {
-            a href=(format!("/{}", repo.id)) { "Overview" }
-            a href=(format!("/{}/tree", repo.id)) { "Files" }
-            a href=(format!("/{}/commits", repo.id)) { "Commits" }
-            a.active href=(format!("/{}/issues", repo.id)) { "Issues" }
-            a href=(format!("/{}/patches", repo.id)) { "Patches" }
-        }
+        (repo_tabs(repo, "issues"))
 
         p { a.btn href=(format!("/{}/issues/new", repo.id)) { "+ New Issue" } }
 
@@ -434,13 +452,7 @@ pub fn patch_list(repo: &ForgeRepoInfo, patches: &[ForgePatchInfo]) -> Markup {
     base_layout(&format!("{} — Patches", repo.name), html! {
         h1 { a href=(format!("/{}", repo.id)) { (&repo.name) } " — Patches" }
 
-        div.tabs {
-            a href=(format!("/{}", repo.id)) { "Overview" }
-            a href=(format!("/{}/tree", repo.id)) { "Files" }
-            a href=(format!("/{}/commits", repo.id)) { "Commits" }
-            a href=(format!("/{}/issues", repo.id)) { "Issues" }
-            a.active href=(format!("/{}/patches", repo.id)) { "Patches" }
-        }
+        (repo_tabs(repo, "patches"))
 
         @if patches.is_empty() {
             p.muted { "No patches." }
@@ -523,6 +535,71 @@ fn new_issue_form_inner(repo: &ForgeRepoInfo, error: Option<&str>, title: &str, 
             input type="text" name="labels" id="labels" placeholder="bug, docs" {}
 
             div.form-actions { button type="submit" { "Create Issue" } }
+        }
+    })
+}
+
+/// Code search results page.
+pub fn search_results(repo: &ForgeRepoInfo, query: &str, results: Option<&crate::state::SearchResults>) -> Markup {
+    base_layout(&format!("{} — Search", repo.name), html! {
+        h1 {
+            a href=(format!("/{}", repo.id)) { (&repo.name) }
+            " — Search"
+        }
+
+        (repo_tabs(repo, "search"))
+
+        form method="get" action=(format!("/{}/search", repo.id)) {
+            input.search-input type="text" name="q" value=(query)
+                placeholder="Search code…" autocomplete="off" autofocus {}
+        }
+
+        @if query.len() < 2 && !query.is_empty() {
+            p.muted { "Enter at least 2 characters." }
+        } @else if let Some(res) = results {
+            @if res.files.is_empty() {
+                p.muted { "No results for "" code { (query) } """ }
+            } @else {
+                p.meta {
+                    (res.total_matches) " matches in " (res.files.len()) " files"
+                    " (" (res.files_examined) " files searched)"
+                    @if res.truncated { " — results truncated" }
+                }
+                @for file in &res.files {
+                    div.search-file {
+                        div.search-file-header {
+                            a href=(format!("/{}/blob/{}/{}", repo.id, repo.default_branch, file.path)) {
+                                (&file.path)
+                            }
+                        }
+                        table.search-matches {
+                            @for m in &file.matches {
+                                @for (ln, line) in &m.context_before {
+                                    tr.ctx {
+                                        td.ln { (ln) }
+                                        td { code { (line) } }
+                                    }
+                                }
+                                tr.hit {
+                                    td.ln {
+                                        a href=(format!("/{}/blob/{}/{}#L{}",
+                                            repo.id, repo.default_branch, file.path, m.line_number)) {
+                                            (m.line_number)
+                                        }
+                                    }
+                                    td { code { (&m.line) } }
+                                }
+                                @for (ln, line) in &m.context_after {
+                                    tr.ctx {
+                                        td.ln { (ln) }
+                                        td { code { (line) } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     })
 }
@@ -709,6 +786,8 @@ form.inline{display:inline}
 .markdown img{max-width:100%}
 .markdown hr{border:none;border-top:1px solid #30363d;margin:1em 0}
 .markdown input[type=checkbox]{margin-right:.4em}
+#repo-filter{width:100%;padding:.5rem;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;font-size:.9rem;margin:.75rem 0}
+#repo-filter:focus{outline:none;border-color:#58a6ff}
 .clone-box{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:.5rem .75rem;margin:.75rem 0;font-size:.85rem;overflow-x:auto;white-space:nowrap}
 .clone-box code{user-select:all;cursor:text}
 .diff-file{border:1px solid #30363d;border-radius:6px;margin:.75rem 0;overflow:hidden}
@@ -726,6 +805,21 @@ table.diff tr.del{background:#2d1115}
 table.diff tr.del td{color:#ffa198}
 table.diff tr.hunk td{color:#58a6ff;background:#0d1117;padding:.2rem .6rem}
 .diff-limit{padding:.75rem;color:#8b949e;font-style:italic;text-align:center}
+.search-input{width:100%;padding:.5rem;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;font-size:.9rem;margin:.5rem 0}
+.search-input:focus{outline:none;border-color:#58a6ff}
+.search-file{border:1px solid #30363d;border-radius:6px;margin:.75rem 0;overflow:hidden}
+.search-file-header{background:#161b22;padding:.4rem .75rem;border-bottom:1px solid #30363d;font-size:.9rem}
+table.search-matches{width:100%;border-collapse:collapse;font-size:.82rem;line-height:1.45}
+table.search-matches td{padding:0 .6rem;border:none;white-space:pre;font-family:'JetBrains Mono',monospace}
+table.search-matches .ln{color:#484f58;text-align:right;user-select:none;width:1px;padding:0 .4rem}
+table.search-matches .ln a{color:inherit;text-decoration:none}
+table.search-matches .ln a:hover{color:#58a6ff}
+table.search-matches tr.hit{background:#2a1f00}
+table.search-matches tr.hit td{color:#e3b341}
+table.search-matches tr.ctx td{color:#8b949e}
+.tabs-search{margin-left:auto}
+.tabs-search input{padding:.25rem .5rem;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;font-size:.8rem;width:10rem}
+.tabs-search input:focus{outline:none;border-color:#58a6ff;width:14rem}
 .commit-meta{margin:.75rem 0}
 .commit-meta .hash{font-size:.9rem;color:#8b949e}
 @media (max-width: 768px) {
