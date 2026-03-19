@@ -273,8 +273,19 @@ pub fn issue_detail(
     base_layout(&format!("{} — #{}", repo.name, short_hash(&issue.id)), html! {
         p { a href=(format!("/{}/issues", repo.id)) { "← Issues" } }
         h1 { (&issue.title) }
-        span class={ "badge " (if issue.state == "open" { "open" } else { "closed" }) } {
-            (&issue.state)
+        div.issue-header {
+            span class={ "badge " (if issue.state == "open" { "open" } else { "closed" }) } {
+                (&issue.state)
+            }
+            @if issue.state == "open" {
+                form.inline method="POST" action=(format!("/{}/issues/{}/close", repo.id, issue.id)) {
+                    button.btn-secondary type="submit" { "Close Issue" }
+                }
+            } @else {
+                form.inline method="POST" action=(format!("/{}/issues/{}/reopen", repo.id, issue.id)) {
+                    button.btn-secondary type="submit" { "Reopen Issue" }
+                }
+            }
         }
         div.card { p { (&issue.body) } }
 
@@ -518,6 +529,10 @@ button:hover{background:#2ea043}
 .btn{display:inline-block;padding:.4rem .8rem;background:#238636;color:#fff;border-radius:4px;font-size:.85rem}
 .btn:hover{background:#2ea043;text-decoration:none}
 .error{background:#3d1a1a;border:1px solid #da3633;border-radius:4px;padding:.75rem;margin:.5rem 0;color:#f85149}
+.issue-header{display:flex;align-items:center;gap:.75rem;margin:.5rem 0}
+form.inline{display:inline}
+.btn-secondary{padding:.35rem .7rem;background:transparent;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;font-size:.8rem;cursor:pointer}
+.btn-secondary:hover{border-color:#da3633;color:#f85149}
 @media (max-width: 768px) {
     main{padding:0.75rem}
     table{font-size:0.85rem}

@@ -105,6 +105,8 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
         return match segments.as_slice() {
             [repo_id, "issues", "new"] => create_issue_post(state, repo_id, &form).await,
             [repo_id, "issues", id, "comment"] => comment_issue_post(state, repo_id, id, &form).await,
+            [repo_id, "issues", id, "close"] => close_issue_post(state, repo_id, id).await,
+            [repo_id, "issues", id, "reopen"] => reopen_issue_post(state, repo_id, id).await,
             _ => method_not_allowed(),
         };
     }
@@ -327,6 +329,20 @@ async fn comment_issue_post(
         return err(e);
     }
 
+    redirect(&format!("/{repo_id}/issues/{issue_id}"))
+}
+
+async fn close_issue_post(st: &AppState, repo_id: &str, issue_id: &str) -> RouteResponse {
+    if let Err(e) = st.close_issue(repo_id, issue_id).await {
+        return err(e);
+    }
+    redirect(&format!("/{repo_id}/issues/{issue_id}"))
+}
+
+async fn reopen_issue_post(st: &AppState, repo_id: &str, issue_id: &str) -> RouteResponse {
+    if let Err(e) = st.reopen_issue(repo_id, issue_id).await {
+        return err(e);
+    }
     redirect(&format!("/{repo_id}/issues/{issue_id}"))
 }
 
