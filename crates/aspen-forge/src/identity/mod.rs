@@ -3,6 +3,8 @@
 //! This module defines repository identity, author information, and delegate
 //! management for Forge repositories.
 
+pub mod nostr_mapping;
+
 use iroh::PublicKey;
 use serde::Deserialize;
 use serde::Serialize;

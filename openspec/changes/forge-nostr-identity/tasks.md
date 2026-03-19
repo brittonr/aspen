@@ -1,9 +1,9 @@
 ## 1. Identity mapping store
 
-- [ ] 1.1 Create `crates/aspen-forge/src/identity/nostr_mapping.rs` — `NostrIdentityStore` with `get_or_create(npub) -> ed25519 keypair`, `get(npub) -> Option<keypair>`, stored encrypted in KV at `_identity:npub:{hex}`
-- [ ] 1.2 Implement encryption: derive a 32-byte key from the cluster's iroh SecretKey via `blake3::keyed_hash`, use XChaCha20-Poly1305 (from `chacha20poly1305` crate) to encrypt/decrypt the stored ed25519 secret key bytes
-- [ ] 1.3 Add `UserContext` struct: `{ npub: String, signing_key: iroh::SecretKey, public_key: iroh::PublicKey }`
-- [ ] 1.4 Unit tests: create mapping, retrieve existing, verify encryption (raw KV value is not plaintext)
+- [x] 1.1 Create `crates/aspen-forge/src/identity/nostr_mapping.rs` — `NostrIdentityStore` with `get_or_create(npub) -> ed25519 keypair`, `get(npub) -> Option<keypair>`, stored encrypted in KV at `_identity:npub:{hex}`
+- [x] 1.2 Implement encryption: derive a 32-byte key from the cluster's iroh SecretKey via `blake3::keyed_hash`, use XChaCha20-Poly1305 (from `chacha20poly1305` crate) to encrypt/decrypt the stored ed25519 secret key bytes
+- [x] 1.3 Add `UserContext` struct: `{ npub: String, signing_key: iroh::SecretKey, public_key: iroh::PublicKey }`
+- [x] 1.4 Unit tests: create mapping, retrieve existing, verify encryption (raw KV value is not plaintext)
 
 ## 2. Challenge-response authentication
 
