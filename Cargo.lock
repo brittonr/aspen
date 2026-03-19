@@ -12428,7 +12428,7 @@ dependencies = [
 [[package]]
 name = "rat-editor"
 version = "0.1.0"
-source = "git+https://github.com/brittonr/subwayrat?rev=66147cb60f8168c9fa71d79cf1b5ae604b6429f1#66147cb60f8168c9fa71d79cf1b5ae604b6429f1"
+source = "git+https://github.com/brittonr/subwayrat?rev=b240e520af26125dda90e351b9a012345e4c9cb9#b240e520af26125dda90e351b9a012345e4c9cb9"
 dependencies = [
  "ratatui",
  "unicode-width 0.2.2",
@@ -12437,7 +12437,7 @@ dependencies = [
 [[package]]
 name = "rat-streaming"
 version = "0.1.0"
-source = "git+https://github.com/brittonr/subwayrat?rev=66147cb60f8168c9fa71d79cf1b5ae604b6429f1#66147cb60f8168c9fa71d79cf1b5ae604b6429f1"
+source = "git+https://github.com/brittonr/subwayrat?rev=b240e520af26125dda90e351b9a012345e4c9cb9#b240e520af26125dda90e351b9a012345e4c9cb9"
 dependencies = [
  "ratatui",
 ]
@@ -12445,7 +12445,7 @@ dependencies = [
 [[package]]
 name = "rat-table"
 version = "0.1.0"
-source = "git+https://github.com/brittonr/subwayrat?rev=66147cb60f8168c9fa71d79cf1b5ae604b6429f1#66147cb60f8168c9fa71d79cf1b5ae604b6429f1"
+source = "git+https://github.com/brittonr/subwayrat?rev=b240e520af26125dda90e351b9a012345e4c9cb9#b240e520af26125dda90e351b9a012345e4c9cb9"
 dependencies = [
  "ratatui",
 ]
@@ -12453,7 +12453,7 @@ dependencies = [
 [[package]]
 name = "rat-widgets"
 version = "0.1.0"
-source = "git+https://github.com/brittonr/subwayrat?rev=66147cb60f8168c9fa71d79cf1b5ae604b6429f1#66147cb60f8168c9fa71d79cf1b5ae604b6429f1"
+source = "git+https://github.com/brittonr/subwayrat?rev=b240e520af26125dda90e351b9a012345e4c9cb9#b240e520af26125dda90e351b9a012345e4c9cb9"
 dependencies = [
  "ratatui",
  "serde_json",

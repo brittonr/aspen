@@ -522,7 +522,7 @@
         # Subwayrat source (fetched separately to work around stale crane checkout cache)
         subwayratSrc = builtins.fetchGit {
           url = "https://github.com/brittonr/subwayrat";
-          rev = "66147cb60f8168c9fa71d79cf1b5ae604b6429f1";
+          rev = "b240e520af26125dda90e351b9a012345e4c9cb9";
           allRefs = true;
         };
 
