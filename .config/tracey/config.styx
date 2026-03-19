@@ -1,0 +1,14 @@
+specs (
+  {
+    name nostr-identity
+    include (crates/aspen-forge/docs/nostr-identity-requirements.md)
+    impls (
+      {
+        name rust
+        include (crates/aspen-forge/src/**/*.rs crates/aspen-forge/verus/**/*.rs)
+        exclude (target/**)
+        test_include (crates/aspen-forge-web/tests/**/*.rs)
+      }
+    )
+  }
+)

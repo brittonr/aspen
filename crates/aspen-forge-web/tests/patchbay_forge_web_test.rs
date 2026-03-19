@@ -38,6 +38,7 @@ fn init_userns() {
     }
 }
 
+// r[verify identity.signing.backward-compat]
 #[tokio::test]
 async fn patchbay_forge_web_all_pages() {
     skip_unless_patchbay!();
@@ -447,6 +448,8 @@ async fn patchbay_nostr_auth_and_backward_compat() {
 /// Test: two users with different npubs create commits on the same repo.
 /// Verify distinct ed25519 author keys and npub fields appear in commit
 /// history and the web UI displays the npub-based author names.
+// r[verify identity.signing.distinct-authors]
+// r[verify identity.signing.npub-in-author]
 #[tokio::test]
 async fn patchbay_two_users_distinct_commits() {
     skip_unless_patchbay!();

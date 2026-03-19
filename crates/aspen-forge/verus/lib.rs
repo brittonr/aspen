@@ -105,8 +105,12 @@ verus! {
 
     // Re-export repo identity specifications
     pub use repo_identity_spec::*;
+
+    // Re-export nostr identity specifications
+    pub use nostr_identity_spec::*;
 }
 
+mod nostr_identity_spec;
 mod ref_store_spec;
 mod repo_identity_spec;
 mod signed_object_spec;

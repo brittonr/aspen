@@ -68,6 +68,8 @@ impl<K: aspen_core::KeyValueStore + ?Sized> NostrIdentityStore<K> {
     ///
     /// Derives the encryption key from the cluster's iroh secret key using
     /// BLAKE3 keyed hash with a fixed context string.
+    // r[impl identity.crypto.key-derivation]
+    // r[impl identity.mapping.cluster-bound]
     pub fn new(kv: Arc<K>, cluster_secret_key: &SecretKey) -> Self {
         let raw_key = cluster_secret_key.to_bytes();
         let derived = blake3::derive_key(KDF_CONTEXT, &raw_key);
@@ -81,6 +83,9 @@ impl<K: aspen_core::KeyValueStore + ?Sized> NostrIdentityStore<K> {
     ///
     /// If a mapping exists, decrypts and returns it. Otherwise generates
     /// a new keypair, encrypts and stores it, and returns the new context.
+    // r[impl identity.mapping.create]
+    // r[impl identity.mapping.retrieve]
+    // r[impl identity.mapping.isolation]
     pub async fn get_or_create(&self, npub_hex: &str) -> ForgeResult<UserContext> {
         if let Some(ctx) = self.get(npub_hex).await? {
             return Ok(ctx);
@@ -183,6 +188,8 @@ impl<K: aspen_core::KeyValueStore + ?Sized> NostrIdentityStore<K> {
         }))
     }
 
+    // r[impl identity.mapping.encryption]
+    // r[impl identity.crypto.nonce-unique]
     /// Encrypt plaintext with XChaCha20-Poly1305.
     fn encrypt(&self, plaintext: &[u8]) -> ForgeResult<Vec<u8>> {
         let cipher = XChaCha20Poly1305::new((&self.encryption_key).into());
@@ -203,6 +210,8 @@ impl<K: aspen_core::KeyValueStore + ?Sized> NostrIdentityStore<K> {
         Ok(result)
     }
 
+    // r[impl identity.crypto.roundtrip]
+    // r[impl identity.crypto.wrong-key-fails]
     /// Decrypt ciphertext (nonce ∥ ciphertext) with XChaCha20-Poly1305.
     fn decrypt(&self, data: &[u8]) -> ForgeResult<Vec<u8>> {
         if data.len() < NONCE_SIZE {
@@ -233,6 +242,8 @@ mod tests {
         NostrIdentityStore::new(kv, &cluster_key)
     }
 
+    // r[verify identity.mapping.create]
+    // r[verify identity.mapping.retrieve]
     #[tokio::test]
     async fn create_and_retrieve_mapping() {
         let store = test_store();
@@ -247,6 +258,7 @@ mod tests {
         assert_eq!(ctx1.public_key, ctx2.public_key);
     }
 
+    // r[verify identity.mapping.isolation]
     #[tokio::test]
     async fn different_npubs_get_different_keys() {
         let store = test_store();
@@ -262,6 +274,10 @@ mod tests {
         assert!(result.is_none());
     }
 
+    // r[verify identity.mapping.encryption]
+    // r[verify identity.crypto.roundtrip]
+    // r[verify identity.crypto.key-derivation]
+    // r[verify identity.crypto.nonce-unique]
     #[tokio::test]
     async fn encryption_is_not_plaintext() {
         let kv: Arc<dyn aspen_core::KeyValueStore> = DeterministicKeyValueStore::new();
@@ -288,6 +304,8 @@ mod tests {
         assert!(!raw_value.contains(&secret_hex), "KV value should not contain plaintext secret key");
     }
 
+    // r[verify identity.mapping.cluster-bound]
+    // r[verify identity.crypto.wrong-key-fails]
     #[tokio::test]
     async fn wrong_cluster_key_cannot_decrypt() {
         let kv: Arc<dyn aspen_core::KeyValueStore> = DeterministicKeyValueStore::new();

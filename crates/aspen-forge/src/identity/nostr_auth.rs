@@ -67,6 +67,7 @@ impl<K: aspen_core::KeyValueStore + ?Sized + 'static> NostrAuthService<K> {
     /// Step 1: Create a challenge for an npub.
     ///
     /// Returns (challenge_id, challenge_bytes).
+    // r[impl identity.auth.challenge-unique]
     pub async fn create_challenge(&self, npub_hex: &str) -> ForgeResult<(String, [u8; 32])> {
         let mut pending = self.pending.lock().await;
 
@@ -103,6 +104,10 @@ impl<K: aspen_core::KeyValueStore + ?Sized + 'static> NostrAuthService<K> {
     ///
     /// The signature must be a 64-byte Schnorr signature (BIP-340) over
     /// the challenge bytes, verifiable against the claimed npub.
+    // r[impl identity.auth.verify-signature]
+    // r[impl identity.auth.reject-invalid]
+    // r[impl identity.auth.reject-unknown]
+    // r[impl identity.auth.stable-key]
     pub async fn verify_challenge(
         &self,
         npub_hex: &str,
@@ -148,6 +153,7 @@ impl<K: aspen_core::KeyValueStore + ?Sized + 'static> NostrAuthService<K> {
     }
 
     /// Build a capability token carrying the npub as a fact.
+    // r[impl identity.auth.token-npub]
     pub fn issue_token(&self, user_ctx: &UserContext) -> ForgeResult<aspen_auth::CapabilityToken> {
         use std::time::Duration;
 
@@ -237,6 +243,9 @@ mod tests {
         hex::encode(sig.serialize())
     }
 
+    // r[verify identity.auth.challenge-unique]
+    // r[verify identity.auth.verify-signature]
+    // r[verify identity.auth.token-npub]
     #[tokio::test]
     async fn full_challenge_response_cycle() {
         let (service, keys) = test_auth_service().await;
@@ -254,6 +263,7 @@ mod tests {
         assert_eq!(extracted.as_deref(), Some(npub_hex.as_str()));
     }
 
+    // r[verify identity.auth.reject-invalid]
     #[tokio::test]
     async fn invalid_signature_rejected() {
         let (service, keys) = test_auth_service().await;
@@ -267,6 +277,7 @@ mod tests {
         assert!(result.is_err());
     }
 
+    // r[verify identity.auth.reject-unknown]
     #[tokio::test]
     async fn unknown_challenge_rejected() {
         let (service, keys) = test_auth_service().await;
@@ -277,6 +288,7 @@ mod tests {
         assert!(result.is_err());
     }
 
+    // r[verify identity.auth.stable-key]
     #[tokio::test]
     async fn same_npub_gets_same_ed25519_key() {
         let (service, keys) = test_auth_service().await;

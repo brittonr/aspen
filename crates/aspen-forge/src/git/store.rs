@@ -254,6 +254,7 @@ impl<B: BlobStore> GitBlobStore<B> {
     ///
     /// - `ForgeError::TooManyParents` if parents exceed `MAX_COMMIT_PARENTS`
     /// - `ForgeError::ObjectTooLarge` if message exceeds `MAX_COMMIT_MESSAGE_BYTES`
+    // r[impl identity.signing.backward-compat]
     pub async fn commit(
         &self,
         tree: blake3::Hash,
@@ -287,6 +288,8 @@ impl<B: BlobStore> GitBlobStore<B> {
     ///
     /// Like `commit()` but uses the provided signing key and attaches
     /// the user's npub to the commit author.
+    // r[impl identity.signing.npub-in-author]
+    // r[impl identity.signing.distinct-authors]
     pub async fn commit_as(
         &self,
         tree: blake3::Hash,
