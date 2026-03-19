@@ -1784,6 +1784,16 @@
             -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
             {} \;
 
+          # Create patchbay stub (referenced by aspen-dag, aspen-forge dev-deps)
+          mkdir -p $out/aspen/.nix-stubs/patchbay/src
+          cat > $out/aspen/.nix-stubs/patchbay/Cargo.toml <<'TOML'
+          [package]
+          name = "patchbay"
+          version = "0.1.0"
+          edition = "2024"
+          TOML
+          echo '// stub' > $out/aspen/.nix-stubs/patchbay/src/lib.rs
+
           # Strip patchbay git source lines from Cargo.lock
           ${pkgs.gnused}/bin/sed -i '/^source = "git+.*patchbay/d' $out/aspen/Cargo.lock
         '';
