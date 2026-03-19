@@ -438,4 +438,265 @@ mod tests {
         assert!(digests.contains(&file1_digest));
         assert!(digests.contains(&file2_digest));
     }
+
+    #[tokio::test]
+    async fn max_closure_paths_bounded() {
+        let kv = DeterministicKeyValueStore::new();
+        let ds = RaftDirectoryService::from_arc(kv.clone());
+        let ps = RaftPathInfoService::from_arc(kv.clone());
+
+        // Create a long chain of store paths: A -> B -> C -> ... -> Z
+        // Each path references the next one, creating a chain longer than practical
+        let mut paths = Vec::new();
+        for i in 0..100 {
+            paths.push(test_store_path(&format!("path-{:03}", i)));
+        }
+
+        // Set up the reference chain
+        for i in 0..100 {
+            let current_path = paths[i].clone();
+            let references = if i == 99 {
+                vec![] // Last path has no references
+            } else {
+                vec![paths[i + 1].clone()] // Reference the next path
+            };
+
+            let path_info = PathInfo {
+                store_path: current_path,
+                node: Node::File {
+                    digest: B3Digest::from(blake3::hash(format!("content-{}", i).as_bytes())),
+                    size: 10,
+                    executable: false,
+                },
+                references,
+                nar_size: 50,
+                nar_sha256: [0u8; 32],
+                signatures: vec![],
+                deriver: None,
+                ca: None,
+            };
+            ps.put(path_info).await.unwrap();
+        }
+
+        let sync = StoreClosureSync::new(Arc::new(ds), Arc::new(ps));
+        let missing = sync.compute_missing_paths(&paths[0]).await.unwrap();
+
+        // Should complete without error and respect bounds
+        assert!(missing.is_empty(), "All paths exist as files, none should be missing");
+    }
+
+    #[tokio::test]
+    async fn diamond_reference_graph_dedup() {
+        let kv = DeterministicKeyValueStore::new();
+        let ds = RaftDirectoryService::from_arc(kv.clone());
+        let ps = RaftPathInfoService::from_arc(kv.clone());
+
+        let lib = test_store_path("shared-lib");
+        let app1 = test_store_path("app1");
+        let app2 = test_store_path("app2");
+
+        // lib has no references
+        let lib_info = PathInfo {
+            store_path: lib.clone(),
+            node: Node::File {
+                digest: B3Digest::from(blake3::hash(b"shared-lib.so")),
+                size: 1000,
+                executable: true,
+            },
+            references: vec![],
+            nar_size: 1100,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        ps.put(lib_info).await.unwrap();
+
+        // app1 references lib
+        let app1_info = PathInfo {
+            store_path: app1.clone(),
+            node: Node::File {
+                digest: B3Digest::from(blake3::hash(b"app1")),
+                size: 500,
+                executable: true,
+            },
+            references: vec![lib.clone()],
+            nar_size: 600,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        ps.put(app1_info).await.unwrap();
+
+        // app2 also references lib (diamond pattern)
+        let app2_info = PathInfo {
+            store_path: app2.clone(),
+            node: Node::File {
+                digest: B3Digest::from(blake3::hash(b"app2")),
+                size: 600,
+                executable: true,
+            },
+            references: vec![lib.clone()],
+            nar_size: 700,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        ps.put(app2_info).await.unwrap();
+
+        // Create a top-level that references both apps
+        let top = test_store_path("top-level");
+        let top_info = PathInfo {
+            store_path: top.clone(),
+            node: Node::File {
+                digest: B3Digest::from(blake3::hash(b"top-level")),
+                size: 100,
+                executable: true,
+            },
+            references: vec![app1.clone(), app2.clone()],
+            nar_size: 200,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        ps.put(top_info).await.unwrap();
+
+        let sync = StoreClosureSync::new(Arc::new(ds), Arc::new(ps));
+        let missing = sync.compute_missing_paths(&top).await.unwrap();
+
+        // All paths exist as files — lib should only be visited once
+        assert!(missing.is_empty(), "diamond dedup should work correctly");
+    }
+
+    #[tokio::test]
+    async fn extract_content_digests_dedup_shared_files() {
+        let kv = DeterministicKeyValueStore::new();
+        let ds = RaftDirectoryService::from_arc(kv.clone());
+        let ps = RaftPathInfoService::from_arc(kv);
+
+        let shared_file_digest = B3Digest::from(blake3::hash(b"shared content"));
+
+        // First directory with shared file
+        let mut dir1 = Directory::new();
+        dir1.add("shared.txt".try_into().unwrap(), Node::File {
+            digest: shared_file_digest.clone(),
+            size: 15,
+            executable: false,
+        })
+        .unwrap();
+        let dir1_digest = ds.put(dir1).await.unwrap();
+
+        // Second directory with same shared file
+        let mut dir2 = Directory::new();
+        dir2.add("also-shared.txt".try_into().unwrap(), Node::File {
+            digest: shared_file_digest.clone(),
+            size: 15,
+            executable: false,
+        })
+        .unwrap();
+        let dir2_digest = ds.put(dir2).await.unwrap();
+
+        // Root directory containing both subdirs
+        let mut root_dir = Directory::new();
+        root_dir
+            .add("subdir1".try_into().unwrap(), Node::Directory {
+                digest: dir1_digest.clone(),
+                size: 100,
+            })
+            .unwrap();
+        root_dir
+            .add("subdir2".try_into().unwrap(), Node::Directory {
+                digest: dir2_digest.clone(),
+                size: 100,
+            })
+            .unwrap();
+        let root_digest = ds.put(root_dir).await.unwrap();
+
+        let sync = StoreClosureSync::new(Arc::new(ds), Arc::new(ps));
+        let root_node = Node::Directory {
+            digest: root_digest.clone(),
+            size: 200,
+        };
+        let digests = sync.extract_content_digests(&root_node).await.unwrap();
+
+        // Should have: root_digest, dir1_digest, dir2_digest, shared_file_digest = 4 total
+        // shared_file_digest should appear only once despite being referenced twice
+        assert_eq!(digests.len(), 4);
+        assert!(digests.contains(&root_digest));
+        assert!(digests.contains(&dir1_digest));
+        assert!(digests.contains(&dir2_digest));
+        assert!(digests.contains(&shared_file_digest));
+
+        // Count occurrences of shared file digest
+        let shared_count = digests.iter().filter(|&d| d == &shared_file_digest).count();
+        assert_eq!(shared_count, 1, "shared file digest should appear exactly once");
+    }
+
+    #[tokio::test]
+    async fn extract_content_digests_symlink_ignored() {
+        let kv = DeterministicKeyValueStore::new();
+        let ds = RaftDirectoryService::from_arc(kv.clone());
+        let ps = RaftPathInfoService::from_arc(kv);
+
+        // Directory with only symlinks
+        let mut dir = Directory::new();
+        dir.add("link1".try_into().unwrap(), Node::Symlink {
+            target: "/some/path".try_into().unwrap(),
+        })
+        .unwrap();
+        dir.add("link2".try_into().unwrap(), Node::Symlink {
+            target: "relative/path".try_into().unwrap(),
+        })
+        .unwrap();
+        let dir_digest = ds.put(dir).await.unwrap();
+
+        let sync = StoreClosureSync::new(Arc::new(ds), Arc::new(ps));
+        let root_node = Node::Directory {
+            digest: dir_digest.clone(),
+            size: 100,
+        };
+        let digests = sync.extract_content_digests(&root_node).await.unwrap();
+
+        // Should only have the directory digest itself, no symlink content
+        assert_eq!(digests.len(), 1);
+        assert_eq!(digests[0], dir_digest);
+    }
+
+    #[tokio::test]
+    async fn missing_reference_chain() {
+        let kv = DeterministicKeyValueStore::new();
+        let ds = RaftDirectoryService::from_arc(kv.clone());
+        let ps = RaftPathInfoService::from_arc(kv.clone());
+
+        let root = test_store_path("root");
+        let missing_dep = test_store_path("missing-dependency");
+
+        // Root path exists and references a missing path
+        let root_info = PathInfo {
+            store_path: root.clone(),
+            node: Node::File {
+                digest: B3Digest::from(blake3::hash(b"root content")),
+                size: 100,
+                executable: false,
+            },
+            references: vec![missing_dep.clone()],
+            nar_size: 150,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        ps.put(root_info).await.unwrap();
+
+        // missing_dep is NOT in the PathInfoService
+
+        let sync = StoreClosureSync::new(Arc::new(ds), Arc::new(ps));
+        let missing = sync.compute_missing_paths(&root).await.unwrap();
+
+        assert_eq!(missing.len(), 1);
+        assert_eq!(missing[0], missing_dep);
+    }
 }

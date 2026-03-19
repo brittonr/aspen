@@ -53,6 +53,9 @@ pub fn base_layout(title: &str, content: Markup) -> Markup {
             body {
                 nav { a href="/" { "🌲 Aspen Forge" } }
                 main { (content) }
+                footer {
+                    "Powered by " a href="https://github.com/aspen-lang/aspen" { "Aspen Forge" }
+                }
             }
         }
     }
@@ -127,9 +130,9 @@ pub fn file_browser(repo: &ForgeRepoInfo, ref_name: &str, path: &str, entries: &
         h1 {
             a href=(format!("/{}", repo.id)) { (&repo.name) }
             " / "
-            code { (ref_name) }
+            a href=(format!("/{}/tree/{}", repo.id, ref_name)) { code { (ref_name) } }
             @if !path.is_empty() {
-                " / " (path)
+                (breadcrumb_path(repo, ref_name, path))
             }
         }
 
@@ -177,7 +180,15 @@ pub fn file_view(repo: &ForgeRepoInfo, ref_name: &str, path: &str, content: Opti
         @if is_text {
             @if let Some(bytes) = content {
                 pre.code-block {
-                    code { (String::from_utf8_lossy(bytes)) }
+                    table.code-table {
+                        @let text = String::from_utf8_lossy(bytes);
+                        @for (line_no, line) in text.lines().enumerate() {
+                            tr {
+                                td.ln { (line_no + 1) }
+                                td.line { code { (line) } }
+                            }
+                        }
+                    }
                 }
             }
         } @else {
@@ -386,6 +397,27 @@ fn is_likely_text(data: &[u8]) -> bool {
     nul_count == 0
 }
 
+fn breadcrumb_path(repo: &ForgeRepoInfo, ref_name: &str, path: &str) -> Markup {
+    let segments: Vec<&str> = path.split('/').collect();
+    let mut cumulative_paths = Vec::new();
+    let mut current_path = String::new();
+
+    for (i, segment) in segments.iter().enumerate() {
+        if i > 0 {
+            current_path.push('/');
+        }
+        current_path.push_str(segment);
+        cumulative_paths.push((segment, current_path.clone()));
+    }
+
+    html! {
+        @for (segment, cumulative) in cumulative_paths {
+            " / "
+            a href=(format!("/{}/tree/{}/{}", repo.id, ref_name, cumulative)) { (segment) }
+        }
+    }
+}
+
 // ── CSS ──────────────────────────────────────────────────────────────
 
 const CSS: &str = r#"
@@ -411,9 +443,21 @@ code{font-family:'JetBrains Mono',monospace;font-size:.85em;background:#161b22;p
 table{width:100%;border-collapse:collapse}
 table td{padding:.4rem .6rem;border-bottom:1px solid #21262d}
 table.file-list td:first-child{width:70%}
+table.file-list tr:hover{background:#161b22}
 table.commits td:first-child{width:100px}
+table.code-table{border:none;background:transparent}
+table.code-table td{border:none;padding:0;vertical-align:top}
 .hash{color:#8b949e;text-align:right}
+.ln{color:#484f58;text-align:right;user-select:none;padding-right:1em;width:1px;white-space:nowrap}
+.line{width:100%}
+.line code{background:transparent;padding:0}
 pre.code-block{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:1rem;overflow-x:auto;font-size:.85rem;line-height:1.5}
 ul{list-style:none;padding-left:0}
 li{padding:.25rem 0}
+footer{text-align:center;padding:2rem 1rem;color:#8b949e;font-size:.85rem;border-top:1px solid #30363d;margin-top:2rem}
+footer a{color:#58a6ff}
+@media (max-width: 768px) {
+    main{padding:0.75rem}
+    table{font-size:0.85rem}
+}
 "#;

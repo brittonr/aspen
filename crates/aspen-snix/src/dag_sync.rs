@@ -191,4 +191,108 @@ mod tests {
         assert_eq!(children[0], d2);
         assert_eq!(children[1], d1);
     }
+
+    #[test]
+    fn extract_children_deeply_nested() {
+        // Verify we only get direct children, not grandchildren
+        let grandchild_digest = B3Digest::from(blake3::hash(b"grandchild"));
+        let child_digest = B3Digest::from(blake3::hash(b"child"));
+        let file_digest = B3Digest::from(blake3::hash(b"file"));
+
+        let mut dir = snix_castore::Directory::new();
+        dir.add("child_dir".try_into().unwrap(), Node::Directory {
+            digest: child_digest.clone(),
+            size: 100,
+        })
+        .unwrap();
+        dir.add("file.txt".try_into().unwrap(), Node::File {
+            digest: file_digest.clone(),
+            size: 50,
+            executable: false,
+        })
+        .unwrap();
+        // Grandchild is not directly added to this directory
+
+        let children = extract_directory_children(&dir);
+        assert_eq!(children.len(), 2);
+        assert!(children.contains(&child_digest));
+        assert!(children.contains(&file_digest));
+        // Should NOT contain grandchild_digest
+        assert!(!children.contains(&grandchild_digest));
+    }
+
+    #[test]
+    fn extract_children_all_symlinks() {
+        let mut dir = snix_castore::Directory::new();
+        dir.add("link1".try_into().unwrap(), Node::Symlink {
+            target: "target1".try_into().unwrap(),
+        })
+        .unwrap();
+        dir.add("link2".try_into().unwrap(), Node::Symlink {
+            target: "/absolute/target".try_into().unwrap(),
+        })
+        .unwrap();
+        dir.add("link3".try_into().unwrap(), Node::Symlink {
+            target: "../relative/target".try_into().unwrap(),
+        })
+        .unwrap();
+
+        let children = extract_directory_children(&dir);
+        assert!(children.is_empty(), "symlinks should produce no child digests");
+    }
+
+    #[test]
+    fn extract_children_mixed_types() {
+        let file1_digest = B3Digest::from(blake3::hash(b"file1"));
+        let file2_digest = B3Digest::from(blake3::hash(b"file2"));
+        let dir1_digest = B3Digest::from(blake3::hash(b"subdir1"));
+        let dir2_digest = B3Digest::from(blake3::hash(b"subdir2"));
+
+        let mut dir = snix_castore::Directory::new();
+
+        // Add files
+        dir.add("file1.txt".try_into().unwrap(), Node::File {
+            digest: file1_digest.clone(),
+            size: 100,
+            executable: false,
+        })
+        .unwrap();
+        dir.add("file2.txt".try_into().unwrap(), Node::File {
+            digest: file2_digest.clone(),
+            size: 200,
+            executable: true,
+        })
+        .unwrap();
+
+        // Add directories
+        dir.add("subdir1".try_into().unwrap(), Node::Directory {
+            digest: dir1_digest.clone(),
+            size: 300,
+        })
+        .unwrap();
+        dir.add("subdir2".try_into().unwrap(), Node::Directory {
+            digest: dir2_digest.clone(),
+            size: 400,
+        })
+        .unwrap();
+
+        // Add symlinks
+        dir.add("symlink1".try_into().unwrap(), Node::Symlink {
+            target: "file1.txt".try_into().unwrap(),
+        })
+        .unwrap();
+        dir.add("symlink2".try_into().unwrap(), Node::Symlink {
+            target: "subdir1".try_into().unwrap(),
+        })
+        .unwrap();
+
+        let children = extract_directory_children(&dir);
+
+        // Should have 4 children: 2 files + 2 directories, symlinks ignored
+        assert_eq!(children.len(), 4);
+        assert!(children.contains(&file1_digest));
+        assert!(children.contains(&file2_digest));
+        assert!(children.contains(&dir1_digest));
+        assert!(children.contains(&dir2_digest));
+    }
 }

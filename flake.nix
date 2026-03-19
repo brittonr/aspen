@@ -299,7 +299,6 @@
           name = "aspen-sibling-aspen-wasm-plugin";
         };
 
-
         snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd6fdebe953fb71bb2fde2f32841015c47"'';
         src = pkgs.runCommand "aspen-src-patched" {} ''
           cp -r ${rawSrc} $out
@@ -2819,6 +2818,17 @@
               # every forge CLI command end-to-end.
               # Build: nix build .#checks.x86_64-linux.forge-cluster-test
               forge-cluster-test = import ./nix/tests/forge-cluster.nix {
+                inherit pkgs kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-forge;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gitRemoteAspenPackage = bins.full-git-remote-aspen;
+              };
+
+              # Forge DAG sync test: 2-node cluster, git push on node1,
+              # git clone from node2 verifying cross-node object sync.
+              # Build: nix build .#checks.x86_64-linux.forge-dag-sync-test
+              forge-dag-sync-test = import ./nix/tests/forge-dag-sync.nix {
                 inherit pkgs kvPluginWasm forgePluginWasm;
                 aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-forge;
