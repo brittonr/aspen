@@ -29,6 +29,6 @@
 
 ## 5. Testing
 
-- [ ] 5.1 End-to-end test: start cluster, push repo with multiple commits, verify commit detail page returns 200 with diff content
-- [ ] 5.2 Test root commit (no parent) — all files shown as added
-- [ ] 5.3 Verify clone URL appears on repo overview and contains correct ticket/repo_id
+- [x] 5.1 End-to-end test: start cluster, push repo with multiple commits, verify commit detail page returns 200 with diff content
+- [x] 5.2 Test root commit (no parent) — all files shown as added
+- [x] 5.3 Verify clone URL appears on repo overview and contains correct ticket/repo_id

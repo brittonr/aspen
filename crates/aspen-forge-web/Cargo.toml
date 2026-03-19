@@ -55,6 +55,28 @@ form_urlencoded = "1.2"
 # Time formatting
 chrono = { workspace = true }
 
+[dev-dependencies]
+async-trait = "0.1"
+blake3 = { workspace = true }
+http = "1.0"
+iroh = { version = "0.97.0" }
+iroh-blobs = "0.99.0"
+iroh-gossip = "0.97"
+tempfile = "3.10"
+aspen-blob = { workspace = true }
+aspen-client = { workspace = true }
+aspen-client-api = { workspace = true }
+aspen-core = { workspace = true }
+aspen-forge = { path = "../aspen-forge" }
+aspen-rpc-core = { path = "../aspen-rpc-core" }
+aspen-rpc-handlers = { path = "../aspen-rpc-handlers", features = ["forge", "blob"] }
+aspen-testing-core = { path = "../aspen-testing-core" }
+aspen-testing-patchbay = { path = "../aspen-testing-patchbay" }
+aspen-transport = { workspace = true }
+ctor = "0.4"
+patchbay = { git = "https://github.com/n0-computer/patchbay.git", rev = "e0c48e094ae11442b1ea374b6d4d8fd55a498ac1" }
+rand = "0.9"
+
 [[bin]]
 name = "aspen-forge-web"
 path = "src/main.rs"
