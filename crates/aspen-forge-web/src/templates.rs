@@ -239,6 +239,8 @@ pub fn issue_list(repo: &ForgeRepoInfo, issues: &[ForgeIssueInfo]) -> Markup {
             a href=(format!("/{}/patches", repo.id)) { "Patches" }
         }
 
+        p { a.btn href=(format!("/{}/issues/new", repo.id)) { "+ New Issue" } }
+
         @if issues.is_empty() {
             p.muted { "No issues." }
         } @else {
@@ -282,6 +284,12 @@ pub fn issue_detail(
                 p.meta { code { (short_hash(&c.author)) } " · " (format_time(c.timestamp_ms)) }
                 p { (&c.body) }
             }
+        }
+
+        h2 { "Add Comment" }
+        form.card method="POST" action=(format!("/{}/issues/{}/comment", repo.id, issue.id)) {
+            textarea name="body" rows="4" placeholder="Write a comment…" required {} {}
+            div.form-actions { button type="submit" { "Comment" } }
         }
     })
 }
@@ -345,6 +353,41 @@ pub fn patch_detail(repo: &ForgeRepoInfo, patch: &ForgePatchInfo) -> Markup {
             (patch.revision_count) " revisions · "
             (patch.approval_count) " approvals · "
             (format_time(patch.created_at_ms))
+        }
+    })
+}
+
+/// New issue form page.
+pub fn new_issue_form(repo: &ForgeRepoInfo) -> Markup {
+    new_issue_form_inner(repo, None, "", "")
+}
+
+/// New issue form with validation error.
+pub fn new_issue_form_with_error(repo: &ForgeRepoInfo, error: &str, title: &str, body: &str) -> Markup {
+    new_issue_form_inner(repo, Some(error), title, body)
+}
+
+fn new_issue_form_inner(repo: &ForgeRepoInfo, error: Option<&str>, title: &str, body: &str) -> Markup {
+    base_layout(&format!("{} — New Issue", repo.name), html! {
+        p { a href=(format!("/{}/issues", repo.id)) { "← Issues" } }
+        h1 { "New Issue" }
+
+        @if let Some(msg) = error {
+            div.error { (msg) }
+        }
+
+        form.card method="POST" action=(format!("/{}/issues/new", repo.id)) {
+            label for="title" { "Title" }
+            input type="text" name="title" id="title" value=(title) required
+                placeholder="Issue title" {}
+
+            label for="body" { "Description" }
+            textarea name="body" id="body" rows="8" placeholder="Describe the issue…" { (body) }
+
+            label for="labels" { "Labels " span.muted { "(comma-separated)" } }
+            input type="text" name="labels" id="labels" placeholder="bug, docs" {}
+
+            div.form-actions { button type="submit" { "Create Issue" } }
         }
     })
 }
@@ -466,6 +509,15 @@ footer{text-align:center;padding:2rem 1rem;color:#8b949e;font-size:.85rem;border
 footer a{color:#58a6ff}
 a.raw-link{display:inline-block;padding:.15em .5em;border:1px solid #30363d;border-radius:4px;font-size:.8rem;color:#8b949e}
 a.raw-link:hover{color:#f0f6fc;border-color:#58a6ff;text-decoration:none}
+form label{display:block;margin:.75rem 0 .25rem;color:#c9d1d9;font-weight:600;font-size:.9rem}
+form input[type=text],form textarea{width:100%;padding:.5rem;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;font-family:inherit;font-size:.9rem}
+form input[type=text]:focus,form textarea:focus{outline:none;border-color:#58a6ff}
+.form-actions{margin-top:.75rem;text-align:right}
+button{padding:.5rem 1rem;background:#238636;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
+button:hover{background:#2ea043}
+.btn{display:inline-block;padding:.4rem .8rem;background:#238636;color:#fff;border-radius:4px;font-size:.85rem}
+.btn:hover{background:#2ea043;text-decoration:none}
+.error{background:#3d1a1a;border:1px solid #da3633;border-radius:4px;padding:.75rem;margin:.5rem 0;color:#f85149}
 @media (max-width: 768px) {
     main{padding:0.75rem}
     table{font-size:0.85rem}

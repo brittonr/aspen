@@ -205,6 +205,47 @@ impl AppState {
         }
     }
 
+    /// Create an issue.
+    pub async fn create_issue(&self, repo_id: &str, title: &str, body: &str, labels: Vec<String>) -> Result<()> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::ForgeCreateIssue {
+                repo_id: repo_id.into(),
+                title: title.into(),
+                body: body.into(),
+                labels,
+            })
+            .await
+            .context("create issue")?;
+        match resp {
+            ClientRpcResponse::ForgeOperationResult(r) if r.is_success => Ok(()),
+            ClientRpcResponse::ForgeOperationResult(r) => {
+                Err(anyhow::anyhow!(r.error.unwrap_or_else(|| "unknown error".into())))
+            }
+            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+        }
+    }
+
+    /// Add a comment to an issue.
+    pub async fn comment_issue(&self, repo_id: &str, issue_id: &str, body: &str) -> Result<()> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::ForgeCommentIssue {
+                repo_id: repo_id.into(),
+                issue_id: issue_id.into(),
+                body: body.into(),
+            })
+            .await
+            .context("comment issue")?;
+        match resp {
+            ClientRpcResponse::ForgeOperationResult(r) if r.is_success => Ok(()),
+            ClientRpcResponse::ForgeOperationResult(r) => {
+                Err(anyhow::anyhow!(r.error.unwrap_or_else(|| "unknown error".into())))
+            }
+            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+        }
+    }
+
     /// Get patch detail.
     pub async fn get_patch(&self, repo_id: &str, patch_id: &str) -> Result<ForgePatchInfo> {
         let resp = self

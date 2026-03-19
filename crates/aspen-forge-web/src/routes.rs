@@ -1,5 +1,8 @@
 //! URL routing via path matching. No framework needed.
 
+use std::collections::HashMap;
+
+use bytes::Bytes;
 use http::StatusCode;
 use tracing::warn;
 
@@ -62,15 +65,32 @@ fn err(e: anyhow::Error) -> RouteResponse {
     }
 }
 
+fn redirect(location: &str) -> RouteResponse {
+    // h3 doesn't support 303 redirect natively in all clients, so we
+    // return a tiny HTML page with a meta-refresh + JS redirect.
+    let body = format!(
+        r#"<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url={loc}"></head><body><a href="{loc}">Redirecting…</a><script>location.replace("{loc}")</script></body></html>"#,
+        loc = location
+    );
+    RouteResponse::Html {
+        status: StatusCode::SEE_OTHER,
+        body,
+    }
+}
+
+fn parse_form(body: &Bytes) -> HashMap<String, String> {
+    form_urlencoded::parse(body).map(|(k, v)| (k.into_owned(), v.into_owned())).collect()
+}
+
 pub fn method_not_allowed() -> RouteResponse {
     RouteResponse::Html {
         status: StatusCode::METHOD_NOT_ALLOWED,
-        body: templates::error_page("Method Not Allowed", "Only GET is supported.").into_string(),
+        body: templates::error_page("Method Not Allowed", "Only GET and POST are supported.").into_string(),
     }
 }
 
 /// Dispatch a GET request to the appropriate handler.
-pub async fn dispatch(state: &AppState, path: &str) -> RouteResponse {
+pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> RouteResponse {
     // Strip trailing slash (except root).
     let path = if path.len() > 1 {
         path.trim_end_matches('/')
@@ -79,6 +99,17 @@ pub async fn dispatch(state: &AppState, path: &str) -> RouteResponse {
     };
     let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
 
+    // POST routes (body is Some)
+    if let Some(body) = body {
+        let form = parse_form(body);
+        return match segments.as_slice() {
+            [repo_id, "issues", "new"] => create_issue_post(state, repo_id, &form).await,
+            [repo_id, "issues", id, "comment"] => comment_issue_post(state, repo_id, id, &form).await,
+            _ => method_not_allowed(),
+        };
+    }
+
+    // GET routes
     match segments.as_slice() {
         [] => repo_list(state).await,
         [repo_id] => repo_overview(state, repo_id).await,
@@ -97,6 +128,7 @@ pub async fn dispatch(state: &AppState, path: &str) -> RouteResponse {
         }
         [repo_id, "commits"] => commits(state, repo_id).await,
         [repo_id, "issues"] => issues(state, repo_id).await,
+        [repo_id, "issues", "new"] => new_issue_form(state, repo_id).await,
         [repo_id, "issues", id] => issue_detail(state, repo_id, id).await,
         [repo_id, "patches"] => patches(state, repo_id).await,
         [repo_id, "patches", id] => patch_detail(state, repo_id, id).await,
@@ -244,6 +276,58 @@ async fn patch_detail(st: &AppState, repo_id: &str, patch_id: &str) -> RouteResp
         Ok(patch) => ok(templates::patch_detail(&repo, &patch)),
         Err(e) => err(e),
     }
+}
+
+async fn new_issue_form(st: &AppState, repo_id: &str) -> RouteResponse {
+    let repo = match st.get_repo(repo_id).await {
+        Ok(r) => r,
+        Err(e) => return err(e),
+    };
+    ok(templates::new_issue_form(&repo))
+}
+
+async fn create_issue_post(st: &AppState, repo_id: &str, form: &HashMap<String, String>) -> RouteResponse {
+    let title = form.get("title").map(|s| s.as_str()).unwrap_or("");
+    let body = form.get("body").map(|s| s.as_str()).unwrap_or("");
+
+    if title.is_empty() {
+        let repo = match st.get_repo(repo_id).await {
+            Ok(r) => r,
+            Err(e) => return err(e),
+        };
+        return ok(templates::new_issue_form_with_error(&repo, "Title is required.", title, body));
+    }
+
+    let labels: Vec<String> = form
+        .get("labels")
+        .map(|s| s.split(',').map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
+        .unwrap_or_default();
+
+    if let Err(e) = st.create_issue(repo_id, title, body, labels).await {
+        return err(e);
+    }
+
+    redirect(&format!("/{repo_id}/issues"))
+}
+
+async fn comment_issue_post(
+    st: &AppState,
+    repo_id: &str,
+    issue_id: &str,
+    form: &HashMap<String, String>,
+) -> RouteResponse {
+    let body = form.get("body").map(|s| s.as_str()).unwrap_or("");
+
+    if body.is_empty() {
+        // Redirect back to the issue — the form is still on the page.
+        return redirect(&format!("/{repo_id}/issues/{issue_id}"));
+    }
+
+    if let Err(e) = st.comment_issue(repo_id, issue_id, body).await {
+        return err(e);
+    }
+
+    redirect(&format!("/{repo_id}/issues/{issue_id}"))
 }
 
 async fn raw_blob(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> RouteResponse {
@@ -408,5 +492,35 @@ mod tests {
     fn not_found_is_404() {
         let resp = not_found("/missing");
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn parse_form_urlencoded() {
+        let body = Bytes::from("title=Bug+report&body=It%27s+broken&labels=bug%2Curgent");
+        let form = parse_form(&body);
+        assert_eq!(form.get("title").unwrap(), "Bug report");
+        assert_eq!(form.get("body").unwrap(), "It's broken");
+        assert_eq!(form.get("labels").unwrap(), "bug,urgent");
+    }
+
+    #[test]
+    fn parse_form_empty() {
+        let form = parse_form(&Bytes::new());
+        assert!(form.is_empty());
+    }
+
+    #[test]
+    fn redirect_is_303() {
+        let resp = redirect("/repo/issues");
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+        let body = resp.into_bytes();
+        let html = String::from_utf8(body).unwrap();
+        assert!(html.contains("/repo/issues"));
+    }
+
+    #[test]
+    fn method_not_allowed_is_405() {
+        let resp = method_not_allowed();
+        assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
     }
 }

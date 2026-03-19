@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use bytes::Buf;
 use bytes::Bytes;
 use h3::server::RequestResolver;
 use http::Response;
@@ -62,15 +63,29 @@ async fn handle_request(
     let (req, mut stream) = resolver.resolve_request().await?;
 
     let (parts, _body) = req.into_parts();
-    let method = &parts.method;
+    let method = parts.method.clone();
     let path = parts.uri.path();
 
     debug!(%method, %path, "forge-web request");
 
-    let route_resp = if *method == http::Method::GET {
-        routes::dispatch(&state, path).await
+    // Read POST body (bounded to 64 KB for form submissions).
+    let body_bytes = if method == http::Method::POST {
+        let mut buf = Vec::new();
+        while let Some(chunk) = stream.recv_data().await? {
+            buf.extend_from_slice(chunk.chunk());
+            if buf.len() > 64 * 1024 {
+                break;
+            }
+        }
+        Some(Bytes::from(buf))
     } else {
-        routes::method_not_allowed()
+        None
+    };
+
+    let route_resp = match method {
+        ref m if *m == http::Method::GET => routes::dispatch(&state, path, None).await,
+        ref m if *m == http::Method::POST => routes::dispatch(&state, path, body_bytes.as_ref()).await,
+        _ => routes::method_not_allowed(),
     };
 
     let resp = Response::builder()

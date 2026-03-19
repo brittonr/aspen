@@ -42,6 +42,9 @@ aspen-h3-proxy = { path = "../aspen-h3-proxy" }
 # Serialization
 serde = { workspace = true }
 
+# Form parsing
+form_urlencoded = "1.2"
+
 # Time formatting
 chrono = { workspace = true }
 
