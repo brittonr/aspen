@@ -1673,6 +1673,7 @@ dependencies = [
  "aspen-forge-protocol",
  "aspen-h3-proxy",
  "aspen-transport",
+ "async-recursion",
  "bytes",
  "chrono",
  "clap",
@@ -1684,6 +1685,7 @@ dependencies = [
  "maud",
  "pulldown-cmark",
  "serde",
+ "similar",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2870,6 +2872,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "async-recursion"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -14075,6 +14088,12 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+
+[[package]]
+name = "similar"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "simple-counter"

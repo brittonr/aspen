@@ -11,6 +11,25 @@ use maud::Markup;
 use maud::PreEscaped;
 use maud::html;
 
+/// Tiger Style: max markdown input size (1 MB) to bound rendering time.
+pub(crate) const MAX_MARKDOWN_BYTES: usize = 1024 * 1024;
+
+/// Render markdown to HTML.
+pub fn render_markdown(source: &str) -> String {
+    let input = if source.len() > MAX_MARKDOWN_BYTES {
+        &source[..MAX_MARKDOWN_BYTES]
+    } else {
+        source
+    };
+    let opts = pulldown_cmark::Options::ENABLE_TABLES
+        | pulldown_cmark::Options::ENABLE_STRIKETHROUGH
+        | pulldown_cmark::Options::ENABLE_TASKLISTS;
+    let parser = pulldown_cmark::Parser::new_ext(input, opts);
+    let mut html = String::new();
+    pulldown_cmark::html::push_html(&mut html, parser);
+    html
+}
+
 /// Format ms-since-epoch as a human-readable date.
 fn format_time(ms: u64) -> String {
     let secs = (ms / 1000) as i64;
@@ -91,11 +110,18 @@ pub fn repo_overview(
     branches: &[ForgeRefInfo],
     recent_commits: &[ForgeCommitInfo],
     readme_html: Option<&str>,
+    ticket: &str,
 ) -> Markup {
+    let clone_cmd = format!("git clone aspen://{}/{} {}", ticket, repo.id, repo.name);
     base_layout(&repo.name, html! {
         h1 { (&repo.name) }
         @if let Some(ref desc) = repo.description {
             p.muted { (desc) }
+        }
+
+        div.clone-box {
+            span.muted { "Clone: " }
+            code { (clone_cmd) }
         }
 
         div.tabs {
@@ -217,6 +243,92 @@ pub fn file_view(repo: &ForgeRepoInfo, ref_name: &str, path: &str, content: Opti
     })
 }
 
+/// Commit detail page with diff.
+pub fn commit_detail(
+    repo: &ForgeRepoInfo,
+    commit: &ForgeCommitInfo,
+    file_diffs: &[(&crate::state::FileDiff, Vec<crate::state::DiffLine>)],
+    truncated: bool,
+) -> Markup {
+    use crate::state::DiffKind;
+    use crate::state::DiffLine;
+
+    base_layout(&format!("{} — {}", repo.name, short_hash(&commit.hash)), html! {
+        h1 {
+            a href=(format!("/{}", repo.id)) { (&repo.name) }
+            " / commit"
+        }
+
+        div.card {
+            p { strong { (first_line(&commit.message)) } }
+            @let rest = commit.message.lines().skip(1).collect::<Vec<_>>().join("\n").trim().to_string();
+            @if !rest.is_empty() {
+                pre.code-block { (rest) }
+            }
+            p.meta {
+                (&commit.author_name)
+                " · " (format_time(commit.timestamp_ms))
+            }
+            p.commit-meta {
+                span.hash { "commit " code { (&commit.hash) } }
+            }
+            @if !commit.parents.is_empty() {
+                p.meta {
+                    "parent "
+                    @for (i, parent) in commit.parents.iter().enumerate() {
+                        @if i > 0 { ", " }
+                        a href=(format!("/{}/commit/{}", repo.id, parent)) { code { (short_hash(parent)) } }
+                    }
+                }
+            }
+        }
+
+        p.meta { (file_diffs.len()) " files changed" }
+
+        @for (file, lines) in file_diffs {
+            div.diff-file {
+                div.diff-file-header {
+                    (&file.path)
+                    @match file.kind {
+                        DiffKind::Added => { span.badge.added { "added" } },
+                        DiffKind::Deleted => { span.badge.deleted { "deleted" } },
+                        DiffKind::Modified => { span.badge.modified { "modified" } },
+                    }
+                }
+                @if lines.is_empty() {
+                    p.diff-limit { "No content changes" }
+                } @else {
+                    table.diff {
+                        @for line in lines {
+                            @match line {
+                                DiffLine::Hunk(text) => {
+                                    @for raw_line in text.lines() {
+                                        @if raw_line.starts_with("@@") {
+                                            tr.hunk { td colspan="2" { (raw_line) } }
+                                        } @else if raw_line.starts_with('+') {
+                                            tr.add { td.ln {} td { (raw_line) } }
+                                        } @else if raw_line.starts_with('-') {
+                                            tr.del { td.ln {} td { (raw_line) } }
+                                        } @else {
+                                            tr { td.ln {} td { (raw_line) } }
+                                        }
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        @if truncated {
+            p.diff-limit { "Too many files changed — showing first 50" }
+        }
+
+        p { a href=(format!("/{}/commits", repo.id)) { "← Back to commits" } }
+    })
+}
+
 /// Commit log page.
 pub fn commit_log(repo: &ForgeRepoInfo, commits: &[ForgeCommitInfo]) -> Markup {
     base_layout(&format!("{} — Commits", repo.name), html! {
@@ -299,13 +411,13 @@ pub fn issue_detail(
                 }
             }
         }
-        div.card { p { (&issue.body) } }
+        div.card { div.markdown { (PreEscaped(render_markdown(&issue.body))) } }
 
         h2 { "Comments (" (comments.len()) ")" }
         @for c in comments {
             div.card {
                 p.meta { code { (short_hash(&c.author)) } " · " (format_time(c.timestamp_ms)) }
-                p { (&c.body) }
+                div.markdown { (PreEscaped(render_markdown(&c.body))) }
             }
         }
 
@@ -364,7 +476,7 @@ pub fn patch_detail(repo: &ForgeRepoInfo, patch: &ForgePatchInfo) -> Markup {
         }
 
         @if !patch.description.is_empty() {
-            div.card { p { (&patch.description) } }
+            div.card { div.markdown { (PreEscaped(render_markdown(&patch.description))) } }
         }
 
         p.meta {
@@ -456,12 +568,16 @@ pub fn forge_unavailable(message: &str, hints: &[aspen_client_api::CapabilityHin
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-fn commit_table(_repo: &ForgeRepoInfo, commits: &[ForgeCommitInfo]) -> Markup {
+fn commit_table(repo: &ForgeRepoInfo, commits: &[ForgeCommitInfo]) -> Markup {
     html! {
         table.commits {
             @for c in commits {
                 tr {
-                    td.hash { code { (short_hash(&c.hash)) } }
+                    td.hash {
+                        a href=(format!("/{}/commit/{}", repo.id, c.hash)) {
+                            code { (short_hash(&c.hash)) }
+                        }
+                    }
                     td { (first_line(&c.message)) }
                     td.meta { (&c.author_name) }
                     td.meta { (format_time(c.timestamp_ms)) }
@@ -593,6 +709,25 @@ form.inline{display:inline}
 .markdown img{max-width:100%}
 .markdown hr{border:none;border-top:1px solid #30363d;margin:1em 0}
 .markdown input[type=checkbox]{margin-right:.4em}
+.clone-box{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:.5rem .75rem;margin:.75rem 0;font-size:.85rem;overflow-x:auto;white-space:nowrap}
+.clone-box code{user-select:all;cursor:text}
+.diff-file{border:1px solid #30363d;border-radius:6px;margin:.75rem 0;overflow:hidden}
+.diff-file-header{background:#161b22;padding:.5rem .75rem;border-bottom:1px solid #30363d;font-weight:600;font-size:.9rem}
+.diff-file-header .badge{margin-left:.5rem}
+.badge.added{background:#238636;color:#fff}
+.badge.deleted{background:#da3633;color:#fff}
+.badge.modified{background:#1f6feb;color:#fff}
+table.diff{width:100%;border-collapse:collapse;font-size:.82rem;line-height:1.45}
+table.diff td{padding:0 .6rem;border:none;white-space:pre;font-family:'JetBrains Mono',monospace}
+table.diff .ln{color:#484f58;text-align:right;user-select:none;width:1px;padding:0 .4rem}
+table.diff tr.add{background:#0d2818}
+table.diff tr.add td{color:#aff5b4}
+table.diff tr.del{background:#2d1115}
+table.diff tr.del td{color:#ffa198}
+table.diff tr.hunk td{color:#58a6ff;background:#0d1117;padding:.2rem .6rem}
+.diff-limit{padding:.75rem;color:#8b949e;font-style:italic;text-align:center}
+.commit-meta{margin:.75rem 0}
+.commit-meta .hash{font-size:.9rem;color:#8b949e}
 @media (max-width: 768px) {
     main{padding:0.75rem}
     table{font-size:0.85rem}

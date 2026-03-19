@@ -135,6 +135,7 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
             let sub = rest.join("/");
             raw_blob(state, repo_id, ref_name, &sub).await
         }
+        [repo_id, "commit", hash] => commit_detail(state, repo_id, hash).await,
         [repo_id, "commits"] => commits(state, repo_id).await,
         [repo_id, "issues"] => issues(state, repo_id).await,
         [repo_id, "issues", "new"] => new_issue_form(state, repo_id).await,
@@ -165,7 +166,8 @@ async fn repo_overview(st: &AppState, repo_id: &str) -> RouteResponse {
         let text = String::from_utf8(bytes).ok()?;
         Some(render_markdown(&text))
     });
-    ok(templates::repo_overview(&repo, &branches, &recent, readme_html.as_deref()))
+    let ticket = st.ticket_str();
+    ok(templates::repo_overview(&repo, &branches, &recent, readme_html.as_deref(), &ticket))
 }
 
 async fn tree_root(st: &AppState, repo_id: &str) -> RouteResponse {
@@ -234,6 +236,41 @@ async fn blob_view(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> 
         }
         Err(e) => err(e),
     }
+}
+
+async fn commit_detail(st: &AppState, repo_id: &str, hash: &str) -> RouteResponse {
+    let repo = match st.get_repo(repo_id).await {
+        Ok(r) => r,
+        Err(e) => return err(e),
+    };
+    let commit = match st.get_commit(hash).await {
+        Ok(c) => c,
+        Err(e) => return err(e),
+    };
+
+    // Get parent tree (None for root commits)
+    let parent_tree = if let Some(parent_hash) = commit.parents.first() {
+        st.get_commit(parent_hash).await.ok().map(|c| c.tree)
+    } else {
+        None
+    };
+
+    // Diff the trees
+    let files = match st.diff_trees(parent_tree.as_deref(), &commit.tree).await {
+        Ok(f) => f,
+        Err(e) => return err(e),
+    };
+
+    let truncated = files.len() >= crate::state::AppState::MAX_DIFF_FILES;
+
+    // Compute line-level diffs for each file
+    let mut file_diffs = Vec::with_capacity(files.len());
+    for file in &files {
+        let lines = st.compute_file_diff(file).await;
+        file_diffs.push((file, lines));
+    }
+
+    ok(templates::commit_detail(&repo, &commit, &file_diffs, truncated))
 }
 
 async fn commits(st: &AppState, repo_id: &str) -> RouteResponse {
@@ -385,22 +422,8 @@ async fn raw_blob(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> R
 
 // ── Markdown rendering ──────────────────────────────────────────────
 
-/// Tiger Style: max markdown input size (1 MB) to bound rendering time.
-const MAX_MARKDOWN_BYTES: usize = 1024 * 1024;
-
 fn render_markdown(source: &str) -> String {
-    let input = if source.len() > MAX_MARKDOWN_BYTES {
-        &source[..MAX_MARKDOWN_BYTES]
-    } else {
-        source
-    };
-    let opts = pulldown_cmark::Options::ENABLE_TABLES
-        | pulldown_cmark::Options::ENABLE_STRIKETHROUGH
-        | pulldown_cmark::Options::ENABLE_TASKLISTS;
-    let parser = pulldown_cmark::Parser::new_ext(input, opts);
-    let mut html = String::new();
-    pulldown_cmark::html::push_html(&mut html, parser);
-    html
+    templates::render_markdown(source)
 }
 
 // ── Tree walking ────────────────────────────────────────────────────
@@ -590,7 +613,7 @@ mod tests {
 
     #[test]
     fn render_markdown_truncates_large_input() {
-        let big = "x".repeat(MAX_MARKDOWN_BYTES + 100);
+        let big = "x".repeat(crate::templates::MAX_MARKDOWN_BYTES + 100);
         let html = render_markdown(&big);
         // Should render without panic; output comes from truncated input.
         assert!(!html.is_empty());

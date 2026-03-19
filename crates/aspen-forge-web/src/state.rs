@@ -43,6 +43,30 @@ fn unexpected_response(resp: ClientRpcResponse) -> anyhow::Error {
     anyhow::anyhow!("unexpected response from cluster: {:?}", std::mem::discriminant(&resp))
 }
 
+/// Kind of file change in a diff.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiffKind {
+    Added,
+    Modified,
+    Deleted,
+}
+
+/// A single file that changed between two trees.
+#[derive(Debug, Clone)]
+pub struct FileDiff {
+    pub path: String,
+    pub kind: DiffKind,
+    pub old_hash: Option<String>,
+    pub new_hash: Option<String>,
+}
+
+/// A line in a unified diff output.
+#[derive(Debug, Clone)]
+pub enum DiffLine {
+    /// Hunk header or complete hunk (from `similar`'s unified diff formatter).
+    Hunk(String),
+}
+
 /// Shared application state containing the client connection.
 #[derive(Clone)]
 pub struct AppState {
@@ -58,6 +82,11 @@ impl AppState {
     /// Get reference to the underlying client.
     pub fn client(&self) -> &AspenClient {
         &self.client
+    }
+
+    /// Get the cluster ticket as a string (for clone URLs).
+    pub fn ticket_str(&self) -> String {
+        self.client.ticket().serialize()
     }
 
     /// List repositories.
@@ -332,6 +361,178 @@ impl AppState {
 
         let blob = self.get_blob(&readme_entry.hash).await.ok()?;
         blob.content
+    }
+
+    // ── Diff computation ──────────────────────────────────────────
+
+    /// Max files to diff per commit.
+    pub const MAX_DIFF_FILES: usize = 50;
+    /// Max blob size for inline diff (256KB).
+    const MAX_DIFF_BLOB_BYTES: u64 = 256 * 1024;
+
+    /// Compare two trees and return a list of changed files.
+    ///
+    /// Recursively walks both trees, comparing entries by name.
+    /// Skips subtrees with matching hashes (no changes underneath).
+    pub async fn diff_trees(&self, old_tree: Option<&str>, new_tree: &str) -> Result<Vec<FileDiff>> {
+        let mut result = Vec::new();
+        self.diff_trees_recursive(old_tree, new_tree, "", &mut result).await?;
+        Ok(result)
+    }
+
+    #[async_recursion::async_recursion]
+    async fn diff_trees_recursive(
+        &self,
+        old_tree: Option<&str>,
+        new_tree: &str,
+        prefix: &str,
+        result: &mut Vec<FileDiff>,
+    ) -> Result<()> {
+        if result.len() >= Self::MAX_DIFF_FILES {
+            return Ok(());
+        }
+
+        let new_entries = self.get_tree(new_tree).await?;
+        let old_entries = match old_tree {
+            Some(h) => self.get_tree(h).await.unwrap_or_default(),
+            None => vec![],
+        };
+
+        let old_map: std::collections::HashMap<&str, &ForgeTreeEntry> =
+            old_entries.iter().map(|e| (e.name.as_str(), e)).collect();
+        let new_map: std::collections::HashMap<&str, &ForgeTreeEntry> =
+            new_entries.iter().map(|e| (e.name.as_str(), e)).collect();
+
+        // Added or modified entries
+        for entry in &new_entries {
+            if result.len() >= Self::MAX_DIFF_FILES {
+                break;
+            }
+            let path = if prefix.is_empty() {
+                entry.name.clone()
+            } else {
+                format!("{prefix}/{}", entry.name)
+            };
+            let is_dir = entry.mode == 0o40000;
+
+            match old_map.get(entry.name.as_str()) {
+                Some(old) if old.hash == entry.hash => {} // unchanged
+                Some(old) if is_dir && old.mode == 0o40000 => {
+                    // Both are directories with different hashes — recurse
+                    self.diff_trees_recursive(Some(&old.hash), &entry.hash, &path, result).await?;
+                }
+                Some(old) if !is_dir => {
+                    result.push(FileDiff {
+                        path,
+                        kind: DiffKind::Modified,
+                        old_hash: Some(old.hash.clone()),
+                        new_hash: Some(entry.hash.clone()),
+                    });
+                }
+                Some(_) => {} // mode change (dir→file etc), treat as modified
+                None if is_dir => {
+                    self.diff_trees_recursive(None, &entry.hash, &path, result).await?;
+                }
+                None => {
+                    result.push(FileDiff {
+                        path,
+                        kind: DiffKind::Added,
+                        old_hash: None,
+                        new_hash: Some(entry.hash.clone()),
+                    });
+                }
+            }
+        }
+
+        // Deleted entries (in old but not new)
+        for entry in &old_entries {
+            if result.len() >= Self::MAX_DIFF_FILES {
+                break;
+            }
+            if new_map.contains_key(entry.name.as_str()) {
+                continue;
+            }
+            let path = if prefix.is_empty() {
+                entry.name.clone()
+            } else {
+                format!("{prefix}/{}", entry.name)
+            };
+            if entry.mode == 0o40000 {
+                // Deleted directory — list all files as deleted
+                self.collect_deleted_tree(&entry.hash, &path, result).await?;
+            } else {
+                result.push(FileDiff {
+                    path,
+                    kind: DiffKind::Deleted,
+                    old_hash: Some(entry.hash.clone()),
+                    new_hash: None,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Collect all files in a tree as deleted entries.
+    #[async_recursion::async_recursion]
+    async fn collect_deleted_tree(&self, tree_hash: &str, prefix: &str, result: &mut Vec<FileDiff>) -> Result<()> {
+        if result.len() >= Self::MAX_DIFF_FILES {
+            return Ok(());
+        }
+        let entries = self.get_tree(tree_hash).await.unwrap_or_default();
+        for entry in &entries {
+            if result.len() >= Self::MAX_DIFF_FILES {
+                break;
+            }
+            let path = format!("{prefix}/{}", entry.name);
+            if entry.mode == 0o40000 {
+                self.collect_deleted_tree(&entry.hash, &path, result).await?;
+            } else {
+                result.push(FileDiff {
+                    path,
+                    kind: DiffKind::Deleted,
+                    old_hash: Some(entry.hash.clone()),
+                    new_hash: None,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Compute a unified diff between two blobs (by hash).
+    pub async fn compute_file_diff(&self, file: &FileDiff) -> Vec<DiffLine> {
+        let old_text = match &file.old_hash {
+            Some(h) => self.get_text_blob(h).await,
+            None => Some(String::new()),
+        };
+        let new_text = match &file.new_hash {
+            Some(h) => self.get_text_blob(h).await,
+            None => Some(String::new()),
+        };
+
+        let (Some(old), Some(new)) = (old_text, new_text) else {
+            return vec![DiffLine::Hunk("Binary or large file — diff not shown".into())];
+        };
+
+        let diff = similar::TextDiff::from_lines(&old, &new);
+        let mut lines = Vec::new();
+        for hunk in diff.unified_diff().context_radius(3).iter_hunks() {
+            lines.push(DiffLine::Hunk(format!("{hunk}")));
+        }
+        if lines.is_empty() && file.kind == DiffKind::Modified {
+            lines.push(DiffLine::Hunk("No visible changes".into()));
+        }
+        lines
+    }
+
+    /// Fetch a blob as text if it's small enough and looks like text.
+    async fn get_text_blob(&self, hash: &str) -> Option<String> {
+        let blob = self.get_blob(hash).await.ok()?;
+        let size = blob.size.unwrap_or(0);
+        if size > Self::MAX_DIFF_BLOB_BYTES {
+            return None;
+        }
+        let content = blob.content?;
+        String::from_utf8(content).ok()
     }
 
     /// Get patch detail.

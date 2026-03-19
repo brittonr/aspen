@@ -26,6 +26,10 @@ maud = "0.26"
 # Markdown rendering
 pulldown-cmark = "0.13"
 
+# Diff computation
+similar = "2.6"
+async-recursion = "1.1"
+
 # Runtime
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal"] }
 
