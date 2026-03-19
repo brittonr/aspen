@@ -102,8 +102,11 @@ pub struct ForgeCommitInfo {
     pub author_name: String,
     /// Author email.
     pub author_email: Option<String>,
-    /// Author public key (hex-encoded).
+    /// Author public key (hex-encoded ed25519).
     pub author_key: Option<String>,
+    /// Author Nostr public key (hex-encoded secp256k1).
+    #[serde(default)]
+    pub author_npub: Option<String>,
     /// Commit message.
     pub message: String,
     /// Timestamp (ms since epoch).

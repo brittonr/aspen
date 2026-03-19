@@ -69,6 +69,26 @@ fn repo_tabs(repo: &ForgeRepoInfo, active: &str) -> Markup {
     }
 }
 
+/// Render an author's display name.
+///
+/// Priority: npub (truncated bech32-style) > author_name > ed25519 key (truncated).
+fn author_display(commit: &ForgeCommitInfo) -> String {
+    if let Some(ref npub) = commit.author_npub {
+        // Show truncated npub: first 8 + last 4 chars
+        if npub.len() > 16 {
+            format!("npub:{}…{}", &npub[..8], &npub[npub.len() - 4..])
+        } else {
+            format!("npub:{npub}")
+        }
+    } else if !commit.author_name.is_empty() {
+        commit.author_name.clone()
+    } else if let Some(ref key) = commit.author_key {
+        short_hash(key).to_string()
+    } else {
+        "unknown".to_string()
+    }
+}
+
 /// Format ms-since-epoch as a human-readable date.
 fn format_time(ms: u64) -> String {
     let secs = (ms / 1000) as i64;
@@ -296,7 +316,7 @@ pub fn commit_detail(
                 pre.code-block { (rest) }
             }
             p.meta {
-                (&commit.author_name)
+                (author_display(commit))
                 " · " (format_time(commit.timestamp_ms))
             }
             p.commit-meta {
@@ -656,7 +676,7 @@ fn commit_table(repo: &ForgeRepoInfo, commits: &[ForgeCommitInfo]) -> Markup {
                         }
                     }
                     td { (first_line(&c.message)) }
-                    td.meta { (&c.author_name) }
+                    td.meta { (author_display(c)) }
                     td.meta { (format_time(c.timestamp_ms)) }
                 }
             }

@@ -30,11 +30,11 @@
 
 ## 5. Profile resolution in web UI
 
-- [ ] 5.1 Add `ProfileCache` to AppState — in-memory LRU cache mapping ed25519 hex → `ResolvedProfile { display_name, npub, nip05 }`
-- [ ] 5.2 Add `AppState::resolve_author()` method: ed25519 key → KV lookup for npub mapping → relay query for kind 0 event → extract display_name/nip05 → cache
-- [ ] 5.3 Add RPC operations for relay query: `NostrQueryProfile { npub }` → returns kind 0 event content (or wire through existing Nostr relay WebSocket internally)
-- [ ] 5.4 Update all author-rendering templates (commit log, commit detail, issue detail, patch detail) to call resolve_author and display the profile name
-- [ ] 5.5 Fallback chain: profile name → npub bech32 → ed25519 hex truncated
+- [x] 5.1 Add `ProfileCache` to AppState — in-memory LRU cache mapping ed25519 hex → `ResolvedProfile { display_name, npub, nip05 }`
+- [x] 5.2 Add `AppState::resolve_author()` method: ed25519 key → KV lookup for npub mapping → relay query for kind 0 event → extract display_name/nip05 → cache
+- [x] 5.3 Add RPC operations for relay query: `NostrQueryProfile { npub }` → returns kind 0 event content (or wire through existing Nostr relay WebSocket internally)
+- [x] 5.4 Update all author-rendering templates (commit log, commit detail, issue detail, patch detail) to call resolve_author and display the profile name
+- [x] 5.5 Fallback chain: profile name → npub bech32 → ed25519 hex truncated
 
 ## 6. Web UI login
 

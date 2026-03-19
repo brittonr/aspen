@@ -23,6 +23,7 @@ fn commit_to_info(hash: blake3::Hash, c: &aspen_forge::git::CommitObject) -> asp
         author_name: c.author.name.clone(),
         author_email: Some(c.author.email.clone()),
         author_key: c.author.public_key.as_ref().map(|k| k.to_string()),
+        author_npub: c.author.npub.clone(),
         message: c.message.clone(),
         timestamp_ms: c.author.timestamp_ms,
     }
