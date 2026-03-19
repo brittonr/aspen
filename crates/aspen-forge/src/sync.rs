@@ -507,6 +507,11 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
         let root = blake3::Hash::from_bytes(root_bytes);
         let mut stats = aspen_dag::SyncStats::default();
 
+        // Tiger Style: enforce traversal bounds from aspen-dag constants.
+        let max_visited = aspen_dag::constants::MAX_VISITED_SET_SIZE as usize;
+        let max_nodes = aspen_dag::constants::MAX_TRAVERSAL_NODES as u64;
+        let mut nodes_emitted: u64 = 0;
+
         // Async DFS: no block_in_place needed since we await blob reads directly.
         let mut stack: Vec<blake3::Hash> = vec![root];
         let mut visited = HashSet::new();
@@ -514,6 +519,11 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
         while let Some(hash) = stack.pop() {
             if !visited.insert(hash) || known_heads.contains(&hash) {
                 continue;
+            }
+
+            if visited.len() > max_visited {
+                tracing::warn!(max = max_visited, "DAG sync traversal hit visited set limit, stopping");
+                break;
             }
 
             let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
@@ -540,6 +550,12 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
                         type_tag: 0,
                         is_leaf: false,
                     };
+                    nodes_emitted = nodes_emitted.saturating_add(1);
+                    if nodes_emitted > max_nodes {
+                        tracing::warn!(max = max_nodes, "DAG sync traversal hit node emission limit, stopping");
+                        break;
+                    }
+
                     let written = if request.inline.should_inline(&ctx) {
                         stats.data_frames = stats.data_frames.saturating_add(1);
                         aspen_dag::write_data_inline(writer, hash_bytes, &bytes).await?
@@ -550,6 +566,11 @@ impl<B: BlobStore + Send + Sync + 'static> SyncService<B> {
                     stats.bytes_transferred = stats.bytes_transferred.saturating_add(written);
                 }
                 None => {
+                    nodes_emitted = nodes_emitted.saturating_add(1);
+                    if nodes_emitted > max_nodes {
+                        tracing::warn!(max = max_nodes, "DAG sync traversal hit node emission limit, stopping");
+                        break;
+                    }
                     stats.hash_only_frames = stats.hash_only_frames.saturating_add(1);
                     let written = aspen_dag::write_hash_only(writer, hash_bytes).await?;
                     stats.bytes_transferred = stats.bytes_transferred.saturating_add(written);

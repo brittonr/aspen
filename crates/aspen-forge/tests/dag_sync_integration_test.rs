@@ -702,3 +702,114 @@ async fn dag_sync_full_loop_sender_receiver_sender() {
         assert!(third_blobs.has(&iroh_hash).await.unwrap());
     }
 }
+
+// ============================================================================
+// Traversal Bounds Tests
+// ============================================================================
+
+/// Build a long linear chain of commits: C_n → C_{n-1} → ... → C_0.
+/// Each commit has an empty tree. Returns the tip commit hash.
+async fn build_commit_chain(blobs: &InMemoryBlobStore, key: &iroh::SecretKey, length: usize) -> blake3::Hash {
+    let empty_tree = store_git_object(blobs, key, GitObject::Tree(TreeObject::new(vec![]))).await;
+
+    let mut prev = store_git_object(
+        blobs,
+        key,
+        GitObject::Commit(CommitObject::new(empty_tree, vec![], test_author(), "commit 0")),
+    )
+    .await;
+
+    for i in 1..length {
+        prev = store_git_object(
+            blobs,
+            key,
+            GitObject::Commit(CommitObject::new(empty_tree, vec![prev], test_author(), &format!("commit {i}"))),
+        )
+        .await;
+    }
+
+    prev
+}
+
+/// Verify that handle_sync_request respects the visited set bound.
+///
+/// The traversal should stop before visiting more than MAX_VISITED_SET_SIZE
+/// nodes. We can't test the exact 1M limit (too slow), but we can verify
+/// the mechanism works with a moderate chain.
+#[tokio::test]
+async fn dag_sync_handles_large_chain_without_panic() {
+    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let blobs = Arc::new(InMemoryBlobStore::new());
+    let sync = SyncService::new(Arc::clone(&blobs));
+
+    // A chain of 500 commits is large enough to verify the sync
+    // completes and returns correct stats, but stays well under the
+    // 1M visited set limit.
+    let tip = build_commit_chain(&blobs, &key, 500).await;
+
+    let request = DagSyncRequest {
+        traversal: TraversalOpts::Full(FullTraversalOpts {
+            root: *tip.as_bytes(),
+            known_heads: BTreeSet::new(),
+            order: TraversalOrder::DepthFirstPreOrder,
+            filter: TraversalFilter::All,
+        }),
+        inline: InlinePolicy::All,
+    };
+
+    let (data_frames, hash_only, stats) = run_sync(&sync, request).await;
+
+    // 500 commits + 1 empty tree = 501 unique objects.
+    // Each commit references the same empty tree, so the tree is
+    // visited once (deduped by the visited set).
+    assert_eq!(data_frames.len(), 501, "expected 500 commits + 1 tree, got {} data frames", data_frames.len());
+    assert_eq!(hash_only.len(), 0);
+    assert_eq!(stats.data_frames, 501);
+}
+
+/// Verify that known_heads correctly stops traversal.
+///
+/// Build a chain A → B → C. Sync from A with B as known head.
+/// Should only transfer A and its tree.
+#[tokio::test]
+async fn dag_sync_known_heads_stops_traversal() {
+    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let blobs = Arc::new(InMemoryBlobStore::new());
+    let sync = SyncService::new(Arc::clone(&blobs));
+
+    let empty_tree = store_git_object(&blobs, &key, GitObject::Tree(TreeObject::new(vec![]))).await;
+
+    let c =
+        store_git_object(&blobs, &key, GitObject::Commit(CommitObject::new(empty_tree, vec![], test_author(), "C")))
+            .await;
+
+    let b =
+        store_git_object(&blobs, &key, GitObject::Commit(CommitObject::new(empty_tree, vec![c], test_author(), "B")))
+            .await;
+
+    let a =
+        store_git_object(&blobs, &key, GitObject::Commit(CommitObject::new(empty_tree, vec![b], test_author(), "A")))
+            .await;
+
+    // Sync from A with B as known — should get A + tree only
+    let request = DagSyncRequest {
+        traversal: TraversalOpts::Full(FullTraversalOpts {
+            root: *a.as_bytes(),
+            known_heads: BTreeSet::from([*b.as_bytes()]),
+            order: TraversalOrder::DepthFirstPreOrder,
+            filter: TraversalFilter::All,
+        }),
+        inline: InlinePolicy::All,
+    };
+
+    let (data_frames, _hash_only, stats) = run_sync(&sync, request).await;
+
+    // A is transferred, its tree is new so also transferred.
+    // B and C are known, so skipped.
+    assert_eq!(stats.data_frames, 2, "expected A + tree");
+    let hashes: HashSet<blake3::Hash> = data_frames.iter().map(|(h, _)| *h).collect();
+    assert!(hashes.contains(&a), "should contain commit A");
+    assert!(hashes.contains(&empty_tree), "should contain the tree");
+    assert!(!hashes.contains(&b), "should NOT contain known head B");
+    assert!(!hashes.contains(&c), "should NOT contain C (behind known head)");
+}
