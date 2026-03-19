@@ -424,6 +424,36 @@ pub fn error_page(title: &str, message: &str) -> Markup {
     })
 }
 
+/// Error page shown when the forge app is not loaded on the cluster.
+pub fn forge_unavailable(message: &str, hints: &[aspen_client_api::CapabilityHint]) -> Markup {
+    base_layout("Forge Unavailable", html! {
+        h1 { "Forge Unavailable" }
+        p { (message) }
+        p.muted {
+            "The cluster this web frontend is connected to does not have the "
+            code { "forge" }
+            " app loaded. Start the node with "
+            code { "--features forge,blob" }
+            " and ensure blob storage is enabled."
+        }
+        @if !hints.is_empty() {
+            h2 { "Clusters with Forge" }
+            p.muted { "These discovered clusters have the forge app:" }
+            ul {
+                @for hint in hints {
+                    li {
+                        strong { (&hint.name) }
+                        " — " code { (&hint.cluster_key) }
+                        @if let Some(ref ver) = hint.app_version {
+                            " (v" (ver) ")"
+                        }
+                    }
+                }
+            }
+        }
+    })
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 fn commit_table(_repo: &ForgeRepoInfo, commits: &[ForgeCommitInfo]) -> Markup {

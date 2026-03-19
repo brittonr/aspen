@@ -3,6 +3,7 @@
 use anyhow::Context;
 use anyhow::Result;
 use aspen_client::AspenClient;
+use aspen_client_api::CapabilityHint;
 use aspen_client_api::messages::ClientRpcRequest;
 use aspen_client_api::messages::ClientRpcResponse;
 use aspen_forge_protocol::ForgeBlobResultResponse;
@@ -12,6 +13,35 @@ use aspen_forge_protocol::ForgePatchInfo;
 use aspen_forge_protocol::ForgeRefInfo;
 use aspen_forge_protocol::ForgeRepoInfo;
 use aspen_forge_protocol::ForgeTreeEntry;
+
+/// Error returned when the cluster doesn't have the forge app loaded.
+#[derive(Debug)]
+pub struct ForgeUnavailableError {
+    pub message: String,
+    pub hints: Vec<CapabilityHint>,
+}
+
+impl std::fmt::Display for ForgeUnavailableError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for ForgeUnavailableError {}
+
+/// Convert a `ClientRpcResponse` that should have been a specific variant into
+/// an error. Returns a `ForgeUnavailableError` for `CapabilityUnavailable`,
+/// or a generic anyhow error for anything else unexpected.
+fn unexpected_response(resp: ClientRpcResponse) -> anyhow::Error {
+    if let ClientRpcResponse::CapabilityUnavailable(cap) = resp {
+        return ForgeUnavailableError {
+            message: cap.message,
+            hints: cap.hints,
+        }
+        .into();
+    }
+    anyhow::anyhow!("unexpected response from cluster: {:?}", std::mem::discriminant(&resp))
+}
 
 /// Shared application state containing the client connection.
 #[derive(Clone)]
@@ -42,7 +72,7 @@ impl AppState {
             .context("list repos")?;
         match resp {
             ClientRpcResponse::ForgeRepoListResult(r) => Ok(r.repos),
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -57,7 +87,7 @@ impl AppState {
             .context("get repo")?;
         match resp {
             ClientRpcResponse::ForgeRepoResult(r) => r.repo.ok_or_else(|| anyhow::anyhow!("repo not found")),
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -72,7 +102,7 @@ impl AppState {
             .context("list branches")?;
         match resp {
             ClientRpcResponse::ForgeRefListResult(r) => Ok(r.refs),
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -94,7 +124,7 @@ impl AppState {
             .context("get log")?;
         match resp {
             ClientRpcResponse::ForgeLogResult(r) => Ok(r.commits),
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -112,7 +142,7 @@ impl AppState {
             ClientRpcResponse::ForgeRefResult(r) => {
                 r.ref_info.map(|ri| ri.hash).ok_or_else(|| anyhow::anyhow!("ref not found"))
             }
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -121,7 +151,7 @@ impl AppState {
         let resp = self.client.send(ClientRpcRequest::ForgeGetTree { hash: hash.into() }).await.context("get tree")?;
         match resp {
             ClientRpcResponse::ForgeTreeResult(r) => r.entries.ok_or_else(|| anyhow::anyhow!("tree not found")),
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -130,7 +160,7 @@ impl AppState {
         let resp = self.client.send(ClientRpcRequest::ForgeGetBlob { hash: hash.into() }).await.context("get blob")?;
         match resp {
             ClientRpcResponse::ForgeBlobResult(r) => Ok(r),
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -143,7 +173,7 @@ impl AppState {
             .context("get commit")?;
         match resp {
             ClientRpcResponse::ForgeCommitResult(r) => r.commit.ok_or_else(|| anyhow::anyhow!("commit not found")),
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -160,7 +190,7 @@ impl AppState {
             .context("list issues")?;
         match resp {
             ClientRpcResponse::ForgeIssueListResult(r) => Ok(r.issues),
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -184,7 +214,7 @@ impl AppState {
                 let comments = r.comments.unwrap_or_default();
                 Ok((issue, comments))
             }
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -201,7 +231,7 @@ impl AppState {
             .context("list patches")?;
         match resp {
             ClientRpcResponse::ForgePatchListResult(r) => Ok(r.patches),
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -222,7 +252,7 @@ impl AppState {
             ClientRpcResponse::ForgeOperationResult(r) => {
                 Err(anyhow::anyhow!(r.error.unwrap_or_else(|| "unknown error".into())))
             }
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -242,7 +272,7 @@ impl AppState {
             ClientRpcResponse::ForgeOperationResult(r) => {
                 Err(anyhow::anyhow!(r.error.unwrap_or_else(|| "unknown error".into())))
             }
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -261,7 +291,7 @@ impl AppState {
             ClientRpcResponse::ForgeOperationResult(r) => {
                 Err(anyhow::anyhow!(r.error.unwrap_or_else(|| "unknown error".into())))
             }
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -281,7 +311,7 @@ impl AppState {
             ClientRpcResponse::ForgeOperationResult(r) => {
                 Err(anyhow::anyhow!(r.error.unwrap_or_else(|| "unknown error".into())))
             }
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 
@@ -316,7 +346,7 @@ impl AppState {
             .context("get patch")?;
         match resp {
             ClientRpcResponse::ForgePatchResult(r) => r.patch.ok_or_else(|| anyhow::anyhow!("patch not found")),
-            other => Err(anyhow::anyhow!("unexpected response: {other:?}")),
+            other => Err(unexpected_response(other)),
         }
     }
 }

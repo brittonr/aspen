@@ -58,6 +58,13 @@ fn not_found(path: &str) -> RouteResponse {
 }
 
 fn err(e: anyhow::Error) -> RouteResponse {
+    // Show a dedicated page when the forge app isn't loaded on the cluster.
+    if let Some(unavailable) = e.downcast_ref::<crate::state::ForgeUnavailableError>() {
+        return RouteResponse::Html {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            body: templates::forge_unavailable(&unavailable.message, &unavailable.hints).into_string(),
+        };
+    }
     warn!("handler error: {e:#}");
     RouteResponse::Html {
         status: StatusCode::INTERNAL_SERVER_ERROR,
@@ -587,5 +594,45 @@ mod tests {
         let html = render_markdown(&big);
         // Should render without panic; output comes from truncated input.
         assert!(!html.is_empty());
+    }
+
+    #[test]
+    fn forge_unavailable_is_503() {
+        let e: anyhow::Error = crate::state::ForgeUnavailableError {
+            message: "the 'forge' app is not loaded on this cluster".into(),
+            hints: vec![],
+        }
+        .into();
+        let resp = err(e);
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = String::from_utf8(resp.into_bytes()).unwrap();
+        assert!(body.contains("Forge Unavailable"));
+        assert!(body.contains("--features forge,blob"));
+    }
+
+    #[test]
+    fn forge_unavailable_with_hints() {
+        let e: anyhow::Error = crate::state::ForgeUnavailableError {
+            message: "forge not loaded".into(),
+            hints: vec![aspen_client_api::CapabilityHint {
+                cluster_key: "abc123".into(),
+                name: "prod-cluster".into(),
+                app_version: Some("0.5.0".into()),
+            }],
+        }
+        .into();
+        let resp = err(e);
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = String::from_utf8(resp.into_bytes()).unwrap();
+        assert!(body.contains("prod-cluster"));
+        assert!(body.contains("abc123"));
+        assert!(body.contains("0.5.0"));
+    }
+
+    #[test]
+    fn generic_error_still_500() {
+        let e = anyhow::anyhow!("something broke");
+        let resp = err(e);
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }
