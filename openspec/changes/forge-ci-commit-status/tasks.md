@@ -69,6 +69,6 @@
 
 ## 11. Integration Testing
 
-- [ ] 11.1 Write end-to-end test: push to forge repo → CI triggers → pipeline completes → commit status written to forge KV → status queryable via `StatusStore`
-- [ ] 11.2 Write end-to-end test: create patch → CI triggers on patch head → pipeline succeeds → merge allowed. Then: pipeline fails → merge blocked.
-- [ ] 11.3 Verify gossip announcement is received by a subscribed node when pipeline status changes
+- [x] 11.1 Write end-to-end test: push to forge repo → CI triggers → pipeline completes → commit status written to forge KV → status queryable via `StatusStore`
+- [x] 11.2 Write end-to-end test: create patch → CI triggers on patch head → pipeline succeeds → merge allowed. Then: pipeline fails → merge blocked.
+- [x] 11.3 Verify gossip announcement is received by a subscribed node when pipeline status changes

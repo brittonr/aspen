@@ -3085,6 +3085,13 @@
                 aspenCliPackage = bins.full-aspen-cli-ci;
               };
 
+              # Build: nix build .#checks.x86_64-linux.forge-ci-commit-status-test
+              forge-ci-commit-status-test = import ./nix/tests/forge-ci-commit-status.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli-ci;
+              };
+
               # SNIX store test: full SNIX storage stack end-to-end.
               # Blob storage, directory metadata (snix:dir:), path info
               # (snix:pathinfo:), Nix binary cache (query, stats, download),
