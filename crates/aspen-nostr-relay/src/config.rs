@@ -59,6 +59,35 @@ pub struct NostrRelayConfig {
     /// URL. If `None`, the relay URL check is skipped.
     #[serde(default)]
     pub relay_url: Option<String>,
+
+    /// Maximum EVENT submissions per second per source IP. Set to 0 to disable.
+    #[serde(default = "default_events_per_second_per_ip")]
+    pub events_per_second_per_ip: u32,
+
+    /// Maximum burst of EVENT submissions per source IP.
+    #[serde(default = "default_events_burst_per_ip")]
+    pub events_burst_per_ip: u32,
+
+    /// Maximum EVENT submissions per second per author pubkey. Set to 0 to disable.
+    #[serde(default = "default_events_per_second_per_pubkey")]
+    pub events_per_second_per_pubkey: u32,
+
+    /// Maximum burst of EVENT submissions per author pubkey.
+    #[serde(default = "default_events_burst_per_pubkey")]
+    pub events_burst_per_pubkey: u32,
+}
+
+fn default_events_per_second_per_ip() -> u32 {
+    constants::MAX_EVENTS_PER_SECOND_PER_IP
+}
+fn default_events_burst_per_ip() -> u32 {
+    constants::MAX_EVENTS_BURST_PER_IP
+}
+fn default_events_per_second_per_pubkey() -> u32 {
+    constants::MAX_EVENTS_PER_SECOND_PER_PUBKEY
+}
+fn default_events_burst_per_pubkey() -> u32 {
+    constants::MAX_EVENTS_BURST_PER_PUBKEY
 }
 
 impl Default for NostrRelayConfig {
@@ -72,6 +101,10 @@ impl Default for NostrRelayConfig {
             max_event_size_bytes: constants::MAX_EVENT_SIZE,
             write_policy: WritePolicy::default(),
             relay_url: None,
+            events_per_second_per_ip: constants::MAX_EVENTS_PER_SECOND_PER_IP,
+            events_burst_per_ip: constants::MAX_EVENTS_BURST_PER_IP,
+            events_per_second_per_pubkey: constants::MAX_EVENTS_PER_SECOND_PER_PUBKEY,
+            events_burst_per_pubkey: constants::MAX_EVENTS_BURST_PER_PUBKEY,
         }
     }
 }

@@ -9,6 +9,7 @@
 //! kind 22242 event. Write access is gated by the configured `WritePolicy`.
 
 use std::borrow::Cow;
+use std::net::IpAddr;
 use std::sync::Arc;
 
 use futures::SinkExt;
@@ -27,6 +28,7 @@ use tracing::warn;
 use crate::auth::AuthState;
 use crate::config::WritePolicy;
 use crate::constants::MAX_EVENT_SIZE;
+use crate::rate_limit::RateLimiter;
 use crate::storage::NostrEventStore;
 use crate::subscriptions::ConnectionId;
 use crate::subscriptions::SubscriptionRegistry;
@@ -48,6 +50,7 @@ pub async fn handle_connection<S: NostrEventStore>(
     cancel: tokio_util::sync::CancellationToken,
     write_policy: WritePolicy,
     relay_url: Option<String>,
+    rate_limit: Option<(Arc<RateLimiter>, IpAddr)>,
 ) {
     let (mut ws_tx, mut ws_rx) = ws.split();
 
@@ -76,6 +79,7 @@ pub async fn handle_connection<S: NostrEventStore>(
                         if let Err(e) = handle_message(
                             &text, conn_id, &store, &registry, &mut ws_tx,
                             &mut auth_state, write_policy, relay_url.as_deref(),
+                            rate_limit.as_ref(),
                         ).await {
                             warn!(conn_id, error = %e, "error handling message");
                         }
@@ -138,12 +142,27 @@ async fn handle_message<S: NostrEventStore>(
     auth_state: &mut AuthState,
     write_policy: WritePolicy,
     relay_url: Option<&str>,
+    rate_limit: Option<&(Arc<RateLimiter>, IpAddr)>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client_msg: ClientMessage<'_> = ClientMessage::from_json(text)?;
 
     match client_msg {
         ClientMessage::Event(event) => {
-            handle_event(event.into_owned(), store, registry, ws_tx, auth_state, write_policy).await?;
+            // IP rate limit check — before event validation to minimize wasted work
+            if let Some((limiter, ip)) = rate_limit
+                && limiter.is_enabled()
+                && !limiter.check_ip(*ip)
+            {
+                let event_id = event.id;
+                let msg = RelayMessage::Ok {
+                    event_id,
+                    status: false,
+                    message: Cow::Borrowed("rate-limited: too many events from this address"),
+                };
+                ws_tx.send(Message::Text(msg.as_json().into())).await?;
+                return Ok(());
+            }
+            handle_event(event.into_owned(), store, registry, ws_tx, auth_state, write_policy, rate_limit).await?;
         }
         ClientMessage::Req {
             subscription_id,
@@ -210,6 +229,7 @@ async fn handle_event<S: NostrEventStore>(
     ws_tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
     auth_state: &AuthState,
     write_policy: WritePolicy,
+    rate_limit: Option<&(Arc<RateLimiter>, IpAddr)>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let event_id = event.id;
 
@@ -244,6 +264,21 @@ async fn handle_event<S: NostrEventStore>(
             event_id,
             status: false,
             message: Cow::Owned(format!("invalid: {e}")),
+        };
+        ws_tx.send(Message::Text(msg.as_json().into())).await?;
+        return Ok(());
+    }
+
+    // Pubkey rate limit check — after signature verification so unsigned events
+    // don't consume the author's rate budget
+    if let Some((limiter, _)) = rate_limit
+        && limiter.is_enabled()
+        && !limiter.check_pubkey(&event.pubkey.to_hex())
+    {
+        let msg = RelayMessage::Ok {
+            event_id,
+            status: false,
+            message: Cow::Borrowed("rate-limited: too many events from this author"),
         };
         ws_tx.send(Message::Text(msg.as_json().into())).await?;
         return Ok(());

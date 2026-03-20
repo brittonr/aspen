@@ -343,3 +343,83 @@ async fn oversized_event_rejected() {
 
     service.shutdown();
 }
+
+// -------------------------------------------------------------------------
+// NIP-11 HTTP content negotiation
+// -------------------------------------------------------------------------
+
+#[tokio::test]
+async fn nip11_http_content_negotiation_serves_json() {
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+    let port = free_port().await;
+    let mut config = NostrRelayConfig::default();
+    config.enabled = true;
+    config.bind_port = port;
+    let service = start_relay_with_config(config).await;
+
+    let mut stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{port}")).await.unwrap();
+
+    let request = format!(
+        "GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAccept: application/nostr+json\r\nConnection: close\r\n\r\n"
+    );
+    stream.write_all(request.as_bytes()).await.unwrap();
+
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).await.unwrap();
+    let response_str = String::from_utf8_lossy(&response);
+
+    assert!(response_str.contains("200 OK"), "expected 200 OK, got: {response_str}");
+    assert!(response_str.contains("application/nostr+json"));
+    let body_start = response_str.find("\r\n\r\n").unwrap() + 4;
+    let body = &response_str[body_start..];
+    let info: serde_json::Value = serde_json::from_str(body).unwrap();
+    assert_eq!(info["name"], "aspen-nostr-relay");
+    assert!(info["supported_nips"].is_array());
+
+    service.shutdown();
+}
+
+#[tokio::test]
+async fn nip11_websocket_upgrade_still_works() {
+    let port = free_port().await;
+    let mut config = NostrRelayConfig::default();
+    config.enabled = true;
+    config.bind_port = port;
+    let service = start_relay_with_config(config).await;
+
+    let url = format!("ws://127.0.0.1:{port}");
+    let (mut ws, _) = timeout(Duration::from_secs(5), connect_async(&url))
+        .await
+        .expect("timeout")
+        .expect("connect failed");
+
+    drain_auth_challenge(&mut ws).await;
+    ws.close(None).await.unwrap();
+
+    service.shutdown();
+}
+
+#[tokio::test]
+async fn nip11_plain_http_returns_400() {
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+    let port = free_port().await;
+    let mut config = NostrRelayConfig::default();
+    config.enabled = true;
+    config.bind_port = port;
+    let service = start_relay_with_config(config).await;
+
+    let mut stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{port}")).await.unwrap();
+
+    let request = format!("GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAccept: text/html\r\nConnection: close\r\n\r\n");
+    stream.write_all(request.as_bytes()).await.unwrap();
+
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).await.unwrap();
+    let response_str = String::from_utf8_lossy(&response);
+
+    assert!(response_str.contains("400 Bad Request"), "expected 400, got: {response_str}");
+
+    service.shutdown();
+}

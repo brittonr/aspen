@@ -8,6 +8,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use aspen_kv_types::DeleteRequest;
+use aspen_kv_types::KeyValueStoreError;
 use aspen_kv_types::ReadRequest;
 use aspen_kv_types::ScanRequest;
 use aspen_kv_types::WriteCommand;
@@ -281,13 +282,56 @@ impl<S: KeyValueStore + ?Sized> KvEventStore<S> {
     }
 
     async fn increment_count(&self) -> Result<(), StorageError> {
-        let count = self.event_count().await?;
-        self.kv_set(KV_EVENT_COUNT, &(count.saturating_add(1)).to_string()).await
+        for _ in 0..MAX_CAS_RETRIES {
+            let (current_str, expected) = self.read_count_for_cas().await?;
+            let count: u32 = current_str
+                .as_deref()
+                .unwrap_or("0")
+                .parse()
+                .map_err(|e| StorageError::Internal(format!("bad event count: {e}")))?;
+            let new_value = count.saturating_add(1).to_string();
+            let req = WriteRequest::compare_and_swap(KV_EVENT_COUNT, expected, &new_value);
+            match self.kv.write(req).await {
+                Ok(_) => return Ok(()),
+                Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => continue,
+                Err(e) => return Err(StorageError::Kv(e.to_string())),
+            }
+        }
+        Err(StorageError::Internal("event count CAS retries exhausted".to_string()))
     }
 
     async fn decrement_count(&self) -> Result<(), StorageError> {
-        let count = self.event_count().await?;
-        self.kv_set(KV_EVENT_COUNT, &count.saturating_sub(1).to_string()).await
+        for _ in 0..MAX_CAS_RETRIES {
+            let (current_str, expected) = self.read_count_for_cas().await?;
+            let count: u32 = current_str
+                .as_deref()
+                .unwrap_or("0")
+                .parse()
+                .map_err(|e| StorageError::Internal(format!("bad event count: {e}")))?;
+            let new_value = count.saturating_sub(1).to_string();
+            let req = WriteRequest::compare_and_swap(KV_EVENT_COUNT, expected, &new_value);
+            match self.kv.write(req).await {
+                Ok(_) => return Ok(()),
+                Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => continue,
+                Err(e) => return Err(StorageError::Kv(e.to_string())),
+            }
+        }
+        Err(StorageError::Internal("event count CAS retries exhausted".to_string()))
+    }
+
+    /// Read the current count string and produce the CAS expected value.
+    ///
+    /// Returns `(Some(value_string), Some(value_string))` if the key exists,
+    /// or `(None, None)` if it doesn't. The second element is the `expected`
+    /// argument for `WriteRequest::compare_and_swap`.
+    async fn read_count_for_cas(&self) -> Result<(Option<String>, Option<String>), StorageError> {
+        match self.kv.read(ReadRequest::new(KV_EVENT_COUNT.to_string())).await {
+            Ok(result) => match result.kv {
+                Some(entry) => Ok((Some(entry.value.clone()), Some(entry.value))),
+                None => Ok((None, None)),
+            },
+            Err(_) => Ok((None, None)),
+        }
     }
 
     /// Delete the existing replaceable event matching (kind, pubkey, d_tag).
@@ -383,45 +427,51 @@ impl<S: KeyValueStore + ?Sized> KvEventStore<S> {
     }
 
     /// Scan KV indexes to find candidate event IDs for a filter.
+    ///
+    /// Uses timestamp-bounded scan ranges when `since`/`until` are present
+    /// on kind and author index scans.
     async fn scan_candidates(&self, filter: &Filter) -> Result<Vec<EventId>, StorageError> {
+        use crate::filters::ScanRange;
+        use crate::filters::filter_scan_ranges;
+
         // Direct lookup by IDs
         if let Some(ref ids) = filter.ids {
             return Ok(ids.iter().cloned().collect());
         }
 
-        // Scan by kind (most common filter pattern for NIP-34)
-        if let Some(ref kinds) = filter.kinds {
+        let ranges = filter_scan_ranges(filter);
+
+        // Kind-scoped scan (possibly time-bounded)
+        if filter.kinds.is_some() {
             let mut ids = Vec::new();
-            for kind in kinds {
-                let prefix = format!("{}{:06}:", KV_PREFIX_KIND, kind.as_u16());
-                let event_ids = self.scan_index_prefix(&prefix).await?;
-                ids.extend(event_ids);
+            for range in &ranges {
+                ids.extend(self.scan_index_range(range).await?);
             }
             // If we also have authors, intersect
             if let Some(ref authors) = filter.authors {
-                let author_ids = self.scan_authors(authors).await?;
+                let author_ids = self.scan_authors_bounded(authors, filter).await?;
                 let author_set: HashSet<_> = author_ids.into_iter().map(|id| id.to_hex()).collect();
                 ids.retain(|id| author_set.contains(&id.to_hex()));
             }
             return Ok(ids);
         }
 
-        // Scan by author
-        if let Some(ref authors) = filter.authors {
-            return self.scan_authors(authors).await;
+        // Author-scoped scan (possibly time-bounded)
+        if filter.authors.is_some() {
+            let mut ids = Vec::new();
+            for range in &ranges {
+                ids.extend(self.scan_index_range(range).await?);
+            }
+            return Ok(ids);
         }
 
-        // Scan by tag
+        // Tag-scoped scan — no timestamp bounding
         if !filter.generic_tags.is_empty() {
             let mut result_ids: Option<HashSet<String>> = None;
-            for (tag, values) in filter.generic_tags.iter() {
+            for range in &ranges {
                 let mut tag_ids = HashSet::new();
-                for value in values {
-                    let prefix = format!("{}{}:{}:", KV_PREFIX_TAG, tag.as_char(), value);
-                    let ids = self.scan_index_prefix(&prefix).await?;
-                    for id in ids {
-                        tag_ids.insert(id.to_hex());
-                    }
+                for id in self.scan_index_range(range).await? {
+                    tag_ids.insert(id.to_hex());
                 }
                 result_ids = Some(match result_ids {
                     Some(existing) => existing.intersection(&tag_ids).cloned().collect(),
@@ -434,26 +484,39 @@ impl<S: KeyValueStore + ?Sized> KvEventStore<S> {
         }
 
         // Full scan fallback
-        let ids = self.scan_index_prefix(KV_PREFIX_EVENT).await?;
+        let ids = self
+            .scan_index_range(&ScanRange {
+                start: KV_PREFIX_EVENT.to_string(),
+                end: None,
+            })
+            .await?;
         Ok(ids)
     }
 
-    async fn scan_authors(
+    async fn scan_authors_bounded(
         &self,
         authors: &std::collections::BTreeSet<PublicKey>,
+        filter: &Filter,
     ) -> Result<Vec<EventId>, StorageError> {
+        let since_pad = filter.since.map(|t| format!("{:016}", t.as_secs()));
+        let until_pad = filter.until.map(|t| format!("{:016}", t.as_secs()));
+
         let mut ids = Vec::new();
         for author in authors {
-            let prefix = format!("{}{}:", KV_PREFIX_AUTHOR, author.to_hex());
-            ids.extend(self.scan_index_prefix(&prefix).await?);
+            let author_prefix = format!("{}{}:", KV_PREFIX_AUTHOR, author.to_hex());
+            let range = crate::filters::bounded_range(&author_prefix, since_pad.as_deref(), until_pad.as_deref());
+            ids.extend(self.scan_index_range(&range).await?);
         }
         Ok(ids)
     }
 
-    /// Scan a KV prefix and extract event IDs from the key suffix.
-    async fn scan_index_prefix(&self, prefix: &str) -> Result<Vec<EventId>, StorageError> {
+    /// Scan a KV range and extract event IDs from the key suffix.
+    ///
+    /// Uses `range.start` as the scan prefix. If `range.end` is set,
+    /// entries with keys >= end are filtered out during iteration.
+    async fn scan_index_range(&self, range: &crate::filters::ScanRange) -> Result<Vec<EventId>, StorageError> {
         let scan = ScanRequest {
-            prefix: prefix.to_string(),
+            prefix: range.start.clone(),
             limit_results: Some(MAX_STORED_EVENTS),
             continuation_token: None,
         };
@@ -461,9 +524,15 @@ impl<S: KeyValueStore + ?Sized> KvEventStore<S> {
 
         let mut ids = Vec::new();
         for entry in &result.entries {
+            // Apply end bound if present
+            if let Some(ref end) = range.end
+                && entry.key.as_str() >= end.as_str()
+            {
+                break; // Keys are sorted; everything after is out of range
+            }
             // For event keys: `nostr:ev:{event_id}` → event_id is after prefix
             // For index keys: `nostr:ki:...:{event_id}` → event_id is last segment
-            let id_hex = if prefix == KV_PREFIX_EVENT {
+            let id_hex = if range.start == KV_PREFIX_EVENT {
                 entry.key.strip_prefix(KV_PREFIX_EVENT).unwrap_or("")
             } else {
                 entry.key.rsplit(':').next().unwrap_or("")

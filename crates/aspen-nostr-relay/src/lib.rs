@@ -12,14 +12,18 @@ pub mod config;
 pub mod connection;
 pub mod constants;
 pub mod filters;
+pub mod iroh_transport;
 pub mod keys;
+pub mod rate_limit;
 pub mod relay;
 pub mod storage;
 pub mod subscriptions;
 
 pub use config::NostrRelayConfig;
 pub use config::WritePolicy;
+pub use iroh_transport::NostrProtocolHandler;
 pub use keys::NostrIdentity;
+pub use rate_limit::RateLimiter;
 pub use relay::NostrRelayService;
 pub use relay::new_dyn_relay;
 pub use storage::KvEventStore;

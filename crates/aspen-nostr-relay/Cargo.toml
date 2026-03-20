@@ -10,6 +10,8 @@ aspen-traits = { workspace = true }
 aspen-kv-types = { workspace = true }
 aspen-constants = { workspace = true }
 async-trait = "0.1"
+dashmap = "6"
+iroh = "0.97.0"
 hex = "0.4"
 rand = { workspace = true }
 bytes = { workspace = true }

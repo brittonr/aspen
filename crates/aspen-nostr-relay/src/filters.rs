@@ -48,6 +48,109 @@ pub fn filter_scan_prefixes(filter: &Filter) -> Vec<String> {
     vec![constants::KV_PREFIX_EVENT.to_string()]
 }
 
+/// A scan range: start prefix (inclusive) and optional end prefix (exclusive).
+///
+/// When `end` is `None`, the scan covers all keys starting with `start`.
+/// When `end` is `Some(bound)`, keys are only returned while `key < bound`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScanRange {
+    pub start: String,
+    pub end: Option<String>,
+}
+
+/// Extract timestamp-bounded KV scan ranges for a filter.
+///
+/// Like `filter_scan_prefixes`, but incorporates `since`/`until` to narrow
+/// kind and author index scans. Tag and event-ID scans are unaffected
+/// (tags don't embed timestamps; event IDs are direct lookups).
+pub fn filter_scan_ranges(filter: &Filter) -> Vec<ScanRange> {
+    let since_pad = filter.since.map(|t| format!("{:016}", t.as_secs()));
+    let until_pad = filter.until.map(|t| format!("{:016}", t.as_secs()));
+
+    // Direct event ID lookups — no timestamp bounding possible
+    if let Some(ref ids) = filter.ids {
+        return ids
+            .iter()
+            .map(|id| ScanRange {
+                start: format!("{}{}", constants::KV_PREFIX_EVENT, id.to_hex()),
+                end: None,
+            })
+            .collect();
+    }
+
+    // Kind-scoped scans with timestamp bounds
+    if let Some(ref kinds) = filter.kinds {
+        return kinds
+            .iter()
+            .map(|kind| {
+                let kind_prefix = format!("{}{:06}:", constants::KV_PREFIX_KIND, kind.as_u16());
+                bounded_range(&kind_prefix, since_pad.as_deref(), until_pad.as_deref())
+            })
+            .collect();
+    }
+
+    // Author-scoped scans with timestamp bounds
+    if let Some(ref authors) = filter.authors {
+        return authors
+            .iter()
+            .map(|author| {
+                let author_prefix = format!("{}{}:", constants::KV_PREFIX_AUTHOR, author.to_hex());
+                bounded_range(&author_prefix, since_pad.as_deref(), until_pad.as_deref())
+            })
+            .collect();
+    }
+
+    // Tag-scoped scans — no timestamp in key, can't bound
+    if !filter.generic_tags.is_empty() {
+        let mut ranges = Vec::new();
+        for (tag, values) in filter.generic_tags.iter() {
+            for value in values {
+                ranges.push(ScanRange {
+                    start: format!("{}{}:{}:", constants::KV_PREFIX_TAG, tag.as_char(), value),
+                    end: None,
+                });
+            }
+        }
+        if !ranges.is_empty() {
+            return ranges;
+        }
+    }
+
+    // Full scan fallback
+    vec![ScanRange {
+        start: constants::KV_PREFIX_EVENT.to_string(),
+        end: None,
+    }]
+}
+
+/// Build a `ScanRange` from a prefix and optional since/until timestamp strings.
+///
+/// Index keys have the shape `{prefix}{timestamp}:{event_id}`.
+///
+/// `since` bounds are applied via the start prefix — but only if the KV store
+/// supports lexicographic range scanning. Since `ScanRequest` does prefix-based
+/// scanning, `since` narrows the start prefix so keys with earlier timestamps
+/// are never returned by the prefix scan (only exact prefix matches).
+///
+/// `until` bounds are applied as an end marker during iteration (early
+/// termination on sorted keys).
+///
+/// NOTE: `since` bounding via prefix scan only works correctly when the
+/// timestamp IS the next component after the prefix. The scan returns all
+/// keys whose string representation starts with `{prefix}{since_padded}` or
+/// comes lexicographically after it within the prefix namespace. Since
+/// `ScanRequest` only does prefix matching (not range), we use the base
+/// prefix for `since` and rely on in-memory filtering + `until` for
+/// early termination.
+pub fn bounded_range(prefix: &str, _since: Option<&str>, until: Option<&str>) -> ScanRange {
+    // `since` cannot narrow a prefix scan — keys with timestamps > since
+    // don't share the since prefix string. We filter in-memory via
+    // Filter::match_event instead.
+    let start = prefix.to_string();
+    let end = until.map(|ts| format!("{prefix}{ts}{}", '\u{00ff}'));
+    ScanRange { start, end }
+}
+
 /// Apply limit and sort ordering to query results.
 ///
 /// Events are sorted by `created_at` descending (newest first),
@@ -89,5 +192,80 @@ mod tests {
         let mut events = vec![event.clone(), event.clone()];
         dedup_events(&mut events);
         assert_eq!(events.len(), 1);
+    }
+
+    #[test]
+    fn test_bounded_range_kind_with_since() {
+        let filter = Filter::new().kind(Kind::Custom(30617)).since(Timestamp::from_secs(1700000000));
+        let ranges = filter_scan_ranges(&filter);
+        assert_eq!(ranges.len(), 1);
+        // `since` doesn't narrow prefix (prefix scan can't do range start)
+        assert_eq!(ranges[0].start, "nostr:ki:030617:");
+        assert!(ranges[0].end.is_none());
+    }
+
+    #[test]
+    fn test_bounded_range_kind_with_until() {
+        let filter = Filter::new().kind(Kind::Custom(30617)).until(Timestamp::from_secs(1700100000));
+        let ranges = filter_scan_ranges(&filter);
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].start, "nostr:ki:030617:");
+        let expected_end = format!("nostr:ki:030617:0000001700100000{}", '\u{00ff}');
+        assert_eq!(ranges[0].end.as_deref(), Some(expected_end.as_str()));
+    }
+
+    #[test]
+    fn test_bounded_range_kind_with_since_and_until() {
+        let filter = Filter::new()
+            .kind(Kind::Custom(1))
+            .since(Timestamp::from_secs(1000))
+            .until(Timestamp::from_secs(2000));
+        let ranges = filter_scan_ranges(&filter);
+        assert_eq!(ranges.len(), 1);
+        // since doesn't narrow prefix; until provides end bound
+        assert_eq!(ranges[0].start, "nostr:ki:000001:");
+        let expected_end = format!("nostr:ki:000001:0000000000002000{}", '\u{00ff}');
+        assert_eq!(ranges[0].end.as_deref(), Some(expected_end.as_str()));
+    }
+
+    #[test]
+    fn test_bounded_range_author_with_since() {
+        let keys = Keys::generate();
+        let filter = Filter::new().author(keys.public_key()).since(Timestamp::from_secs(5000));
+        let ranges = filter_scan_ranges(&filter);
+        assert_eq!(ranges.len(), 1);
+        // since doesn't narrow prefix
+        let expected_start = format!("nostr:au:{}:", keys.public_key().to_hex());
+        assert_eq!(ranges[0].start, expected_start);
+    }
+
+    #[test]
+    fn test_bounded_range_no_time_bounds() {
+        let filter = Filter::new().kind(Kind::TextNote);
+        let ranges = filter_scan_ranges(&filter);
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].start, "nostr:ki:000001:");
+        assert!(ranges[0].end.is_none());
+    }
+
+    #[test]
+    fn test_bounded_range_event_ids_ignores_time() {
+        let id = EventId::from_hex("0000000000000000000000000000000000000000000000000000000000000001").unwrap();
+        let filter = Filter::new().id(id).since(Timestamp::from_secs(1000));
+        let ranges = filter_scan_ranges(&filter);
+        assert_eq!(ranges.len(), 1);
+        assert!(ranges[0].start.starts_with("nostr:ev:"));
+        assert!(ranges[0].end.is_none());
+    }
+
+    #[test]
+    fn test_bounded_range_tag_ignores_time() {
+        let filter = Filter::new()
+            .custom_tag(SingleLetterTag::lowercase(Alphabet::D), "my-repo")
+            .since(Timestamp::from_secs(1000));
+        let ranges = filter_scan_ranges(&filter);
+        assert_eq!(ranges.len(), 1);
+        assert!(ranges[0].start.starts_with("nostr:tg:d:"));
+        assert!(ranges[0].end.is_none());
     }
 }

@@ -52,3 +52,32 @@ pub const AUTH_CHALLENGE_BYTES: usize = 32;
 /// Maximum allowed time delta (seconds) between `created_at` in a kind 22242
 /// event and the relay's current time. Events outside this window are rejected.
 pub const AUTH_TIMESTAMP_WINDOW_SECS: u64 = 60;
+
+// ---------------------------------------------------------------------------
+// CAS Atomicity
+// ---------------------------------------------------------------------------
+
+/// Maximum retries for compare-and-swap loops on the event counter.
+pub const MAX_CAS_RETRIES: u32 = 5;
+
+// ---------------------------------------------------------------------------
+// Rate Limiting
+// ---------------------------------------------------------------------------
+
+/// Maximum EVENT submissions per second per source IP address.
+pub const MAX_EVENTS_PER_SECOND_PER_IP: u32 = 10;
+
+/// Maximum burst of EVENT submissions per source IP address.
+pub const MAX_EVENTS_BURST_PER_IP: u32 = 20;
+
+/// Maximum EVENT submissions per second per author pubkey.
+pub const MAX_EVENTS_PER_SECOND_PER_PUBKEY: u32 = 5;
+
+/// Maximum burst of EVENT submissions per author pubkey.
+pub const MAX_EVENTS_BURST_PER_PUBKEY: u32 = 10;
+
+/// Time-to-live for idle rate limit buckets (seconds).
+pub const RATE_LIMIT_BUCKET_TTL_SECS: u64 = 300;
+
+/// Interval between stale rate limit bucket cleanup sweeps (seconds).
+pub const RATE_LIMIT_CLEANUP_INTERVAL_SECS: u64 = 60;

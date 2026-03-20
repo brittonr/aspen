@@ -137,6 +137,21 @@ impl RouterBuilder {
         self
     }
 
+    /// Register the Nostr relay protocol handler (optional).
+    ///
+    /// Accepts Nostr messages over iroh QUIC using length-prefixed framing.
+    /// Shares event store, subscriptions, and broadcast channel with the
+    /// TCP WebSocket listener.
+    ///
+    /// ALPN: `/aspen/nostr-ws/1`
+    #[cfg(feature = "nostr-relay")]
+    pub fn nostr_relay<N: iroh::protocol::ProtocolHandler>(mut self, handler: N) -> Self {
+        use aspen_transport::NOSTR_WS_ALPN;
+        self.builder = self.builder.accept(NOSTR_WS_ALPN, handler);
+        tracing::info!("registered Nostr relay protocol handler (ALPN: /aspen/nostr-ws/1)");
+        self
+    }
+
     /// Register the DAG sync protocol handler (optional).
     ///
     /// Enables streaming deterministic DAG traversal for efficient

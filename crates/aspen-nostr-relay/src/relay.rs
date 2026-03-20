@@ -8,6 +8,8 @@ use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 
 use aspen_traits::KeyValueStore;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
 use tracing::debug;
@@ -15,8 +17,10 @@ use tracing::info;
 use tracing::warn;
 
 use crate::config::NostrRelayConfig;
+use crate::config::WritePolicy;
 use crate::connection::handle_connection;
 use crate::keys::NostrIdentity;
+use crate::rate_limit::RateLimiter;
 use crate::storage::KvEventStore;
 use crate::storage::NostrEventStore;
 use crate::subscriptions::SubscriptionRegistry;
@@ -25,6 +29,7 @@ use crate::subscriptions::SubscriptionRegistry;
 struct RelayInner<S: ?Sized> {
     store: Arc<KvEventStore<S>>,
     registry: Arc<SubscriptionRegistry>,
+    rate_limiter: Arc<RateLimiter>,
     active_connections: AtomicU32,
 }
 
@@ -45,6 +50,14 @@ impl<S: KeyValueStore + 'static> NostrRelayService<S> {
     pub fn new(config: NostrRelayConfig, identity: NostrIdentity, kv: Arc<S>) -> Self {
         let store = Arc::new(KvEventStore::new(kv));
         let registry = Arc::new(SubscriptionRegistry::new(config.max_subscriptions_per_connection));
+        let rate_limiter = Arc::new(RateLimiter::new(
+            config.events_per_second_per_ip,
+            config.events_burst_per_ip,
+            config.events_per_second_per_pubkey,
+            config.events_burst_per_pubkey,
+        ));
+        let cancel = tokio_util::sync::CancellationToken::new();
+        rate_limiter.start_cleanup_task(cancel.child_token());
 
         Self {
             config,
@@ -52,10 +65,11 @@ impl<S: KeyValueStore + 'static> NostrRelayService<S> {
             inner: Arc::new(RelayInner {
                 store,
                 registry,
+                rate_limiter,
                 active_connections: AtomicU32::new(0),
             }),
             conn_counter: AtomicU32::new(0),
-            cancel: tokio_util::sync::CancellationToken::new(),
+            cancel,
         }
     }
 }
@@ -70,6 +84,14 @@ pub fn new_dyn_relay(
 ) -> NostrRelayService<dyn KeyValueStore> {
     let store = Arc::new(KvEventStore::from_arc(kv));
     let registry = Arc::new(SubscriptionRegistry::new(config.max_subscriptions_per_connection));
+    let rate_limiter = Arc::new(RateLimiter::new(
+        config.events_per_second_per_ip,
+        config.events_burst_per_ip,
+        config.events_per_second_per_pubkey,
+        config.events_burst_per_pubkey,
+    ));
+    let cancel = tokio_util::sync::CancellationToken::new();
+    rate_limiter.start_cleanup_task(cancel.child_token());
 
     NostrRelayService {
         config,
@@ -77,10 +99,11 @@ pub fn new_dyn_relay(
         inner: Arc::new(RelayInner {
             store,
             registry,
+            rate_limiter,
             active_connections: AtomicU32::new(0),
         }),
         conn_counter: AtomicU32::new(0),
-        cancel: tokio_util::sync::CancellationToken::new(),
+        cancel,
     }
 }
 
@@ -100,7 +123,7 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
             tokio::select! {
                 accept = listener.accept() => {
                     match accept {
-                        Ok((stream, peer)) => {
+                        Ok((mut stream, peer)) => {
                             let active = self.inner.active_connections.load(Ordering::Relaxed);
                             if active >= self.config.max_connections {
                                 warn!(
@@ -110,6 +133,50 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
                                 );
                                 drop(stream);
                                 continue;
+                            }
+
+                            // Peek at the HTTP request to decide: NIP-11 info vs WebSocket upgrade
+                            let mut buf = [0u8; 4096];
+                            let n = match stream.peek(&mut buf).await {
+                                Ok(n) if n > 0 => n,
+                                _ => { drop(stream); continue; }
+                            };
+                            let request_bytes = &buf[..n];
+
+                            // Check for NIP-11 info request: Accept header contains
+                            // "application/nostr+json" AND no Upgrade: websocket
+                            if let Some(action) = classify_http_request(request_bytes) {
+                                match action {
+                                    HttpAction::Nip11 => {
+                                        let info = self.relay_info_json();
+                                        let response = format!(
+                                            "HTTP/1.1 200 OK\r\n\
+                                             Content-Type: application/nostr+json\r\n\
+                                             Access-Control-Allow-Origin: *\r\n\
+                                             Content-Length: {}\r\n\
+                                             Connection: close\r\n\r\n{}",
+                                            info.len(),
+                                            info
+                                        );
+                                        // Consume the peeked bytes
+                                        let _ = stream.read(&mut buf).await;
+                                        let _ = stream.write_all(response.as_bytes()).await;
+                                        let _ = stream.shutdown().await;
+                                        continue;
+                                    }
+                                    HttpAction::Reject => {
+                                        let response = "HTTP/1.1 400 Bad Request\r\n\
+                                             Content-Length: 0\r\n\
+                                             Connection: close\r\n\r\n";
+                                        let _ = stream.read(&mut buf).await;
+                                        let _ = stream.write_all(response.as_bytes()).await;
+                                        let _ = stream.shutdown().await;
+                                        continue;
+                                    }
+                                    HttpAction::WebSocket => {
+                                        // Fall through to WebSocket upgrade
+                                    }
+                                }
                             }
 
                             let conn_id = self.conn_counter.fetch_add(1, Ordering::Relaxed) as u64;
@@ -133,6 +200,7 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
 
                             let write_policy = self.config.write_policy;
                             let relay_url = self.config.relay_url.clone();
+                            let rate_limiter = Arc::clone(&inner.rate_limiter);
 
                             tokio::spawn(async move {
                                 handle_connection(
@@ -144,6 +212,7 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
                                     cancel,
                                     write_policy,
                                     relay_url,
+                                    Some((rate_limiter, peer.ip())),
                                 ).await;
                                 inner.active_connections.fetch_sub(1, Ordering::Relaxed);
                             });
@@ -222,5 +291,59 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
     /// Access the Nostr identity.
     pub fn identity(&self) -> &NostrIdentity {
         &self.identity
+    }
+
+    /// Access the subscription registry (for iroh transport sharing).
+    pub fn registry(&self) -> &Arc<SubscriptionRegistry> {
+        &self.inner.registry
+    }
+
+    /// Access the rate limiter (for iroh transport sharing).
+    pub fn rate_limiter(&self) -> &Arc<RateLimiter> {
+        &self.inner.rate_limiter
+    }
+
+    /// Access the write policy.
+    pub fn write_policy(&self) -> WritePolicy {
+        self.config.write_policy
+    }
+
+    /// Access the relay URL.
+    pub fn relay_url(&self) -> Option<&str> {
+        self.config.relay_url.as_deref()
+    }
+}
+
+/// Classification of an incoming HTTP request.
+enum HttpAction {
+    /// NIP-11 relay info request — serve JSON and close.
+    Nip11,
+    /// WebSocket upgrade — proceed with handshake.
+    WebSocket,
+    /// Neither NIP-11 nor WebSocket — reject with 400.
+    Reject,
+}
+
+/// Inspect raw HTTP request bytes to decide how to handle the connection.
+///
+/// Returns `None` if the bytes don't look like HTTP (binary garbage).
+fn classify_http_request(buf: &[u8]) -> Option<HttpAction> {
+    let text = std::str::from_utf8(buf).ok()?;
+    let lower = text.to_ascii_lowercase();
+
+    // Must start with an HTTP method
+    if !text.starts_with("GET ") && !text.starts_with("HEAD ") {
+        return None;
+    }
+
+    let has_ws_upgrade = lower.contains("upgrade: websocket") || lower.contains("upgrade:websocket");
+    let has_nostr_accept = lower.contains("application/nostr+json");
+
+    if has_nostr_accept && !has_ws_upgrade {
+        Some(HttpAction::Nip11)
+    } else if has_ws_upgrade {
+        Some(HttpAction::WebSocket)
+    } else {
+        Some(HttpAction::Reject)
     }
 }

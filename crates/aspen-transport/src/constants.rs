@@ -62,6 +62,14 @@ pub const NIX_CACHE_H3_ALPN: &[u8] = b"iroh+h3";
 /// compatibility proxy to bridge TCP HTTP/1.1 clients to the forge frontend.
 pub const FORGE_WEB_ALPN: &[u8] = b"aspen/forge-web/1";
 
+/// ALPN protocol identifier for Nostr relay over QUIC.
+///
+/// Accepts iroh connections and processes Nostr protocol messages using
+/// length-prefixed framing (4-byte BE length + UTF-8 JSON payload).
+/// Runs alongside the TCP WebSocket listener, sharing the same event
+/// store and subscription registry.
+pub const NOSTR_WS_ALPN: &[u8] = b"/aspen/nostr-ws/1";
+
 /// ALPN protocol identifier for DAG sync.
 ///
 /// Used for streaming deterministic DAG traversal between nodes.
