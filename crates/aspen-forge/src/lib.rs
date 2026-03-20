@@ -86,11 +86,15 @@ pub mod refs;
 
 pub mod gossip;
 mod node;
+pub mod protection;
+pub mod status;
 pub mod sync;
 
 // Re-export primary types for convenient access
 pub use aspen_dag::DAG_SYNC_ALPN;
 pub use aspen_dag::DagSyncProtocolHandler;
+pub use cob::Approval;
+pub use cob::ChangeRequest;
 pub use cob::CobChange;
 pub use cob::CobOperation;
 pub use cob::CobStore;
@@ -128,8 +132,14 @@ pub use identity::Author;
 pub use identity::RepoId;
 pub use identity::RepoIdentity;
 pub use node::ForgeNode;
+pub use protection::BranchProtection;
+pub use protection::MergeChecker;
+pub use protection::ProtectionStore;
 pub use refs::RefStore;
 pub use refs::RefUpdateEvent;
+pub use status::CommitCheckState;
+pub use status::CommitStatus;
+pub use status::StatusStore;
 pub use sync::DagSyncPlan;
 pub use sync::DagSyncResult;
 pub use sync::DagSyncType;

@@ -315,6 +315,8 @@ pub struct PipelineOrchestrator<S: KeyValueStore + ?Sized> {
     /// Uses `std::sync::RwLock` so it can be set from sync contexts
     /// (e.g., `HandlerFactory::create`).
     deploy_dispatcher: StdRwLock<Option<Arc<dyn DeployDispatcher>>>,
+    /// Optional status reporter for writing commit statuses to Forge.
+    status_reporter: StdRwLock<Option<Arc<dyn crate::status_reporter::StatusReporter>>>,
     /// Weak self-reference for spawning deploy monitors from `execute()`.
     ///
     /// Set during `init()` which already requires `&Arc<Self>`.
@@ -339,6 +341,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             active_runs: RwLock::new(HashMap::new()),
             runs_per_repo: RwLock::new(HashMap::new()),
             deploy_dispatcher: StdRwLock::new(None),
+            status_reporter: StdRwLock::new(None),
             self_ref: RwLock::new(None),
         }
     }
@@ -357,6 +360,20 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         } else {
             warn!("failed to set deploy dispatcher: lock poisoned");
         }
+    }
+
+    /// Set the status reporter for publishing commit statuses to Forge.
+    pub fn set_status_reporter(&self, reporter: Arc<dyn crate::status_reporter::StatusReporter>) {
+        if let Ok(mut guard) = self.status_reporter.write() {
+            *guard = Some(reporter);
+        } else {
+            warn!("failed to set status reporter: lock poisoned");
+        }
+    }
+
+    /// Get the status reporter if configured.
+    pub(crate) fn get_status_reporter(&self) -> Option<Arc<dyn crate::status_reporter::StatusReporter>> {
+        self.status_reporter.read().ok().and_then(|g| g.clone())
     }
 
     /// Get the blob store if configured.

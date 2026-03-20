@@ -185,6 +185,13 @@ pub enum ForgeError {
     /// Federation operation error.
     #[snafu(display("federation error: {message}"))]
     FederationError { message: String },
+
+    // ========================================================================
+    // Merge Gating Errors
+    // ========================================================================
+    /// Merge blocked by branch protection rules.
+    #[snafu(display("merge blocked: {reason}"))]
+    MergeBlocked { reason: String },
 }
 
 impl From<anyhow::Error> for ForgeError {

@@ -206,6 +206,41 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             status = ?status,
             "Pipeline run status synced from workflow"
         );
+
+        // Report terminal status to Forge
+        if status.is_terminal() {
+            if let Some(reporter) = self.get_status_reporter() {
+                let check_state = crate::status_reporter::pipeline_status_to_check_state(&status);
+                let description = match status {
+                    PipelineStatus::Success => {
+                        format!("Pipeline '{}' succeeded", updated_run.pipeline_name)
+                    }
+                    PipelineStatus::Failed => {
+                        format!("Pipeline '{}' failed", updated_run.pipeline_name)
+                    }
+                    PipelineStatus::Cancelled => {
+                        format!("Pipeline '{}' cancelled", updated_run.pipeline_name)
+                    }
+                    _ => format!("Pipeline '{}' completed", updated_run.pipeline_name),
+                };
+                let report = crate::status_reporter::CommitStatusReport {
+                    repo_id_hex: updated_run.context.repo_id.to_hex(),
+                    commit_hash: updated_run.context.commit_hash,
+                    context: "ci/pipeline".to_string(),
+                    state: check_state,
+                    description,
+                    pipeline_run_id: updated_run.id.clone(),
+                    ref_name: updated_run.context.ref_name.clone(),
+                };
+                if let Err(e) = reporter.report_status(report).await {
+                    warn!(
+                        run_id = %updated_run.id,
+                        error = %e,
+                        "Failed to report terminal status"
+                    );
+                }
+            }
+        }
     }
 
     /// Persist job info updates without a pipeline status change.

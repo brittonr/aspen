@@ -120,6 +120,19 @@
 //!     snapshot_created     - Snapshot taken
 //!     snapshot_installed   - Snapshot restored
 //!     health_changed       - Node health status change
+//!   forge.
+//!     ref_updated          - Git ref updated (push)
+//!     patch_created        - Patch/merge request created
+//!     patch_merged         - Patch/merge request merged
+//!     patch_closed         - Patch/merge request closed without merging
+//!     patch_approved       - Patch/merge request approved
+//!     repo_created         - Repository created
+//!     push_completed       - Forge push completed — refs updated on a repository
+//!   ci.
+//!     pipeline_started     - CI pipeline started
+//!     pipeline_completed   - CI pipeline completed successfully
+//!     pipeline_failed      - CI pipeline failed
+//!     deploy_completed     - Deployment completed
 //!   blob.
 //!     blob_added           - Blob added to store
 //!     blob_deleted         - Blob removed (GC protection removed)

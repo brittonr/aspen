@@ -14,6 +14,7 @@ use serde::Serialize;
 
 use crate::cob::CobType;
 use crate::identity::RepoId;
+use crate::status::CommitCheckState;
 
 /// Announcement types broadcast over gossip.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,6 +68,22 @@ pub enum Announcement {
         /// Node ID of creator.
         creator: PublicKey,
     },
+
+    /// A CI pipeline status changed.
+    PipelineStatus {
+        /// Repository ID.
+        repo_id: RepoId,
+        /// Commit hash the pipeline ran against.
+        commit: [u8; 32],
+        /// Ref name (e.g., "heads/main").
+        ref_name: String,
+        /// Pipeline run ID.
+        run_id: String,
+        /// Pipeline result.
+        status: CommitCheckState,
+        /// Context string identifying the check (e.g., "ci/pipeline").
+        context: String,
+    },
 }
 
 impl Announcement {
@@ -78,6 +95,7 @@ impl Announcement {
             Announcement::Seeding { repo_id, .. } => repo_id,
             Announcement::Unseeding { repo_id, .. } => repo_id,
             Announcement::RepoCreated { repo_id, .. } => repo_id,
+            Announcement::PipelineStatus { repo_id, .. } => repo_id,
         }
     }
 
@@ -364,6 +382,14 @@ mod tests {
                 name: "test".to_string(),
                 creator: key.public(),
             },
+            Announcement::PipelineStatus {
+                repo_id,
+                commit: [4u8; 32],
+                ref_name: "heads/main".to_string(),
+                run_id: "run-123".to_string(),
+                status: CommitCheckState::Success,
+                context: "ci/pipeline".to_string(),
+            },
         ];
 
         for announcement in announcements {
@@ -372,5 +398,45 @@ mod tests {
             assert!(verified.is_some());
             assert_eq!(verified.unwrap(), &announcement);
         }
+    }
+
+    #[test]
+    fn test_pipeline_status_announcement_roundtrip() {
+        let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+
+        let ann = Announcement::PipelineStatus {
+            repo_id,
+            commit: [0xab; 32],
+            ref_name: "heads/feature".to_string(),
+            run_id: "run-456".to_string(),
+            status: CommitCheckState::Failure,
+            context: "ci/pipeline".to_string(),
+        };
+
+        let bytes = ann.to_bytes();
+        let recovered = Announcement::from_bytes(&bytes).expect("should deserialize");
+        assert_eq!(ann, recovered);
+        assert_eq!(recovered.repo_id(), &repo_id);
+    }
+
+    #[test]
+    fn test_pipeline_status_sign_verify() {
+        let key = test_key();
+        let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+
+        let ann = Announcement::PipelineStatus {
+            repo_id,
+            commit: [0xcd; 32],
+            ref_name: "heads/main".to_string(),
+            run_id: "run-789".to_string(),
+            status: CommitCheckState::Pending,
+            context: "ci/pipeline".to_string(),
+        };
+
+        let signed = SignedAnnouncement::sign(ann.clone(), &key);
+        let bytes = signed.to_bytes();
+        let recovered = SignedAnnouncement::from_bytes(&bytes).unwrap();
+        assert!(recovered.verify().is_some());
+        assert_eq!(recovered.verify().unwrap(), &ann);
     }
 }

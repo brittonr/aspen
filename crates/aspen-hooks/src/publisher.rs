@@ -133,6 +133,14 @@ mod tests {
         assert_eq!(topic_for_event_type(HookEventType::WriteCommitted), "hooks.kv.write_committed");
         assert_eq!(topic_for_event_type(HookEventType::LeaderElected), "hooks.cluster.leader_elected");
         assert_eq!(topic_for_event_type(HookEventType::SnapshotCreated), "hooks.system.snapshot_created");
+        // New forge events
+        assert_eq!(topic_for_event_type(HookEventType::RefUpdated), "hooks.forge.ref_updated");
+        assert_eq!(topic_for_event_type(HookEventType::PatchCreated), "hooks.forge.patch_created");
+        assert_eq!(topic_for_event_type(HookEventType::RepoCreated), "hooks.forge.repo_created");
+        // New CI events
+        assert_eq!(topic_for_event_type(HookEventType::PipelineStarted), "hooks.ci.pipeline_started");
+        assert_eq!(topic_for_event_type(HookEventType::PipelineCompleted), "hooks.ci.pipeline_completed");
+        assert_eq!(topic_for_event_type(HookEventType::DeployCompleted), "hooks.ci.deploy_completed");
     }
 
     #[test]

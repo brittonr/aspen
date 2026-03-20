@@ -72,6 +72,22 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         if let Err(e) = self.persist_run(run).await {
             warn!(run_id = %run.id, error = %e, "Failed to persist pipeline run to KV store");
         }
+
+        // Report initial Pending status to Forge
+        if let Some(reporter) = self.get_status_reporter() {
+            let report = crate::status_reporter::CommitStatusReport {
+                repo_id_hex: run.context.repo_id.to_hex(),
+                commit_hash: run.context.commit_hash,
+                context: "ci/pipeline".to_string(),
+                state: aspen_forge::CommitCheckState::Pending,
+                description: format!("Pipeline '{}' started", run.pipeline_name),
+                pipeline_run_id: run.id.clone(),
+                ref_name: run.context.ref_name.clone(),
+            };
+            if let Err(e) = reporter.report_status(report).await {
+                warn!(run_id = %run.id, error = %e, "Failed to report pending status");
+            }
+        }
     }
 
     /// Persist a pipeline run to the KV store.

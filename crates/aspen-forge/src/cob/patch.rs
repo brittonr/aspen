@@ -53,6 +53,10 @@ pub struct Patch {
 
     /// Timestamp of last activity.
     pub updated_at_ms: u64,
+
+    /// CI statuses for the patch's head commit (populated at read time).
+    #[serde(default)]
+    pub ci_statuses: Vec<crate::status::CommitStatus>,
 }
 
 /// State of a patch.
@@ -191,6 +195,7 @@ impl Patch {
             change_requests: Vec::new(),
             created_at_ms,
             updated_at_ms: created_at_ms,
+            ci_statuses: Vec::new(),
         }
     }
 

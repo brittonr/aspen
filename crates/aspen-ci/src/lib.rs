@@ -63,12 +63,14 @@ pub mod checkout;
 pub mod config;
 pub mod error;
 pub mod failure_cache;
+pub mod forge_reporter;
 pub mod log_writer;
 #[cfg(feature = "nix-config")]
 pub mod nix_config;
 pub mod orchestrator;
 #[cfg(test)]
 mod schema_gen;
+pub mod status_reporter;
 pub mod trigger;
 /// CI build workers.
 pub mod workers;
@@ -236,6 +238,7 @@ pub use config::loader::load_pipeline_config_str_async;
 // Re-export priority conversion function
 pub use config::types::to_jobs_priority;
 pub use error::CiError;
+pub use forge_reporter::ForgeStatusReporter;
 // Re-export log writer types (the actual writer implementation, not just types)
 pub use log_writer::CiLogWriter;
 pub use log_writer::SpawnedLogWriter;
@@ -256,6 +259,9 @@ pub use orchestrator::PipelineOrchestratorConfig;
 pub use orchestrator::PipelineRun;
 pub use orchestrator::PipelineStatus;
 pub use orchestrator::StageStatus;
+pub use status_reporter::CommitStatusReport;
+pub use status_reporter::StatusReporter;
+pub use status_reporter::pipeline_status_to_check_state;
 // ============================================================================
 // Re-exports from other Aspen crates
 // ============================================================================

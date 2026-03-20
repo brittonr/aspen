@@ -186,6 +186,22 @@ impl AnnouncementCallback for ForgeAnnouncementHandler {
                     "discovered new repository"
                 );
             }
+
+            Announcement::PipelineStatus {
+                repo_id,
+                status,
+                context,
+                ref_name,
+                ..
+            } => {
+                tracing::info!(
+                    repo_id = %repo_id.to_hex(),
+                    status = %status,
+                    context = %context,
+                    ref_name = %ref_name,
+                    "received pipeline status update"
+                );
+            }
         }
     }
 }

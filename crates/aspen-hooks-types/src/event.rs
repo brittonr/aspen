@@ -48,8 +48,30 @@ pub enum HookEventType {
     BlobUnprotected,
 
     // Forge events
+    /// Git ref updated (push).
+    RefUpdated,
+    /// Patch/merge request created.
+    PatchCreated,
+    /// Patch/merge request merged.
+    PatchMerged,
+    /// Patch/merge request closed without merging.
+    PatchClosed,
+    /// Patch/merge request approved.
+    PatchApproved,
+    /// Repository created.
+    RepoCreated,
     /// Forge push completed — refs updated on a repository.
     ForgePushCompleted,
+
+    // CI events
+    /// CI pipeline started.
+    PipelineStarted,
+    /// CI pipeline completed successfully.
+    PipelineCompleted,
+    /// CI pipeline failed.
+    PipelineFailed,
+    /// Deployment completed.
+    DeployCompleted,
 
     // Docs events
     /// Docs sync session started with peer cluster.
@@ -79,7 +101,18 @@ impl HookEventType {
             HookEventType::HealthChanged => "system.health_changed",
             HookEventType::TtlExpired => "kv.ttl_expired",
             // Forge events
+            HookEventType::RefUpdated => "forge.ref_updated",
+            HookEventType::PatchCreated => "forge.patch_created",
+            HookEventType::PatchMerged => "forge.patch_merged",
+            HookEventType::PatchClosed => "forge.patch_closed",
+            HookEventType::PatchApproved => "forge.patch_approved",
+            HookEventType::RepoCreated => "forge.repo_created",
             HookEventType::ForgePushCompleted => "forge.push_completed",
+            // CI events
+            HookEventType::PipelineStarted => "ci.pipeline_started",
+            HookEventType::PipelineCompleted => "ci.pipeline_completed",
+            HookEventType::PipelineFailed => "ci.pipeline_failed",
+            HookEventType::DeployCompleted => "ci.deploy_completed",
             // Blob events
             HookEventType::BlobAdded => "blob.blob_added",
             HookEventType::BlobDeleted => "blob.blob_deleted",
@@ -110,7 +143,17 @@ impl HookEventType {
             HookEventType::SnapshotCreated | HookEventType::SnapshotInstalled | HookEventType::HealthChanged => {
                 "system"
             }
-            HookEventType::ForgePushCompleted => "forge",
+            HookEventType::RefUpdated
+            | HookEventType::PatchCreated
+            | HookEventType::PatchMerged
+            | HookEventType::PatchClosed
+            | HookEventType::PatchApproved
+            | HookEventType::RepoCreated
+            | HookEventType::ForgePushCompleted => "forge",
+            HookEventType::PipelineStarted
+            | HookEventType::PipelineCompleted
+            | HookEventType::PipelineFailed
+            | HookEventType::DeployCompleted => "ci",
             HookEventType::BlobAdded
             | HookEventType::BlobDeleted
             | HookEventType::BlobDownloaded
@@ -450,6 +493,19 @@ mod tests {
         // Blob events
         assert_eq!(HookEventType::BlobAdded.topic(), "hooks.blob.blob_added");
         assert_eq!(HookEventType::BlobDownloaded.topic(), "hooks.blob.blob_downloaded");
+        // Forge events
+        assert_eq!(HookEventType::RefUpdated.topic(), "hooks.forge.ref_updated");
+        assert_eq!(HookEventType::PatchCreated.topic(), "hooks.forge.patch_created");
+        assert_eq!(HookEventType::PatchMerged.topic(), "hooks.forge.patch_merged");
+        assert_eq!(HookEventType::PatchClosed.topic(), "hooks.forge.patch_closed");
+        assert_eq!(HookEventType::PatchApproved.topic(), "hooks.forge.patch_approved");
+        assert_eq!(HookEventType::RepoCreated.topic(), "hooks.forge.repo_created");
+        assert_eq!(HookEventType::ForgePushCompleted.topic(), "hooks.forge.push_completed");
+        // CI events
+        assert_eq!(HookEventType::PipelineStarted.topic(), "hooks.ci.pipeline_started");
+        assert_eq!(HookEventType::PipelineCompleted.topic(), "hooks.ci.pipeline_completed");
+        assert_eq!(HookEventType::PipelineFailed.topic(), "hooks.ci.pipeline_failed");
+        assert_eq!(HookEventType::DeployCompleted.topic(), "hooks.ci.deploy_completed");
         // Docs events
         assert_eq!(HookEventType::DocsSyncStarted.topic(), "hooks.docs.sync_started");
         assert_eq!(HookEventType::DocsEntryImported.topic(), "hooks.docs.entry_imported");
@@ -469,6 +525,19 @@ mod tests {
         assert_eq!(HookEventType::BlobDownloaded.category(), "blob");
         assert_eq!(HookEventType::BlobProtected.category(), "blob");
         assert_eq!(HookEventType::BlobUnprotected.category(), "blob");
+        // Forge events
+        assert_eq!(HookEventType::RefUpdated.category(), "forge");
+        assert_eq!(HookEventType::PatchCreated.category(), "forge");
+        assert_eq!(HookEventType::PatchMerged.category(), "forge");
+        assert_eq!(HookEventType::PatchClosed.category(), "forge");
+        assert_eq!(HookEventType::PatchApproved.category(), "forge");
+        assert_eq!(HookEventType::RepoCreated.category(), "forge");
+        assert_eq!(HookEventType::ForgePushCompleted.category(), "forge");
+        // CI events
+        assert_eq!(HookEventType::PipelineStarted.category(), "ci");
+        assert_eq!(HookEventType::PipelineCompleted.category(), "ci");
+        assert_eq!(HookEventType::PipelineFailed.category(), "ci");
+        assert_eq!(HookEventType::DeployCompleted.category(), "ci");
         // Docs events
         assert_eq!(HookEventType::DocsSyncStarted.category(), "docs");
         assert_eq!(HookEventType::DocsSyncCompleted.category(), "docs");

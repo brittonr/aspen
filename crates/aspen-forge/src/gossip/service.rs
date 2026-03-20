@@ -138,6 +138,21 @@ fn spawn_receiver_log_announcement(announcement: &Announcement, signer: &PublicK
                 "received RepoCreated announcement"
             );
         }
+        Announcement::PipelineStatus {
+            repo_id,
+            ref_name,
+            status,
+            context,
+            ..
+        } => {
+            tracing::info!(
+                repo_id = %repo_id.to_hex(),
+                ref_name = %ref_name,
+                status = %status,
+                context = %context,
+                "received PipelineStatus announcement"
+            );
+        }
     }
 }
 

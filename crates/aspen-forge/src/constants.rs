@@ -220,6 +220,18 @@ pub const KV_PREFIX_SEEDING: &str = "forge:seeding:";
 /// Value: JSON-serialized `FederationSettings`
 pub const KV_PREFIX_FEDERATION_SETTINGS: &str = "forge:federation:settings:";
 
+/// KV key prefix for commit statuses.
+///
+/// Key format: `{KV_PREFIX_COMMIT_STATUS}{repo_hex}:{commit_hex}:{context}`
+/// Value: JSON-serialized `CommitStatus`
+pub const KV_PREFIX_COMMIT_STATUS: &str = "forge:status:";
+
+/// KV key prefix for branch protection rules.
+///
+/// Key format: `{KV_PREFIX_BRANCH_PROTECTION}{repo_hex}:{ref_pattern}`
+/// Value: JSON-serialized `BranchProtection`
+pub const KV_PREFIX_BRANCH_PROTECTION: &str = "forge:protection:";
+
 // ============================================================================
 // Chunked Push Session Limits
 // ============================================================================

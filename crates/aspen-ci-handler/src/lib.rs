@@ -87,6 +87,11 @@ impl HandlerFactory for CiHandlerFactory {
                         ctx.node_id,
                     ));
                 orchestrator.set_deploy_dispatcher(deploy_dispatcher);
+
+                // Set up status reporter so CI writes commit statuses back to Forge
+                let status_reporter: Arc<dyn aspen_ci::StatusReporter> =
+                    Arc::new(aspen_ci::ForgeStatusReporter::new(ctx.kv_store.clone()));
+                orchestrator.set_status_reporter(status_reporter);
             }
 
             let executor = Arc::new(CiServiceExecutor::new(

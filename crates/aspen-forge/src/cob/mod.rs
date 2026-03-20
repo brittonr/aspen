@@ -40,6 +40,8 @@ pub use change::ReviewSide;
 pub use issue::Issue;
 pub use issue::IssueScalarFieldValue;
 pub use issue::IssueState;
+pub use patch::Approval;
+pub use patch::ChangeRequest;
 pub use patch::Patch;
 pub use patch::PatchRevision;
 pub use patch::PatchState;
