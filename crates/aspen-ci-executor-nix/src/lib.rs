@@ -42,6 +42,8 @@ mod executor;
 #[cfg(feature = "snix-build")]
 pub mod fetch;
 #[cfg(feature = "snix-eval")]
+pub mod flake_compat;
+#[cfg(feature = "snix-eval")]
 pub mod flake_lock;
 pub mod flakeref;
 mod payload;

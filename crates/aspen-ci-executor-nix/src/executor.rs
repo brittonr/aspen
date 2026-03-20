@@ -342,11 +342,11 @@ impl NixBuildWorker {
         })
     }
 
-    /// Try in-process flake evaluation via call-flake.nix + snix-eval.
+    /// Try in-process flake evaluation via embedded flake-compat + snix-eval.
     ///
-    /// Parses flake.lock, resolves inputs, constructs eval expression, and
-    /// evaluates with snix-eval. Returns the Derivation on success, or an
-    /// error that triggers fallback to `nix eval` subprocess.
+    /// Uses NixOS/flake-compat to resolve inputs via snix-eval's native
+    /// `fetchTarball`/`builtins.path` builtins. Falls back to the legacy
+    /// call-flake.nix path, then to `nix eval` subprocess.
     #[cfg(feature = "snix-build")]
     async fn try_flake_eval_native(
         &self,
@@ -366,10 +366,46 @@ impl NixBuildWorker {
             reason: "NixEvaluator not initialized for flake eval".to_string(),
         })?;
 
+        // Primary path: flake-compat — snix-eval handles all input fetching
         if let Some(tx) = log_sender {
-            let _ = tx.send("attempting in-process flake eval via call-flake.nix\n".to_string()).await;
+            let _ = tx.send("attempting in-process flake eval via flake-compat\n".to_string()).await;
         }
 
+        let eval_clone = evaluator.clone();
+        let dir = flake_dir.to_string();
+        let attr = attribute.clone();
+
+        match tokio::task::spawn_blocking(move || eval_clone.evaluate_flake_via_compat(&dir, &attr)).await {
+            Ok(Ok((_store_path, drv))) => {
+                info!(
+                    flake_ref = %flake_ref,
+                    "flake native build completed (zero subprocesses)"
+                );
+                if let Some(tx) = log_sender {
+                    let _ = tx.send("flake-compat eval succeeded (zero subprocesses)\n".to_string()).await;
+                }
+                return Ok(drv);
+            }
+            Ok(Err(e)) => {
+                warn!(
+                    error = %e,
+                    flake_ref = %flake_ref,
+                    "flake-compat eval failed, trying legacy call-flake.nix path"
+                );
+                if let Some(tx) = log_sender {
+                    let _ = tx.send(format!("flake-compat eval failed ({e}), trying legacy path\n")).await;
+                }
+            }
+            Err(e) => {
+                warn!(
+                    error = %e,
+                    flake_ref = %flake_ref,
+                    "flake-compat eval task panicked, trying legacy path"
+                );
+            }
+        }
+
+        // Fallback: legacy call-flake.nix + manual input resolution
         let eval_clone = evaluator.clone();
         let dir = flake_dir.to_string();
         let attr = attribute.clone();

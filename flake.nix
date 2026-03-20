@@ -3368,6 +3368,18 @@
                 gatewayPackage = bins.full-aspen-nix-cache-gateway;
               };
 
+              # Flake-compat native build (zero subprocesses for tarball inputs).
+              # Uses embedded NixOS/flake-compat + snix-eval's fetchTarball for
+              # in-process flake input resolution. No nix eval subprocess needed.
+              # Build: nix build .#checks.x86_64-linux.snix-flake-native-build-test --impure
+              snix-flake-native-build-test = import ./nix/tests/snix-flake-native-build.nix {
+                inherit pkgs kvPluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins-snix-build;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gatewayPackage = bins.full-aspen-nix-cache-gateway;
+              };
+
               # MicroVM smoke test: nginx in a Cloud Hypervisor microVM.
               # MicroVM + AspenFs VirtioFS integration test: nginx in a Cloud
               # Hypervisor guest serving files from AspenFs in-memory KV store.

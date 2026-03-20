@@ -70,24 +70,37 @@ snix-eval resolves the `.drvPath` attribute, which triggers `derivationStrict` i
 The `Derivation` object is extracted from snix-glue's `KnownPaths` — no `.drv` file
 needs to exist on disk. The entire eval→build→upload pipeline runs in-process.
 
-#### 2. Native build with eval subprocess (flake projects)
+#### 2. Native build via flake-compat (flake projects, zero subprocesses)
 
-For flake projects when `snix-build` feature is enabled.
+For flake projects when `snix-build` feature is enabled. Uses embedded
+[NixOS/flake-compat](https://github.com/NixOS/flake-compat) evaluated through
+snix-eval — no `nix` subprocess needed for github, gitlab, tarball, path, or
+sourcehut inputs.
 
 ```
 git push → Forge gossip → CI trigger
   → NixBuildWorker::try_native_build()
-    1. nix eval --raw <flake>.drvPath  (subprocess, ~100ms)
-    2. Read .drv from /nix/store, parse ATerm format
-    3. LocalStoreBuildService: Derivation → BuildRequest → bubblewrap sandbox
-    4. Upload outputs directly to PathInfoService + BlobService
-    5. nar-bridge serves built paths to downstream consumers
+    → try_flake_eval_native() [primary: flake-compat]
+      1. evaluate_flake_via_compat(): import flake-compat { src = <dir>; }
+      2. snix-eval's fetchTarball resolves inputs (HTTP download, narHash verify)
+      3. derivationStrict → Derivation extracted from KnownPaths
+    → LocalStoreBuildService: Derivation → BuildRequest → bubblewrap sandbox
+    → Upload outputs directly to PathInfoService + BlobService
+    → nar-bridge serves built paths to downstream consumers
 ```
 
-The `nix eval` subprocess is the only external process call. Build execution uses
-`LocalStoreBuildService`, which copies inputs from the local `/nix/store` into the
-bubblewrap sandbox via `cp -a`. This replaces upstream snix-build's FUSE-based input
-mounting, which fails under systemd's `ProtectSystem=strict`.
+snix-eval's `fetchTarball` builtin handles HTTP downloads, tarball unpacking,
+narHash verification, and store path computation internally. `SnixStoreIO`
+triggers lazy fetches on-demand when `import` reads from a store path.
+
+**Limitation:** `builtins.fetchGit` is unimplemented in snix, so flakes with
+raw `git` inputs fall back to the `nix eval --raw .drvPath` subprocess path
+(legacy call-flake.nix), then to the full `nix build` subprocess.
+
+Build execution uses `LocalStoreBuildService`, which copies inputs from the
+local `/nix/store` into the bubblewrap sandbox via `cp -a`. This replaces
+upstream snix-build's FUSE-based input mounting, which fails under systemd's
+`ProtectSystem=strict`.
 
 #### 3. Subprocess fallback
 
@@ -134,4 +147,5 @@ standard Nix binary cache protocol.
 | `e2e-push-build-cache-test` | Full pipeline: Forge push → CI auto-trigger → build → cache gateway serves |
 | `snix-daemon-test` | nix-daemon protocol: path-info, valid-path, copy via Unix socket |
 | `snix-native-build-test` | Native bwrap build: flake eval subprocess → LocalStoreBuildService → PathInfoService upload → cache gateway narinfo |
+| `snix-flake-native-build-test` | Zero-subprocess flake build: flake-compat + snix-eval fetchTarball resolves tarball input → bwrap build → cache gateway narinfo |
 | `npins-native-eval-test` | Zero-subprocess build: snix-eval resolves Derivation in-memory → bwrap build → confirms "zero subprocesses" in logs |
