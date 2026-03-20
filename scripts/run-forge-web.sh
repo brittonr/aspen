@@ -135,9 +135,6 @@ mkdir -p "$CLUSTER_DIR/node1"
 KEY=$(printf '%064x' 9001)
 
 log "Starting cluster..."
-ASPEN_DOCS_ENABLED=true \
-ASPEN_DOCS_IN_MEMORY=true \
-ASPEN_HOOKS_ENABLED=true \
 ./target/debug/aspen-node \
   --node-id 1 \
   --data-dir "$CLUSTER_DIR/node1" \
@@ -205,11 +202,31 @@ A demo repository hosted on **Aspen Forge**.
 - Raft-consistent refs
 - P2P replication via iroh QUIC
 - Web UI served over HTTP/3
+- Nostr NIP-07 login (browser extension)
+- Code search across repos
+- Issue tracking with close/reopen
+- Patch submission, review, and merge
+- CI auto-trigger via `.aspen/ci.ncl`
 INNER_MD
 
     mkdir -p src
     printf 'fn main() {\n    println!("Hello from Aspen Forge!");\n}\n' > src/main.rs
     printf '[package]\nname = "hello"\nversion = "0.1.0"\nedition = "2024"\n' > Cargo.toml
+
+    # CI config — triggers automatically on push when --ci-auto-trigger is set
+    mkdir -p .aspen
+    cat > .aspen/ci.ncl << 'INNER_NCL'
+{
+  jobs = {
+    build = {
+      steps = [
+        { run = "echo 'Hello from Aspen CI!'" },
+        { run = "cat README.md" },
+      ]
+    }
+  }
+}
+INNER_NCL
 
     git add -A && git commit -q -m "Initial commit"
     RUST_LOG=warn git push "aspen://${TICKET}/${REPO_ID}" HEAD:main 2>/dev/null
@@ -261,29 +278,32 @@ if [ -n "$TAILSCALE_MODE" ]; then
   [ "$TAILSCALE_MODE" = "funnel" ] && VISIBILITY="public internet"
 
   echo ""
-  echo -e "${BOLD}╔══════════════════════════════════════════════════════════════╗${NC}"
-  echo -e "${BOLD}║  🌲 Aspen Forge  (via Tailscale)                            ║${NC}"
-  echo -e "${BOLD}║                                                              ║${NC}"
-  echo -e "${BOLD}║     ${GREEN}$TS_URL${NC}"
-  echo -e "${BOLD}║     ${BLUE}$LOCAL_URL${NC}${BOLD}  (local)                                    ║${NC}"
-  echo -e "${BOLD}║                                                              ║${NC}"
-  echo -e "${BOLD}║  Accessible to: ${VISIBILITY}${NC}"
-  echo -e "${BOLD}║  Click the repo name to browse files & commits.              ║${NC}"
-  echo -e "${BOLD}║  Press Ctrl-C to stop.                                       ║${NC}"
-  echo -e "${BOLD}╚══════════════════════════════════════════════════════════════╝${NC}"
+  echo -e "${BOLD}  🌲 Aspen Forge${NC}  (via Tailscale ${TAILSCALE_MODE})"
+  echo ""
+  echo -e "     ${GREEN}${TS_URL}${NC}"
+  echo -e "     ${BLUE}${LOCAL_URL}${NC}  (local)"
+  echo ""
+  echo -e "  Accessible to: ${BOLD}${VISIBILITY}${NC}"
+  echo ""
+  echo "  Browse files, commits, issues, patches, and search."
+  echo "  Login with a Nostr NIP-07 browser extension."
+  echo "  CI auto-triggers on push (.aspen/ci.ncl)."
+  echo ""
+  echo -e "  Press ${BOLD}Ctrl-C${NC} to stop."
   echo ""
 else
   URL="$LOCAL_URL"
 
   echo ""
-  echo -e "${BOLD}╔══════════════════════════════════════════════════╗${NC}"
-  echo -e "${BOLD}║  🌲 Aspen Forge                                  ║${NC}"
-  echo -e "${BOLD}║                                                  ║${NC}"
-  echo -e "${BOLD}║     ${GREEN}$URL${NC}${BOLD}                            ║${NC}"
-  echo -e "${BOLD}║                                                  ║${NC}"
-  echo -e "${BOLD}║  Click the repo name to browse files & commits.  ║${NC}"
-  echo -e "${BOLD}║  Press Ctrl-C to stop.                           ║${NC}"
-  echo -e "${BOLD}╚══════════════════════════════════════════════════╝${NC}"
+  echo -e "${BOLD}  🌲 Aspen Forge${NC}"
+  echo ""
+  echo -e "     ${GREEN}${URL}${NC}"
+  echo ""
+  echo "  Browse files, commits, issues, patches, and search."
+  echo "  Login with a Nostr NIP-07 browser extension."
+  echo "  CI auto-triggers on push (.aspen/ci.ncl)."
+  echo ""
+  echo -e "  Press ${BOLD}Ctrl-C${NC} to stop."
   echo ""
 fi
 
