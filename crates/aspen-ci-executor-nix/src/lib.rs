@@ -39,6 +39,8 @@ pub mod derivation;
 #[cfg(feature = "snix-eval")]
 pub mod eval;
 mod executor;
+#[cfg(feature = "snix-build")]
+pub mod fetch;
 #[cfg(feature = "snix-eval")]
 pub mod flake_lock;
 pub mod flakeref;

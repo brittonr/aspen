@@ -403,8 +403,14 @@ impl NixEvaluator {
             is_ifd: false,
         })?;
 
-        // Step 2: Resolve all inputs to store paths
-        let resolved = lock.resolve_all_inputs(flake_dir).map_err(|e| NixEvalError {
+        // Step 2: Resolve all inputs to store paths.
+        // Create a FetchCache so missing inputs can be downloaded over HTTP.
+        let fetch_cache = crate::fetch::FetchCache::new().map_err(|e| NixEvalError {
+            message: format!("failed to create fetch cache: {e}"),
+            is_ifd: false,
+        })?;
+
+        let resolved = lock.resolve_all_inputs_with_fetch(flake_dir, &fetch_cache).map_err(|e| NixEvalError {
             message: format!("failed to resolve flake inputs: {e}"),
             is_ifd: false,
         })?;

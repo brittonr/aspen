@@ -294,46 +294,80 @@ impl FlakeLock {
     ///
     /// The root node is handled specially — its outPath is the flake_dir itself.
     ///
+    /// When `fetch_cache` is provided, missing inputs are fetched over HTTP
+    /// and cached by narHash. Without a cache, fetching is skipped and missing
+    /// inputs cause a fallback to subprocess evaluation.
+    ///
     /// Returns a map of node key → (outPath, LockedInput) for building overrides.
     pub fn resolve_all_inputs(&self, flake_dir: &str) -> io::Result<Vec<ResolvedInput>> {
         let mut resolved = self.resolve_all_nodes()?;
-
-        // Check local availability for all computed store paths
         Self::check_local_availability(&mut resolved);
 
-        // For inputs not available locally, try fetching
-        let mut unresolved = Vec::new();
-        for input in &resolved {
+        for input in &mut resolved {
             if !input.is_local {
-                match input.locked.input_type.as_str() {
-                    "path" => {
-                        // Path inputs don't use store paths — resolve directly
-                        // (handled separately in build_overrides)
+                let fetch_result = match input.locked.input_type.as_str() {
+                    "path" => resolve_path_input(&input.locked, flake_dir),
+                    #[cfg(not(feature = "snix-build"))]
+                    "github" | "gitlab" => fetch_github_input(&input.locked),
+                    #[cfg(not(feature = "snix-build"))]
+                    "tarball" => fetch_tarball_input(&input.locked),
+                    #[cfg(feature = "snix-build")]
+                    "github" => fetch_github_input(&input.locked, None),
+                    #[cfg(feature = "snix-build")]
+                    "gitlab" => fetch_gitlab_input(&input.locked, None),
+                    #[cfg(feature = "snix-build")]
+                    "tarball" => fetch_tarball_input(&input.locked, None),
+                    "git" => Err(io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        format!("git input {} requires fallback", input.node_key),
+                    )),
+                    other => Err(io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        format!("unsupported input type '{}' for node {}", other, input.node_key),
+                    )),
+                };
+
+                match fetch_result {
+                    Ok(path) => {
+                        input.store_path = path;
+                        input.is_local = true;
                     }
-                    "github" | "gitlab" => {
-                        unresolved.push(input.node_key.clone());
-                    }
-                    "tarball" => {
-                        unresolved.push(input.node_key.clone());
-                    }
-                    "git" => {
-                        unresolved.push(input.node_key.clone());
-                    }
-                    _ => {
-                        // Unknown type — will trigger fallback
-                        unresolved.push(input.node_key.clone());
+                    Err(e) => {
+                        tracing::debug!(
+                            node = %input.node_key,
+                            input_type = %input.locked.input_type,
+                            error = %e,
+                            "input not available locally, will need fallback"
+                        );
                     }
                 }
             }
         }
 
-        // Attempt fetch for missing inputs
+        Ok(resolved)
+    }
+
+    /// Resolve all inputs, fetching missing inputs over HTTP via the provided cache.
+    ///
+    /// Missing GitHub/GitLab/tarball inputs are downloaded, unpacked,
+    /// narHash-verified, and cached. This enables fully in-process flake
+    /// evaluation without subprocess fallback.
+    #[cfg(feature = "snix-build")]
+    pub fn resolve_all_inputs_with_fetch(
+        &self,
+        flake_dir: &str,
+        fetch_cache: &crate::fetch::FetchCache,
+    ) -> io::Result<Vec<ResolvedInput>> {
+        let mut resolved = self.resolve_all_nodes()?;
+        Self::check_local_availability(&mut resolved);
+
         for input in &mut resolved {
             if !input.is_local {
                 let fetch_result = match input.locked.input_type.as_str() {
                     "path" => resolve_path_input(&input.locked, flake_dir),
-                    "github" | "gitlab" => fetch_github_input(&input.locked),
-                    "tarball" => fetch_tarball_input(&input.locked),
+                    "github" => fetch_github_input(&input.locked, Some(fetch_cache)),
+                    "gitlab" => fetch_gitlab_input(&input.locked, Some(fetch_cache)),
+                    "tarball" => fetch_tarball_input(&input.locked, Some(fetch_cache)),
                     "git" => Err(io::Error::new(
                         io::ErrorKind::Unsupported,
                         format!("git input {} requires fallback to nix eval subprocess", input.node_key),
@@ -369,6 +403,15 @@ impl FlakeLock {
     pub fn all_inputs_available(resolved: &[ResolvedInput]) -> bool {
         resolved.iter().all(|r| r.is_local)
     }
+}
+
+/// Extract the host portion from a URL string.
+///
+/// Simple parser: looks for `://` then takes everything up to the next `/`.
+fn extract_host_from_url(url: &str) -> Option<String> {
+    let after_scheme = url.split("://").nth(1)?;
+    let host = after_scheme.split('/').next()?;
+    if host.is_empty() { None } else { Some(host.to_string()) }
 }
 
 /// Compute Nix store path from a narHash SRI string.
@@ -410,31 +453,138 @@ pub fn compute_store_path(nar_hash_sri: &str) -> io::Result<String> {
     Ok(store_path.to_absolute_path())
 }
 
-/// Fetch a github input by downloading the tarball from GitHub's API.
-/// Returns the store path where the unpacked source was placed.
-/// For now, this returns an error indicating fetching is not yet supported —
-/// the primary path is pre-resolved inputs already in /nix/store.
+/// Fetch a GitHub input via HTTP archive download.
+///
+/// When `fetch_cache` is provided, downloads the archive tarball, unpacks it,
+/// verifies the narHash, and caches the result. Without a cache, returns an
+/// error indicating the input is not available.
+#[cfg(feature = "snix-build")]
+pub fn fetch_github_input(locked: &LockedInput, fetch_cache: Option<&crate::fetch::FetchCache>) -> io::Result<String> {
+    let owner = locked.owner.as_deref().unwrap_or("");
+    let repo = locked.repo.as_deref().unwrap_or("");
+    let rev = locked.rev.as_deref().unwrap_or("");
+
+    let cache = match fetch_cache {
+        Some(c) => c,
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("github input {owner}/{repo}@{rev} not in local store and no fetch cache"),
+            ));
+        }
+    };
+
+    let nar_hash = locked.nar_hash.as_deref().unwrap_or("");
+    if nar_hash.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("github input {owner}/{repo}@{rev} has no narHash for verification"),
+        ));
+    }
+
+    let o = owner.to_string();
+    let r = repo.to_string();
+    let rv = rev.to_string();
+    let nh = nar_hash.to_string();
+
+    cache
+        .get_or_fetch(nar_hash, Some(nar_hash), |dest| {
+            let path = crate::fetch::fetch_and_unpack_github(&o, &r, &rv, dest)?;
+            // verify_nar_hash is called by get_or_fetch via expected_nar_hash
+            Ok(path)
+        })
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| io::Error::new(e.kind(), format!("failed to fetch github input {o}/{r}@{rv} (narHash={nh}): {e}")))
+}
+
+/// Fetch a GitHub input (stub when snix-build is disabled).
+#[cfg(not(feature = "snix-build"))]
 pub fn fetch_github_input(locked: &LockedInput) -> io::Result<String> {
-    // Extract owner/repo/rev from locked
-    // Construct URL: https://api.github.com/repos/{owner}/{repo}/tarball/{rev}
-    // For now, return NotFound — actual HTTP fetch will be added when needed.
-    // In CI, inputs are typically already in the store from a prior `nix build` or `nix flake update`.
     let owner = locked.owner.as_deref().unwrap_or("?");
     let repo = locked.repo.as_deref().unwrap_or("?");
     let rev = locked.rev.as_deref().unwrap_or("?");
     Err(io::Error::new(
         io::ErrorKind::NotFound,
-        format!("github input {owner}/{repo}@{rev} not in local store; HTTP fetch not yet implemented"),
+        format!("github input {owner}/{repo}@{rev} not in local store; enable snix-build feature for HTTP fetch"),
     ))
 }
 
-/// Fetch a tarball input by downloading from URL.
-/// Same situation as github — returns error for now, inputs should be pre-resolved.
+/// Fetch a GitLab input via HTTP archive download.
+#[cfg(feature = "snix-build")]
+pub fn fetch_gitlab_input(locked: &LockedInput, fetch_cache: Option<&crate::fetch::FetchCache>) -> io::Result<String> {
+    let owner = locked.owner.as_deref().unwrap_or("");
+    let repo = locked.repo.as_deref().unwrap_or("");
+    let rev = locked.rev.as_deref().unwrap_or("");
+    // Extract host from URL if available, default to gitlab.com
+    let host = locked.url.as_deref().and_then(extract_host_from_url).unwrap_or_else(|| "gitlab.com".to_string());
+
+    let cache = match fetch_cache {
+        Some(c) => c,
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("gitlab input {owner}/{repo}@{rev} not in local store and no fetch cache"),
+            ));
+        }
+    };
+
+    let nar_hash = locked.nar_hash.as_deref().unwrap_or("");
+    if nar_hash.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("gitlab input {owner}/{repo}@{rev} has no narHash for verification"),
+        ));
+    }
+
+    let h = host.clone();
+    let o = owner.to_string();
+    let r = repo.to_string();
+    let rv = rev.to_string();
+
+    cache
+        .get_or_fetch(nar_hash, Some(nar_hash), |dest| crate::fetch::fetch_and_unpack_gitlab(&h, &o, &r, &rv, dest))
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Fetch a tarball input via HTTP download.
+#[cfg(feature = "snix-build")]
+pub fn fetch_tarball_input(locked: &LockedInput, fetch_cache: Option<&crate::fetch::FetchCache>) -> io::Result<String> {
+    let url = locked.url.as_deref().unwrap_or("");
+
+    let cache = match fetch_cache {
+        Some(c) => c,
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("tarball input {url} not in local store and no fetch cache"),
+            ));
+        }
+    };
+
+    let nar_hash = locked.nar_hash.as_deref().unwrap_or("");
+    // For tarballs without narHash, skip verification but still fetch
+    let expected = if nar_hash.is_empty() {
+        tracing::warn!(url = %url, "tarball input has no narHash, content will not be verified");
+        None
+    } else {
+        Some(nar_hash)
+    };
+
+    let cache_key = if nar_hash.is_empty() { url } else { nar_hash };
+    let url_owned = url.to_string();
+
+    cache
+        .get_or_fetch(cache_key, expected, |dest| crate::fetch::fetch_and_unpack_tarball(&url_owned, dest))
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Fetch a tarball input (stub when snix-build is disabled).
+#[cfg(not(feature = "snix-build"))]
 pub fn fetch_tarball_input(locked: &LockedInput) -> io::Result<String> {
     let url = locked.url.as_deref().unwrap_or("?");
     Err(io::Error::new(
         io::ErrorKind::NotFound,
-        format!("tarball input {url} not in local store; HTTP fetch not yet implemented"),
+        format!("tarball input {url} not in local store; enable snix-build feature for HTTP fetch"),
     ))
 }
 
