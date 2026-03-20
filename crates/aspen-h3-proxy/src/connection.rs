@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use h3::client::SendRequest;
 use iroh::Endpoint;
-use iroh::PublicKey;
+use iroh::EndpointAddr;
 use iroh_h3::Connection as IrohH3Connection;
 use iroh_h3::OpenStreams;
 use tokio::sync::Mutex;
@@ -30,14 +30,14 @@ struct H3Session {
 /// If the connection is dead, it reconnects with exponential backoff.
 pub struct ConnectionPool {
     endpoint: Arc<Endpoint>,
-    target: PublicKey,
+    target: EndpointAddr,
     alpn: Vec<u8>,
     request_timeout: Duration,
     session: Mutex<Option<H3Session>>,
 }
 
 impl ConnectionPool {
-    pub fn new(endpoint: Arc<Endpoint>, target: PublicKey, alpn: Vec<u8>, request_timeout: Duration) -> Self {
+    pub fn new(endpoint: Arc<Endpoint>, target: EndpointAddr, alpn: Vec<u8>, request_timeout: Duration) -> Self {
         Self {
             endpoint,
             target,
@@ -85,11 +85,12 @@ impl ConnectionPool {
 
     /// Single connection attempt.
     async fn try_connect(&self) -> anyhow::Result<H3Session> {
-        let conn = tokio::time::timeout(Duration::from_secs(10), self.endpoint.connect(self.target, &self.alpn))
-            .await
-            .map_err(|_| anyhow::anyhow!("connection timeout"))??;
+        let conn =
+            tokio::time::timeout(Duration::from_secs(10), self.endpoint.connect(self.target.clone(), &self.alpn))
+                .await
+                .map_err(|_| anyhow::anyhow!("connection timeout"))??;
 
-        info!(target_id = %self.target.fmt_short(), "connected to iroh endpoint");
+        info!(target_id = %self.target.id.fmt_short(), "connected to iroh endpoint");
 
         let h3_conn = IrohH3Connection::new(conn);
         let (mut driver, send_request) = h3::client::new(h3_conn).await?;

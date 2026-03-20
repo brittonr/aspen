@@ -12,9 +12,9 @@
 //! let config = ProxyConfig {
 //!     bind_addr: "127.0.0.1".into(),
 //!     port: 8080,
-//!     endpoint_id: target_id,
+//!     target_addr,  // EndpointAddr with direct socket addrs
 //!     alpn: b"aspen/forge-web/1".to_vec(),
-//!     ..Default::default()
+//!     request_timeout: Duration::from_secs(30),
 //! };
 //! let proxy = H3Proxy::new(config);
 //! proxy.run().await?;
@@ -69,7 +69,7 @@ impl H3Proxy {
 
         let pool = Arc::new(ConnectionPool::new(
             Arc::new(endpoint),
-            self.config.endpoint_id,
+            self.config.target_addr.clone(),
             self.config.alpn.clone(),
             self.config.request_timeout,
         ));

@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use iroh::PublicKey;
+use iroh::EndpointAddr;
 
 /// Configuration for the TCP-to-h3 proxy.
 pub struct ProxyConfig {
@@ -12,8 +12,8 @@ pub struct ProxyConfig {
     /// TCP listen port (default: 8080).
     pub port: u16,
 
-    /// Iroh endpoint ID (public key) of the target server.
-    pub endpoint_id: PublicKey,
+    /// Full iroh endpoint address of the target server (includes direct socket addrs).
+    pub target_addr: EndpointAddr,
 
     /// ALPN protocol to use when connecting (e.g., b"aspen/forge-web/1").
     pub alpn: Vec<u8>,
@@ -24,11 +24,11 @@ pub struct ProxyConfig {
 
 impl ProxyConfig {
     /// Create a minimal config with just the target and ALPN.
-    pub fn new(endpoint_id: PublicKey, alpn: Vec<u8>) -> Self {
+    pub fn new(target_addr: EndpointAddr, alpn: Vec<u8>) -> Self {
         Self {
             bind_addr: "127.0.0.1".into(),
             port: 8080,
-            endpoint_id,
+            target_addr,
             alpn,
             request_timeout: Duration::from_secs(30),
         }

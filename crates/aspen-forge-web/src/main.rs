@@ -58,10 +58,21 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to bind iroh endpoint")?;
 
-    let endpoint_id = endpoint.addr().id;
+    // Build full EndpointAddr with direct socket addresses so the
+    // embedded TCP proxy can connect locally without DNS discovery.
+    let mut target_addr = iroh::EndpointAddr::new(endpoint.id());
+    for sock in endpoint.bound_sockets() {
+        let fixed = if sock.ip().is_unspecified() {
+            std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), sock.port())
+        } else {
+            sock
+        };
+        target_addr.addrs.insert(iroh::TransportAddr::Ip(fixed));
+    }
+
     info!(
-        endpoint_id = %endpoint_id,
-        endpoint_id_short = %endpoint_id.fmt_short(),
+        endpoint_id = %target_addr.id,
+        endpoint_id_short = %target_addr.id.fmt_short(),
         "forge web serving HTTP/3 over iroh QUIC"
     );
 
@@ -73,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
         let proxy_config = aspen_forge_web::ProxyConfig {
             bind_addr: cli.tcp_bind.clone(),
             port: tcp_port,
-            endpoint_id,
+            target_addr,
             alpn: b"aspen/forge-web/1".to_vec(),
             request_timeout: std::time::Duration::from_secs(cli.timeout_secs),
         };

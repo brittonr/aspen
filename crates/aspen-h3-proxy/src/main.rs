@@ -12,6 +12,7 @@ use anyhow::Context;
 use aspen_h3_proxy::H3Proxy;
 use aspen_h3_proxy::ProxyConfig;
 use clap::Parser;
+use iroh::EndpointAddr;
 use iroh::PublicKey;
 
 /// TCP-to-iroh-h3 reverse proxy.
@@ -59,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
     let config = ProxyConfig {
         bind_addr: cli.bind,
         port: cli.port,
-        endpoint_id,
+        target_addr: EndpointAddr::from(endpoint_id),
         alpn: cli.alpn.as_bytes().to_vec(),
         request_timeout: Duration::from_secs(cli.timeout_secs),
     };
