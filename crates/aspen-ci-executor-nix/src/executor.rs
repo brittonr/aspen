@@ -10,6 +10,8 @@ use aspen_ci_core::CiCoreError;
 use aspen_ci_core::Result;
 #[cfg(feature = "nix-cache-proxy")]
 use aspen_ci_executor_shell::CacheProxy;
+#[cfg(feature = "snix-build")]
+use nix_compat::derivation::Derivation;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::process::Child;
@@ -189,9 +191,9 @@ impl NixBuildWorker {
 
     /// Attempt a native in-process build via snix-build.
     ///
-    /// Resolves the flake to a `.drv` path, parses the derivation,
-    /// executes via NativeBuildService, uploads outputs to PathInfoService,
-    /// and returns the build output. Falls back on any error.
+    /// Tries to resolve the derivation fully in-process via call-flake.nix + snix-eval
+    /// (zero subprocesses). Falls back to `nix eval --raw .drvPath` subprocess if
+    /// in-process eval fails (missing inputs, IFD, unsupported builtins).
     #[cfg(feature = "snix-build")]
     pub(crate) async fn try_native_build(
         &self,
@@ -204,30 +206,32 @@ impl NixBuildWorker {
             reason: "native build service not initialized".to_string(),
         })?;
 
-        // Step 1: Resolve flake ref to .drv path
-        let drv_path = self.resolve_drv_path(payload, flake_ref).await?;
-
-        // Step 2: Read and parse the .drv file
-        let drv_bytes = tokio::fs::read(&drv_path).await.map_err(|e| CiCoreError::NixBuildFailed {
-            flake: flake_ref.to_string(),
-            reason: format!("failed to read {}: {e}", drv_path.display()),
-        })?;
-
-        let (drv, _output_paths) =
-            crate::eval::parse_derivation(&drv_bytes).map_err(|e| CiCoreError::NixBuildFailed {
-                flake: flake_ref.to_string(),
-                reason: format!("failed to parse {}: {e}", drv_path.display()),
-            })?;
+        // Step 1: Try in-process flake eval via call-flake.nix + snix-eval.
+        // Falls back to `nix eval` subprocess if in-process eval fails.
+        let drv = match self.try_flake_eval_native(payload, flake_ref, &log_sender).await {
+            Ok(drv) => drv,
+            Err(eval_err) => {
+                warn!(
+                    error = %eval_err,
+                    flake_ref = %flake_ref,
+                    "in-process flake eval failed, falling back to nix eval subprocess"
+                );
+                if let Some(ref tx) = log_sender {
+                    let _ = tx.send(format!("in-process eval failed ({eval_err}), using nix eval subprocess\n")).await;
+                }
+                // Fallback: resolve via subprocess, read .drv from disk
+                self.resolve_drv_and_parse(payload, flake_ref).await?
+            }
+        };
 
         info!(
-            drv_path = %drv_path.display(),
             output_count = drv.outputs.len(),
             system = %drv.system,
             "parsed derivation, starting native build"
         );
 
         if let Some(ref tx) = log_sender {
-            let _ = tx.send(format!("native build: resolved {} → {}\n", flake_ref, drv_path.display())).await;
+            let _ = tx.send(format!("native build: starting build for {flake_ref}\n")).await;
         }
 
         // Step 3: Execute native build — call build_derivation directly so
@@ -284,6 +288,86 @@ impl NixBuildWorker {
             timings,
             native_uploaded: true,
         })
+    }
+
+    /// Try in-process flake evaluation via call-flake.nix + snix-eval.
+    ///
+    /// Parses flake.lock, resolves inputs, constructs eval expression, and
+    /// evaluates with snix-eval. Returns the Derivation on success, or an
+    /// error that triggers fallback to `nix eval` subprocess.
+    #[cfg(feature = "snix-build")]
+    async fn try_flake_eval_native(
+        &self,
+        payload: &NixBuildPayload,
+        flake_ref: &str,
+        log_sender: &Option<mpsc::Sender<String>>,
+    ) -> std::result::Result<Derivation, CiCoreError> {
+        let flake_dir = payload
+            .working_dir
+            .as_deref()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| payload.flake_url.clone());
+        let attribute = &payload.attribute;
+
+        // Need SNIX services for the evaluator
+        let (blob_svc, dir_svc, pathinfo_svc) = match (
+            &self.config.snix_blob_service,
+            &self.config.snix_directory_service,
+            &self.config.snix_pathinfo_service,
+        ) {
+            (Some(bs), Some(ds), Some(ps)) => (bs.clone(), ds.clone(), ps.clone()),
+            _ => {
+                return Err(CiCoreError::NixBuildFailed {
+                    flake: flake_ref.to_string(),
+                    reason: "snix services not configured for flake eval".to_string(),
+                });
+            }
+        };
+
+        if let Some(tx) = log_sender {
+            let _ = tx.send("attempting in-process flake eval via call-flake.nix\n".to_string()).await;
+        }
+
+        let evaluator = crate::eval::NixEvaluator::new(blob_svc, dir_svc, pathinfo_svc);
+        let dir = flake_dir.to_string();
+        let attr = attribute.clone();
+        let flake_ref_owned = flake_ref.to_string();
+
+        let (_store_path, drv) = tokio::task::spawn_blocking(move || evaluator.evaluate_flake_derivation(&dir, &attr))
+            .await
+            .map_err(|e| CiCoreError::NixBuildFailed {
+                flake: flake_ref_owned.clone(),
+                reason: format!("eval task panicked: {e}"),
+            })?
+            .map_err(|e| CiCoreError::NixBuildFailed {
+                flake: flake_ref_owned,
+                reason: format!("in-process flake eval failed: {e}"),
+            })?;
+
+        Ok(drv)
+    }
+
+    /// Fallback: resolve .drv path via `nix eval` subprocess, then read and parse it.
+    #[cfg(feature = "snix-build")]
+    async fn resolve_drv_and_parse(
+        &self,
+        payload: &NixBuildPayload,
+        flake_ref: &str,
+    ) -> std::result::Result<Derivation, CiCoreError> {
+        let drv_path = self.resolve_drv_path(payload, flake_ref).await?;
+
+        let drv_bytes = tokio::fs::read(&drv_path).await.map_err(|e| CiCoreError::NixBuildFailed {
+            flake: flake_ref.to_string(),
+            reason: format!("failed to read {}: {e}", drv_path.display()),
+        })?;
+
+        let (drv, _output_paths) =
+            crate::eval::parse_derivation(&drv_bytes).map_err(|e| CiCoreError::NixBuildFailed {
+                flake: flake_ref.to_string(),
+                reason: format!("failed to parse {}: {e}", drv_path.display()),
+            })?;
+
+        Ok(drv)
     }
 
     /// Detect whether a project uses npins (has `npins/sources.json`).

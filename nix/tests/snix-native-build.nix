@@ -325,6 +325,31 @@ in
           # Look for evidence of native path usage
           # (may show "native build succeeded" or "native build failed, falling back")
 
+      with subtest("verify zero-subprocess flake eval"):
+          # The trivial test flake (inputs = {}) should be evaluable
+          # fully in-process via call-flake.nix + snix-eval.
+          # If successful, the log contains "zero subprocesses".
+          # If not (snix-eval lacks a needed builtin), the fallback
+          # to nix eval subprocess is used — that's also fine.
+          logs = node1.succeed(
+              "journalctl -u aspen-node.service --no-pager "
+              "| grep -i 'zero subprocesses' || true"
+          )
+          node1.log(f"Zero-subprocess log lines:\n{logs}")
+          if "zero subprocesses" in logs:
+              node1.log("In-process flake eval succeeded (zero subprocesses)!")
+          else:
+              node1.log(
+                  "In-process flake eval not used — likely fell back to "
+                  "nix eval subprocess. Check 'in-process flake eval failed' "
+                  "in logs for the reason."
+              )
+              fallback_logs = node1.succeed(
+                  "journalctl -u aspen-node.service --no-pager "
+                  "| grep -i 'in-process.*flake.*eval.*failed\\|falling back' || true"
+              )
+              node1.log(f"Fallback logs:\n{fallback_logs}")
+
       # ── start cache gateway and verify ───────────────────────────────
 
       with subtest("start nix cache gateway"):

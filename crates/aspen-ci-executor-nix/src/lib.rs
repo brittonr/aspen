@@ -32,11 +32,15 @@ mod artifacts;
 #[cfg(feature = "snix-build")]
 pub mod build_service;
 mod cache;
+#[cfg(feature = "snix-eval")]
+pub mod call_flake;
 mod config;
 pub mod derivation;
 #[cfg(feature = "snix-eval")]
 pub mod eval;
 mod executor;
+#[cfg(feature = "snix-eval")]
+pub mod flake_lock;
 pub mod flakeref;
 mod payload;
 #[cfg(feature = "snix")]
