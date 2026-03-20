@@ -12,6 +12,7 @@
 //! - Saturating arithmetic for overflow safety
 
 mod cob_state;
+pub mod merge;
 mod rate_limiter;
 mod ref_validation;
 

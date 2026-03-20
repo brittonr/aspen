@@ -73,6 +73,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     fn resolve_patch_track_field_value<'a>(
         hash: &blake3::Hash,
         op: &'a CobOperation,
+        author: &iroh::PublicKey,
+        hlc_timestamp: &aspen_core::hlc::SerializableTimestamp,
         field_values: &mut HashMap<([u8; 32], &'a str), super::super::patch::ScalarFieldValue>,
         final_resolutions: &mut Vec<FieldResolution>,
     ) {
@@ -100,6 +102,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                     (*hash.as_bytes(), "state"),
                     super::super::patch::ScalarFieldValue::State(super::super::patch::PatchState::Merged {
                         commit: *commit,
+                        merged_by: *author.as_bytes(),
+                        merged_at_ms: hlc_timestamp.to_unix_ms(),
                     }),
                 );
             }
@@ -156,7 +160,14 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         let mut patch = super::super::patch::Patch::default();
 
         for (hash, signed) in &sorted {
-            Self::resolve_patch_track_field_value(hash, &signed.payload.op, &mut field_values, &mut final_resolutions);
+            Self::resolve_patch_track_field_value(
+                hash,
+                &signed.payload.op,
+                &signed.author,
+                &signed.hlc_timestamp,
+                &mut field_values,
+                &mut final_resolutions,
+            );
             patch.apply_change(*hash, &signed.author, &signed.hlc_timestamp, &signed.payload.op);
         }
 

@@ -148,3 +148,16 @@ The system SHALL store Git objects (commits, trees, blobs, tags) as content-addr
 - **WHEN** a git push updates refs
 - **THEN** a `RefUpdate` gossip announcement SHALL be broadcast
 - **AND** other nodes SHALL be able to query commit statuses for the pushed commit hash
+
+#### Scenario: Diff between two commits
+
+- **WHEN** `diff_commits(commit_a, commit_b)` is called
+- **THEN** the system SHALL resolve both commits to their root trees and produce a list of `DiffEntry` records
+- **AND** the result SHALL be equivalent to `diff_trees(tree_a, tree_b)`
+
+#### Scenario: Merge patch via ForgeNode
+
+- **WHEN** `merge_patch(repo_id, patch_id)` is called on ForgeNode
+- **THEN** the system SHALL enforce branch protection, perform three-way tree merge, create a merge commit, advance the target ref, and transition the patch to `Merged` state
+
+<!-- Synced from forge-merge-and-diff change (2026-03-20) -->

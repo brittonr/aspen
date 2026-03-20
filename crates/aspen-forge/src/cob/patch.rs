@@ -68,8 +68,12 @@ pub enum PatchState {
 
     /// Patch has been merged.
     Merged {
-        /// The commit hash that was merged.
+        /// The merge commit hash (or fast-forwarded commit hash).
         commit: [u8; 32],
+        /// Public key of the user who performed the merge.
+        merged_by: [u8; 32],
+        /// Timestamp when the merge was performed (milliseconds).
+        merged_at_ms: u64,
     },
 
     /// Patch has been closed without merging.
@@ -98,7 +102,7 @@ impl PatchState {
     /// Get the merged commit hash if merged.
     pub fn merged_commit(&self) -> Option<[u8; 32]> {
         match self {
-            PatchState::Merged { commit } => Some(*commit),
+            PatchState::Merged { commit, .. } => Some(*commit),
             _ => None,
         }
     }
@@ -240,7 +244,11 @@ impl Patch {
             }
 
             CobOperation::Merge { commit } => {
-                self.state = PatchState::Merged { commit: *commit };
+                self.state = PatchState::Merged {
+                    commit: *commit,
+                    merged_by: *author.as_bytes(),
+                    merged_at_ms: timestamp_ms,
+                };
             }
 
             CobOperation::Comment { body } => {

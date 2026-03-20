@@ -256,6 +256,36 @@ pub const PUSH_SESSION_TIMEOUT: Duration = Duration::from_secs(300);
 pub const MAX_CI_CONFIG_SIZE_BYTES: u64 = 1024 * 1024; // 1 MB
 
 // ============================================================================
+// Diff and Merge Limits
+// ============================================================================
+
+/// Maximum number of diff entries returned.
+///
+/// Tiger Style: Prevents unbounded computation on extremely large tree comparisons.
+pub const MAX_DIFF_ENTRIES: u32 = 10_000;
+
+/// Maximum blob size for inline content loading in diffs.
+///
+/// Tiger Style: Prevents memory exhaustion when loading file content.
+/// Blobs larger than this are reported as modified but content is not loaded.
+pub const MAX_DIFF_BLOB_SIZE: u64 = 1024 * 1024; // 1 MB
+
+/// Maximum recursion depth for nested directory merges.
+///
+/// Tiger Style: Prevents stack overflow on pathologically nested trees.
+pub const MAX_MERGE_DEPTH: u32 = 64;
+
+/// Maximum number of conflict entries reported during merge.
+///
+/// Tiger Style: Prevents unbounded conflict accumulation.
+pub const MAX_MERGE_CONFLICTS: u32 = 1_000;
+
+/// Maximum number of CAS retry attempts during merge.
+///
+/// Tiger Style: Bounded retry to prevent livelock under contention.
+pub const MAX_MERGE_CAS_RETRIES: u32 = 3;
+
+// ============================================================================
 // Compile-Time Constant Assertions
 // ============================================================================
 
@@ -309,3 +339,10 @@ const _: () = assert!(MAX_CONCURRENT_PUSH_SESSIONS > 0);
 
 // CI config limits must be positive
 const _: () = assert!(MAX_CI_CONFIG_SIZE_BYTES > 0);
+
+// Diff and merge limits must be positive
+const _: () = assert!(MAX_DIFF_ENTRIES > 0);
+const _: () = assert!(MAX_DIFF_BLOB_SIZE > 0);
+const _: () = assert!(MAX_MERGE_DEPTH > 0);
+const _: () = assert!(MAX_MERGE_CONFLICTS > 0);
+const _: () = assert!(MAX_MERGE_CAS_RETRIES > 0);

@@ -192,6 +192,25 @@ pub enum ForgeError {
     /// Merge blocked by branch protection rules.
     #[snafu(display("merge blocked: {reason}"))]
     MergeBlocked { reason: String },
+
+    /// Merge failed due to tree conflicts.
+    #[snafu(display("merge conflicts: {count} conflicting file(s)"))]
+    MergeConflicts {
+        count: u32,
+        conflicts: Vec<crate::git::merge::MergeConflict>,
+    },
+
+    /// Merge depth exceeded during recursive tree merge.
+    #[snafu(display("merge depth exceeded: {depth} > {max}"))]
+    MergeDepthExceeded { depth: u32, max: u32 },
+
+    /// Merge failed after exhausting CAS retries.
+    #[snafu(display("merge failed after {attempts} CAS retries"))]
+    MergeCasExhausted { attempts: u32 },
+
+    /// Patch is not in a mergeable state.
+    #[snafu(display("patch not mergeable: {reason}"))]
+    PatchNotMergeable { reason: String },
 }
 
 impl From<anyhow::Error> for ForgeError {

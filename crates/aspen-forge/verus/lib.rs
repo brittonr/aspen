@@ -25,6 +25,22 @@
 //!
 //! # Invariants Verified
 //!
+//! ## Three-Way Merge
+//!
+//! 15. **MERGE-1: Conflict Symmetry**: is_conflict(b, o, t) == is_conflict(b, t, o)
+//!     - Swapping ours/theirs never changes whether a conflict exists
+//!     - TakeOurs and TakeTheirs swap accordingly
+//!
+//! 16. **MERGE-2: Convergent Safety**: Convergent changes never conflict
+//!     - When ours == theirs, the result is never Conflict
+//!     - Both-deleted and both-added-same are safe
+//!
+//! 17. **MERGE-3: Unchanged Safety**: Unchanged entries never conflict
+//!     - When base == ours == theirs, result is Unchanged
+//!
+//! 18. **MERGE-4: Classification Exhaustiveness**: Every input maps to exactly one variant
+//!     - All (base, ours, theirs) combinations produce a valid ThreeWayClass
+//!
 //! ## Signed Object
 //!
 //! 1. **SIGNED-1: Signature Binding**: Signature covers payload + author + timestamp
@@ -108,8 +124,12 @@ verus! {
 
     // Re-export nostr identity specifications
     pub use nostr_identity_spec::*;
+
+    // Re-export merge specifications
+    pub use merge_spec::*;
 }
 
+mod merge_spec;
 mod nostr_identity_spec;
 mod ref_store_spec;
 mod repo_identity_spec;

@@ -24,6 +24,8 @@
 //! - Hash translation between SHA-1 and BLAKE3
 //! - The `git-remote-aspen` helper for transparent git integration
 
+pub mod diff;
+pub mod merge;
 pub(crate) mod object;
 mod store;
 
@@ -33,6 +35,16 @@ pub mod bridge;
 // Re-export git-bridge ALPN for convenience
 #[cfg(feature = "git-bridge")]
 pub use bridge::GIT_BRIDGE_ALPN;
+pub use diff::DiffEntry;
+pub use diff::DiffKind;
+pub use diff::DiffOptions;
+pub use diff::DiffResult;
+pub use diff::diff_commits;
+pub use diff::diff_trees;
+pub use merge::ConflictKind;
+pub use merge::MergeConflict;
+pub use merge::TreeMergeResult;
+pub use merge::merge_trees;
 pub use object::BlobObject;
 pub use object::CommitObject;
 pub use object::GitObject;
