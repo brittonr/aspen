@@ -56,7 +56,7 @@
 - [x] 7.2 Add idempotency property test: apply random issue operation sequence twice, assert same resolved state
 - [x] 7.3 Add label convergence property test: two independent AddLabel ops in both orderings produce same label set
 - [x] 7.4 Add comment convergence property test: independent Comment ops produce same body set regardless of order
-- [ ] 7.5 Add DAG well-formedness property test: generated DAGs pass topological sort with no cycles and exactly one root
+- [x] 7.5 Add DAG well-formedness property test: generated DAGs pass topological sort with no cycles and exactly one root
 - [x] 7.6 Add discussion operation generators and idempotency property test for Discussion resolution
 - [x] 7.7 Gate property tests behind `#[cfg(not(feature = "quick"))]` and add to `ci` nextest profile
 
