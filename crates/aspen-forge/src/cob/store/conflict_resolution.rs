@@ -229,8 +229,43 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                 | CobOperation::Merge { .. }
                 | CobOperation::Approve { .. }
                 | CobOperation::RequestChanges { .. }
+                | CobOperation::Reply { .. }
+                | CobOperation::ResolveThread { .. }
+                | CobOperation::UnresolveThread { .. }
                 | CobOperation::MergeHeads { .. } => {
                     // These don't create scalar field conflicts
+                }
+
+                // Discussion operations that can conflict
+                CobOperation::CreateDiscussion { title, body, .. } => {
+                    field_values.entry("title".to_string()).or_default().push(ConflictingValue {
+                        change_hash: *head,
+                        value: title.clone(),
+                        hlc_timestamp: signed.hlc_timestamp.clone(),
+                        author: signed.author,
+                    });
+                    field_values.entry("body".to_string()).or_default().push(ConflictingValue {
+                        change_hash: *head,
+                        value: body.clone(),
+                        hlc_timestamp: signed.hlc_timestamp.clone(),
+                        author: signed.author,
+                    });
+                }
+                CobOperation::LockDiscussion => {
+                    field_values.entry("state".to_string()).or_default().push(ConflictingValue {
+                        change_hash: *head,
+                        value: "locked".to_string(),
+                        hlc_timestamp: signed.hlc_timestamp.clone(),
+                        author: signed.author,
+                    });
+                }
+                CobOperation::UnlockDiscussion => {
+                    field_values.entry("state".to_string()).or_default().push(ConflictingValue {
+                        change_hash: *head,
+                        value: "open".to_string(),
+                        hlc_timestamp: signed.hlc_timestamp.clone(),
+                        author: signed.author,
+                    });
                 }
             }
         }

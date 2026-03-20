@@ -187,7 +187,7 @@ impl Review {
                 });
             }
 
-            // Issue and Patch operations are not applicable to reviews
+            // Issue, Patch, and Discussion operations are not applicable to reviews
             CobOperation::CreateIssue { .. }
             | CobOperation::AddLabel { .. }
             | CobOperation::RemoveLabel { .. }
@@ -201,7 +201,13 @@ impl Review {
             | CobOperation::React { .. }
             | CobOperation::Unreact { .. }
             | CobOperation::Assign { .. }
-            | CobOperation::Unassign { .. } => {
+            | CobOperation::Unassign { .. }
+            | CobOperation::CreateDiscussion { .. }
+            | CobOperation::Reply { .. }
+            | CobOperation::ResolveThread { .. }
+            | CobOperation::UnresolveThread { .. }
+            | CobOperation::LockDiscussion
+            | CobOperation::UnlockDiscussion => {
                 // Ignore non-review operations
             }
 

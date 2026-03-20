@@ -82,4 +82,61 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     pub async fn list_patches(&self, repo_id: &RepoId) -> ForgeResult<Vec<blake3::Hash>> {
         self.list_cobs(repo_id, CobType::Patch).await
     }
+
+    /// List all discussions in a repository.
+    ///
+    /// Convenience method that calls `list_cobs` with `CobType::Discussion`.
+    ///
+    /// # Errors
+    ///
+    /// - `ForgeError::KvOperation` if the scan fails
+    pub async fn list_discussions(&self, repo_id: &RepoId) -> ForgeResult<Vec<blake3::Hash>> {
+        self.list_cobs(repo_id, CobType::Discussion).await
+    }
+
+    /// List discussions with state filtering.
+    ///
+    /// Resolves each discussion to check its state and returns only those
+    /// matching the filter. Results are limited to `limit` entries.
+    ///
+    /// # Arguments
+    ///
+    /// * `repo_id` - Repository to list discussions from
+    /// * `state_filter` - Optional state to filter by (None = all states)
+    /// * `limit` - Maximum number of results (capped at 1000)
+    pub async fn list_discussions_filtered(
+        &self,
+        repo_id: &RepoId,
+        state_filter: Option<&super::super::discussion::DiscussionState>,
+        limit: u32,
+    ) -> ForgeResult<Vec<(blake3::Hash, super::super::discussion::Discussion)>> {
+        let limit = limit.min(1000); // Tiger Style: bound results
+        let cob_ids = self.list_discussions(repo_id).await?;
+
+        let mut results = Vec::new();
+        for cob_id in cob_ids {
+            if results.len() as u32 >= limit {
+                break;
+            }
+
+            match self.resolve_discussion(repo_id, &cob_id).await {
+                Ok(discussion) => {
+                    let matches = match state_filter {
+                        None => true,
+                        Some(filter) => std::mem::discriminant(&discussion.state) == std::mem::discriminant(filter),
+                    };
+                    if matches {
+                        results.push((cob_id, discussion));
+                    }
+                }
+                Err(ForgeError::CobNotFound { .. }) => continue,
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Sort by updated_at_ms descending
+        results.sort_by_key(|b| std::cmp::Reverse(b.1.updated_at_ms));
+
+        Ok(results)
+    }
 }

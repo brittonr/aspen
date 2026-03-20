@@ -7,6 +7,51 @@ pub use aspen_forge_protocol::*;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Discussion info for list/get responses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeDiscussionInfo {
+    pub id: String,
+    pub title: String,
+    pub body: String,
+    pub state: String,
+    pub labels: Vec<String>,
+    pub reply_count: u32,
+    pub resolved_thread_count: u32,
+    pub created_at_ms: u64,
+    pub updated_at_ms: u64,
+}
+
+/// Discussion list result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeDiscussionListResultResponse {
+    pub discussions: Vec<ForgeDiscussionInfo>,
+}
+
+/// Discussion result (single).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeDiscussionResultResponse {
+    pub discussion: ForgeDiscussionInfo,
+}
+
+/// Fork info in repo responses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeForkInfo {
+    pub upstream_repo_id: String,
+    pub upstream_cluster: Option<String>,
+}
+
+/// Mirror config info for responses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeMirrorStatusResponse {
+    pub upstream_repo_id: String,
+    pub upstream_cluster: Option<String>,
+    pub interval_secs: u32,
+    pub enabled: bool,
+    pub last_sync_ms: u64,
+    pub synced_refs_count: u32,
+    pub is_due: bool,
+}
+
 /// Forge domain request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ForgeRequest {
@@ -158,6 +203,62 @@ pub enum ForgeRequest {
         reason: Option<String>,
     },
 
+    // Discussion operations
+    /// Create a discussion.
+    ForgeCreateDiscussion {
+        repo_id: String,
+        title: String,
+        body: String,
+        labels: Vec<String>,
+    },
+    /// List discussions.
+    ForgeListDiscussions {
+        repo_id: String,
+        state: Option<String>,
+        limit: Option<u32>,
+    },
+    /// Get discussion details.
+    ForgeGetDiscussion { repo_id: String, discussion_id: String },
+    /// Reply to a discussion.
+    ForgeReplyDiscussion {
+        repo_id: String,
+        discussion_id: String,
+        body: String,
+        parent_reply: Option<String>,
+    },
+    /// Lock a discussion.
+    ForgeLockDiscussion { repo_id: String, discussion_id: String },
+    /// Unlock a discussion.
+    ForgeUnlockDiscussion { repo_id: String, discussion_id: String },
+    /// Close a discussion.
+    ForgeCloseDiscussion {
+        repo_id: String,
+        discussion_id: String,
+        reason: Option<String>,
+    },
+    /// Reopen a discussion.
+    ForgeReopenDiscussion { repo_id: String, discussion_id: String },
+
+    // Fork operations
+    /// Fork a repository.
+    ForgeForkRepo {
+        upstream_repo_id: String,
+        name: String,
+        description: Option<String>,
+    },
+
+    // Mirror operations
+    /// Set mirror config for a repository.
+    ForgeSetMirror {
+        repo_id: String,
+        upstream_repo_id: String,
+        interval_secs: u32,
+    },
+    /// Disable mirror for a repository.
+    ForgeDisableMirror { repo_id: String },
+    /// Get mirror status for a repository.
+    ForgeGetMirrorStatus { repo_id: String },
+
     // Delegate key
     /// Get the delegate key for a repository.
     ForgeGetDelegateKey { repo_id: String },
@@ -232,6 +333,15 @@ impl ForgeRequest {
             | Self::ForgeApprovePatch { .. }
             | Self::ForgeMergePatch { .. }
             | Self::ForgeClosePatch { .. }
+            | Self::ForgeCreateDiscussion { .. }
+            | Self::ForgeReplyDiscussion { .. }
+            | Self::ForgeLockDiscussion { .. }
+            | Self::ForgeUnlockDiscussion { .. }
+            | Self::ForgeCloseDiscussion { .. }
+            | Self::ForgeReopenDiscussion { .. }
+            | Self::ForgeForkRepo { .. }
+            | Self::ForgeSetMirror { .. }
+            | Self::ForgeDisableMirror { .. }
             | Self::GitBridgePush { .. }
             | Self::GitBridgePushStart { .. }
             | Self::GitBridgePushChunk { .. }
@@ -254,7 +364,10 @@ impl ForgeRequest {
             | Self::ForgeListPatches { .. }
             | Self::ForgeGetPatch { .. }
             | Self::ForgeCheckMerge { .. }
+            | Self::ForgeListDiscussions { .. }
+            | Self::ForgeGetDiscussion { .. }
             | Self::ForgeGetDelegateKey { .. }
+            | Self::ForgeGetMirrorStatus { .. }
             | Self::GitBridgeListRefs { .. }
             | Self::GitBridgeFetch { .. }
             | Self::GitBridgeProbeObjects { .. } => Some(Operation::Read {

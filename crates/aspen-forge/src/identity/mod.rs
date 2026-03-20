@@ -64,6 +64,20 @@ impl std::fmt::Display for RepoId {
     }
 }
 
+/// Information about a fork's upstream origin.
+///
+/// Stored on `RepoIdentity` to track the lineage of forked repositories.
+/// Set once at fork time and never changes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ForkInfo {
+    /// The RepoId of the upstream repository this was forked from.
+    pub upstream_repo_id: RepoId,
+
+    /// Optional public key of the upstream cluster.
+    /// `None` means the upstream is in the same cluster.
+    pub upstream_cluster: Option<PublicKey>,
+}
+
 /// Repository identity document.
 ///
 /// This is the foundational document for a repository, defining its name,
@@ -90,6 +104,11 @@ pub struct RepoIdentity {
 
     /// Unix timestamp in milliseconds when this identity was created.
     pub created_at_ms: u64,
+
+    /// Fork lineage information.
+    /// `None` for repositories created normally, `Some` for forks.
+    #[serde(default)]
+    pub fork_info: Option<ForkInfo>,
 }
 
 impl RepoIdentity {
@@ -152,6 +171,7 @@ impl RepoIdentity {
             delegates,
             threshold,
             created_at_ms,
+            fork_info: None,
         })
     }
 
@@ -177,6 +197,19 @@ impl RepoIdentity {
     pub fn with_default_branch(mut self, branch: impl Into<String>) -> Self {
         self.default_branch = branch.into();
         self
+    }
+
+    /// Set fork information.
+    ///
+    /// This records that this repository was forked from an upstream.
+    pub fn with_fork_info(mut self, fork_info: ForkInfo) -> Self {
+        self.fork_info = Some(fork_info);
+        self
+    }
+
+    /// Check if this repository is a fork.
+    pub fn is_fork(&self) -> bool {
+        self.fork_info.is_some()
     }
 
     /// Compute the repository ID (BLAKE3 hash of the identity).

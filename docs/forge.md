@@ -102,6 +102,30 @@ Forge is a decentralized code collaboration system built on Aspen's distributed 
 - [ ] Integration tests for full workflows (TODO)
 - [ ] Property-based tests for COB resolution (TODO)
 
+### Phase 7: Discussion COB ✅
+
+- [x] Discussion struct with Open/Closed/Locked states
+- [x] Reply with optional threading (parent_reply)
+- [x] Thread resolution (resolve/unresolve)
+- [x] CobStore operations (create, reply, resolve_thread, lock, close, reopen)
+- [x] State filtering and listing
+- [x] CLI commands and RPC handlers
+
+### Phase 8: Fork & Mirror ✅
+
+- [x] ForkInfo on RepoIdentity
+- [x] ForgeNode::fork_repo with ref copying
+- [x] MirrorConfig with interval clamping
+- [x] sync_mirror_refs for ref synchronization
+- [x] Integration with aspen-jobs for recurring scheduling
+- [x] CLI commands (git fork, git mirror)
+
+### Phase 9: Testing ✅
+
+- [x] Integration tests (repo, issue, patch, discussion, fork lifecycle)
+- [x] Property-based tests (idempotency, convergence, label/comment ordering)
+- [x] Quick feature gate for fast iteration
+
 ## Key Design Decisions
 
 ### 1. Pure BLAKE3 (No SHA-1)
@@ -162,9 +186,12 @@ crates/aspen-forge/src/
 │   ├── mod.rs          # Re-exports (~55 lines)
 │   ├── change.rs       # CobChange, CobOperation (~319 lines)
 │   ├── store.rs        # CobStore, topological sort (~1,342 lines)
+│   ├── discussion.rs   # Discussion state resolution
 │   ├── issue.rs        # Issue state resolution (~328 lines)
 │   ├── patch.rs        # Patch implementation (~758 lines)
-│   └── review.rs       # Review with inline comments (~552 lines)
+│   ├── review.rs       # Review with inline comments (~552 lines)
+│   └── store/
+│       └── discussion_ops.rs  # Discussion CobStore operations
 ├── refs/
 │   ├── mod.rs          # Re-exports (~19 lines)
 │   ├── store.rs        # RefStore (Raft-backed) (~598 lines)
@@ -177,6 +204,8 @@ crates/aspen-forge/src/
 │   ├── handler.rs      # ForgeAnnouncementHandler (~319 lines)
 │   ├── rate_limiter.rs # Per-peer rate limiting (~301 lines)
 │   └── types.rs        # Announcement types (~374 lines)
+├── mirror.rs           # Mirror configuration and ref sync
+├── mirror_worker.rs    # Mirror job worker for recurring sync
 ├── sync.rs             # SyncService, FetchResult (~316 lines)
 └── node.rs             # ForgeNode coordinator (~710 lines)
 
@@ -241,6 +270,39 @@ forge.cobs.comment(&repo_id, &issue_id, "I can reproduce this").await?;
 forge.cobs.close_issue(&repo_id, &issue_id, Some("Fixed in abc123")).await?;
 ```
 
+### Creating a Discussion
+
+```rust
+let discussion_id = forge.cobs.create_discussion(
+    &repo_id,
+    "Feature request: Add syntax highlighting",
+    "It would be great to have syntax highlighting for code blocks...",
+    &["enhancement", "ui"],
+).await?;
+
+// Add a threaded reply
+let reply_id = forge.cobs.reply_to_discussion(
+    &repo_id,
+    &discussion_id,
+    "This could be implemented using highlight.js",
+    None, // No parent reply (top-level)
+).await?;
+
+// Reply to the first reply (threaded)
+forge.cobs.reply_to_discussion(
+    &repo_id,
+    &discussion_id,
+    "Good point, but we should consider performance impact",
+    Some(reply_id), // Parent reply for threading
+).await?;
+
+// Resolve a thread
+forge.cobs.resolve_discussion_thread(&repo_id, &discussion_id, &reply_id).await?;
+
+// Lock the discussion to prevent further replies
+forge.cobs.lock_discussion(&repo_id, &discussion_id).await?;
+```
+
 ### Resolving Current State
 
 ```rust
@@ -249,6 +311,13 @@ let issue = forge.cobs.resolve_issue(&repo_id, &issue_id).await?;
 println!("Title: {}", issue.title);
 println!("State: {:?}", issue.state);
 println!("Comments: {}", issue.comments.len());
+
+// Get current discussion state
+let discussion = forge.cobs.resolve_discussion(&repo_id, &discussion_id).await?;
+println!("Title: {}", discussion.title);
+println!("State: {:?}", discussion.state);
+println!("Replies: {}", discussion.replies.len());
+println!("Resolved threads: {}", discussion.resolved_threads.len());
 ```
 
 ## git-remote-aspen: Git Integration
@@ -534,11 +603,11 @@ Forge Object (BLAKE3)
 
 ## Next Steps
 
-1. **Integration tests**: End-to-end tests with real Aspen clusters
-2. **Patch resolution**: Implement patch state machine (like issue)
-3. **CLI integration**: Add forge commands to aspen-cli
-4. **Gossip integration**: Wire up announcements to iroh-gossip
-5. **P2P sync**: Implement actual object fetching from peers
+1. **Enhanced testing**: Expand property-based and chaos testing coverage
+2. **Performance optimization**: Optimize COB resolution and blob transfer
+3. **Advanced features**: Implement merge requests, code review workflows
+4. **Authentication**: Add capability-based access control
+5. **Federation**: Cross-cluster repository mirroring and discovery
 
 ## Usage Example
 
@@ -573,4 +642,4 @@ println!("Issue: {} ({:?})", issue.title, issue.state);
 
 ---
 
-*Last updated: 2026-01-06*
+*Last updated: 2026-03-20*

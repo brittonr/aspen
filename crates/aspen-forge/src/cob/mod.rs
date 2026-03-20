@@ -25,6 +25,7 @@
 //! - **Discussion**: General threaded discussions
 
 mod change;
+mod discussion;
 mod issue;
 mod patch;
 mod review;
@@ -37,6 +38,10 @@ pub use change::FieldResolution;
 pub use change::MergeStrategy;
 pub use change::ReviewComment;
 pub use change::ReviewSide;
+pub use discussion::Discussion;
+pub use discussion::DiscussionReply;
+pub use discussion::DiscussionScalarFieldValue;
+pub use discussion::DiscussionState;
 pub use issue::Issue;
 pub use issue::IssueScalarFieldValue;
 pub use issue::IssueState;

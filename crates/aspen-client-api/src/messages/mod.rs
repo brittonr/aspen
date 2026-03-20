@@ -243,12 +243,16 @@ pub use forge::ForgeBlobResultResponse;
 pub use forge::ForgeCommentInfo;
 pub use forge::ForgeCommitInfo;
 pub use forge::ForgeCommitResultResponse;
+pub use forge::ForgeDiscussionInfo;
+pub use forge::ForgeDiscussionListResultResponse;
+pub use forge::ForgeDiscussionResultResponse;
 pub use forge::ForgeIssueInfo;
 pub use forge::ForgeIssueListResultResponse;
 pub use forge::ForgeIssueResultResponse;
 pub use forge::ForgeKeyResultResponse;
 pub use forge::ForgeLogResultResponse;
 pub use forge::ForgeMergeCheckResultResponse;
+pub use forge::ForgeMirrorStatusResponse;
 pub use forge::ForgeOperationResultResponse;
 pub use forge::ForgePatchApproval;
 pub use forge::ForgePatchInfo;
@@ -2006,6 +2010,65 @@ pub enum ClientRpcRequest {
         reason: Option<String>,
     },
 
+    // Forge - Discussion operations
+    ForgeCreateDiscussion {
+        repo_id: String,
+        title: String,
+        body: String,
+        labels: Vec<String>,
+    },
+    ForgeListDiscussions {
+        repo_id: String,
+        state: Option<String>,
+        limit: Option<u32>,
+    },
+    ForgeGetDiscussion {
+        repo_id: String,
+        discussion_id: String,
+    },
+    ForgeReplyDiscussion {
+        repo_id: String,
+        discussion_id: String,
+        body: String,
+        parent_reply: Option<String>,
+    },
+    ForgeLockDiscussion {
+        repo_id: String,
+        discussion_id: String,
+    },
+    ForgeUnlockDiscussion {
+        repo_id: String,
+        discussion_id: String,
+    },
+    ForgeCloseDiscussion {
+        repo_id: String,
+        discussion_id: String,
+        reason: Option<String>,
+    },
+    ForgeReopenDiscussion {
+        repo_id: String,
+        discussion_id: String,
+    },
+    // Forge - Fork operations
+    ForgeForkRepo {
+        upstream_repo_id: String,
+        name: String,
+        description: Option<String>,
+    },
+
+    // Forge - Mirror operations
+    ForgeSetMirror {
+        repo_id: String,
+        upstream_repo_id: String,
+        interval_secs: u32,
+    },
+    ForgeDisableMirror {
+        repo_id: String,
+    },
+    ForgeGetMirrorStatus {
+        repo_id: String,
+    },
+
     /// Get the delegate key for a repository.
     ///
     /// Returns the secret key used for signing canonical ref updates.
@@ -3739,33 +3802,45 @@ impl ClientRpcRequest {
             Self::ForgeCasRef { .. } => "ForgeCasRef",
             Self::ForgeCloseIssue { .. } => "ForgeCloseIssue",
             Self::ForgeClosePatch { .. } => "ForgeClosePatch",
+            Self::ForgeCloseDiscussion { .. } => "ForgeCloseDiscussion",
             Self::ForgeCommentIssue { .. } => "ForgeCommentIssue",
             Self::ForgeCommit { .. } => "ForgeCommit",
+            Self::ForgeCreateDiscussion { .. } => "ForgeCreateDiscussion",
             Self::ForgeCreateIssue { .. } => "ForgeCreateIssue",
             Self::ForgeCreatePatch { .. } => "ForgeCreatePatch",
             Self::ForgeCreateRepo { .. } => "ForgeCreateRepo",
             Self::ForgeCreateTree { .. } => "ForgeCreateTree",
             Self::ForgeDeleteRef { .. } => "ForgeDeleteRef",
             Self::ForgeFetchFederated { .. } => "ForgeFetchFederated",
+            Self::ForgeForkRepo { .. } => "ForgeForkRepo",
+            Self::ForgeSetMirror { .. } => "ForgeSetMirror",
+            Self::ForgeDisableMirror { .. } => "ForgeDisableMirror",
+            Self::ForgeGetMirrorStatus { .. } => "ForgeGetMirrorStatus",
             Self::ForgeGetBlob { .. } => "ForgeGetBlob",
             Self::ForgeGetCommit { .. } => "ForgeGetCommit",
             Self::ForgeGetDelegateKey { .. } => "ForgeGetDelegateKey",
+            Self::ForgeGetDiscussion { .. } => "ForgeGetDiscussion",
             Self::ForgeGetIssue { .. } => "ForgeGetIssue",
             Self::ForgeGetPatch { .. } => "ForgeGetPatch",
             Self::ForgeGetRef { .. } => "ForgeGetRef",
             Self::ForgeGetRepo { .. } => "ForgeGetRepo",
             Self::ForgeGetTree { .. } => "ForgeGetTree",
             Self::ForgeListBranches { .. } => "ForgeListBranches",
+            Self::ForgeListDiscussions { .. } => "ForgeListDiscussions",
             Self::ForgeListIssues { .. } => "ForgeListIssues",
             Self::ForgeListPatches { .. } => "ForgeListPatches",
             Self::ForgeListRepos { .. } => "ForgeListRepos",
             Self::ForgeListTags { .. } => "ForgeListTags",
+            Self::ForgeLockDiscussion { .. } => "ForgeLockDiscussion",
             Self::ForgeLog { .. } => "ForgeLog",
             Self::ForgeMergePatch { .. } => "ForgeMergePatch",
             Self::ForgeCheckMerge { .. } => "ForgeCheckMerge",
+            Self::ForgeReopenDiscussion { .. } => "ForgeReopenDiscussion",
             Self::ForgeReopenIssue { .. } => "ForgeReopenIssue",
+            Self::ForgeReplyDiscussion { .. } => "ForgeReplyDiscussion",
             Self::ForgeSetRef { .. } => "ForgeSetRef",
             Self::ForgeStoreBlob { .. } => "ForgeStoreBlob",
+            Self::ForgeUnlockDiscussion { .. } => "ForgeUnlockDiscussion",
             Self::ForgeUpdatePatch { .. } => "ForgeUpdatePatch",
             Self::GetBlob { .. } => "GetBlob",
             Self::GetBlobReplicationStatus { .. } => "GetBlobReplicationStatus",
@@ -4149,6 +4224,18 @@ impl ClientRpcRequest {
             | Self::ForgeMergePatch { .. }
             | Self::ForgeCheckMerge { .. }
             | Self::ForgeClosePatch { .. }
+            | Self::ForgeCreateDiscussion { .. }
+            | Self::ForgeListDiscussions { .. }
+            | Self::ForgeGetDiscussion { .. }
+            | Self::ForgeReplyDiscussion { .. }
+            | Self::ForgeLockDiscussion { .. }
+            | Self::ForgeUnlockDiscussion { .. }
+            | Self::ForgeCloseDiscussion { .. }
+            | Self::ForgeReopenDiscussion { .. }
+            | Self::ForgeForkRepo { .. }
+            | Self::ForgeSetMirror { .. }
+            | Self::ForgeDisableMirror { .. }
+            | Self::ForgeGetMirrorStatus { .. }
             | Self::ForgeGetDelegateKey { .. } => Some("forge"),
 
             // Federation operations
@@ -4727,6 +4814,15 @@ pub enum ClientRpcResponse {
 
     /// Patch list result.
     ForgePatchListResult(ForgePatchListResultResponse),
+
+    /// Discussion operation result.
+    ForgeDiscussionResult(ForgeDiscussionResultResponse),
+
+    /// Discussion list result.
+    ForgeDiscussionListResult(ForgeDiscussionListResultResponse),
+
+    /// Mirror status result.
+    ForgeMirrorStatus(Option<ForgeMirrorStatusResponse>),
 
     /// Generic forge operation success/error.
     ForgeOperationResult(ForgeOperationResultResponse),

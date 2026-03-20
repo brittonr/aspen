@@ -17,6 +17,7 @@ pub mod ci;
 pub mod cluster;
 pub mod contacts;
 pub mod counter;
+pub mod discussion;
 pub mod docs;
 pub mod federation;
 pub mod git;

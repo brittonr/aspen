@@ -329,9 +329,15 @@ impl Patch {
                 });
             }
 
-            // Issue-specific operations are not applicable to patches
-            CobOperation::CreateIssue { .. } => {
-                // Ignore issue creation on patches
+            // Non-patch operations are not applicable to patches
+            CobOperation::CreateIssue { .. }
+            | CobOperation::CreateDiscussion { .. }
+            | CobOperation::Reply { .. }
+            | CobOperation::ResolveThread { .. }
+            | CobOperation::UnresolveThread { .. }
+            | CobOperation::LockDiscussion
+            | CobOperation::UnlockDiscussion => {
+                // Ignore non-patch operations
             }
 
             // Merge operations are handled at the store level during resolution.

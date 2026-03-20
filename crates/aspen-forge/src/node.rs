@@ -792,6 +792,234 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     }
 
     // ========================================================================
+    // Fork Operations
+    // ========================================================================
+
+    /// Fork a repository, creating a new repo linked to the upstream.
+    ///
+    /// The fork:
+    /// 1. Creates a new `RepoIdentity` with `ForkInfo` pointing to the upstream
+    /// 2. Copies all refs from the upstream repository
+    /// 3. Starts seeding the fork (if gossip is enabled)
+    ///
+    /// Git objects are NOT duplicated — they're shared via iroh-blobs content
+    /// addressing. Only the refs (branch/tag pointers) are copied.
+    ///
+    /// # Arguments
+    ///
+    /// * `upstream_repo_id` - Repository to fork from
+    /// * `name` - Name for the new fork
+    /// * `delegates` - Delegates for the fork (typically the forking user)
+    /// * `threshold` - Signature threshold for the fork
+    ///
+    /// # Errors
+    ///
+    /// * `ForgeError::RepoNotFound` if the upstream doesn't exist
+    /// * `ForgeError::RepoNameAlreadyExists` if the fork name is taken
+    pub async fn fork_repo(
+        &self,
+        upstream_repo_id: &RepoId,
+        name: impl Into<String>,
+        delegates: Vec<iroh::PublicKey>,
+        threshold: u32,
+    ) -> ForgeResult<RepoIdentity> {
+        let name = name.into();
+
+        // Verify upstream exists
+        let upstream = self.get_repo(upstream_repo_id).await?;
+
+        // Create the fork identity with ForkInfo
+        let fork_info = crate::identity::ForkInfo {
+            upstream_repo_id: *upstream_repo_id,
+            upstream_cluster: None, // Same cluster
+        };
+
+        let mut identity = RepoIdentity::new(name, delegates, threshold)?
+            .with_fork_info(fork_info)
+            .with_default_branch(upstream.default_branch.clone());
+
+        if let Some(desc) = &upstream.description {
+            identity = identity.with_description(format!("Fork of {}: {}", upstream.name, desc))?;
+        }
+
+        let repo_id = identity.repo_id();
+
+        // Check if name already exists
+        let name_key = format!("{}{}", crate::constants::KV_PREFIX_REPO_NAMES, identity.name);
+        let name_exists = match self
+            .kv
+            .read(aspen_core::ReadRequest {
+                key: name_key.clone(),
+                consistency: ReadConsistency::Linearizable,
+            })
+            .await
+        {
+            Ok(r) => r.kv.is_some(),
+            Err(KeyValueStoreError::NotFound { .. }) => false,
+            Err(e) => return Err(ForgeError::from(e)),
+        };
+
+        if name_exists {
+            return Err(ForgeError::RepoNameAlreadyExists {
+                name: identity.name.clone(),
+            });
+        }
+
+        // Store the fork identity
+        let signed = SignedObject::new(identity.clone(), &self.secret_key, &self.hlc)?;
+        let bytes = signed.to_bytes();
+        let identity_key = format!("{}{}:identity", crate::constants::KV_PREFIX_REPOS, repo_id.to_hex());
+
+        self.kv
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::SetMulti {
+                    pairs: vec![
+                        (identity_key, base64::Engine::encode(&base64::prelude::BASE64_STANDARD, &bytes)),
+                        (name_key, repo_id.to_hex()),
+                    ],
+                },
+            })
+            .await?;
+
+        // Copy all refs from upstream
+        let upstream_refs = self.refs.list(upstream_repo_id).await?;
+        for (ref_name, hash) in &upstream_refs {
+            self.refs.set(&repo_id, ref_name, *hash).await?;
+        }
+
+        // Start seeding if gossip is available
+        if self.gossip.is_some()
+            && let Err(e) = self.start_seeding(&repo_id).await
+        {
+            tracing::warn!(repo_id = %repo_id.to_hex(), "failed to start seeding fork: {}", e);
+        }
+
+        tracing::info!(
+            fork_id = %repo_id.to_hex(),
+            upstream_id = %upstream_repo_id.to_hex(),
+            "forked repository"
+        );
+
+        Ok(identity)
+    }
+
+    // ========================================================================
+    // Mirror Operations
+    // ========================================================================
+
+    /// Set mirror configuration for a repository.
+    ///
+    /// Persists the config to KV at `forge:mirror:{repo_id}`.
+    /// The interval is clamped to [60, 3600] seconds.
+    ///
+    /// # Errors
+    ///
+    /// * `ForgeError::MirrorLimitReached` if max mirrors exceeded
+    /// * `ForgeError::RepoNotFound` if the repo doesn't exist
+    pub async fn set_mirror_config(&self, repo_id: &RepoId, config: &crate::mirror::MirrorConfig) -> ForgeResult<()> {
+        use crate::constants::KV_PREFIX_MIRROR;
+        use crate::constants::MAX_MIRRORS_PER_NODE;
+
+        // Check mirror count limit (only for new mirrors)
+        let existing = self.get_mirror_config(repo_id).await?;
+        if existing.is_none() {
+            let count = self.count_mirrors().await?;
+            if count >= MAX_MIRRORS_PER_NODE {
+                return Err(ForgeError::MirrorLimitReached {
+                    count,
+                    max: MAX_MIRRORS_PER_NODE,
+                });
+            }
+        }
+
+        let key = format!("{}{}", KV_PREFIX_MIRROR, repo_id.to_hex());
+        let value = serde_json::to_string(config).map_err(|e| ForgeError::Serialization { message: e.to_string() })?;
+
+        self.kv
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::Set { key, value },
+            })
+            .await?;
+
+        tracing::debug!(repo_id = %repo_id.to_hex(), interval = config.interval_secs, "mirror config set");
+        Ok(())
+    }
+
+    /// Get mirror configuration for a repository.
+    pub async fn get_mirror_config(&self, repo_id: &RepoId) -> ForgeResult<Option<crate::mirror::MirrorConfig>> {
+        use crate::constants::KV_PREFIX_MIRROR;
+
+        let key = format!("{}{}", KV_PREFIX_MIRROR, repo_id.to_hex());
+
+        let result = match self
+            .kv
+            .read(aspen_core::ReadRequest {
+                key,
+                consistency: ReadConsistency::Linearizable,
+            })
+            .await
+        {
+            Ok(r) => r,
+            Err(KeyValueStoreError::NotFound { .. }) => return Ok(None),
+            Err(e) => return Err(ForgeError::from(e)),
+        };
+
+        match result.kv.map(|kv| kv.value) {
+            Some(json) => {
+                let config: crate::mirror::MirrorConfig =
+                    serde_json::from_str(&json).map_err(|e| ForgeError::InvalidObject { message: e.to_string() })?;
+                Ok(Some(config))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Delete mirror configuration for a repository.
+    pub async fn delete_mirror_config(&self, repo_id: &RepoId) -> ForgeResult<()> {
+        use crate::constants::KV_PREFIX_MIRROR;
+
+        let key = format!("{}{}", KV_PREFIX_MIRROR, repo_id.to_hex());
+        self.kv.delete(aspen_core::DeleteRequest { key }).await?;
+
+        tracing::debug!(repo_id = %repo_id.to_hex(), "mirror config deleted");
+        Ok(())
+    }
+
+    /// Get mirror status for a repository.
+    pub async fn get_mirror_status(&self, repo_id: &RepoId) -> ForgeResult<Option<crate::mirror::MirrorStatus>> {
+        let config = self.get_mirror_config(repo_id).await?;
+        match config {
+            Some(config) => {
+                let now_ms =
+                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                        as u64;
+                let is_due = config.is_due(now_ms);
+                Ok(Some(crate::mirror::MirrorStatus { config, is_due }))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Count active mirrors on this node.
+    ///
+    /// Tiger Style: Bounded scan with MAX_MIRRORS_PER_NODE + 1 limit.
+    async fn count_mirrors(&self) -> ForgeResult<u32> {
+        use crate::constants::KV_PREFIX_MIRROR;
+        use crate::constants::MAX_MIRRORS_PER_NODE;
+
+        let results = self
+            .kv
+            .scan(aspen_core::ScanRequest {
+                prefix: KV_PREFIX_MIRROR.to_string(),
+                limit_results: Some(MAX_MIRRORS_PER_NODE.saturating_add(1)),
+                continuation_token: None,
+            })
+            .await?;
+
+        Ok(results.entries.len() as u32)
+    }
+
+    // ========================================================================
     // High-Level Operations
     // ========================================================================
 
@@ -2233,5 +2461,122 @@ mod tests {
         let check = node.check_merge(&repo_id, &patch_id).await.unwrap();
         assert!(check.mergeable);
         assert!(check.protection_satisfied);
+    }
+
+    // ========================================================================
+    // Fork tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_fork_repo_basic() {
+        let node = create_test_node().await;
+
+        // Create upstream with a commit
+        let upstream = node.create_repo("upstream", vec![node.public_key()], 1).await.unwrap();
+        let upstream_id = upstream.repo_id();
+        let commit = node.init_repo(&upstream_id, "Initial commit").await.unwrap();
+
+        // Fork it
+        let fork = node.fork_repo(&upstream_id, "my-fork", vec![node.public_key()], 1).await.unwrap();
+        let fork_id = fork.repo_id();
+
+        // Fork should have ForkInfo
+        assert!(fork.is_fork());
+        assert_eq!(fork.fork_info.as_ref().unwrap().upstream_repo_id, upstream_id);
+        assert!(fork.fork_info.as_ref().unwrap().upstream_cluster.is_none());
+
+        // Fork should have same head
+        let fork_head = node.get_head(&fork_id).await.unwrap();
+        assert_eq!(fork_head, Some(commit));
+    }
+
+    #[tokio::test]
+    async fn test_fork_of_fork_lineage() {
+        let node = create_test_node().await;
+
+        let upstream = node.create_repo("upstream", vec![node.public_key()], 1).await.unwrap();
+        let upstream_id = upstream.repo_id();
+        node.init_repo(&upstream_id, "init").await.unwrap();
+
+        let fork1 = node.fork_repo(&upstream_id, "fork1", vec![node.public_key()], 1).await.unwrap();
+        let fork1_id = fork1.repo_id();
+
+        let fork2 = node.fork_repo(&fork1_id, "fork2", vec![node.public_key()], 1).await.unwrap();
+
+        // fork1 points to upstream
+        assert_eq!(fork1.fork_info.as_ref().unwrap().upstream_repo_id, upstream_id);
+        // fork2 points to fork1
+        assert_eq!(fork2.fork_info.as_ref().unwrap().upstream_repo_id, fork1_id);
+    }
+
+    #[tokio::test]
+    async fn test_fork_nonexistent_repo_error() {
+        let node = create_test_node().await;
+
+        let fake_id = RepoId::from_hash(blake3::hash(b"nonexistent"));
+        let result = node.fork_repo(&fake_id, "bad-fork", vec![node.public_key()], 1).await;
+        assert!(matches!(result, Err(ForgeError::RepoNotFound { .. })));
+    }
+
+    // ========================================================================
+    // Mirror tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_mirror_config_persistence() {
+        let node = create_test_node().await;
+        let identity = node.create_repo("mirrortest", vec![node.public_key()], 1).await.unwrap();
+        let repo_id = identity.repo_id();
+
+        // No mirror initially
+        let config = node.get_mirror_config(&repo_id).await.unwrap();
+        assert!(config.is_none());
+
+        // Set mirror config
+        let upstream_id = RepoId::from_hash(blake3::hash(b"upstream"));
+        let config = crate::mirror::MirrorConfig::new(upstream_id, 300);
+        node.set_mirror_config(&repo_id, &config).await.unwrap();
+
+        // Retrieve it
+        let retrieved = node.get_mirror_config(&repo_id).await.unwrap().unwrap();
+        assert_eq!(retrieved.upstream_repo_id, upstream_id);
+        assert_eq!(retrieved.interval_secs, 300);
+        assert!(retrieved.enabled);
+
+        // Delete it
+        node.delete_mirror_config(&repo_id).await.unwrap();
+        let config = node.get_mirror_config(&repo_id).await.unwrap();
+        assert!(config.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_mirror_interval_clamping() {
+        // Below minimum
+        let config = crate::mirror::MirrorConfig::new(RepoId([0; 32]), 5);
+        assert_eq!(config.interval_secs, crate::constants::MIN_MIRROR_INTERVAL_SECS);
+
+        // Above maximum
+        let config = crate::mirror::MirrorConfig::new(RepoId([0; 32]), 99999);
+        assert_eq!(config.interval_secs, crate::constants::MAX_MIRROR_INTERVAL_SECS);
+    }
+
+    #[tokio::test]
+    async fn test_mirror_status() {
+        let node = create_test_node().await;
+        let identity = node.create_repo("statustest", vec![node.public_key()], 1).await.unwrap();
+        let repo_id = identity.repo_id();
+
+        // No status without config
+        let status = node.get_mirror_status(&repo_id).await.unwrap();
+        assert!(status.is_none());
+
+        // Set config, check status
+        let upstream_id = RepoId::from_hash(blake3::hash(b"upstream"));
+        let config = crate::mirror::MirrorConfig::new(upstream_id, 60);
+        node.set_mirror_config(&repo_id, &config).await.unwrap();
+
+        let status = node.get_mirror_status(&repo_id).await.unwrap().unwrap();
+        assert!(status.is_due); // Never synced, so always due
+        assert_eq!(status.config.interval_secs, 60);
     }
 }

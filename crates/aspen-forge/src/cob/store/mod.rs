@@ -1,6 +1,7 @@
 //! COB storage and state resolution.
 
 mod conflict_resolution;
+mod discussion_ops;
 mod issue_ops;
 mod listing;
 mod patch_ops;

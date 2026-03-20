@@ -66,6 +66,25 @@ fn patch_to_info(id: &blake3::Hash, patch: &aspen_forge::cob::Patch) -> aspen_cl
     }
 }
 
+fn discussion_to_info(id: &blake3::Hash, d: &aspen_forge::cob::Discussion) -> aspen_client_api::ForgeDiscussionInfo {
+    let state_str = match &d.state {
+        aspen_forge::cob::DiscussionState::Open => "open",
+        aspen_forge::cob::DiscussionState::Closed { .. } => "closed",
+        aspen_forge::cob::DiscussionState::Locked => "locked",
+    };
+    aspen_client_api::ForgeDiscussionInfo {
+        id: id.to_hex().to_string(),
+        title: d.title.clone(),
+        body: d.body.clone(),
+        state: state_str.into(),
+        labels: d.labels.iter().cloned().collect(),
+        reply_count: d.replies.len() as u32,
+        resolved_thread_count: d.resolved_threads.len() as u32,
+        created_at_ms: d.created_at_ms,
+        updated_at_ms: d.updated_at_ms,
+    }
+}
+
 /// Service executor for Forge operations (federation + git bridge).
 ///
 /// Repos, objects, refs, issues, and patches are handled by the WASM
@@ -122,6 +141,18 @@ impl ForgeServiceExecutor {
         "ForgeMergePatch",
         "ForgeCheckMerge",
         "ForgeClosePatch",
+        "ForgeCreateDiscussion",
+        "ForgeListDiscussions",
+        "ForgeGetDiscussion",
+        "ForgeReplyDiscussion",
+        "ForgeLockDiscussion",
+        "ForgeUnlockDiscussion",
+        "ForgeCloseDiscussion",
+        "ForgeReopenDiscussion",
+        "ForgeForkRepo",
+        "ForgeSetMirror",
+        "ForgeDisableMirror",
+        "ForgeGetMirrorStatus",
         "ForgeGetDelegateKey",
         "GetFederationStatus",
         "ListDiscoveredClusters",
@@ -1019,6 +1050,289 @@ impl ForgeServiceExecutor {
         }
     }
 
+    // ========================================================================
+    // Discussion Handler Methods
+    // ========================================================================
+
+    async fn handle_create_discussion(
+        &self,
+        repo_id: String,
+        title: String,
+        body: String,
+        labels: Vec<String>,
+    ) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeOperationResultResponse;
+
+        let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
+
+        match self.forge_node.cobs.create_discussion(&repo_id, title, body, labels).await {
+            Ok(_id) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: true,
+                error: None,
+            })),
+            Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: false,
+                error: Some(format!("{e}")),
+            })),
+        }
+    }
+
+    async fn handle_list_discussions(&self, repo_id: String) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeDiscussionListResultResponse;
+
+        let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
+
+        let ids = self.forge_node.cobs.list_discussions(&repo_id).await?;
+        let mut discussions = Vec::with_capacity(ids.len());
+        for id in &ids {
+            if let Ok(discussion) = self.forge_node.cobs.resolve_discussion(&repo_id, id).await {
+                discussions.push(discussion_to_info(id, &discussion));
+            }
+        }
+        Ok(ClientRpcResponse::ForgeDiscussionListResult(ForgeDiscussionListResultResponse { discussions }))
+    }
+
+    async fn handle_get_discussion(&self, repo_id: String, discussion_id: String) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeDiscussionResultResponse;
+
+        let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
+        let did = blake3::Hash::from_hex(&discussion_id).map_err(|e| anyhow::anyhow!("invalid discussion ID: {e}"))?;
+
+        let discussion = self.forge_node.cobs.resolve_discussion(&repo_id, &did).await?;
+        Ok(ClientRpcResponse::ForgeDiscussionResult(ForgeDiscussionResultResponse {
+            discussion: discussion_to_info(&did, &discussion),
+        }))
+    }
+
+    async fn handle_reply_discussion(
+        &self,
+        repo_id: String,
+        discussion_id: String,
+        body: String,
+        parent_reply: Option<String>,
+    ) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeOperationResultResponse;
+
+        let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
+        let did = blake3::Hash::from_hex(&discussion_id).map_err(|e| anyhow::anyhow!("invalid discussion ID: {e}"))?;
+
+        let parent_reply_hash = if let Some(parent) = parent_reply {
+            let ph = blake3::Hash::from_hex(&parent).map_err(|e| anyhow::anyhow!("invalid parent reply hash: {e}"))?;
+            Some(*ph.as_bytes())
+        } else {
+            None
+        };
+
+        match self.forge_node.cobs.add_reply(&repo_id, &did, body, parent_reply_hash).await {
+            Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: true,
+                error: None,
+            })),
+            Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: false,
+                error: Some(format!("{e}")),
+            })),
+        }
+    }
+
+    async fn handle_lock_discussion(&self, repo_id: String, discussion_id: String) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeOperationResultResponse;
+
+        let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
+        let did = blake3::Hash::from_hex(&discussion_id).map_err(|e| anyhow::anyhow!("invalid discussion ID: {e}"))?;
+
+        match self.forge_node.cobs.lock_discussion(&repo_id, &did).await {
+            Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: true,
+                error: None,
+            })),
+            Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: false,
+                error: Some(format!("{e}")),
+            })),
+        }
+    }
+
+    async fn handle_unlock_discussion(&self, repo_id: String, discussion_id: String) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeOperationResultResponse;
+
+        let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
+        let did = blake3::Hash::from_hex(&discussion_id).map_err(|e| anyhow::anyhow!("invalid discussion ID: {e}"))?;
+
+        match self.forge_node.cobs.unlock_discussion(&repo_id, &did).await {
+            Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: true,
+                error: None,
+            })),
+            Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: false,
+                error: Some(format!("{e}")),
+            })),
+        }
+    }
+
+    async fn handle_close_discussion(
+        &self,
+        repo_id: String,
+        discussion_id: String,
+        reason: Option<String>,
+    ) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeOperationResultResponse;
+
+        let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
+        let did = blake3::Hash::from_hex(&discussion_id).map_err(|e| anyhow::anyhow!("invalid discussion ID: {e}"))?;
+
+        match self.forge_node.cobs.close_discussion(&repo_id, &did, reason).await {
+            Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: true,
+                error: None,
+            })),
+            Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: false,
+                error: Some(format!("{e}")),
+            })),
+        }
+    }
+
+    async fn handle_reopen_discussion(&self, repo_id: String, discussion_id: String) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeOperationResultResponse;
+
+        let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
+        let did = blake3::Hash::from_hex(&discussion_id).map_err(|e| anyhow::anyhow!("invalid discussion ID: {e}"))?;
+
+        match self.forge_node.cobs.reopen_discussion(&repo_id, &did).await {
+            Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: true,
+                error: None,
+            })),
+            Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: false,
+                error: Some(format!("{e}")),
+            })),
+        }
+    }
+
+    // ========================================================================
+    // Fork Handler Methods
+    // ========================================================================
+
+    async fn handle_fork_repo(
+        &self,
+        upstream_repo_id: String,
+        name: String,
+        description: Option<String>,
+    ) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeRepoResultResponse;
+
+        let upstream_hash =
+            blake3::Hash::from_hex(&upstream_repo_id).map_err(|e| anyhow::anyhow!("invalid upstream repo ID: {e}"))?;
+        let upstream_repo_id = aspen_forge::identity::RepoId::from_hash(upstream_hash);
+
+        // Use the current node's key as the single delegate with threshold 1
+        let delegates = vec![self.forge_node.public_key()];
+        let threshold = 1;
+
+        match self.forge_node.fork_repo(&upstream_repo_id, &name, delegates, threshold).await {
+            Ok(identity) => {
+                let repo_info = aspen_client_api::ForgeRepoInfo {
+                    id: identity.repo_id().to_hex(),
+                    name: identity.name.clone(),
+                    description,
+                    default_branch: "main".to_string(),
+                    delegates: identity.delegates.iter().map(|d| d.to_string()).collect(),
+                    threshold_delegates: identity.threshold,
+                    created_at_ms: identity.created_at_ms,
+                };
+                Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                    is_success: true,
+                    repo: Some(repo_info),
+                    error: None,
+                }))
+            }
+            Err(e) => Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                is_success: false,
+                repo: None,
+                error: Some(format!("{e}")),
+            })),
+        }
+    }
+
+    async fn handle_set_mirror(
+        &self,
+        repo_id: String,
+        upstream_repo_id: String,
+        interval_secs: u32,
+    ) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeOperationResultResponse;
+
+        let repo_hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let repo_id = aspen_forge::identity::RepoId::from_hash(repo_hash);
+        let upstream_hash =
+            blake3::Hash::from_hex(&upstream_repo_id).map_err(|e| anyhow::anyhow!("invalid upstream repo ID: {e}"))?;
+        let upstream = aspen_forge::identity::RepoId::from_hash(upstream_hash);
+
+        let config = aspen_forge::mirror::MirrorConfig::new(upstream, interval_secs);
+
+        match self.forge_node.set_mirror_config(&repo_id, &config).await {
+            Ok(()) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: true,
+                error: None,
+            })),
+            Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: false,
+                error: Some(format!("{e}")),
+            })),
+        }
+    }
+
+    async fn handle_disable_mirror(&self, repo_id: String) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeOperationResultResponse;
+
+        let repo_hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let repo_id = aspen_forge::identity::RepoId::from_hash(repo_hash);
+
+        match self.forge_node.delete_mirror_config(&repo_id).await {
+            Ok(()) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: true,
+                error: None,
+            })),
+            Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: false,
+                error: Some(format!("{e}")),
+            })),
+        }
+    }
+
+    async fn handle_get_mirror_status(&self, repo_id: String) -> Result<ClientRpcResponse> {
+        let repo_hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let repo_id = aspen_forge::identity::RepoId::from_hash(repo_hash);
+
+        match self.forge_node.get_mirror_status(&repo_id).await {
+            Ok(Some(status)) => {
+                let resp = aspen_client_api::ForgeMirrorStatusResponse {
+                    upstream_repo_id: status.config.upstream_repo_id.to_hex(),
+                    upstream_cluster: status.config.upstream_cluster.map(|k| k.to_string()),
+                    interval_secs: status.config.interval_secs,
+                    enabled: status.config.enabled,
+                    last_sync_ms: status.config.last_sync_ms,
+                    synced_refs_count: status.config.last_synced_refs_count,
+                    is_due: status.is_due,
+                };
+                Ok(ClientRpcResponse::ForgeMirrorStatus(Some(resp)))
+            }
+            Ok(None) => Ok(ClientRpcResponse::ForgeMirrorStatus(None)),
+            Err(_e) => Ok(ClientRpcResponse::ForgeMirrorStatus(None)),
+        }
+    }
+
     /// Emit a ForgePushCompleted hook event for successful ref updates.
     ///
     /// This is fire-and-forget — hook dispatch failures are logged but don't
@@ -1279,6 +1593,58 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 patch_id,
                 reason,
             } => self.handle_close_patch(repo_id, patch_id, reason).await,
+
+            // Discussion operations
+            ClientRpcRequest::ForgeCreateDiscussion {
+                repo_id,
+                title,
+                body,
+                labels,
+            } => self.handle_create_discussion(repo_id, title, body, labels).await,
+            ClientRpcRequest::ForgeListDiscussions {
+                repo_id,
+                state: _,
+                limit: _,
+            } => self.handle_list_discussions(repo_id).await,
+            ClientRpcRequest::ForgeGetDiscussion { repo_id, discussion_id } => {
+                self.handle_get_discussion(repo_id, discussion_id).await
+            }
+            ClientRpcRequest::ForgeReplyDiscussion {
+                repo_id,
+                discussion_id,
+                body,
+                parent_reply,
+            } => self.handle_reply_discussion(repo_id, discussion_id, body, parent_reply).await,
+            ClientRpcRequest::ForgeLockDiscussion { repo_id, discussion_id } => {
+                self.handle_lock_discussion(repo_id, discussion_id).await
+            }
+            ClientRpcRequest::ForgeUnlockDiscussion { repo_id, discussion_id } => {
+                self.handle_unlock_discussion(repo_id, discussion_id).await
+            }
+            ClientRpcRequest::ForgeCloseDiscussion {
+                repo_id,
+                discussion_id,
+                reason,
+            } => self.handle_close_discussion(repo_id, discussion_id, reason).await,
+            ClientRpcRequest::ForgeReopenDiscussion { repo_id, discussion_id } => {
+                self.handle_reopen_discussion(repo_id, discussion_id).await
+            }
+
+            // Fork operations
+            ClientRpcRequest::ForgeForkRepo {
+                upstream_repo_id,
+                name,
+                description,
+            } => self.handle_fork_repo(upstream_repo_id, name, description).await,
+
+            // Mirror operations
+            ClientRpcRequest::ForgeSetMirror {
+                repo_id,
+                upstream_repo_id,
+                interval_secs,
+            } => self.handle_set_mirror(repo_id, upstream_repo_id, interval_secs).await,
+            ClientRpcRequest::ForgeDisableMirror { repo_id } => self.handle_disable_mirror(repo_id).await,
+            ClientRpcRequest::ForgeGetMirrorStatus { repo_id } => self.handle_get_mirror_status(repo_id).await,
 
             // Federation operations
             ClientRpcRequest::ForgeGetDelegateKey { repo_id } => {

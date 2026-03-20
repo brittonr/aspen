@@ -81,6 +81,12 @@ pub enum GitCommand {
 
     /// Fetch a federated repository from a remote cluster.
     FetchRemote(FetchRemoteArgs),
+
+    /// Fork a repository.
+    Fork(ForkArgs),
+
+    /// Manage mirror configuration for a repository.
+    Mirror(MirrorArgs),
 }
 
 #[derive(Args)]
@@ -290,6 +296,40 @@ pub struct FetchRemoteArgs {
     pub cluster: String,
 }
 
+#[derive(Args, Clone)]
+pub struct ForkArgs {
+    /// Upstream repository ID to fork from.
+    #[arg(long)]
+    pub upstream: String,
+
+    /// Name for the fork.
+    #[arg(short, long)]
+    pub name: String,
+}
+
+#[derive(Args, Clone)]
+pub struct MirrorArgs {
+    /// Repository ID.
+    #[arg(short, long)]
+    pub repo: String,
+
+    /// Upstream repository ID to mirror from.
+    #[arg(long)]
+    pub upstream: Option<String>,
+
+    /// Sync interval in seconds.
+    #[arg(long, default_value = "300")]
+    pub interval: u32,
+
+    /// Disable mirror mode.
+    #[arg(long)]
+    pub disable: bool,
+
+    /// Show mirror status.
+    #[arg(long)]
+    pub status: bool,
+}
+
 impl GitCommand {
     /// Execute the git command.
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
@@ -312,6 +352,8 @@ impl GitCommand {
             GitCommand::Federate(args) => git_federate(client, args, json).await,
             GitCommand::ListFederated(args) => git_list_federated(client, args, json).await,
             GitCommand::FetchRemote(args) => git_fetch_remote(client, args, json).await,
+            GitCommand::Fork(args) => git_fork(client, args, json).await,
+            GitCommand::Mirror(args) => git_mirror(client, args, json).await,
         }
     }
 }
@@ -1536,5 +1578,113 @@ async fn git_fetch_remote(client: &AspenClient, args: FetchRemoteArgs, json: boo
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn git_fork(client: &AspenClient, args: ForkArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::ForgeForkRepo {
+            upstream_repo_id: args.upstream.clone(),
+            name: args.name.clone(),
+            description: None,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::ForgeRepoResult(result) => {
+            if result.is_success {
+                if let Some(repo) = &result.repo {
+                    if json {
+                        println!("{}", serde_json::to_string_pretty(&repo)?);
+                    } else {
+                        println!("Forked {} → {}", args.upstream, repo.name);
+                        println!("  ID: {}", repo.id);
+                    }
+                }
+                Ok(())
+            } else {
+                anyhow::bail!("{}", result.error.unwrap_or_else(|| "fork failed".to_string()))
+            }
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn git_mirror(client: &AspenClient, args: MirrorArgs, json: bool) -> Result<()> {
+    if args.status {
+        let response = client
+            .send(ClientRpcRequest::ForgeGetMirrorStatus {
+                repo_id: args.repo.clone(),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::ForgeMirrorStatus(status) => {
+                if let Some(s) = &status {
+                    if json {
+                        println!("{}", serde_json::to_string_pretty(&s)?);
+                    } else {
+                        println!("Mirror for {}", args.repo);
+                        println!("  Upstream: {}", s.upstream_repo_id);
+                        println!("  Interval: {}s", s.interval_secs);
+                        println!("  Enabled:  {}", s.enabled);
+                        println!("  Last sync: {}ms", s.last_sync_ms);
+                        println!("  Synced refs: {}", s.synced_refs_count);
+                        println!("  Due: {}", s.is_due);
+                    }
+                } else if json {
+                    println!("null");
+                } else {
+                    println!("No mirror configured for {}", args.repo);
+                }
+                Ok(())
+            }
+            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
+    } else if args.disable {
+        let response = client
+            .send(ClientRpcRequest::ForgeDisableMirror {
+                repo_id: args.repo.clone(),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::ForgeOperationResult(r) if r.is_success => {
+                if !json {
+                    println!("Mirror disabled for {}", args.repo);
+                }
+                Ok(())
+            }
+            ClientRpcResponse::ForgeOperationResult(r) => {
+                anyhow::bail!("{}", r.error.unwrap_or_else(|| "failed".to_string()))
+            }
+            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
+    } else {
+        let upstream = args.upstream.ok_or_else(|| anyhow::anyhow!("--upstream is required to set mirror"))?;
+        let response = client
+            .send(ClientRpcRequest::ForgeSetMirror {
+                repo_id: args.repo.clone(),
+                upstream_repo_id: upstream.clone(),
+                interval_secs: args.interval,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::ForgeOperationResult(r) if r.is_success => {
+                if !json {
+                    println!("Mirror enabled for {} → {} (interval: {}s)", args.repo, upstream, args.interval);
+                }
+                Ok(())
+            }
+            ClientRpcResponse::ForgeOperationResult(r) => {
+                anyhow::bail!("{}", r.error.unwrap_or_else(|| "failed".to_string()))
+            }
+            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
     }
 }

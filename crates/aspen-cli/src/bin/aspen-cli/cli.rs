@@ -27,6 +27,7 @@ use crate::commands::ci::CiCommand;
 use crate::commands::cluster::ClusterCommand;
 use crate::commands::contacts::ContactsCommand;
 use crate::commands::counter::CounterCommand;
+use crate::commands::discussion::DiscussionCommand;
 use crate::commands::docs::DocsCommand;
 use crate::commands::federation::FederationCommand;
 use crate::commands::git::GitCommand;
@@ -181,6 +182,12 @@ pub enum Commands {
     /// CRDT-replicated docs namespace operations.
     #[command(subcommand)]
     Docs(DocsCommand),
+
+    /// Discussion management (collaborative objects).
+    ///
+    /// Create and manage discussions as immutable, content-addressed DAGs.
+    #[command(subcommand)]
+    Discussion(DiscussionCommand),
 
     /// Cross-cluster federation.
     ///
@@ -399,6 +406,7 @@ impl Cli {
             Commands::Contacts(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Counter(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Docs(cmd) => cmd.run(&client, self.global.is_json).await,
+            Commands::Discussion(cmd) => cmd.execute(&client, self.global.is_json).await,
             Commands::Federation(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Git(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Hook(cmd) => cmd.run(&client, self.global.is_json).await,

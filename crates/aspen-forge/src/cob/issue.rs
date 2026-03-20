@@ -173,13 +173,19 @@ impl Issue {
                 self.assignees.remove(assignee);
             }
 
-            // Patch-specific operations are not applicable to issues
+            // Non-issue operations are not applicable to issues
             CobOperation::CreatePatch { .. }
             | CobOperation::UpdatePatch { .. }
             | CobOperation::Merge { .. }
             | CobOperation::Approve { .. }
-            | CobOperation::RequestChanges { .. } => {
-                // Ignore patch operations on issues
+            | CobOperation::RequestChanges { .. }
+            | CobOperation::CreateDiscussion { .. }
+            | CobOperation::Reply { .. }
+            | CobOperation::ResolveThread { .. }
+            | CobOperation::UnresolveThread { .. }
+            | CobOperation::LockDiscussion
+            | CobOperation::UnlockDiscussion => {
+                // Ignore non-issue operations
             }
 
             // Merge operations are handled at the store level during resolution.

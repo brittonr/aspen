@@ -225,6 +225,41 @@ pub enum CobOperation {
     },
 
     // ========================================================================
+    // Discussion Operations
+    // ========================================================================
+    /// Create a new discussion.
+    CreateDiscussion {
+        title: String,
+        body: String,
+        labels: Vec<String>,
+    },
+
+    /// Reply to a discussion.
+    Reply {
+        body: String,
+        /// Optional parent reply hash for threaded replies.
+        parent_reply: Option<[u8; 32]>,
+    },
+
+    /// Mark a reply thread as resolved.
+    ResolveThread {
+        /// Hash of the reply being resolved.
+        reply_hash: [u8; 32],
+    },
+
+    /// Unmark a reply thread as resolved.
+    UnresolveThread {
+        /// Hash of the reply being unresolved.
+        reply_hash: [u8; 32],
+    },
+
+    /// Lock a discussion (prevent new replies).
+    LockDiscussion,
+
+    /// Unlock a discussion.
+    UnlockDiscussion,
+
+    // ========================================================================
     // Generic Operations
     // ========================================================================
     /// Add a reaction (emoji).

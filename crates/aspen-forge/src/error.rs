@@ -52,6 +52,13 @@ pub enum ForgeError {
     TooManyChanges { count: u32, max: u32 },
 
     // ========================================================================
+    // Discussion Errors
+    // ========================================================================
+    /// Discussion is locked, cannot add replies.
+    #[snafu(display("discussion is locked: {discussion_id}"))]
+    DiscussionLocked { discussion_id: String },
+
+    // ========================================================================
     // Repository Errors
     // ========================================================================
     /// Repository not found.
@@ -185,6 +192,17 @@ pub enum ForgeError {
     /// Federation operation error.
     #[snafu(display("federation error: {message}"))]
     FederationError { message: String },
+
+    // ========================================================================
+    // Mirror Errors
+    // ========================================================================
+    /// Mirror limit reached.
+    #[snafu(display("mirror limit reached: {count} >= {max}"))]
+    MirrorLimitReached { count: u32, max: u32 },
+
+    /// Mirror interval out of range.
+    #[snafu(display("mirror interval {interval_secs}s out of range [{min}s, {max}s]"))]
+    MirrorIntervalOutOfRange { interval_secs: u32, min: u32, max: u32 },
 
     // ========================================================================
     // Merge Gating Errors

@@ -71,6 +71,11 @@ pub const MAX_TITLE_LENGTH_BYTES: u32 = 512;
 /// Tiger Style: Prevents runaway resolution on pathological DAGs.
 pub const MAX_COB_CHANGES_TO_RESOLVE: u32 = 100_000;
 
+/// Maximum size of a discussion reply body.
+///
+/// Tiger Style: Prevents memory exhaustion from oversized replies.
+pub const MAX_DISCUSSION_REPLY_BODY_BYTES: u32 = 256 * 1024; // 256 KB
+
 // ============================================================================
 // Repository Limits
 // ============================================================================
@@ -286,6 +291,33 @@ pub const MAX_MERGE_CONFLICTS: u32 = 1_000;
 pub const MAX_MERGE_CAS_RETRIES: u32 = 3;
 
 // ============================================================================
+// Mirror Limits
+// ============================================================================
+
+/// Maximum number of mirrored repos per node.
+///
+/// Tiger Style: Prevents unbounded background sync load.
+pub const MAX_MIRRORS_PER_NODE: u32 = 1_000;
+
+/// Minimum mirror sync interval.
+///
+/// Tiger Style: Prevents excessive polling.
+pub const MIN_MIRROR_INTERVAL_SECS: u32 = 60;
+
+/// Maximum mirror sync interval.
+///
+/// Tiger Style: Ensures mirrors stay reasonably fresh.
+pub const MAX_MIRROR_INTERVAL_SECS: u32 = 3_600;
+
+/// Maximum concurrent mirror syncs.
+///
+/// Tiger Style: Limits background sync resource usage.
+pub const MAX_CONCURRENT_MIRROR_SYNCS: u32 = 10;
+
+/// KV key prefix for mirror configuration.
+pub const KV_PREFIX_MIRROR: &str = "forge:mirror:";
+
+// ============================================================================
 // Compile-Time Constant Assertions
 // ============================================================================
 
@@ -303,6 +335,7 @@ const _: () = assert!(MAX_LABELS > 0);
 const _: () = assert!(MAX_LABEL_LENGTH_BYTES > 0);
 const _: () = assert!(MAX_TITLE_LENGTH_BYTES > 0);
 const _: () = assert!(MAX_COB_CHANGES_TO_RESOLVE > 0);
+const _: () = assert!(MAX_DISCUSSION_REPLY_BODY_BYTES > 0);
 
 // Repository limits must be positive
 const _: () = assert!(MAX_DELEGATES > 0);
@@ -346,3 +379,10 @@ const _: () = assert!(MAX_DIFF_BLOB_SIZE > 0);
 const _: () = assert!(MAX_MERGE_DEPTH > 0);
 const _: () = assert!(MAX_MERGE_CONFLICTS > 0);
 const _: () = assert!(MAX_MERGE_CAS_RETRIES > 0);
+
+// Mirror limits must be positive
+const _: () = assert!(MAX_MIRRORS_PER_NODE > 0);
+const _: () = assert!(MIN_MIRROR_INTERVAL_SECS > 0);
+const _: () = assert!(MAX_MIRROR_INTERVAL_SECS > 0);
+const _: () = assert!(MIN_MIRROR_INTERVAL_SECS <= MAX_MIRROR_INTERVAL_SECS);
+const _: () = assert!(MAX_CONCURRENT_MIRROR_SYNCS > 0);
