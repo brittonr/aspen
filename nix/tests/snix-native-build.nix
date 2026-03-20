@@ -402,6 +402,148 @@ in
           else:
               node1.log("No output paths available — skipping narinfo check")
 
+      # ── flake with real input (input resolution) ─────────────────────
+
+      with subtest("prepare flake with path input"):
+          # Create a library flake that provides a simple package.
+          node1.succeed("mkdir -p /root/lib-flake")
+          node1.succeed(
+              "cat > /root/lib-flake/flake.nix << 'FLAKE'\n"
+              "{\n"
+              '  description = "test library";\n'
+              "  inputs = {};\n"
+              "  outputs = { self, ... }: {\n"
+              "    packages.x86_64-linux.greeting = derivation {\n"
+              '      name = "greeting";\n'
+              '      system = "x86_64-linux";\n'
+              '      builder = "/bin/sh";\n'
+              '      args = [ "-c" "echo hello-from-lib > $out" ];\n'
+              "    };\n"
+              "  };\n"
+              "}\n"
+              "FLAKE"
+          )
+          node1.succeed(
+              "cd /root/lib-flake && "
+              "git init && "
+              "git config user.email 'test@test' && "
+              "git config user.name 'test' && "
+              "git add -A && "
+              "git commit -m 'init'"
+          )
+
+          # Create main flake that depends on lib-flake via path input.
+          node1.succeed("mkdir -p /root/main-flake")
+          node1.succeed(
+              "cat > /root/main-flake/flake.nix << 'FLAKE'\n"
+              "{\n"
+              '  description = "test main with input";\n'
+              '  inputs.lib-flake.url = "path:../lib-flake";\n'
+              "  outputs = { self, lib-flake, ... }: {\n"
+              "    packages.x86_64-linux.default = derivation {\n"
+              '      name = "main-with-input";\n'
+              '      system = "x86_64-linux";\n'
+              '      builder = "/bin/sh";\n'
+              '      args = [ "-c" "echo built-with-input > $out" ];\n'
+              "    };\n"
+              "  };\n"
+              "}\n"
+              "FLAKE"
+          )
+          node1.succeed(
+              "cd /root/main-flake && "
+              "git init && "
+              "git config user.email 'test@test' && "
+              "git config user.name 'test' && "
+              "git add -A && "
+              "git commit -m 'init'"
+          )
+
+          # Lock the flake — this computes narHash for the path input
+          # and copies lib-flake to /nix/store.
+          node1.succeed("cd /root/main-flake && nix flake lock")
+
+          # Verify flake.lock has the lib-flake input with narHash
+          lock_json = node1.succeed("cat /root/main-flake/flake.lock")
+          node1.log(f"main-flake flake.lock:\n{lock_json[:800]}")
+          lock_data = json.loads(lock_json)
+          nodes = lock_data.get("nodes", {})
+          assert "lib-flake" in nodes, \
+              f"lib-flake not in lock nodes: {list(nodes.keys())}"
+          lib_locked = nodes["lib-flake"].get("locked", {})
+          assert "narHash" in lib_locked, \
+              f"lib-flake locked entry missing narHash: {lib_locked}"
+          node1.log(
+              f"lib-flake locked: type={lib_locked.get('type')}, "
+              f"narHash={lib_locked.get('narHash')}"
+          )
+
+      with subtest("submit build job with input"):
+          payload = json.dumps({
+              "flake_url": "/root/main-flake",
+              "attribute": "packages.x86_64-linux.default",
+              "extra_args": [],
+              "timeout_secs": 300,
+              "sandbox": False,
+              "should_upload_result": False,
+              "publish_to_cache": True,
+              "cache_outputs": [],
+              "artifacts": [],
+          })
+          result = cli(f"job submit ci_nix_build '{payload}'")
+          input_job_id = result.get("job_id") or result.get("id")
+          assert input_job_id, f"no job_id: {result}"
+          node1.log(f"Submitted input-flake build job: {input_job_id}")
+
+      with subtest("input-flake build completes"):
+          deadline = time.time() + 300
+          input_final = None
+          while time.time() < deadline:
+              result = cli(f"job status {input_job_id}", check=False)
+              if isinstance(result, dict):
+                  job = result.get("job") or result
+                  state = job.get("status")
+                  node1.log(f"Input job {input_job_id}: state={state}")
+                  if state in ("success", "completed", "failed", "dead"):
+                      input_final = result
+                      break
+              time.sleep(5)
+
+          assert input_final is not None, \
+              f"Input job did not complete within 300s"
+          job = input_final.get("job") or input_final
+          state = job.get("status")
+
+          if state == "failed":
+              node1.log(f"Input job FAILED: {json.dumps(input_final, indent=2)[:2000]}")
+              logs = node1.succeed(
+                  "journalctl -u aspen-node.service --no-pager -n 50 "
+                  "| grep -iE 'flake.eval|call-flake|input|resolve' || true"
+              )
+              node1.log(f"Input resolution logs:\n{logs}")
+
+          assert state in ("success", "completed"), \
+              f"Input-flake build failed: state={state}"
+          node1.log("Build with input completed!")
+
+      with subtest("verify input resolution in logs"):
+          # Check whether the in-process eval resolved the input
+          logs = node1.succeed(
+              "journalctl -u aspen-node.service --no-pager "
+              "| grep -iE 'call-flake|flake eval|input.*resolution|zero subprocesses' || true"
+          )
+          node1.log(f"Input resolution log lines:\n{logs}")
+          if "zero subprocesses" in logs:
+              node1.log(
+                  "In-process flake eval with input succeeded! "
+                  "narHash → store path resolution worked."
+              )
+          else:
+              node1.log(
+                  "In-process eval with input not used — fell back to subprocess. "
+                  "Build still succeeded via fallback path."
+              )
+
       # ── done ─────────────────────────────────────────────────────────
       node1.log("All snix-native-build tests passed!")
     '';

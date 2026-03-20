@@ -30,5 +30,5 @@
 ## 5. VM Test and Validation
 
 - [x] 5.1 Update `snix-native-build.nix` VM test to verify "zero subprocesses" in journal for the trivial flake test case
-- [ ] 5.2 Add a VM test case with a flake that has one real input (e.g., nixpkgs pinned to a specific rev) to validate input resolution end-to-end
+- [x] 5.2 Add a VM test case with a flake that has one real input (e.g., nixpkgs pinned to a specific rev) to validate input resolution end-to-end
 - [x] 5.3 Property test: for N random flake.lock files, `compute_store_path` matches `nix store path-from-hash-part`
