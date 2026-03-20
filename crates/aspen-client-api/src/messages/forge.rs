@@ -146,8 +146,11 @@ pub enum ForgeRequest {
     ForgeMergePatch {
         repo_id: String,
         patch_id: String,
-        merge_commit: String,
+        strategy: Option<String>,
+        message: Option<String>,
     },
+    /// Check merge feasibility without side effects.
+    ForgeCheckMerge { repo_id: String, patch_id: String },
     /// Close a patch without merging.
     ForgeClosePatch {
         repo_id: String,
@@ -250,6 +253,7 @@ impl ForgeRequest {
             | Self::ForgeGetIssue { .. }
             | Self::ForgeListPatches { .. }
             | Self::ForgeGetPatch { .. }
+            | Self::ForgeCheckMerge { .. }
             | Self::ForgeGetDelegateKey { .. }
             | Self::GitBridgeListRefs { .. }
             | Self::GitBridgeFetch { .. }

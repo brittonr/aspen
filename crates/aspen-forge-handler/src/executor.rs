@@ -120,6 +120,7 @@ impl ForgeServiceExecutor {
         "ForgeUpdatePatch",
         "ForgeApprovePatch",
         "ForgeMergePatch",
+        "ForgeCheckMerge",
         "ForgeClosePatch",
         "ForgeGetDelegateKey",
         "GetFederationStatus",
@@ -925,23 +926,70 @@ impl ForgeServiceExecutor {
         &self,
         repo_id: String,
         patch_id: String,
-        merge_commit: String,
+        strategy: Option<String>,
+        message: Option<String>,
     ) -> Result<ClientRpcResponse> {
-        use aspen_client_api::ForgeOperationResultResponse;
+        use aspen_client_api::ForgeMergeCheckResultResponse;
 
         let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
         let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
         let pid = blake3::Hash::from_hex(&patch_id).map_err(|e| anyhow::anyhow!("invalid patch ID: {e}"))?;
-        let mc =
-            blake3::Hash::from_hex(&merge_commit).map_err(|e| anyhow::anyhow!("invalid merge commit hash: {e}"))?;
 
-        match self.forge_node.cobs.merge_patch(&repo_id, &pid, mc).await {
-            Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+        let merge_strategy = match strategy.as_deref() {
+            Some(s) => s.parse::<aspen_forge::GitMergeStrategy>().map_err(|e| anyhow::anyhow!("{e}"))?,
+            None => aspen_forge::GitMergeStrategy::default(),
+        };
+
+        match self.forge_node.merge_patch(&repo_id, &pid, merge_strategy, message).await {
+            Ok(merge_commit) => Ok(ClientRpcResponse::ForgeMergeCheckResult(ForgeMergeCheckResultResponse {
                 is_success: true,
+                mergeable: true,
+                available_strategies: vec![],
+                conflicts: vec![],
+                protection_satisfied: true,
+                protection_reason: None,
+                merge_commit: Some(merge_commit.to_hex().to_string()),
                 error: None,
             })),
-            Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            Err(e) => Ok(ClientRpcResponse::ForgeMergeCheckResult(ForgeMergeCheckResultResponse {
                 is_success: false,
+                mergeable: false,
+                available_strategies: vec![],
+                conflicts: vec![],
+                protection_satisfied: false,
+                protection_reason: None,
+                merge_commit: None,
+                error: Some(format!("{e}")),
+            })),
+        }
+    }
+
+    async fn handle_check_merge(&self, repo_id: String, patch_id: String) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeMergeCheckResultResponse;
+
+        let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
+        let pid = blake3::Hash::from_hex(&patch_id).map_err(|e| anyhow::anyhow!("invalid patch ID: {e}"))?;
+
+        match self.forge_node.check_merge(&repo_id, &pid).await {
+            Ok(result) => Ok(ClientRpcResponse::ForgeMergeCheckResult(ForgeMergeCheckResultResponse {
+                is_success: true,
+                mergeable: result.mergeable,
+                available_strategies: result.available_strategies,
+                conflicts: result.conflicts,
+                protection_satisfied: result.protection_satisfied,
+                protection_reason: result.protection_reason,
+                merge_commit: None,
+                error: None,
+            })),
+            Err(e) => Ok(ClientRpcResponse::ForgeMergeCheckResult(ForgeMergeCheckResultResponse {
+                is_success: false,
+                mergeable: false,
+                available_strategies: vec![],
+                conflicts: vec![],
+                protection_satisfied: false,
+                protection_reason: None,
+                merge_commit: None,
                 error: Some(format!("{e}")),
             })),
         }
@@ -1222,8 +1270,10 @@ impl ServiceExecutor for ForgeServiceExecutor {
             ClientRpcRequest::ForgeMergePatch {
                 repo_id,
                 patch_id,
-                merge_commit,
-            } => self.handle_merge_patch(repo_id, patch_id, merge_commit).await,
+                strategy,
+                message,
+            } => self.handle_merge_patch(repo_id, patch_id, strategy, message).await,
+            ClientRpcRequest::ForgeCheckMerge { repo_id, patch_id } => self.handle_check_merge(repo_id, patch_id).await,
             ClientRpcRequest::ForgeClosePatch {
                 repo_id,
                 patch_id,

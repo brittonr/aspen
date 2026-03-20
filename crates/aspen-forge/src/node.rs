@@ -26,6 +26,21 @@ use crate::refs::RefStore;
 use crate::sync::SyncService;
 use crate::types::SignedObject;
 
+/// Result of a dry-run merge check.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MergeCheckResult {
+    /// Whether the patch can be merged right now.
+    pub mergeable: bool,
+    /// Which merge strategies are available (e.g. `["merge", "squash", "fast-forward"]`).
+    pub available_strategies: Vec<String>,
+    /// Conflicting file paths (empty if no conflicts).
+    pub conflicts: Vec<String>,
+    /// Whether branch protection rules are satisfied.
+    pub protection_satisfied: bool,
+    /// Reason protection is blocking (None if satisfied).
+    pub protection_reason: Option<String>,
+}
+
 /// Main coordinator for Forge operations.
 ///
 /// Provides a unified interface for:
@@ -923,6 +938,90 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     // Merge Operations
     // ========================================================================
 
+    /// Dry-run merge check. Returns mergeability status without side effects.
+    ///
+    /// Resolves the patch, checks branch protection, attempts a tree merge,
+    /// and reports the result. No objects are written, no refs updated.
+    pub async fn check_merge(&self, repo_id: &RepoId, patch_id: &blake3::Hash) -> ForgeResult<MergeCheckResult> {
+        // Resolve patch state
+        let patch = self.cobs.resolve_patch(repo_id, patch_id).await?;
+
+        if !patch.state.is_open() {
+            return Ok(MergeCheckResult {
+                mergeable: false,
+                available_strategies: vec![],
+                conflicts: vec![],
+                protection_satisfied: false,
+                protection_reason: Some(format!("patch is {:?}, must be Open", patch.state)),
+            });
+        }
+
+        let patch_head = blake3::Hash::from_bytes(patch.head);
+
+        // Check branch protection
+        let identity = self.get_repo(repo_id).await?;
+        let target_ref = format!("heads/{}", identity.default_branch);
+        let merge_checker = crate::protection::MergeChecker::new(self.kv.clone());
+        let protection_result =
+            merge_checker.check_merge_allowed(repo_id, &target_ref, &patch.head, &patch.approvals).await;
+
+        let (protection_satisfied, protection_reason) = match protection_result {
+            Ok(()) => (true, None),
+            Err(ForgeError::MergeBlocked { reason }) => (false, Some(reason)),
+            Err(e) => return Err(e),
+        };
+
+        // Check divergence and conflicts
+        let target_commit = match self.refs.get(repo_id, &target_ref).await? {
+            Some(c) => c,
+            None => {
+                return Ok(MergeCheckResult {
+                    mergeable: false,
+                    available_strategies: vec![],
+                    conflicts: vec![],
+                    protection_satisfied,
+                    protection_reason: Some("target ref not found".to_string()),
+                });
+            }
+        };
+
+        let patch_base = blake3::Hash::from_bytes(patch.base);
+        let is_fast_forward = target_commit == patch_base;
+
+        // Determine available strategies
+        let mut available_strategies = vec!["merge".to_string(), "squash".to_string()];
+        if is_fast_forward {
+            available_strategies.push("fast-forward".to_string());
+        }
+
+        // Check for conflicts (only if diverged)
+        let conflicts = if !is_fast_forward {
+            let target_tree = self.git.get_commit(&target_commit).await?.tree();
+            let target_tree = self.git.get_tree(&target_tree).await?;
+
+            let base_tree = self.git.get_commit(&patch_base).await?.tree();
+            let base_tree = self.git.get_tree(&base_tree).await?;
+
+            let head_tree = self.git.get_commit(&patch_head).await?.tree();
+            let head_tree = self.git.get_tree(&head_tree).await?;
+
+            let merge_result = crate::git::merge_trees(&self.git, &base_tree, &target_tree, &head_tree).await?;
+            merge_result.conflicts.iter().map(|c| c.path.clone()).collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
+
+        let mergeable = protection_satisfied && conflicts.is_empty();
+
+        Ok(MergeCheckResult {
+            mergeable,
+            available_strategies,
+            conflicts,
+            protection_satisfied,
+            protection_reason,
+        })
+    }
+
     /// Merge a patch into its target branch.
     ///
     /// Performs the full merge workflow:
@@ -937,6 +1036,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     ///
     /// * `repo_id` - Repository containing the patch
     /// * `patch_id` - Patch COB ID
+    /// * `strategy` - Merge strategy (merge commit, fast-forward-only, squash)
     /// * `custom_message` - Optional override for the merge commit message
     ///
     /// # Errors
@@ -945,13 +1045,16 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     /// * `ForgeError::MergeConflicts` - Tree merge produced conflicts
     /// * `ForgeError::MergeCasExhausted` - CAS retries exhausted
     /// * `ForgeError::PatchNotMergeable` - Patch is not open
+    /// * `ForgeError::FastForwardNotPossible` - FF-only but target diverged
     pub async fn merge_patch(
         &self,
         repo_id: &RepoId,
         patch_id: &blake3::Hash,
+        strategy: crate::git::GitMergeStrategy,
         custom_message: Option<String>,
     ) -> ForgeResult<blake3::Hash> {
         use crate::constants::MAX_MERGE_CAS_RETRIES;
+        use crate::git::GitMergeStrategy;
 
         // 1. Resolve patch state
         let patch = self.cobs.resolve_patch(repo_id, patch_id).await?;
@@ -987,75 +1090,107 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
                 ref_name: target_ref.clone(),
             })?;
 
-            // Fast-forward detection: if target hasn't diverged from patch base
             let patch_base = blake3::Hash::from_bytes(patch.base);
-            if target_commit == patch_base {
-                // Fast-forward: just advance the ref, no merge commit needed
+            let is_fast_forward = target_commit == patch_base;
+
+            // Fast-forward-only: reject diverged branches immediately
+            if strategy == GitMergeStrategy::FastForwardOnly && !is_fast_forward {
+                return Err(ForgeError::FastForwardNotPossible);
+            }
+
+            // Fast-forward path (for MergeCommit and FastForwardOnly when target == base)
+            if is_fast_forward && strategy != GitMergeStrategy::Squash {
                 match self.refs.compare_and_set(repo_id, &target_ref, Some(target_commit), patch_head).await {
                     Ok(()) => {
-                        // Transition patch to Merged
                         self.cobs.merge_patch(repo_id, patch_id, patch_head).await?;
-
-                        // Gossip happens automatically via RefStore's event subscription
-
                         return Ok(patch_head);
                     }
                     Err(ForgeError::RefConflict { .. }) => {
-                        // Another push landed — retry with full merge
                         continue;
                     }
                     Err(e) => return Err(e),
                 }
             }
 
-            // Full three-way merge
-            let target_tree = self.git.get_commit(&target_commit).await?.tree();
-            let target_tree = self.git.get_tree(&target_tree).await?;
+            // Need a tree merge (diverged branches or squash)
+            let (merged_tree_hash, target_for_parent) =
+                self.compute_merged_tree(repo_id, &target_commit, &patch_base, &patch_head, is_fast_forward).await?;
 
-            let base_tree = self.git.get_commit(&patch_base).await?.tree();
-            let base_tree = self.git.get_tree(&base_tree).await?;
+            // Build the commit
+            let message = custom_message.clone().unwrap_or_else(|| match strategy {
+                GitMergeStrategy::Squash => format!("Squash merge patch '{}'", patch.title),
+                _ => format!("Merge patch '{}'", patch.title),
+            });
 
-            let head_tree = self.git.get_commit(&patch_head).await?.tree();
-            let head_tree = self.git.get_tree(&head_tree).await?;
-
-            let merge_result = crate::git::merge_trees(&self.git, &base_tree, &target_tree, &head_tree).await?;
-
-            if !merge_result.is_clean() {
-                return Err(ForgeError::MergeConflicts {
-                    count: merge_result.conflicts.len() as u32,
-                    conflicts: merge_result.conflicts,
-                });
-            }
-
-            let merged_tree = merge_result.tree.ok_or_else(|| ForgeError::PatchNotMergeable {
-                reason: "merge produced no tree despite no conflicts".to_string(),
-            })?;
-
-            // Write merged tree and create merge commit
-            let merged_tree_hash = self.git.create_tree(&merged_tree.entries).await?;
-
-            let message = custom_message.clone().unwrap_or_else(|| format!("Merge patch '{}'", patch.title));
-
-            let merge_commit = self.git.commit(merged_tree_hash, vec![target_commit, patch_head], &message).await?;
+            let result_commit = match strategy {
+                GitMergeStrategy::Squash => {
+                    // Single-parent commit on the target branch
+                    self.git.commit(merged_tree_hash, vec![target_commit], &message).await?
+                }
+                _ => {
+                    // Two-parent merge commit
+                    self.git.commit(merged_tree_hash, vec![target_for_parent, patch_head], &message).await?
+                }
+            };
 
             // CAS the ref
-            match self.refs.compare_and_set(repo_id, &target_ref, Some(target_commit), merge_commit).await {
+            match self.refs.compare_and_set(repo_id, &target_ref, Some(target_commit), result_commit).await {
                 Ok(()) => {
-                    // Transition patch to Merged
-                    self.cobs.merge_patch(repo_id, patch_id, merge_commit).await?;
-
-                    // Gossip happens automatically via RefStore's event subscription
-
-                    return Ok(merge_commit);
+                    self.cobs.merge_patch(repo_id, patch_id, result_commit).await?;
+                    return Ok(result_commit);
                 }
                 Err(ForgeError::RefConflict { .. }) => {
-                    // CAS failure — retry
                     tracing::debug!(attempt = attempts, "merge CAS failed, retrying");
                     continue;
                 }
                 Err(e) => return Err(e),
             }
         }
+    }
+
+    /// Compute the merged tree for a patch merge.
+    ///
+    /// When `is_fast_forward` is true (squash path), uses the patch head's tree directly.
+    /// Otherwise performs a full three-way merge.
+    async fn compute_merged_tree(
+        &self,
+        _repo_id: &RepoId,
+        target_commit: &blake3::Hash,
+        patch_base: &blake3::Hash,
+        patch_head: &blake3::Hash,
+        is_fast_forward: bool,
+    ) -> ForgeResult<(blake3::Hash, blake3::Hash)> {
+        if is_fast_forward {
+            // Squash on a non-diverged branch: use the patch head's tree
+            let head_tree = self.git.get_commit(patch_head).await?.tree();
+            return Ok((head_tree, *target_commit));
+        }
+
+        // Full three-way merge
+        let target_tree = self.git.get_commit(target_commit).await?.tree();
+        let target_tree = self.git.get_tree(&target_tree).await?;
+
+        let base_tree = self.git.get_commit(patch_base).await?.tree();
+        let base_tree = self.git.get_tree(&base_tree).await?;
+
+        let head_tree = self.git.get_commit(patch_head).await?.tree();
+        let head_tree = self.git.get_tree(&head_tree).await?;
+
+        let merge_result = crate::git::merge_trees(&self.git, &base_tree, &target_tree, &head_tree).await?;
+
+        if !merge_result.is_clean() {
+            return Err(ForgeError::MergeConflicts {
+                count: merge_result.conflicts.len() as u32,
+                conflicts: merge_result.conflicts,
+            });
+        }
+
+        let merged_tree = merge_result.tree.ok_or_else(|| ForgeError::PatchNotMergeable {
+            reason: "merge produced no tree despite no conflicts".to_string(),
+        })?;
+
+        let merged_tree_hash = self.git.create_tree(&merged_tree.entries).await?;
+        Ok((merged_tree_hash, *target_commit))
     }
 }
 
@@ -1440,7 +1575,7 @@ mod tests {
         let repo_id = identity.repo_id();
 
         // Merge — should fast-forward since main hasn't moved
-        let result = node.merge_patch(&repo_id, &patch_id, None).await;
+        let result = node.merge_patch(&repo_id, &patch_id, Default::default(), None).await;
         assert!(result.is_ok(), "merge should succeed: {:?}", result.err());
 
         let merge_hash = result.unwrap();
@@ -1503,7 +1638,7 @@ mod tests {
 
         // Merge — should do full three-way merge
         let merge_hash = node
-            .merge_patch(&repo_id, &patch_id, Some("Custom merge msg".to_string()))
+            .merge_patch(&repo_id, &patch_id, Default::default(), Some("Custom merge msg".to_string()))
             .await
             .expect("merge should succeed");
 
@@ -1534,7 +1669,7 @@ mod tests {
         node.cobs.close_patch(&repo_id, &patch_id, Some("not needed".to_string())).await.unwrap();
 
         // Try to merge a closed patch
-        let result = node.merge_patch(&repo_id, &patch_id, None).await;
+        let result = node.merge_patch(&repo_id, &patch_id, Default::default(), None).await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ForgeError::PatchNotMergeable { .. }));
     }
@@ -1565,7 +1700,7 @@ mod tests {
         let patch_id = node.cobs.create_patch(&repo_id, "Conflicting", "Desc", c0, c_patch).await.unwrap();
 
         // Merge should fail with conflicts
-        let result = node.merge_patch(&repo_id, &patch_id, None).await;
+        let result = node.merge_patch(&repo_id, &patch_id, Default::default(), None).await;
         assert!(result.is_err());
         match result.unwrap_err() {
             ForgeError::MergeConflicts { count, conflicts } => {
@@ -1574,6 +1709,124 @@ mod tests {
             }
             e => panic!("expected MergeConflicts, got: {:?}", e),
         }
+    }
+
+    // ========================================================================
+    // check_merge tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_check_merge_mergeable() {
+        let node = create_test_node().await;
+        let (identity, patch_id) = setup_mergeable_patch(&node).await;
+        let repo_id = identity.repo_id();
+
+        let result = node.check_merge(&repo_id, &patch_id).await.unwrap();
+        assert!(result.mergeable);
+        assert!(result.conflicts.is_empty());
+        assert!(result.protection_satisfied);
+        assert!(result.available_strategies.contains(&"merge".to_string()));
+        assert!(result.available_strategies.contains(&"squash".to_string()));
+        assert!(result.available_strategies.contains(&"fast-forward".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_check_merge_closed_patch() {
+        let node = create_test_node().await;
+        let (identity, patch_id) = setup_mergeable_patch(&node).await;
+        let repo_id = identity.repo_id();
+
+        node.cobs.close_patch(&repo_id, &patch_id, None).await.unwrap();
+
+        let result = node.check_merge(&repo_id, &patch_id).await.unwrap();
+        assert!(!result.mergeable);
+        assert!(result.available_strategies.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_check_merge_with_conflicts() {
+        let node = create_test_node().await;
+        let identity = node.create_repo("check-conflict", vec![node.public_key()], 1).await.unwrap();
+        let repo_id = identity.repo_id();
+
+        // Initial commit
+        let h0 = node.git.store_blob(b"base".to_vec()).await.unwrap();
+        let tree0 = node.git.create_tree(&[crate::git::TreeEntry::file("f.txt", h0)]).await.unwrap();
+        let c0 = node.git.commit(tree0, vec![], "init").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c0).await.unwrap();
+
+        // Main modifies f.txt
+        let h1 = node.git.store_blob(b"main_v".to_vec()).await.unwrap();
+        let tree1 = node.git.create_tree(&[crate::git::TreeEntry::file("f.txt", h1)]).await.unwrap();
+        let c1 = node.git.commit(tree1, vec![c0], "main").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c1).await.unwrap();
+
+        // Patch also modifies f.txt differently
+        let h2 = node.git.store_blob(b"patch_v".to_vec()).await.unwrap();
+        let tree2 = node.git.create_tree(&[crate::git::TreeEntry::file("f.txt", h2)]).await.unwrap();
+        let c2 = node.git.commit(tree2, vec![c0], "patch").await.unwrap();
+        let patch_id = node.cobs.create_patch(&repo_id, "Conflict", "Desc", c0, c2).await.unwrap();
+
+        let result = node.check_merge(&repo_id, &patch_id).await.unwrap();
+        assert!(!result.mergeable);
+        assert_eq!(result.conflicts, vec!["f.txt"]);
+        assert!(result.protection_satisfied); // no protection rules set
+        // fast-forward not available (diverged)
+        assert!(!result.available_strategies.contains(&"fast-forward".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_check_merge_diverged_no_ff() {
+        let node = create_test_node().await;
+        let identity = node.create_repo("check-div", vec![node.public_key()], 1).await.unwrap();
+        let repo_id = identity.repo_id();
+
+        // Initial commit with two files
+        let ha = node.git.store_blob(b"a".to_vec()).await.unwrap();
+        let hb = node.git.store_blob(b"b".to_vec()).await.unwrap();
+        let tree0 = node
+            .git
+            .create_tree(&[
+                crate::git::TreeEntry::file("a.rs", ha),
+                crate::git::TreeEntry::file("b.rs", hb),
+            ])
+            .await
+            .unwrap();
+        let c0 = node.git.commit(tree0, vec![], "init").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c0).await.unwrap();
+
+        // Main modifies a.rs
+        let ha2 = node.git.store_blob(b"a2".to_vec()).await.unwrap();
+        let tree1 = node
+            .git
+            .create_tree(&[
+                crate::git::TreeEntry::file("a.rs", ha2),
+                crate::git::TreeEntry::file("b.rs", hb),
+            ])
+            .await
+            .unwrap();
+        let c1 = node.git.commit(tree1, vec![c0], "main").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c1).await.unwrap();
+
+        // Patch modifies b.rs (clean merge possible, but no ff)
+        let hb2 = node.git.store_blob(b"b2".to_vec()).await.unwrap();
+        let tree2 = node
+            .git
+            .create_tree(&[
+                crate::git::TreeEntry::file("a.rs", ha),
+                crate::git::TreeEntry::file("b.rs", hb2),
+            ])
+            .await
+            .unwrap();
+        let c2 = node.git.commit(tree2, vec![c0], "patch").await.unwrap();
+        let patch_id = node.cobs.create_patch(&repo_id, "Clean div", "Desc", c0, c2).await.unwrap();
+
+        let result = node.check_merge(&repo_id, &patch_id).await.unwrap();
+        assert!(result.mergeable);
+        assert!(result.conflicts.is_empty());
+        assert!(!result.available_strategies.contains(&"fast-forward".to_string()));
+        assert!(result.available_strategies.contains(&"merge".to_string()));
+        assert!(result.available_strategies.contains(&"squash".to_string()));
     }
 
     #[tokio::test]
@@ -1606,5 +1859,379 @@ mod tests {
 
         let g_entry = result.entries.iter().find(|e| e.path == "g.txt").unwrap();
         assert_eq!(g_entry.kind, crate::git::DiffKind::Added);
+    }
+
+    // ========================================================================
+    // merge strategy tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_merge_patch_squash_no_divergence() {
+        let node = create_test_node().await;
+        let (identity, patch_id) = setup_mergeable_patch(&node).await;
+        let repo_id = identity.repo_id();
+
+        // Squash merge — target hasn't diverged, but squash always creates a new commit
+        let result = node.merge_patch(&repo_id, &patch_id, crate::git::GitMergeStrategy::Squash, None).await;
+        assert!(result.is_ok(), "squash merge should succeed: {:?}", result.err());
+
+        let squash_hash = result.unwrap();
+
+        // Squash commit should have a single parent (the old main head = patch base)
+        let squash_commit = node.git.get_commit(&squash_hash).await.unwrap();
+        assert_eq!(squash_commit.parents.len(), 1, "squash commit has single parent");
+
+        // Default message should mention "Squash merge"
+        assert!(
+            squash_commit.message.contains("Squash merge"),
+            "message should contain 'Squash merge': {}",
+            squash_commit.message
+        );
+
+        // main should point to the squash commit
+        let head = node.refs.get(&repo_id, "heads/main").await.unwrap().unwrap();
+        assert_eq!(head, squash_hash);
+
+        // Patch should be merged
+        let patch = node.cobs.resolve_patch(&repo_id, &patch_id).await.unwrap();
+        assert!(patch.state.is_merged());
+    }
+
+    #[tokio::test]
+    async fn test_merge_patch_squash_diverged() {
+        let node = create_test_node().await;
+        let identity = node.create_repo("squash-div", vec![node.public_key()], 1).await.unwrap();
+        let repo_id = identity.repo_id();
+
+        // Initial commit
+        let ha = node.git.store_blob(b"a_base".to_vec()).await.unwrap();
+        let hb = node.git.store_blob(b"b_base".to_vec()).await.unwrap();
+        let tree0 = node
+            .git
+            .create_tree(&[
+                crate::git::TreeEntry::file("a.rs", ha),
+                crate::git::TreeEntry::file("b.rs", hb),
+            ])
+            .await
+            .unwrap();
+        let c0 = node.git.commit(tree0, vec![], "init").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c0).await.unwrap();
+
+        // Main diverges (modifies a.rs)
+        let ha2 = node.git.store_blob(b"a_main".to_vec()).await.unwrap();
+        let tree_main = node
+            .git
+            .create_tree(&[
+                crate::git::TreeEntry::file("a.rs", ha2),
+                crate::git::TreeEntry::file("b.rs", hb),
+            ])
+            .await
+            .unwrap();
+        let c_main = node.git.commit(tree_main, vec![c0], "main").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c_main).await.unwrap();
+
+        // Patch modifies b.rs (non-overlapping)
+        let hb2 = node.git.store_blob(b"b_patch".to_vec()).await.unwrap();
+        let tree_patch = node
+            .git
+            .create_tree(&[
+                crate::git::TreeEntry::file("a.rs", ha),
+                crate::git::TreeEntry::file("b.rs", hb2),
+            ])
+            .await
+            .unwrap();
+        let c_patch = node.git.commit(tree_patch, vec![c0], "patch").await.unwrap();
+        let patch_id = node.cobs.create_patch(&repo_id, "Squash diverged", "Desc", c0, c_patch).await.unwrap();
+
+        let squash_hash = node
+            .merge_patch(&repo_id, &patch_id, crate::git::GitMergeStrategy::Squash, None)
+            .await
+            .expect("squash merge should succeed");
+
+        let squash_commit = node.git.get_commit(&squash_hash).await.unwrap();
+        assert_eq!(squash_commit.parents.len(), 1, "squash has single parent");
+        // Parent should be c_main (the target head)
+        assert_eq!(blake3::Hash::from_bytes(squash_commit.parents[0]), c_main, "squash parent should be target head");
+
+        // Merged tree should have both changes
+        let merged_tree = node.git.get_tree(&squash_commit.tree()).await.unwrap();
+        let a_entry = merged_tree.entries.iter().find(|e| e.name == "a.rs").unwrap();
+        let b_entry = merged_tree.entries.iter().find(|e| e.name == "b.rs").unwrap();
+        assert_eq!(a_entry.hash, *ha2.as_bytes(), "a.rs from main");
+        assert_eq!(b_entry.hash, *hb2.as_bytes(), "b.rs from patch");
+    }
+
+    #[tokio::test]
+    async fn test_merge_patch_ff_only_succeeds() {
+        let node = create_test_node().await;
+        let (identity, patch_id) = setup_mergeable_patch(&node).await;
+        let repo_id = identity.repo_id();
+
+        // FF-only should succeed when target hasn't diverged
+        let result = node.merge_patch(&repo_id, &patch_id, crate::git::GitMergeStrategy::FastForwardOnly, None).await;
+        assert!(result.is_ok(), "ff-only should succeed: {:?}", result.err());
+
+        // Should have advanced the ref directly (no merge commit)
+        let patch = node.cobs.resolve_patch(&repo_id, &patch_id).await.unwrap();
+        assert!(patch.state.is_merged());
+    }
+
+    #[tokio::test]
+    async fn test_merge_patch_ff_only_rejects_diverged() {
+        let node = create_test_node().await;
+        let identity = node.create_repo("ff-div", vec![node.public_key()], 1).await.unwrap();
+        let repo_id = identity.repo_id();
+
+        // Initial commit
+        let h0 = node.git.store_blob(b"base".to_vec()).await.unwrap();
+        let tree0 = node.git.create_tree(&[crate::git::TreeEntry::file("f.txt", h0)]).await.unwrap();
+        let c0 = node.git.commit(tree0, vec![], "init").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c0).await.unwrap();
+
+        // Main diverges
+        let h1 = node.git.store_blob(b"main_v".to_vec()).await.unwrap();
+        let tree1 = node.git.create_tree(&[crate::git::TreeEntry::file("f.txt", h1)]).await.unwrap();
+        let c1 = node.git.commit(tree1, vec![c0], "main").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c1).await.unwrap();
+
+        // Patch from c0
+        let h2 = node.git.store_blob(b"patch_v".to_vec()).await.unwrap();
+        let tree2 = node.git.create_tree(&[crate::git::TreeEntry::file("g.txt", h2)]).await.unwrap();
+        let c2 = node.git.commit(tree2, vec![c0], "patch").await.unwrap();
+        let patch_id = node.cobs.create_patch(&repo_id, "FF fail", "Desc", c0, c2).await.unwrap();
+
+        let result = node.merge_patch(&repo_id, &patch_id, crate::git::GitMergeStrategy::FastForwardOnly, None).await;
+        assert!(result.is_err());
+        assert!(
+            matches!(result.unwrap_err(), ForgeError::FastForwardNotPossible),
+            "should get FastForwardNotPossible"
+        );
+
+        // Patch should still be open
+        let patch = node.cobs.resolve_patch(&repo_id, &patch_id).await.unwrap();
+        assert!(patch.state.is_open());
+    }
+
+    #[tokio::test]
+    async fn test_merge_patch_squash_custom_message() {
+        let node = create_test_node().await;
+        let (identity, patch_id) = setup_mergeable_patch(&node).await;
+        let repo_id = identity.repo_id();
+
+        let squash_hash = node
+            .merge_patch(&repo_id, &patch_id, crate::git::GitMergeStrategy::Squash, Some("feat: add auth".to_string()))
+            .await
+            .expect("squash merge should succeed");
+
+        let commit = node.git.get_commit(&squash_hash).await.unwrap();
+        assert_eq!(commit.message, "feat: add auth");
+    }
+
+    // ========================================================================
+    // End-to-end integration tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_e2e_create_patch_approve_merge() {
+        let node = create_test_node().await;
+        let identity = node.create_repo("e2e-test", vec![node.public_key()], 1).await.unwrap();
+        let repo_id = identity.repo_id();
+
+        // Initial commit
+        let h0 = node.git.store_blob(b"initial".to_vec()).await.unwrap();
+        let tree0 = node.git.create_tree(&[crate::git::TreeEntry::file("readme.md", h0)]).await.unwrap();
+        let c0 = node.git.commit(tree0, vec![], "init").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c0).await.unwrap();
+
+        // Patch: add a new file
+        let h1 = node.git.store_blob(b"new file".to_vec()).await.unwrap();
+        let tree1 = node
+            .git
+            .create_tree(&[
+                crate::git::TreeEntry::file("readme.md", h0),
+                crate::git::TreeEntry::file("new.txt", h1),
+            ])
+            .await
+            .unwrap();
+        let c1 = node.git.commit(tree1, vec![c0], "add new.txt").await.unwrap();
+        let patch_id = node.cobs.create_patch(&repo_id, "Add file", "Adding new.txt", c0, c1).await.unwrap();
+
+        // Verify patch is open
+        let patch = node.cobs.resolve_patch(&repo_id, &patch_id).await.unwrap();
+        assert!(patch.state.is_open());
+
+        // Approve
+        node.cobs.approve_patch(&repo_id, &patch_id, c1, None).await.unwrap();
+
+        // Check merge
+        let check = node.check_merge(&repo_id, &patch_id).await.unwrap();
+        assert!(check.mergeable);
+
+        // Merge (default strategy)
+        let merge_hash =
+            node.merge_patch(&repo_id, &patch_id, Default::default(), None).await.expect("merge should succeed");
+
+        // Verify ref advanced
+        let head = node.refs.get(&repo_id, "heads/main").await.unwrap().unwrap();
+        assert_eq!(head, merge_hash);
+
+        // Verify patch is merged
+        let patch = node.cobs.resolve_patch(&repo_id, &patch_id).await.unwrap();
+        assert!(patch.state.is_merged());
+    }
+
+    #[tokio::test]
+    async fn test_e2e_squash_merge_single_parent() {
+        let node = create_test_node().await;
+        let identity = node.create_repo("e2e-squash", vec![node.public_key()], 1).await.unwrap();
+        let repo_id = identity.repo_id();
+
+        // Initial commit with two files
+        let ha = node.git.store_blob(b"a".to_vec()).await.unwrap();
+        let hb = node.git.store_blob(b"b".to_vec()).await.unwrap();
+        let tree0 = node
+            .git
+            .create_tree(&[
+                crate::git::TreeEntry::file("a.rs", ha),
+                crate::git::TreeEntry::file("b.rs", hb),
+            ])
+            .await
+            .unwrap();
+        let c0 = node.git.commit(tree0, vec![], "init").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c0).await.unwrap();
+
+        // Main modifies a.rs
+        let ha2 = node.git.store_blob(b"a2".to_vec()).await.unwrap();
+        let tree_main = node
+            .git
+            .create_tree(&[
+                crate::git::TreeEntry::file("a.rs", ha2),
+                crate::git::TreeEntry::file("b.rs", hb),
+            ])
+            .await
+            .unwrap();
+        let c_main = node.git.commit(tree_main, vec![c0], "main").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c_main).await.unwrap();
+
+        // Patch modifies b.rs
+        let hb2 = node.git.store_blob(b"b2".to_vec()).await.unwrap();
+        let tree_patch = node
+            .git
+            .create_tree(&[
+                crate::git::TreeEntry::file("a.rs", ha),
+                crate::git::TreeEntry::file("b.rs", hb2),
+            ])
+            .await
+            .unwrap();
+        let c_patch = node.git.commit(tree_patch, vec![c0], "patch").await.unwrap();
+        let patch_id = node.cobs.create_patch(&repo_id, "Squash test", "Test", c0, c_patch).await.unwrap();
+
+        // Squash merge
+        let squash = node
+            .merge_patch(&repo_id, &patch_id, crate::git::GitMergeStrategy::Squash, None)
+            .await
+            .expect("squash should succeed");
+
+        // Verify single parent
+        let commit = node.git.get_commit(&squash).await.unwrap();
+        assert_eq!(commit.parents.len(), 1);
+        assert_eq!(blake3::Hash::from_bytes(commit.parents[0]), c_main);
+
+        // Verify merged tree has both changes
+        let tree = node.git.get_tree(&commit.tree()).await.unwrap();
+        let a_entry = tree.entries.iter().find(|e| e.name == "a.rs").unwrap();
+        let b_entry = tree.entries.iter().find(|e| e.name == "b.rs").unwrap();
+        assert_eq!(a_entry.hash, *ha2.as_bytes());
+        assert_eq!(b_entry.hash, *hb2.as_bytes());
+    }
+
+    #[tokio::test]
+    async fn test_e2e_ff_only_rejects_diverged() {
+        let node = create_test_node().await;
+        let identity = node.create_repo("e2e-ffonly", vec![node.public_key()], 1).await.unwrap();
+        let repo_id = identity.repo_id();
+
+        // Setup: diverged branches
+        let h0 = node.git.store_blob(b"base".to_vec()).await.unwrap();
+        let tree0 = node.git.create_tree(&[crate::git::TreeEntry::file("f.txt", h0)]).await.unwrap();
+        let c0 = node.git.commit(tree0, vec![], "init").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c0).await.unwrap();
+
+        let h1 = node.git.store_blob(b"main".to_vec()).await.unwrap();
+        let tree1 = node.git.create_tree(&[crate::git::TreeEntry::file("f.txt", h1)]).await.unwrap();
+        let c1 = node.git.commit(tree1, vec![c0], "main").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c1).await.unwrap();
+
+        let h2 = node.git.store_blob(b"patch".to_vec()).await.unwrap();
+        let tree2 = node.git.create_tree(&[crate::git::TreeEntry::file("g.txt", h2)]).await.unwrap();
+        let c2 = node.git.commit(tree2, vec![c0], "patch").await.unwrap();
+        let patch_id = node.cobs.create_patch(&repo_id, "FF test", "Test", c0, c2).await.unwrap();
+
+        // FF-only should fail
+        let result = node.merge_patch(&repo_id, &patch_id, crate::git::GitMergeStrategy::FastForwardOnly, None).await;
+        assert!(matches!(result, Err(ForgeError::FastForwardNotPossible)));
+
+        // Check merge should report ff not available
+        let check = node.check_merge(&repo_id, &patch_id).await.unwrap();
+        assert!(!check.available_strategies.contains(&"fast-forward".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_e2e_check_merge_with_protection() {
+        let node = create_test_node().await;
+        let identity = node.create_repo("e2e-prot", vec![node.public_key()], 1).await.unwrap();
+        let repo_id = identity.repo_id();
+
+        // Setup protected branch
+        let protection = crate::protection::BranchProtection {
+            ref_pattern: "heads/main".to_string(),
+            required_approvals: 1,
+            required_ci_contexts: vec!["ci/pipeline".to_string()],
+            dismiss_stale_approvals: false,
+        };
+        let protection_store = crate::protection::ProtectionStore::new(node.kv.clone());
+        protection_store.set_rule(&repo_id, &protection).await.unwrap();
+
+        // Initial commit + patch
+        let h0 = node.git.store_blob(b"base".to_vec()).await.unwrap();
+        let tree0 = node.git.create_tree(&[crate::git::TreeEntry::file("f.txt", h0)]).await.unwrap();
+        let c0 = node.git.commit(tree0, vec![], "init").await.unwrap();
+        node.refs.set(&repo_id, "heads/main", c0).await.unwrap();
+
+        let h1 = node.git.store_blob(b"patch".to_vec()).await.unwrap();
+        let tree1 = node.git.create_tree(&[crate::git::TreeEntry::file("f.txt", h1)]).await.unwrap();
+        let c1 = node.git.commit(tree1, vec![c0], "patch").await.unwrap();
+        let patch_id = node.cobs.create_patch(&repo_id, "Protected", "Test", c0, c1).await.unwrap();
+
+        // Check — should be blocked (no approval, no CI)
+        let check = node.check_merge(&repo_id, &patch_id).await.unwrap();
+        assert!(!check.mergeable);
+        assert!(!check.protection_satisfied);
+        assert!(check.protection_reason.is_some());
+
+        // Add CI status
+        let status_store = crate::status::StatusStore::new(node.kv.clone());
+        let ci_status = crate::status::CommitStatus {
+            repo_id: repo_id.clone(),
+            commit: *c1.as_bytes(),
+            context: "ci/pipeline".to_string(),
+            state: crate::status::CommitCheckState::Success,
+            description: "Build passed".to_string(),
+            pipeline_run_id: None,
+            created_at_ms: 1000,
+        };
+        status_store.set_status(&ci_status).await.unwrap();
+
+        // Still blocked (no approval)
+        let check = node.check_merge(&repo_id, &patch_id).await.unwrap();
+        assert!(!check.mergeable);
+
+        // Add approval
+        node.cobs.approve_patch(&repo_id, &patch_id, c1, None).await.unwrap();
+
+        // Now should be mergeable
+        let check = node.check_merge(&repo_id, &patch_id).await.unwrap();
+        assert!(check.mergeable);
+        assert!(check.protection_satisfied);
     }
 }

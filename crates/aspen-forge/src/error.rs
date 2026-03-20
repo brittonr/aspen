@@ -211,6 +211,10 @@ pub enum ForgeError {
     /// Patch is not in a mergeable state.
     #[snafu(display("patch not mergeable: {reason}"))]
     PatchNotMergeable { reason: String },
+
+    /// Fast-forward merge not possible because the target has diverged.
+    #[snafu(display("fast-forward not possible: target has diverged from patch base"))]
+    FastForwardNotPossible,
 }
 
 impl From<anyhow::Error> for ForgeError {

@@ -128,9 +128,13 @@ pub struct PatchMergeArgs {
     /// Patch ID (hex-encoded).
     pub patch: String,
 
-    /// Merge commit hash.
-    #[arg(long)]
-    pub merge_commit: String,
+    /// Merge strategy: merge (default), fast-forward, squash.
+    #[arg(short, long)]
+    pub strategy: Option<String>,
+
+    /// Custom merge commit message.
+    #[arg(short, long)]
+    pub message: Option<String>,
 }
 
 #[derive(Args)]
@@ -451,21 +455,34 @@ async fn patch_merge(client: &AspenClient, args: PatchMergeArgs, json: bool) -> 
         .send(ClientRpcRequest::ForgeMergePatch {
             repo_id: args.repo,
             patch_id: args.patch.clone(),
-            merge_commit: args.merge_commit,
+            strategy: args.strategy,
+            message: args.message,
         })
         .await?;
 
     match response {
-        ClientRpcResponse::ForgePatchResult(result) => {
+        ClientRpcResponse::ForgeMergeCheckResult(result) => {
             if result.is_success {
                 if !json {
-                    println!("Patch {} merged", args.patch);
+                    if let Some(commit) = &result.merge_commit {
+                        println!("Patch {} merged ({})", args.patch, commit);
+                    } else {
+                        println!("Patch {} merged", args.patch);
+                    }
                 } else {
-                    println!(r#"{{"merged": true, "patch": "{}"}}"#, args.patch);
+                    println!(
+                        r#"{{"merged": true, "patch": "{}", "merge_commit": {}}}"#,
+                        args.patch,
+                        result
+                            .merge_commit
+                            .as_deref()
+                            .map(|c| format!(r#""{c}""#))
+                            .unwrap_or_else(|| "null".to_string())
+                    );
                 }
                 Ok(())
             } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+                anyhow::bail!("{}", result.error.unwrap_or_else(|| "merge failed".to_string()))
             }
         }
         ClientRpcResponse::ForgeOperationResult(result) => {

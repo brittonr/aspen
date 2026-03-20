@@ -9,6 +9,7 @@ use aspen_client_api::messages::ClientRpcResponse;
 use aspen_forge_protocol::ForgeBlobResultResponse;
 use aspen_forge_protocol::ForgeCommitInfo;
 use aspen_forge_protocol::ForgeIssueInfo;
+use aspen_forge_protocol::ForgeMergeCheckResultResponse;
 use aspen_forge_protocol::ForgePatchInfo;
 use aspen_forge_protocol::ForgeRefInfo;
 use aspen_forge_protocol::ForgeRepoInfo;
@@ -759,6 +760,72 @@ impl AppState {
             .context("get patch")?;
         match resp {
             ClientRpcResponse::ForgePatchResult(r) => r.patch.ok_or_else(|| anyhow::anyhow!("patch not found")),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    /// Check if a patch is mergeable (dry-run, no side effects).
+    pub async fn check_merge(&self, repo_id: &str, patch_id: &str) -> Result<ForgeMergeCheckResultResponse> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::ForgeCheckMerge {
+                repo_id: repo_id.into(),
+                patch_id: patch_id.into(),
+            })
+            .await
+            .context("check merge")?;
+        match resp {
+            ClientRpcResponse::ForgeMergeCheckResult(r) => Ok(r),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    /// Merge a patch with the given strategy.
+    pub async fn merge_patch(
+        &self,
+        repo_id: &str,
+        patch_id: &str,
+        strategy: Option<&str>,
+    ) -> Result<ForgeMergeCheckResultResponse> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::ForgeMergePatch {
+                repo_id: repo_id.into(),
+                patch_id: patch_id.into(),
+                strategy: strategy.map(|s| s.to_string()),
+                message: None,
+            })
+            .await
+            .context("merge patch")?;
+        match resp {
+            ClientRpcResponse::ForgeMergeCheckResult(r) => Ok(r),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    /// Approve a patch at its current head.
+    pub async fn approve_patch(&self, repo_id: &str, patch_id: &str) -> Result<()> {
+        // Get current head for the approval
+        let patch = self.get_patch(repo_id, patch_id).await?;
+        let resp = self
+            .client
+            .send(ClientRpcRequest::ForgeApprovePatch {
+                repo_id: repo_id.into(),
+                patch_id: patch_id.into(),
+                commit: patch.head,
+                message: None,
+            })
+            .await
+            .context("approve patch")?;
+        match resp {
+            ClientRpcResponse::ForgePatchResult(r) if r.is_success => Ok(()),
+            ClientRpcResponse::ForgeOperationResult(r) if r.is_success => Ok(()),
+            ClientRpcResponse::ForgePatchResult(r) => {
+                Err(anyhow::anyhow!(r.error.unwrap_or_else(|| "approve failed".into())))
+            }
+            ClientRpcResponse::ForgeOperationResult(r) => {
+                Err(anyhow::anyhow!(r.error.unwrap_or_else(|| "approve failed".into())))
+            }
             other => Err(unexpected_response(other)),
         }
     }

@@ -122,6 +122,8 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
             [repo_id, "issues", id, "comment"] => comment_issue_post(state, repo_id, id, &form).await,
             [repo_id, "issues", id, "close"] => close_issue_post(state, repo_id, id).await,
             [repo_id, "issues", id, "reopen"] => reopen_issue_post(state, repo_id, id).await,
+            [repo_id, "patches", id, "merge"] => merge_patch_post(state, repo_id, id, &form).await,
+            [repo_id, "patches", id, "approve"] => approve_patch_post(state, repo_id, id).await,
             ["login", "verify"] => login_verify_post(state, &form).await,
             _ => method_not_allowed(),
         };
@@ -349,10 +351,21 @@ async fn patch_detail(st: &AppState, repo_id: &str, patch_id: &str) -> RouteResp
         Ok(r) => r,
         Err(e) => return err(e),
     };
-    match st.get_patch(repo_id, patch_id).await {
-        Ok(patch) => ok(templates::patch_detail(&repo, &patch)),
-        Err(e) => err(e),
-    }
+    let patch = match st.get_patch(repo_id, patch_id).await {
+        Ok(p) => p,
+        Err(e) => return err(e),
+    };
+
+    // Fetch merge check and diff in parallel (best-effort)
+    let merge_check = if patch.state == "open" {
+        st.check_merge(repo_id, patch_id).await.ok()
+    } else {
+        None
+    };
+
+    let diff = st.diff_trees(Some(&patch.base), &patch.head).await.unwrap_or_default();
+
+    ok(templates::patch_detail_full(&repo, &patch, merge_check.as_ref(), &diff))
 }
 
 async fn new_issue_form(st: &AppState, repo_id: &str) -> RouteResponse {
@@ -419,6 +432,30 @@ async fn reopen_issue_post(st: &AppState, repo_id: &str, issue_id: &str) -> Rout
         return err(e);
     }
     redirect(&format!("/{repo_id}/issues/{issue_id}"))
+}
+
+async fn merge_patch_post(
+    st: &AppState,
+    repo_id: &str,
+    patch_id: &str,
+    form: &HashMap<String, String>,
+) -> RouteResponse {
+    let strategy = form.get("strategy").map(|s| s.as_str());
+    match st.merge_patch(repo_id, patch_id, strategy).await {
+        Ok(result) if result.is_success => redirect(&format!("/{repo_id}/patches/{patch_id}")),
+        Ok(result) => {
+            let msg = result.error.unwrap_or_else(|| "merge failed".into());
+            err(anyhow::anyhow!(msg))
+        }
+        Err(e) => err(e),
+    }
+}
+
+async fn approve_patch_post(st: &AppState, repo_id: &str, patch_id: &str) -> RouteResponse {
+    if let Err(e) = st.approve_patch(repo_id, patch_id).await {
+        return err(e);
+    }
+    redirect(&format!("/{repo_id}/patches/{patch_id}"))
 }
 
 async fn login_page(_st: &AppState) -> RouteResponse {

@@ -122,6 +122,7 @@ pub use git::DiffResult;
 #[cfg(feature = "git-bridge")]
 pub use git::GIT_BRIDGE_ALPN;
 pub use git::GitBlobStore;
+pub use git::GitMergeStrategy;
 pub use git::GitObject;
 pub use git::MergeConflict;
 pub use git::TagObject;
@@ -139,6 +140,7 @@ pub use identity::Author;
 pub use identity::RepoId;
 pub use identity::RepoIdentity;
 pub use node::ForgeNode;
+pub use node::MergeCheckResult;
 pub use protection::BranchProtection;
 pub use protection::MergeChecker;
 pub use protection::ProtectionStore;

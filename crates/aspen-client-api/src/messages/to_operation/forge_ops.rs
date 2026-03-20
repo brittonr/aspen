@@ -47,6 +47,7 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::ForgeGetIssue { .. }
         | ClientRpcRequest::ForgeListPatches { .. }
         | ClientRpcRequest::ForgeGetPatch { .. }
+        | ClientRpcRequest::ForgeCheckMerge { .. }
         | ClientRpcRequest::ForgeGetDelegateKey { .. }
         | ClientRpcRequest::GitBridgeListRefs { .. }
         | ClientRpcRequest::GitBridgeFetch { .. }

@@ -42,6 +42,7 @@ pub use diff::DiffResult;
 pub use diff::diff_commits;
 pub use diff::diff_trees;
 pub use merge::ConflictKind;
+pub use merge::GitMergeStrategy;
 pub use merge::MergeConflict;
 pub use merge::TreeMergeResult;
 pub use merge::merge_trees;

@@ -5,6 +5,8 @@
 //! subtrees, and reports conflicts.
 
 use std::collections::BTreeMap;
+use std::fmt;
+use std::str::FromStr;
 
 use aspen_blob::prelude::*;
 use serde::Deserialize;
@@ -19,6 +21,46 @@ use crate::error::ForgeError;
 use crate::error::ForgeResult;
 use crate::verified::merge::ThreeWayClass;
 use crate::verified::merge::classify_three_way;
+
+/// Strategy for merging a patch into a target branch.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GitMergeStrategy {
+    /// Create a two-parent merge commit. Falls back to fast-forward when the
+    /// target hasn't diverged from the patch base.
+    #[default]
+    MergeCommit,
+    /// Advance the ref only if it points to an ancestor of the patch head.
+    /// Fails with `FastForwardNotPossible` when the target has diverged.
+    FastForwardOnly,
+    /// Collapse all patch commits into a single-parent commit on the target
+    /// branch with the merged tree.
+    Squash,
+}
+
+impl fmt::Display for GitMergeStrategy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MergeCommit => write!(f, "merge"),
+            Self::FastForwardOnly => write!(f, "fast-forward"),
+            Self::Squash => write!(f, "squash"),
+        }
+    }
+}
+
+impl FromStr for GitMergeStrategy {
+    type Err = ForgeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "merge" | "merge-commit" => Ok(Self::MergeCommit),
+            "fast-forward" | "ff" | "ff-only" => Ok(Self::FastForwardOnly),
+            "squash" => Ok(Self::Squash),
+            other => Err(ForgeError::InvalidObject {
+                message: format!("unknown merge strategy: {other:?}"),
+            }),
+        }
+    }
+}
 
 /// Kind of merge conflict.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -127,7 +169,7 @@ pub async fn merge_trees<B: BlobStore>(
 
 /// Boxed future type for recursive merge.
 type MergeRecurseFut<'a> =
-    std::pin::Pin<Box<dyn std::future::Future<Output = ForgeResult<Option<Vec<TreeEntry>>>> + 'a>>;
+    std::pin::Pin<Box<dyn std::future::Future<Output = ForgeResult<Option<Vec<TreeEntry>>>> + Send + 'a>>;
 
 /// Recursive three-way merge implementation.
 ///

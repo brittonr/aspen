@@ -248,6 +248,7 @@ pub use forge::ForgeIssueListResultResponse;
 pub use forge::ForgeIssueResultResponse;
 pub use forge::ForgeKeyResultResponse;
 pub use forge::ForgeLogResultResponse;
+pub use forge::ForgeMergeCheckResultResponse;
 pub use forge::ForgeOperationResultResponse;
 pub use forge::ForgePatchApproval;
 pub use forge::ForgePatchInfo;
@@ -1981,8 +1982,18 @@ pub enum ClientRpcRequest {
         repo_id: String,
         /// Patch ID.
         patch_id: String,
-        /// Merge commit hash.
-        merge_commit: String,
+        /// Merge strategy: "merge" (default), "fast-forward", "squash".
+        strategy: Option<String>,
+        /// Custom merge commit message.
+        message: Option<String>,
+    },
+
+    /// Check merge feasibility without side effects.
+    ForgeCheckMerge {
+        /// Repository ID.
+        repo_id: String,
+        /// Patch ID.
+        patch_id: String,
     },
 
     /// Close a patch without merging.
@@ -3751,6 +3762,7 @@ impl ClientRpcRequest {
             Self::ForgeListTags { .. } => "ForgeListTags",
             Self::ForgeLog { .. } => "ForgeLog",
             Self::ForgeMergePatch { .. } => "ForgeMergePatch",
+            Self::ForgeCheckMerge { .. } => "ForgeCheckMerge",
             Self::ForgeReopenIssue { .. } => "ForgeReopenIssue",
             Self::ForgeSetRef { .. } => "ForgeSetRef",
             Self::ForgeStoreBlob { .. } => "ForgeStoreBlob",
@@ -4135,6 +4147,7 @@ impl ClientRpcRequest {
             | Self::ForgeUpdatePatch { .. }
             | Self::ForgeApprovePatch { .. }
             | Self::ForgeMergePatch { .. }
+            | Self::ForgeCheckMerge { .. }
             | Self::ForgeClosePatch { .. }
             | Self::ForgeGetDelegateKey { .. } => Some("forge"),
 
@@ -4717,6 +4730,9 @@ pub enum ClientRpcResponse {
 
     /// Generic forge operation success/error.
     ForgeOperationResult(ForgeOperationResultResponse),
+
+    /// Merge check result (dry-run).
+    ForgeMergeCheckResult(ForgeMergeCheckResultResponse),
 
     /// Delegate key result.
     ForgeKeyResult(ForgeKeyResultResponse),

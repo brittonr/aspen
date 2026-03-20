@@ -335,6 +335,27 @@ pub struct ForgeOperationResultResponse {
     pub error: Option<String>,
 }
 
+/// Merge check result response (dry-run).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeMergeCheckResultResponse {
+    /// Whether the operation succeeded (check was performed).
+    pub is_success: bool,
+    /// Whether the patch can be merged right now.
+    pub mergeable: bool,
+    /// Which merge strategies are available.
+    pub available_strategies: Vec<String>,
+    /// Conflicting file paths (empty if no conflicts).
+    pub conflicts: Vec<String>,
+    /// Whether branch protection rules are satisfied.
+    pub protection_satisfied: bool,
+    /// Reason protection is blocking (None if satisfied).
+    pub protection_reason: Option<String>,
+    /// Merge commit hash returned on successful merge operations.
+    pub merge_commit: Option<String>,
+    /// Error message if the check itself failed.
+    pub error: Option<String>,
+}
+
 /// Delegate key result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeKeyResultResponse {

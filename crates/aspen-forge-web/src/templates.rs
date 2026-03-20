@@ -2,6 +2,7 @@
 
 use aspen_forge_protocol::ForgeCommitInfo;
 use aspen_forge_protocol::ForgeIssueInfo;
+use aspen_forge_protocol::ForgeMergeCheckResultResponse;
 use aspen_forge_protocol::ForgePatchInfo;
 use aspen_forge_protocol::ForgeRefInfo;
 use aspen_forge_protocol::ForgeRepoInfo;
@@ -10,6 +11,9 @@ use maud::DOCTYPE;
 use maud::Markup;
 use maud::PreEscaped;
 use maud::html;
+
+use crate::state::DiffKind;
+use crate::state::FileDiff;
 
 /// Tiger Style: max markdown input size (1 MB) to bound rendering time.
 pub(crate) const MAX_MARKDOWN_BYTES: usize = 1024 * 1024;
@@ -536,10 +540,24 @@ pub fn patch_list(repo: &ForgeRepoInfo, patches: &[ForgePatchInfo]) -> Markup {
 
 /// Patch detail page.
 pub fn patch_detail(repo: &ForgeRepoInfo, patch: &ForgePatchInfo) -> Markup {
+    patch_detail_full(repo, patch, None, &[])
+}
+
+/// Full patch detail page with merge check, actions, and diff.
+pub fn patch_detail_full(
+    repo: &ForgeRepoInfo,
+    patch: &ForgePatchInfo,
+    merge_check: Option<&ForgeMergeCheckResultResponse>,
+    diff: &[FileDiff],
+) -> Markup {
     base_layout(&format!("{} — {}", repo.name, patch.title), html! {
         p { a href=(format!("/{}/patches", repo.id)) { "← Patches" } }
         h1 { (&patch.title) }
-        span class={ "badge " (if patch.state == "open" { "open" } else { "closed" }) } {
+        span class={ "badge " (match patch.state.as_str() {
+            "open" => "open",
+            "merged" => "merged",
+            _ => "closed",
+        }) } {
             (&patch.state)
         }
 
@@ -557,7 +575,119 @@ pub fn patch_detail(repo: &ForgeRepoInfo, patch: &ForgePatchInfo) -> Markup {
             (patch.approval_count) " approvals · "
             (format_time(patch.created_at_ms))
         }
+
+        // Merge status banner and actions (open patches only)
+        @if patch.state == "open" {
+            (merge_status_banner(repo, patch, merge_check))
+        }
+
+        // File diff section
+        @if !diff.is_empty() {
+            h2 { "Changed files (" (diff.len()) ")" }
+            table.diff-table {
+                thead { tr { th { "Status" } th { "Path" } } }
+                tbody {
+                    @for file in diff {
+                        tr {
+                            td {
+                                span class={ "diff-badge " (match file.kind {
+                                    DiffKind::Added => "added",
+                                    DiffKind::Modified => "modified",
+                                    DiffKind::Deleted => "deleted",
+                                }) } {
+                                    (match file.kind {
+                                        DiffKind::Added => "A",
+                                        DiffKind::Modified => "M",
+                                        DiffKind::Deleted => "D",
+                                    })
+                                }
+                            }
+                            td { code { (&file.path) } }
+                        }
+                    }
+                }
+            }
+        } @else if patch.state == "open" {
+            p.muted { "No file changes detected." }
+        }
     })
+}
+
+/// Merge status banner with action buttons.
+fn merge_status_banner(
+    repo: &ForgeRepoInfo,
+    patch: &ForgePatchInfo,
+    merge_check: Option<&ForgeMergeCheckResultResponse>,
+) -> Markup {
+    html! {
+        div.merge-section {
+            @if let Some(check) = merge_check {
+                // Status banner
+                div class={ "merge-banner " (if check.mergeable { "merge-ready" }
+                    else if !check.conflicts.is_empty() { "merge-conflict" }
+                    else { "merge-blocked" }) } {
+
+                    @if check.mergeable {
+                        strong { "✓ Ready to merge" }
+                    } @else if !check.conflicts.is_empty() {
+                        strong { "✗ Merge conflicts" }
+                        ul {
+                            @for path in &check.conflicts {
+                                li { code { (path) } }
+                            }
+                        }
+                    } @else if let Some(reason) = &check.protection_reason {
+                        strong { "⏳ Blocked" }
+                        " — " (reason)
+                    } @else {
+                        strong { "✗ Cannot merge" }
+                    }
+                }
+
+                // Action buttons
+                div.merge-actions {
+                    // Approve button
+                    form method="POST"
+                        action=(format!("/{}/patches/{}/approve", repo.id, patch.id))
+                        style="display:inline" {
+                        button type="submit" class="btn-approve" { "Approve" }
+                    }
+
+                    // Merge button with strategy
+                    @if check.mergeable {
+                        form method="POST"
+                            action=(format!("/{}/patches/{}/merge", repo.id, patch.id))
+                            style="display:inline" {
+                            select name="strategy" {
+                                option value="merge" selected { "Merge commit" }
+                                @if check.available_strategies.iter().any(|s| s == "fast-forward") {
+                                    option value="fast-forward" { "Fast-forward" }
+                                }
+                                option value="squash" { "Squash" }
+                            }
+                            " "
+                            button type="submit" class="btn-merge" { "Merge" }
+                        }
+                    } @else {
+                        button type="button" class="btn-merge" disabled { "Merge" }
+                    }
+                }
+            } @else {
+                div class="merge-banner merge-blocked" {
+                    "Merge check unavailable"
+                }
+
+                // Still show approve button
+                div.merge-actions {
+                    form method="POST"
+                        action=(format!("/{}/patches/{}/approve", repo.id, patch.id))
+                        style="display:inline" {
+                        button type="submit" class="btn-approve" { "Approve" }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// New issue form page.
