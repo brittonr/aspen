@@ -57,6 +57,8 @@ pub use config::NixBuildWorkerConfig;
 #[cfg(feature = "snix-eval")]
 pub use eval::NixEvaluator;
 pub use executor::NixBuildWorker;
+pub use executor::ProjectType;
+pub use executor::detect_project_type;
 pub use payload::NixBuildPayload;
 #[cfg(feature = "snix")]
 pub use snix::UploadedStorePathSnix;

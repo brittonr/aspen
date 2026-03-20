@@ -55,6 +55,32 @@ struct OutputReaders {
     stderr_rx: mpsc::Receiver<String>,
 }
 
+/// Detected project type based on directory contents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProjectType {
+    /// Has `npins/sources.json` — can use zero-subprocess eval via snix-eval.
+    Npins,
+    /// Has `flake.nix` — uses flake evaluation (in-process or subprocess).
+    Flake,
+    /// Neither npins nor flake markers found.
+    Unknown,
+}
+
+/// Detect project type by checking for marker files.
+///
+/// Checks `npins/sources.json` first (npins takes priority since it enables
+/// the fully-native zero-subprocess path), then `flake.nix`.
+pub fn detect_project_type(project_dir: &str) -> ProjectType {
+    let base = std::path::Path::new(project_dir);
+    if base.join("npins/sources.json").exists() {
+        ProjectType::Npins
+    } else if base.join("flake.nix").exists() {
+        ProjectType::Flake
+    } else {
+        ProjectType::Unknown
+    }
+}
+
 /// Worker that executes Nix flake builds.
 ///
 /// This worker:
@@ -73,6 +99,9 @@ pub struct NixBuildWorker {
     /// Native build service for in-process builds (when snix-build feature is enabled).
     #[cfg(feature = "snix-build")]
     pub(crate) native_build_service: Option<crate::build_service::NativeBuildService>,
+    /// In-process Nix evaluator for npins and flake evaluation.
+    #[cfg(feature = "snix-eval")]
+    pub(crate) evaluator: Option<crate::eval::NixEvaluator>,
 }
 
 impl NixBuildWorker {
@@ -82,12 +111,35 @@ impl NixBuildWorker {
             config,
             #[cfg(feature = "snix-build")]
             native_build_service: None,
+            #[cfg(feature = "snix-eval")]
+            evaluator: None,
         }
     }
 
     /// Create a worker with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(NixBuildWorkerConfig::default())
+    }
+
+    /// Initialize the in-process evaluator from the worker's snix services.
+    ///
+    /// Call after construction to enable zero-subprocess npins eval and
+    /// in-process flake eval. If snix services are missing, the worker
+    /// falls back to `nix eval` subprocess.
+    #[cfg(feature = "snix-eval")]
+    pub fn init_evaluator(&mut self) {
+        if let (Some(bs), Some(ds), Some(ps)) = (
+            &self.config.snix_blob_service,
+            &self.config.snix_directory_service,
+            &self.config.snix_pathinfo_service,
+        ) {
+            let eval = crate::eval::NixEvaluator::new(bs.clone(), ds.clone(), ps.clone())
+                .with_nix_binary(self.config.nix_binary.clone());
+            self.evaluator = Some(eval);
+            info!("in-process NixEvaluator initialized");
+        } else {
+            info!("snix services not configured, NixEvaluator not available");
+        }
     }
 
     /// Initialize the native build service from the worker's config.
@@ -309,31 +361,21 @@ impl NixBuildWorker {
             .unwrap_or_else(|| payload.flake_url.clone());
         let attribute = &payload.attribute;
 
-        // Need SNIX services for the evaluator
-        let (blob_svc, dir_svc, pathinfo_svc) = match (
-            &self.config.snix_blob_service,
-            &self.config.snix_directory_service,
-            &self.config.snix_pathinfo_service,
-        ) {
-            (Some(bs), Some(ds), Some(ps)) => (bs.clone(), ds.clone(), ps.clone()),
-            _ => {
-                return Err(CiCoreError::NixBuildFailed {
-                    flake: flake_ref.to_string(),
-                    reason: "snix services not configured for flake eval".to_string(),
-                });
-            }
-        };
+        let evaluator = self.evaluator.as_ref().ok_or_else(|| CiCoreError::NixBuildFailed {
+            flake: flake_ref.to_string(),
+            reason: "NixEvaluator not initialized for flake eval".to_string(),
+        })?;
 
         if let Some(tx) = log_sender {
             let _ = tx.send("attempting in-process flake eval via call-flake.nix\n".to_string()).await;
         }
 
-        let evaluator = crate::eval::NixEvaluator::new(blob_svc, dir_svc, pathinfo_svc);
+        let eval_clone = evaluator.clone();
         let dir = flake_dir.to_string();
         let attr = attribute.clone();
         let flake_ref_owned = flake_ref.to_string();
 
-        let (_store_path, drv) = tokio::task::spawn_blocking(move || evaluator.evaluate_flake_derivation(&dir, &attr))
+        let (_store_path, drv) = tokio::task::spawn_blocking(move || eval_clone.evaluate_flake_derivation(&dir, &attr))
             .await
             .map_err(|e| CiCoreError::NixBuildFailed {
                 flake: flake_ref_owned.clone(),
@@ -370,12 +412,6 @@ impl NixBuildWorker {
         Ok(drv)
     }
 
-    /// Detect whether a project uses npins (has `npins/sources.json`).
-    #[cfg(feature = "snix-build")]
-    fn is_npins_project(project_dir: &str) -> bool {
-        std::path::Path::new(project_dir).join("npins/sources.json").exists()
-    }
-
     /// Attempt a fully-native build for an npins project — zero subprocesses.
     ///
     /// Uses `NixEvaluator::evaluate_npins_drv_path()` to resolve the .drv path
@@ -394,22 +430,11 @@ impl NixBuildWorker {
         let project_dir = payload.flake_url.clone();
         let attribute = payload.attribute.clone();
 
-        // Construct evaluator from the same snix services the build uses
-        let (blob_svc, dir_svc, pathinfo_svc) = match (
-            &self.config.snix_blob_service,
-            &self.config.snix_directory_service,
-            &self.config.snix_pathinfo_service,
-        ) {
-            (Some(bs), Some(ds), Some(ps)) => (bs.clone(), ds.clone(), ps.clone()),
-            _ => {
-                return Err(CiCoreError::NixBuildFailed {
-                    flake: project_dir,
-                    reason: "snix services not configured for npins eval".to_string(),
-                });
-            }
-        };
-
-        let evaluator = crate::eval::NixEvaluator::new(blob_svc, dir_svc, pathinfo_svc);
+        // Use the pre-initialized evaluator (avoids re-creating per build).
+        let evaluator = self.evaluator.as_ref().ok_or_else(|| CiCoreError::NixBuildFailed {
+            flake: project_dir.clone(),
+            reason: "NixEvaluator not initialized for npins eval".to_string(),
+        })?;
 
         // Step 1: Evaluate to Derivation via snix-eval (no subprocess, no disk I/O).
         // The Derivation is extracted from KnownPaths in-memory — no .drv file needed.
@@ -419,8 +444,9 @@ impl NixBuildWorker {
 
         let dir = project_dir.clone();
         let attr = attribute.clone();
+        let eval_clone = evaluator.clone();
         let (_drv_store_path, drv) =
-            tokio::task::spawn_blocking(move || evaluator.evaluate_npins_derivation(&dir, "default.nix", &attr))
+            tokio::task::spawn_blocking(move || eval_clone.evaluate_npins_derivation(&dir, "default.nix", &attr))
                 .await
                 .map_err(|e| CiCoreError::NixBuildFailed {
                     flake: project_dir.clone(),
@@ -538,7 +564,8 @@ impl NixBuildWorker {
         //   3. nix build subprocess — always available as fallback
 
         #[cfg(feature = "snix-build")]
-        let native_result = if self.has_native_builds() && Self::is_npins_project(&payload.flake_url) {
+        let native_result = if self.has_native_builds() && detect_project_type(&payload.flake_url) == ProjectType::Npins
+        {
             // npins project: try fully-native path (zero subprocesses)
             let build_start = Instant::now();
             match self.try_npins_native_build(payload, log_sender.clone()).await {

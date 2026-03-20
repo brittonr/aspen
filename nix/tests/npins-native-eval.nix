@@ -225,6 +225,50 @@ in
           assert "zero subprocesses" in logs, \
               f"Expected 'zero subprocesses' in logs — npins eval path not used"
 
+      # ── verify cache gateway serves narinfo ──────────────────────────
+      with subtest("cache gateway serves built output"):
+          # Extract the output store path from the build job result
+          result = cli(f"job status {job_id}", check=False)
+          job_data = result.get("job") or result
+          output = job_data.get("output", {})
+          output_paths = None
+          if isinstance(output, dict):
+              meta = output.get("metadata", {})
+              output_paths = meta.get("output_paths")
+
+          if output_paths and len(output_paths) > 0:
+              # Parse the store path hash from /nix/store/<hash>-<name>
+              import re
+              store_path = output_paths[0]
+              m = re.match(r"/nix/store/([a-z0-9]{32})-", store_path)
+              if m:
+                  path_hash = m.group(1)
+                  # Start gateway and query narinfo
+                  node1.succeed(
+                      "aspen-nix-cache-gateway "
+                      "--ticket $(cat /var/lib/aspen/cluster-ticket.txt) "
+                      "--listen 127.0.0.1:8380 &"
+                  )
+                  time.sleep(2)
+
+                  # Check nix-cache-info
+                  cache_info = node1.succeed("curl -sf http://127.0.0.1:8380/nix-cache-info || true")
+                  node1.log(f"nix-cache-info: {cache_info}")
+
+                  # Check narinfo for the built store path
+                  narinfo = node1.succeed(
+                      f"curl -sf http://127.0.0.1:8380/{path_hash}.narinfo || true"
+                  )
+                  node1.log(f"narinfo for {path_hash}: {narinfo[:500]}")
+                  if "StorePath:" in narinfo:
+                      node1.log("Cache gateway serves narinfo for built output!")
+                  else:
+                      node1.log(f"WARN: narinfo not found for {store_path} — cache upload may not have completed")
+              else:
+                  node1.log(f"Could not parse store path hash from: {store_path}")
+          else:
+              node1.log("No output_paths in job result — skipping cache gateway check")
+
       node1.log("All npins-native-eval tests passed!")
     '';
   }

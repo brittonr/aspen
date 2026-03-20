@@ -729,6 +729,10 @@ async fn initialize_job_system(
 
                     let mut nix_worker = NixBuildWorker::new(nix_config);
 
+                    // Initialize in-process evaluator (snix-eval) when snix services are available.
+                    #[cfg(feature = "snix-eval")]
+                    nix_worker.init_evaluator();
+
                     // Initialize native build service (snix-build) when available.
                     // Falls back to subprocess if sandbox isn't detected.
                     #[cfg(feature = "snix-build")]

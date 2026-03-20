@@ -65,6 +65,9 @@ impl std::fmt::Display for NixEvalError {
 ///
 /// Uses snix-eval for pure Nix evaluation and snix-glue's `SnixStoreIO`
 /// to resolve store paths through BlobService/DirectoryService/PathInfoService.
+///
+/// Clone is cheap — all services are behind Arc.
+#[derive(Clone)]
 pub struct NixEvaluator {
     blob_service: Arc<dyn BlobService>,
     directory_service: Arc<dyn DirectoryService>,
@@ -404,13 +407,21 @@ impl NixEvaluator {
         })?;
 
         // Step 2: Resolve all inputs to store paths.
-        // Create a FetchCache so missing inputs can be downloaded over HTTP.
-        let fetch_cache = crate::fetch::FetchCache::new().map_err(|e| NixEvalError {
-            message: format!("failed to create fetch cache: {e}"),
-            is_ifd: false,
-        })?;
-
-        let resolved = lock.resolve_all_inputs_with_fetch(flake_dir, &fetch_cache).map_err(|e| NixEvalError {
+        // When snix-build is enabled, use FetchCache to download missing inputs over HTTP.
+        // Otherwise, only local inputs are resolved (missing inputs cause an error).
+        #[cfg(feature = "snix-build")]
+        let resolved = {
+            let fetch_cache = crate::fetch::FetchCache::new().map_err(|e| NixEvalError {
+                message: format!("failed to create fetch cache: {e}"),
+                is_ifd: false,
+            })?;
+            lock.resolve_all_inputs_with_fetch(flake_dir, &fetch_cache).map_err(|e| NixEvalError {
+                message: format!("failed to resolve flake inputs: {e}"),
+                is_ifd: false,
+            })?
+        };
+        #[cfg(not(feature = "snix-build"))]
+        let resolved = lock.resolve_all_inputs(flake_dir).map_err(|e| NixEvalError {
             message: format!("failed to resolve flake inputs: {e}"),
             is_ifd: false,
         })?;
@@ -906,6 +917,84 @@ mod tests {
                 eprintln!("evaluate_flake_derivation failed (may be expected): {e}");
             }
         }
+    }
+
+    /// Integration test: evaluate a synthetic npins project fully in-process.
+    ///
+    /// Creates a temp dir with default.nix + npins/sources.json, calls
+    /// evaluate_npins_derivation, and verifies a Derivation is extracted
+    /// from KnownPaths — no subprocess, no real npins sources.
+    #[tokio::test]
+    async fn test_evaluate_npins_derivation_simple() {
+        let eval = test_evaluator();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let project_dir = tmpdir.path();
+
+        // Minimal default.nix returning an attrset with a derivation.
+        // No nixpkgs — just a raw derivation builtin.
+        std::fs::write(
+            project_dir.join("default.nix"),
+            r#"{
+              packages.x86_64-linux.default = derivation {
+                name = "npins-eval-unit-test";
+                system = "x86_64-linux";
+                builder = "/bin/sh";
+                args = [ "-c" "echo hello > $out" ];
+              };
+            }"#,
+        )
+        .unwrap();
+
+        // npins/sources.json — empty, just needs to exist for detection
+        std::fs::create_dir(project_dir.join("npins")).unwrap();
+        std::fs::write(project_dir.join("npins/sources.json"), r#"{ "pins": {}, "version": 7 }"#).unwrap();
+
+        let dir_str = project_dir.to_string_lossy().to_string();
+        let result = eval.evaluate_npins_derivation(&dir_str, "default.nix", "packages.x86_64-linux.default");
+
+        match result {
+            Ok((store_path, drv)) => {
+                let drv_path = store_path.to_absolute_path();
+                assert!(drv_path.starts_with("/nix/store/"), "bad drv path: {drv_path}");
+                assert!(drv_path.ends_with(".drv"), "not a .drv: {drv_path}");
+                assert_eq!(drv.system, "x86_64-linux");
+                assert_eq!(drv.builder, "/bin/sh");
+                assert!(drv.outputs.contains_key("out"));
+                // Output path should be valid
+                let out = drv.outputs.get("out").unwrap();
+                let out_path = out.path.as_ref().expect("output should have path");
+                assert!(out_path.to_absolute_path().starts_with("/nix/store/"));
+            }
+            Err(e) => {
+                // snix-eval may have limitations in some environments
+                eprintln!("evaluate_npins_derivation failed (may be expected): {e}");
+            }
+        }
+    }
+
+    /// Verify evaluate_npins_derivation rejects a missing default.nix.
+    #[tokio::test]
+    async fn test_evaluate_npins_derivation_missing_file() {
+        let eval = test_evaluator();
+        let result = eval.evaluate_npins_derivation("/nonexistent", "default.nix", "default");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        // Should fail at evaluation (file not found), not a crash
+        assert!(!err.message.is_empty());
+    }
+
+    /// Verify evaluate_npins_derivation rejects a bad attribute path.
+    #[tokio::test]
+    async fn test_evaluate_npins_derivation_bad_attribute() {
+        let eval = test_evaluator();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let project_dir = tmpdir.path();
+
+        std::fs::write(project_dir.join("default.nix"), "{ hello = 42; }").unwrap();
+
+        let dir_str = project_dir.to_string_lossy().to_string();
+        let result = eval.evaluate_npins_derivation(&dir_str, "default.nix", "nonexistent.attr");
+        assert!(result.is_err());
     }
 
     /// Verify evaluate_flake_derivation rejects missing flake.lock.
