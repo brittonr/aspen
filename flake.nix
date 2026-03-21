@@ -3323,6 +3323,22 @@
               };
             }
             // lib.optionalAttrs (system == "x86_64-linux") {
+              # Full-loop test: 3-stage pipeline orchestration (check → build → test).
+              # Uses aspen-constants crate with 4 jobs: format-check (shell),
+              # clippy-check (nix), build-and-test (nix), unit-tests (nix).
+              # No WASM plugins required — uses ci-aspen-node (pure eval).
+              # Build: nix build .#checks.x86_64-linux.ci-dogfood-full-loop-test --option sandbox false
+              ci-dogfood-full-loop-test = import ./nix/tests/ci-dogfood-full-loop.nix {
+                inherit pkgs;
+                aspenNodePackage = ciVmTestBin {
+                  name = "aspen-node";
+                  features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "git-bridge" "blob"];
+                };
+                aspenCliPackage = ciVmTestCliBin ["ci" "forge"];
+                gitRemoteAspenPackage = bins.ci-git-remote-aspen;
+                nixpkgsFlake = nixpkgs;
+              };
+
               # SNIX microVM boot test: verifies the full snix boot chain
               # (snix-store virtiofs daemon → cloud-hypervisor → kernel +
               # initrd → snix-init → VirtioFS mount). Requires nested KVM.

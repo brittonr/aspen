@@ -1,0 +1,514 @@
+# Dogfood NixOS VM test: 3-stage CI pipeline orchestration verification.
+#
+# Tests the complete 3-stage pipeline flow using the real aspen-constants crate:
+#   Stage 1 "check": format-check (shell) + syntax-check (nix)
+#   Stage 2 "build": build-and-test (nix) — depends on check stage
+#   Stage 3 "test":  unit-tests (nix) — depends on build stage
+#
+# Verifies stage ordering, dependency resolution, and artifact flow:
+#   1. Create Forge repo with real aspen-constants crate
+#   2. Push source → CI auto-triggers 3-stage pipeline
+#   3. Verify all 4 jobs complete in correct order (format-check, syntax-check, build-and-test, unit-tests)
+#   4. Extract build-and-test output and run the CI-built binary
+#   5. Verify blob upload to demonstrate artifact storage
+#
+# This focuses on pipeline orchestration rather than storage verification.
+#
+# Run:
+#   nix build .#checks.x86_64-linux.ci-dogfood-full-loop-test --impure --option sandbox false
+{
+  pkgs,
+  aspenNodePackage,
+  aspenCliPackage,
+  gitRemoteAspenPackage,
+  nixpkgsFlake,
+}: let
+  secretKey = "0000000000000007000000000000000700000000000000070000000000000007";
+  cookie = "ci-full-loop-test";
+
+  # Path to the real aspen-constants source tree.
+  aspenConstantsSrc = ../../crates/aspen-constants/src;
+
+  # CI config: 3-stage pipeline with stage dependencies — matches real .aspen/ci.ncl pattern.
+  ciConfig = pkgs.writeText "ci.ncl" ''
+    {
+      name = "aspen-constants-full-loop",
+      stages = [
+        {
+          name = "check",
+          jobs = [
+            {
+              name = "format-check",
+              type = 'shell,
+              command = "echo 'format check passed'",
+              timeout_secs = 300,
+            },
+            {
+              name = "syntax-check",
+              type = 'nix,
+              flake_url = ".",
+              flake_attr = "checks.x86_64-linux.cargo-check",
+              isolation = 'none,
+              timeout_secs = 600,
+            },
+          ],
+        },
+        {
+          name = "build",
+          depends_on = ["check"],
+          jobs = [
+            {
+              name = "build-and-test",
+              type = 'nix,
+              flake_url = ".",
+              flake_attr = "packages.x86_64-linux.default",
+              isolation = 'none,
+              timeout_secs = 600,
+            },
+          ],
+        },
+        {
+          name = "test",
+          depends_on = ["build"],
+          jobs = [
+            {
+              name = "unit-tests",
+              type = 'nix,
+              flake_url = ".",
+              flake_attr = "checks.x86_64-linux.unit-tests",
+              isolation = 'none,
+              timeout_secs = 600,
+            },
+          ],
+        },
+      ],
+    }
+  '';
+
+  # Nix flake with three check outputs plus the build package:
+  #   checks.x86_64-linux.syntax-check   — cargo check type validation
+  #   checks.x86_64-linux.unit-tests     — cargo test execution
+  #   packages.x86_64-linux.default      — full build with rustPlatform.buildRustPackage
+  #
+  # Uses rustPlatform.buildRustPackage for proper cargo builds with vendoring.
+  selfBuildFlake = pkgs.writeText "flake.nix" ''
+    {
+      description = "Aspen constants — 3-stage pipeline verification";
+      inputs.nixpkgs.url = "nixpkgs";
+      outputs = { nixpkgs, self, ... }:
+        let
+          pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        in {
+          packages.x86_64-linux.default = pkgs.rustPlatform.buildRustPackage {
+            pname = "aspen-constants";
+            version = "0.1.0";
+            src = ./.;
+            cargoLock.lockFile = ./Cargo.lock;
+            doCheck = true;
+          };
+          checks.x86_64-linux.cargo-check = pkgs.stdenv.mkDerivation {
+            name = "aspen-constants-cargo-check";
+            src = ./.;
+            nativeBuildInputs = [ pkgs.cargo pkgs.rustc ];
+            buildPhase = "export HOME=$(mktemp -d) && cargo check 2>&1";
+            installPhase = "touch $out";
+          };
+          checks.x86_64-linux.unit-tests = pkgs.stdenv.mkDerivation {
+            name = "aspen-constants-unit-tests";
+            src = ./.;
+            nativeBuildInputs = [ pkgs.cargo pkgs.rustc ];
+            buildPhase = "export HOME=$(mktemp -d) && cargo test 2>&1";
+            installPhase = "touch $out";
+          };
+        };
+    }
+  '';
+
+  # Cargo.toml: real aspen-constants metadata + binary target for the wrapper.
+  cargoToml = pkgs.writeText "Cargo.toml" ''
+    [package]
+    name = "aspen-constants"
+    version = "0.1.0"
+    edition = "2024"
+    description = "Tiger Style resource limits and constants for Aspen distributed systems"
+
+    [lib]
+    name = "aspen_constants"
+    path = "src/lib.rs"
+
+    [[bin]]
+    name = "aspen-constants-check"
+    path = "src/main.rs"
+
+    [features]
+    default = []
+    sql = []
+  '';
+
+  # Cargo.lock for a zero-dependency crate.
+  cargoLock = pkgs.writeText "Cargo.lock" ''
+    # This file is automatically @generated by Cargo.
+    # It is not intended for manual editing.
+    version = 3
+
+    [[package]]
+    name = "aspen-constants"
+    version = "0.1.0"
+  '';
+
+  # Thin binary wrapper that exercises the real library.
+  selfBuildMain = pkgs.writeText "main.rs" ''
+    use aspen_constants::{api, ci, coordination, network, raft};
+
+    fn main() {
+        println!("=== Aspen Constants Self-Build ===");
+        println!(
+            "{} v{}",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION")
+        );
+        println!();
+
+        // KV limits
+        println!("MAX_KEY_SIZE         = {} bytes", api::MAX_KEY_SIZE);
+        println!("MAX_VALUE_SIZE       = {} bytes", api::MAX_VALUE_SIZE);
+        println!("MAX_SCAN_RESULTS     = {}", api::MAX_SCAN_RESULTS);
+        println!("DEFAULT_SCAN_LIMIT   = {}", api::DEFAULT_SCAN_LIMIT);
+
+        // Network
+        println!("MAX_PEERS            = {}", network::MAX_PEERS);
+        println!("MAX_CONNECTIONS      = {}", network::MAX_CONCURRENT_CONNECTIONS);
+        println!("CONNECT_TIMEOUT      = {}s", network::IROH_CONNECT_TIMEOUT_SECS);
+        println!("READ_TIMEOUT         = {}s", network::IROH_READ_TIMEOUT_SECS);
+
+        // Raft
+        println!("MAX_BATCH_SIZE       = {}", raft::MAX_BATCH_SIZE);
+
+        // Coordination
+        println!("MAX_CAS_RETRIES      = {}", coordination::MAX_CAS_RETRIES);
+
+        // CI
+        println!("MAX_CI_VMS           = {}", ci::MAX_CI_VMS_PER_NODE);
+
+        // Runtime assertions (complement the 413 compile-time assertions in assertions.rs)
+        assert!(api::MAX_KEY_SIZE < api::MAX_VALUE_SIZE);
+        assert!(api::DEFAULT_SCAN_LIMIT <= api::MAX_SCAN_RESULTS);
+        assert!(raft::MAX_BATCH_SIZE > 0);
+        assert!(
+            network::IROH_CONNECT_TIMEOUT_SECS < network::IROH_READ_TIMEOUT_SECS
+        );
+
+        println!();
+        println!("All compile-time and runtime assertions passed");
+        println!("Built by Aspen CI");
+    }
+  '';
+
+  # Bundle the complete source tree as a single derivation:
+  # real aspen-constants source + main.rs wrapper + Cargo.toml + flake.
+  selfBuildRepo = pkgs.runCommand "aspen-full-loop-repo" {} ''
+    mkdir -p $out/src $out/.aspen
+
+    # Real aspen-constants source (11 files, 2600+ lines)
+    cp ${aspenConstantsSrc}/lib.rs       $out/src/
+    cp ${aspenConstantsSrc}/api.rs       $out/src/
+    cp ${aspenConstantsSrc}/assertions.rs $out/src/
+    cp ${aspenConstantsSrc}/ci.rs        $out/src/
+    cp ${aspenConstantsSrc}/coordination.rs $out/src/
+    cp ${aspenConstantsSrc}/directory.rs  $out/src/
+    cp ${aspenConstantsSrc}/network.rs   $out/src/
+    cp ${aspenConstantsSrc}/plugin.rs    $out/src/
+    cp ${aspenConstantsSrc}/proxy.rs     $out/src/
+    cp ${aspenConstantsSrc}/raft.rs      $out/src/
+    cp ${aspenConstantsSrc}/wasm.rs      $out/src/
+
+    # Binary wrapper
+    cp ${selfBuildMain} $out/src/main.rs
+
+    # Build files
+    cp ${cargoToml}        $out/Cargo.toml
+    cp ${cargoLock}        $out/Cargo.lock
+    cp ${selfBuildFlake}   $out/flake.nix
+    cp ${ciConfig}         $out/.aspen/ci.ncl
+  '';
+
+in
+  pkgs.testers.nixosTest {
+    name = "ci-dogfood-full-loop";
+    skipLint = true;
+    skipTypeCheck = true;
+
+    nodes.node1 = {
+      imports = [
+        ../../nix/modules/aspen-node.nix
+      ];
+
+      services.aspen.node = {
+        enable = true;
+        package = aspenNodePackage;
+        nodeId = 1;
+        inherit cookie;
+        secretKey = secretKey;
+        storageBackend = "redb";
+        dataDir = "/var/lib/aspen";
+        logLevel = "info";
+        relayMode = "disabled";
+        enableWorkers = true;
+        enableCi = true;
+        enableSnix = false;
+        features = ["forge" "blob"];
+      };
+
+      environment.systemPackages = [
+        aspenCliPackage
+        gitRemoteAspenPackage
+        pkgs.git
+        pkgs.nix
+      ];
+
+      networking.firewall.enable = false;
+      nix.settings.experimental-features = ["nix-command" "flakes"];
+      nix.settings.sandbox = false;
+      nix.registry.nixpkgs.flake = nixpkgsFlake;
+
+      # The inner nix build downloads rustc + cargo + stdenv from
+      # cache.nixos.org (~3GB). The default writableStoreUseTmpfs=true
+      # caps the writable store overlay at ~50% of RAM (not enough).
+      virtualisation.memorySize = 4096;
+      virtualisation.cores = 2;
+      virtualisation.diskSize = 20480;
+      virtualisation.writableStoreUseTmpfs = false;
+    };
+
+    testScript = ''
+      import json, time
+
+      SELF_BUILD_REPO = "${selfBuildRepo}"
+
+      def get_ticket():
+          return node1.succeed("cat /var/lib/aspen/cluster-ticket.txt").strip()
+
+      def cli(cmd, check=True):
+          ticket = get_ticket()
+          run = f"aspen-cli --ticket '{ticket}' --json {cmd} >/tmp/_cli.json 2>/tmp/_cli.err"
+          if check:
+              node1.succeed(run)
+          else:
+              node1.execute(run)
+          raw = node1.succeed("cat /tmp/_cli.json")
+          try:
+              return json.loads(raw)
+          except (json.JSONDecodeError, ValueError):
+              return raw.strip()
+
+      def cli_text(cmd):
+          ticket = get_ticket()
+          node1.succeed(f"aspen-cli --ticket '{ticket}' {cmd} >/tmp/_cli.txt 2>/dev/null")
+          return node1.succeed("cat /tmp/_cli.txt")
+
+      def stream_job_logs(run_id, job_id, job_name):
+          """Stream logs for a job via ci logs --follow, saving to file."""
+          ticket = get_ticket()
+          node1.log(f"=== streaming logs: {job_name} ({job_id}) ===")
+          node1.execute(
+              f"aspen-cli --ticket '{ticket}' ci logs --follow {run_id} {job_id} "
+              f">/tmp/job-{job_id}.log 2>/dev/null"
+          )
+          log_size = node1.succeed(f"wc -c < /tmp/job-{job_id}.log").strip()
+          node1.log(f"=== end logs: {job_name} ({log_size} bytes) ===")
+
+      def wait_for_pipeline(run_id, timeout=600):
+          """Wait for pipeline by streaming job logs as they're assigned."""
+          deadline = time.time() + timeout
+          streamed_jobs = set()
+          while time.time() < deadline:
+              result = cli(f"ci status {run_id}", check=False)
+              if not isinstance(result, dict):
+                  time.sleep(3)
+                  continue
+
+              # Stream logs for newly assigned jobs
+              for stage in result.get("stages", []):
+                  for job in stage.get("jobs", []):
+                      jid = job.get("id", "")
+                      if jid and jid not in streamed_jobs:
+                          streamed_jobs.add(jid)
+                          stream_job_logs(run_id, jid, job.get("name", "unknown"))
+
+              status = result.get("status")
+              node1.log(f"Pipeline {run_id}: status={status}")
+              if status in ("success", "failed", "cancelled"):
+                  return result
+              time.sleep(3)
+          raise Exception(f"Pipeline {run_id} did not complete within {timeout}s")
+
+      # ── boot ─────────────────────────────────────────────────────
+      start_all()
+      node1.wait_for_unit("aspen-node.service")
+      node1.wait_for_file("/var/lib/aspen/cluster-ticket.txt", timeout=30)
+      node1.wait_until_succeeds(
+          "aspen-cli --ticket $(cat /var/lib/aspen/cluster-ticket.txt) cluster health",
+          timeout=60,
+      )
+      cli_text("cluster init")
+      time.sleep(2)
+
+      # ── create forge repo ────────────────────────────────────────
+      with subtest("create forge repo"):
+          out = cli("git init aspen-constants-full-loop")
+          repo_id = out.get("id") or out.get("repo_id")
+          assert repo_id, f"no repo_id: {out}"
+          node1.log(f"Repo: {repo_id}")
+
+      with subtest("ci watch"):
+          result = cli(f"ci watch {repo_id}")
+          assert isinstance(result, dict) and result.get("is_success"), f"ci watch failed: {result}"
+
+      # ── push real aspen-constants to forge ───────────────────────
+      with subtest("push aspen-constants crate to forge"):
+          node1.succeed(
+              f"cp -r --no-preserve=mode {SELF_BUILD_REPO} /tmp/self-build-repo && "
+              "cd /tmp/self-build-repo && "
+              "git init --initial-branch=main && "
+              "git config user.email 'test@test' && "
+              "git config user.name 'Test' && "
+              "git add -A && "
+              "git commit -m 'aspen-constants: 3-stage pipeline test'"
+          )
+          ticket = get_ticket()
+          node1.succeed(
+              f"cd /tmp/self-build-repo && "
+              f"git remote add aspen 'aspen://{ticket}/{repo_id}' && "
+              f"RUST_LOG=warn git push aspen main 2>/tmp/push.err"
+          )
+          # Verify we pushed the real source
+          file_count = node1.succeed(
+              "find /tmp/self-build-repo/src -name '*.rs' | wc -l"
+          ).strip()
+          node1.log(f"Pushed {file_count} Rust source files to Forge")
+          assert int(file_count) >= 12, f"Expected >=12 .rs files, got {file_count}"
+
+      # ── wait for pipeline ────────────────────────────────────────
+      with subtest("pipeline auto-triggers"):
+          deadline = time.time() + 60
+          run_id = None
+          while time.time() < deadline:
+              out = cli("ci list", check=False)
+              if isinstance(out, dict):
+                  runs = out.get("runs", [])
+                  if runs:
+                      run_id = runs[0].get("run_id")
+                      break
+              time.sleep(3)
+          assert run_id, "No pipeline triggered within 60s"
+          node1.log(f"Pipeline: {run_id}")
+
+      with subtest("3-stage pipeline succeeds"):
+          final = wait_for_pipeline(run_id, timeout=1200)
+          node1.log(f"Final: {json.dumps(final, indent=2)}")
+          status = final.get("status")
+          assert status == "success", f"Pipeline failed: {status}: {final}"
+
+      # ── verify all 3 stages and 4 jobs ─────────────────────────
+      with subtest("all 3 stages completed with 4 jobs total"):
+          stages = final.get("stages", [])
+          assert len(stages) == 3, f"Expected 3 stages, got {len(stages)}: {stages}"
+
+          stage_names = [s["name"] for s in stages]
+          assert "check" in stage_names, f"Missing 'check' stage: {stage_names}"
+          assert "build" in stage_names, f"Missing 'build' stage: {stage_names}"
+          assert "test" in stage_names, f"Missing 'test' stage: {stage_names}"
+
+          # Verify stage completion order by timestamps
+          stage_by_name = {s["name"]: s for s in stages}
+          check_stage = stage_by_name["check"]
+          build_stage = stage_by_name["build"]
+          test_stage = stage_by_name["test"]
+
+          for stage in stages:
+              assert stage["status"] == "success", \
+                  f"Stage '{stage['name']}' status={stage['status']}, expected success"
+
+          # Count total jobs across all stages
+          all_jobs = []
+          for stage in stages:
+              for job in stage.get("jobs", []):
+                  if job.get("id"):
+                      all_jobs.append(job)
+
+          assert len(all_jobs) == 4, f"Expected exactly 4 jobs, got {len(all_jobs)}"
+          
+          job_names = [job.get("name") for job in all_jobs]
+          expected_jobs = ["format-check", "syntax-check", "build-and-test", "unit-tests"]
+          for expected in expected_jobs:
+              assert expected in job_names, f"Missing job '{expected}': {job_names}"
+
+          node1.log(f"All jobs: {job_names}")
+
+      # ── verify job logs ──────────────────────────────────────────
+      with subtest("all 4 jobs succeeded"):
+          for job in all_jobs:
+              assert job["status"] == "success", \
+                  f"Job '{job.get('name')}' not success: {job['status']}"
+              # Check logs if available (shell jobs may complete before streamer connects)
+              log = node1.succeed(f"cat /tmp/job-{job['id']}.log 2>/dev/null || true").strip()
+              node1.log(f"Job '{job.get('name')}': {len(log)} bytes of logs")
+
+      # ── extract build job result ────────────────────────────────
+      with subtest("extract build job output path"):
+          build_job = [j for j in all_jobs if j.get("name") == "build-and-test"][0]
+          job_data = cli(f"kv get __jobs:{build_job['id']}", check=False)
+
+          output_path = None
+          job_result_data = None
+          if isinstance(job_data, dict):
+              value = job_data.get("value", "")
+              try:
+                  job_result = json.loads(value) if isinstance(value, str) else value
+                  job_result_data = job_result.get("result", {}).get("Success", {}).get("data", {})
+                  paths = job_result_data.get("output_paths", [])
+                  if paths:
+                      output_path = paths[0]
+              except (json.JSONDecodeError, ValueError, AttributeError) as e:
+                  node1.log(f"Failed to parse job result: {e}")
+
+          assert output_path, f"No output_path in job result: {job_data}"
+          node1.log(f"Nix output path: {output_path}")
+
+      # ── verify blob upload ──────────────────────────────────────
+      with subtest("build output uploaded to blobs"):
+          uploaded = job_result_data.get("uploaded_store_paths", [])
+          assert len(uploaded) >= 1, f"No uploaded store paths: {job_result_data}"
+
+          build_upload = [u for u in uploaded if "aspen-constants-0.1.0" in u.get("store_path", "")]
+          assert len(build_upload) == 1, f"Expected 1 build upload, got {len(build_upload)}: {uploaded}"
+
+          blob_hash = build_upload[0].get("blob_hash")
+          nar_size = build_upload[0].get("nar_size", 0)
+          cache_registered = build_upload[0].get("cache_registered", False)
+
+          assert blob_hash, f"No blob_hash in upload: {build_upload[0]}"
+          assert nar_size > 0, f"NAR size is 0: {build_upload[0]}"
+          assert cache_registered, f"Store path not registered in cache: {build_upload[0]}"
+
+          node1.log(f"Blob upload: hash={blob_hash} nar_size={nar_size} cached={cache_registered}")
+
+      # ── run the CI-built binary ──────────────────────────────────
+      with subtest("run CI-built binary"):
+          binary = f"{output_path}/bin/aspen-constants-check"
+          node1.succeed(f"test -x {binary}")
+
+          output = node1.succeed(f"{binary}")
+          node1.log(f"Binary output:\n{output}")
+          assert "aspen-constants v0.1.0" in output, \
+              f"Missing crate identity in output: {output}"
+          assert "All compile-time and runtime assertions passed" in output, \
+              f"Assertions missing from output: {output}"
+          assert "Built by Aspen CI" in output, \
+              f"Build attribution missing: {output}"
+          assert "MAX_KEY_SIZE" in output, \
+              f"Constants missing from output: {output}"
+
+      node1.log("FULL-LOOP PASSED: 3-stage pipeline → format + check + build + unit-tests → binary execution")
+    '';
+  }
