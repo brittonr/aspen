@@ -231,7 +231,6 @@
     cp ${selfBuildFlake}   $out/flake.nix
     cp ${ciConfig}         $out/.aspen/ci.ncl
   '';
-
 in
   pkgs.testers.nixosTest {
     name = "ci-dogfood-full-loop";
@@ -437,7 +436,7 @@ in
                       all_jobs.append(job)
 
           assert len(all_jobs) == 4, f"Expected exactly 4 jobs, got {len(all_jobs)}"
-          
+
           job_names = [job.get("name") for job in all_jobs]
           expected_jobs = ["format-check", "syntax-check", "build-and-test", "unit-tests"]
           for expected in expected_jobs:
