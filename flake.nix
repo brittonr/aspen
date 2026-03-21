@@ -2140,6 +2140,16 @@
                 name = "git-remote-aspen";
                 features = ["git-bridge"];
               };
+              # Nix cache gateway built from ciSrc (no plugins dependency).
+              ci-aspen-nix-cache-gateway = craneLib.buildPackage (
+                ciCommonArgs
+                // {
+                  pname = "aspen-nix-cache-gateway";
+                  version = "0.1.0";
+                  cargoExtraArgs = "-p aspen-nix-cache-gateway --bin aspen-nix-cache-gateway";
+                  doCheck = false;
+                }
+              );
             }
             # CI-path builds with plugins (requires --impure for aspen-wasm-plugin).
             # Uses ciSrc with the stub replaced by real aspen-wasm-plugin source.
@@ -4236,7 +4246,7 @@
                     aspenNode
                     bins.aspen-cli
                     bins.git-remote-aspen
-                    bins.full-aspen-nix-cache-gateway
+                    bins.ci-aspen-nix-cache-gateway
                     pkgs.bash
                     pkgs.coreutils
                     pkgs.gnugrep
@@ -4250,7 +4260,7 @@
                 export ASPEN_NODE_BIN="${aspenNode}/bin/aspen-node"
                 export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
                 export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
-                export ASPEN_NIX_CACHE_GATEWAY_BIN="${bins.full-aspen-nix-cache-gateway}/bin/aspen-nix-cache-gateway"
+                export ASPEN_NIX_CACHE_GATEWAY_BIN="${bins.ci-aspen-nix-cache-gateway}/bin/aspen-nix-cache-gateway"
                 export PROJECT_DIR="$PWD"
 
                 exec ${scriptsDir}/dogfood-local.sh "$@"

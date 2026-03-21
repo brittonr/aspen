@@ -60,11 +60,14 @@ parse_json() {
 import json, sys, re, os
 raw = sys.stdin.read()
 expr = os.environ['PARSE_EXPR']
+decoder = json.JSONDecoder()
 # Try each '{' or '[' position - log lines (e.g. 'Os { code: 101 }')
 # can contain braces before the real JSON, so skip invalid starts.
+# Use raw_decode to handle trailing non-JSON content (stderr errors,
+# version banners, etc.) that would cause json.loads to fail.
 for m in re.finditer(r'[\[{]', raw):
     try:
-        d = json.loads(raw[m.start():])
+        d, _ = decoder.raw_decode(raw, m.start())
     except (json.JSONDecodeError, ValueError):
         continue
     try:
