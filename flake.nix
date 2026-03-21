@@ -3339,6 +3339,20 @@
                 nixpkgsFlake = nixpkgs;
               };
 
+              # Multi-node dogfood: 3-node cluster → Forge push → CI build →
+              # rolling restart (follower-first) → quorum checks → re-election → KV persistence.
+              # Build: nix build .#checks.x86_64-linux.multi-node-dogfood-test --option sandbox false
+              multi-node-dogfood-test = import ./nix/tests/multi-node-dogfood.nix {
+                inherit pkgs;
+                aspenNodePackage = ciVmTestBin {
+                  name = "aspen-node";
+                  features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "git-bridge" "blob"];
+                };
+                aspenCliPackage = ciVmTestCliBin ["ci" "forge"];
+                gitRemoteAspenPackage = bins.ci-git-remote-aspen;
+                nixpkgsFlake = nixpkgs;
+              };
+
               # SNIX microVM boot test: verifies the full snix boot chain
               # (snix-store virtiofs daemon → cloud-hypervisor → kernel +
               # initrd → snix-init → VirtioFS mount). Requires nested KVM.

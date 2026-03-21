@@ -573,18 +573,28 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
 
         info!(run_id = %run_id, checkout_dir = %checkout_dir.display(), "Pre-fetching flake inputs for VM builds");
 
-        match tokio::process::Command::new("nix")
+        // Tiger Style: bounded timeout — nix flake archive can hang indefinitely
+        // when the network is unavailable (e.g., inside NixOS VM tests).
+        let prefetch_timeout = std::time::Duration::from_secs(120);
+        let child = match tokio::process::Command::new("nix")
             .args(["flake", "archive", "--no-write-lock-file", "--accept-flake-config"])
             .current_dir(checkout_dir)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
-            .output()
-            .await
+            .spawn()
         {
-            Ok(output) if output.status.success() => {
+            Ok(child) => child,
+            Err(e) => {
+                warn!(run_id = %run_id, error = %e, "Failed to run nix flake archive (nix not in PATH?)");
+                return;
+            }
+        };
+
+        match tokio::time::timeout(prefetch_timeout, child.wait_with_output()).await {
+            Ok(Ok(output)) if output.status.success() => {
                 info!(run_id = %run_id, "Flake inputs pre-fetched into host nix store");
             }
-            Ok(output) => {
+            Ok(Ok(output)) => {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 warn!(
                     run_id = %run_id,
@@ -593,8 +603,13 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
                     "nix flake archive failed (VMs will download inputs directly)"
                 );
             }
-            Err(e) => {
-                warn!(run_id = %run_id, error = %e, "Failed to run nix flake archive (nix not in PATH?)");
+            Ok(Err(e)) => {
+                warn!(run_id = %run_id, error = %e, "nix flake archive process error");
+            }
+            Err(_elapsed) => {
+                warn!(run_id = %run_id, timeout_secs = prefetch_timeout.as_secs(),
+                    "nix flake archive timed out (network unavailable? VMs will download inputs directly)");
+                // The child process is dropped here which sends SIGKILL.
             }
         }
     }
