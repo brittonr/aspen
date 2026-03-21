@@ -37,12 +37,49 @@ pub(super) struct StorageBroadcasts {
 /// Create Raft configuration and broadcast channels.
 ///
 /// Returns (raft_config, broadcasts).
+///
+/// Applies per-node election timeout jitter based on node_id to prevent
+/// split-votes when multiple nodes start elections simultaneously. openraft
+/// randomizes the timeout once at engine creation and never re-randomizes,
+/// so without jitter, nodes with similar startup timing persistently split
+/// votes (especially in VMs with synchronized scheduling).
 pub(super) fn create_raft_config_and_broadcast(config: &NodeConfig) -> (Arc<RaftConfig>, StorageBroadcasts) {
+    // Derive deterministic per-node jitter from node_id.
+    // Spread across the election timeout range to desynchronize elections.
+    // With default 1500-3000ms range, jitter adds 0-500ms based on node_id.
+    let timeout_range = config.election_timeout_max_ms.saturating_sub(config.election_timeout_min_ms);
+    let jitter = if timeout_range > 0 {
+        // Use a simple hash of node_id to distribute jitter evenly.
+        // Modulo by range/3 ensures jitter stays within ~1/3 of the range,
+        // preserving enough randomization space for openraft's own rand.
+        let jitter_range = timeout_range / 3;
+        if jitter_range > 0 {
+            config.node_id % jitter_range
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+
+    let election_min = config.election_timeout_min_ms.saturating_add(jitter);
+    let election_max = config.election_timeout_max_ms.saturating_add(jitter);
+
+    if jitter > 0 {
+        info!(
+            node_id = config.node_id,
+            jitter_ms = jitter,
+            election_min,
+            election_max,
+            "applied per-node election timeout jitter to prevent split-votes"
+        );
+    }
+
     let raft_config = Arc::new(RaftConfig {
         cluster_name: config.cookie.clone(),
         heartbeat_interval: config.heartbeat_interval_ms,
-        election_timeout_min: config.election_timeout_min_ms,
-        election_timeout_max: config.election_timeout_max_ms,
+        election_timeout_min: election_min,
+        election_timeout_max: election_max,
         replication_lag_threshold: 10000,
         snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(10_000),
         max_in_snapshot_log_to_keep: 1_000,

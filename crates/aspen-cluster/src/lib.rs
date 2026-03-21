@@ -632,4 +632,40 @@ mod tests {
              see napkin 2026-02-26 snapshot race"
         );
     }
+
+    /// Compute election jitter for a node — mirrors the logic in storage_init.
+    fn compute_election_jitter(node_id: u64, timeout_min: u64, timeout_max: u64) -> u64 {
+        let range = timeout_max.saturating_sub(timeout_min);
+        if range == 0 {
+            return 0;
+        }
+        let jitter_range = range / 3;
+        if jitter_range > 0 { node_id % jitter_range } else { 0 }
+    }
+
+    /// Different node IDs must produce different election timeout offsets.
+    #[test]
+    fn test_election_jitter_differs_by_node_id() {
+        let j1 = compute_election_jitter(1, 1500, 3000);
+        let j2 = compute_election_jitter(2, 1500, 3000);
+        let j3 = compute_election_jitter(3, 1500, 3000);
+
+        let has_different = j1 != j2 || j2 != j3 || j1 != j3;
+        assert!(has_different, "jitter should differ: [{}, {}, {}]", j1, j2, j3);
+    }
+
+    /// Jitter must not exceed 1/3 of the timeout range.
+    #[test]
+    fn test_election_jitter_bounded() {
+        let range = 1500u64; // default: 3000 - 1500
+        let jitter = compute_election_jitter(99999, 1500, 3000);
+        assert!(jitter <= range / 3, "jitter {} exceeds 1/3 of range {}", jitter, range);
+    }
+
+    /// Zero-range election timeout must produce zero jitter.
+    #[test]
+    fn test_election_jitter_zero_range() {
+        assert_eq!(compute_election_jitter(5, 2000, 2001), 0);
+        assert_eq!(compute_election_jitter(5, 2000, 2000), 0);
+    }
 }
