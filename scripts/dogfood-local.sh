@@ -468,7 +468,7 @@ import json, sys, re, os
 raw = sys.stdin.read()
 for m in re.finditer(r'[\[{]', raw):
     try:
-        d = json.loads(raw[m.start():])
+        d, _ = json.JSONDecoder().raw_decode(raw, m.start())
     except (json.JSONDecodeError, ValueError):
         continue
     for stage in d.get('stages', []):
@@ -541,7 +541,7 @@ import json, sys, re
 raw = sys.stdin.read()
 for m in re.finditer(r'[\[{]', raw):
     try:
-        d = json.loads(raw[m.start():])
+        d, _ = json.JSONDecoder().raw_decode(raw, m.start())
     except (json.JSONDecodeError, ValueError):
         continue
     icons = {'success': '✅', 'failed': '❌', 'cancelled': '⏹️', 'running': '🔄', 'pending': '⏳'}
@@ -608,7 +608,7 @@ import json, sys, re
 raw = sys.stdin.read()
 for m in re.finditer(r'[\[{]', raw):
     try:
-        d = json.loads(raw[m.start():])
+        d, _ = json.JSONDecoder().raw_decode(raw, m.start())
     except (json.JSONDecodeError, ValueError):
         continue
     for stage in d.get('stages', []):
@@ -639,7 +639,7 @@ import json, sys, re
 raw = sys.stdin.read()
 for m in re.finditer(r'[\[{]', raw):
     try:
-        d = json.loads(raw[m.start():])
+        d, _ = json.JSONDecoder().raw_decode(raw, m.start())
     except (json.JSONDecodeError, ValueError):
         continue
     try:
@@ -676,7 +676,7 @@ import json, sys, re
 raw = sys.stdin.read()
 for m in re.finditer(r'[\[{]', raw):
     try:
-        d = json.loads(raw[m.start():])
+        d, _ = json.JSONDecoder().raw_decode(raw, m.start())
     except (json.JSONDecodeError, ValueError):
         continue
     try:
@@ -727,7 +727,7 @@ import json, sys, re
 raw = sys.stdin.read()
 for m in re.finditer(r'[\[{]', raw):
     try:
-        d = json.loads(raw[m.start():])
+        d, _ = json.JSONDecoder().raw_decode(raw, m.start())
     except (json.JSONDecodeError, ValueError):
         continue
     try:
@@ -848,7 +848,7 @@ import json, sys, re
 raw = sys.stdin.read()
 for m in re.finditer(r'[\[{]', raw):
     try:
-        d = json.loads(raw[m.start():])
+        d, _ = json.JSONDecoder().raw_decode(raw, m.start())
     except (json.JSONDecodeError, ValueError):
         continue
     for stage in d.get('stages', []):
@@ -876,7 +876,7 @@ import json, sys, re
 raw = sys.stdin.read()
 for m in re.finditer(r'[\[{]', raw):
     try:
-        d = json.loads(raw[m.start():])
+        d, _ = json.JSONDecoder().raw_decode(raw, m.start())
     except (json.JSONDecodeError, ValueError):
         continue
     try:
