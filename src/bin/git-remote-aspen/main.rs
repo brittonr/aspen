@@ -1474,7 +1474,8 @@ fn init_tracing() {
     // - netlink_packet_route: related netlink attribute size mismatches
     // - netlink_packet_core: related netlink core warnings
     // - quinn_udp: IPv6 unreachable errors when IPv6 is not available
-    const NOISY_CRATES: &str = ",netlink_packet_route=error,quinn_udp=error,netlink_packet_core=error,portmapper=error";
+    const NOISY_CRATES: &str =
+        ",netlink_packet_route=error,quinn_udp=error,netlink_packet_core=error,portmapper=error,noq_proto=error";
 
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(format!("warn{NOISY_CRATES}")));
     tracing_subscriber::fmt()
