@@ -27,7 +27,7 @@ use aspen_proxy::StaticForwardProxy;
 use clap::Args;
 use clap::Subcommand;
 use iroh::Endpoint;
-use iroh::discovery::static_provider::StaticProvider;
+use iroh::address_lookup::memory::MemoryLookup;
 use tracing::debug;
 use tracing::info;
 
@@ -108,15 +108,14 @@ impl ProxyCommand {
 
         // Create a StaticProvider with the remote node's address so the
         // connection pool inside DownstreamProxy can resolve EndpointId → address.
-        let discovery = StaticProvider::new();
-        discovery.add_endpoint_info(bootstrap_addr);
+        let static_lookup = MemoryLookup::from_endpoint_info([bootstrap_addr]);
 
         // Create a lightweight iroh endpoint for the proxy client.
         // No ALPNs needed — DownstreamProxy uses HTTP_PROXY_ALPN internally.
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
         let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
-            .discovery(discovery)
+            .address_lookup(static_lookup)
             .bind()
             .await
             .context("failed to create iroh endpoint")?;
