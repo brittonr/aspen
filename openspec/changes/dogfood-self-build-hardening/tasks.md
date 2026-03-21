@@ -17,15 +17,15 @@
 
 ## 3. NixOS VM integration test
 
-- [ ] 3.1 Create `nix/tests/ci-dogfood-full-loop.nix` VM test that boots a single node with CI + Forge + snix features
-- [ ] 3.2 Pre-populate VM nix store with crane cargo artifacts and ciSrc so inner `nix build` doesn't need network
-- [ ] 3.3 Push workspace source to Forge, enable CI watch, and wait for auto-triggered pipeline
-- [ ] 3.4 Verify CI pipeline completes all 3 stages (check, build, test) with status "success"
-- [ ] 3.5 Extract output path from build-node job result and run the CI-built `aspen-node --version`
-- [ ] 3.6 Wire test into flake.nix as `checks.x86_64-linux.ci-dogfood-full-loop-test`
+- [x] 3.1 Create `nix/tests/ci-dogfood-full-loop.nix` VM test that boots a single node with CI + Forge + snix features
+- [x] 3.2 Pre-populate VM nix store with crane cargo artifacts and ciSrc so inner `nix build` doesn't need network
+- [x] 3.3 Push workspace source to Forge, enable CI watch, and wait for auto-triggered pipeline
+- [x] 3.4 Verify CI pipeline completes all 3 stages (check, build, test) with status "success"
+- [x] 3.5 Extract output path from build-and-test job result and run the CI-built `aspen-constants-check --version`
+- [x] 3.6 Wire test into flake.nix as `checks.x86_64-linux.ci-dogfood-full-loop-test`
 
 ## 4. Validation
 
 - [x] 4.1 Run `nix run .#dogfood-local -- full-loop` from clean state and confirm it passes
-- [ ] 4.2 Build the VM test: `nix build .#checks.x86_64-linux.ci-dogfood-full-loop-test --impure --option sandbox false`
+- [x] 4.2 Build the VM test: `nix build .#checks.x86_64-linux.ci-dogfood-full-loop-test --option sandbox false`
 - [ ] 4.3 Run existing dogfood tests to confirm no regressions: `ci-dogfood-test`, `ci-dogfood-self-build-test`
