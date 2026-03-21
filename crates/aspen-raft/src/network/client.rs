@@ -25,6 +25,7 @@ use openraft::type_config::alias::VoteOf;
 use tokio::io::AsyncReadExt;
 use tokio::select;
 use tokio::sync::RwLock;
+use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -299,7 +300,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         let response_bytes =
             extract_sharded_response(response_buf, self.shard_id).map_err(|e| anyhow::anyhow!("{}", e))?;
 
-        info!(
+        debug!(
             response_size = response_bytes.len(),
             shard_id = ?self.shard_id,
             "received RPC response bytes"

@@ -43,6 +43,7 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::instrument;
@@ -263,10 +264,10 @@ async fn handle_rpc_stream(
 async fn handle_rpc_read_request(recv: &mut iroh::endpoint::RecvStream) -> Result<(RaftRpcProtocol, u64)> {
     let buffer = recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.context("failed to read RPC message")?;
     let server_recv_ms = current_time_ms();
-    info!(buffer_size = buffer.len(), "read RPC message bytes");
+    debug!(buffer_size = buffer.len(), "read RPC message bytes");
 
     let request: RaftRpcProtocol = postcard::from_bytes(&buffer).context("failed to deserialize RPC request")?;
-    info!(request_type = ?request, "received and deserialized RPC request");
+    debug!(request_type = ?request, "received and deserialized RPC request");
 
     Ok((request, server_recv_ms))
 }

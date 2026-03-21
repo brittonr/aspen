@@ -374,7 +374,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             }
         }
 
-        info!(
+        debug!(
             target_node = %target,
             endpoint_id = %node.iroh_addr.id,
             "creating network client with address from Raft membership"
