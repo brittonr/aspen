@@ -188,14 +188,15 @@ in
           node1.log(f"Tarball content narHash: {nar_hash}")
           assert nar_hash.startswith("sha256-"), f"bad narHash: {nar_hash}"
 
-          # Start HTTP server to serve the tarball.
+          # Start HTTP server to serve the tarball via systemd-run
+          # (node1.succeed with & can hang in NixOS test driver).
           node1.succeed(
-              "cd /root && "
-              "python3 -m http.server 8888 --bind 127.0.0.1 &"
+              "systemd-run --unit=http-tarball "
+              "python3 -m http.server 8888 --bind 127.0.0.1 --directory /root"
           )
           node1.wait_until_succeeds(
               "curl -sf http://127.0.0.1:8888/tarball-input.tar.gz -o /dev/null",
-              timeout=10,
+              timeout=30,
           )
           node1.log("HTTP server serving tarball at :8888")
 
