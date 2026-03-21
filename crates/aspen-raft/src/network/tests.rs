@@ -576,6 +576,155 @@ fn test_empty_postcard_deserialization_fails() {
 }
 
 // =========================================================================
+// Gossip Address Override Tests
+// =========================================================================
+
+/// Test: gossip-discovered address with same endpoint ID overrides Raft membership.
+#[tokio::test]
+async fn test_gossip_addr_overrides_raft_membership_when_addrs_differ() {
+    use std::collections::BTreeSet;
+    use std::net::SocketAddr;
+
+    use iroh::SecretKey;
+
+    let secret = SecretKey::generate(&mut rand::rng());
+    let endpoint_id = secret.public();
+
+    // Raft membership has old address (port 12345)
+    let old_addr: SocketAddr = "192.168.1.2:12345".parse().unwrap();
+    let raft_addr = iroh::EndpointAddr {
+        id: endpoint_id,
+        addrs: BTreeSet::from([iroh::TransportAddr::Ip(old_addr)]),
+    };
+
+    // Gossip discovered new address (port 45678) — same endpoint ID
+    let new_addr: SocketAddr = "192.168.1.2:45678".parse().unwrap();
+    let gossip_addr = iroh::EndpointAddr {
+        id: endpoint_id,
+        addrs: BTreeSet::from([iroh::TransportAddr::Ip(new_addr)]),
+    };
+
+    let target = NodeId::from(2);
+    let peer_addrs: Arc<RwLock<HashMap<NodeId, iroh::EndpointAddr>>> = Arc::new(RwLock::new(HashMap::new()));
+
+    // Populate gossip cache
+    {
+        let mut peers = peer_addrs.write().await;
+        peers.insert(target, gossip_addr.clone());
+    }
+
+    // Simulate the address resolution logic from new_client()
+    let resolved = {
+        let peers = peer_addrs.read().await;
+        if let Some(cached) = peers.get(&target) {
+            if cached.id == raft_addr.id && cached.addrs != raft_addr.addrs {
+                cached.clone() // Gossip override
+            } else {
+                raft_addr.clone()
+            }
+        } else {
+            raft_addr.clone()
+        }
+    };
+
+    // Should use the gossip address (new port)
+    assert_eq!(resolved.id, endpoint_id);
+    assert!(resolved.addrs.contains(&iroh::TransportAddr::Ip(new_addr)));
+    assert!(!resolved.addrs.contains(&iroh::TransportAddr::Ip(old_addr)));
+}
+
+/// Test: gossip cache with different endpoint ID falls back to Raft membership.
+#[tokio::test]
+async fn test_gossip_addr_mismatch_endpoint_id_falls_back() {
+    use std::collections::BTreeSet;
+    use std::net::SocketAddr;
+
+    use iroh::SecretKey;
+
+    let secret1 = SecretKey::generate(&mut rand::rng());
+    let secret2 = SecretKey::generate(&mut rand::rng());
+    let raft_endpoint_id = secret1.public();
+    let gossip_endpoint_id = secret2.public();
+
+    let old_addr: SocketAddr = "192.168.1.2:12345".parse().unwrap();
+    let raft_addr = iroh::EndpointAddr {
+        id: raft_endpoint_id,
+        addrs: BTreeSet::from([iroh::TransportAddr::Ip(old_addr)]),
+    };
+
+    // Gossip has a different endpoint ID (wrong node)
+    let other_addr: SocketAddr = "192.168.1.99:9999".parse().unwrap();
+    let gossip_addr = iroh::EndpointAddr {
+        id: gossip_endpoint_id,
+        addrs: BTreeSet::from([iroh::TransportAddr::Ip(other_addr)]),
+    };
+
+    let target = NodeId::from(2);
+    let peer_addrs: Arc<RwLock<HashMap<NodeId, iroh::EndpointAddr>>> = Arc::new(RwLock::new(HashMap::new()));
+
+    {
+        let mut peers = peer_addrs.write().await;
+        peers.insert(target, gossip_addr);
+    }
+
+    // Simulate the address resolution logic from new_client()
+    let resolved = {
+        let peers = peer_addrs.read().await;
+        if let Some(cached) = peers.get(&target) {
+            if cached.id == raft_addr.id && cached.addrs != raft_addr.addrs {
+                cached.clone()
+            } else {
+                raft_addr.clone() // Endpoint ID mismatch → fallback
+            }
+        } else {
+            raft_addr.clone()
+        }
+    };
+
+    // Should fall back to Raft membership address
+    assert_eq!(resolved.id, raft_endpoint_id);
+    assert!(resolved.addrs.contains(&iroh::TransportAddr::Ip(old_addr)));
+}
+
+/// Test: no gossip entry uses Raft membership address.
+#[tokio::test]
+async fn test_no_gossip_entry_uses_raft_membership() {
+    use std::collections::BTreeSet;
+    use std::net::SocketAddr;
+
+    use iroh::SecretKey;
+
+    let secret = SecretKey::generate(&mut rand::rng());
+    let endpoint_id = secret.public();
+
+    let addr: SocketAddr = "192.168.1.2:12345".parse().unwrap();
+    let raft_addr = iroh::EndpointAddr {
+        id: endpoint_id,
+        addrs: BTreeSet::from([iroh::TransportAddr::Ip(addr)]),
+    };
+
+    let target = NodeId::from(2);
+    let peer_addrs: Arc<RwLock<HashMap<NodeId, iroh::EndpointAddr>>> = Arc::new(RwLock::new(HashMap::new()));
+    // Empty cache — no gossip entry
+
+    let resolved = {
+        let peers = peer_addrs.read().await;
+        if let Some(cached) = peers.get(&target) {
+            if cached.id == raft_addr.id && cached.addrs != raft_addr.addrs {
+                cached.clone()
+            } else {
+                raft_addr.clone()
+            }
+        } else {
+            raft_addr.clone() // No gossip entry
+        }
+    };
+
+    assert_eq!(resolved.id, endpoint_id);
+    assert!(resolved.addrs.contains(&iroh::TransportAddr::Ip(addr)));
+}
+
+// =========================================================================
 // Timeout Duration Tests
 // =========================================================================
 

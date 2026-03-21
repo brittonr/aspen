@@ -87,6 +87,12 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     /// Tiger Style: Prevents unbounded task spawning by sending updates
     /// through a bounded channel instead of spawning per-failure tasks.
     failure_update_tx: tokio::sync::mpsc::Sender<FailureDetectorUpdate>,
+    /// Shared gossip-populated peer address cache for address refresh.
+    ///
+    /// After a peer restarts with a new port, gossip announcements update
+    /// this cache. On RPC failure, we check for a fresher address here
+    /// before retrying with the stale Raft membership address.
+    gossip_addrs: Option<Arc<RwLock<std::collections::HashMap<NodeId, iroh::EndpointAddr>>>>,
 }
 
 impl<T> IrpcRaftNetwork<T>
@@ -111,7 +117,20 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             drift_detector,
             shard_id,
             failure_update_tx,
+            gossip_addrs: None,
         }
+    }
+
+    /// Attach a shared gossip address cache for dynamic address refresh.
+    ///
+    /// When set, `send_rpc` will check this cache for fresher addresses
+    /// after connection failures — enabling reconnection after peer restarts.
+    pub(crate) fn with_gossip_addrs(
+        mut self,
+        addrs: Arc<RwLock<std::collections::HashMap<NodeId, iroh::EndpointAddr>>>,
+    ) -> Self {
+        self.gossip_addrs = Some(addrs);
+        self
     }
 
     /// Send an RPC request to the peer and wait for response.
@@ -129,8 +148,22 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     async fn send_rpc(&self, request: RaftRpcProtocol) -> anyhow::Result<RaftRpcResponse> {
         let peer_addr = self.peer_addr.as_ref().context("peer address not found in peer map")?;
 
-        // Acquire connection and stream
-        let mut stream_handle = self.send_rpc_acquire_stream(peer_addr).await?;
+        // Acquire connection and stream. On failure, check gossip cache for
+        // a fresher address (peer may have restarted with a new port).
+        let mut stream_handle = match self.send_rpc_acquire_stream(peer_addr).await {
+            Ok(sh) => sh,
+            Err(first_err) => {
+                if let Some(refreshed) = self.try_refresh_addr_from_gossip(peer_addr).await {
+                    info!(
+                        target_node = %self.target,
+                        "retrying RPC with gossip-refreshed address"
+                    );
+                    self.send_rpc_acquire_stream(&refreshed).await?
+                } else {
+                    return Err(first_err);
+                }
+            }
+        };
 
         // Record client send time (t1) for clock drift detection
         let client_send_ms = current_time_ms();
@@ -146,6 +179,21 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 
         // Process response and update failure/drift detectors
         self.send_rpc_process_response(&response_buf, client_send_ms, client_recv_ms).await
+    }
+
+    /// Check gossip cache for a fresher address after connection failure.
+    ///
+    /// Returns `Some(addr)` if the gossip cache has an address with the same
+    /// endpoint ID but different socket addresses — indicating the peer restarted.
+    async fn try_refresh_addr_from_gossip(&self, current_addr: &iroh::EndpointAddr) -> Option<iroh::EndpointAddr> {
+        let cache = self.gossip_addrs.as_ref()?;
+        let peers = cache.read().await;
+        let gossip_addr = peers.get(&self.target)?;
+        if gossip_addr.id == current_addr.id && gossip_addr.addrs != current_addr.addrs {
+            Some(gossip_addr.clone())
+        } else {
+            None
+        }
     }
 
     /// Acquire connection and stream for RPC.

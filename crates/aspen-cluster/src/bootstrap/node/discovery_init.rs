@@ -91,6 +91,21 @@ pub(super) async fn setup_gossip_discovery(
                 topic_id = %hex::encode(gossip_topic_id.as_bytes()),
                 "gossip discovery started successfully"
             );
+
+            // Eager announcement: broadcast current address immediately so
+            // peers learn our new socket address before the periodic timer.
+            // Critical after restart — other nodes have stale addresses from
+            // Raft membership and need the gossip update to reconnect.
+            if let Err(e) = discovery.broadcast_announcement().await {
+                warn!(
+                    node_id = config.node_id,
+                    error = %e,
+                    "failed to send eager gossip announcement (peers will discover via periodic timer)"
+                );
+            } else {
+                info!(node_id = config.node_id, "broadcast eager gossip announcement with current address");
+            }
+
             Some(discovery)
         }
         Err(err) => {

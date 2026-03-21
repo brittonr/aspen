@@ -268,6 +268,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             Some(shard_id),
             self.failure_update_tx.clone(),
         )
+        .with_gossip_addrs(Arc::clone(&self.peer_addrs))
     }
 }
 
@@ -278,13 +279,48 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 
     #[tracing::instrument(level = "debug", skip_all, fields(target = %target))]
     async fn new_client(&mut self, target: NodeId, node: &RaftMemberInfo) -> Self::Network {
-        // Primary source: Get address from RaftMemberInfo (stored in Raft membership)
-        let peer_addr = Some(node.iroh_addr.clone());
+        // Resolve the best address: gossip-discovered addresses may be fresher
+        // than Raft membership after a node restart (new port, same endpoint ID).
+        let peer_addr = {
+            let peers = self.peer_addrs.read().await;
+            if let Some(gossip_addr) = peers.get(&target) {
+                if gossip_addr.id == node.iroh_addr.id {
+                    // Same endpoint ID — this is the same node. Use gossip address
+                    // if it has different socket addresses (fresher after restart).
+                    if gossip_addr.addrs != node.iroh_addr.addrs {
+                        info!(
+                            target_node = %target,
+                            endpoint_id = %gossip_addr.id,
+                            gossip_addrs = gossip_addr.addrs.len(),
+                            raft_addrs = node.iroh_addr.addrs.len(),
+                            "using gossip-discovered address (fresher than Raft membership)"
+                        );
+                        Some(gossip_addr.clone())
+                    } else {
+                        Some(node.iroh_addr.clone())
+                    }
+                } else {
+                    // Endpoint ID mismatch — gossip cache has a different node's
+                    // address under this node ID. Fall back to Raft membership.
+                    warn!(
+                        target_node = %target,
+                        raft_endpoint_id = %node.iroh_addr.id,
+                        gossip_endpoint_id = %gossip_addr.id,
+                        "gossip cache endpoint ID mismatch, using Raft membership address"
+                    );
+                    Some(node.iroh_addr.clone())
+                }
+            } else {
+                // No gossip entry — use Raft membership address.
+                Some(node.iroh_addr.clone())
+            }
+        };
 
-        // Update the fallback cache with this address for future reference
+        // Update the fallback cache with Raft membership address (only if no
+        // gossip entry exists — don't overwrite fresher gossip data).
         {
             let mut peers = self.peer_addrs.write().await;
-            if peers.len() < MAX_PEERS as usize || peers.contains_key(&target) {
+            if !peers.contains_key(&target) && (peers.len() < MAX_PEERS as usize) {
                 peers.insert(target, node.iroh_addr.clone());
             }
         }
@@ -304,6 +340,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             None, // Non-sharded mode for backward compatibility
             self.failure_update_tx.clone(),
         )
+        .with_gossip_addrs(Arc::clone(&self.peer_addrs))
     }
 }
 
