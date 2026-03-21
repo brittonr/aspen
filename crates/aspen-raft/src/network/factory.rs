@@ -1,6 +1,7 @@
 //! Network factory for creating per-peer Raft network clients.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use aspen_core::NetworkFactory as CoreNetworkFactory;
@@ -8,6 +9,7 @@ use aspen_core::NetworkTransport;
 use aspen_sharding::ShardId;
 use openraft::network::RaftNetworkFactory;
 use tokio::sync::RwLock;
+use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
@@ -67,6 +69,12 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     /// Purely observational - does NOT affect Raft consensus.
     /// Used to detect NTP misconfiguration for operational health.
     drift_detector: Arc<RwLock<ClockDriftDetector>>,
+    /// Path to persist peer addresses across restarts.
+    ///
+    /// When set, gossip-discovered addresses are saved to this file so
+    /// restarted nodes can reach peers at their current addresses without
+    /// waiting for gossip rediscovery.
+    peer_cache_path: Option<PathBuf>,
     /// Bounded channel for failure detector updates.
     ///
     /// Tiger Style: Prevents unbounded task spawning by batching updates
@@ -86,6 +94,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             peer_addrs: Arc::clone(&self.peer_addrs),
             failure_detector: Arc::clone(&self.failure_detector),
             drift_detector: Arc::clone(&self.drift_detector),
+            peer_cache_path: self.peer_cache_path.clone(),
             failure_update_tx: self.failure_update_tx.clone(),
         }
     }
@@ -154,8 +163,40 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             peer_addrs: Arc::new(RwLock::new(peer_addrs)),
             failure_detector,
             drift_detector,
+            peer_cache_path: None,
             failure_update_tx,
         }
+    }
+
+    /// Enable persistent peer address cache.
+    ///
+    /// When set, peer addresses are saved to `<data_dir>/peer_addrs.json` on
+    /// every gossip update, and loaded on startup. This lets restarted nodes
+    /// reach peers at their current addresses immediately.
+    pub fn with_peer_cache_dir(mut self, data_dir: &std::path::Path) -> Self {
+        let path = data_dir.join("peer_addrs.json");
+        // Load existing cache
+        if let Ok(contents) = std::fs::read_to_string(&path) {
+            match serde_json::from_str::<HashMap<u64, iroh::EndpointAddr>>(&contents) {
+                Ok(cached) => {
+                    let rt = tokio::runtime::Handle::current();
+                    rt.block_on(async {
+                        let mut peers = self.peer_addrs.write().await;
+                        for (node_id, addr) in cached {
+                            if peers.len() < MAX_PEERS as usize || peers.contains_key(&node_id.into()) {
+                                peers.insert(node_id.into(), addr);
+                            }
+                        }
+                    });
+                    info!(path = %path.display(), "loaded peer address cache");
+                }
+                Err(e) => {
+                    debug!(path = %path.display(), error = %e, "failed to parse peer address cache, starting fresh");
+                }
+            }
+        }
+        self.peer_cache_path = Some(path);
+        self
     }
 
     /// Get a reference to the failure detector for metrics/monitoring.
@@ -189,6 +230,14 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             return;
         }
         peers.insert(node_id, addr);
+
+        // Persist to disk so restarted nodes have fresh addresses.
+        if let Some(ref path) = self.peer_cache_path {
+            let serializable: HashMap<u64, &iroh::EndpointAddr> = peers.iter().map(|(k, v)| (k.0, v)).collect();
+            if let Ok(json) = serde_json::to_string(&serializable) {
+                let _ = std::fs::write(path, json);
+            }
+        }
     }
 
     /// Update peer addresses in bulk.

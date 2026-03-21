@@ -424,8 +424,13 @@ async fn init_networking(config: &NodeConfig) -> Result<NetworkingResult> {
         info!("Raft authentication enabled - using Iroh-native NodeId verification and RAFT_AUTH_ALPN");
     }
 
-    let network_factory =
-        Arc::new(IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs, config.iroh.enable_raft_auth));
+    let mut factory = IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs, config.iroh.enable_raft_auth);
+    // Persist gossip-discovered peer addresses to survive restarts.
+    // On next startup, the cache provides fresh addresses before gossip kicks in.
+    if let Some(ref data_dir) = config.data_dir {
+        factory = factory.with_peer_cache_dir(data_dir);
+    }
+    let network_factory = Arc::new(factory);
 
     Ok(NetworkingResult {
         iroh_manager,

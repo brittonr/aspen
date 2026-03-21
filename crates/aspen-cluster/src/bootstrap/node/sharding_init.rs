@@ -639,8 +639,11 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
         info!("Raft authentication enabled - using Iroh-native NodeId verification and RAFT_AUTH_ALPN");
     }
 
-    let network_factory =
-        Arc::new(IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs, config.iroh.enable_raft_auth));
+    let mut factory = IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs, config.iroh.enable_raft_auth);
+    if let Some(ref data_dir) = config.data_dir {
+        factory = factory.with_peer_cache_dir(data_dir);
+    }
+    let network_factory = Arc::new(factory);
 
     let gossip_topic_id = bootstrap_base_node_derive_topic_id(config);
     let gossip_discovery =
