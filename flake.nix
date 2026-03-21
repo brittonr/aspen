@@ -660,6 +660,8 @@
         # From $out/aspen-X/crates/Y/Cargo.toml, ../../../aspen-Z/ resolves naturally.
         # Full raw source — includes crates/ and openraft/ (excluded from rawSrc
         # to keep lightweight stub builds fast).
+        # Rust workspace source — excludes nix/ so test file edits don't
+        # invalidate binary derivation caches.
         fullRawSrc = lib.fileset.toSource {
           root = ./.;
           fileset = lib.fileset.unions [
@@ -673,7 +675,6 @@
             ./rust-toolchain.toml
             ./flake.nix
             ./flake.lock
-            ./nix
             ./src
             ./crates
             ./openraft

@@ -12,6 +12,6 @@
 
 ## 3. Integration Verification
 
-- [ ] 3.1 Run the multi-node-dogfood VM test (`nix build .#checks.x86_64-linux.multi-node-dogfood-test`). The rolling restart subtests should now pass — restarted nodes rejoin within 30s.
+- [ ] 3.1 Run the multi-node-dogfood VM test (`nix build .#checks.x86_64-linux.multi-node-dogfood-test`). The rolling restart subtests should now pass — restarted nodes rejoin within 30s. (RUNNING: task 111)
 - [ ] 3.2 Fix any issues discovered during the VM test run.
 - [ ] 3.3 Mark multi-node-dogfood task 4.4 complete if the full test passes end-to-end.
