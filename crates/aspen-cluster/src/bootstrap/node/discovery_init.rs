@@ -14,6 +14,7 @@ use super::IrpcRaftNetworkFactory;
 use crate::IrohEndpointManager;
 use crate::config::NodeConfig;
 use crate::gossip_discovery::GossipPeerDiscovery;
+use crate::gossip_discovery::MembershipRefreshSlot;
 use crate::gossip_discovery::spawn_gossip_peer_discovery;
 use crate::ticket::AspenClusterTicket;
 
@@ -61,6 +62,7 @@ pub(super) async fn setup_gossip_discovery(
     gossip_topic_id: TopicId,
     iroh_manager: &Arc<IrohEndpointManager>,
     network_factory: &Arc<IrpcRaftNetworkFactory>,
+    membership_refresh: Option<MembershipRefreshSlot>,
 ) -> Option<GossipPeerDiscovery> {
     if !config.iroh.enable_gossip {
         info!(
@@ -82,6 +84,7 @@ pub(super) async fn setup_gossip_discovery(
         config.node_id.into(),
         iroh_manager,
         Some(network_factory.clone()),
+        membership_refresh,
     )
     .await
     {

@@ -172,6 +172,23 @@ pub trait PeerDiscovery: Send + Sync {
     fn is_running(&self) -> bool;
 }
 
+/// Updates Raft membership when a peer's address changes.
+///
+/// Gossip discovers new addresses after a node restart (same endpoint ID,
+/// different socket addresses). This trait propagates that information into
+/// the authoritative Raft membership state.
+///
+/// Only the leader performs the update — followers return `Ok(false)`.
+/// Implementations should debounce to avoid spamming the Raft log.
+#[async_trait]
+pub trait MembershipAddressUpdater: Send + Sync {
+    /// Update a member's address in the Raft membership.
+    ///
+    /// Returns `Ok(true)` if the membership was updated, `Ok(false)` if
+    /// skipped (not leader, same address, debounced, or node not in membership).
+    async fn update_member_address(&self, node_id: u64, new_endpoint_addr: &[u8]) -> anyhow::Result<bool>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -327,13 +327,18 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     // Phase 2: Networking
     let net = init_networking(&config).await?;
 
-    // Phase 3: Gossip discovery
+    // Phase 3: Gossip discovery (with deferred membership refresh slot)
+    let membership_refresh_slot = crate::gossip_discovery::new_membership_refresh_slot();
     let (gossip_topic_id, gossip_discovery) =
-        init_gossip_discovery(&config, &net.iroh_manager, &net.network_factory).await;
+        init_gossip_discovery(&config, &net.iroh_manager, &net.network_factory, membership_refresh_slot.clone()).await;
 
     // Phase 4: Consensus (Raft + supervisor + health)
     let (raft_config, broadcasts) = storage_init::create_raft_config_and_broadcast(&config);
     let consensus = init_consensus(&config, raft_config, &net.network_factory, &data_dir, &broadcasts).await?;
+
+    // Now that Raft is initialized, populate the membership refresh slot
+    // so gossip-discovered address changes propagate into Raft membership.
+    crate::gossip_discovery::set_membership_refresh(&membership_refresh_slot, consensus.raft_node.clone()).await;
 
     // Phase 5: Event broadcast channels for hook integration
     let event_channels = create_event_channels(&config);
@@ -442,14 +447,24 @@ async fn init_networking(config: &NodeConfig) -> Result<NetworkingResult> {
 ///
 /// Derives the gossip topic ID from the cluster ticket or cookie, then
 /// spawns the gossip peer discovery service if enabled.
+///
+/// The `membership_refresh` slot is initially empty — it gets populated
+/// after Phase 4 (Raft init) via `set_membership_refresh`.
 async fn init_gossip_discovery(
     config: &NodeConfig,
     iroh_manager: &Arc<IrohEndpointManager>,
     network_factory: &Arc<IrpcRaftNetworkFactory>,
+    membership_refresh: crate::gossip_discovery::MembershipRefreshSlot,
 ) -> (TopicId, Option<crate::gossip_discovery::GossipPeerDiscovery>) {
     let gossip_topic_id = discovery_init::derive_gossip_topic_from_config(config);
-    let gossip_discovery =
-        discovery_init::setup_gossip_discovery(config, gossip_topic_id, iroh_manager, network_factory).await;
+    let gossip_discovery = discovery_init::setup_gossip_discovery(
+        config,
+        gossip_topic_id,
+        iroh_manager,
+        network_factory,
+        Some(membership_refresh),
+    )
+    .await;
     (gossip_topic_id, gossip_discovery)
 }
 

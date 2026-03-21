@@ -30,6 +30,7 @@ mod cluster_controller;
 mod conversions;
 mod health;
 mod kv_store;
+mod membership_refresh;
 #[cfg(feature = "sql")]
 mod sql;
 #[cfg(all(test, feature = "testing"))]
@@ -49,6 +50,7 @@ use aspen_cluster_types::ControlPlaneError;
 use aspen_kv_types::KeyValueStoreError;
 pub use health::HealthStatus;
 pub use health::RaftNodeHealth;
+pub use membership_refresh::AddressUpdateDebouncer;
 use openraft::Raft;
 use tokio::sync::Semaphore;
 

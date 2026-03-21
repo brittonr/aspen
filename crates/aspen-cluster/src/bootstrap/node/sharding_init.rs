@@ -566,7 +566,8 @@ async fn bootstrap_base_node_setup_gossip(
         "starting gossip discovery"
     );
 
-    match spawn_gossip_peer_discovery(gossip_topic_id, config.node_id.into(), iroh_manager, Some(network_factory)).await
+    match spawn_gossip_peer_discovery(gossip_topic_id, config.node_id.into(), iroh_manager, Some(network_factory), None)
+        .await
     {
         Ok(discovery) => {
             info!(

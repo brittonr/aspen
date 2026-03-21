@@ -10,8 +10,11 @@ use anyhow::Result;
 use aspen_core::DiscoveredPeer;
 use aspen_core::PeerDiscoveredCallback;
 use aspen_core::PeerDiscovery;
+use aspen_raft::node::AddressUpdateDebouncer;
+use aspen_raft::node::RaftNode;
 use aspen_raft::types::NodeId;
 use iroh_gossip::proto::TopicId;
+use tokio::sync::RwLock;
 
 use super::IrohEndpointManager;
 // Use the type alias from cluster mod.rs which provides the concrete type
@@ -25,6 +28,36 @@ pub use crate::gossip::GossipPeerDiscovery;
 #[cfg(feature = "blob")]
 pub use crate::gossip::broadcast_blob_announcement;
 
+/// Deferred slot for the RaftNode, filled after Raft initialization.
+///
+/// Gossip starts at Phase 3 of bootstrap, Raft starts at Phase 4.
+/// This slot lets the gossip callback trigger membership address updates
+/// once Raft is available.
+pub type MembershipRefreshSlot = Arc<RwLock<Option<MembershipRefreshState>>>;
+
+/// State needed for membership address refresh in the gossip callback.
+pub struct MembershipRefreshState {
+    pub raft_node: Arc<RaftNode>,
+    pub debouncer: Arc<AddressUpdateDebouncer>,
+}
+
+/// Create an empty membership refresh slot.
+///
+/// Call `set_membership_refresh` after Raft initialization to enable
+/// automatic membership address updates from gossip.
+pub fn new_membership_refresh_slot() -> MembershipRefreshSlot {
+    Arc::new(RwLock::new(None))
+}
+
+/// Fill the membership refresh slot after Raft initialization.
+pub async fn set_membership_refresh(slot: &MembershipRefreshSlot, raft_node: Arc<RaftNode>) {
+    *slot.write().await = Some(MembershipRefreshState {
+        raft_node,
+        debouncer: Arc::new(AddressUpdateDebouncer::new()),
+    });
+    tracing::info!("membership refresh slot populated — gossip will now update Raft membership addresses");
+}
+
 /// Compatibility wrapper: spawn gossip peer discovery tasks using IrohEndpointManager.
 ///
 /// Subscribes to the gossip topic and starts background tasks for
@@ -33,6 +66,9 @@ pub use crate::gossip::broadcast_blob_announcement;
 /// If `network_factory` is provided, discovered peers are automatically
 /// added to it for Raft networking.
 ///
+/// If `membership_refresh` is provided, discovered peers with changed
+/// addresses trigger Raft membership updates (leader-only, debounced).
+///
 /// This is a compatibility function that adapts the new standalone GossipPeerDiscovery
 /// to work with the existing IrohEndpointManager interface.
 pub async fn spawn_gossip_peer_discovery(
@@ -40,6 +76,7 @@ pub async fn spawn_gossip_peer_discovery(
     node_id: NodeId,
     iroh_manager: &IrohEndpointManager,
     network_factory: Option<Arc<IrpcRaftNetworkFactory>>,
+    membership_refresh: Option<MembershipRefreshSlot>,
 ) -> Result<GossipPeerDiscovery> {
     let gossip = iroh_manager.gossip().context("gossip not enabled on IrohEndpointManager")?;
 
@@ -51,14 +88,41 @@ pub async fn spawn_gossip_peer_discovery(
         iroh_manager.secret_key().clone(),
     );
 
-    // Convert network factory to callback if provided
+    // Convert network factory + membership refresh to callback if provided
     let callback = network_factory.map(|factory| {
         let callback: PeerDiscoveredCallback<iroh::EndpointAddr> =
             Box::new(move |peer: DiscoveredPeer<iroh::EndpointAddr>| {
                 let factory = Arc::clone(&factory);
+                let refresh_slot = membership_refresh.clone();
                 Box::pin(async move {
-                    factory.add_peer(peer.node_id, peer.address).await;
+                    // Update the network factory's gossip cache (existing behavior).
+                    factory.add_peer(peer.node_id, peer.address.clone()).await;
                     tracing::info!("added peer to network factory via callback: node_id={}", peer.node_id);
+
+                    // If the membership refresh slot is populated, trigger a Raft
+                    // membership update for changed addresses (leader-only, debounced).
+                    if let Some(ref slot) = refresh_slot {
+                        let guard = slot.read().await;
+                        if let Some(ref state) = *guard {
+                            match state
+                                .raft_node
+                                .try_update_member_address(&state.debouncer, peer.node_id, peer.address)
+                                .await
+                            {
+                                Ok(true) => {
+                                    tracing::info!("updated Raft membership address for node_id={}", peer.node_id);
+                                }
+                                Ok(false) => {} // Skipped (not leader, same addr, debounced, etc.)
+                                Err(e) => {
+                                    tracing::warn!(
+                                        node_id = %peer.node_id,
+                                        error = %e,
+                                        "failed to update Raft membership address"
+                                    );
+                                }
+                            }
+                        }
+                    }
                 })
             });
         callback

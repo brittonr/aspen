@@ -193,6 +193,7 @@ pub use transport::BlobAnnouncedInfo;
 pub use transport::DiscoveredPeer;
 pub use transport::DiscoveryHandle;
 pub use transport::IrohTransportExt;
+pub use transport::MembershipAddressUpdater;
 pub use transport::NetworkTransport;
 pub use transport::PeerDiscoveredCallback;
 pub use transport::PeerDiscovery;
