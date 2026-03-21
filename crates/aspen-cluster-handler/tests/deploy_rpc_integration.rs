@@ -232,7 +232,8 @@ async fn create_endpoint(seed: u64) -> Endpoint {
     Endpoint::builder(iroh::endpoint::presets::N0)
         .secret_key(secret_key)
         .alpns(vec![CLIENT_ALPN.to_vec()])
-        .bind_addr_v4("127.0.0.1:0".parse().unwrap())
+        .bind_addr("127.0.0.1:0".parse::<std::net::SocketAddrV4>().unwrap())
+        .expect("failed to bind loopback address")
         .bind()
         .await
         .expect("failed to bind endpoint")
