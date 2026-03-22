@@ -116,6 +116,11 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     }
 
     /// Attempt connection with retries and exponential backoff.
+    ///
+    /// On the final retry, falls back to connecting with just the endpoint ID
+    /// (no socket address hints). This lets iroh use mDNS or its internal
+    /// address book to find the peer — critical after a peer restarts on a
+    /// new port and the cached addresses are stale.
     async fn create_connection_with_retries(
         &self,
         node_id: NodeId,
@@ -128,8 +133,25 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         loop {
             attempts += 1;
 
+            // Alternate between cached addresses and endpoint-ID-only discovery.
+            // Attempt 1: use cached addresses (fast path if addresses are correct).
+            // Attempt 2+: use endpoint ID only so iroh tries mDNS and its internal
+            // address book — critical after a peer restarts on a new port.
+            let addr_to_use = if attempts > 1 {
+                let id_only = EndpointAddr::from(peer_addr.id);
+                info!(
+                    %node_id,
+                    attempt = attempts,
+                    endpoint_id = %peer_addr.id,
+                    "retrying with endpoint ID only (mDNS/address-book discovery)"
+                );
+                id_only
+            } else {
+                peer_addr.clone()
+            };
+
             let connect_result =
-                tokio::time::timeout(IROH_CONNECT_TIMEOUT, self.transport.endpoint().connect(peer_addr.clone(), alpn))
+                tokio::time::timeout(IROH_CONNECT_TIMEOUT, self.transport.endpoint().connect(addr_to_use, alpn))
                     .await
                     .context("timeout connecting to peer")?;
 
