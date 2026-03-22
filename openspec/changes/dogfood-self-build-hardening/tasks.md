@@ -28,4 +28,4 @@
 
 - [x] 4.1 Run `nix run .#dogfood-local -- full-loop` from clean state and confirm it passes
 - [x] 4.2 Build the VM test: `nix build .#checks.x86_64-linux.ci-dogfood-full-loop-test --option sandbox false`
-- [ ] 4.3 Run existing dogfood tests to confirm no regressions: `ci-dogfood-test`, `ci-dogfood-self-build-test`
+- [x] 4.3 Run existing dogfood tests to confirm no regressions: `ci-dogfood-test`, `ci-dogfood-self-build-test`
