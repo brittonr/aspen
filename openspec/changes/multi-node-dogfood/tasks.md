@@ -22,12 +22,12 @@
 - [x] 4.1 Verify all 3 nodes are running with new binary (PID check + process alive)
 - [x] 4.2 Verify cluster health: 3 healthy voters, KV round-trip (write on leader, read from follower)
 - [x] 4.3 Verify pre-deploy KV data survived all restarts
-- [ ] 4.4 Build and run the VM test end-to-end, fix any issues discovered
+- [x] 4.4 Build and run the VM test end-to-end, fix any issues discovered
   - Cluster formation, KV ops, Forge push, CI build, CI-built binary: all pass
   - Prefetch timeout fix (adapters.rs): `nix flake archive` no longer hangs in VMs without internet
-  - BLOCKED: After systemctl restart, iroh endpoint gets new port but Raft membership has old address.
-    Restarted node can't rejoin cluster. Needs address update mechanism (gossip rediscovery or
-    explicit re-registration). This is a real cluster issue to fix in aspen-cluster, not a test bug.
+  - FIXED: Stale connection pool entries caused election storms after restart. `add_peer()` now evicts
+    old connections when address changes. VM test passes: all 14 subtests green including rolling
+    restart (followers first, leader last), re-election, KV persistence.
 
 ## 5. Script Hardening
 
