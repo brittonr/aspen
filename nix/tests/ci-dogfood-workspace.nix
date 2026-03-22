@@ -733,7 +733,7 @@ in
               f"snix feature not compiled — missing uploaded_store_paths_snix: {job_result_data.keys()}"
 
           snix_log = node1.succeed(
-              "journalctl -u aspen-node --no-pager 2>/dev/null | grep -c 'Uploading store path to SNIX' || echo 0"
+              "journalctl -u aspen-node --no-pager 2>/dev/null | grep -c 'Uploading store path to SNIX' || true"
           ).strip()
           snix_attempts = int(snix_log)
           assert snix_attempts >= 1, \
