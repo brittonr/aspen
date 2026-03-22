@@ -11,6 +11,7 @@ The iroh-dag-sync experiment demonstrates that a single deterministic traversal 
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Single `DagTraversal` trait usable by Forge, snix, and blob replication
 - Single-stream DAG sync protocol that replaces per-object fetching
 - Stem/leaf split for two-phase sync with multi-peer parallelism
@@ -18,6 +19,7 @@ The iroh-dag-sync experiment demonstrates that a single deterministic traversal 
 - Verified pure functions for traversal state computation
 
 **Non-Goals:**
+
 - Multi-hash support (Aspen is BLAKE3-only, no IPFS interop needed)
 - Generic traversal language (project-specific traversals in Rust, per iroh-dag-sync's recommendation)
 - Replacing iroh-blobs' own transfer protocol (DAG sync uses it for individual blob fallback)
@@ -82,6 +84,7 @@ pub trait DagTraversal {
 ```
 
 Composable combinators:
+
 - `Filtered<T, F>`: Skip nodes matching a predicate
 - `Bounded<T>`: Stop after N nodes or N depth
 - `Sequenced<T>`: Traverse a fixed sequence of hashes
