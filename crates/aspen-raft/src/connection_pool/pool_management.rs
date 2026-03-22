@@ -279,6 +279,26 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         *self.cleanup_task.lock().await = Some(handle);
     }
 
+    /// Evict a specific peer's connection from the pool.
+    ///
+    /// Call this when a peer's address has changed (e.g., after restart with a new port)
+    /// so that the next `get_or_connect` creates a fresh connection to the new address
+    /// instead of reusing the stale one.
+    ///
+    /// Returns true if a connection was evicted, false if no connection existed.
+    pub async fn evict(&self, node_id: NodeId) -> bool {
+        let mut connections = self.connections.write().await;
+        let evicted = connections.remove(&node_id).is_some();
+        if evicted {
+            info!(
+                %node_id,
+                pool_size = connections.len(),
+                "evicted stale connection from pool (peer address changed)"
+            );
+        }
+        evicted
+    }
+
     /// Shutdown the connection pool gracefully.
     pub async fn shutdown(&self) {
         info!("shutting down connection pool");

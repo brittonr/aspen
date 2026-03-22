@@ -279,8 +279,10 @@ in
           node.wait_for_unit("aspen-node.service")
           node.wait_for_file("/var/lib/aspen/cluster-ticket.txt", timeout=30)
           ticket = get_ticket(node)
+          # Use --timeout 5000 (5s) so each attempt fails fast and
+          # wait_until_succeeds can retry instead of hanging on one attempt.
           node.wait_until_succeeds(
-              f"aspen-cli --ticket '{ticket}' cluster health 2>/dev/null",
+              f"aspen-cli --ticket '{ticket}' --timeout 5000 cluster health 2>/dev/null",
               timeout=timeout,
           )
 

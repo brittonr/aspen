@@ -237,10 +237,29 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             );
             return;
         }
+
+        // Check if address changed — if so, evict the stale connection from the pool.
+        // This is critical for post-restart recovery: a restarted node gets a new iroh port,
+        // but the connection pool still holds a connection to the old port. Without eviction,
+        // heartbeats/RPCs route through the dead connection until it times out (~60s),
+        // causing election storms that break all inter-node connectivity.
+        let address_changed = peers.get(&node_id).map(|old| old.addrs != addr.addrs).unwrap_or(false);
+
         peers.insert(node_id, addr);
+        // Drop the lock before async eviction
+        drop(peers);
+
+        if address_changed {
+            info!(
+                %node_id,
+                "peer address changed, evicting stale connection from pool"
+            );
+            self.connection_pool.evict(node_id).await;
+        }
 
         // Persist to disk so restarted nodes have fresh addresses.
         if let Some(ref path) = self.peer_cache_path {
+            let peers = self.peer_addrs.read().await;
             let serializable: HashMap<u64, &iroh::EndpointAddr> = peers.iter().map(|(k, v)| (k.0, v)).collect();
             if let Ok(json) = serde_json::to_string(&serializable) {
                 let _ = std::fs::write(path, json);
