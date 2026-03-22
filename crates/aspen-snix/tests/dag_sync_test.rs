@@ -222,6 +222,92 @@ async fn directory_traversal_shared_subtree() {
     assert!(visited.contains(&file_digest));
 }
 
+/// Traversal with known heads prunes subtrees.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn directory_traversal_known_heads_prunes() {
+    let kv = DeterministicKeyValueStore::new();
+    let ds = RaftDirectoryService::from_arc(kv);
+    let (root_digest, sub_digest, empty_digest, h1, _h2) = build_tree(&ds).await;
+
+    // Mark sub_digest as a known head — traversal should skip it and its children (h2).
+    let mut known_heads = std::collections::HashSet::new();
+    known_heads.insert(sub_digest.clone());
+
+    let extractor = DirectoryLinkExtractor::new(Arc::new(ds.clone()));
+    let mut trav = FullTraversal::with_known_heads(root_digest.clone(), (), extractor, known_heads);
+
+    let mut visited = vec![];
+    while let Some(digest) = trav.next().await.unwrap() {
+        visited.push(digest);
+    }
+
+    // Should visit: root, empty, h1 — but NOT sub or h2
+    assert_eq!(visited.len(), 3);
+    assert!(visited.contains(&root_digest));
+    assert!(visited.contains(&empty_digest));
+    assert!(visited.contains(&h1));
+    assert!(!visited.contains(&sub_digest));
+}
+
+/// Closure sync: use DAG traversal to walk a store path's directory tree
+/// and collect all content digests needed for transfer.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn closure_sync_via_dag_traversal() {
+    use aspen_snix::RaftPathInfoService;
+    use snix_store::pathinfoservice::PathInfo;
+    use snix_store::pathinfoservice::PathInfoService;
+
+    let kv = DeterministicKeyValueStore::new();
+    let ds = RaftDirectoryService::from_arc(kv.clone());
+    let ps = RaftPathInfoService::from_arc(kv);
+
+    // Build the directory tree
+    let (root_digest, sub_digest, empty_digest, h1, h2) = build_tree(&ds).await;
+
+    // Create a store path with the root directory as its content
+    let hash_bytes = blake3::hash(b"test-pkg");
+    let mut sp_digest = [0u8; 20];
+    sp_digest.copy_from_slice(&hash_bytes.as_bytes()[..20]);
+    let store_path =
+        nix_compat::store_path::StorePath::from_name_and_digest_fixed("test-pkg".try_into().unwrap(), sp_digest)
+            .unwrap();
+
+    let path_info = PathInfo {
+        store_path: store_path.clone(),
+        node: Node::Directory {
+            digest: root_digest.clone(),
+            size: 300,
+        },
+        references: vec![],
+        nar_size: 500,
+        nar_sha256: [0u8; 32],
+        signatures: vec![],
+        deriver: None,
+        ca: None,
+    };
+    ps.put(path_info).await.unwrap();
+
+    // Use DAG traversal to walk the entire content tree
+    let extractor = DirectoryLinkExtractor::new(Arc::new(ds.clone()));
+    let mut trav = FullTraversal::new(root_digest.clone(), (), extractor);
+
+    let mut content_digests = vec![];
+    while let Some(digest) = trav.next().await.unwrap() {
+        content_digests.push(digest);
+    }
+
+    // All content digests collected in DFS order
+    assert_eq!(content_digests.len(), 5);
+    assert!(content_digests.contains(&root_digest));
+    assert!(content_digests.contains(&sub_digest));
+    assert!(content_digests.contains(&empty_digest));
+    assert!(content_digests.contains(&h1));
+    assert!(content_digests.contains(&h2));
+
+    // Root is always first (DFS from root)
+    assert_eq!(content_digests[0], root_digest);
+}
+
 /// extract_directory_children matches what the extractor returns.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn extract_children_matches_extractor() {

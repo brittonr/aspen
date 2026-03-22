@@ -67,6 +67,7 @@ pub use adapters::KvReplicaMetadataStore;
 use iroh_blobs::Hash;
 // Re-export manager types
 pub use manager::BlobReplicationManager;
+pub use manager::DagRepairScanner;
 pub use manager::NodeInfo;
 pub use manager::PlacementStrategy;
 pub use manager::ReplicaBlobTransfer;
@@ -102,6 +103,14 @@ pub const MAX_REPAIR_BATCH_SIZE: u32 = 100;
 /// Minimum interval between repair cycles (seconds).
 /// Tiger Style: Prevents repair storms.
 pub const MIN_REPAIR_INTERVAL_SECS: u64 = 10;
+
+/// Maximum number of DAG roots to scan per repair cycle.
+/// Tiger Style: Bounds DAG-aware repair work per cycle.
+pub const MAX_DAG_REPAIR_ROOTS: u32 = 100;
+
+/// Maximum number of under-replicated objects discovered per DAG root.
+/// Tiger Style: Prevents runaway subgraph discovery.
+pub const MAX_DAG_REPAIR_PER_ROOT: u32 = 500;
 
 /// Maximum size of serialized ReplicaSet metadata (bytes).
 /// Tiger Style: Bounds per-blob metadata size.

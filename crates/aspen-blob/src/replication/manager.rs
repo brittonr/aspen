@@ -57,6 +57,8 @@ use tracing::warn;
 use crate::events::BlobEvent;
 use crate::events::BlobEventType;
 use crate::replication::MAX_CONCURRENT_REPLICATIONS;
+use crate::replication::MAX_DAG_REPAIR_PER_ROOT;
+use crate::replication::MAX_DAG_REPAIR_ROOTS;
 use crate::replication::MAX_REPAIR_BATCH_SIZE;
 use crate::replication::MIN_REPAIR_INTERVAL_SECS;
 use crate::replication::ReplicaSet;
@@ -180,6 +182,31 @@ pub trait PlacementStrategy: Send + Sync {
         nodes: &[NodeInfo],
         failure_domain_key: Option<&str>,
     ) -> Vec<u64>;
+}
+
+/// DAG-aware repair scanner for discovering under-replicated subgraphs.
+///
+/// Implementations walk content-addressed graphs to discover objects
+/// that are under-replicated as a connected subgraph. For example, a
+/// Git commit may be replicated but its tree/blob children may not be.
+///
+/// The repair cycle calls `list_roots()` to find entry points (branch
+/// tips, PathInfo roots, etc.), then `scan_subgraph()` on each root
+/// to discover under-replicated objects reachable from it.
+#[async_trait::async_trait]
+pub trait DagRepairScanner: Send + Sync {
+    /// Discover hashes reachable from the given root that are under-replicated.
+    ///
+    /// Walks the object graph from `root`, checking each node's replica
+    /// count against the replication policy. Returns hashes that need
+    /// additional replicas. Limited to `max_results` entries.
+    async fn scan_subgraph(&self, root: &Hash, max_results: u32) -> Result<Vec<Hash>>;
+
+    /// List known DAG roots to scan (e.g., branch tips, PathInfo roots).
+    ///
+    /// Returns up to `max_roots` root hashes. The repair cycle iterates
+    /// these and calls `scan_subgraph` on each.
+    async fn list_roots(&self, max_roots: u32) -> Result<Vec<Hash>>;
 }
 
 /// Default placement strategy using weighted random selection.
@@ -340,6 +367,27 @@ impl BlobReplicationManager {
         KV: ReplicaMetadataStore + 'static,
         BS: ReplicaBlobTransfer + 'static,
     {
+        Self::spawn_with_dag_scanner(config, blob_events, kv_store, blob_store, placement, None, cancel).await
+    }
+
+    /// Create a new replication manager with an optional DAG-aware repair scanner.
+    ///
+    /// When a `dag_scanner` is provided, repair cycles additionally walk
+    /// the object graph from known roots to discover under-replicated
+    /// subgraphs that flat status scans would miss.
+    pub async fn spawn_with_dag_scanner<KV, BS>(
+        config: ReplicationConfig,
+        blob_events: broadcast::Receiver<BlobEvent>,
+        kv_store: Arc<KV>,
+        blob_store: Arc<BS>,
+        placement: Arc<dyn PlacementStrategy>,
+        dag_scanner: Option<Arc<dyn DagRepairScanner>>,
+        cancel: CancellationToken,
+    ) -> Result<(Self, JoinHandle<()>)>
+    where
+        KV: ReplicaMetadataStore + 'static,
+        BS: ReplicaBlobTransfer + 'static,
+    {
         let (command_tx, command_rx) = mpsc::channel(256);
 
         let manager = Self {
@@ -347,7 +395,16 @@ impl BlobReplicationManager {
             config: config.clone(),
         };
 
-        let task = tokio::spawn(run_manager(config, command_rx, blob_events, kv_store, blob_store, placement, cancel));
+        let task = tokio::spawn(run_manager(
+            config,
+            command_rx,
+            blob_events,
+            kv_store,
+            blob_store,
+            placement,
+            dag_scanner,
+            cancel,
+        ));
 
         Ok((manager, task))
     }
@@ -486,6 +543,7 @@ pub trait ReplicaBlobTransfer: Send + Sync {
 // Manager Event Loop
 // ============================================================================
 
+#[allow(clippy::too_many_arguments)]
 async fn run_manager<KV, BS>(
     config: ReplicationConfig,
     mut command_rx: mpsc::Receiver<ReplicationCommand>,
@@ -493,6 +551,7 @@ async fn run_manager<KV, BS>(
     kv_store: Arc<KV>,
     blob_store: Arc<BS>,
     placement: Arc<dyn PlacementStrategy>,
+    dag_scanner: Option<Arc<dyn DagRepairScanner>>,
     cancel: CancellationToken,
 ) where
     KV: ReplicaMetadataStore + 'static,
@@ -561,6 +620,7 @@ async fn run_manager<KV, BS>(
                             &placement,
                             &nodes,
                             &replication_semaphore,
+                            dag_scanner.as_deref(),
                         ).await {
                             warn!(error = %e, "repair cycle failed");
                         }
@@ -623,6 +683,7 @@ async fn run_manager<KV, BS>(
                     &placement,
                     &nodes,
                     &replication_semaphore,
+                    dag_scanner.as_deref(),
                 ).await {
                     debug!(error = %e, "periodic repair cycle failed");
                 }
@@ -795,6 +856,7 @@ async fn handle_repair_cycle<KV, BS>(
     placement: &Arc<dyn PlacementStrategy>,
     nodes: &Arc<RwLock<Vec<NodeInfo>>>,
     semaphore: &Arc<Semaphore>,
+    dag_scanner: Option<&dyn DagRepairScanner>,
 ) -> Result<()>
 where
     KV: ReplicaMetadataStore,
@@ -821,6 +883,45 @@ where
     for hash in degraded.into_iter().take(MAX_REPAIR_BATCH_SIZE as usize) {
         if let Err(e) = handle_repair_blob(config, kv_store, blob_store, placement, nodes, semaphore, &hash).await {
             debug!(hash = %hash.to_hex(), error = %e, "degraded repair failed");
+        }
+    }
+
+    // DAG-aware scan: walk object graphs from known roots to find
+    // under-replicated nodes that flat status scans miss.
+    if let Some(scanner) = dag_scanner {
+        match scanner.list_roots(MAX_DAG_REPAIR_ROOTS).await {
+            Ok(roots) => {
+                debug!(count = roots.len(), "DAG repair: scanning roots");
+                for root in roots {
+                    match scanner.scan_subgraph(&root, MAX_DAG_REPAIR_PER_ROOT).await {
+                        Ok(hashes) => {
+                            for hash in hashes {
+                                if let Err(e) =
+                                    handle_repair_blob(config, kv_store, blob_store, placement, nodes, semaphore, &hash)
+                                        .await
+                                {
+                                    debug!(
+                                        hash = %hash.to_hex(),
+                                        root = %root.to_hex(),
+                                        error = %e,
+                                        "DAG repair failed for subgraph node"
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            debug!(
+                                root = %root.to_hex(),
+                                error = %e,
+                                "DAG repair: subgraph scan failed"
+                            );
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                debug!(error = %e, "DAG repair: failed to list roots");
+            }
         }
     }
 

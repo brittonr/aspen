@@ -90,6 +90,7 @@ pub use events::create_blob_event_channel;
 pub use kv_integration::BlobAwareKeyValueStore;
 // Replication types
 pub use replication::BlobReplicationManager;
+pub use replication::DagRepairScanner;
 pub use replication::IrohBlobTransfer;
 pub use replication::KvReplicaMetadataStore;
 pub use replication::MAX_CONCURRENT_REPLICATIONS;

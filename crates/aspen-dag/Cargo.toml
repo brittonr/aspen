@@ -42,6 +42,11 @@ rand = { version = "0.9", features = ["std_rng"] }
 patchbay = { git = "https://github.com/n0-computer/patchbay.git", rev = "e0c48e094ae11442b1ea374b6d4d8fd55a498ac1" }
 aspen-testing-patchbay = { path = "../aspen-testing-patchbay" }
 ctor = "0.4"
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+
+[[bench]]
+name = "dag_sync_bench"
+harness = false
 
 [features]
 default = []

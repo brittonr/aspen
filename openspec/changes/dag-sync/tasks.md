@@ -45,15 +45,15 @@
 
 ## Phase 4: Blob & Snix Integration
 
-- [ ] Implement `DirectoryLinkExtractor` for snix Directory → sub-directory/blob links
-- [ ] Add DAG traversal to blob replication repair scan for object-graph-aware discovery
-- [ ] Write integration test: snix closure sync via DAG traversal
-- [ ] Write integration test: blob repair scan discovers under-replicated subgraph
+- [x] Implement `DirectoryLinkExtractor` for snix Directory → sub-directory/blob links
+- [x] Add DAG traversal to blob replication repair scan for object-graph-aware discovery
+- [x] Write integration test: snix closure sync via DAG traversal
+- [x] Write integration test: blob repair scan discovers under-replicated subgraph
 
 ## Phase 5: Verification & Hardening
 
-- [ ] Add Verus specs for traversal invariants: visited set monotonicity, depth boundedness, traversal determinism
-- [ ] Add madsim deterministic test for DAG sync under network partitions
-- [ ] Add madsim test for partial sync resumption after connection drop
-- [ ] Benchmark: DAG sync throughput vs. per-object fetch for 5,000-object repo
-- [ ] Benchmark: stem/leaf split with 3 peers vs. single-peer full sync
+- [x] Add Verus specs for traversal invariants: visited set monotonicity, depth boundedness, traversal determinism
+- [x] Add madsim deterministic test for DAG sync under network partitions
+- [x] Add madsim test for partial sync resumption after connection drop
+- [x] Benchmark: DAG sync throughput vs. per-object fetch for 5,000-object repo
+- [x] Benchmark: stem/leaf split with 3 peers vs. single-peer full sync

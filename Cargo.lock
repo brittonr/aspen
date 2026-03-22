@@ -1417,6 +1417,7 @@ dependencies = [
  "bao-tree",
  "blake3",
  "bytes",
+ "criterion",
  "ctor",
  "hex",
  "iroh",

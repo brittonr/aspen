@@ -440,3 +440,150 @@ async fn no_links_extractor() {
     let result = links.extract_links::<()>(&a, &()).unwrap();
     assert!(result.is_empty());
 }
+
+// ============================================================================
+// Repair Scan: DAG-aware under-replication discovery
+// ============================================================================
+
+/// Simulate a repair scan that discovers under-replicated nodes
+/// by walking the object graph and checking each node against a
+/// "is replicated" predicate.
+///
+/// ```text
+///       root
+///      /    \
+///     a      b
+///    / \    / \
+///   c   d  d   e
+/// ```
+///
+/// Nodes c and e are under-replicated. The scan traverses the full
+/// DAG and collects only the under-replicated nodes.
+#[tokio::test]
+async fn repair_scan_discovers_under_replicated_subgraph() {
+    let root = hash("root");
+    let a = hash("a");
+    let b = hash("b");
+    let c = hash("c");
+    let d = hash("d");
+    let e = hash("e");
+
+    let mut dag = TestDag::new();
+    dag.add_edge(root, a);
+    dag.add_edge(root, b);
+    dag.add_edge(a, c);
+    dag.add_edge(a, d);
+    dag.add_edge(b, d);
+    dag.add_edge(b, e);
+    dag.add_node(c);
+    dag.add_node(d);
+    dag.add_node(e);
+
+    // Define which nodes are under-replicated
+    let under_replicated: HashSet<blake3::Hash> = HashSet::from([c, e]);
+
+    // Traverse the full DAG and collect under-replicated nodes
+    let links = make_link_extractor(dag.clone());
+    let mut trav = FullTraversal::new(root, dag, links);
+
+    let mut needs_repair = vec![];
+    while let Some(h) = trav.next().await.unwrap() {
+        if under_replicated.contains(&h) {
+            needs_repair.push(h);
+        }
+    }
+
+    // Both c and e discovered
+    assert_eq!(needs_repair.len(), 2);
+    assert!(needs_repair.contains(&c));
+    assert!(needs_repair.contains(&e));
+
+    // d is shared between a and b but was not under-replicated
+    assert!(!needs_repair.contains(&d));
+}
+
+/// Repair scan with a multi-root DAG: two separate trees share a leaf.
+///
+/// ```text
+///   root1    root2
+///    |         |
+///    a         b
+///    |         |
+///    shared    shared
+/// ```
+///
+/// "shared" is under-replicated and should be discovered from either root.
+#[tokio::test]
+async fn repair_scan_multi_root_shared_leaf() {
+    let root1 = hash("root1");
+    let root2 = hash("root2");
+    let a = hash("a");
+    let b = hash("b");
+    let shared = hash("shared");
+
+    let mut dag = TestDag::new();
+    dag.add_edge(root1, a);
+    dag.add_edge(root2, b);
+    dag.add_edge(a, shared);
+    dag.add_edge(b, shared);
+    dag.add_node(shared);
+
+    let under_replicated: HashSet<blake3::Hash> = HashSet::from([shared]);
+
+    // Scan from root1
+    let links = make_link_extractor(dag.clone());
+    let mut trav = FullTraversal::new(root1, dag.clone(), links);
+
+    let mut found_from_root1 = vec![];
+    while let Some(h) = trav.next().await.unwrap() {
+        if under_replicated.contains(&h) {
+            found_from_root1.push(h);
+        }
+    }
+    assert_eq!(found_from_root1, vec![shared]);
+
+    // Scan from root2 — same "shared" node discovered
+    let links2 = make_link_extractor(dag.clone());
+    let mut trav2 = FullTraversal::new(root2, dag, links2);
+
+    let mut found_from_root2 = vec![];
+    while let Some(h) = trav2.next().await.unwrap() {
+        if under_replicated.contains(&h) {
+            found_from_root2.push(h);
+        }
+    }
+    assert_eq!(found_from_root2, vec![shared]);
+}
+
+/// Bounded repair scan stops after max_count even if more under-replicated
+/// nodes exist deeper in the graph. Prevents runaway scans.
+#[tokio::test]
+async fn repair_scan_bounded_limits_discovery() {
+    // Build a long chain: root → n1 → n2 → ... → n10
+    // All nodes except root are under-replicated.
+    let nodes: Vec<blake3::Hash> = (0..11).map(|i| hash(&format!("node{}", i))).collect();
+
+    let mut dag = TestDag::new();
+    for i in 0..10 {
+        dag.add_edge(nodes[i], nodes[i + 1]);
+    }
+    dag.add_node(nodes[10]);
+
+    let under_replicated: HashSet<blake3::Hash> = nodes[1..].iter().copied().collect();
+
+    let links = make_link_extractor(dag.clone());
+    let trav = FullTraversal::new(nodes[0], dag, links);
+    // Bound to 5 nodes total
+    let mut bounded = trav.bounded(5);
+
+    let mut needs_repair = vec![];
+    while let Some(h) = bounded.next().await.unwrap() {
+        if under_replicated.contains(&h) {
+            needs_repair.push(h);
+        }
+    }
+
+    // Bounded at 5 total nodes (root + 4 chain nodes), so 4 under-replicated found
+    assert_eq!(needs_repair.len(), 4);
+    // The remaining 6 nodes in the chain are not discovered
+}
