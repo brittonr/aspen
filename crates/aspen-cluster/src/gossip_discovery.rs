@@ -80,13 +80,23 @@ pub async fn spawn_gossip_peer_discovery(
 ) -> Result<GossipPeerDiscovery> {
     let gossip = iroh_manager.gossip().context("gossip not enabled on IrohEndpointManager")?;
 
-    let discovery = GossipPeerDiscovery::new(
+    let mut discovery = GossipPeerDiscovery::new(
         topic_id,
         node_id,
         Arc::clone(gossip),
         iroh_manager.node_addr().clone(),
         iroh_manager.secret_key().clone(),
     );
+
+    // Seed gossip with bootstrap peers from the network factory's peer cache.
+    // Without bootstrap peers, a restarted node's gossip subscription has nobody
+    // to connect to and never learns updated addresses from other nodes.
+    if let Some(ref factory) = network_factory {
+        let bootstrap_peers = factory.get_peer_endpoint_ids().await;
+        if !bootstrap_peers.is_empty() {
+            discovery.set_bootstrap_peers(bootstrap_peers);
+        }
+    }
 
     // Convert network factory + membership refresh to callback if provided
     let callback = network_factory.map(|factory| {

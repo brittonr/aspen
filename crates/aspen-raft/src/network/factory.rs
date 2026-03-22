@@ -209,6 +209,14 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         Arc::clone(&self.drift_detector)
     }
 
+    /// Get endpoint IDs from all known peers.
+    ///
+    /// Used to seed gossip bootstrap so restarted nodes can reconnect.
+    pub async fn get_peer_endpoint_ids(&self) -> Vec<iroh::EndpointId> {
+        let peers = self.peer_addrs.read().await;
+        peers.values().map(|addr| addr.id).collect()
+    }
+
     /// Add a peer address for future connections.
     ///
     /// This allows dynamic peer addition after the network factory has been created.

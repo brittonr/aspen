@@ -57,6 +57,12 @@ pub struct GossipPeerDiscovery {
     gossip: Arc<Gossip>,
     endpoint_addr: EndpointAddr,
     secret_key: SecretKey,
+    /// Peer endpoint IDs to bootstrap gossip subscription.
+    ///
+    /// Without bootstrap peers, gossip has nobody to connect to after a
+    /// restart. These are typically loaded from the persisted peer cache
+    /// or Raft membership and passed at construction time.
+    bootstrap_peers: Vec<iroh::EndpointId>,
     // Running state tracking
     pub(super) is_running: Arc<AtomicBool>,
     pub(super) cancel_token: CancellationToken,
@@ -98,6 +104,7 @@ impl GossipPeerDiscovery {
             gossip,
             endpoint_addr,
             secret_key,
+            bootstrap_peers: Vec::new(),
             is_running: Arc::new(AtomicBool::new(false)),
             cancel_token: CancellationToken::new(),
             announcer_task: Mutex::new(None),
@@ -106,6 +113,15 @@ impl GossipPeerDiscovery {
             on_topology_stale: Mutex::new(None),
             on_blob_announced: Mutex::new(None),
         }
+    }
+
+    /// Set bootstrap peers for gossip subscription.
+    ///
+    /// These endpoint IDs are passed to `gossip.subscribe()` so the gossip
+    /// protocol has peers to connect to on startup. Without this, a restarted
+    /// node's gossip is isolated and can never discover updated addresses.
+    pub fn set_bootstrap_peers(&mut self, peers: Vec<iroh::EndpointId>) {
+        self.bootstrap_peers = peers;
     }
 
     /// Set the callback for stale topology detection.
@@ -151,10 +167,22 @@ impl GossipPeerDiscovery {
         // Subscribe to the topic with timeout
         // Tiger Style: Explicit timeout prevents indefinite blocking during subscription.
         // If gossip is unavailable, the node should continue without it (non-fatal).
-        let gossip_topic = tokio::time::timeout(GOSSIP_SUBSCRIBE_TIMEOUT, self.gossip.subscribe(self.topic_id, vec![]))
-            .await
-            .context("timeout subscribing to gossip topic")?
-            .context("failed to subscribe to gossip topic")?;
+        if self.bootstrap_peers.is_empty() {
+            tracing::debug!(node_id = %self.node_id, "gossip starting with no bootstrap peers");
+        } else {
+            tracing::info!(
+                node_id = %self.node_id,
+                peer_count = self.bootstrap_peers.len(),
+                "gossip starting with bootstrap peers from peer cache"
+            );
+        }
+        let gossip_topic = tokio::time::timeout(
+            GOSSIP_SUBSCRIBE_TIMEOUT,
+            self.gossip.subscribe(self.topic_id, self.bootstrap_peers.clone()),
+        )
+        .await
+        .context("timeout subscribing to gossip topic")?
+        .context("failed to subscribe to gossip topic")?;
 
         // Split into sender and receiver
         let (gossip_sender, mut gossip_receiver) = gossip_topic.split();
