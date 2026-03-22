@@ -3342,6 +3342,16 @@
 
               # Multi-node dogfood: 3-node cluster → Forge push → CI build →
               # rolling restart (follower-first) → quorum checks → re-election → KV persistence.
+              # Build: nix build .#checks.x86_64-linux.rolling-restart-test --option sandbox false
+              rolling-restart-test = import ./nix/tests/rolling-restart.nix {
+                inherit pkgs;
+                aspenNodePackage = ciVmTestBin {
+                  name = "aspen-node";
+                  features = ["docs" "hooks" "automerge" "blob"];
+                };
+                aspenCliPackage = ciVmTestCliBin [];
+              };
+
               # Build: nix build .#checks.x86_64-linux.multi-node-dogfood-test --option sandbox false
               multi-node-dogfood-test = import ./nix/tests/multi-node-dogfood.nix {
                 inherit pkgs;
