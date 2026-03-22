@@ -333,17 +333,50 @@ impl NativeBuildService {
             ));
         }
 
-        // Resolve each store path to its Node via PathInfoService
+        // Resolve each store path to its Node via PathInfoService.
+        // Falls back to a synthetic Node when the path exists on the local
+        // filesystem but hasn't been imported into PathInfoService yet (the
+        // common case for fresh builds where inputs were just realised).
         for store_path in paths_to_resolve {
             match self.pathinfo_service.get(*store_path.digest()).await {
                 Ok(Some(path_info)) => {
                     resolved.insert(store_path, path_info.node);
                 }
                 Ok(None) => {
-                    warn!(
-                        path = %store_path.to_absolute_path(),
-                        "input store path not found in PathInfoService"
-                    );
+                    // PathInfoService doesn't know this path — check local disk.
+                    // After `nix-store --realise`, inputs exist in /nix/store but
+                    // haven't been imported into Aspen's content-addressed store.
+                    // Create a synthetic Node so LocalStoreBuildService can cp -a
+                    // from the local store into the bwrap sandbox.
+                    let abs_path = store_path.to_absolute_path();
+                    let local = std::path::Path::new(&abs_path);
+                    if local.exists() {
+                        // Placeholder digest — LocalStoreBuildService copies from
+                        // /nix/store via cp -a, so the digest is never read.
+                        let placeholder = snix_castore::B3Digest::from(&[0u8; 32]);
+                        let node = if local.is_dir() {
+                            Node::Directory {
+                                digest: placeholder,
+                                size: 0,
+                            }
+                        } else {
+                            Node::File {
+                                digest: placeholder,
+                                size: 0,
+                                executable: false,
+                            }
+                        };
+                        debug!(
+                            path = %abs_path,
+                            "input resolved from local /nix/store (not in PathInfoService)"
+                        );
+                        resolved.insert(store_path, node);
+                    } else {
+                        warn!(
+                            path = %abs_path,
+                            "input store path not found in PathInfoService or local store"
+                        );
+                    }
                 }
                 Err(e) => {
                     warn!(
@@ -460,7 +493,11 @@ impl BuildService for LocalStoreBuildService {
         // /bin/sh by bwrap. It must be statically linked (busybox-sandbox-shell)
         // because /nix/store inside the sandbox only contains build inputs —
         // a dynamically linked shell can't find its ELF interpreter.
-        let input_names: Vec<String> = request.inputs.keys().map(|k| k.to_string()).collect();
+        // Compute the full runtime closure of all inputs. Direct inputs alone
+        // aren't enough — the builder (bash) needs glibc, etc. Use nix-store -qR
+        // to get the transitive closure, then copy everything into the sandbox.
+        let direct_names: Vec<String> = request.inputs.keys().map(|k| k.to_string()).collect();
+        let closure_names = compute_input_closure(&direct_names);
 
         let spec = snix_build::sandbox::SandboxSpec::builder()
             .host_workdir(sandbox_path.clone())
@@ -470,15 +507,16 @@ impl BuildService for LocalStoreBuildService {
             .env_vars(request.environment_vars.clone())
             .additional_files(request.additional_files.clone())
             .with_inputs(request.inputs_dir.clone(), move |path: &std::path::Path| {
-                // Copy each input from /nix/store/<name> to <path>/<name>.
-                // Uses cp -a for correctness (preserves symlinks, permissions).
-                for name in &input_names {
+                // Copy the full closure from /nix/store into the sandbox.
+                for name in &closure_names {
                     let src = std::path::Path::new("/nix/store").join(name);
                     let dst = path.join(name);
+                    if dst.exists() {
+                        continue; // already copied (dedup from closure)
+                    }
                     if !src.exists() {
                         return Err(io::Error::other(format!("input not in local store: {}", src.display())));
                     }
-                    // cp -a preserves symlinks, permissions, timestamps
                     let status = std::process::Command::new("cp")
                         .arg("-a")
                         .arg(&src)
@@ -494,8 +532,6 @@ impl BuildService for LocalStoreBuildService {
                         )));
                     }
                 }
-                // Return a guard that cleans up the host_inputs_dir on drop.
-                // Bwrap::run holds this until the build finishes.
                 Ok(())
             })
             .allow_network(request.constraints.contains(&BuildConstraints::NetworkAccess))
@@ -528,6 +564,14 @@ impl BuildService for LocalStoreBuildService {
             warn!("not all outputs produced");
             return Err(io::Error::other("not all outputs produced"));
         }
+
+        // NOTE: Build outputs live in the sandbox temp dir and are ingested
+        // into castore below. They are NOT registered in the local /nix/store
+        // because the store overlay is typically read-only and `nix store add`
+        // content-addresses (producing a different hash than the derivation
+        // output). Registering outputs in the local store requires proper
+        // nix-daemon integration (TODO: use nix-store --import or snix's
+        // PathInfoService → local store bridge).
 
         let patterns = snix_castore::refscan::ReferencePattern::new(request.refscan_needles);
         let results = futures::future::try_join_all(outputs.into_iter().enumerate().map(|(i, host_output_path)| {
@@ -567,6 +611,64 @@ impl BuildService for LocalStoreBuildService {
         }
 
         Ok(BuildResult { outputs: results })
+    }
+}
+
+// ============================================================================
+// Input closure computation
+// ============================================================================
+
+/// Compute the full runtime closure of a set of store path basenames.
+///
+/// Uses `nix-store -qR /nix/store/<name>` to find all transitive dependencies.
+/// The builder (bash) needs its dynamic linker (glibc), which needs its own
+/// deps, etc. Without the full closure in the sandbox, dynamically-linked
+/// binaries fail with "No such file or directory" from the ELF loader.
+///
+/// Returns deduplicated basenames for all paths in the closure.
+fn compute_input_closure(direct_names: &[String]) -> Vec<String> {
+    let store_paths: Vec<String> = direct_names
+        .iter()
+        .map(|n| format!("/nix/store/{n}"))
+        .filter(|p| std::path::Path::new(p).exists())
+        .collect();
+
+    if store_paths.is_empty() {
+        return direct_names.to_vec();
+    }
+
+    let output = std::process::Command::new("nix-store").arg("-qR").args(&store_paths).output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let mut closure: Vec<String> = stdout
+                .lines()
+                .filter_map(|line| {
+                    let trimmed = line.trim();
+                    trimmed.strip_prefix("/nix/store/").map(|basename| basename.to_string())
+                })
+                .collect();
+
+            // Dedup while preserving order
+            let mut seen = std::collections::HashSet::new();
+            closure.retain(|name| seen.insert(name.clone()));
+
+            info!(direct = direct_names.len(), closure = closure.len(), "computed input closure for sandbox");
+            closure
+        }
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            warn!(
+                stderr = %stderr,
+                "nix-store -qR failed, using direct inputs only"
+            );
+            direct_names.to_vec()
+        }
+        Err(e) => {
+            warn!(error = %e, "failed to run nix-store -qR, using direct inputs only");
+            direct_names.to_vec()
+        }
     }
 }
 
@@ -695,14 +797,53 @@ pub fn derivation_to_build_request(
         })
         .collect();
 
-    // Input nodes keyed by store path basename
-    let input_nodes: BTreeMap<PathComponent, Node> = inputs
+    // Input nodes keyed by store path basename.
+    // Also include the builder's store path — bwrap's /nix/store overlay
+    // only contains paths from this map, so the builder binary must be here.
+    let mut input_nodes: BTreeMap<PathComponent, Node> = inputs
         .iter()
         .filter_map(|(sp, node)| {
             let basename = sp.to_string();
             PathComponent::try_from(basename.as_str()).ok().map(|pc| (pc, node.clone()))
         })
         .collect();
+
+    // Ensure the builder binary's store path is in the inputs.
+    // For stdenv.mkDerivation, the builder is typically /nix/store/...-bash-.../bin/bash.
+    // It may not be listed in input_derivations if it's a transitive dep of stdenv.
+    if drv.builder.starts_with("/nix/store/") {
+        // Extract the store path component (e.g. "2hjsch59amjs3nbgh7ahcfzm2bfwl8zi-bash-5.3p9")
+        let parts: Vec<&str> = drv.builder.splitn(4, '/').collect();
+        if parts.len() >= 4 {
+            let store_basename = parts[3].split('/').next().unwrap_or(parts[3]);
+            if let Ok(pc) = PathComponent::try_from(store_basename)
+                && let std::collections::btree_map::Entry::Vacant(entry) = input_nodes.entry(pc)
+            {
+                let builder_store = std::path::Path::new("/nix/store").join(store_basename);
+                if builder_store.exists() {
+                    let placeholder = snix_castore::B3Digest::from(&[0u8; 32]);
+                    let node = if builder_store.is_dir() {
+                        Node::Directory {
+                            digest: placeholder,
+                            size: 0,
+                        }
+                    } else {
+                        Node::File {
+                            digest: placeholder,
+                            size: 0,
+                            executable: true,
+                        }
+                    };
+                    info!(
+                        builder = %drv.builder,
+                        store_basename = %store_basename,
+                        "adding builder store path to sandbox inputs"
+                    );
+                    entry.insert(node);
+                }
+            }
+        }
+    }
 
     // Reference scanning needles: nixbase32 of output + input hashes
     let refscan_needles: Vec<String> = drv

@@ -201,13 +201,14 @@ impl NixBuildWorker {
             reason: format!("failed to spawn nix eval for drv path: {e}"),
         })?;
 
-        // Timeout: 60 seconds for eval (generous, most take <5s)
-        let timeout = Duration::from_secs(60);
+        // Timeout: 120 seconds for eval. First eval in a fresh store may need
+        // to fetch nixpkgs (~50MB download) before it can resolve the .drvPath.
+        let timeout = Duration::from_secs(120);
         let output = tokio::time::timeout(timeout, child.wait_with_output())
             .await
             .map_err(|_| CiCoreError::NixBuildFailed {
                 flake: flake_ref.to_string(),
-                reason: "nix eval --raw timed out after 60s resolving .drvPath".to_string(),
+                reason: "nix eval --raw timed out after 120s resolving .drvPath".to_string(),
             })?
             .map_err(|e| CiCoreError::NixBuildFailed {
                 flake: flake_ref.to_string(),
@@ -284,6 +285,156 @@ impl NixBuildWorker {
 
         if let Some(ref tx) = log_sender {
             let _ = tx.send(format!("native build: starting build for {flake_ref}\n")).await;
+        }
+
+        // Step 2: Realise the build's input closure in the local /nix/store.
+        //
+        // `nix eval` only instantiates the derivation — it doesn't build the
+        // input closure. LocalStoreBuildService needs all referenced store
+        // paths physically present in /nix/store so it can cp -a them into
+        // the bwrap sandbox.
+        //
+        // We collect: (a) all input .drv files, (b) input_sources, and
+        // (c) the builder path itself (e.g. bash from stdenv). Then run
+        // `nix-store --realise` on the .drv files and `nix-store --add`
+        // isn't needed for store paths that come from substitution.
+        //
+        // Simplest approach: realise the top-level .drv's entire input
+        // closure by passing --derivation to nix build. This fetches
+        // everything the build needs from substituters without actually
+        // building the derivation itself.
+        let realise_start = Instant::now();
+        let input_drv_paths: Vec<String> = drv.input_derivations.keys().map(|p| p.to_absolute_path()).collect();
+
+        // Also collect store paths from builder and input_sources that
+        // need to be present (these are direct references, not .drv files).
+        let mut extra_paths: Vec<String> = Vec::new();
+        if drv.builder.starts_with("/nix/store/") {
+            extra_paths.push(drv.builder.clone());
+        }
+        for source in &drv.input_sources {
+            extra_paths.push(source.to_absolute_path());
+        }
+
+        let total_inputs = input_drv_paths.len() + extra_paths.len();
+        if total_inputs > 0 {
+            info!(
+                drv_count = input_drv_paths.len(),
+                extra_count = extra_paths.len(),
+                "realising input closure for native build"
+            );
+            if let Some(ref tx) = log_sender {
+                let _ = tx
+                    .send(format!(
+                        "realising {} input derivations + {} extra paths\n",
+                        input_drv_paths.len(),
+                        extra_paths.len()
+                    ))
+                    .await;
+            }
+
+            // Realise input .drv files (builds/fetches their outputs)
+            if !input_drv_paths.is_empty() {
+                let mut cmd = Command::new("nix-store");
+                cmd.arg("--realise");
+                for drv_path in &input_drv_paths {
+                    cmd.arg(drv_path);
+                }
+                cmd.arg("--option").arg("substitute").arg("true");
+                if let Some(ref dir) = payload.working_dir {
+                    cmd.current_dir(dir);
+                }
+                cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+                let realise_timeout = Duration::from_secs(payload.timeout_secs.saturating_sub(60).max(120));
+                let output = tokio::time::timeout(realise_timeout, cmd.output())
+                    .await
+                    .map_err(|_| CiCoreError::NixBuildFailed {
+                        flake: flake_ref.to_string(),
+                        reason: format!("realising input derivations timed out after {}s", realise_timeout.as_secs()),
+                    })?
+                    .map_err(|e| CiCoreError::NixBuildFailed {
+                        flake: flake_ref.to_string(),
+                        reason: format!("failed to spawn nix-store --realise: {e}"),
+                    })?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    return Err(CiCoreError::NixBuildFailed {
+                        flake: flake_ref.to_string(),
+                        reason: format!(
+                            "realising input derivations failed (exit {}): {}",
+                            output.status.code().unwrap_or(-1),
+                            stderr.chars().take(500).collect::<String>()
+                        ),
+                    });
+                }
+            }
+
+            // Ensure extra store paths (builder, input sources) exist.
+            // The builder (e.g. bash) may be a transitive dep not directly
+            // in input_derivations. `nix-store --realise` accepts output
+            // paths and fetches them from substituters if missing.
+            let missing_extra: Vec<String> = extra_paths
+                .iter()
+                .filter_map(|p| {
+                    // Extract the store path root (e.g. /nix/store/xxx-bash-5.3p9)
+                    let components: Vec<&str> = p.splitn(5, '/').collect();
+                    if components.len() >= 4 {
+                        let store_root = components[..4].join("/");
+                        if !std::path::Path::new(&store_root).exists() {
+                            return Some(store_root);
+                        }
+                    }
+                    None
+                })
+                .collect();
+
+            if !missing_extra.is_empty() {
+                info!(
+                    missing = missing_extra.len(),
+                    paths = ?missing_extra,
+                    "fetching missing extra paths via nix-store --realise"
+                );
+                let mut cmd = Command::new("nix-store");
+                cmd.arg("--realise");
+                for path in &missing_extra {
+                    cmd.arg(path);
+                }
+                cmd.arg("--option").arg("substitute").arg("true");
+                cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+                let fetch_timeout = Duration::from_secs(120);
+                let output = tokio::time::timeout(fetch_timeout, cmd.output())
+                    .await
+                    .map_err(|_| CiCoreError::NixBuildFailed {
+                        flake: flake_ref.to_string(),
+                        reason: "fetching extra store paths timed out".to_string(),
+                    })?
+                    .map_err(|e| CiCoreError::NixBuildFailed {
+                        flake: flake_ref.to_string(),
+                        reason: format!("nix-store --realise for extra paths failed: {e}"),
+                    })?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    return Err(CiCoreError::NixBuildFailed {
+                        flake: flake_ref.to_string(),
+                        reason: format!(
+                            "fetching extra store paths failed (exit {}): {}",
+                            output.status.code().unwrap_or(-1),
+                            stderr.chars().take(500).collect::<String>()
+                        ),
+                    });
+                }
+                info!("extra store paths fetched successfully");
+            }
+
+            let realise_ms = realise_start.elapsed().as_millis();
+            info!(realise_ms = realise_ms, "input closure realised");
+            if let Some(ref tx) = log_sender {
+                let _ = tx.send(format!("input closure realised in {realise_ms}ms\n")).await;
+            }
         }
 
         // Step 3: Execute native build — call build_derivation directly so
