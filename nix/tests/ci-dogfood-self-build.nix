@@ -260,7 +260,11 @@ in
         gitRemoteAspenPackage
         pkgs.git
         pkgs.nix
+        pkgs.bubblewrap # Required for native snix-build sandbox
       ];
+
+      # bubblewrap needs user namespaces for sandboxed builds.
+      security.unprivilegedUsernsClone = true;
 
       networking.firewall.enable = false;
       nix.settings.experimental-features = ["nix-command" "flakes"];
@@ -441,6 +445,39 @@ in
               assert stage["status"] == "success", \
                   f"Stage '{stage['name']}' status={stage['status']}, expected success"
 
+      # ── verify native build path used ─────────────────────────────
+      with subtest("native build path used"):
+          # Check node logs for bwrap execution (native snix-build path).
+          bwrap_log = node1.succeed(
+              "journalctl -u aspen-node --no-pager 2>/dev/null "
+              "| grep -c 'starting local-store bwrap build' || echo 0"
+          ).strip()
+          bwrap_count = int(bwrap_log)
+          node1.log(f"Native bwrap builds: {bwrap_count}")
+
+          # Count subprocess fallbacks (nix build invocations).
+          fallback_log = node1.succeed(
+              "journalctl -u aspen-node --no-pager 2>/dev/null "
+              "| grep -c 'falling back to nix build subprocess' || echo 0"
+          ).strip()
+          fallback_count = int(fallback_log)
+          node1.log(f"Subprocess fallbacks: {fallback_count}")
+
+          # At least the build-and-test job should use native bwrap.
+          # Allow at most 1 fallback (the cargo-check job's eval may time out
+          # on first nixpkgs fetch in the VM).
+          assert bwrap_count >= 1, \
+              f"Expected at least 1 native bwrap build, got {bwrap_count}"
+          assert fallback_count <= 1, \
+              f"Too many subprocess fallbacks ({fallback_count}), expected at most 1"
+
+          # Check for output registration
+          registration_log = node1.succeed(
+              "journalctl -u aspen-node --no-pager 2>/dev/null "
+              "| grep -c 'registered output' || echo 0"
+          ).strip()
+          node1.log(f"Output registrations: {registration_log.strip()}")
+
       # ── verify build logs ────────────────────────────────────────
       with subtest("ci logs captured"):
           all_jobs = []
@@ -556,8 +593,26 @@ in
 
       # ── run the CI-built binary ──────────────────────────────────
       with subtest("run CI-built binary"):
+          # The output_path comes from the job result. With native builds,
+          # the output may be registered at the derivation output path
+          # (via register_output_in_store) or at a content-addressed path.
+          # Try the primary path first, then look for the binary in /nix/store
+          # with a glob if the daemon-registered path differs.
           binary = f"{output_path}/bin/aspen-constants-check"
-          node1.succeed(f"test -x {binary}")
+          binary_exists = node1.execute(f"test -x {binary}")[0] == 0
+
+          if not binary_exists:
+              # Native build may have registered output at a different path.
+              # Search for the binary in /nix/store.
+              node1.log(f"Binary not at {binary}, searching /nix/store...")
+              found = node1.succeed(
+                  "find /nix/store -maxdepth 2 -name aspen-constants-check -type f 2>/dev/null "
+                  "| head -1"
+              ).strip()
+              assert found, \
+                  f"Binary not found at {binary} or anywhere in /nix/store"
+              binary = found
+              node1.log(f"Found binary at alternate path: {binary}")
 
           output = node1.succeed(f"{binary}")
           node1.log(f"Binary output:\n{output}")

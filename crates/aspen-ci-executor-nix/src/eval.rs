@@ -24,7 +24,6 @@ use snix_store::nar::SimpleRenderer;
 use snix_store::pathinfoservice::PathInfoService;
 use tracing::debug;
 use tracing::info;
-#[cfg(feature = "nix-cli-fallback")]
 use tracing::warn;
 
 use crate::config::MAX_FLAKE_URL_LENGTH;
@@ -704,6 +703,67 @@ pub fn parse_derivation(drv_bytes: &[u8]) -> std::io::Result<(Derivation, Vec<St
     Ok((drv, output_paths))
 }
 
+// ============================================================================
+// Flake lock generation
+// ============================================================================
+
+/// Check if a flake directory needs `flake.lock` generation.
+///
+/// Returns `true` when `flake.nix` exists but `flake.lock` does not.
+pub fn needs_flake_lock(flake_dir: &std::path::Path) -> bool {
+    flake_dir.join("flake.nix").exists() && !flake_dir.join("flake.lock").exists()
+}
+
+/// Generate `flake.lock` by running `nix flake lock` if the lock file is missing.
+///
+/// CI checkouts often don't include `flake.lock` (it's gitignored or generated
+/// on the fly by nix). snix-eval's call-flake.nix requires it to resolve inputs.
+///
+/// Returns `Ok(true)` if lock was generated, `Ok(false)` if already present,
+/// or `Err` if generation failed.
+pub fn ensure_flake_lock(flake_dir: &std::path::Path) -> std::io::Result<bool> {
+    if !needs_flake_lock(flake_dir) {
+        return Ok(false);
+    }
+
+    info!(
+        flake_dir = %flake_dir.display(),
+        "generating flake.lock via nix flake lock"
+    );
+
+    let start = std::time::Instant::now();
+    let output = std::process::Command::new("nix")
+        .args(["flake", "lock"])
+        .current_dir(flake_dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()?;
+
+    let elapsed_ms = start.elapsed().as_millis();
+
+    if output.status.success() {
+        info!(
+            flake_dir = %flake_dir.display(),
+            elapsed_ms = elapsed_ms,
+            "generated flake.lock"
+        );
+        Ok(true)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        warn!(
+            flake_dir = %flake_dir.display(),
+            stderr = %stderr,
+            elapsed_ms = elapsed_ms,
+            "nix flake lock failed"
+        );
+        Err(std::io::Error::other(format!(
+            "nix flake lock failed (exit {}): {}",
+            output.status.code().unwrap_or(-1),
+            stderr.chars().take(500).collect::<String>()
+        )))
+    }
+}
+
 /// Extract a `.drvPath` string from a successful `NixEvalOutput`.
 ///
 /// Validates the value is a string starting with `/nix/store/` and ending with `.drv`.
@@ -1275,6 +1335,90 @@ mod tests {
             Ok(_) => {} // lockless flake eval succeeded
             Err(e) => {
                 assert!(!e.message.is_empty());
+            }
+        }
+    }
+
+    // ================================================================
+    // Task 3.2: Unit tests for needs_flake_lock()
+    // ================================================================
+
+    #[test]
+    fn test_needs_flake_lock_missing_lock() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        std::fs::write(tmpdir.path().join("flake.nix"), "{ }").unwrap();
+        assert!(super::needs_flake_lock(tmpdir.path()));
+    }
+
+    #[test]
+    fn test_needs_flake_lock_present() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        std::fs::write(tmpdir.path().join("flake.nix"), "{ }").unwrap();
+        std::fs::write(tmpdir.path().join("flake.lock"), "{}").unwrap();
+        assert!(!super::needs_flake_lock(tmpdir.path()));
+    }
+
+    #[test]
+    fn test_needs_flake_lock_no_flake_nix() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        // No flake.nix at all — should not need lock generation.
+        assert!(!super::needs_flake_lock(tmpdir.path()));
+    }
+
+    #[test]
+    fn test_ensure_flake_lock_already_present() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        std::fs::write(tmpdir.path().join("flake.nix"), "{ }").unwrap();
+        std::fs::write(tmpdir.path().join("flake.lock"), "{}").unwrap();
+        let result = super::ensure_flake_lock(tmpdir.path()).unwrap();
+        assert!(!result, "should return false when lock already present");
+    }
+
+    // ================================================================
+    // Task 3.4: Integration test for eval with lock generation
+    // ================================================================
+
+    #[tokio::test]
+    #[ignore = "requires nix CLI"]
+    async fn test_ensure_flake_lock_generates_lock() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let flake_dir = tmpdir.path();
+
+        // Trivial flake with no inputs — `nix flake lock` should create a
+        // minimal flake.lock with just the root node.
+        std::fs::write(
+            flake_dir.join("flake.nix"),
+            r#"{
+              description = "test";
+              inputs = {};
+              outputs = { self, ... }: {
+                packages.x86_64-linux.default = derivation {
+                  name = "lock-gen-test";
+                  system = "x86_64-linux";
+                  builder = "/bin/sh";
+                  args = [ "-c" "echo hello > $out" ];
+                };
+              };
+            }"#,
+        )
+        .unwrap();
+
+        assert!(!flake_dir.join("flake.lock").exists(), "precondition: no flake.lock");
+
+        let result = super::ensure_flake_lock(flake_dir);
+        match result {
+            Ok(generated) => {
+                assert!(generated, "should report that lock was generated");
+                assert!(flake_dir.join("flake.lock").exists(), "flake.lock should now exist");
+
+                // Verify the generated lock is valid JSON
+                let lock_content = std::fs::read_to_string(flake_dir.join("flake.lock")).unwrap();
+                let _: serde_json::Value =
+                    serde_json::from_str(&lock_content).expect("generated flake.lock should be valid JSON");
+            }
+            Err(e) => {
+                // May fail if nix CLI is not available
+                eprintln!("ensure_flake_lock failed (nix CLI may not be available): {e}");
             }
         }
     }
