@@ -64,6 +64,238 @@ cli_json() {
   "$ASPEN_CLI" --ticket "$ticket" --json "$@"
 }
 
+# Target a specific node by its ticket file.
+cli_node() {
+  local node_id="$1"; shift
+  local ticket
+  ticket=$(cat "$CLUSTER_DIR/node$node_id/cluster-ticket.txt" 2>/dev/null) || {
+    err "No ticket for node $node_id"
+    return 1
+  }
+  "$ASPEN_CLI" --ticket "$ticket" --timeout 5000 "$@"
+}
+
+cli_node_json() {
+  local node_id="$1"; shift
+  local ticket
+  ticket=$(cat "$CLUSTER_DIR/node$node_id/cluster-ticket.txt" 2>/dev/null) || return 1
+  "$ASPEN_CLI" --ticket "$ticket" --timeout 5000 --json "$@"
+}
+
+# ── Raft Health Gate ──────────────────────────────────────────────────
+#
+# After restarting a node, wait until it has:
+#   1. Responded to health RPC (process is up and listening)
+#   2. Joined the Raft group (is_initialized=true, knows a leader)
+#   3. Caught up on log replication (last_applied is advancing)
+#
+# This prevents moving to the next node in a rolling deploy before the
+# restarted node is actually participating in consensus.
+
+wait_node_rejoined() {
+  local node_id="$1"
+  local timeout_secs="${2:-60}"
+  local start_time=$SECONDS
+
+  log "Waiting for node $node_id to rejoin Raft (timeout: ${timeout_secs}s)..."
+
+  local prev_applied=0
+  local has_leader=false
+  local is_initialized=false
+  local caught_up=false
+
+  while [ $((SECONDS - start_time)) -lt "$timeout_secs" ]; do
+    # Phase 1: Can we reach the node at all?
+    local health_out
+    health_out=$(cli_node_json "$node_id" cluster health 2>&1) || {
+      sleep 2
+      continue
+    }
+
+    # Phase 2: Is the node initialized? (status=healthy implies initialized)
+    local node_status
+    node_status=$(parse_json "d.get('status', '')" <<< "$health_out" 2>/dev/null) || true
+    if [ "$node_status" != "healthy" ]; then
+      sleep 2
+      continue
+    fi
+    if [ "$is_initialized" != "true" ]; then
+      is_initialized=true
+      ok "Node $node_id: initialized (status=$node_status)"
+    fi
+
+    # Phase 3: Does the node know who the leader is?
+    local metrics_out
+    metrics_out=$(cli_node_json "$node_id" cluster metrics 2>&1) || {
+      sleep 2
+      continue
+    }
+
+    local leader
+    leader=$(parse_json "d.get('current_leader', '')" <<< "$metrics_out" 2>/dev/null) || true
+    if [ -z "$leader" ] || [ "$leader" = "None" ] || [ "$leader" = "null" ]; then
+      sleep 2
+      continue
+    fi
+    if [ "$has_leader" != "true" ]; then
+      has_leader=true
+      ok "Node $node_id: sees leader=$leader"
+    fi
+
+    # Phase 4: Is the node caught up? (last_applied advancing or at leader's level)
+    local applied
+    applied=$(parse_json "d.get('last_applied', 0)" <<< "$metrics_out" 2>/dev/null) || applied=0
+
+    if [ "$applied" -gt 0 ] 2>/dev/null; then
+      if [ "$applied" -ge "$prev_applied" ] && [ "$prev_applied" -gt 0 ]; then
+        caught_up=true
+      fi
+      prev_applied="$applied"
+    fi
+
+    # For single-node clusters, initialized + has_leader is sufficient
+    if [ "$NODE_COUNT" -eq 1 ]; then
+      ok "Node $node_id: rejoined Raft (single-node, applied=$applied)"
+      return 0
+    fi
+
+    # For multi-node: need to see that the node is caught up
+    if [ "$caught_up" = "true" ]; then
+      ok "Node $node_id: rejoined Raft (applied=$applied, leader=$leader)"
+      return 0
+    fi
+
+    # Also accept if applied is already high (node had state from before restart)
+    if [ "$applied" -gt 0 ] 2>/dev/null && [ "$has_leader" = "true" ]; then
+      ok "Node $node_id: rejoined Raft (applied=$applied, leader=$leader)"
+      return 0
+    fi
+
+    sleep 2
+  done
+
+  local elapsed=$((SECONDS - start_time))
+  warn "Node $node_id: rejoin timed out after ${elapsed}s (initialized=$is_initialized, leader=$has_leader, applied=$prev_applied)"
+  return 1
+}
+
+# ── Post-Deploy Cluster Assertion ─────────────────────────────────────
+#
+# After all nodes are upgraded, verify the cluster is actually healthy:
+#   1. All nodes agree on the same leader
+#   2. A KV write/read round-trip succeeds (proves consensus works)
+#   3. All nodes are voters (no one stuck as learner)
+
+assert_cluster_healthy() {
+  local timeout_secs="${1:-30}"
+  local start_time=$SECONDS
+
+  log "Asserting cluster health (timeout: ${timeout_secs}s)..."
+
+  while [ $((SECONDS - start_time)) -lt "$timeout_secs" ]; do
+    # ── Check 1: Leader agreement ──
+    local leaders=()
+    local all_agree=true
+
+    for i in $(seq 1 "$NODE_COUNT"); do
+      local pid
+      pid=$(cat "$CLUSTER_DIR/node$i.pid" 2>/dev/null || true)
+      if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+        all_agree=false
+        break
+      fi
+
+      local metrics_out
+      metrics_out=$(cli_node_json "$i" cluster metrics 2>&1) || {
+        all_agree=false
+        break
+      }
+
+      local leader
+      leader=$(parse_json "d.get('current_leader', '')" <<< "$metrics_out" 2>/dev/null) || true
+      if [ -z "$leader" ] || [ "$leader" = "None" ] || [ "$leader" = "null" ]; then
+        all_agree=false
+        break
+      fi
+      leaders+=("$leader")
+    done
+
+    if [ "$all_agree" != "true" ] || [ ${#leaders[@]} -ne "$NODE_COUNT" ]; then
+      sleep 2
+      continue
+    fi
+
+    # All nodes must agree on the same leader
+    local first_leader="${leaders[0]}"
+    local leader_consensus=true
+    for l in "${leaders[@]}"; do
+      if [ "$l" != "$first_leader" ]; then
+        leader_consensus=false
+        break
+      fi
+    done
+
+    if [ "$leader_consensus" != "true" ]; then
+      sleep 2
+      continue
+    fi
+
+    ok "Leader agreement: all $NODE_COUNT nodes see leader=$first_leader"
+
+    # ── Check 2: KV write/read round-trip ──
+    local test_key
+    test_key="_deploy:health:$(date +%s)"
+    local test_value="deploy-check-$$"
+
+    if cli kv set "$test_key" "$test_value" >/dev/null 2>&1; then
+      local read_out
+      read_out=$(cli_json kv get "$test_key" 2>&1) || true
+      local got_value
+      got_value=$(parse_json "d.get('value', '')" <<< "$read_out" 2>/dev/null) || true
+
+      if [ "$got_value" = "$test_value" ]; then
+        ok "KV round-trip: write + read succeeded"
+
+        # Clean up the test key (best-effort)
+        cli kv delete "$test_key" >/dev/null 2>&1 || true
+
+        # ── Check 3: All nodes are voters ──
+        local status_out
+        status_out=$(cli_json cluster status 2>&1) || true
+        local voter_count
+        voter_count=$(python3 -c "
+import json, sys, re
+raw = sys.stdin.read()
+for m in re.finditer(r'[\[{]', raw):
+    try:
+        d, _ = json.JSONDecoder().raw_decode(raw, m.start())
+    except (json.JSONDecodeError, ValueError):
+        continue
+    nodes = d.get('nodes', [])
+    voters = sum(1 for n in nodes if n.get('is_voter'))
+    print(voters)
+    sys.exit(0)
+print(0)
+" <<< "$status_out" 2>/dev/null) || voter_count=0
+
+        if [ "$voter_count" -ge "$NODE_COUNT" ]; then
+          ok "All $NODE_COUNT nodes are voters"
+        else
+          warn "Only $voter_count/$NODE_COUNT nodes are voters"
+        fi
+
+        return 0
+      fi
+    fi
+
+    sleep 2
+  done
+
+  local elapsed=$((SECONDS - start_time))
+  err "Cluster health assertion failed after ${elapsed}s"
+  return 1
+}
+
 # Extract a JSON field from CLI output that may have a version banner prefix.
 # Usage: parse_json <python_expr> <<< "$output"
 #   python_expr receives the parsed dict as 'd' and should print the result.
@@ -277,11 +509,19 @@ do_start() {
     sleep 2
   fi
 
-  # Verify cluster health
-  if cli cluster health 2>/dev/null | grep -q healthy; then
-    ok "Cluster healthy"
+  # Verify cluster health: full Raft assertion for multi-node, basic check for single
+  if [ "$NODE_COUNT" -gt 1 ]; then
+    if assert_cluster_healthy 30; then
+      ok "Cluster healthy (all nodes agree on leader, KV round-trip OK)"
+    else
+      warn "Cluster health assertion inconclusive — continuing"
+    fi
   else
-    warn "Cluster health check inconclusive (single-node is OK)"
+    if cli cluster health 2>/dev/null | grep -q healthy; then
+      ok "Cluster healthy"
+    else
+      warn "Cluster health check inconclusive (single-node is OK)"
+    fi
   fi
 
   # Start nix cache gateway if binary is available
@@ -1051,25 +1291,40 @@ print('')
       return 1
     fi
 
-    # For multi-node: wait for cluster to stabilize before next node
+    # Re-announce this node's new address to the cluster.
+    # After restart, iroh gets a new port. Other nodes still have the
+    # stale address in Raft membership. Calling add-learner updates the
+    # address even for existing voters.
     if [ "$NODE_COUNT" -gt 1 ]; then
-      log "Waiting for cluster to stabilize after node $i restart..."
-      local stable_retries=15
-      while [ $stable_retries -gt 0 ]; do
-        if cli cluster status >/dev/null 2>&1; then
-          ok "Cluster responsive after node $i upgrade"
-          break
-        fi
-        sleep 2
-        stable_retries=$((stable_retries - 1))
-      done
-      if [ $stable_retries -eq 0 ]; then
-        warn "Cluster not yet responsive after node $i — continuing anyway"
+      local strip_ansi='sed s/\x1b\[[0-9;]*m//g'
+      local new_endpoint new_addr
+      new_endpoint=$(grep "created Iroh endpoint" "$CLUSTER_DIR/node$i.log" \
+        | tail -1 | $strip_ansi | grep -oP 'endpoint_id=\K[a-f0-9]+')
+      new_addr=$(grep "direct_addrs" "$CLUSTER_DIR/node$i.log" \
+        | tail -1 | $strip_ansi | grep -oP '\d+\.\d+\.\d+\.\d+:\d+' | head -1)
+      if [ -n "$new_endpoint" ] && [ -n "$new_addr" ]; then
+        # Tell the cluster (via any reachable node) about this node's new address
+        cli cluster add-learner --node-id "$i" \
+          --addr "{\"id\":\"$new_endpoint\",\"addrs\":[{\"Ip\":\"$new_addr\"}]}" 2>/dev/null \
+          && ok "Node $i: address re-announced ($new_addr)" \
+          || warn "Node $i: address re-announce failed (may recover via gossip)"
       fi
+    fi
+
+    # Wait for this node to rejoin Raft before moving to the next one.
+    # Single-node: quick check (just needs to be initialized).
+    # Multi-node: full rejoin gate (initialized + leader + caught up).
+    if ! wait_node_rejoined "$i" 60; then
+      err "Node $i failed to rejoin Raft — aborting deploy"
+      tail -20 "$CLUSTER_DIR/node$i.log" 2>/dev/null
+      return 1
     fi
   done
 
-  # ── Step 4: Final health check ──────────────────────────────────
+  # ── Step 4: Post-deploy cluster assertion ───────────────────────
+  #
+  # All nodes are upgraded. Now verify the cluster is actually working:
+  # leader agreement, KV write/read round-trip, voter status.
 
   log "Verifying final cluster state..."
 
@@ -1085,24 +1340,76 @@ print('')
     fi
   done
 
-  # Verify cluster is responsive via CLI
-  local health_retries=15
-  while [ $health_retries -gt 0 ]; do
-    if cli cluster status >/dev/null 2>&1; then
-      ok "Cluster is healthy after deploy"
-      # Restart cache gateway with fresh ticket (node addresses may have changed)
-      if [ "$NODE_COUNT" -gt 1 ]; then
-        stop_cache_gateway
-        start_cache_gateway
-      fi
-      return 0
-    fi
-    sleep 2
-    health_retries=$((health_retries - 1))
-  done
+  # Re-announce ALL node addresses after the full rolling restart.
+  # Each node got a new iroh port on restart. The per-node add-learner
+  # during the loop only helps partially — after the last node (leader)
+  # restarts, ALL addresses are stale. This final sweep updates them.
+  #
+  # Key insight: add-learner is a Raft write, so it must go through the
+  # leader. After all nodes restart, only the leader can reach itself.
+  # We find the leader and use cli_node to talk directly to it.
+  if [ "$NODE_COUNT" -gt 1 ]; then
+    log "Re-announcing all node addresses after rolling restart..."
+    local strip_ansi='sed s/\x1b\[[0-9;]*m//g'
+    sleep 5
 
-  err "Cluster not responsive after deploy"
-  return 1
+    # Find which node thinks it's leader (it can at least talk to itself)
+    local leader_node=""
+    for i in $(seq 1 "$NODE_COUNT"); do
+      local state
+      state=$(cli_node_json "$i" cluster metrics 2>&1 | grep '"state"' | grep -oP '"[A-Z][a-z]+"' | head -1) || true
+      if [ "$state" = '"Leader"' ]; then
+        leader_node="$i"
+        break
+      fi
+    done
+
+    if [ -z "$leader_node" ]; then
+      warn "No leader found — address refresh may fail, waiting 10s..."
+      sleep 10
+      for i in $(seq 1 "$NODE_COUNT"); do
+        local state
+        state=$(cli_node_json "$i" cluster metrics 2>&1 | grep '"state"' | grep -oP '"[A-Z][a-z]+"' | head -1) || true
+        if [ "$state" = '"Leader"' ]; then
+          leader_node="$i"
+          break
+        fi
+      done
+    fi
+
+    if [ -n "$leader_node" ]; then
+      ok "Leader is node $leader_node — re-announcing addresses via it"
+      for i in $(seq 1 "$NODE_COUNT"); do
+        local new_endpoint new_addr
+        new_endpoint=$(grep "created Iroh endpoint" "$CLUSTER_DIR/node$i.log" \
+          | tail -1 | $strip_ansi | grep -oP 'endpoint_id=\K[a-f0-9]+')
+        new_addr=$(grep "direct_addrs" "$CLUSTER_DIR/node$i.log" \
+          | tail -1 | $strip_ansi | grep -oP '\d+\.\d+\.\d+\.\d+:\d+' | head -1)
+        if [ -n "$new_endpoint" ] && [ -n "$new_addr" ]; then
+          cli_node "$leader_node" cluster add-learner --node-id "$i" \
+            --addr "{\"id\":\"$new_endpoint\",\"addrs\":[{\"Ip\":\"$new_addr\"}]}" 2>/dev/null \
+            && ok "Node $i: address updated ($new_addr)" \
+            || warn "Node $i: address update failed"
+        fi
+      done
+    else
+      warn "No leader found after retry — cluster may need manual intervention"
+    fi
+    sleep 3
+  fi
+
+  if ! assert_cluster_healthy 90; then
+    err "Post-deploy cluster assertion failed"
+    return 1
+  fi
+
+  # Restart cache gateway with fresh ticket (node addresses may have changed)
+  if [ "$NODE_COUNT" -gt 1 ]; then
+    stop_cache_gateway
+    start_cache_gateway
+  fi
+
+  return 0
 }
 
 # ── Full Loop (build + deploy + verify) ───────────────────────────────
