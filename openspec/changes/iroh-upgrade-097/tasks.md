@@ -35,7 +35,7 @@
 - [x] 4.1 Add `h3-serving` feature flag to `aspen-nix-cache-gateway`
 - [x] 4.2 Replace axum TCP listener with h3-iroh QUIC listener using axum router
 - [x] 4.3 Define HTTP/3 ALPN constant in `aspen-transport`
-- [ ] 4.4 Verify nix client can fetch from HTTP/3 endpoint (deferred — requires running cluster)
+- [x] 4.4 Verify nix client can fetch from HTTP/3 endpoint — verified via `nix-cache-h3-test` VM test (h3-nix-client change)
 
 ## 5. Build and test verification
 
@@ -45,7 +45,7 @@
 - [x] 5.4 `nix build .#checks.x86_64-linux.clippy` — no new warnings
 - [x] 5.5 Update `flake.nix` — crate-hashes, h3-iroh vendor overrides if needed
 - [x] 5.6 Run key NixOS VM tests: `kv-operations-test` ✓, `multi-node-cluster` ✓
-- [ ] 5.7 Run `nix-cache-gateway-test` with h3-iroh transport (deferred — needs h3 nix client support)
+- [x] 5.7 Run `nix-cache-gateway-test` with h3-iroh transport — verified via `nix-cache-h3-test` VM test (h3-nix-client change)
 
 ## 6. Cleanup and merge
 

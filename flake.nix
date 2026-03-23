@@ -2151,6 +2151,26 @@
                   doCheck = false;
                 }
               );
+              # Nix cache gateway with HTTP/3 over iroh QUIC support.
+              ci-aspen-nix-cache-gateway-h3 = craneLib.buildPackage (
+                ciCommonArgs
+                // {
+                  pname = "aspen-nix-cache-gateway";
+                  version = "0.1.0";
+                  cargoExtraArgs = "-p aspen-nix-cache-gateway --bin aspen-nix-cache-gateway --features h3-serving";
+                  doCheck = false;
+                }
+              );
+              # TCP-to-iroh-h3 reverse proxy for bridging HTTP/1.1 clients to H3 endpoints.
+              ci-aspen-h3-proxy = craneLib.buildPackage (
+                ciCommonArgs
+                // {
+                  pname = "aspen-h3-proxy";
+                  version = "0.1.0";
+                  cargoExtraArgs = "-p aspen-h3-proxy --bin aspen-h3-proxy";
+                  doCheck = false;
+                }
+              );
             }
             # CI-path builds with plugins (requires --impure for aspen-wasm-plugin).
             # Uses ciSrc with the stub replaced by real aspen-wasm-plugin source.
@@ -3123,6 +3143,17 @@
                 aspenNodePackage = bins.full-aspen-node;
                 aspenCliPackage = bins.full-aspen-cli-ci;
                 gatewayPackage = bins.full-aspen-nix-cache-gateway;
+              };
+
+              # Nix cache via HTTP/3 over iroh QUIC: gateway --h3 + h3-proxy bridge.
+              # Verifies end-to-end H3 path: nix client → h3-proxy → gateway (iroh QUIC) → cluster.
+              # Build: nix build .#checks.x86_64-linux.nix-cache-h3-test
+              nix-cache-h3-test = import ./nix/tests/nix-cache-h3-test.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli-ci;
+                gatewayH3Package = bins.ci-aspen-nix-cache-gateway-h3;
+                h3ProxyPackage = bins.ci-aspen-h3-proxy;
               };
 
               # End-to-end push→build→cache test: full self-hosting pipeline.

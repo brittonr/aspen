@@ -6,6 +6,8 @@
 //! aspen-h3-proxy --endpoint-id <ID> --alpn "aspen/forge-web/1" --port 8080
 //! ```
 
+use std::collections::BTreeSet;
+use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -14,6 +16,7 @@ use aspen_h3_proxy::ProxyConfig;
 use clap::Parser;
 use iroh::EndpointAddr;
 use iroh::PublicKey;
+use iroh::TransportAddr;
 
 /// TCP-to-iroh-h3 reverse proxy.
 ///
@@ -42,6 +45,11 @@ struct Cli {
     /// Per-request timeout in seconds.
     #[arg(long, default_value_t = 30)]
     timeout_secs: u64,
+
+    /// Direct socket address of the target (ip:port). Use when relay
+    /// discovery is unavailable (e.g., no internet). Can be repeated.
+    #[arg(long)]
+    direct_addr: Vec<SocketAddr>,
 }
 
 #[tokio::main]
@@ -57,10 +65,12 @@ async fn main() -> anyhow::Result<()> {
 
     let endpoint_id: PublicKey = cli.endpoint_id.parse().context("invalid endpoint ID (expected base32 public key)")?;
 
+    let addrs: BTreeSet<TransportAddr> = cli.direct_addr.into_iter().map(TransportAddr::Ip).collect();
+
     let config = ProxyConfig {
         bind_addr: cli.bind,
         port: cli.port,
-        target_addr: EndpointAddr::from(endpoint_id),
+        target_addr: EndpointAddr { id: endpoint_id, addrs },
         alpn: cli.alpn.as_bytes().to_vec(),
         request_timeout: Duration::from_secs(cli.timeout_secs),
     };

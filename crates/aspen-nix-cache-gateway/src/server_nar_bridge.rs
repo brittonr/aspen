@@ -94,16 +94,18 @@ pub async fn run_h3(config: &GatewayConfig) -> anyhow::Result<()> {
     let endpoint = iroh::Endpoint::builder(N0).bind().await.context("failed to bind iroh endpoint")?;
 
     let addr = endpoint.addr();
+    let direct_addrs: Vec<String> = addr.addrs.iter().map(|a| a.to_string()).collect();
     info!(
         endpoint_id = %addr.id,
         endpoint_id_short = %addr.id.fmt_short(),
+        ?direct_addrs,
         "nix cache gateway listening (nar-bridge, HTTP/3 over iroh QUIC)"
     );
 
     // Register axum router as HTTP/3 protocol handler
     let h3_handler = IrohAxum::new(router);
     let iroh_router = iroh::protocol::Router::builder(endpoint)
-        .accept(aspen_transport::constants::NIX_CACHE_H3_ALPN.to_vec(), h3_handler)
+        .accept(aspen_transport::constants::NIX_CACHE_H3_ALPN, h3_handler)
         .spawn();
 
     // Wait for shutdown signal
