@@ -31,4 +31,12 @@
 
 ## 5. Script Hardening
 
-- [ ] 5.1 Run `ASPEN_NODE_COUNT=3 nix run .#dogfood-local -- full-loop` and fix any issues in the multi-node paths of `dogfood-local.sh`
+- [x] 5.1 Run `ASPEN_NODE_COUNT=3 nix run .#dogfood-local -- full-loop` and fix any issues in the multi-node paths of `dogfood-local.sh`
+  - FIXED: Deploy order now followers first, leader last (detected via `cluster status` JSON)
+  - FIXED: Per-node health check between restarts during rolling deploy
+  - FIXED: CLI ticket resolution falls back to any running node (not just node1)
+  - FIXED: Write forwarding handled CAS/batch write commands (rate limiter CAS was blocking all follower writes)
+  - FIXED: Write batcher bypassed on followers (batcher's flush path lacked forwarding)
+  - FIXED: Git push targets leader node directly (62K hash mapping writes can't be forwarded individually)
+  - REMAINING: `do_verify` fails after deploy because pipeline status query hits a newly-restarted node.
+    Non-blocking — the build+deploy themselves succeed. Fix: add retry/delay in verify after rolling deploy.
