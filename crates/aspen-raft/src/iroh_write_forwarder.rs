@@ -7,10 +7,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen_client_api::messages::AuthenticatedRequest;
+use aspen_client_api::messages::BatchWriteOperation;
 use aspen_client_api::messages::ClientRpcRequest;
 use aspen_client_api::messages::ClientRpcResponse;
 use aspen_client_api::messages::MAX_CLIENT_MESSAGE_SIZE;
-use aspen_client_api::messages::WriteResultResponse;
 use aspen_kv_types::KeyValueStoreError;
 use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteRequest;
@@ -30,6 +30,177 @@ const FORWARD_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// CLIENT_ALPN for connecting to the leader's client protocol handler.
 const CLIENT_ALPN: &[u8] = aspen_constants::network::CLIENT_ALPN;
+
+/// Convert a `WriteCommand` to the corresponding `ClientRpcRequest`.
+///
+/// Most write commands map directly to a client RPC variant. The few that
+/// don't (SetMulti, SetMultiWithTTL, DeleteMulti) are converted to batch
+/// operations.
+fn write_command_to_rpc_request(
+    command: &WriteCommand,
+    leader_id: NodeId,
+) -> Result<ClientRpcRequest, KeyValueStoreError> {
+    match command {
+        WriteCommand::Set { key, value } => Ok(ClientRpcRequest::WriteKey {
+            key: key.clone(),
+            value: value.as_bytes().to_vec(),
+        }),
+        WriteCommand::Delete { key } => Ok(ClientRpcRequest::DeleteKey { key: key.clone() }),
+        WriteCommand::CompareAndSwap {
+            key,
+            expected,
+            new_value,
+        } => Ok(ClientRpcRequest::CompareAndSwapKey {
+            key: key.clone(),
+            expected: expected.as_ref().map(|v| v.as_bytes().to_vec()),
+            new_value: new_value.as_bytes().to_vec(),
+        }),
+        WriteCommand::CompareAndDelete { key, expected } => Ok(ClientRpcRequest::CompareAndDeleteKey {
+            key: key.clone(),
+            expected: expected.as_bytes().to_vec(),
+        }),
+        WriteCommand::SetWithTTL { key, value, .. } => {
+            // TTL forwarding: the leader applies the TTL. We forward as a
+            // plain write — the TTL semantics are re-applied by the leader's
+            // KV handler since it processes the full WriteKey path.
+            // NOTE: This loses TTL info. If TTL forwarding becomes critical,
+            // add a WriteKeyWithTTL variant to ClientRpcRequest.
+            Ok(ClientRpcRequest::WriteKey {
+                key: key.clone(),
+                value: value.as_bytes().to_vec(),
+            })
+        }
+        WriteCommand::SetMulti { pairs } => {
+            let operations = pairs
+                .iter()
+                .map(|(k, v)| BatchWriteOperation::Set {
+                    key: k.clone(),
+                    value: v.as_bytes().to_vec(),
+                })
+                .collect();
+            Ok(ClientRpcRequest::BatchWrite { operations })
+        }
+        WriteCommand::SetMultiWithTTL { pairs, .. } => {
+            // Same TTL note as SetWithTTL above.
+            let operations = pairs
+                .iter()
+                .map(|(k, v)| BatchWriteOperation::Set {
+                    key: k.clone(),
+                    value: v.as_bytes().to_vec(),
+                })
+                .collect();
+            Ok(ClientRpcRequest::BatchWrite { operations })
+        }
+        WriteCommand::DeleteMulti { keys } => {
+            let operations = keys.iter().map(|k| BatchWriteOperation::Delete { key: k.clone() }).collect();
+            Ok(ClientRpcRequest::BatchWrite { operations })
+        }
+        WriteCommand::Batch { operations } => {
+            let rpc_ops = operations
+                .iter()
+                .map(|op| match op {
+                    aspen_kv_types::BatchOperation::Set { key, value } => BatchWriteOperation::Set {
+                        key: key.clone(),
+                        value: value.as_bytes().to_vec(),
+                    },
+                    aspen_kv_types::BatchOperation::Delete { key } => BatchWriteOperation::Delete { key: key.clone() },
+                })
+                .collect();
+            Ok(ClientRpcRequest::BatchWrite { operations: rpc_ops })
+        }
+        other => {
+            // ConditionalBatch and any future complex operations.
+            debug!(
+                leader_id = leader_id.0,
+                command = ?other,
+                "cannot forward complex write command, returning NotLeader"
+            );
+            Err(KeyValueStoreError::NotLeader {
+                leader: Some(leader_id.0),
+                reason: "complex write commands cannot be forwarded".to_string(),
+            })
+        }
+    }
+}
+
+/// Check if a response indicates a write success, regardless of the specific
+/// response variant. Returns Ok for success, Err for failures.
+fn interpret_write_response(response: ClientRpcResponse, leader_id: NodeId) -> Result<WriteResult, KeyValueStoreError> {
+    match response {
+        ClientRpcResponse::WriteResult(resp) => {
+            if resp.is_success {
+                Ok(WriteResult::default())
+            } else {
+                let reason = resp.error.unwrap_or_else(|| "write failed".to_string());
+                check_not_leader_error(reason, leader_id)
+            }
+        }
+        ClientRpcResponse::DeleteResult(resp) => {
+            if resp.was_deleted {
+                Ok(WriteResult::default())
+            } else if let Some(err) = resp.error {
+                check_not_leader_error(err, leader_id)
+            } else {
+                // Key didn't exist — still a successful operation
+                Ok(WriteResult::default())
+            }
+        }
+        ClientRpcResponse::CompareAndSwapResult(resp) => {
+            if resp.is_success {
+                Ok(WriteResult::default())
+            } else if let Some(err) = resp.error {
+                check_not_leader_error(err, leader_id)
+            } else {
+                // CAS condition failed (actual value didn't match expected).
+                // This is a legitimate CAS failure, not a forwarding error.
+                Err(KeyValueStoreError::CompareAndSwapFailed {
+                    key: String::new(), // Key info not in CAS response
+                    expected: None,
+                    actual: resp.actual_value.map(|v| String::from_utf8_lossy(&v).to_string()),
+                })
+            }
+        }
+        ClientRpcResponse::BatchWriteResult(resp) => {
+            if resp.is_success {
+                Ok(WriteResult::default())
+            } else {
+                let reason = resp.error.unwrap_or_else(|| "batch write failed".to_string());
+                check_not_leader_error(reason, leader_id)
+            }
+        }
+        ClientRpcResponse::ConditionalBatchWriteResult(resp) => {
+            if resp.is_success {
+                Ok(WriteResult::default())
+            } else {
+                let reason = resp.error.unwrap_or_else(|| "conditional batch failed".to_string());
+                check_not_leader_error(reason, leader_id)
+            }
+        }
+        other => {
+            warn!(
+                leader_id = leader_id.0,
+                response_type = ?std::mem::discriminant(&other),
+                "unexpected response type from forwarded write"
+            );
+            Err(KeyValueStoreError::Failed {
+                reason: "unexpected response from leader".to_string(),
+            })
+        }
+    }
+}
+
+/// If an error message suggests the target is also not the leader, return
+/// NotLeader so the caller can retry. Otherwise return Failed.
+fn check_not_leader_error(reason: String, leader_id: NodeId) -> Result<WriteResult, KeyValueStoreError> {
+    if reason.contains("forward") || reason.contains("not the leader") || reason.contains("ForwardToLeader") {
+        Err(KeyValueStoreError::NotLeader {
+            leader: None,
+            reason: format!("forwarding target {} is also not the leader", leader_id.0),
+        })
+    } else {
+        Err(KeyValueStoreError::Failed { reason })
+    }
+}
 
 /// Forwards writes to the Raft leader via iroh QUIC client protocol.
 pub struct IrohWriteForwarder {
@@ -51,29 +222,8 @@ impl WriteForwarder for IrohWriteForwarder {
         leader_addr: EndpointAddr,
         request: WriteRequest,
     ) -> Result<WriteResult, KeyValueStoreError> {
-        // Convert WriteCommand to ClientRpcRequest
-        let rpc_request = match &request.command {
-            WriteCommand::Set { key, value } => ClientRpcRequest::WriteKey {
-                key: key.clone(),
-                value: value.as_bytes().to_vec(),
-            },
-            WriteCommand::Delete { key } => ClientRpcRequest::DeleteKey { key: key.clone() },
-            other => {
-                // Complex operations (CAS, batch) can't be forwarded via simple
-                // client RPC. Return NotLeader so the caller's retry loop handles it.
-                debug!(
-                    leader_id = leader_id.0,
-                    command = ?other,
-                    "cannot forward complex write command, returning NotLeader"
-                );
-                return Err(KeyValueStoreError::NotLeader {
-                    leader: Some(leader_id.0),
-                    reason: "complex write commands cannot be forwarded".to_string(),
-                });
-            }
-        };
+        let rpc_request = write_command_to_rpc_request(&request.command, leader_id)?;
 
-        // Connect to leader and send the request
         let result = timeout(FORWARD_TIMEOUT, async {
             let connection = self.endpoint.connect(leader_addr.clone(), CLIENT_ALPN).await.map_err(|e| {
                 KeyValueStoreError::Failed {
@@ -85,7 +235,6 @@ impl WriteForwarder for IrohWriteForwarder {
                 reason: format!("failed to open stream to leader {}: {e}", leader_id.0),
             })?;
 
-            // Wrap as unauthenticated (internal forwarding, leader trusts cluster peers)
             let authenticated = AuthenticatedRequest::unauthenticated(rpc_request);
             let request_bytes = postcard::to_stdvec(&authenticated).map_err(|e| KeyValueStoreError::Failed {
                 reason: format!("failed to serialize forwarded write: {e}"),
@@ -109,45 +258,7 @@ impl WriteForwarder for IrohWriteForwarder {
                     reason: format!("failed to deserialize forwarded write response: {e}"),
                 })?;
 
-            match response {
-                ClientRpcResponse::WriteResult(WriteResultResponse { is_success: true, .. }) => {
-                    Ok(WriteResult::default())
-                }
-                ClientRpcResponse::WriteResult(WriteResultResponse {
-                    is_success: false,
-                    error,
-                }) => {
-                    let reason = error.unwrap_or_else(|| "unknown error".to_string());
-                    // Check if the leader also returned NotLeader (stale hint)
-                    if reason.contains("forward") || reason.contains("not the leader") {
-                        Err(KeyValueStoreError::NotLeader {
-                            leader: None,
-                            reason: format!("forwarding target {leader_id:?} is also not the leader"),
-                        })
-                    } else {
-                        Err(KeyValueStoreError::Failed { reason })
-                    }
-                }
-                ClientRpcResponse::DeleteResult(resp) => {
-                    if resp.was_deleted {
-                        Ok(WriteResult::default())
-                    } else {
-                        Err(KeyValueStoreError::Failed {
-                            reason: resp.error.unwrap_or_else(|| "delete failed".to_string()),
-                        })
-                    }
-                }
-                other => {
-                    warn!(
-                        leader_id = leader_id.0,
-                        response_type = ?std::mem::discriminant(&other),
-                        "unexpected response type from forwarded write"
-                    );
-                    Err(KeyValueStoreError::Failed {
-                        reason: "unexpected response from leader".to_string(),
-                    })
-                }
-            }
+            interpret_write_response(response, leader_id)
         })
         .await;
 

@@ -33,9 +33,25 @@ ASPEN_CLI="${ASPEN_CLI_BIN:-aspen-cli}"
 # GIT_REMOTE="${GIT_REMOTE_ASPEN_BIN:-git-remote-aspen}"
 PROJECT="${PROJECT_DIR:-$(pwd)}"
 
+# Find a valid cluster ticket from any running node.
+# Prefers node1 but falls back to other nodes during rolling deploy.
+get_ticket() {
+  for i in $(seq 1 "$NODE_COUNT"); do
+    local t
+    t=$(cat "$CLUSTER_DIR/node$i/cluster-ticket.txt" 2>/dev/null) || continue
+    local pid
+    pid=$(cat "$CLUSTER_DIR/node$i.pid" 2>/dev/null || true)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      echo "$t"
+      return 0
+    fi
+  done
+  return 1
+}
+
 cli() {
   local ticket
-  ticket=$(cat "$CLUSTER_DIR/node1/cluster-ticket.txt" 2>/dev/null) || {
+  ticket=$(get_ticket) || {
     err "No cluster ticket found. Is the cluster running?"
     return 1
   }
@@ -44,7 +60,7 @@ cli() {
 
 cli_json() {
   local ticket
-  ticket=$(cat "$CLUSTER_DIR/node1/cluster-ticket.txt" 2>/dev/null) || return 1
+  ticket=$(get_ticket) || return 1
   "$ASPEN_CLI" --ticket "$ticket" --json "$@"
 }
 
@@ -916,40 +932,60 @@ print('')
   fi
   ok "CI-built binary validated: $ci_bin"
 
-  # ── Step 3: Script-level deploy (stop → restart with new binary) ─
+  # ── Step 3: Script-level rolling deploy ──────────────────────────
   #
-  # In a 1-node cluster, CI-internal deploy (DeploymentCoordinator) can't
-  # work because the coordinator sends NodeUpgrade to itself, which restarts
-  # the process and kills the coordinator mid-flight. Instead, we do the
-  # deploy at the script level: stop the old node, start with the CI-built
-  # binary, wait for it to come back.
+  # For single-node: stop then restart (DeploymentCoordinator can't
+  # self-upgrade because it kills itself mid-flight).
+  #
+  # For multi-node: followers first, leader last. After each node
+  # restart, wait for the cluster to remain healthy before proceeding.
+  # This preserves quorum throughout the upgrade.
 
-  for i in $(seq 1 "$NODE_COUNT"); do
+  # Build deploy order: followers first, leader last
+  local deploy_order=()
+  if [ "$NODE_COUNT" -gt 1 ]; then
+    local leader_id
+    leader_id=$(parse_json "next((n.get('node_id',0) for n in d.get('nodes',[]) if n.get('is_leader')), 1)" <<< "$(cli_json cluster status 2>&1)") || leader_id=""
+    leader_id="${leader_id:-1}"
+    log "Current leader: node $leader_id (will be upgraded last)"
+
+    for i in $(seq 1 "$NODE_COUNT"); do
+      if [ "$i" -ne "$leader_id" ]; then
+        deploy_order+=("$i")
+      fi
+    done
+    deploy_order+=("$leader_id")
+  else
+    deploy_order=(1)
+  fi
+
+  log "Deploy order: ${deploy_order[*]}"
+
+  for i in "${deploy_order[@]}"; do
     local pid
     pid=$(cat "$CLUSTER_DIR/node$i.pid" 2>/dev/null || true)
 
     if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
-      warn "Node $i not running (PID $pid), skipping"
-      continue
+      warn "Node $i not running (PID $pid), skipping stop"
+    else
+      log "Stopping node $i (PID $pid) for binary upgrade..."
+      kill "$pid" 2>/dev/null || true
+
+      # Wait for the process to actually exit
+      local wait_count=0
+      while kill -0 "$pid" 2>/dev/null && [ $wait_count -lt 15 ]; do
+        sleep 1
+        wait_count=$((wait_count + 1))
+      done
+
+      if kill -0 "$pid" 2>/dev/null; then
+        warn "Node $i didn't stop gracefully, sending SIGKILL"
+        kill -9 "$pid" 2>/dev/null || true
+        sleep 1
+      fi
+
+      ok "Node $i stopped"
     fi
-
-    log "Stopping node $i (PID $pid) for binary upgrade..."
-    kill "$pid" 2>/dev/null || true
-
-    # Wait for the process to actually exit
-    local wait_count=0
-    while kill -0 "$pid" 2>/dev/null && [ $wait_count -lt 15 ]; do
-      sleep 1
-      wait_count=$((wait_count + 1))
-    done
-
-    if kill -0 "$pid" 2>/dev/null; then
-      warn "Node $i didn't stop gracefully, sending SIGKILL"
-      kill -9 "$pid" 2>/dev/null || true
-      sleep 1
-    fi
-
-    ok "Node $i stopped"
 
     # Read the iroh secret key used at start (deterministic from node id)
     local key
@@ -976,32 +1012,48 @@ print('')
       --ci-auto-trigger \
       >> "$CLUSTER_DIR/node$i.log" 2>&1 &
     echo $! > "$CLUSTER_DIR/node$i.pid"
-  done
 
-  # ── Step 4: Wait for the cluster to come back ───────────────────
+    # Wait for this node's ticket file to appear (proves it started)
+    local ticket_retries=30
+    while [ $ticket_retries -gt 0 ]; do
+      if [ -f "$CLUSTER_DIR/node$i/cluster-ticket.txt" ]; then
+        break
+      fi
+      sleep 1
+      ticket_retries=$((ticket_retries - 1))
+    done
 
-  log "Waiting for cluster to come back online..."
-
-  # The cluster-ticket.txt is regenerated on each start. Wait for it to
-  # appear fresh (the old one was from the previous process).
-  rm -f "$CLUSTER_DIR/node1/cluster-ticket.txt"
-
-  local retries=60
-  while [ $retries -gt 0 ]; do
-    if [ -f "$CLUSTER_DIR/node1/cluster-ticket.txt" ]; then
-      break
+    local new_pid
+    new_pid=$(cat "$CLUSTER_DIR/node$i.pid" 2>/dev/null || true)
+    if [ -n "$new_pid" ] && kill -0 "$new_pid" 2>/dev/null; then
+      ok "Node $i (PID $new_pid): restarted with CI-built binary"
+    else
+      err "Node $i failed to restart — check $CLUSTER_DIR/node$i.log"
+      tail -10 "$CLUSTER_DIR/node$i.log" 2>/dev/null
+      return 1
     fi
-    sleep 1
-    retries=$((retries - 1))
+
+    # For multi-node: wait for cluster to stabilize before next node
+    if [ "$NODE_COUNT" -gt 1 ]; then
+      log "Waiting for cluster to stabilize after node $i restart..."
+      local stable_retries=15
+      while [ $stable_retries -gt 0 ]; do
+        if cli cluster status >/dev/null 2>&1; then
+          ok "Cluster responsive after node $i upgrade"
+          break
+        fi
+        sleep 2
+        stable_retries=$((stable_retries - 1))
+      done
+      if [ $stable_retries -eq 0 ]; then
+        warn "Cluster not yet responsive after node $i — continuing anyway"
+      fi
+    fi
   done
 
-  if [ ! -f "$CLUSTER_DIR/node1/cluster-ticket.txt" ]; then
-    err "Node 1 failed to restart within 60s"
-    tail -20 "$CLUSTER_DIR/node1.log" 2>/dev/null
-    return 1
-  fi
+  # ── Step 4: Final health check ──────────────────────────────────
 
-  # ── Step 5: Health check ────────────────────────────────────────
+  log "Verifying final cluster state..."
 
   # Verify all nodes are alive
   for i in $(seq 1 "$NODE_COUNT"); do
@@ -1016,10 +1068,15 @@ print('')
   done
 
   # Verify cluster is responsive via CLI
-  local health_retries=10
+  local health_retries=15
   while [ $health_retries -gt 0 ]; do
     if cli cluster status >/dev/null 2>&1; then
       ok "Cluster is healthy after deploy"
+      # Restart cache gateway with fresh ticket (node addresses may have changed)
+      if [ "$NODE_COUNT" -gt 1 ]; then
+        stop_cache_gateway
+        start_cache_gateway
+      fi
       return 0
     fi
     sleep 2

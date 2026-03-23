@@ -21,7 +21,7 @@ use async_trait::async_trait;
 use openraft::ReadPolicy;
 use openraft::error::ClientWriteError;
 use openraft::error::RaftError;
-use tracing::info;
+use tracing::debug;
 use tracing::instrument;
 
 use super::RaftNode;
@@ -43,14 +43,21 @@ impl KeyValueStore for RaftNode {
 
         validate_write_command(&request.command)?;
 
-        // Route simple Set/Delete through batcher if enabled
+        // Route simple Set/Delete through batcher if enabled.
+        // Only use the batcher when this node is the leader. The batcher's
+        // flush path calls raft.client_write() directly without write
+        // forwarding — on a follower this always returns ForwardToLeader.
+        // Followers skip the batcher and fall through to the forwarding path.
         if let Some(batcher) = self.write_batcher() {
-            match &request.command {
-                WriteCommand::Set { .. } | WriteCommand::Delete { .. } => {
-                    return batcher.write_shared(request.command).await;
+            let is_leader = self.raft().metrics().borrow().current_leader == Some(self.node_id());
+            if is_leader {
+                match &request.command {
+                    WriteCommand::Set { .. } | WriteCommand::Delete { .. } => {
+                        return batcher.write_shared(request.command).await;
+                    }
+                    // Complex operations bypass batcher for correctness
+                    _ => {}
                 }
-                // Complex operations bypass batcher for correctness
-                _ => {}
             }
         }
 
@@ -70,7 +77,7 @@ impl KeyValueStore for RaftNode {
                     && let Some(leader_node) = &forward_info.leader_node
                 {
                     let leader_addr = leader_node.iroh_addr.clone();
-                    info!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding write to leader");
+                    debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding write to leader");
                     return forwarder.forward_write(leader_id, leader_addr, request).await;
                 }
                 Err(map_raft_write_error(err))
