@@ -3032,3 +3032,26 @@ impl Outputable for RollbackOutput {
         }
     }
 }
+
+/// Output for the `cluster update-peer` command.
+pub struct UpdatePeerOutput {
+    pub is_success: bool,
+    pub error: Option<String>,
+}
+
+impl Outputable for UpdatePeerOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "is_success": self.is_success,
+            "error": self.error,
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.is_success {
+            "Peer address updated".to_string()
+        } else {
+            format!("Update peer failed: {}", self.error.as_deref().unwrap_or("unknown error"))
+        }
+    }
+}

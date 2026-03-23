@@ -18,6 +18,7 @@ use crate::output::HealthOutput;
 use crate::output::NodeInfo;
 use crate::output::RaftMetricsOutput;
 use crate::output::RollbackOutput;
+use crate::output::UpdatePeerOutput;
 use crate::output::print_output;
 use crate::output::print_success;
 
@@ -65,6 +66,20 @@ pub enum ClusterCommand {
 
     /// Roll back the current or last deployment.
     Rollback,
+
+    /// Update a peer's address in the local network factory (no Raft consensus).
+    UpdatePeer(UpdatePeerArgs),
+}
+
+#[derive(Args)]
+pub struct UpdatePeerArgs {
+    /// Node ID of the peer to update.
+    #[arg(long)]
+    pub node_id: u64,
+
+    /// JSON endpoint address: {"id":"<hex>","addrs":[{"Ip":"host:port"}]}.
+    #[arg(long)]
+    pub addr: String,
 }
 
 #[derive(Args)]
@@ -136,6 +151,7 @@ impl ClusterCommand {
             ClusterCommand::Deploy(args) => deploy(client, args, json).await,
             ClusterCommand::DeployStatus => deploy_status(client, json).await,
             ClusterCommand::Rollback => rollback(client, json).await,
+            ClusterCommand::UpdatePeer(args) => update_peer(client, args, json).await,
         }
     }
 }
@@ -274,6 +290,33 @@ async fn add_learner(client: &AspenClient, args: AddLearnerArgs, json: bool) -> 
     match response {
         ClientRpcResponse::AddLearnerResult(_) => {
             print_success(&format!("Learner {} added at {}", args.node_id, args.addr), json);
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => {
+            anyhow::bail!("{}: {}", e.code, e.message)
+        }
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn update_peer(client: &AspenClient, args: UpdatePeerArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::AddPeer {
+            node_id: args.node_id,
+            endpoint_addr: args.addr.clone(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::AddPeerResult(result) => {
+            let output = UpdatePeerOutput {
+                is_success: result.is_success,
+                error: result.error,
+            };
+            print_output(&output, json);
+            if !output.is_success {
+                anyhow::bail!("update-peer failed: {}", output.error.as_deref().unwrap_or("unknown error"));
+            }
             Ok(())
         }
         ClientRpcResponse::Error(e) => {

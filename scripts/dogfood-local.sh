@@ -1291,25 +1291,10 @@ print('')
       return 1
     fi
 
-    # Re-announce this node's new address to the cluster.
-    # After restart, iroh gets a new port. Other nodes still have the
-    # stale address in Raft membership. Calling add-learner updates the
-    # address even for existing voters.
-    if [ "$NODE_COUNT" -gt 1 ]; then
-      local strip_ansi='sed s/\x1b\[[0-9;]*m//g'
-      local new_endpoint new_addr
-      new_endpoint=$(grep "created Iroh endpoint" "$CLUSTER_DIR/node$i.log" \
-        | tail -1 | $strip_ansi | grep -oP 'endpoint_id=\K[a-f0-9]+')
-      new_addr=$(grep "direct_addrs" "$CLUSTER_DIR/node$i.log" \
-        | tail -1 | $strip_ansi | grep -oP '\d+\.\d+\.\d+\.\d+:\d+' | head -1)
-      if [ -n "$new_endpoint" ] && [ -n "$new_addr" ]; then
-        # Tell the cluster (via any reachable node) about this node's new address
-        cli cluster add-learner --node-id "$i" \
-          --addr "{\"id\":\"$new_endpoint\",\"addrs\":[{\"Ip\":\"$new_addr\"}]}" 2>/dev/null \
-          && ok "Node $i: address re-announced ($new_addr)" \
-          || warn "Node $i: address re-announce failed (may recover via gossip)"
-      fi
-    fi
+    # NOTE: Per-node address re-announce removed. The post-deploy sweep
+    # below uses update-peer to push every node's address to every other
+    # node — no Raft consensus needed, works even when followers can't
+    # reach the leader.
 
     # Wait for this node to rejoin Raft before moving to the next one.
     # Single-node: quick check (just needs to be initialized).
@@ -1340,61 +1325,33 @@ print('')
     fi
   done
 
-  # Re-announce ALL node addresses after the full rolling restart.
-  # Each node got a new iroh port on restart. The per-node add-learner
-  # during the loop only helps partially — after the last node (leader)
-  # restarts, ALL addresses are stale. This final sweep updates them.
-  #
-  # Key insight: add-learner is a Raft write, so it must go through the
-  # leader. After all nodes restart, only the leader can reach itself.
-  # We find the leader and use cli_node to talk directly to it.
+  # Full address sweep: push every node's address to every OTHER node.
+  # Each node got a new iroh port on restart. update-peer operates on
+  # each node's local network factory — no Raft consensus, no leader
+  # required. This fixes the problem where add-learner (a Raft write)
+  # couldn't reach the leader after all nodes restarted.
   if [ "$NODE_COUNT" -gt 1 ]; then
-    log "Re-announcing all node addresses after rolling restart..."
+    log "Updating peer addresses across all nodes..."
     local strip_ansi='sed s/\x1b\[[0-9;]*m//g'
     sleep 5
 
-    # Find which node thinks it's leader (it can at least talk to itself)
-    local leader_node=""
     for i in $(seq 1 "$NODE_COUNT"); do
-      local state
-      state=$(cli_node_json "$i" cluster metrics 2>&1 | grep '"state"' | grep -oP '"[A-Z][a-z]+"' | head -1) || true
-      if [ "$state" = '"Leader"' ]; then
-        leader_node="$i"
-        break
+      local new_endpoint new_addr
+      new_endpoint=$(grep "created Iroh endpoint" "$CLUSTER_DIR/node$i.log" \
+        | tail -1 | $strip_ansi | grep -oP 'endpoint_id=\K[a-f0-9]+')
+      new_addr=$(grep "direct_addrs" "$CLUSTER_DIR/node$i.log" \
+        | tail -1 | $strip_ansi | grep -oP '\d+\.\d+\.\d+\.\d+:\d+' | head -1)
+      if [ -n "$new_endpoint" ] && [ -n "$new_addr" ]; then
+        # Tell every OTHER node about this node's current address
+        for other in $(seq 1 "$NODE_COUNT"); do
+          [ "$other" -eq "$i" ] && continue
+          cli_node "$other" cluster update-peer --node-id "$i" \
+            --addr "{\"id\":\"$new_endpoint\",\"addrs\":[{\"Ip\":\"$new_addr\"}]}" 2>/dev/null \
+            && ok "Node $other: updated address for node $i ($new_addr)" \
+            || warn "Node $other: failed to update address for node $i"
+        done
       fi
     done
-
-    if [ -z "$leader_node" ]; then
-      warn "No leader found — address refresh may fail, waiting 10s..."
-      sleep 10
-      for i in $(seq 1 "$NODE_COUNT"); do
-        local state
-        state=$(cli_node_json "$i" cluster metrics 2>&1 | grep '"state"' | grep -oP '"[A-Z][a-z]+"' | head -1) || true
-        if [ "$state" = '"Leader"' ]; then
-          leader_node="$i"
-          break
-        fi
-      done
-    fi
-
-    if [ -n "$leader_node" ]; then
-      ok "Leader is node $leader_node — re-announcing addresses via it"
-      for i in $(seq 1 "$NODE_COUNT"); do
-        local new_endpoint new_addr
-        new_endpoint=$(grep "created Iroh endpoint" "$CLUSTER_DIR/node$i.log" \
-          | tail -1 | $strip_ansi | grep -oP 'endpoint_id=\K[a-f0-9]+')
-        new_addr=$(grep "direct_addrs" "$CLUSTER_DIR/node$i.log" \
-          | tail -1 | $strip_ansi | grep -oP '\d+\.\d+\.\d+\.\d+:\d+' | head -1)
-        if [ -n "$new_endpoint" ] && [ -n "$new_addr" ]; then
-          cli_node "$leader_node" cluster add-learner --node-id "$i" \
-            --addr "{\"id\":\"$new_endpoint\",\"addrs\":[{\"Ip\":\"$new_addr\"}]}" 2>/dev/null \
-            && ok "Node $i: address updated ($new_addr)" \
-            || warn "Node $i: address update failed"
-        fi
-      done
-    else
-      warn "No leader found after retry — cluster may need manual intervention"
-    fi
     sleep 3
   fi
 
