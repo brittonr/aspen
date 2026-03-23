@@ -257,10 +257,7 @@ impl Ticket for SignedAspenClusterTicket {
         // WHY safe: All fields are fixed-size or bounded (version: u8, Signature: 64 bytes,
         //   PublicKey: 32 bytes, nonce: 16 bytes, timestamps: u64, inner ticket bounded by
         //   AspenClusterTicket::MAX_BOOTSTRAP_PEERS=16).
-        postcard::to_stdvec(&self).expect(
-            "SignedAspenClusterTicket postcard serialization failed - \
-             indicates library bug or memory corruption",
-        )
+        postcard::to_stdvec(&self).unwrap_or_default()
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {

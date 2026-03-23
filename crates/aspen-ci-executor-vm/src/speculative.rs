@@ -109,8 +109,22 @@ impl SpeculativeGroup {
     /// Clone this for each fork's execution task. Send a `ForkResult`
     /// when the fork completes (success or failure). Drop the sender
     /// when done — `wait_first_success()` terminates when all senders close.
+    ///
+    /// If the result sender has already been consumed by `wait_first_success()`,
+    /// logs an error and returns a dummy sender that drops all messages.
     pub fn result_tx(&self) -> mpsc::Sender<ForkResult> {
-        self.result_tx.as_ref().expect("result_tx already consumed by wait_first_success").clone()
+        match self.result_tx.as_ref() {
+            Some(tx) => tx.clone(),
+            None => {
+                warn!(
+                    job_id = %self.job_id,
+                    "result_tx already consumed by wait_first_success, returning dummy sender"
+                );
+                // Create a dummy channel that drops all messages
+                let (tx, _rx) = mpsc::channel(1);
+                tx
+            }
+        }
     }
 
     /// Wait for the first successful fork, or all forks to fail.

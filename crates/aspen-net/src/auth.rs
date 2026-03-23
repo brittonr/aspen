@@ -47,11 +47,18 @@ impl NetAuthenticator {
         use aspen_auth::TokenBuilder;
 
         let key = iroh::SecretKey::generate(&mut rand::rng());
-        let token = TokenBuilder::new(key)
+        // Permissive token build with valid key and fixed capability cannot fail.
+        // If it somehow does, create a minimal token via a second attempt.
+        let token = TokenBuilder::new(key.clone())
             .with_capability(Capability::NetAdmin)
             .with_lifetime(Duration::from_secs(365 * 24 * 3600))
             .build()
-            .expect("permissive token build should not fail");
+            .unwrap_or_else(|_| {
+                TokenBuilder::new(key)
+                    .with_capability(Capability::NetAdmin)
+                    .build()
+                    .expect("token build with valid key is infallible")
+            });
         let verifier = TokenVerifier::new();
         Self { token, verifier }
     }

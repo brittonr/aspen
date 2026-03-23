@@ -143,12 +143,12 @@ impl WriteBatcher {
     /// leadership transitions. Called during bootstrap after the forwarder
     /// is created but before the node starts accepting writes.
     pub fn set_write_forwarder(&self, forwarder: Arc<dyn WriteForwarder>) {
-        *self.write_forwarder.write().unwrap() = Some(forwarder);
+        *self.write_forwarder.write().unwrap_or_else(|e| e.into_inner()) = Some(forwarder);
     }
 
     /// Get the write forwarder, if set.
     pub(super) fn write_forwarder(&self) -> Option<Arc<dyn WriteForwarder>> {
-        self.write_forwarder.read().unwrap().clone()
+        self.write_forwarder.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     /// Submit a write operation for batching (Arc version with timeout support).

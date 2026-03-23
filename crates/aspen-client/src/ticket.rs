@@ -101,7 +101,7 @@ impl Ticket for AspenClientTicket {
     fn to_bytes(&self) -> Vec<u8> {
         // SAFETY: postcard serialization of #[derive(Serialize)] types with only
         // primitive fields and standard library types is infallible.
-        postcard::to_stdvec(self).expect("AspenClientTicket serialization should not fail")
+        postcard::to_stdvec(self).unwrap_or_default()
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {

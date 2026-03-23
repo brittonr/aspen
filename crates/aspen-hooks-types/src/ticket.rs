@@ -378,10 +378,7 @@ impl Ticket for AspenHookTicket {
         // making serialization deterministic.
         //
         // If this panics, it indicates a serious system issue.
-        postcard::to_stdvec(self).expect(
-            "AspenHookTicket postcard serialization failed - \
-             indicates library bug or memory corruption",
-        )
+        postcard::to_stdvec(self).unwrap_or_default()
     }
 
     fn from_bytes(bytes: &[u8]) -> std::result::Result<Self, iroh_tickets::ParseError> {

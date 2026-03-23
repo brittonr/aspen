@@ -100,10 +100,9 @@ impl SubscriptionRegistry {
             Some(s) => s,
             None => {
                 // Connection not registered; create state on the fly
-                conns.insert(conn_id, ConnectionState {
+                conns.entry(conn_id).or_insert_with(|| ConnectionState {
                     subscriptions: HashMap::new(),
-                });
-                conns.get_mut(&conn_id).unwrap()
+                })
             }
         };
 

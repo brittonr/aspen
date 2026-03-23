@@ -468,10 +468,11 @@ pub struct LwwRegister<T> {
 
 impl<T: Clone> LwwRegister<T> {
     fn new(value: T) -> Self {
-        // Use a zero timestamp as the initial state (NTP64 time 0, empty ID)
-        // SAFETY: [1u8; 16] is a hardcoded constant with all non-zero bytes,
-        // so ID::try_from is infallible for this input.
-        let zero_id = ID::try_from([1u8; 16]).expect("16 non-zero bytes always valid for ID");
+        // Use a zero timestamp as the initial state (NTP64 time 0, constant ID).
+        // Proof: [1u8; 16] contains only non-zero bytes, so ID::try_from is infallible.
+        // This is a compile-time invariant; the unwrap cannot be reached at runtime.
+        const SEED: [u8; 16] = [1u8; 16];
+        let zero_id = ID::try_from(SEED).expect("[1u8; 16] has no zero bytes");
         Self {
             value,
             timestamp: HlcTimestamp::new(NTP64(0), zero_id),

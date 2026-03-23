@@ -270,9 +270,11 @@ pub enum SubspaceError {
 fn strinc_inplace(data: &mut Vec<u8>) -> bool {
     while let Some(&last) = data.last() {
         if last < 0xFF {
-            // SAFETY: The while-let condition guarantees data.last() is Some,
+            // The while-let condition guarantees data.last() is Some,
             // so data.last_mut() is also Some.
-            *data.last_mut().unwrap() = last + 1;
+            if let Some(last_byte) = data.last_mut() {
+                *last_byte = last + 1;
+            }
             return true;
         }
         data.pop();

@@ -184,8 +184,10 @@ async fn kv_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()> {
     let value = if let Some(ref path) = args.file {
         std::fs::read(path).map_err(|e| anyhow::anyhow!("failed to read file '{}': {}", path.display(), e))?
     } else {
-        // Safe: clap's required_unless_present ensures value is Some when file is None
-        args.value.expect("value required when --file not provided").into_bytes()
+        match args.value {
+            Some(value) => value.into_bytes(),
+            None => return Err(anyhow::anyhow!("value required when --file not provided")),
+        }
     };
 
     let response = client

@@ -57,7 +57,7 @@ async fn build_cluster_services(
 async fn build_router(config: &GatewayConfig) -> anyhow::Result<axum::Router> {
     let (blob_svc, dir_svc, pathinfo_svc) = build_cluster_services(&config.ticket, config.timeout_secs).await?;
 
-    let cache_capacity = NonZeroUsize::new(ROOT_NODE_CACHE_CAPACITY).expect("ROOT_NODE_CACHE_CAPACITY is non-zero");
+    let cache_capacity = NonZeroUsize::new(ROOT_NODE_CACHE_CAPACITY).unwrap_or(NonZeroUsize::MIN);
     let state = nar_bridge::AppState::new(blob_svc, dir_svc, pathinfo_svc, cache_capacity);
 
     Ok(nar_bridge::gen_router(CACHE_PRIORITY).with_state(state))

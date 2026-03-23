@@ -257,13 +257,19 @@ fn merge_trees_recursive<'a, B: BlobStore>(
 
                     if o_is_dir && t_is_dir {
                         // Both sides are directories with different hashes — recurse
-                        let base_subtree = if b_is_dir {
-                            store.get_tree(&b.unwrap().hash()).await?
-                        } else {
-                            TreeObject::new(vec![])
+                        // o and t are guaranteed Some by the o_is_dir/t_is_dir guards above.
+                        let base_subtree = match b {
+                            Some(entry) if b_is_dir => store.get_tree(&entry.hash()).await?,
+                            _ => TreeObject::new(vec![]),
                         };
-                        let ours_subtree = store.get_tree(&o.unwrap().hash()).await?;
-                        let theirs_subtree = store.get_tree(&t.unwrap().hash()).await?;
+                        let ours_entry = o.ok_or_else(|| ForgeError::InvalidObject {
+                            message: "ours entry missing despite o_is_dir guard".into(),
+                        })?;
+                        let theirs_entry = t.ok_or_else(|| ForgeError::InvalidObject {
+                            message: "theirs entry missing despite t_is_dir guard".into(),
+                        })?;
+                        let ours_subtree = store.get_tree(&ours_entry.hash()).await?;
+                        let theirs_subtree = store.get_tree(&theirs_entry.hash()).await?;
 
                         let sub_prefix = format_path(prefix, name);
 

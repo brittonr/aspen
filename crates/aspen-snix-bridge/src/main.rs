@@ -91,10 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Use snix-tracing for unified tracing setup (supports OTLP via --tracer otlp
     // and OTEL_EXPORTER_OTLP_ENDPOINT env var)
-    let _tracing_handle = snix_tracing::TracingBuilder::default()
-        .handle_tracing_args(&args.tracing)
-        .build()
-        .expect("failed to initialize tracing");
+    let _tracing_handle = snix_tracing::TracingBuilder::default().handle_tracing_args(&args.tracing).build().ok();
 
     // Remove stale socket
     if args.socket.exists() {

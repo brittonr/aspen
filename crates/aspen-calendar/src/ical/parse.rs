@@ -199,8 +199,9 @@ fn unfold_lines(input: &str) -> Vec<String> {
     let mut result: Vec<String> = Vec::new();
     for line in input.lines() {
         if (line.starts_with(' ') || line.starts_with('\t')) && !result.is_empty() {
-            let last = result.last_mut().expect("checked non-empty");
-            last.push_str(&line[1..]);
+            if let Some(last) = result.last_mut() {
+                last.push_str(&line[1..]);
+            }
         } else {
             result.push(line.to_string());
         }

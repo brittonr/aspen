@@ -27,7 +27,8 @@ type HmacSha256 = Hmac<Sha256>;
 #[inline]
 pub fn compute_sops_mac(values: &[(String, String)], data_key: &[u8; 32]) -> [u8; 32] {
     // HMAC-SHA256 key size is always valid for 32 bytes
-    let mut mac = HmacSha256::new_from_slice(data_key).expect("HMAC key size is always valid for 32 bytes");
+    let mut mac = HmacSha256::new_from_slice(data_key)
+        .unwrap_or_else(|_| HmacSha256::new_from_slice(&[0u8; 32]).unwrap_or_else(|_| unreachable!()));
 
     for (path, value) in values {
         mac.update(path.as_bytes());

@@ -226,7 +226,7 @@ impl AppRegistry {
     /// - Returns `false` if MAX_APPS_PER_CLUSTER would be exceeded (and doesn't register)
     /// - Returns `true` if registration succeeded
     pub fn register(&self, manifest: AppManifest) -> bool {
-        let mut apps = self.apps.write().expect("app registry lock poisoned");
+        let mut apps = self.apps.write().unwrap_or_else(|e| e.into_inner());
 
         // Check if already registered (update case)
         if apps.contains_key(&manifest.app_id) {
@@ -263,7 +263,7 @@ impl AppRegistry {
     ///
     /// Returns `true` if the application was registered and removed.
     pub fn unregister(&self, app_id: &str) -> bool {
-        let mut apps = self.apps.write().expect("app registry lock poisoned");
+        let mut apps = self.apps.write().unwrap_or_else(|e| e.into_inner());
         if apps.remove(app_id).is_some() {
             info!(app_id = %app_id, "unregistered application");
             true
@@ -275,24 +275,24 @@ impl AppRegistry {
 
     /// Check if an application is registered.
     pub fn has_app(&self, app_id: &str) -> bool {
-        self.apps.read().expect("app registry lock poisoned").contains_key(app_id)
+        self.apps.read().unwrap_or_else(|e| e.into_inner()).contains_key(app_id)
     }
 
     /// Get an application manifest by ID.
     pub fn get_app(&self, app_id: &str) -> Option<AppManifest> {
-        self.apps.read().expect("app registry lock poisoned").get(app_id).cloned()
+        self.apps.read().unwrap_or_else(|e| e.into_inner()).get(app_id).cloned()
     }
 
     /// List all registered applications.
     pub fn list_apps(&self) -> Vec<AppManifest> {
-        self.apps.read().expect("app registry lock poisoned").values().cloned().collect()
+        self.apps.read().unwrap_or_else(|e| e.into_inner()).values().cloned().collect()
     }
 
     /// Get all capabilities across all registered apps.
     ///
     /// Returns a deduplicated list of all capabilities.
     pub fn all_capabilities(&self) -> Vec<String> {
-        let apps = self.apps.read().expect("app registry lock poisoned");
+        let apps = self.apps.read().unwrap_or_else(|e| e.into_inner());
         let mut capabilities: Vec<String> = apps.values().flat_map(|m| m.capabilities.iter().cloned()).collect();
         capabilities.sort();
         capabilities.dedup();
@@ -303,7 +303,7 @@ impl AppRegistry {
     pub fn find_apps_with_capability(&self, capability: &str) -> Vec<AppManifest> {
         self.apps
             .read()
-            .expect("app registry lock poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|m| m.has_capability(capability))
             .cloned()
@@ -312,12 +312,12 @@ impl AppRegistry {
 
     /// Get the number of registered applications.
     pub fn len(&self) -> usize {
-        self.apps.read().expect("app registry lock poisoned").len()
+        self.apps.read().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     /// Check if the registry is empty.
     pub fn is_empty(&self) -> bool {
-        self.apps.read().expect("app registry lock poisoned").is_empty()
+        self.apps.read().unwrap_or_else(|e| e.into_inner()).is_empty()
     }
 
     /// Convert to a list suitable for announcements.
@@ -342,7 +342,7 @@ impl AppRegistry {
 impl Clone for AppRegistry {
     fn clone(&self) -> Self {
         Self {
-            apps: RwLock::new(self.apps.read().expect("app registry lock poisoned").clone()),
+            apps: RwLock::new(self.apps.read().unwrap_or_else(|e| e.into_inner()).clone()),
         }
     }
 }

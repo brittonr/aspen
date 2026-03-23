@@ -178,7 +178,7 @@ impl LockManager {
     /// Returns the first conflicting lock if one exists, or an unlocked
     /// FileLockResult if no conflict is found.
     pub fn get_lock(&self, inode: u64, owner: u64, lock_type: u32, start: u64, end: u64) -> FileLockResult {
-        let locks = self.locks.read().expect("lock poisoned");
+        let locks = self.locks.read().unwrap_or_else(|e| e.into_inner());
 
         if let Some(inode_locks) = locks.get(&inode)
             && let Some(conflict) = inode_locks.find_conflict(owner, lock_type, start, end)
@@ -205,7 +205,7 @@ impl LockManager {
     /// Returns `Ok(())` on success, `Err(EAGAIN)` if a conflicting lock exists,
     /// or `Err(ENOLCK)` if resource limits are exceeded.
     pub fn set_lock(&self, inode: u64, owner: u64, pid: u32, lock_type: u32, start: u64, end: u64) -> io::Result<()> {
-        let mut locks = self.locks.write().expect("lock poisoned");
+        let mut locks = self.locks.write().unwrap_or_else(|e| e.into_inner());
 
         // Check global inode limit (if adding a new inode)
         if !locks.contains_key(&inode) && locks.len() >= MAX_LOCKED_INODES {
@@ -272,7 +272,7 @@ impl LockManager {
     ///
     /// Called from `release()` when a file handle is closed.
     pub fn release_owner(&self, inode: u64, owner: u64) {
-        let mut locks = self.locks.write().expect("lock poisoned");
+        let mut locks = self.locks.write().unwrap_or_else(|e| e.into_inner());
 
         if let Some(inode_locks) = locks.get_mut(&inode) {
             inode_locks.release_owner(owner);
@@ -288,7 +288,7 @@ impl LockManager {
     ///
     /// Called when a file is deleted.
     pub fn release_inode(&self, inode: u64) {
-        let mut locks = self.locks.write().expect("lock poisoned");
+        let mut locks = self.locks.write().unwrap_or_else(|e| e.into_inner());
         locks.remove(&inode);
     }
 }

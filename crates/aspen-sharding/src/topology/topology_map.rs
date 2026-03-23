@@ -168,7 +168,9 @@ impl ShardTopology {
 
         // SAFETY: We verified self.shards.contains_key(&source_shard_id) at the start
         // of this function and returned early if false. No mutations remove this key.
-        let source = self.shards.get_mut(&source_shard_id).unwrap();
+        let source = self.shards.get_mut(&source_shard_id).ok_or(TopologyError::ShardNotFound {
+            shard_id: source_shard_id,
+        })?;
         let (left_range, right_range) =
             source.key_range.split_at(&split_key).ok_or(TopologyError::InvalidSplitKey {
                 key: split_key.clone(),
@@ -248,12 +250,16 @@ impl ShardTopology {
 
         // SAFETY: We verified self.shards.contains_key(&target_shard_id) at the start
         // and borrowed it immutably above. No mutations remove this key.
-        let target = self.shards.get_mut(&target_shard_id).unwrap();
+        let target = self.shards.get_mut(&target_shard_id).ok_or(TopologyError::ShardNotFound {
+            shard_id: target_shard_id,
+        })?;
         target.key_range = merged_range.clone();
 
         // SAFETY: We verified self.shards.contains_key(&source_shard_id) at the start.
         // No mutations remove this key between that check and here.
-        let source = self.shards.get_mut(&source_shard_id).unwrap();
+        let source = self.shards.get_mut(&source_shard_id).ok_or(TopologyError::ShardNotFound {
+            shard_id: source_shard_id,
+        })?;
         source.state = ShardState::Tombstone {
             tombstoned_at: timestamp,
             successor_shard_id: Some(target_shard_id),

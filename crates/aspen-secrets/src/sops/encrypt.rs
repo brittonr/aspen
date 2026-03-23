@@ -173,7 +173,9 @@ pub fn encrypt_data_key_for_age(recipient_str: &str, data_key: &[u8]) -> Result<
 
     let recipients: Vec<Box<dyn age::Recipient>> = vec![Box::new(recipient)];
     let encryptor =
-        age::Encryptor::with_recipients(recipients.iter().map(|r| r.as_ref())).expect("at least one recipient");
+        age::Encryptor::with_recipients(recipients.iter().map(|r| r.as_ref())).ok_or_else(|| SopsError::AgeError {
+            message: "no recipients provided for age encryption".into(),
+        })?;
 
     let mut encrypted = Vec::new();
     let mut writer =

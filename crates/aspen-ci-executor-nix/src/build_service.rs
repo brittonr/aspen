@@ -791,10 +791,21 @@ fn register_output_in_store(source_path: &std::path::Path, target_store_path: &s
         }
     };
 
+    let stdout = match dump_child.stdout {
+        Some(stdout) => stdout,
+        None => {
+            warn!(
+                target = %target_store_path.display(),
+                "nix-store --dump child has no stdout pipe, output not registered in local store"
+            );
+            return;
+        }
+    };
+
     let restore_result = std::process::Command::new("nix-store")
         .arg("--restore")
         .arg(target_store_path)
-        .stdin(dump_child.stdout.unwrap())
+        .stdin(stdout)
         .stderr(std::process::Stdio::piped())
         .output();
 

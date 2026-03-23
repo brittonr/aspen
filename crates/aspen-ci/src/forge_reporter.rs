@@ -73,6 +73,10 @@ impl<K: KeyValueStore + ?Sized + 'static> StatusReporter for ForgeStatusReporter
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use aspen_forge::CommitCheckState;
+
     use super::*;
 
     #[tokio::test]

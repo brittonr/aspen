@@ -112,8 +112,10 @@ impl PluginHealth {
         Self {
             state: PluginState::Ready,
             message: Some(msg.into()),
-            last_check_ms: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()
-                as u64,
+            last_check_ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64,
         }
     }
 
@@ -125,8 +127,10 @@ impl PluginHealth {
         Self {
             state: PluginState::Degraded,
             message: Some(msg.into()),
-            last_check_ms: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()
-                as u64,
+            last_check_ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64,
         }
     }
 

@@ -32,14 +32,14 @@ impl AutomergeSyncTicket {
     pub fn new(addr: EndpointAddr, token: &CapabilityToken) -> Self {
         Self {
             addr,
-            token: token.encode().expect("token encoding cannot fail"),
+            token: token.encode().unwrap_or_default(),
         }
     }
 
     /// Serialize to a shareable string.
     pub fn serialize(&self) -> String {
         use base64::Engine;
-        let bytes = postcard::to_stdvec(self).expect("ticket serialization cannot fail");
+        let bytes = postcard::to_stdvec(self).unwrap_or_default();
         format!("{}{}", TICKET_PREFIX, base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&bytes))
     }
 

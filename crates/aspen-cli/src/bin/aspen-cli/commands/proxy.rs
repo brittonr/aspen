@@ -98,7 +98,10 @@ impl ProxyCommand {
             anyhow::bail!("ticket contains no bootstrap peers");
         }
 
-        let bootstrap_addr = bootstrap_addrs.into_iter().next().expect("checked non-empty");
+        let bootstrap_addr = match bootstrap_addrs.into_iter().next() {
+            Some(addr) => addr,
+            None => anyhow::bail!("no bootstrap peers available in ticket"),
+        };
         let remote_id = bootstrap_addr.id;
 
         info!(

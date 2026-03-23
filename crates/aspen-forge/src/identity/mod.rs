@@ -213,10 +213,11 @@ impl RepoIdentity {
     }
 
     /// Compute the repository ID (BLAKE3 hash of the identity).
+    ///
+    /// Postcard serialization of `derive(Serialize)` types is infallible.
+    /// Falls back to hashing an empty vec on the impossible error path.
     pub fn repo_id(&self) -> RepoId {
-        // SAFETY: postcard serialization of derive(Serialize) types with no custom
-        // serializers is infallible. All fields are primitive types or derive(Serialize).
-        let bytes = postcard::to_allocvec(self).expect("serialization of derived Serialize types is infallible");
+        let bytes = postcard::to_allocvec(self).unwrap_or_default();
         RepoId::from_hash(blake3::hash(&bytes))
     }
 

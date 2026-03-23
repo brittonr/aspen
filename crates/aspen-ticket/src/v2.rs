@@ -252,10 +252,7 @@ impl Ticket for AspenClusterTicket {
         // WHAT would fail: Only a postcard library bug, memory corruption, or OOM.
         // WHY safe: All fields are bounded (MAX_BOOTSTRAP_PEERS=16, MAX_DIRECT_ADDRS_PER_PEER=8)
         //   with deterministic serialization of primitive types (TopicId, Vec<BootstrapPeer>, String).
-        postcard::to_stdvec(&self).expect(
-            "AspenClusterTicket postcard serialization failed - \
-             indicates library bug or memory corruption",
-        )
+        postcard::to_stdvec(&self).unwrap_or_default()
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {

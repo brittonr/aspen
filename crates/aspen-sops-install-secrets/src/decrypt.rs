@@ -96,7 +96,9 @@ async fn decrypt_sops_file<'a>(
         cache.insert(sops_file.to_string(), PlainData { keys, raw });
     }
 
-    Ok(cache.get(sops_file).expect("just inserted"))
+    cache
+        .get(sops_file)
+        .ok_or_else(|| anyhow::anyhow!("failed to retrieve decrypted data for '{}' from cache", sops_file))
 }
 
 /// Extract a key path from decrypted data.
@@ -112,7 +114,13 @@ fn extract_key(plain: &PlainData, secret: &SecretEntry) -> Result<Vec<u8>> {
                 return Ok(plain.raw.clone());
             }
 
-            let keys = plain.keys.as_ref().expect("keys should be parsed for yaml/json");
+            let keys = plain.keys.as_ref().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "secret '{}' in '{}': no parsed keys available for yaml/json format",
+                    secret.name,
+                    secret.sops_file
+                )
+            })?;
 
             let value = recurse_key(keys, &secret.key).with_context(|| {
                 format!("secret '{}' in '{}': key '{}' not found", secret.name, secret.sops_file, secret.key)

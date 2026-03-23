@@ -80,8 +80,8 @@ pub(crate) struct MockStatusReporter {
 
 #[cfg(test)]
 impl MockStatusReporter {
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self {
+    pub fn new() -> std::sync::Arc<Self> {
+        std::sync::Arc::new(Self {
             reports: tokio::sync::Mutex::new(Vec::new()),
         })
     }

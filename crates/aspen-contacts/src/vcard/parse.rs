@@ -155,8 +155,9 @@ fn unfold_lines(input: &str) -> Vec<String> {
         let line = raw_line.trim_end_matches('\r');
         if (line.starts_with(' ') || line.starts_with('\t')) && !result.is_empty() {
             // Continuation: append to previous line (strip leading whitespace)
-            let last = result.last_mut().expect("checked non-empty");
-            last.push_str(&line[1..]);
+            if let Some(last) = result.last_mut() {
+                last.push_str(&line[1..]);
+            }
         } else {
             result.push(line.to_string());
         }

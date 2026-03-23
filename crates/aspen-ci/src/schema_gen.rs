@@ -19,19 +19,19 @@ use schemars::schema::SingleOrVec;
 /// `optional` for nullable/non-required fields, and `default` values.
 pub fn schema_to_nickel(name: &str, schema: &schemars::schema::RootSchema) -> String {
     let mut out = String::new();
-    writeln!(out, "# Auto-generated Nickel contract. Do not edit manually.").unwrap();
-    writeln!(out, "# Source: #[derive(JsonSchema)] on Rust type `{name}`").unwrap();
+    let _ = writeln!(out, "# Auto-generated Nickel contract. Do not edit manually.");
+    let _ = writeln!(out, "# Source: #[derive(JsonSchema)] on Rust type `{name}`");
     if let Some(desc) = &schema.schema.metadata.as_ref().and_then(|m| m.description.as_ref()) {
-        writeln!(out, "#").unwrap();
+        let _ = writeln!(out, "#");
         for line in desc.lines() {
             if line.is_empty() {
-                writeln!(out, "#").unwrap();
+                let _ = writeln!(out, "#");
             } else {
-                writeln!(out, "# {line}").unwrap();
+                let _ = writeln!(out, "# {line}");
             }
         }
     }
-    writeln!(out).unwrap();
+    let _ = writeln!(out);
 
     render_schema_object(&mut out, &schema.schema, &schema.definitions, 0);
     out
@@ -40,36 +40,36 @@ pub fn schema_to_nickel(name: &str, schema: &schemars::schema::RootSchema) -> St
 /// Convert multiple named schemas into a single `.ncl` file with `let` bindings.
 pub fn schemas_to_nickel(comment: &str, schemas: &[(&str, &schemars::schema::RootSchema)]) -> String {
     let mut out = String::new();
-    writeln!(out, "# {comment}").unwrap();
-    writeln!(out, "# Auto-generated Nickel contracts. Do not edit manually.").unwrap();
-    writeln!(out).unwrap();
+    let _ = writeln!(out, "# {comment}");
+    let _ = writeln!(out, "# Auto-generated Nickel contracts. Do not edit manually.");
+    let _ = writeln!(out);
 
     for (i, (name, schema)) in schemas.iter().enumerate() {
         if let Some(desc) = schema.schema.metadata.as_ref().and_then(|m| m.description.as_ref()) {
             for line in desc.lines() {
                 if line.is_empty() {
-                    writeln!(out, "#").unwrap();
+                    let _ = writeln!(out, "#");
                 } else {
-                    writeln!(out, "# {line}").unwrap();
+                    let _ = writeln!(out, "# {line}");
                 }
             }
         }
 
-        write!(out, "let {name} = ").unwrap();
+        let _ = write!(out, "let {name} = ");
         render_schema_object(&mut out, &schema.schema, &schema.definitions, 0);
 
         if i < schemas.len() - 1 {
-            writeln!(out, "in").unwrap();
-            writeln!(out).unwrap();
+            let _ = writeln!(out, "in");
+            let _ = writeln!(out);
         } else {
             // Last binding — export as record
-            writeln!(out, "in").unwrap();
-            writeln!(out).unwrap();
-            writeln!(out, "{{").unwrap();
+            let _ = writeln!(out, "in");
+            let _ = writeln!(out);
+            let _ = writeln!(out, "{{");
             for (export_name, _) in schemas {
-                writeln!(out, "  {export_name},").unwrap();
+                let _ = writeln!(out, "  {export_name},");
             }
-            writeln!(out, "}}").unwrap();
+            let _ = writeln!(out, "}}");
         }
     }
     out
@@ -79,7 +79,7 @@ fn render_schema_object(out: &mut String, schema: &SchemaObject, defs: &BTreeMap
     // Handle $ref
     if let Some(ref_path) = &schema.reference {
         let type_name = ref_path.rsplit('/').next().unwrap_or(ref_path);
-        write!(out, "{type_name}").unwrap();
+        let _ = write!(out, "{type_name}");
         return;
     }
 
@@ -101,14 +101,14 @@ fn render_schema_object(out: &mut String, schema: &SchemaObject, defs: &BTreeMap
             let non_null: Vec<_> = types.iter().filter(|t| **t != InstanceType::Null).collect();
             if non_null.len() == 1 {
                 let nickel_type = instance_type_to_nickel(non_null[0]);
-                write!(out, "{nickel_type}").unwrap();
+                let _ = write!(out, "{nickel_type}");
             } else {
-                write!(out, "Dyn").unwrap();
+                let _ = write!(out, "Dyn");
             }
         }
         None => {
             // No type specified — could be a $ref or any
-            write!(out, "Dyn").unwrap();
+            let _ = write!(out, "Dyn");
         }
     }
 }
@@ -130,17 +130,17 @@ fn render_instance_type(
                     SingleOrVec::Single(s) => Some(s.as_ref()),
                     _ => None,
                 }) {
-                    write!(out, "Array ").unwrap();
+                    let _ = write!(out, "Array ");
                     render_schema_object(out, item_schema, defs, indent);
                 } else {
-                    write!(out, "Array Dyn").unwrap();
+                    let _ = write!(out, "Array Dyn");
                 }
             } else {
-                write!(out, "Array Dyn").unwrap();
+                let _ = write!(out, "Array Dyn");
             }
         }
         other => {
-            write!(out, "{}", instance_type_to_nickel(other)).unwrap();
+            let _ = write!(out, "{}", instance_type_to_nickel(other));
         }
     }
 }
@@ -155,7 +155,7 @@ fn render_object(
     let obj = match obj {
         Some(o) => o,
         None => {
-            write!(out, "{{}}").unwrap();
+            let _ = write!(out, "{{}}");
             return;
         }
     };
@@ -163,7 +163,7 @@ fn render_object(
     let pad = "  ".repeat(indent);
     let inner_pad = "  ".repeat(indent + 1);
 
-    writeln!(out, "{{").unwrap();
+    let _ = writeln!(out, "{{");
     for (field_name, field_schema) in &obj.properties {
         let is_required = obj.required.contains(field_name);
 
@@ -172,15 +172,15 @@ fn render_object(
             if let Some(desc) = field_obj.metadata.as_ref().and_then(|m| m.description.as_ref()) {
                 for line in desc.lines() {
                     if line.is_empty() {
-                        writeln!(out, "{inner_pad}#").unwrap();
+                        let _ = writeln!(out, "{inner_pad}#");
                     } else {
-                        writeln!(out, "{inner_pad}# {line}").unwrap();
+                        let _ = writeln!(out, "{inner_pad}# {line}");
                     }
                 }
             }
 
             // Field with contract annotation
-            write!(out, "{inner_pad}{field_name} | ").unwrap();
+            let _ = write!(out, "{inner_pad}{field_name} | ");
 
             let is_nullable = is_nullable_type(field_obj);
 
@@ -189,15 +189,15 @@ fn render_object(
 
             // Default value
             if let Some(default) = field_obj.metadata.as_ref().and_then(|m| m.default.as_ref()) {
-                write!(out, " | default = {}", nickel_value(default)).unwrap();
+                let _ = write!(out, " | default = {}", nickel_value(default));
             } else if !is_required || is_nullable {
-                write!(out, " | optional").unwrap();
+                let _ = write!(out, " | optional");
             }
 
-            writeln!(out, ",").unwrap();
+            let _ = writeln!(out, ",");
         }
     }
-    write!(out, "{pad}}}").unwrap();
+    let _ = write!(out, "{pad}}}");
 }
 
 fn render_one_of(out: &mut String, variants: &[Schema], defs: &BTreeMap<String, Schema>, indent: usize) {
@@ -214,29 +214,29 @@ fn render_one_of(out: &mut String, variants: &[Schema], defs: &BTreeMap<String, 
     });
 
     if is_tagged {
-        writeln!(out, "[").unwrap();
+        let _ = writeln!(out, "[");
         for variant in variants {
             if let Schema::Object(obj) = variant {
                 if let Some(desc) = obj.metadata.as_ref().and_then(|m| m.description.as_ref()) {
-                    writeln!(out, "{inner_pad}# {desc}").unwrap();
+                    let _ = writeln!(out, "{inner_pad}# {desc}");
                 }
 
                 // Extract the tag value
                 if let Some(tag) = extract_enum_tag(obj) {
-                    write!(out, "{inner_pad}").unwrap();
+                    let _ = write!(out, "{inner_pad}");
                     render_schema_object(out, obj, defs, indent + 1);
-                    writeln!(out, ",  # tag: {tag}").unwrap();
+                    let _ = writeln!(out, ",  # tag: {tag}");
                 } else {
-                    write!(out, "{inner_pad}").unwrap();
+                    let _ = write!(out, "{inner_pad}");
                     render_schema_object(out, obj, defs, indent + 1);
-                    writeln!(out, ",").unwrap();
+                    let _ = writeln!(out, ",");
                 }
             }
         }
-        write!(out, "{pad}]").unwrap();
+        let _ = write!(out, "{pad}]");
     } else {
         // Simple enum — render as Dyn with comment
-        write!(out, "Dyn").unwrap();
+        let _ = write!(out, "Dyn");
     }
 }
 

@@ -138,10 +138,9 @@ pub struct HashMappingStore<K: KeyValueStore + ?Sized> {
 impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
     /// Create a new hash mapping store.
     pub fn new(kv: Arc<K>) -> Self {
-        // SAFETY: MAX_HASH_CACHE_SIZE is a compile-time constant asserted > 0 in constants.rs.
-        // NonZeroUsize::new() is not const-stable, so we use expect() with static proof.
-        let cache_size =
-            NonZeroUsize::new(MAX_HASH_CACHE_SIZE).expect("MAX_HASH_CACHE_SIZE is non-zero (compile-time asserted)");
+        // MAX_HASH_CACHE_SIZE is a compile-time constant > 0 (asserted in constants.rs).
+        // NonZeroUsize::new() is not const-stable; use MIN as a safe fallback.
+        let cache_size = NonZeroUsize::new(MAX_HASH_CACHE_SIZE).unwrap_or(NonZeroUsize::MIN);
         Self {
             kv,
             cache: RwLock::new(LruCache::new(cache_size)),

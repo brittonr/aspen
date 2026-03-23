@@ -328,9 +328,15 @@ impl ShellCommandWorker {
             return Err(JobError::JobTimeout { timeout });
         }
 
-        // SAFETY: timed_out is false at this point, which means we took the Ok(Ok(status))
-        // path above, which sets exit_status = Some(status). The unwrap cannot fail.
-        let status: std::process::ExitStatus = exit_status.expect("exit_status is Some when not timed_out");
+        // When not timed out, exit_status should be Some(status) from the Ok(Ok(status)) path above
+        let status: std::process::ExitStatus = match exit_status {
+            Some(status) => status,
+            None => {
+                return Err(JobError::ExecutionFailed {
+                    reason: "command completed without timeout but exit status is missing".to_string(),
+                });
+            }
+        };
         let exit_code = status.code().unwrap_or(-1);
 
         Ok(CommandOutput {

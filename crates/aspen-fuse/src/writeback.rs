@@ -529,12 +529,9 @@ impl FlushTimer {
 
                 info!("flush timer stopped");
             })
-            .expect("failed to spawn flush timer thread");
+            .ok();
 
-        Self {
-            stop_flag,
-            thread: Some(thread),
-        }
+        Self { stop_flag, thread }
     }
 
     /// Stop the background flush timer and join the thread.

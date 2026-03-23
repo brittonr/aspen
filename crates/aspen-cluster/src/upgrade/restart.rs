@@ -95,9 +95,9 @@ fn restart_execve() -> Result<()> {
                 reason: format!("invalid exe path: {e}"),
             })?;
 
-        // Collect original args.
-        let args: Vec<CString> =
-            std::env::args().map(|a| CString::new(a).unwrap_or_else(|_| CString::new("").unwrap())).collect();
+        // Collect original args. CString::new("") is infallible (empty string has no interior NUL).
+        let empty = CString::default();
+        let args: Vec<CString> = std::env::args().map(|a| CString::new(a).unwrap_or_else(|_| empty.clone())).collect();
 
         let arg_refs: Vec<&std::ffi::CStr> = args.iter().map(|a| a.as_c_str()).collect();
 
