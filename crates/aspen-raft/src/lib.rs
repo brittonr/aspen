@@ -48,6 +48,7 @@ pub mod constants;
 pub mod conversions;
 /// Storage integrity checks and validation.
 pub mod integrity;
+pub mod iroh_write_forwarder;
 /// Learner to voter promotion logic.
 pub mod learner_promotion;
 /// Background task for cleaning up expired leases.
@@ -91,6 +92,7 @@ pub mod types;
 pub mod verified;
 /// Write batching for amortized fsync costs.
 pub mod write_batcher;
+pub mod write_forwarder;
 
 // Re-export key types for convenience
 use std::sync::Arc;

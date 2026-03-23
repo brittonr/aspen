@@ -24,6 +24,7 @@ aspen-transport = { workspace = true }
 aspen-sharding = { workspace = true }
 aspen-time = { workspace = true }
 aspen-storage-types = { workspace = true }
+aspen-client-api = { workspace = true }
 aspen-coordination = { workspace = true, optional = true }
 aspen-sql = { workspace = true, optional = true }
 

@@ -2194,6 +2194,7 @@ dependencies = [
  "anyhow",
  "arrow",
  "aspen-auth",
+ "aspen-client-api",
  "aspen-cluster-types",
  "aspen-constants",
  "aspen-coordination",

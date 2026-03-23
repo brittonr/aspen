@@ -334,7 +334,8 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
 
     // Phase 4: Consensus (Raft + supervisor + health)
     let (raft_config, broadcasts) = storage_init::create_raft_config_and_broadcast(&config);
-    let consensus = init_consensus(&config, raft_config, &net.network_factory, &data_dir, &broadcasts).await?;
+    let consensus =
+        init_consensus(&config, raft_config, &net.network_factory, &data_dir, &broadcasts, &net.iroh_manager).await?;
 
     // Now that Raft is initialized, populate the membership refresh slot
     // so gossip-discovered address changes propagate into Raft membership.
@@ -489,6 +490,7 @@ async fn init_consensus(
     network_factory: &Arc<IrpcRaftNetworkFactory>,
     data_dir: &Path,
     broadcasts: &StorageBroadcasts,
+    iroh_manager: &Arc<IrohEndpointManager>,
 ) -> Result<ConsensusResult> {
     let (raft, state_machine_variant, ttl_cleanup_cancel) =
         storage_init::create_raft_instance(config, raft_config, network_factory, data_dir, broadcasts).await?;
@@ -497,8 +499,10 @@ async fn init_consensus(
 
     let state_machine_for_handle = state_machine_variant.clone();
 
-    // Write batching provides ~10x throughput improvement at ~2ms added latency
-    let raft_node = create_raft_node(config, raft, state_machine_variant);
+    // Write batching provides ~10x throughput improvement at ~2ms added latency.
+    // Write forwarding is set up before Arc wrapping so follower nodes can
+    // transparently forward writes to the leader after elections.
+    let raft_node = create_raft_node(config, raft, state_machine_variant, iroh_manager);
 
     let supervisor = Supervisor::new(format!("raft-node-{}", config.node_id));
     let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
@@ -514,22 +518,27 @@ async fn init_consensus(
     })
 }
 
-/// Create a `RaftNode`, optionally with write batching.
+/// Create a `RaftNode`, optionally with write batching, and with write forwarding.
 fn create_raft_node(
     config: &NodeConfig,
     raft: Arc<openraft::Raft<aspen_raft::types::AppTypeConfig>>,
     state_machine_variant: StateMachineVariant,
+    iroh_manager: &Arc<IrohEndpointManager>,
 ) -> Arc<RaftNode> {
-    if let Some(batch_config) = config.batch_config.clone() {
-        Arc::new(RaftNode::with_write_batching(
-            config.node_id.into(),
-            raft,
-            state_machine_variant,
-            batch_config.finalize(),
-        ))
+    let mut node = if let Some(batch_config) = config.batch_config.clone() {
+        RaftNode::with_write_batching(config.node_id.into(), raft, state_machine_variant, batch_config.finalize())
     } else {
-        Arc::new(RaftNode::new(config.node_id.into(), raft, state_machine_variant))
-    }
+        RaftNode::new(config.node_id.into(), raft, state_machine_variant)
+    };
+
+    // Set up write forwarding before wrapping in Arc. Follower nodes transparently
+    // forward writes to the leader, preventing job ack failures during elections.
+    let endpoint = Arc::new(iroh_manager.endpoint().clone());
+    let forwarder = Arc::new(aspen_raft::iroh_write_forwarder::IrohWriteForwarder::new(endpoint));
+    node.set_write_forwarder(forwarder);
+    info!(node_id = config.node_id, "write forwarding enabled");
+
+    Arc::new(node)
 }
 
 /// Intermediate result for event broadcast channels.

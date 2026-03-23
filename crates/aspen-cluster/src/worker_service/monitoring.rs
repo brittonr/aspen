@@ -8,6 +8,7 @@ use aspen_core::KeyValueStore;
 use aspen_core::WriteRequest;
 use aspen_jobs::WorkerMetadata;
 use aspen_jobs::WorkerPoolStats;
+use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
@@ -63,7 +64,7 @@ impl WorkerService {
         let key = worker_stats_key(worker_id);
         if let Ok(value) = serde_json::to_string(&stats) {
             if let Err(e) = store.write(WriteRequest::set(key, value)).await {
-                warn!(worker_id, error = %e, "failed to write worker stats to KV");
+                debug!(worker_id, error = %e, "failed to write worker stats to KV");
             }
         }
     }

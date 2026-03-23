@@ -21,6 +21,7 @@ use async_trait::async_trait;
 use openraft::ReadPolicy;
 use openraft::error::ClientWriteError;
 use openraft::error::RaftError;
+use tracing::info;
 use tracing::instrument;
 
 use super::RaftNode;
@@ -59,7 +60,21 @@ impl KeyValueStore for RaftNode {
 
         match result {
             Ok(resp) => build_write_result(request.command, resp.data),
-            Err(err) => Err(map_raft_write_error(err)),
+            Err(err) => {
+                // If we're a follower with a write forwarder, forward to the leader
+                // instead of returning NotLeader. This prevents job ack failures
+                // and pipeline stalls during leader elections.
+                if let Some(forward_info) = err.forward_to_leader()
+                    && let Some(forwarder) = self.write_forwarder()
+                    && let Some(leader_id) = forward_info.leader_id
+                    && let Some(leader_node) = &forward_info.leader_node
+                {
+                    let leader_addr = leader_node.iroh_addr.clone();
+                    info!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding write to leader");
+                    return forwarder.forward_write(leader_id, leader_addr, request).await;
+                }
+                Err(map_raft_write_error(err))
+            }
         }
     }
 

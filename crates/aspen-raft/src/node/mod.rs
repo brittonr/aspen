@@ -59,6 +59,7 @@ use crate::types::AppTypeConfig;
 use crate::types::NodeId;
 use crate::write_batcher::BatchConfig;
 use crate::write_batcher::WriteBatcher;
+use crate::write_forwarder::WriteForwarder;
 
 /// Maximum concurrent operations (prevents resource exhaustion).
 const MAX_CONCURRENT_OPS: usize = 1000;
@@ -102,6 +103,13 @@ pub struct RaftNode {
     /// to amortize consensus and fsync costs. Provides ~10x throughput improvement
     /// at the cost of ~2ms added latency per write.
     write_batcher: Option<Arc<WriteBatcher>>,
+
+    /// Optional write forwarder for follower nodes.
+    ///
+    /// When set, follower nodes transparently forward writes to the current
+    /// leader instead of returning `NotLeader`. This prevents job ack failures
+    /// and pipeline stalls during leader elections.
+    write_forwarder: Option<Arc<dyn WriteForwarder>>,
 }
 
 impl RaftNode {
@@ -116,6 +124,7 @@ impl RaftNode {
             #[cfg(feature = "sql")]
             sql_executor: OnceLock::new(),
             write_batcher: None,
+            write_forwarder: None,
         }
     }
 
@@ -148,12 +157,26 @@ impl RaftNode {
             #[cfg(feature = "sql")]
             sql_executor: OnceLock::new(),
             write_batcher: Some(write_batcher),
+            write_forwarder: None,
         }
     }
 
     /// Check if write batching is enabled.
     pub fn is_batching_enabled(&self) -> bool {
         self.write_batcher.is_some()
+    }
+
+    /// Set the write forwarder for transparent follower-to-leader write forwarding.
+    ///
+    /// When set, follower nodes forward writes to the leader instead of returning
+    /// `NotLeader`. Call this during cluster bootstrap before wrapping in `Arc`.
+    pub fn set_write_forwarder(&mut self, forwarder: Arc<dyn WriteForwarder>) {
+        self.write_forwarder = Some(forwarder);
+    }
+
+    /// Get the write forwarder, if set.
+    pub(crate) fn write_forwarder(&self) -> Option<&Arc<dyn WriteForwarder>> {
+        self.write_forwarder.as_ref()
     }
 
     /// Get the underlying Raft instance.
