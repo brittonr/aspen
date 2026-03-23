@@ -271,9 +271,12 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
         Ok(())
     }
 
-    /// Store multiple hash mappings in a batch.
+    /// Store multiple hash mappings using batched KV writes.
     ///
-    /// More efficient than individual stores for bulk imports.
+    /// Each mapping produces 2 KV pairs (b3→sha1 and sha1→b3). Pairs are
+    /// chunked into `SetMulti` writes of up to `MAX_SETMULTI_KEYS` pairs
+    /// each, reducing Raft round-trips from 2×N to ceil(2×N / 100).
+    ///
     /// Respects `MAX_HASH_MAPPING_BATCH_SIZE` limit.
     pub async fn store_batch(
         &self,
@@ -287,11 +290,44 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
             });
         }
 
-        // Store each mapping (in production, this would use batch writes)
+        if mappings.is_empty() {
+            return Ok(());
+        }
+
+        // Build all KV pairs upfront: 2 per mapping (b3→sha1 + sha1→b3).
+        let mut pairs: Vec<(String, String)> = Vec::with_capacity(mappings.len().saturating_mul(2));
+
         for (blake3, sha1, object_type) in mappings {
-            self.store(repo_id, *blake3, *sha1, *object_type).await.map_err(|e| BridgeError::KvStorage {
-                message: format!("failed to store batch mapping for {}: {}", hex::encode(blake3.as_bytes()), e),
+            let mapping = HashMapping::new(*blake3, *sha1, *object_type);
+            let value = mapping.to_base64()?;
+
+            let b3_key = Self::b3_to_sha1_key(repo_id, blake3);
+            let sha1_key = Self::sha1_to_b3_key(repo_id, sha1);
+
+            pairs.push((b3_key, value.clone()));
+            pairs.push((sha1_key, value));
+        }
+
+        // Chunk into SetMulti writes respecting MAX_SETMULTI_KEYS (100).
+        let max_pairs = aspen_core::MAX_SETMULTI_KEYS as usize;
+        for chunk in pairs.chunks(max_pairs) {
+            let request = WriteRequest {
+                command: WriteCommand::SetMulti { pairs: chunk.to_vec() },
+            };
+            self.kv.write(request).await.map_err(|e| BridgeError::KvStorage {
+                message: format!("failed to store batch mappings: {}", e),
             })?;
+        }
+
+        // Update cache for all mappings.
+        {
+            let mut cache = self.cache.write();
+            for (blake3, sha1, object_type) in mappings {
+                cache.put(*blake3.as_bytes(), CacheEntry {
+                    sha1: *sha1,
+                    object_type: *object_type,
+                });
+            }
         }
 
         Ok(())

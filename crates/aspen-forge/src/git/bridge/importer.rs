@@ -25,6 +25,7 @@ use aspen_core::hlc::HLC;
 use n0_future::BufferedStreamExt;
 use n0_future::StreamExt;
 
+use super::constants::MAX_HASH_MAPPING_BATCH_SIZE;
 use super::constants::MAX_IMPORT_BATCH_SIZE;
 use super::constants::MAX_IMPORT_CONCURRENCY;
 use super::converter::GitObjectConverter;
@@ -90,6 +91,27 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
     /// Note: For objects with dependencies (trees, commits, tags), the
     /// dependencies must already be imported and have hash mappings.
     pub async fn import_object(&self, repo_id: &RepoId, git_bytes: &[u8]) -> BridgeResult<blake3::Hash> {
+        let (blake3, sha1, obj_type) = self.import_object_store_blob(repo_id, git_bytes).await?;
+
+        // Store the hash mapping individually (for single-object imports).
+        // Bulk imports use import_objects() which batches mappings per wave.
+        self.mapping.store(repo_id, blake3, sha1, obj_type).await.map_err(|e| BridgeError::KvStorage {
+            message: format!("failed to store hash mapping for {}: {}", sha1.to_hex(), e),
+        })?;
+
+        Ok(blake3)
+    }
+
+    /// Convert and store the blob for a single git object, returning
+    /// mapping info without writing it to KV.
+    ///
+    /// Used by `import_objects()` to separate blob storage (concurrent)
+    /// from mapping storage (batched per wave).
+    async fn import_object_store_blob(
+        &self,
+        repo_id: &RepoId,
+        git_bytes: &[u8],
+    ) -> BridgeResult<(blake3::Hash, Sha1Hash, GitObjectType)> {
         let (obj_type, content) = GitObjectConverter::<K>::split_git_object(git_bytes)?;
 
         let (signed, sha1, blake3) = match obj_type {
@@ -99,19 +121,14 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             GitObjectType::Tag => self.converter.import_tag(repo_id, content).await?,
         };
 
-        // Store the object
+        // Store the object blob only — mapping is deferred.
         let bytes = signed.to_bytes();
         self.blobs
             .add_bytes(&bytes)
             .await
             .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?;
 
-        // Store the hash mapping
-        self.mapping.store(repo_id, blake3, sha1, obj_type).await.map_err(|e| BridgeError::KvStorage {
-            message: format!("failed to store hash mapping for {}: {}", sha1.to_hex(), e),
-        })?;
-
-        Ok(blake3)
+        Ok((blake3, sha1, obj_type))
     }
 
     /// Import multiple objects using wave-based parallelism.
@@ -177,23 +194,35 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         // so they can be imported concurrently. We must wait for all
         // objects in a wave to complete before starting the next wave
         // because later waves depend on mappings created in earlier waves.
+        //
+        // Blob storage is concurrent per-object within the wave. Hash
+        // mappings are collected and written in batched SetMulti calls
+        // after each wave, reducing Raft round-trips from 2×N individual
+        // writes to ceil(2×N / MAX_SETMULTI_KEYS) batched writes.
         let repo_id = *repo_id;
         let mut imported = 0u32;
 
         for (wave_idx, wave) in waves.waves.into_iter().enumerate() {
             let wave_size = wave.len();
 
-            // Process all objects in this wave concurrently
-            let results: Vec<BridgeResult<blake3::Hash>> = n0_future::stream::iter(wave)
-                .map(|obj| async move { self.import_object(&repo_id, &obj.data).await })
+            // Store blobs concurrently, collect mapping info.
+            let results: Vec<BridgeResult<(blake3::Hash, Sha1Hash, GitObjectType)>> = n0_future::stream::iter(wave)
+                .map(|obj| async move { self.import_object_store_blob(&repo_id, &obj.data).await })
                 .buffered_unordered(MAX_IMPORT_CONCURRENCY)
                 .collect()
                 .await;
 
-            // Check for errors and count successful imports
+            // Collect successful mappings, propagate first error.
+            let mut wave_mappings: Vec<(blake3::Hash, Sha1Hash, GitObjectType)> = Vec::with_capacity(wave_size);
             for result in results {
-                result?;
+                wave_mappings.push(result?);
                 imported += 1;
+            }
+
+            // Batch-write all hash mappings for this wave.
+            // store_batch chunks internally to respect MAX_SETMULTI_KEYS.
+            for chunk in wave_mappings.chunks(MAX_HASH_MAPPING_BATCH_SIZE) {
+                self.mapping.store_batch(&repo_id, chunk).await?;
             }
 
             tracing::trace!(wave = wave_idx, objects = wave_size, "wave import complete");
