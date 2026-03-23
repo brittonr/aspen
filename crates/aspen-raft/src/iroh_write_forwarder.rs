@@ -2,6 +2,12 @@
 //!
 //! Forwards write requests from follower nodes to the Raft leader via iroh
 //! QUIC using the client RPC protocol (CLIENT_ALPN).
+//!
+//! Connection reuse: a single QUIC connection to the leader is cached and
+//! reused across writes. Multiple writes are multiplexed as separate
+//! bidirectional streams on that connection — no per-write handshake.
+//! The cached connection is evicted when the leader changes or when
+//! `open_bi()` fails (dead connection).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,6 +24,8 @@ use aspen_kv_types::WriteResult;
 use async_trait::async_trait;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
+use iroh::endpoint::Connection;
+use tokio::sync::Mutex as AsyncMutex;
 use tokio::time::timeout;
 use tracing::debug;
 use tracing::warn;
@@ -25,8 +33,11 @@ use tracing::warn;
 use crate::types::NodeId;
 use crate::write_forwarder::WriteForwarder;
 
-/// Timeout for forwarded write operations.
+/// Timeout for forwarded write operations (per-stream, not per-connection).
 const FORWARD_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Timeout for establishing a new QUIC connection to the leader.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// CLIENT_ALPN for connecting to the leader's client protocol handler.
 const CLIENT_ALPN: &[u8] = aspen_constants::network::CLIENT_ALPN;
@@ -202,15 +213,123 @@ fn check_not_leader_error(reason: String, leader_id: NodeId) -> Result<WriteResu
     }
 }
 
+/// Cached QUIC connection to the current leader.
+///
+/// Evicted when the leader changes (different `NodeId`) or when the
+/// connection is dead (`open_bi()` fails).
+struct CachedLeaderConnection {
+    leader_id: NodeId,
+    connection: Connection,
+}
+
 /// Forwards writes to the Raft leader via iroh QUIC client protocol.
+///
+/// Maintains a cached QUIC connection to the leader for stream multiplexing.
+/// A single connection handles thousands of concurrent writes as separate
+/// bidirectional streams — no per-write QUIC handshake.
 pub struct IrohWriteForwarder {
     endpoint: Arc<Endpoint>,
+    cached: AsyncMutex<Option<CachedLeaderConnection>>,
 }
 
 impl IrohWriteForwarder {
     /// Create a new write forwarder using the given iroh endpoint.
     pub fn new(endpoint: Arc<Endpoint>) -> Self {
-        Self { endpoint }
+        Self {
+            endpoint,
+            cached: AsyncMutex::new(None),
+        }
+    }
+
+    /// Get or establish a QUIC connection to the leader.
+    ///
+    /// Returns the cached connection if it's for the same leader, otherwise
+    /// connects fresh and caches the new connection.
+    async fn get_connection(
+        &self,
+        leader_id: NodeId,
+        leader_addr: &EndpointAddr,
+    ) -> Result<Connection, KeyValueStoreError> {
+        let mut cached = self.cached.lock().await;
+
+        // Reuse if same leader and connection is still open
+        if let Some(ref entry) = *cached {
+            if entry.leader_id == leader_id {
+                // Clone is cheap — Connection is Arc-wrapped internally
+                return Ok(entry.connection.clone());
+            }
+            // Leader changed — drop old connection
+            debug!(
+                old_leader = entry.leader_id.0,
+                new_leader = leader_id.0,
+                "leader changed, dropping cached connection"
+            );
+        }
+
+        // Establish new connection with a dedicated timeout
+        let connection = timeout(CONNECT_TIMEOUT, self.endpoint.connect(leader_addr.clone(), CLIENT_ALPN))
+            .await
+            .map_err(|_| KeyValueStoreError::Timeout {
+                duration_ms: CONNECT_TIMEOUT.as_millis() as u64,
+            })?
+            .map_err(|e| KeyValueStoreError::Failed {
+                reason: format!("failed to connect to leader {}: {e}", leader_id.0),
+            })?;
+
+        debug!(leader_id = leader_id.0, "cached new leader connection");
+        *cached = Some(CachedLeaderConnection {
+            leader_id,
+            connection: connection.clone(),
+        });
+
+        Ok(connection)
+    }
+
+    /// Evict the cached connection (called when `open_bi` fails — dead connection).
+    async fn evict_connection(&self, leader_id: NodeId) {
+        let mut cached = self.cached.lock().await;
+        if let Some(ref entry) = *cached
+            && entry.leader_id == leader_id
+        {
+            debug!(leader_id = leader_id.0, "evicting dead leader connection");
+            *cached = None;
+        }
+    }
+
+    /// Execute a single write on the given connection as a new bidirectional stream.
+    async fn execute_on_stream(
+        connection: &Connection,
+        rpc_request: ClientRpcRequest,
+        leader_id: NodeId,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        let (mut send, mut recv) = connection.open_bi().await.map_err(|e| KeyValueStoreError::Failed {
+            reason: format!("failed to open stream to leader {}: {e}", leader_id.0),
+        })?;
+
+        let authenticated = AuthenticatedRequest::unauthenticated(rpc_request);
+        let request_bytes = postcard::to_stdvec(&authenticated).map_err(|e| KeyValueStoreError::Failed {
+            reason: format!("failed to serialize forwarded write: {e}"),
+        })?;
+
+        send.write_all(&request_bytes).await.map_err(|e| KeyValueStoreError::Failed {
+            reason: format!("failed to send forwarded write: {e}"),
+        })?;
+
+        send.finish().map_err(|e| KeyValueStoreError::Failed {
+            reason: format!("failed to finish send stream: {e}"),
+        })?;
+
+        let response_bytes =
+            recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.map_err(|e| KeyValueStoreError::Failed {
+                reason: format!("failed to read forwarded write response: {e}"),
+            })?;
+
+        let response: ClientRpcResponse =
+            postcard::from_bytes(&response_bytes).map_err(|e| KeyValueStoreError::Failed {
+                reason: format!("failed to deserialize forwarded write response: {e}"),
+            })?;
+
+        interpret_write_response(response, leader_id)
     }
 }
 
@@ -225,40 +344,18 @@ impl WriteForwarder for IrohWriteForwarder {
         let rpc_request = write_command_to_rpc_request(&request.command, leader_id)?;
 
         let result = timeout(FORWARD_TIMEOUT, async {
-            let connection = self.endpoint.connect(leader_addr.clone(), CLIENT_ALPN).await.map_err(|e| {
-                KeyValueStoreError::Failed {
-                    reason: format!("failed to connect to leader {}: {e}", leader_id.0),
+            let connection = self.get_connection(leader_id, &leader_addr).await?;
+
+            match Self::execute_on_stream(&connection, rpc_request.clone(), leader_id).await {
+                Ok(result) => Ok(result),
+                Err(KeyValueStoreError::Failed { ref reason }) if reason.contains("failed to open stream") => {
+                    // Connection is dead — evict, reconnect, retry once
+                    self.evict_connection(leader_id).await;
+                    let fresh = self.get_connection(leader_id, &leader_addr).await?;
+                    Self::execute_on_stream(&fresh, rpc_request, leader_id).await
                 }
-            })?;
-
-            let (mut send, mut recv) = connection.open_bi().await.map_err(|e| KeyValueStoreError::Failed {
-                reason: format!("failed to open stream to leader {}: {e}", leader_id.0),
-            })?;
-
-            let authenticated = AuthenticatedRequest::unauthenticated(rpc_request);
-            let request_bytes = postcard::to_stdvec(&authenticated).map_err(|e| KeyValueStoreError::Failed {
-                reason: format!("failed to serialize forwarded write: {e}"),
-            })?;
-
-            send.write_all(&request_bytes).await.map_err(|e| KeyValueStoreError::Failed {
-                reason: format!("failed to send forwarded write: {e}"),
-            })?;
-
-            send.finish().map_err(|e| KeyValueStoreError::Failed {
-                reason: format!("failed to finish send stream: {e}"),
-            })?;
-
-            let response_bytes =
-                recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.map_err(|e| KeyValueStoreError::Failed {
-                    reason: format!("failed to read forwarded write response: {e}"),
-                })?;
-
-            let response: ClientRpcResponse =
-                postcard::from_bytes(&response_bytes).map_err(|e| KeyValueStoreError::Failed {
-                    reason: format!("failed to deserialize forwarded write response: {e}"),
-                })?;
-
-            interpret_write_response(response, leader_id)
+                Err(e) => Err(e),
+            }
         })
         .await;
 
