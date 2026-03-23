@@ -21,6 +21,7 @@ use std::sync::Mutex;
 
 use tracing::debug;
 use tracing::info;
+use wait_timeout::ChildExt;
 
 // ---------------------------------------------------------------------------
 // Tiger Style: all limits explicit
@@ -259,6 +260,415 @@ pub fn fetch_and_unpack_gitlab(host: &str, owner: &str, repo: &str, rev: &str, d
     let url = format!("https://{host}/{owner}/{repo}/-/archive/{rev}/{repo}-{rev}.tar.gz");
     info!(host = %host, owner = %owner, repo = %repo, rev = %rev, "fetching GitLab archive");
     fetch_and_unpack_tarball(&url, dest_dir)
+}
+
+// ---------------------------------------------------------------------------
+// Git clone and extraction
+// ---------------------------------------------------------------------------
+
+/// Timeout for git clone operations in seconds.
+const GIT_CLONE_TIMEOUT_SECS: u64 = 600;
+
+/// Maximum recursion depth for git submodules.
+const MAX_SUBMODULE_DEPTH: u32 = 10;
+
+/// Characters forbidden in git ref/rev strings to prevent shell injection.
+/// Covers shell metacharacters, backticks, pipes, etc.
+const FORBIDDEN_REF_CHARS: &[char] = &[
+    '`', '$', '|', ';', '&', '(', ')', '{', '}', '<', '>', '!', '\\', '\n', '\r', '\0', '\'', '"',
+];
+
+/// Metadata extracted from a git commit.
+#[derive(Debug, Clone)]
+pub struct GitMetadata {
+    /// Full 40-char hex commit hash.
+    pub rev: String,
+    /// Commit timestamp (unix seconds).
+    pub last_modified: u64,
+    /// Number of ancestor commits (0 for shallow clones).
+    pub rev_count: u64,
+}
+
+/// Validate a git ref or rev string for safety.
+///
+/// Rejects strings containing shell metacharacters that could be used
+/// for command injection when passed to the git CLI.
+fn validate_git_ref(value: &str, field_name: &str) -> io::Result<()> {
+    if value.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("{field_name} must not be empty")));
+    }
+    if value.len() > MAX_URL_LENGTH {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("{field_name} too long: {} chars", value.len()),
+        ));
+    }
+    if let Some(bad) = value.chars().find(|c| FORBIDDEN_REF_CHARS.contains(c)) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("{field_name} contains forbidden character: {bad:?}"),
+        ));
+    }
+    Ok(())
+}
+
+/// Resolve a git ref and/or rev to a 40-char hex commit hash.
+///
+/// Runs `git rev-parse` in the given bare repo. When `rev` is provided,
+/// validates it resolves in the repo. When only `ref` is given, resolves
+/// the ref to its tip. Defaults to HEAD when neither is given.
+pub fn resolve_git_rev(bare_repo: &Path, rev: Option<&str>, git_ref: Option<&str>) -> io::Result<String> {
+    let target = match (rev, git_ref) {
+        (Some(r), _) => {
+            validate_git_ref(r, "rev")?;
+            r.to_string()
+        }
+        (None, Some(r)) => {
+            validate_git_ref(r, "ref")?;
+            r.to_string()
+        }
+        (None, None) => "HEAD".to_string(),
+    };
+
+    let output = Command::new("git")
+        .args(["rev-parse", "--verify", &target])
+        .current_dir(bare_repo)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, format!("failed to spawn git: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(io::Error::new(io::ErrorKind::NotFound, format!("git rev-parse failed for {target}: {stderr}")));
+    }
+
+    let resolved = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if resolved.len() != 40 || !resolved.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("git rev-parse returned invalid hash: {resolved}"),
+        ));
+    }
+
+    Ok(resolved)
+}
+
+/// Extract commit metadata from a bare git repo.
+///
+/// Runs `git log -1 --format='%H %ct'` for the commit hash and timestamp,
+/// and `git rev-list --count` for the ancestor count (returns 0 for
+/// shallow clones).
+pub fn get_git_metadata(bare_repo: &Path, rev: &str) -> io::Result<GitMetadata> {
+    validate_git_ref(rev, "rev")?;
+
+    // Get commit hash and timestamp
+    let output = Command::new("git")
+        .args(["log", "-1", "--format=%H %ct", rev])
+        .current_dir(bare_repo)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, format!("failed to spawn git: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(io::Error::new(io::ErrorKind::InvalidData, format!("git log failed for {rev}: {stderr}")));
+    }
+
+    let line = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let parts: Vec<&str> = line.splitn(2, ' ').collect();
+    if parts.len() != 2 {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, format!("unexpected git log output: {line}")));
+    }
+
+    let commit_hash = parts[0].to_string();
+    let last_modified: u64 = parts[1]
+        .parse()
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("failed to parse commit timestamp: {e}")))?;
+
+    // Get rev-count (0 for shallow clones)
+    let count_output = Command::new("git")
+        .args(["rev-list", "--count", rev])
+        .current_dir(bare_repo)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output();
+
+    let rev_count = match count_output {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().parse::<u64>().unwrap_or(0),
+        _ => 0,
+    };
+
+    Ok(GitMetadata {
+        rev: commit_hash,
+        last_modified,
+        rev_count,
+    })
+}
+
+/// Clone a git repository and extract a specific revision.
+///
+/// For non-submodule fetches, uses a bare clone + `git archive` for
+/// minimal disk usage. For submodule fetches, uses a full clone with
+/// `--recurse-submodules`.
+///
+/// Returns the path to the extracted checkout directory.
+pub fn fetch_and_clone_git(
+    url: &str,
+    rev: Option<&str>,
+    git_ref: Option<&str>,
+    submodules: bool,
+    dest_dir: &Path,
+) -> io::Result<PathBuf> {
+    if url.len() > MAX_URL_LENGTH {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("URL too long: {} chars exceeds {} limit", url.len(), MAX_URL_LENGTH),
+        ));
+    }
+    if let Some(r) = rev {
+        validate_git_ref(r, "rev")?;
+    }
+    if let Some(r) = git_ref {
+        validate_git_ref(r, "ref")?;
+    }
+
+    info!(url = %url, rev = ?rev, git_ref = ?git_ref, submodules = submodules, "cloning git repository");
+
+    if submodules {
+        fetch_git_with_submodules(url, rev, git_ref, dest_dir)
+    } else {
+        fetch_git_bare(url, rev, git_ref, dest_dir)
+    }
+}
+
+/// Bare clone + git archive extraction (no submodules).
+fn fetch_git_bare(url: &str, rev: Option<&str>, git_ref: Option<&str>, dest_dir: &Path) -> io::Result<PathBuf> {
+    let bare_dir = dest_dir.join("bare.git");
+    std::fs::create_dir_all(&bare_dir)?;
+
+    // Build clone args
+    let mut clone_args = vec!["clone".to_string(), "--bare".to_string()];
+
+    // Use --single-branch when we have a specific ref
+    if let Some(r) = git_ref {
+        clone_args.push("--single-branch".to_string());
+        clone_args.push("--branch".to_string());
+        // Strip refs/heads/ prefix if present — git clone --branch wants just the name
+        let branch = r.strip_prefix("refs/heads/").unwrap_or(r);
+        clone_args.push(branch.to_string());
+    }
+
+    clone_args.push(url.to_string());
+    clone_args.push(bare_dir.to_string_lossy().to_string());
+
+    run_git_with_timeout(&clone_args, None)?;
+
+    // Resolve the target revision
+    let resolved_rev = resolve_git_rev(&bare_dir, rev, git_ref)?;
+
+    // Extract via git archive
+    let checkout_dir = dest_dir.join("checkout");
+    std::fs::create_dir_all(&checkout_dir)?;
+
+    let archive_output = Command::new("git")
+        .args(["archive", "--format=tar", &resolved_rev])
+        .current_dir(&bare_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| io::Error::other(format!("failed to spawn git archive: {e}")))?;
+
+    if !archive_output.status.success() {
+        let stderr = String::from_utf8_lossy(&archive_output.stderr);
+        return Err(io::Error::other(format!("git archive failed: {stderr}")));
+    }
+
+    // Check archive size
+    let archive_size = archive_output.stdout.len() as u64;
+    if archive_size > MAX_DOWNLOAD_SIZE {
+        return Err(io::Error::other(format!(
+            "git archive size {} exceeds maximum {} bytes",
+            archive_size, MAX_DOWNLOAD_SIZE
+        )));
+    }
+
+    // Unpack the tar archive
+    let mut archive = tar::Archive::new(&archive_output.stdout[..]);
+    archive.set_preserve_permissions(true);
+    archive
+        .unpack(&checkout_dir)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("failed to unpack git archive: {e}")))?;
+
+    // Clean up bare repo to save disk
+    let _ = std::fs::remove_dir_all(&bare_dir);
+
+    info!(
+        url = %url,
+        rev = %resolved_rev,
+        checkout = %checkout_dir.display(),
+        "git checkout extracted"
+    );
+    Ok(checkout_dir)
+}
+
+/// Full clone with submodule support.
+fn fetch_git_with_submodules(
+    url: &str,
+    rev: Option<&str>,
+    git_ref: Option<&str>,
+    dest_dir: &Path,
+) -> io::Result<PathBuf> {
+    let checkout_dir = dest_dir.join("checkout");
+    std::fs::create_dir_all(&checkout_dir)?;
+
+    let mut clone_args = vec![
+        "clone".to_string(),
+        "--recurse-submodules".to_string(),
+        format!("--recurse-submodules-default=on-demand"),
+        format!("--shallow-submodules"),
+    ];
+
+    if let Some(r) = git_ref {
+        clone_args.push("--branch".to_string());
+        let branch = r.strip_prefix("refs/heads/").unwrap_or(r);
+        clone_args.push(branch.to_string());
+    }
+
+    clone_args.push(url.to_string());
+    clone_args.push(checkout_dir.to_string_lossy().to_string());
+
+    run_git_with_timeout(&clone_args, None)?;
+
+    // Checkout the specific rev if provided
+    if let Some(r) = rev {
+        run_git_with_timeout(&["checkout".to_string(), r.to_string()], Some(&checkout_dir))?;
+        // Re-init submodules at the checked-out rev
+        run_git_with_timeout(
+            &[
+                "submodule".to_string(),
+                "update".to_string(),
+                "--init".to_string(),
+                "--recursive".to_string(),
+                "--depth=1".to_string(),
+            ],
+            Some(&checkout_dir),
+        )?;
+    }
+
+    // Enforce submodule depth limit
+    check_submodule_depth(&checkout_dir, 0)?;
+
+    // Remove .git directories to match Nix's fetchGit behavior
+    remove_git_dirs(&checkout_dir)?;
+
+    info!(
+        url = %url,
+        checkout = %checkout_dir.display(),
+        "git checkout with submodules extracted"
+    );
+    Ok(checkout_dir)
+}
+
+/// Run a git command with a timeout, returning an error on failure.
+fn run_git_with_timeout(args: &[String], cwd: Option<&Path>) -> io::Result<()> {
+    use std::time::Duration;
+
+    let mut cmd = Command::new("git");
+    cmd.args(args);
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, format!("failed to spawn git: {e}")))?;
+
+    let timeout = Duration::from_secs(GIT_CLONE_TIMEOUT_SECS);
+    match child.wait_timeout(timeout) {
+        Ok(Some(status)) => {
+            if status.success() {
+                Ok(())
+            } else {
+                // Read stderr for error message
+                let mut stderr_buf = String::new();
+                if let Some(mut stderr) = child.stderr.take() {
+                    let _ = stderr.read_to_string(&mut stderr_buf);
+                }
+                Err(io::Error::other(format!(
+                    "git {} failed (exit {}): {}",
+                    args.first().unwrap_or(&String::new()),
+                    status.code().unwrap_or(-1),
+                    stderr_buf.chars().take(500).collect::<String>()
+                )))
+            }
+        }
+        Ok(None) => {
+            // Timed out — kill the process
+            let _ = child.kill();
+            let _ = child.wait();
+            Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!("git command timed out after {GIT_CLONE_TIMEOUT_SECS}s"),
+            ))
+        }
+        Err(e) => Err(io::Error::other(format!("failed to wait for git process: {e}"))),
+    }
+}
+
+/// Recursively check submodule nesting depth.
+fn check_submodule_depth(dir: &Path, depth: u32) -> io::Result<()> {
+    if depth > MAX_SUBMODULE_DEPTH {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("submodule depth {} exceeds maximum {MAX_SUBMODULE_DEPTH}", depth),
+        ));
+    }
+
+    // Look for .gitmodules to detect submodules
+    let gitmodules = dir.join(".gitmodules");
+    if gitmodules.exists() {
+        // Check each subdirectory that might be a submodule
+        for entry in std::fs::read_dir(dir)?.filter_map(|e| e.ok()) {
+            if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                let subdir = entry.path();
+                // A submodule directory has a .git file (not directory) or .git directory
+                if subdir.join(".git").exists() {
+                    check_submodule_depth(&subdir, depth + 1)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Remove .git directories recursively to produce a clean checkout.
+fn remove_git_dirs(dir: &Path) -> io::Result<()> {
+    let git_dir = dir.join(".git");
+    if git_dir.exists() {
+        if git_dir.is_dir() {
+            std::fs::remove_dir_all(&git_dir)?;
+        } else {
+            // .git file (submodule pointer)
+            std::fs::remove_file(&git_dir)?;
+        }
+    }
+
+    let gitmodules = dir.join(".gitmodules");
+    if gitmodules.exists() {
+        std::fs::remove_file(&gitmodules)?;
+    }
+
+    // Recurse into subdirectories
+    for entry in std::fs::read_dir(dir)?.filter_map(|e| e.ok()) {
+        if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+            remove_git_dirs(&entry.path())?;
+        }
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -784,5 +1194,182 @@ mod tests {
             panic!("should not fetch twice");
         });
         assert_eq!(result2.unwrap(), path);
+    }
+
+    // -----------------------------------------------------------------------
+    // Git clone tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_validate_git_ref_rejects_shell_metacharacters() {
+        assert!(validate_git_ref("abc;rm -rf /", "rev").is_err());
+        assert!(validate_git_ref("abc`whoami`", "rev").is_err());
+        assert!(validate_git_ref("abc$(cmd)", "rev").is_err());
+        assert!(validate_git_ref("abc|cat", "rev").is_err());
+        assert!(validate_git_ref("abc&bg", "rev").is_err());
+        assert!(validate_git_ref("abc\ninjection", "rev").is_err());
+        assert!(validate_git_ref("abc\0null", "rev").is_err());
+    }
+
+    #[test]
+    fn test_validate_git_ref_accepts_valid_refs() {
+        assert!(validate_git_ref("abc123def456", "rev").is_ok());
+        assert!(validate_git_ref("refs/heads/main", "ref").is_ok());
+        assert!(validate_git_ref("refs/tags/v1.0.0", "ref").is_ok());
+        assert!(validate_git_ref("feature/my-branch", "ref").is_ok());
+        assert!(validate_git_ref("HEAD", "ref").is_ok());
+    }
+
+    #[test]
+    fn test_validate_git_ref_rejects_empty() {
+        assert!(validate_git_ref("", "rev").is_err());
+    }
+
+    #[test]
+    fn test_validate_git_ref_rejects_too_long() {
+        let long = "a".repeat(MAX_URL_LENGTH + 1);
+        assert!(validate_git_ref(&long, "rev").is_err());
+    }
+
+    #[test]
+    fn test_fetch_and_clone_git_rejects_long_url() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let long_url = "https://example.com/".to_string() + &"x".repeat(MAX_URL_LENGTH);
+        let err = fetch_and_clone_git(&long_url, None, None, false, tmpdir.path()).unwrap_err();
+        assert!(err.to_string().contains("URL too long"));
+    }
+
+    #[test]
+    fn test_fetch_and_clone_git_rejects_bad_rev() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let err = fetch_and_clone_git("https://example.com/repo.git", Some("abc;rm -rf /"), None, false, tmpdir.path())
+            .unwrap_err();
+        assert!(err.to_string().contains("forbidden character"));
+    }
+
+    #[test]
+    fn test_fetch_and_clone_git_rejects_bad_ref() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let err = fetch_and_clone_git(
+            "https://example.com/repo.git",
+            None,
+            Some("refs/heads/`whoami`"),
+            false,
+            tmpdir.path(),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("forbidden character"));
+    }
+
+    #[test]
+    fn test_git_metadata_from_local_repo() {
+        // Create a local git repo and verify metadata extraction
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_dir = tmpdir.path().join("repo");
+        std::fs::create_dir(&repo_dir).unwrap();
+
+        // Init and commit
+        Command::new("git").args(["init"]).current_dir(&repo_dir).output().unwrap();
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(&repo_dir)
+            .output()
+            .unwrap();
+        Command::new("git").args(["config", "user.name", "Test"]).current_dir(&repo_dir).output().unwrap();
+        std::fs::write(repo_dir.join("file.txt"), "hello").unwrap();
+        Command::new("git").args(["add", "."]).current_dir(&repo_dir).output().unwrap();
+        Command::new("git").args(["commit", "-m", "initial"]).current_dir(&repo_dir).output().unwrap();
+
+        let meta = get_git_metadata(&repo_dir, "HEAD").unwrap();
+        assert_eq!(meta.rev.len(), 40);
+        assert!(meta.rev.chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(meta.last_modified > 0);
+        assert!(meta.rev_count >= 1);
+    }
+
+    #[test]
+    fn test_resolve_git_rev_from_local_repo() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_dir = tmpdir.path().join("repo");
+        std::fs::create_dir(&repo_dir).unwrap();
+
+        Command::new("git").args(["init"]).current_dir(&repo_dir).output().unwrap();
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(&repo_dir)
+            .output()
+            .unwrap();
+        Command::new("git").args(["config", "user.name", "Test"]).current_dir(&repo_dir).output().unwrap();
+        std::fs::write(repo_dir.join("file.txt"), "hello").unwrap();
+        Command::new("git").args(["add", "."]).current_dir(&repo_dir).output().unwrap();
+        Command::new("git").args(["commit", "-m", "initial"]).current_dir(&repo_dir).output().unwrap();
+
+        // Resolve HEAD
+        let rev = resolve_git_rev(&repo_dir, None, None).unwrap();
+        assert_eq!(rev.len(), 40);
+
+        // Resolve by explicit rev
+        let rev2 = resolve_git_rev(&repo_dir, Some(&rev), None).unwrap();
+        assert_eq!(rev, rev2);
+
+        // Resolve nonexistent ref
+        let err = resolve_git_rev(&repo_dir, None, Some("refs/heads/nonexistent-branch-xyz"));
+        assert!(err.is_err(), "should fail for nonexistent ref");
+    }
+
+    #[test]
+    fn test_fetch_and_clone_git_local_repo() {
+        let tmpdir = tempfile::tempdir().unwrap();
+
+        // Create source repo
+        let src = tmpdir.path().join("src");
+        std::fs::create_dir(&src).unwrap();
+        Command::new("git").args(["init"]).current_dir(&src).output().unwrap();
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(&src)
+            .output()
+            .unwrap();
+        Command::new("git").args(["config", "user.name", "Test"]).current_dir(&src).output().unwrap();
+        std::fs::write(src.join("hello.txt"), "hello from git").unwrap();
+        Command::new("git").args(["add", "."]).current_dir(&src).output().unwrap();
+        Command::new("git").args(["commit", "-m", "initial"]).current_dir(&src).output().unwrap();
+
+        // Clone into dest
+        let dest = tmpdir.path().join("dest");
+        std::fs::create_dir(&dest).unwrap();
+
+        let src_url = src.to_string_lossy().to_string();
+        let result = fetch_and_clone_git(&src_url, None, None, false, &dest);
+        assert!(result.is_ok(), "clone failed: {:?}", result.err());
+
+        let checkout = result.unwrap();
+        assert!(checkout.join("hello.txt").exists());
+        let content = std::fs::read_to_string(checkout.join("hello.txt")).unwrap();
+        assert_eq!(content, "hello from git");
+
+        // .git should be removed (bare clone + archive)
+        assert!(!checkout.join(".git").exists());
+    }
+
+    /// Integration test: clone nix-systems/default via git URL.
+    #[test]
+    #[ignore] // requires network access
+    fn test_fetch_and_clone_git_remote() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let dest = tmpdir.path().join("nix-systems");
+        std::fs::create_dir(&dest).unwrap();
+
+        let result = fetch_and_clone_git(
+            "https://github.com/nix-systems/default.git",
+            Some("da67096a3b9bf56a91d16901293e51ba5b49a27e"),
+            None,
+            false,
+            &dest,
+        );
+
+        assert!(result.is_ok(), "clone failed: {:?}", result.err());
+        let checkout = result.unwrap();
+        assert!(checkout.join("default.nix").exists(), "missing default.nix in {:?}", checkout,);
     }
 }

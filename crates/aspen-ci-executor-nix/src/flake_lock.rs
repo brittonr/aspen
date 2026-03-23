@@ -317,10 +317,10 @@ impl FlakeLock {
                     "gitlab" => fetch_gitlab_input(&input.locked, None),
                     #[cfg(feature = "snix-build")]
                     "tarball" => fetch_tarball_input(&input.locked, None),
-                    "git" => Err(io::Error::new(
-                        io::ErrorKind::Unsupported,
-                        format!("git input {} requires fallback", input.node_key),
-                    )),
+                    #[cfg(not(feature = "snix-build"))]
+                    "git" => fetch_git_input(&input.locked),
+                    #[cfg(feature = "snix-build")]
+                    "git" => fetch_git_input(&input.locked, None),
                     other => Err(io::Error::new(
                         io::ErrorKind::Unsupported,
                         format!("unsupported input type '{}' for node {}", other, input.node_key),
@@ -349,7 +349,7 @@ impl FlakeLock {
 
     /// Resolve all inputs, fetching missing inputs over HTTP via the provided cache.
     ///
-    /// Missing GitHub/GitLab/tarball inputs are downloaded, unpacked,
+    /// Missing GitHub/GitLab/tarball/git inputs are downloaded, unpacked,
     /// narHash-verified, and cached. This enables fully in-process flake
     /// evaluation without subprocess fallback.
     #[cfg(feature = "snix-build")]
@@ -368,10 +368,7 @@ impl FlakeLock {
                     "github" => fetch_github_input(&input.locked, Some(fetch_cache)),
                     "gitlab" => fetch_gitlab_input(&input.locked, Some(fetch_cache)),
                     "tarball" => fetch_tarball_input(&input.locked, Some(fetch_cache)),
-                    "git" => Err(io::Error::new(
-                        io::ErrorKind::Unsupported,
-                        format!("git input {} requires fallback to nix eval subprocess", input.node_key),
-                    )),
+                    "git" => fetch_git_input(&input.locked, Some(fetch_cache)),
                     other => Err(io::Error::new(
                         io::ErrorKind::Unsupported,
                         format!("unsupported input type '{}' for node {}", other, input.node_key),
@@ -585,6 +582,78 @@ pub fn fetch_tarball_input(locked: &LockedInput) -> io::Result<String> {
     Err(io::Error::new(
         io::ErrorKind::NotFound,
         format!("tarball input {url} not in local store; enable snix-build feature for HTTP fetch"),
+    ))
+}
+
+/// Fetch a git input by cloning the repository.
+///
+/// Clones the repo at the locked URL, checks out the specified rev,
+/// verifies the narHash if present, and caches the result via `FetchCache`.
+/// The cache key is the narHash when available, or `git:<url>@<rev>` otherwise.
+#[cfg(feature = "snix-build")]
+pub fn fetch_git_input(locked: &LockedInput, fetch_cache: Option<&crate::fetch::FetchCache>) -> io::Result<String> {
+    let url = locked.url.as_deref().unwrap_or("");
+    let rev = locked.rev.as_deref();
+
+    if url.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "git input missing 'url' field"));
+    }
+
+    let cache = match fetch_cache {
+        Some(c) => c,
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("git input {url} not in local store and no fetch cache"),
+            ));
+        }
+    };
+
+    let nar_hash = locked.nar_hash.as_deref().unwrap_or("");
+    let expected_nar_hash = if nar_hash.is_empty() {
+        tracing::warn!(url = %url, "git input has no narHash, content will not be verified");
+        None
+    } else {
+        Some(nar_hash)
+    };
+
+    // Cache key: narHash if available, otherwise url+rev
+    let cache_key = if !nar_hash.is_empty() {
+        nar_hash.to_string()
+    } else {
+        format!("git:{}@{}", url, rev.unwrap_or("HEAD"))
+    };
+
+    let url_owned = url.to_string();
+    let rev_owned = rev.map(|r| r.to_string());
+    // Note: flake.lock git inputs don't have a separate "ref" field in LockedInput;
+    // the rev is always pinned in locked inputs. ref is only in the original spec.
+    let submodules = false; // TODO: parse from locked input when flake.lock includes it
+
+    cache
+        .get_or_fetch(&cache_key, expected_nar_hash, |dest| {
+            crate::fetch::fetch_and_clone_git(
+                &url_owned,
+                rev_owned.as_deref(),
+                None, // ref not needed when rev is pinned
+                submodules,
+                dest,
+            )
+        })
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| {
+            io::Error::new(e.kind(), format!("failed to fetch git input {url}@{}: {e}", rev.unwrap_or("HEAD")))
+        })
+}
+
+/// Fetch a git input (stub when snix-build is disabled).
+#[cfg(not(feature = "snix-build"))]
+pub fn fetch_git_input(locked: &LockedInput) -> io::Result<String> {
+    let url = locked.url.as_deref().unwrap_or("?");
+    let rev = locked.rev.as_deref().unwrap_or("?");
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!("git input {url}@{rev} not in local store; enable snix-build feature for git clone"),
     ))
 }
 
@@ -977,6 +1046,84 @@ mod tests {
         // Use the crate root as flake_dir — it exists
         let result = resolve_path_input(&locked, env!("CARGO_MANIFEST_DIR"));
         assert!(result.is_ok());
+    }
+
+    #[test]
+    #[cfg(feature = "snix-build")]
+    fn test_fetch_git_input_missing_url() {
+        let cache = crate::fetch::FetchCache::new().unwrap();
+        let locked = LockedInput {
+            input_type: "git".to_string(),
+            nar_hash: None,
+            rev: None,
+            last_modified: None,
+            owner: None,
+            repo: None,
+            url: None, // missing
+            path: None,
+            dir: None,
+        };
+        let err = fetch_git_input(&locked, Some(&cache)).unwrap_err();
+        assert!(err.to_string().contains("missing 'url'"));
+    }
+
+    #[test]
+    #[cfg(feature = "snix-build")]
+    fn test_fetch_git_input_no_cache() {
+        let locked = LockedInput {
+            input_type: "git".to_string(),
+            nar_hash: Some("sha256-test".to_string()),
+            rev: Some("abc123".to_string()),
+            last_modified: None,
+            owner: None,
+            repo: None,
+            url: Some("https://example.com/repo.git".to_string()),
+            path: None,
+            dir: None,
+        };
+        let err = fetch_git_input(&locked, None).unwrap_err();
+        assert!(err.to_string().contains("no fetch cache"));
+    }
+
+    #[test]
+    #[cfg(feature = "snix-build")]
+    fn test_fetch_git_input_local_repo() {
+        // Create a local git repo and verify fetch_git_input can clone it
+        let tmpdir = tempfile::tempdir().unwrap();
+        let src = tmpdir.path().join("src");
+        std::fs::create_dir(&src).unwrap();
+
+        std::process::Command::new("git").args(["init"]).current_dir(&src).output().unwrap();
+        std::process::Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(&src)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(&src)
+            .output()
+            .unwrap();
+        std::fs::write(src.join("file.txt"), "hello").unwrap();
+        std::process::Command::new("git").args(["add", "."]).current_dir(&src).output().unwrap();
+        std::process::Command::new("git").args(["commit", "-m", "init"]).current_dir(&src).output().unwrap();
+
+        let cache = crate::fetch::FetchCache::new().unwrap();
+        let locked = LockedInput {
+            input_type: "git".to_string(),
+            nar_hash: None,
+            rev: None,
+            last_modified: None,
+            owner: None,
+            repo: None,
+            url: Some(src.to_string_lossy().to_string()),
+            path: None,
+            dir: None,
+        };
+        let result = fetch_git_input(&locked, Some(&cache));
+        assert!(result.is_ok(), "fetch_git_input failed: {:?}", result.err());
+        let path = result.unwrap();
+        assert!(std::path::Path::new(&path).join("file.txt").exists());
     }
 
     /// Property test: for multiple known SRI hashes, compute_store_path produces

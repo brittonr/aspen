@@ -952,6 +952,7 @@ dependencies = [
  "tonic 0.12.3",
  "tracing",
  "uuid",
+ "wait-timeout",
 ]
 
 [[package]]
