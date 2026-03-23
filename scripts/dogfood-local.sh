@@ -365,8 +365,26 @@ do_push() {
   log "Enabling CI auto-trigger on repo..."
   cli_json ci watch "$repo_id" 2>/dev/null || warn "CI watch may already be enabled"
 
-  # Push source to Forge
-  ticket=$(cat "$CLUSTER_DIR/node1/cluster-ticket.txt")
+  # Push source to Forge — target the leader node directly.
+  # The git import writes ~62K KV entries (hash mappings). Forwarding each
+  # one individually from a follower to the leader is slow and fragile.
+  # Using the leader's ticket avoids this entirely.
+  local leader_ticket
+  if [ "$NODE_COUNT" -gt 1 ]; then
+    local leader_id
+    leader_id=$(parse_json "next((n.get('node_id',0) for n in d.get('nodes',[]) if n.get('is_leader')), 1)" <<< "$(cli_json cluster status 2>&1)") || leader_id=""
+    leader_id="${leader_id:-1}"
+    leader_ticket=$(cat "$CLUSTER_DIR/node$leader_id/cluster-ticket.txt" 2>/dev/null)
+    if [ -z "$leader_ticket" ]; then
+      warn "Could not get leader ticket (node $leader_id), falling back to node1"
+      leader_ticket=$(cat "$CLUSTER_DIR/node1/cluster-ticket.txt")
+    else
+      log "Pushing to leader node $leader_id"
+    fi
+  else
+    leader_ticket=$(cat "$CLUSTER_DIR/node1/cluster-ticket.txt")
+  fi
+  ticket="$leader_ticket"
   local remote_url="aspen://${ticket}/${repo_id}"
 
   log "Pushing Aspen source to Forge..."
