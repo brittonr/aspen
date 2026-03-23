@@ -23,6 +23,7 @@ Aspen is pinned to iroh 0.95.1, iroh-blobs 0.97, and iroh-docs 0.95. The current
 ## Capabilities
 
 ### New Capabilities
+
 - `h3-iroh-serving`: HTTP/3 serving through iroh QUIC endpoints via ALPN routing. Replaces TCP-bound axum listeners with h3-iroh for the nix cache gateway. Foundation for Forge web frontend.
 
 ### Modified Capabilities

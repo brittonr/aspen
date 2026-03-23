@@ -7,12 +7,14 @@ The upgrade must be done as a single atomic change — partial upgrades leave ir
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Upgrade iroh to 0.97.0, iroh-blobs to 0.99.0, iroh-docs to 0.97.0
 - Enable h3-iroh dependency (un-comment disabled code)
 - All existing tests pass after migration
 - Migrate nix-cache-gateway from axum TCP to h3-iroh serving
 
 **Non-Goals:**
+
 - Forge web frontend (separate change, built on h3-iroh after this lands)
 - Exploiting new iroh features (multipath, custom transports, endpoint hooks) — just migrate the API, don't adopt new capabilities yet
 - Upgrading snix's iroh dependency (snix is vendored, pins its own iroh version)
