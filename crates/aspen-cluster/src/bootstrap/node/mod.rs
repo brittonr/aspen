@@ -534,8 +534,16 @@ fn create_raft_node(
     // Set up write forwarding before wrapping in Arc. Follower nodes transparently
     // forward writes to the leader, preventing job ack failures during elections.
     let endpoint = Arc::new(iroh_manager.endpoint().clone());
-    let forwarder = Arc::new(aspen_raft::iroh_write_forwarder::IrohWriteForwarder::new(endpoint));
-    node.set_write_forwarder(forwarder);
+    let forwarder: Arc<dyn aspen_raft::write_forwarder::WriteForwarder> =
+        Arc::new(aspen_raft::iroh_write_forwarder::IrohWriteForwarder::new(endpoint));
+    node.set_write_forwarder(Arc::clone(&forwarder));
+
+    // Also wire forwarder into the batcher so batched writes can be forwarded
+    // during leadership transitions (batcher collects writes, leadership
+    // changes, flush needs to forward instead of failing).
+    if let Some(batcher) = node.write_batcher() {
+        batcher.set_write_forwarder(Arc::clone(&forwarder));
+    }
     info!(node_id = config.node_id, "write forwarding enabled");
 
     Arc::new(node)

@@ -1,12 +1,19 @@
 use aspen_kv_types::KeyValueStoreError;
 use aspen_kv_types::WriteCommand;
+use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
+use tracing::debug;
 
 use super::command_conversion::write_command_to_app_request;
 use super::*;
+use crate::types::NodeId;
 
 impl WriteBatcher {
     /// Write directly to Raft without batching.
+    ///
+    /// If Raft returns ForwardToLeader (leadership changed), forwards the
+    /// write to the leader via the write forwarder. Without a forwarder,
+    /// returns NotLeader so callers can retry.
     pub(super) async fn write_direct(&self, command: WriteCommand) -> Result<WriteResult, KeyValueStoreError> {
         let app_request = write_command_to_app_request(&command);
 
@@ -29,9 +36,27 @@ impl WriteBatcher {
                 conflict_expected_version: None,
                 conflict_actual_version: None,
             }),
-            Err(e) => Err(KeyValueStoreError::Failed {
-                reason: format!("raft error: {}", e),
-            }),
+            Err(e) => {
+                // Forward to leader if this is a leadership change during write
+                if let Some(forward_info) = e.forward_to_leader() {
+                    if let Some(forwarder) = self.write_forwarder()
+                        && let Some(lid) = forward_info.leader_id
+                        && let Some(node) = &forward_info.leader_node
+                    {
+                        debug!(leader_id = lid.0, "forwarding direct write to leader after leadership change");
+                        let request = WriteRequest { command };
+                        return forwarder.forward_write(NodeId(lid.0), node.iroh_addr.clone(), request).await;
+                    }
+                    // No forwarder or no leader info
+                    return Err(KeyValueStoreError::NotLeader {
+                        leader: forward_info.leader_id.map(|id| id.0),
+                        reason: "leadership changed during direct write".to_string(),
+                    });
+                }
+                Err(KeyValueStoreError::Failed {
+                    reason: format!("raft error: {}", e),
+                })
+            }
         }
     }
 }

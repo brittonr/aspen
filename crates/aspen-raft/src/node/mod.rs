@@ -232,8 +232,9 @@ impl RaftNode {
         &self.initialized
     }
 
-    /// Internal: Get write batcher reference for KV store.
-    pub(crate) fn write_batcher(&self) -> Option<&Arc<WriteBatcher>> {
+    /// Get write batcher reference. Used by KV store and bootstrap to wire
+    /// the write forwarder into the batcher.
+    pub fn write_batcher(&self) -> Option<&Arc<WriteBatcher>> {
         self.write_batcher.as_ref()
     }
 

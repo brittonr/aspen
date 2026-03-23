@@ -41,6 +41,7 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 
 use crate::types::AppTypeConfig;
+use crate::write_forwarder::WriteForwarder;
 
 /// A pending write waiting for batch submission.
 struct PendingWrite {
@@ -93,6 +94,9 @@ pub struct WriteBatcher {
     state: Mutex<BatcherState>,
     /// Tracked flush tasks (Tiger Style: no untracked spawns)
     flush_tasks: Mutex<JoinSet<()>>,
+    /// Optional write forwarder for forwarding to leader during transitions.
+    /// Set after construction via `set_write_forwarder()`.
+    write_forwarder: std::sync::RwLock<Option<Arc<dyn WriteForwarder>>>,
 }
 
 impl WriteBatcher {
@@ -111,6 +115,7 @@ impl WriteBatcher {
                 flush_scheduled: false,
             }),
             flush_tasks: Mutex::new(JoinSet::new()),
+            write_forwarder: std::sync::RwLock::new(None),
         })
     }
 
@@ -130,7 +135,20 @@ impl WriteBatcher {
                 flush_scheduled: false,
             }),
             flush_tasks: Mutex::new(JoinSet::new()),
+            write_forwarder: std::sync::RwLock::new(None),
         }
+    }
+
+    /// Set the write forwarder for forwarding batched writes during
+    /// leadership transitions. Called during bootstrap after the forwarder
+    /// is created but before the node starts accepting writes.
+    pub fn set_write_forwarder(&self, forwarder: Arc<dyn WriteForwarder>) {
+        *self.write_forwarder.write().unwrap() = Some(forwarder);
+    }
+
+    /// Get the write forwarder, if set.
+    pub(super) fn write_forwarder(&self) -> Option<Arc<dyn WriteForwarder>> {
+        self.write_forwarder.read().unwrap().clone()
     }
 
     /// Submit a write operation for batching (Arc version with timeout support).

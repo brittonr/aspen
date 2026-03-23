@@ -126,9 +126,28 @@ impl KeyValueStore for RaftNode {
                     is_deleted: deleted,
                 })
             }
-            Err(err) => Err(KeyValueStoreError::Failed {
-                reason: err.to_string(),
-            }),
+            Err(err) => {
+                // Forward to leader if this is a ForwardToLeader error
+                if let Some(forward_info) = err.forward_to_leader()
+                    && let Some(forwarder) = self.write_forwarder()
+                    && let Some(leader_id) = forward_info.leader_id
+                    && let Some(leader_node) = &forward_info.leader_node
+                {
+                    let leader_addr = leader_node.iroh_addr.clone();
+                    debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding delete to leader");
+                    let write_request = WriteRequest {
+                        command: WriteCommand::Delete {
+                            key: request.key.clone(),
+                        },
+                    };
+                    let _write_result = forwarder.forward_write(leader_id, leader_addr, write_request).await?;
+                    return Ok(DeleteResult {
+                        key: request.key,
+                        is_deleted: true,
+                    });
+                }
+                Err(map_raft_write_error(err))
+            }
         }
     }
 

@@ -44,17 +44,19 @@ pub(super) struct StorageBroadcasts {
 /// so without jitter, nodes with similar startup timing persistently split
 /// votes (especially in VMs with synchronized scheduling).
 pub(super) fn create_raft_config_and_broadcast(config: &NodeConfig) -> (Arc<RaftConfig>, StorageBroadcasts) {
-    // Derive deterministic per-node jitter from node_id.
-    // Spread across the election timeout range to desynchronize elections.
+    // Derive deterministic per-node jitter from node_id using Knuth's
+    // multiplicative hash. Plain `node_id % range` gives tiny jitter for
+    // small IDs (1, 2, 3 → 1ms, 2ms, 3ms). The multiplicative hash spreads
+    // small IDs across the full jitter range.
     // With default 1500-3000ms range, jitter adds 0-500ms based on node_id.
     let timeout_range = config.election_timeout_max_ms.saturating_sub(config.election_timeout_min_ms);
     let jitter = if timeout_range > 0 {
-        // Use a simple hash of node_id to distribute jitter evenly.
-        // Modulo by range/3 ensures jitter stays within ~1/3 of the range,
-        // preserving enough randomization space for openraft's own rand.
         let jitter_range = timeout_range / 3;
         if jitter_range > 0 {
-            config.node_id % jitter_range
+            // Knuth multiplicative hash: spread node_id across jitter range.
+            // 2654435761 is the golden ratio × 2^32, truncated.
+            let hash = config.node_id.wrapping_mul(2_654_435_761);
+            hash % jitter_range
         } else {
             0
         }

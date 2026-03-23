@@ -1,8 +1,14 @@
+use aspen_kv_types::BatchOperation;
 use aspen_kv_types::KeyValueStoreError;
+use aspen_kv_types::WriteCommand;
+use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
+use tracing::debug;
+use tracing::warn;
 
 use super::*;
 use crate::types::AppRequest;
+use crate::types::NodeId;
 use crate::verified::FlushDecision;
 use crate::verified::determine_flush_action;
 
@@ -90,6 +96,10 @@ impl WriteBatcher {
     }
 
     /// Submit a batch to Raft and notify all waiters.
+    ///
+    /// If the local Raft returns ForwardToLeader (leadership changed during
+    /// batch collection), forwards the batch to the leader via the write
+    /// forwarder. Without a forwarder, returns NotLeader so callers can retry.
     pub(super) async fn flush_batch(&self, batch: Vec<PendingWrite>) {
         if batch.is_empty() {
             return;
@@ -112,7 +122,9 @@ impl WriteBatcher {
             "FLUSH: all batch operation keys must be non-empty"
         );
 
-        let app_request = AppRequest::Batch { operations };
+        let app_request = AppRequest::Batch {
+            operations: operations.clone(),
+        };
 
         let batch_size = batch.len();
 
@@ -137,14 +149,73 @@ impl WriteBatcher {
                 conflict_expected_version: None,
                 conflict_actual_version: None,
             }),
-            Err(e) => Err(KeyValueStoreError::Failed {
-                reason: format!("raft error: {}", e),
-            }),
+            Err(e) => {
+                // Check if this is a ForwardToLeader (leadership changed mid-batch).
+                if let Some(forward_info) = e.forward_to_leader() {
+                    self.handle_forward_to_leader(forward_info, &operations, batch_size).await
+                } else {
+                    Err(KeyValueStoreError::Failed {
+                        reason: format!("raft error: {}", e),
+                    })
+                }
+            }
         };
 
         // Clone result for each waiter
         for pending in batch {
             let _ = pending.result_tx.send(write_result.clone());
         }
+    }
+
+    /// Handle a ForwardToLeader error from flush_batch by forwarding the
+    /// batch to the leader via the write forwarder.
+    async fn handle_forward_to_leader(
+        &self,
+        forward_info: &openraft::error::ForwardToLeader<AppTypeConfig>,
+        operations: &[(bool, String, String)],
+        batch_size: usize,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        let leader_id = forward_info.leader_id;
+        let leader_node = forward_info.leader_node.as_ref();
+
+        // Try to forward via the write forwarder
+        if let Some(forwarder) = self.write_forwarder()
+            && let Some(lid) = leader_id
+            && let Some(node) = leader_node
+        {
+            debug!(leader_id = lid.0, batch_size, "forwarding batched write to leader after leadership change");
+
+            let batch_ops: Vec<BatchOperation> = operations
+                .iter()
+                .map(|(is_set, key, value)| {
+                    if *is_set {
+                        BatchOperation::Set {
+                            key: key.clone(),
+                            value: value.clone(),
+                        }
+                    } else {
+                        BatchOperation::Delete { key: key.clone() }
+                    }
+                })
+                .collect();
+
+            let request = WriteRequest {
+                command: WriteCommand::Batch { operations: batch_ops },
+            };
+
+            return forwarder.forward_write(NodeId(lid.0), node.iroh_addr.clone(), request).await;
+        }
+
+        // No forwarder or no leader info — return NotLeader for client retry
+        let leader_hint = leader_id.map(|id| id.0);
+        warn!(
+            leader = ?leader_hint,
+            batch_size,
+            "batch flush failed: leadership changed, no forwarder available"
+        );
+        Err(KeyValueStoreError::NotLeader {
+            leader: leader_hint,
+            reason: "leadership changed during batch flush".to_string(),
+        })
     }
 }

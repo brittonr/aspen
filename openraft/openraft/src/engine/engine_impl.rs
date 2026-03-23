@@ -208,6 +208,11 @@ where C: RaftTypeConfig
     /// Start to elect this node as leader
     #[tracing::instrument(level = "debug", skip(self))]
     pub(crate) fn elect(&mut self) {
+        // Re-randomize election timeout for this attempt (Raft §5.2).
+        // Without this, nodes that picked similar initial timeouts will
+        // persistently split votes on every subsequent election.
+        self.config.rerandomize_election_timeout();
+
         let new_term = self.state.vote.term().next();
         let leader_id = LeaderIdOf::<C>::new(new_term, self.config.id.clone());
         let new_vote = VoteOf::<C>::from_leader_id(leader_id, false);

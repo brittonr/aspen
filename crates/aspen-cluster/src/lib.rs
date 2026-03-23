@@ -640,10 +640,16 @@ mod tests {
             return 0;
         }
         let jitter_range = range / 3;
-        if jitter_range > 0 { node_id % jitter_range } else { 0 }
+        if jitter_range > 0 {
+            node_id.wrapping_mul(2_654_435_761) % jitter_range
+        } else {
+            0
+        }
     }
 
     /// Different node IDs must produce different election timeout offsets.
+    /// With Knuth multiplicative hash, even small IDs (1, 2, 3) produce
+    /// well-separated jitter values.
     #[test]
     fn test_election_jitter_differs_by_node_id() {
         let j1 = compute_election_jitter(1, 1500, 3000);
@@ -652,6 +658,11 @@ mod tests {
 
         let has_different = j1 != j2 || j2 != j3 || j1 != j3;
         assert!(has_different, "jitter should differ: [{}, {}, {}]", j1, j2, j3);
+
+        // With multiplicative hash, small node IDs should produce
+        // meaningful jitter (not just 1ms, 2ms, 3ms).
+        assert!(j1 > 10, "node 1 jitter {} should be meaningful", j1);
+        assert!(j2 > 10, "node 2 jitter {} should be meaningful", j2);
     }
 
     /// Jitter must not exceed 1/3 of the timeout range.

@@ -581,6 +581,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
             .current_dir(checkout_dir)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
             .spawn()
         {
             Ok(child) => child,
