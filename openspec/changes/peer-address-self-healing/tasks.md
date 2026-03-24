@@ -21,9 +21,9 @@
 
 - [x] 4.1 In `NodeResources::shutdown()`, call `ClusterDiscovery::publish()` with current endpoint addresses before closing the endpoint
 - [x] 4.2 Flush cluster discovery in both shutdown paths (NodeResources and CommonShutdownResources)
-- [ ] 4.3 Test: clean shutdown produces discovery file, restart reads it
+- [x] 4.3 Test: clean shutdown produces discovery file, restart reads it
 
 ## 5. Integration test
 
-- [ ] 5.1 Write `scripts/test-cluster-discovery.sh`: 3-node cluster with relay disabled and mDNS disabled, all on same machine. Stop all, restart all, assert quorum restores within 10s without CLI intervention
-- [ ] 5.2 Verify test: confirm discovery files exist in data dirs after first run, confirm they're read on restart, confirm new addresses are published after restart
+- [x] 5.1 Write `scripts/test-cluster-discovery.sh`: 3-node cluster with relay disabled and mDNS disabled, all on same machine. Stop all, restart all, assert quorum restores within 10s without CLI intervention
+- [x] 5.2 Verify test: confirm discovery files exist in data dirs after first run, confirm they're read on restart, confirm new addresses are published after restart

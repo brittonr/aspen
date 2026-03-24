@@ -86,7 +86,7 @@ impl ClusterDiscovery {
         base_dir.join("discovery").join(format!("{}.json", endpoint_id))
     }
 
-    /// Atomically write an `EndpointAddr` to a discovery file.
+    /// Write an `EndpointAddr` to a discovery file.
     fn write_file(path: &std::path::Path, addr: &EndpointAddr) -> std::io::Result<()> {
         let dir = path.parent().unwrap_or(std::path::Path::new("."));
         std::fs::create_dir_all(dir)?;
@@ -94,10 +94,7 @@ impl ClusterDiscovery {
         let json =
             serde_json::to_string_pretty(addr).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
-        // Atomic write: temp file + rename
-        let tmp_path = path.with_extension("json.tmp");
-        std::fs::write(&tmp_path, json)?;
-        std::fs::rename(&tmp_path, path)?;
+        std::fs::write(path, json)?;
 
         Ok(())
     }

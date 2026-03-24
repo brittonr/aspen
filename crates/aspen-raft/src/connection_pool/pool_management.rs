@@ -151,9 +151,13 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             };
 
             let connect_result =
-                tokio::time::timeout(IROH_CONNECT_TIMEOUT, self.transport.endpoint().connect(addr_to_use, alpn))
+                match tokio::time::timeout(IROH_CONNECT_TIMEOUT, self.transport.endpoint().connect(addr_to_use, alpn))
                     .await
-                    .context("timeout connecting to peer")?;
+                {
+                    Ok(Ok(conn)) => Ok(conn),
+                    Ok(Err(e)) => Err(anyhow::anyhow!("{}", e)),
+                    Err(_elapsed) => Err(anyhow::anyhow!("connect timeout after {}s", IROH_CONNECT_TIMEOUT.as_secs())),
+                };
 
             match connect_result {
                 Ok(conn) => return Ok(conn),

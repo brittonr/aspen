@@ -98,6 +98,7 @@ impl IrohEndpointManager {
         builder = Self::configure_address_lookup(builder, &config);
 
         // Configure file-based cluster discovery if data_dir is set
+        tracing::debug!(data_dir = ?config.data_dir, "checking cluster discovery config");
         let cluster_discovery = if let Some(ref data_dir) = config.data_dir {
             let cluster_data_dir = data_dir.parent().map(|p| p.to_path_buf());
             let disc = crate::cluster_discovery::ClusterDiscovery::new(
