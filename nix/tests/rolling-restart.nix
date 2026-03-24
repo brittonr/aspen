@@ -36,7 +36,7 @@
       features = [];
     };
 
-    environment.systemPackages = [aspenCliPackage];
+    environment.systemPackages = [aspenCliPackage pkgs.jq];
     networking.firewall.enable = false;
 
     virtualisation = {
@@ -95,7 +95,7 @@ in
           output = node.succeed(
               "journalctl -u aspen-node --no-pager 2>/dev/null"
               " | grep 'cluster ticket generated'"
-              " | head -1"
+              " | tail -1"
           )
           eid_match = re.search(r'endpoint_id=([0-9a-f]{64})', output)
           assert eid_match, f"endpoint_id not found: {output[:300]}"
@@ -103,9 +103,12 @@ in
           addrs = []
           addr_match = re.search(r'direct_addrs=\[(.*?)\]', output)
           if addr_match:
-              for a in re.findall(r'[\d.]+:\d+', addr_match.group(1)):
+              # Match only IPv4:port — skip IPv6 fragments like "8:1" from "[2001:db8:1::2]:port"
+              for a in re.findall(r'\d+\.\d+\.\d+\.\d+:\d+', addr_match.group(1)):
                   addrs.append(a)
-          return json.dumps({"id": eid, "addrs": addrs})
+          assert len(addrs) > 0, f"no IPv4 addresses found in: {addr_match.group(1) if addr_match else output[:300]}"
+          # iroh EndpointAddr expects addrs as TransportAddr enum: {"Ip": "host:port"}
+          return json.dumps({"id": eid, "addrs": [{"Ip": a} for a in addrs]})
 
       def wait_for_healthy(node, timeout=60):
           node.wait_for_unit("aspen-node.service")
@@ -116,6 +119,20 @@ in
               timeout=timeout,
           )
 
+      def wait_for_voter(node, timeout=120):
+          """Wait until this node starts with persisted voter state."""
+          node.wait_for_unit("aspen-node.service")
+          node.wait_for_file("/var/lib/aspen/cluster-ticket.txt", timeout=30)
+          # Verify from journal that the node started with voter membership
+          # (don't rely on RPC which needs leader connectivity)
+          node.wait_until_succeeds(
+              "journalctl -u aspen-node --no-pager"
+              " | grep 'startup begin'"
+              " | tail -1"
+              " | grep 'is_voter: true'",
+              timeout=timeout,
+          )
+
       # ── 1. Form cluster ──
       with subtest("form 3-node cluster"):
           node1.wait_for_file("/var/lib/aspen/cluster-ticket.txt", timeout=30)
@@ -123,20 +140,38 @@ in
 
           addr2_json = get_endpoint_addr_json(node2)
           addr3_json = get_endpoint_addr_json(node3)
+          node1.log(f"node2 addr: {addr2_json}")
+          node1.log(f"node3 addr: {addr3_json}")
 
           cli_text(node1, "cluster init")
-          time.sleep(2)
-          cli_text(node1, f"cluster add-learner --node-id 2 --addr '{addr2_json}'")
-          time.sleep(3)
-          cli_text(node1, f"cluster add-learner --node-id 3 --addr '{addr3_json}'")
-          time.sleep(2)
-          cli_text(node1, "cluster change-membership 1 2 3")
-          time.sleep(3)
 
-          # Wait for all nodes healthy
+          # add-learner with retry — the CLI now returns non-zero on failure
+          node1.wait_until_succeeds(
+              f"aspen-cli --ticket '{get_ticket(node1)}' cluster add-learner --node-id 2 --addr '{addr2_json}'",
+              timeout=30,
+          )
+          node1.wait_until_succeeds(
+              f"aspen-cli --ticket '{get_ticket(node1)}' cluster add-learner --node-id 3 --addr '{addr3_json}'",
+              timeout=30,
+          )
+
+          # change-membership with retry
+          node1.wait_until_succeeds(
+              f"aspen-cli --ticket '{get_ticket(node1)}' cluster change-membership 1 2 3",
+              timeout=30,
+          )
+
+          # Verify all nodes see themselves as voters
           for n in [node1, node2, node3]:
               wait_for_healthy(n, timeout=30)
-          node1.log("3-node cluster formed")
+
+          # Verify leader exists and logs have been applied
+          ticket1 = get_ticket(node1)
+          m = cli(node1, "--json cluster metrics", ticket=ticket1)
+          if isinstance(m, dict):
+              assert m.get("current_leader", 0) > 0, f"no leader after formation: {m}"
+              assert m.get("last_applied", 0) > 0, f"no applied entries: {m}"
+          node1.log(f"3-node cluster formed and verified: {m}")
 
       # ── 2. Write test data ──
       with subtest("write KV data"):
@@ -148,7 +183,7 @@ in
       # ── 3. Find leader ──
       with subtest("identify leader"):
           ticket1 = get_ticket(node1)
-          metrics = cli(node1, "cluster metrics", ticket=ticket1)
+          metrics = cli(node1, "--json cluster metrics", ticket=ticket1)
           leader_id = metrics.get("current_leader", 1) if isinstance(metrics, dict) else 1
           node1.log(f"Leader before restart: node{leader_id}")
 
@@ -165,28 +200,31 @@ in
               node.succeed("systemctl stop aspen-node.service")
               time.sleep(5)
               node.succeed("systemctl start aspen-node.service")
-              wait_for_healthy(node, timeout=120)
-              node.log(f"node{nid} restarted and healthy")
+              # Use wait_for_voter to verify this node actually has Raft state
+              # (not just that it can reach a leader)
+              wait_for_voter(node, timeout=120)
+              node.log(f"node{nid} restarted and voter-confirmed")
 
       # ── 5. Verify cluster health ──
       with subtest("cluster healthy after rolling restart"):
-          # Use node1's ticket — as leader it can answer cluster queries.
-          # Other nodes' tickets only point to themselves and may return
-          # "not initialized" if they haven't caught up yet.
-          ticket1 = get_ticket(node1)
-          m = cli(node1, "cluster metrics", ticket=ticket1)
-          node1.log(f"metrics response: {m}")
-          if isinstance(m, dict):
-              current = m.get("current_leader")
-              node1.log(f"Leader after restart: node{current}")
-              assert current is not None and current > 0, f"No leader in metrics: {m}"
-          else:
-              # Metrics returned non-JSON — try cluster health instead
-              node1.wait_until_succeeds(
-                  f"aspen-cli --ticket '{ticket1}' cluster health 2>/dev/null",
-                  timeout=30,
-              )
-              node1.log("Cluster healthy (health check passed)")
+          # After rolling restart, leader may have changed. Try each node
+          # until we find one that answers metrics.
+          verified = False
+          for nid, node in nodes_by_id.items():
+              try:
+                  ticket = get_ticket(node)
+                  m = cli(node, "--json cluster metrics", ticket=ticket)
+                  node.log(f"node{nid} metrics: {m}")
+                  if isinstance(m, dict):
+                      current = m.get("current_leader", 0)
+                      applied = m.get("last_applied", 0)
+                      if current > 0 and applied > 0:
+                          node.log(f"cluster verified via node{nid}: leader={current}, applied={applied}")
+                          verified = True
+                          break
+              except Exception as e:
+                  node.log(f"node{nid} metrics failed (may have stale addresses): {e}")
+          assert verified, "no node could verify healthy cluster after rolling restart"
 
       # ── 6. Verify KV data survived ──
       with subtest("KV data survived restart"):

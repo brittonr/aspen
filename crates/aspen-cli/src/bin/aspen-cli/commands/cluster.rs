@@ -288,7 +288,10 @@ async fn add_learner(client: &AspenClient, args: AddLearnerArgs, json: bool) -> 
         .await?;
 
     match response {
-        ClientRpcResponse::AddLearnerResult(_) => {
+        ClientRpcResponse::AddLearnerResult(result) => {
+            if !result.is_success {
+                anyhow::bail!("add-learner failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()));
+            }
             print_success(&format!("Learner {} added at {}", args.node_id, args.addr), json);
             Ok(())
         }
@@ -350,7 +353,7 @@ async fn promote_learner(client: &AspenClient, args: PromoteArgs, json: bool) ->
             } else if result.is_success {
                 println!("Learner {} promoted to voter", args.learner_id);
             } else {
-                println!("Promotion failed: {}", result.message);
+                anyhow::bail!("promote failed: {}", result.message);
             }
             Ok(())
         }
@@ -369,7 +372,13 @@ async fn change_membership(client: &AspenClient, args: ChangeMembershipArgs, jso
         .await?;
 
     match response {
-        ClientRpcResponse::ChangeMembershipResult(_) => {
+        ClientRpcResponse::ChangeMembershipResult(result) => {
+            if !result.is_success {
+                anyhow::bail!(
+                    "change-membership failed: {}",
+                    result.error.unwrap_or_else(|| "unknown error".to_string())
+                );
+            }
             print_success(&format!("Membership changed to voters: {:?}", args.members), json);
             Ok(())
         }
