@@ -12,7 +12,6 @@ aspen-core = { workspace = true }
 aspen-ci-core = { path = "../aspen-ci-core" }
 aspen-ci-executor-shell = { path = "../aspen-ci-executor-shell" }
 aspen-blob = { workspace = true }
-aspen-cache = { workspace = true }
 aspen-fuse = { workspace = true, features = ["virtiofs"] }
 aspen-jobs = { workspace = true }
 aspen-ticket = { workspace = true }

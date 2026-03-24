@@ -11,7 +11,7 @@ authors = ["Aspen Contributors"]
 aspen-core = { workspace = true }
 aspen-ci-core = { path = "../aspen-ci-core" }
 aspen-blob = { workspace = true }
-aspen-cache = { workspace = true }
+aspen-cache = { workspace = true, optional = true }
 aspen-jobs = { workspace = true }
 aspen-kv-branch = { path = "../aspen-kv-branch", optional = true }
 
@@ -66,7 +66,8 @@ nix = { version = "0.29", features = ["signal", "process"] }
 [features]
 default = []
 kv-branch = ["dep:aspen-kv-branch"]
-snix = ["dep:snix-castore", "dep:snix-store", "dep:nix-compat"]
+nix-cache = ["dep:aspen-cache"]
+snix = ["nix-cache", "dep:snix-castore", "dep:snix-store", "dep:nix-compat"]
 nix-cache-proxy = [
     "dep:h3",
     "dep:iroh-h3",

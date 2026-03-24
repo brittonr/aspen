@@ -1001,7 +1001,6 @@ name = "aspen-ci-executor-vm"
 version = "0.1.0"
 dependencies = [
  "aspen-blob",
- "aspen-cache",
  "aspen-ci-core",
  "aspen-ci-executor-shell",
  "aspen-core",

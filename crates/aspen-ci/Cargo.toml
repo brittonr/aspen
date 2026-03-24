@@ -16,7 +16,6 @@ aspen-core = { workspace = true }
 aspen-forge = { workspace = true }
 aspen-jobs = { workspace = true }
 aspen-blob = { workspace = true }
-aspen-cache = { workspace = true }
 aspen-auth = { workspace = true }
 aspen-ticket = { workspace = true }
 
@@ -87,7 +86,7 @@ shell-executor = ["dep:aspen-ci-executor-shell"]
 # VM executor for Cloud Hypervisor microVM isolation
 plugins-vm = ["dep:aspen-ci-executor-vm", "aspen-jobs/plugins-vm"]
 # Nix build executor for Nix flake builds
-nix-executor = ["dep:aspen-ci-executor-nix"]
+nix-executor = ["dep:aspen-ci-executor-nix", "nix-cache"]
 # Nix executor with SNIX integration for decomposed cache uploads
 nix-executor-snix = ["nix-executor", "aspen-ci-executor-nix/snix"]
 # Nix executor with in-process evaluation (snix-eval + snix-glue)
@@ -97,10 +96,13 @@ nix-executor-snix-build = ["nix-executor-snix-eval", "aspen-ci-executor-nix/snix
 # SNIX storage (forwarded to executor crates)
 # In-process Nix evaluation for config deserialization via snix-serde
 nix-config = ["dep:snix-serde", "dep:snix-eval"]
+# Enable aspen-cache support in the shell executor (cache_index field)
+nix-cache = ["aspen-ci-executor-shell?/nix-cache"]
 # HTTP/3 cache proxy for Nix binary cache substitution
 nix-cache-proxy = ["aspen-ci-executor-shell?/nix-cache-proxy"]
 
 [dev-dependencies]
+aspen-cache = { workspace = true }
 tempfile = "3.4.0"
 tokio-test = "0.4"
 proptest = "1.0"

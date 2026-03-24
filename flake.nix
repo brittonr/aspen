@@ -2739,26 +2739,11 @@
                     "aspen-net" # iroh-proxy-utils
                     "aspen-testing-madsim" # mad-turmoil
                     # nix-compat stub: aspen-cache uses nix_compat::{nixbase32,nar,narinfo,store_path}
-                    # which the stub doesn't provide. Feature unification pulls aspen-cache into
-                    # all handler crates via aspen-rpc-core/ci → aspen-ci → aspen-cache.
+                    # which the stub doesn't provide. Only crates with DIRECT nix-compat deps excluded.
                     "aspen-cache"
                     "aspen-nix-cache-gateway"
                     "aspen-ci-executor-nix"
-                    "aspen-ci-executor-shell"
-                    "aspen-ci-executor-vm"
-                    "aspen-forge-web" # aspen-cache via feature unification
-                    # Handler crates + aspen-rpc-core: feature unification gives aspen-rpc-core
-                    # ALL features (ci, forge, blob, etc.), pulling in aspen-ci → aspen-cache → nix-compat stub
-                    "aspen-rpc-core"
-                    "aspen-blob-handler"
-                    "aspen-ci-handler"
-                    "aspen-cluster-handler"
-                    "aspen-core-essentials-handler"
-                    "aspen-docs-handler"
-                    "aspen-forge-handler"
-                    "aspen-job-handler"
-                    "aspen-nix-handler"
-                    "aspen-secrets-handler"
+                    "aspen-ci-executor-vm" # unconditional dep on aspen-fuse (needs /dev/fuse)
                     # patchbay stub: dev-deps pull in aspen-testing-patchbay → patchbay
                     "aspen-dag"
                     "aspen-forge"

@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[cfg(feature = "nix-cache")]
 use aspen_cache::CacheIndex;
 use aspen_core::KeyValueStore;
 use iroh::Endpoint;
@@ -41,6 +42,7 @@ pub struct LocalExecutorWorkerConfig {
     /// Optional cache index for registering built store paths.
     /// When set, built store paths are automatically registered in the
     /// distributed Nix binary cache (legacy format).
+    #[cfg(feature = "nix-cache")]
     pub cache_index: Option<Arc<dyn CacheIndex>>,
 
     // --- Cache/store access ---
@@ -76,6 +78,7 @@ impl Default for LocalExecutorWorkerConfig {
             snix_directory_service: None,
             #[cfg(feature = "snix")]
             snix_pathinfo_service: None,
+            #[cfg(feature = "nix-cache")]
             cache_index: None,
             kv_store: None,
             use_cluster_cache: false,
