@@ -91,6 +91,14 @@ pub struct IrohEndpointConfig {
     /// For private infrastructure, run your own pkarr relay and set this URL.
     /// Only relevant when `enable_pkarr` and `enable_pkarr_relay` are true.
     pub pkarr_relay_url: Option<String>,
+    /// Data directory for file-based cluster discovery.
+    ///
+    /// When set, enables `ClusterDiscovery` address lookup. Each node writes its
+    /// endpoint address to `<data_dir>/discovery/<endpoint_id>.json`. On resolve,
+    /// sibling directories under `<data_dir>/..` are scanned for peer address files.
+    ///
+    /// This provides address recovery after restart without relay or external services.
+    pub data_dir: Option<PathBuf>,
     /// Relay server mode for connection facilitation.
     ///
     /// Relays help establish connections when direct P2P isn't possible (NAT traversal).
@@ -157,6 +165,7 @@ impl Default for IrohEndpointConfig {
             include_pkarr_direct_addresses: true, // Include direct IPs by default
             pkarr_republish_delay_secs: 600,      // 10 minutes default republish
             pkarr_relay_url: None,
+            data_dir: None,
             relay_mode: config::RelayMode::Default,
             relay_urls: Vec::new(),
             alpns: Vec::new(),

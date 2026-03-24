@@ -94,6 +94,9 @@ impl NetworkResources {
             }
         }
 
+        // Flush cluster discovery before closing the endpoint
+        self.iroh_manager.flush_cluster_discovery();
+
         // Shutdown Iroh endpoint
         info!("shutting down Iroh endpoint");
         if let Err(err) = self.iroh_manager.shutdown().await {

@@ -282,6 +282,9 @@ async fn shutdown_common_resources(resources: CommonShutdownResources<'_>) -> Re
         }
     }
 
+    // Flush cluster discovery before closing the endpoint
+    resources.iroh_manager.flush_cluster_discovery();
+
     // Shutdown Iroh endpoint
     info!("shutting down Iroh endpoint");
     resources.iroh_manager.shutdown().await?;

@@ -1209,6 +1209,7 @@ dependencies = [
  "iroh-tickets",
  "irpc",
  "mainline",
+ "n0-error",
  "n0-future",
  "nix 0.29.0",
  "num_cpus",

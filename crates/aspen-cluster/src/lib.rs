@@ -126,6 +126,7 @@
 // Bootstrap module requires blob, docs, jobs, and hooks features for full functionality
 #[cfg(all(feature = "blob", feature = "docs", feature = "jobs", feature = "hooks"))]
 pub mod bootstrap;
+pub mod cluster_discovery;
 pub mod config;
 #[cfg(feature = "blob")]
 pub mod content_discovery;

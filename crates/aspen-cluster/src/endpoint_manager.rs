@@ -52,6 +52,8 @@ pub struct IrohEndpointManager {
     /// The Iroh Router for ALPN-based protocol dispatching.
     /// If None, protocol handlers must be registered separately.
     router: Option<Router>,
+    /// File-based cluster discovery for address persistence across restarts.
+    cluster_discovery: Option<crate::cluster_discovery::ClusterDiscovery>,
     /// The embedded iroh relay server, if enabled.
     #[cfg(feature = "relay-server")]
     relay_server: parking_lot::Mutex<Option<RelayServer>>,
@@ -95,10 +97,36 @@ impl IrohEndpointManager {
         // Configure address lookup services
         builder = Self::configure_address_lookup(builder, &config);
 
+        // Configure file-based cluster discovery if data_dir is set
+        let cluster_discovery = if let Some(ref data_dir) = config.data_dir {
+            let cluster_data_dir = data_dir.parent().map(|p| p.to_path_buf());
+            let disc = crate::cluster_discovery::ClusterDiscovery::new(
+                data_dir.clone(),
+                cluster_data_dir,
+                None, // Membership resolver wired later via set_membership_resolver
+            );
+            builder = builder.address_lookup(disc.clone());
+            tracing::info!(
+                data_dir = %data_dir.display(),
+                "cluster file discovery enabled"
+            );
+            Some(disc)
+        } else {
+            None
+        };
+
         let endpoint = builder.bind().await.context("failed to bind Iroh endpoint")?;
 
         // Extract node address for discovery (synchronous in 0.95.1)
         let node_addr = endpoint.addr();
+
+        // Set endpoint ID on cluster discovery so publish() works,
+        // then publish our initial address immediately.
+        // resolve() handles on-demand peer address lookup from sibling files.
+        if let Some(ref disc) = cluster_discovery {
+            disc.set_endpoint_id(node_addr.id);
+            disc.publish_endpoint_addr(&node_addr);
+        }
 
         // Optionally spawn gossip
         let gossip = if config.enable_gossip {
@@ -115,6 +143,7 @@ impl IrohEndpointManager {
             secret_key,
             gossip,
             router: None, // Router is created later via spawn_router()
+            cluster_discovery,
             #[cfg(feature = "relay-server")]
             relay_server: parking_lot::Mutex::new(None),
         })
@@ -504,6 +533,24 @@ impl IrohEndpointManager {
     /// Get a reference to the gossip instance, if enabled.
     pub fn gossip(&self) -> Option<&Arc<Gossip>> {
         self.gossip.as_ref()
+    }
+
+    /// Get a reference to the cluster discovery, if enabled.
+    pub fn cluster_discovery(&self) -> Option<&crate::cluster_discovery::ClusterDiscovery> {
+        self.cluster_discovery.as_ref()
+    }
+
+    /// Flush cluster discovery: publish current address to disk.
+    /// Call during shutdown before closing the endpoint.
+    pub fn flush_cluster_discovery(&self) {
+        if let Some(ref disc) = self.cluster_discovery {
+            let addr = self.endpoint.addr();
+            disc.publish_endpoint_addr(&addr);
+            tracing::info!(
+                endpoint_id = %addr.id,
+                "flushed cluster discovery on shutdown"
+            );
+        }
     }
 
     /// Get a reference to the router, if spawned.

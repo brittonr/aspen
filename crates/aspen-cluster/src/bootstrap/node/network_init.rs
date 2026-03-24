@@ -63,13 +63,15 @@ pub(super) fn build_iroh_config_from_node_config(config: &NodeConfig) -> Result<
         None => iroh_config,
     };
 
-    // Set secret key persistence path based on data_dir
-    // This ensures stable node identity across restarts
+    // Set secret key persistence path and cluster discovery based on data_dir
+    // This ensures stable node identity and address recovery across restarts
     let iroh_config = match &config.data_dir {
         Some(data_dir) => {
             let key_path = data_dir.join("iroh_secret_key");
             info!(path = %key_path.display(), "configured secret key persistence path");
-            iroh_config.with_secret_key_path(key_path)
+            let mut cfg = iroh_config.with_secret_key_path(key_path);
+            cfg.data_dir = Some(data_dir.clone());
+            cfg
         }
         None => {
             warn!("no data_dir configured - secret key will not persist across restarts");
