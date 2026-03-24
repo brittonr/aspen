@@ -740,9 +740,11 @@ impl<K: KeyValueStore + ?Sized, R: NodeRpcClient, C: ClusterController + ?Sized>
                 Some(entry) => {
                     serde_json::from_str(&entry.value).map_err(|e| DeployError::SerdeError { reason: e.to_string() })
                 }
-                None => Err(DeployError::NoDeploymentFound),
+                // Current key empty — fall back to latest history entry
+                None => history::read_latest_history(&*self.kv).await,
             },
-            Err(KeyValueStoreError::NotFound { .. }) => Err(DeployError::NoDeploymentFound),
+            // Current key not found — fall back to latest history entry
+            Err(KeyValueStoreError::NotFound { .. }) => history::read_latest_history(&*self.kv).await,
             Err(e) => Err(DeployError::KvError { reason: e.to_string() }),
         }
     }

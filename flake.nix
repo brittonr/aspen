@@ -1010,7 +1010,7 @@
           # real snix source tree for crates that need snix feature (aspen-snix, etc.).
 
           # Re-add source lines for snix crates in Cargo.lock
-          ${pkgs.gawk}/bin/awk -v src='source = "git+https://git.snix.dev/snix/snix.git?rev=180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac#180bfc4ce41ad25016aae2e3eb4e7af8c3d185ac"' '
+          ${pkgs.gawk}/bin/awk -v src='source = "git+https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd6fdebe953fb71bb2fde2f32841015c47"' '
             /^name = "/ && ($0 ~ "\"nix-compat\"" || $0 ~ "\"nix-compat-derive\"" || $0 ~ "\"snix-castore\"" || $0 ~ "\"snix-store\"" || $0 ~ "\"snix-cli\"" || $0 ~ "\"snix-tracing\"") { found=1 }
             found && /^version = "0.1.0"$/ {
               print
@@ -2713,14 +2713,24 @@
                 # crates that unconditionally import from stubs, and vendored
                 # openraft (tested upstream).
                   !builtins.elem name [
-                    # Stubs themselves
+                    # Stubs themselves (git deps replaced with empty crates)
                     "iroh-h3"
+                    "iroh-h3-axum" # depends on iroh-h3 stub
                     "iroh-proxy-utils"
                     "mad-turmoil"
                     "nix-compat"
                     "nix-compat-derive"
+                    "patchbay"
+                    "snix-build"
                     "snix-castore"
+                    "snix-castore-http"
+                    "snix-eval"
+                    "snix-glue"
+                    "snix-serde"
                     "snix-store"
+                    "snix-tracing"
+                    "nix-daemon"
+                    "nar-bridge"
                     # Crates with unconditional deps on stubs
                     "aspen-castore"
                     "aspen-snix"
@@ -2728,6 +2738,31 @@
                     "aspen-proxy"
                     "aspen-net" # iroh-proxy-utils
                     "aspen-testing-madsim" # mad-turmoil
+                    # nix-compat stub: aspen-cache uses nix_compat::{nixbase32,nar,narinfo,store_path}
+                    # which the stub doesn't provide. Feature unification pulls aspen-cache into
+                    # all handler crates via aspen-rpc-core/ci → aspen-ci → aspen-cache.
+                    "aspen-cache"
+                    "aspen-nix-cache-gateway"
+                    "aspen-ci-executor-nix"
+                    "aspen-ci-executor-shell"
+                    "aspen-ci-executor-vm"
+                    "aspen-forge-web" # aspen-cache via feature unification
+                    # Handler crates + aspen-rpc-core: feature unification gives aspen-rpc-core
+                    # ALL features (ci, forge, blob, etc.), pulling in aspen-ci → aspen-cache → nix-compat stub
+                    "aspen-rpc-core"
+                    "aspen-blob-handler"
+                    "aspen-ci-handler"
+                    "aspen-cluster-handler"
+                    "aspen-core-essentials-handler"
+                    "aspen-docs-handler"
+                    "aspen-forge-handler"
+                    "aspen-job-handler"
+                    "aspen-nix-handler"
+                    "aspen-secrets-handler"
+                    # patchbay stub: dev-deps pull in aspen-testing-patchbay → patchbay
+                    "aspen-dag"
+                    "aspen-forge"
+                    "aspen-testing-patchbay" # depends on patchbay git dep
                     # buildRustCrate ignores required-features — gated tests get compiled
                     "aspen"
                     "aspen-rpc-handlers"

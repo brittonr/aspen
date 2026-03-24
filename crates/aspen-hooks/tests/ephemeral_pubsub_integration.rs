@@ -25,10 +25,11 @@ async fn make_endpoint(seed: u64) -> iroh::Endpoint {
     key_bytes[0..8].copy_from_slice(&seed.to_le_bytes());
     let secret_key = SecretKey::from_bytes(&key_bytes);
 
-    let addr = "127.0.0.1:0".parse().unwrap();
+    let addr: std::net::SocketAddr = "127.0.0.1:0".parse().unwrap();
     iroh::Endpoint::builder(iroh::endpoint::presets::N0)
         .secret_key(secret_key)
         .bind_addr(addr)
+        .expect("invalid bind address")
         .bind()
         .await
         .expect("failed to create endpoint")
