@@ -2,21 +2,21 @@
 
 - [x] 1.1 Run `nix run .#dogfood-local -- start` and verify single-node cluster boots and reports healthy
 - [x] 1.2 Run `nix run .#dogfood-local -- push` and verify source pushes to Forge without errors
-- [ ] 1.3 Run `nix run .#dogfood-local -- build` and verify CI pipeline triggers, builds, and completes
-- [ ] 1.4 Run `nix run .#dogfood-local -- deploy` and verify deploy to running cluster succeeds
-- [ ] 1.5 Run `nix run .#dogfood-local -- verify` and confirm CI-built binary matches local build
-- [ ] 1.6 Fix any failures found in 1.1–1.5 and re-run affected phases
-- [ ] 1.7 Run `nix run .#dogfood-local -- full-loop` end-to-end to confirm the complete pipeline passes
-- [ ] 1.8 Run `nix run .#dogfood-local -- stop` to clean up
+- [x] 1.3 Run `nix run .#dogfood-local -- build` and verify CI pipeline triggers, builds, and completes
+- [x] 1.4 Run `nix run .#dogfood-local -- deploy` and verify deploy to running cluster succeeds
+- [x] 1.5 Run `nix run .#dogfood-local -- verify` and confirm CI-built binary matches local build
+- [x] 1.6 Fix any failures found in 1.1–1.5 and re-run affected phases
+- [x] 1.7 Run `nix run .#dogfood-local -- full-loop` end-to-end to confirm the complete pipeline passes
+- [x] 1.8 Run `nix run .#dogfood-local -- stop` to clean up
 
 ## 2. NixOS VM Test Audit
 
-- [ ] 2.1 Build a list of all 63 VM test check attrs from `nix eval .#checks.x86_64-linux`
-- [ ] 2.2 Run all VM tests in parallel via pueue (`nix build .#checks.x86_64-linux.<name>` per test)
-- [ ] 2.3 Collect results and categorize each test as pass / fail (regression) / fail (pre-existing) / skip
-- [ ] 2.4 Fix any regressions caused by hardening sprint changes (cluster discovery, write forwarding, tiger style, health gates)
-- [ ] 2.5 Re-run fixed tests to confirm they pass
-- [ ] 2.6 Write an audit report: pass count, fail count, list of pre-existing failures with root causes
+- [x] 2.1 Build a list of all 63 VM test check attrs from `nix eval .#checks.x86_64-linux`
+- [x] 2.2 Run all VM tests in parallel via pueue (`nix build .#checks.x86_64-linux.<name>` per test)
+- [x] 2.3 Collect results and categorize each test as pass / fail (regression) / fail (pre-existing) / skip
+- [x] 2.4 Fix any regressions caused by hardening sprint changes (cluster discovery, write forwarding, tiger style, health gates)
+- [x] 2.5 Re-run fixed tests to confirm they pass
+- [x] 2.6 Write an audit report: pass count, fail count, list of pre-existing failures with root causes
 
 ## 3. snix System Detection
 
