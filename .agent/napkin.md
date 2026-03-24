@@ -2,578 +2,210 @@
 
 ## Corrections
 
-| 2026-03-24 | self | **unit2nix infinite recursion in test.check**: `mkTestBuiltByPkgs` applied `includeDevDeps=true` to ALL workspace members in one shared fixpoint. Dev-dep cycle `aspen-dag [dev-dep]→ aspen-testing-patchbay → aspen-cluster → aspen-dag` caused infinite recursion for 22 checks. **Fix**: Added `mkTestGraphForCrate` — per-crate test graphs where only the target crate gets dev-deps (matches `cargo test -p` behavior). Also: feature unification with `workspace = true` pulls nix-compat stub into handler crates via `aspen-rpc-core/ci → aspen-ci → aspen-cache → nix-compat`. Added 18 stub-dependent crates to the exclude list. | When using `buildRustCrate` + `workspace = true`, dev-deps must only be included for the crate being tested, not for all workspace members simultaneously. Feature unification makes the dep graph fatter than individual crates need — stubs that work for narrow builds break under unified features. |
-| 2026-03-24 | self | **rolling-restart-test: 3 compounding bugs masked by exit-code-0 CLI**. (1) CLI `add-learner`/`change-membership` returned exit 0 on failure — matched the response variant without checking `is_success`. (2) Test's address regex `[\d.]+:\d+` captured IPv6 fragments like `8:1` from `[2001:db8:1::2]:port`, producing invalid EndpointAddr JSON. iroh expects `{"Ip":"host:port"}` enum wrappers, not bare strings. (3) `wait_for_healthy` routed through the leader, masking that followers had empty Raft state. The cluster never actually formed as 3 voters — redb storage was fine, the add-learner/change-membership commands silently failed. **Fix**: CLI checks `is_success` and returns non-zero. Test uses IPv4-only regex, `{"Ip":addr}` format, `wait_until_succeeds` for retries, and verifies voter state from journal after restart. | When a CLI command wraps an RPC that returns `{is_success, error}`, always check `is_success` and exit non-zero on failure. When parsing iroh addresses from logs, use `\d+\.\d+\.\d+\.\d+:\d+` to avoid IPv6 fragments. |
-| 2026-03-24 | self | **nix-compat stub chain**: `aspen-ci` had `aspen-cache` as a regular dep but never imported it in source (only in tests). `aspen-ci-executor-shell` had `aspen-cache` unconditional but only used `CacheIndex` in a config field + `nar` module behind `snix` feature. `aspen-ci-executor-vm` also had unused `aspen-cache` dep. The chain `aspen-rpc-core → aspen-ci → aspen-ci-executor-shell → aspen-cache → nix-compat` pulled the stub into 12 handler crates. **Fix**: moved aspen-cache to dev-dep in aspen-ci, made it optional behind `nix-cache` feature in aspen-ci-executor-shell, removed unused dep from aspen-ci-executor-vm. Recovered 12 per-crate unit2nix test checks. | When a dep appears in `[dependencies]` but `rg` finds zero source imports, move it to `[dev-dependencies]`. When a dep is used only in feature-gated code, make the dep itself optional behind the same feature. |
-| 2026-03-24 | self | **stale snix rev**: `SNIX_GIT_SOURCE` in checkout.rs pinned `180bfc4c...` but flake.lock had `e20f82dd...`. Also a stale awk source line in `fullSrc` Cargo.lock manipulation. | When updating git deps, grep the ENTIRE repo for the old rev hash — it can appear in constants, Nix awk scripts, and IFD source rewriting. |
-| 2026-03-24 | self | **deploy get_status after archive**: `archive_deployment` deletes `DEPLOY_CURRENT_KEY` after copying to history, but `read_current_or_latest_stale` only read the current key — no history fallback. Test `test_get_status_falls_back_to_history` named the expected behavior that wasn't implemented. | When a function name describes fallback behavior (e.g., "or_latest"), verify the code actually implements the fallback. |
-| 2026-03-24 | self | **iroh 0.97 bind_addr API change**: `Endpoint::builder().bind_addr(addr)` now returns `Result<Builder, InvalidSocketAddr>` instead of `Builder`. Test code called `.bind()` on the `Result`. | After iroh upgrades, check all `bind_addr` call sites for the new `Result` return type. |
-| 2026-03-23 | self | Rolling deploy on 3-node cluster: after ALL nodes restart (followers first, leader last), gossip can't bootstrap because all bootstrap peer addresses are stale (new iroh ports). `add-learner` on the leader updates the leader's Raft factory but followers' factories still hold stale leader address. `add-learner` to followers gets forwarded to the leader (iroh can connect because the CLI ticket has the new address), but the follower's Raft network factory never gets updated — heartbeats still route to old port. **Root cause**: `add-learner` is a Raft write that updates membership, but the network factory `peer_addrs` map is only updated on the node that processes the write (the leader). Followers need a direct `AddPeer` RPC that calls `factory.add_peer()` locally. | Wire up `ClusterRequest::AddPeer` to a handler that calls `factory.add_peer()` directly (no Raft consensus). Add a CLI `cluster update-peer` subcommand. In the dogfood deploy loop, call `update-peer` on each follower after the leader restarts to push the leader's new address to their factories. |
-| 2026-03-23 | self | **`update-peer` isolation test revealed design gap**: (1) With relay enabled (default), iroh reconnects nodes via relay after restart — `update-peer` is an optimization for switching to direct connections, not a necessity for recovery. The 3-node dogfood full-loop passed because relay handled reconnection, not because of `update-peer`. (2) With relay disabled, nodes genuinely can't find each other after restart (stale addresses, confirmed broken for 15s, no self-healing). But the CLI also can't reach nodes to run `update-peer` — the feature is unreachable when most needed. **Real fix needed**: node-level self-discovery mechanism that works without relay or CLI intervention. Options: (a) persist peer addresses to `peer_addrs.json` with NEW addresses on clean shutdown, so restarted nodes load fresh addresses, (b) gossip-based peer exchange where nodes broadcast their addresses on a known multicast/bootstrap port, (c) shared file or DNS-based discovery for same-machine deployments. | `update-peer` as a CLI command is useful for relay-enabled deployments (pushing direct addresses after relay reconnection). For relay-disabled environments, need a different mechanism — node-level peer cache that survives restart, or gossip bootstrap on a well-known port. |
-| 2026-03-23 | self | Dogfood deploy health checks were checking `cli cluster status >/dev/null` which only proves "one node answers RPC" — not that the restarted node actually rejoined Raft. During 3-node rolling deploy, moving to the next node before the previous one caught up could break quorum. | Use `wait_node_rejoined` (per-node: initialized + leader + applied > 0) as a gate between each node restart. Use `assert_cluster_healthy` (leader agreement + KV round-trip + voter count) as post-deploy assertion. Target specific nodes via `cli_node` with their own ticket, not the generic `get_ticket` which picks any node. |
-| 2026-03-23 | self | **FIXED** (`cf574f155`): Three loose threads resolved — (1) WriteBatcher flush/direct_write now detect ForwardToLeader and forward via WriteForwarder instead of returning opaque Failed errors; delete() also gained forwarding. (2) openraft elect() re-randomizes election timeout per attempt (Raft §5.2); jitter uses Knuth multiplicative hash for meaningful spread. (3) prefetch `nix flake archive` uses kill_on_drop(true) to actually kill the process on timeout. |
-| 2026-03-23 | self | `std::sync::RwLock` is fine for the batcher's write_forwarder field (set once during bootstrap, read many times during flushes) — no async contention. Don't use tokio::sync::RwLock unless you hold it across await points. |
-| 2026-03-20 | self | `evaluate_flake_derivation` used `FetchCache` + `resolve_all_inputs_with_fetch` from the `fetch` module (gated on `snix-build`), but the method itself lives behind `snix-eval`. Compiling with `--features snix-eval` (without `snix-build`) broke. Fixed with `#[cfg(feature = "snix-build")]` conditional: use fetch-based resolution when available, fall back to `resolve_all_inputs` (local-only) otherwise. | When adding feature-gated code to methods, check which feature gates the METHOD vs which gates the DEPENDENCY. The `snix-eval` → `snix-build` feature hierarchy means `snix-eval` is the smaller set. Always `cargo check --features <each-combo>` after touching feature-gated code. |
-| 2026-03-20 | self | npins-native-eval change: most tasks (1.1, 1.2, 2.2, 2.3, 3.1, 3.2) were already implemented but task checkboxes not updated. New work: (1) added `Clone` to `NixEvaluator` (cheap — all Arc refs), (2) added `ProjectType` enum + `detect_project_type()` replacing `is_npins_project()` bool, (3) stored `NixEvaluator` as field on `NixBuildWorker` instead of creating per-build, (4) added 3 unit tests for `evaluate_npins_derivation`, (5) added cache gateway narinfo verification to VM test, (6) fixed snix-eval-only compilation. | When OpenSpec tasks describe features that were implemented in prior changes, check the code first before implementing. Mark already-done tasks immediately, then focus on the remaining gaps. |
-| 2026-03-19 | self | **MISDIAGNOSIS**: Initially blamed Nix 2.33 `fetchgit` FOD incompatibility ("fixed-output derivations must not reference store paths"). Actual cause: STALE `.drv` in nix store from a previous failed build. After `nix store delete <drv>`, nix re-generated a DIFFERENT drv hash and it worked. Manual `fetchgit` test with same args produced different (working) drv hash because system nixpkgs ≠ flake's pinned nixpkgs. The real blocker was missing patchbay stub in `u2nSrc` — `aspen-dag` and `aspen-forge` have `patchbay` as dev-dep, sed rewrote it to `../../.nix-stubs/patchbay` but never created the stub dir. Fixed by adding `mkdir -p + Cargo.toml + lib.rs` stub in the u2nSrc derivation. Second blocker: `nix run .#dogfood-local --impure` fails with `rat-table-0.1.0` missing from `patched-vendor-for-plugins` — subwayrat crate not in crane vendor dir. This is a pre-existing `fullCommonArgs` vendor issue, separate from unit2nix. | **When nix FOD errors mention "store path references", check if the drv is stale before blaming Nix version.** `nix store delete <drv>` to clear, then retry. Different nixpkgs pins produce different drv hashes for the same `fetchgit` args. Always test `fetchgit` with the SAME nixpkgs the flake uses, not system nixpkgs. |
-| 2026-03-17 | self | When adding crates with git deps to the workspace, ALWAYS check that `ciSrc` and `fullSrc` either vendor the dep or strip the crate from workspace members. Test with `nix build .#checks.x86_64-linux.clippy --option sandbox true` (not `false`) to catch sandbox fetch failures before pushing to Forge. Once a nix derivation fails, the `.drv` file persists in the nix store and subsequent evaluations that produce the same drv hash reuse the cached failure — deleting outputs doesn't help. Use `nix store gc` or `nix-collect-garbage` to clear stale drv files, or pass `--rebuild` to force re-execution. Added `ciSrc-resolve` check to catch unvendored git deps early. |
-| 2026-03-17 | self | CI clippy has TWO definitions — `ciCommonArgs` (stubbed deps, line 2405) and `fullCommonArgs` (full deps, line 2647). The `fullCommonArgs` version overrides via `// lib.optionalAttrs hasExternalRepos { clippy = ... }`. On machines with sibling repos (`aspen-wasm-plugin`, etc.), the full version fires. Edited only the first — spent 30 min debugging why the drv hash didn't change. Fix: edit BOTH. Also: `/tmp/fake-git-bin` dir created by unit2nix IFD with `--option sandbox false` is owned by nix builder UID (872415232) — can't remove without root. Switch to sandboxed builds or reboot to clear. | When a nix attrset uses `//` to merge, later attrs override earlier ones. Always search for ALL definitions of the same attribute name. When using `--option sandbox false`, IFD steps pollute `/tmp` with root-owned files. |
-| 2026-03-17 | self | crate-hashes.json snix entry got `sha256-OAJLtIQITbEwsSZPkarguY4b/bZMxMvVlh5bJazXIpE=` (no leaveDotGit) but unit2nix fetches with `leaveDotGit=1 fetchSubmodules=1` which produces `sha256-PtCl3pnXtHv0o+ACQtRNVT627qJIohw6yfnlmmwHQGU=`. The .git directory contents are non-deterministic across fetches — once the nix store entry was GC'd and re-fetched, the hash no longer matched. Also: `nix run .#dogfood-local` failed with "attribute 'full-aspen-nix-cache-gateway' missing" due to stale nix evaluation cache — IFD failure cascades to make all `bins.*` attrs disappear. `nix build '.#apps...'` then `$(nix path-info ...)` worked around it. Dogfood pipeline failed at clippy stage (pre-existing `ciSrc` feature mismatch, not related to native build changes). | When populating crate-hashes.json for git deps, check if unit2nix's fetch-source.nix uses `leaveDotGit`/`fetchSubmodules` — use `nix-prefetch-git --leave-dotGit --fetch-submodules` to get the matching hash. When nix flake eval caches a failure from an IFD step, all downstream attrs become "missing" — use `nix build` then `nix path-info` to bypass stale `nix run` caching. |
-| 2026-03-17 | self | snix-bridge-virtiofs-test now passes (was failing as of 2026-03-15 napkin entry). The snix update (e20f82dd) and FUSE→LocalStoreBuildService replacement fixed the underlying issues. Import, PathInfoService put, and microVM virtiofs mount all work. Minor cosmetic: path hash from `find /nix/store` not found in output due to listing format — test already handles this gracefully with a WARN log, not a failure. | When napkin says a test is broken, re-run it before debugging — upstream fixes or your own recent commits may have resolved it. |
-| 2026-03-17 | self | Native build path uploaded outputs to PathInfoService during bwrap build, then worker.rs called `upload_store_paths_snix` again — tried to read outputs from `/nix/store/` on disk, but they only existed in a temporary bwrap scratch dir (already cleaned up). Produced spurious `WARN Failed to create NAR archive for SNIX ... No such file or directory`. Fix: added `native_uploaded: bool` to `NixBuildOutput`, skip disk-based SNIX upload when native path already uploaded. | When a build pipeline has multiple upload steps, thread a flag through so later steps know earlier ones already handled it. Native bwrap outputs live in temp dirs — don't assume they're in `/nix/store/` after the build returns. |
-| 2026-03-16 | self | snix-native-build VM test: 4 bugs. (1) `resolve_drv_path` used `nix eval --raw --expr` which treats the flake ref as a Nix expression, rejecting absolute paths in pure eval mode. Fix: remove `--expr`, pass as installable positional arg. (2) `PrivateTmp=true` gives aspen-node a private `/tmp` — test flake created in real `/tmp` was invisible to service. Fix: use `/root/test-flake`. (3) `spawn_nix_build` used `--out-link result` which creates symlink in cwd (`/`), read-only under `ProtectSystem=strict`. Fix: `--no-link` + `--print-out-paths`. (4) snix-build bubblewrap sandbox mounts inputs via FUSE even for zero-input derivations — needs `boot.kernelModules = ["fuse"]` + `pkgs.fuse3` in VM. FUSE still fails with "FUSE channel already closed" (upstream snix-build issue) but subprocess fallback works. **UPDATE**: Replaced upstream FUSE-based `BubblewrapBuildService` with `LocalStoreBuildService` — copies inputs from local `/nix/store` via `cp -a` instead of FUSE-mounting from castore. Removed FUSE deps from VM test. | `nix eval --expr` vs positional: `--expr` evaluates a Nix expression, positional arg is an installable (flake ref). systemd `PrivateTmp=true` creates isolated `/tmp` per service — use `/root` or `/var/lib` for shared paths. `--out-link` requires writable cwd — always use `--no-link` + `--print-out-paths` in daemon contexts. When upstream snix-build uses FUSE for sandbox inputs but your service runs under systemd `ProtectSystem=strict`, write a custom `BuildService` impl that copies from local store instead. |
+### Rust / Cargo Patterns
 
-| 2026-03-15 | self | `crate-hashes.json` entries without `?rev=` in the URL key silently failed to match in unit2nix's `parse_crate_hash_key` (returned `None`). Three entries (wu-manber, iroh-experiments, iroh-proxy-utils) had no `?rev=` → `nix-prefetch-git` ran inside sandbox → SSL/DNS failure → ALL NixOS VM test builds broken. Also: sops-transit test used bash heredoc `<<'TOML_END'` inside Python `succeed()` → `TOML_END` literal in file content → TOML parse error. Also: `aspen-sops keyservice` binary has empty `bin/` dir from crane build → keyservice bridge test fails with "not found". | crate-hashes.json keys MUST include `?rev=<commit>` matching Cargo.lock. unit2nix upstream now handles rev-less keys (URL-only fallback). Never use heredocs in NixOS test Python `succeed()` — use `pkgs.writeText`. crane `buildPackage` may produce empty `bin/` if the crate isn't found in the workspace — check with `nix build ... --print-out-paths` and verify bin/ contents. |
-| 2026-03-15 | self | snix integration (tiers 1-5) committed with 3 compile errors behind feature gates: (1) eval.rs missing `use tracing::warn` (only used in `#[cfg(feature = "nix-cli-fallback")]` block), (2) executor.rs test structs missing `validate_only` field added to JobConfig, plus `build_nix_payload()` gained async + store arg but 5 test call sites not updated, (3) nix_build_integration_test.rs gated on `#[cfg(feature = "snix")]` which doesn't exist (should be `nix-executor`), plus missing `run_id` field on NixBuildPayload. Also: bare paths like `/tmp/x` rejected by nix-compat FlakeRef parser (needs `path:/tmp/x`). Default `cargo nextest run` never caught these because tests are behind non-default features. | **After adding code behind feature gates, always test with those features enabled before committing.** Run `cargo check --features <feat>` and `cargo nextest run -p <crate> --features <feat>` for each feature combination. When adding fields to structs: `rg 'StructName {' --glob '*.rs'` to find ALL construction sites (including test files and integration tests). When a function signature changes (new args, async): search for all callers across test modules too. |
-| 2026-03-15 | self | sops-transit: WASM plugin `handle_datakey()` checked `key_type == "plaintext"` but SOPS client sent `"aes256-gcm"` → plaintext always None in response. Root cause: the `key_type` field serves dual purpose (return mode vs algorithm name). CLI defaults to `"plaintext"` (works), SOPS client sent the algorithm name (broken). Fix: (1) plugin changed to `key_type != "wrapped"` (default includes plaintext), (2) SOPS client changed to send `"plaintext"`. ci-dogfood-deploy-multinode: 600s build timeout in 3-node QEMU. Switched to `validate_only` deploy mode with `expected_binary = "bin/cowsay"`, matching single-node pattern. Test exercises deploy coordination, not build speed. snix-bridge-virtiofs: added tracing to BlobWriter::close(), PathInfoService::put(), DirectoryPutter. Code inspection shows correct Arc sharing between gRPC wrappers and SimpleRenderer — needs interactive debugging. | When RPC field serves dual purpose (return mode + algorithm type), pick ONE semantic and document it. The SOPS `key_type` field doc says "plaintext or wrapped" but nothing stopped callers from sending algorithm names. For slow VM tests: restructure to test the interesting part (deploy coordination) not the slow part (nix build). |
-| 2026-03-15 | self | 9 NixOS VM test failures. (1) alert-failover: Python test driver `time.time()` ≠ VM `SystemTime::now()` — metrics ingested with host clock, evaluation uses VM clock → all metrics filtered out by window. Fix: get timestamps from VM via `date +%s`. (2) forge-cluster + multi-node-cluster + automerge-sql: `wasm-plugins.nix` hard-asserted plugin count → test crashed before any subtests. Hyperlight WASM sandbox needs KVM. Fix: make assertion non-fatal, export `_plugins_loaded` flag, tests skip gracefully via `sys.exit(0)`. (3) sops-transit: `--age-recipient` flag doesn't exist — should be `--age` per `#[arg(long = "age")]`. Also added plugin guard. (4) ci-dogfood-deploy + deploy-multinode: deploy stage actually switches nix profile to cowsay → bricks the node. Fix: added `validate_only` field to DeployRequest, JobConfig, DeployJobInfo; deploy executor skips profile switch and restart, just validates artifact exists. (5) ci-dogfood-workspace: fixture `workspace-build-main.rs` missing `expected_binary`, `stateful`, `validate_only` fields on JobConfig → compile error in CI nix build. (6) snix-bridge-virtiofs: added diagnostic logging for bridge import failures. | When adding fields to structs: always `rg 'StructName \{' --glob '*.rs'` to find ALL construction sites. For VM tests: use VM clock (`date +%s`) not Python `time.time()`. For WASM plugin tests: never hard-assert plugin count — Hyperlight needs bare-metal KVM. |
-| 2026-03-14 | self | pureSrc stubbed snix deps (nix-compat, snix-castore, snix-store) as empty crates, breaking aspen-cache which needs nix-compat::narinfo for signing. All 6 microvm + ci-workspace-virtiofs tests failed with `aspen-cache` compile errors. Also needed `cargoLock = pureSrc + "/aspen/Cargo.lock"` for IFD cache invalidation, and `overrideVendorGitCheckout` on `pureCargoVendorDir` for real snix source. | Follow ciSrc pattern: keep snix deps as real git deps, vendor via `overrideVendorGitCheckout` with `snix-src` flake input. Always set explicit `cargoLock` for derivations using IFD-based vendor dirs. |
-| 2026-03-14 | self | CI failure cache (`check_failure()`) returned `Err(CiError::InvalidConfig)` for cached flake refs, killing the entire pipeline during trigger processing. Status stuck at `checking_out` because the error propagated before status update to `Running`. Cache key uses flake ref (not commit hash) so new commits with same build target are rejected. | Changed failure cache from blocking to advisory: log warning + continue on cache hit. New commits may fix the build issue. The nix-build-supervisor-test and ci-failure-cache-test were both blocked by this. |
-| 2026-03-14 | self | fuse-operations-test used `inherit (bins) aspen-fuse-vm-test` but `aspen-fuse-vm-test` is a `pureBin` package in `packages.${system}`, not in `bins`. | Use `inherit (self.packages.${system}) aspen-fuse-vm-test` — other tests already use this pattern. |
-| 2026-03-14 | self | net-service-mesh-test: (1) Missing `skipTypeCheck = true` — test driver type checker rejected complex Python. (2) `installPluginsScript` nested inside `with subtest()` caused Python indentation error. | Add `skipLint = true; skipTypeCheck = true;`. Don't wrap `installPluginsScript` in `with subtest()` — it already contains its own `with subtest("install WASM plugins"):`. |
-| 2026-03-14 | self | nix-cache-gateway-test asserted `Priority: 40` but server returns `Priority: 30` (CACHE_PRIORITY constant). Server intentionally uses 30 to be preferred over cache.nixos.org (40). | Fix test assertion to match the constant. |
-| 2026-03-14 | self | snix-bridge-test: `import time` unused — linter rejected it. | Remove unused import. |
-| 2026-03-14 | self | worker-psi-health-test failed: (1) `kv scan --prefix 'x'` — `prefix` is a positional arg in `ScanArgs`, not `--prefix`. (2) `job submit type --payload x` — `payload` is also positional. (3) `job submit type 'bare-string'` — payload must be valid JSON. (4) Regular `WorkerService` monitoring never wrote `__worker_stats:` to KV — only `DistributedWorkerCoordinator` (requires `enable_distributed=true`) did. | Fixed CLI syntax to positional args. Added JSON payload. Added KV stat writes (with PSI + disk data) to regular monitoring loop in `monitoring.rs`, storing `Arc<dyn KeyValueStore>` on `WorkerService`. |
-| 2026-03-14 | self | `aspen-testing-patchbay` crate added patchbay git dep but no stub/rewrite in flake.nix — `nix flake check` broken on eval (sandbox can't fetch git). `nix flake check` also pre-broken for `packages.*` due to snix.dev SSL cert failure in unit2nix IFD step. | Added patchbay stubs to fullSrc, ciSrc, u2nTestSrc. Stripped patchbay workspace member from u2nSrc. Added crate-hashes.json entry. snix.dev issue is separate/pre-existing. |
-| 2026-03-14 | self | `nix build .#aspen-node` failed: (1) unit2nix IFD called `nix-prefetch-git` inside sandboxed derivation for snix git dep — no network access. (2) After fixing prefetch, `nix-compat` crate from snix monorepo compiled from repo root instead of `snix/nix-compat/` subdir — `sub_dir` field serialized as snake_case but `fetch-source.nix` expected `subDir` (camelCase). | Fixed in unit2nix: (1) `apply_crate_hashes()` reads `crate-hashes.json` next to Cargo.toml, pre-fills SHA256 for git sources, skipping `nix-prefetch-git`. (2) Added `#[serde(rename = "subDir")]` to `NixSource::Git::sub_dir` field. Root cause chain: `ci` → `ci-basic` → `aspen-cache` → `nix-compat` (non-optional dep from git.snix.dev). |
-| 2026-03-14 | self | `adopt-nixops4-patterns` added `expected_binary` and `stateful` fields to `JobConfig` but missed 5 test struct literals across 3 files (aspen-ci-core, aspen-ci-handler, madsim test) — workspace wouldn't compile | Always search ALL `StructName {` occurrences across the workspace when adding fields to widely-used structs. `rg "JobConfig \{" --glob '*.rs'` finds them all. |
+| Date | What Went Wrong | What To Do Instead |
+|------|----------------|-------------------|
+| 2026-03-24 | unit2nix `mkTestBuiltByPkgs` applied `includeDevDeps=true` to ALL workspace members in one shared fixpoint — dev-dep cycles caused infinite recursion | `mkTestGraphForCrate`: per-crate test graphs where only the target crate gets dev-deps (matches `cargo test -p` behavior) |
+| 2026-03-23 | `cargo build -p aspen` doesn't rebuild `aspen-node` without features | Always `cargo build --features jobs,docs,blob,hooks,automerge --bin aspen-node` or `--features full` |
+| 2026-02-26 | `aspen-client-api` features defaulted to off → postcard enum discriminants shifted → deserialization crash | All `aspen-client-api` features default-on. Wire format enum layout must be identical between all consumers |
+| 2026-02-26 | `PluginReloadResult` placed AFTER `#[cfg(feature)]` variants — discriminant shifted | All non-gated variants BEFORE feature-gated section. Golden-file discriminant tests to catch reordering |
+| 2026-02-26 | Snapshot race: `LogsSinceLast(100)` triggers during eager apply → panic | `LogsSinceLast(10_000)` + track `confirmed_last_applied` separately in `apply()` callback |
+| 2026-02-24 | WASM plugin host function externs used Rust types (String, Vec) | All host externs MUST use raw C types (`*const c_char`, `*const u8`, `i32`). Vec params need explicit `_len: i32` |
+| 2026-02-23 | Added field to widely-used struct → 40 broken callers | Add default trait methods (purely additive). When adding fields: `rg 'StructName\s*\{' --type rust -l` to find ALL sites |
 
-| 2026-03-12 | self | `substituter_args()` used `--trusted-public-keys` (replaces defaults) instead of `--extra-trusted-public-keys` (appends). Nix rejected cache.nixos.org substitutes because only the aspen-cache key was trusted. Shell executor and H3 proxy path already handled this by including the cache.nixos.org key. | Changed to `--extra-trusted-public-keys` to match `--extra-substituters`. Both use the `extra-` prefix to append rather than replace defaults. |
-| 2026-03-12 | self | NAR hash stored in hex format (`sha256:dc810f...`) but nix narinfo uses nix32 base32 (`sha256:14srlg7x...`). Fingerprint signed with hex hash didn't match what nix computes for verification → all narinfo signatures rejected | Added `aspen_cache::nix32` module (ported from nix source `printHash32`). NAR hash now computed in nix32 at upload time. Verified output matches cache.nixos.org for cowsay. |
+### Struct / API Gotchas
 
-| 2026-03-12 | self | Nix cache KV key mismatch: `ensure_signing_key` (aspen-cache) writes public key to `_sys:nix-cache:public-key`, Transit signer (aspen-node config) writes to `_system:nix-cache:public-key`, node's `read_nix_cache_public_key` only checked `_system:` variant | Updated `read_nix_cache_public_key` to check both KV keys. Both signing paths now discovered. For dogfood (no Transit), `ensure_signing_key` is called at node startup when `nix_cache.is_enabled` and no Transit signer is configured. |
-| 2026-03-12 | self | unit2nix auto mode (`buildFromUnitGraphAuto`) dropped CLI features — `collect_features()` only reads lib-like units, aspen-cli is bin-only so `crateFeatures=''` | Inject features via crate override: `features = (attrs.features or []) ++ ["forge" "ci" "secrets" "automerge"];`. Previous manual JSON patch (1b267c536) was deleted when switching to auto mode (8668c42a2). Upstream fix needed: unit2nix `collect_features()` should include bin units when no lib exists. |
-| 2026-03-12 | self | aspen-node logs contain ANSI escape codes even when writing to file (tracing subscriber wraps `=` in `\e[2m...\e[0m`) — breaks `grep 'endpoint_id='` in scripts | Set `NO_COLOR=1` or `RUST_LOG_STYLE=never` before starting aspen-node when log output will be parsed by scripts. Applied to serial-dogfood start scripts. |
-| 2026-03-12 | self | Deploy executor resolves `output_paths[0]` from build job, which can be `cowsay-3.8.4-man` (man pages multi-output) instead of the actual binary | **FIXED**: `select_primary_output()` prefers paths without `-man`/`-doc`/`-dev` suffixes. Verified in VM: artifact now resolves to `cowsay-3.8.4`. |
-| 2026-03-12 | self | Deploy coordinator loses KV write race after leadership transfer — transfers leadership to node 2, transfer succeeds, but coordinator on node 1 tries to update deploy status in KV and gets "not leader" error | **PARTIALLY FIXED**: (1) Final get_metrics check at transfer timeout detects completed transfers. (2) get_status uses stale reads for follower polling. (3) spawn_deploy_resume_watcher wired into main.rs. **FULLY FIXED (deploy-executor-feedback commit)**: (a) `expected_binary` config field lets CI config specify the binary to validate (e.g. `bin/cowsay`), or `None` to skip. (b) Executor writes `NodeDeployStatus::Failed` to KV on error — coordinator polls KV status alongside RPC health checks. (c) NixOS module ExecStart uses profile path so `nix-env --profile --set` deploys take effect on restart. |
-| 2026-03-12 | self | Raft heartbeat/RPC messages at INFO level flood serial console and log files in multi-node single-VM setup | Set `RUST_LOG=info,aspen_raft_network=warn,aspen_rpc_core=warn` to suppress the spam. Applied to serial-dogfood-multinode start scripts. |
-| 2026-03-06 | self | VM workers polled for `ci_vm` jobs but CI pipeline submitted `ci_nix_build` — VMs sat idle consuming 48GB RAM while host handled all builds | Job types must match: VMs now poll `ci_nix_build` + `ci_vm` + `shell_command`. When `ASPEN_CI_KERNEL_PATH` is set, host skips local NixBuildWorker registration so VMs get the jobs. |
-| 2026-03-06 | self | Dogfood smoke test checked `[ -n "$ci_version" ]` but `$ci_version` contained error message from unsupported `--version` flag — non-empty error = "functional" | Check exit code (`if "$ci_bin" --help >/dev/null 2>&1`), not output emptiness. Error messages are non-empty strings. Added `#[command(version)]` to clap derive so `--version` actually works. |
-| 2026-03-06 | self | `stream_pid: unbound variable` — `trap cleanup_stream EXIT` set inside `stream_pipeline()` persists after function returns, but local `stream_pid` goes out of scope | Add `trap - EXIT` after `cleanup_stream` before returning from the function to clear the trap. |
-| 2026-03-06 | self | delegate_task workers reported success for VM CI routing fix but no file changes persisted (6th documented incident at the time) | **UPDATE 2026-03-10: delegate_task NOW WORKS for file edits.** Previous failures were a pi bug, now fixed. delegate_task can be used for both read-only and write operations. Still prefer direct edits for surgical changes; delegate for larger autonomous tasks. |
+| What | Correct Usage |
+|------|---------------|
+| `WriteRequest` | Has `command: WriteCommand` field, not `key`/`value`. Use `WriteRequest::set(key, value_string)` |
+| `ReadRequest` | Has `consistency` field. Use `ReadRequest::new(key)` constructor |
+| `ScanRequest` | `limit_results: Option<u32>`, `continuation_token`. No `Default` impl |
+| `KV values` | `KeyValueWithRevision.value` is `String`, not `Vec<u8>` |
+| `DeterministicKeyValueStore` | `.new()` returns `Arc<Self>`. `.read()` returns `Err(NotFound)` for missing keys |
+| `RequestHandler::handle()` | Signature is `handle(request, ctx)` — ctx is second parameter |
+| `JobId` | Newtype, no `From<String>`. Use `serde_json::from_value(json!("id"))` |
+| `DummyBuildService` | Unit-like struct — must use `DummyBuildService {}` (Rust 2024 strict) |
+| `Membership::get_node()` | Not `get()`. Check openraft API with rg before writing |
+| `EndpointAddr.addrs` | `BTreeSet<TransportAddr>` not `Vec<DirectAddr>` (iroh 0.97) |
+| `aspen-cli kv set` | Not `kv put` |
+| `async-trait` | NOT a workspace dep — each crate specifies `async-trait = "0.1"` directly |
 
-| Date | Source | What Went Wrong | What To Do Instead |
-|------|--------|----------------|-------------------|
-| 2026-03-06 | self | `aspen-ci-handler` forge+blob features never propagated — `aspen-rpc-handlers/ci` enabled the dep but not `aspen-ci-handler/forge` or `aspen-ci-handler/blob`. Server returned CI_FEATURE_UNAVAILABLE for trigger, list, artifacts | When a feature on crate A enables `dep:crate-B`, also propagate sub-features: `ci = ["dep:aspen-ci-handler", "aspen-ci-handler/forge", "aspen-ci-handler/blob"]`. Check feature propagation chains for optional deps with their own feature flags. |
-| 2026-03-06 | self | git-remote-aspen URL format is `aspen://{ticket}/{repo_id}`, not `aspen://{repo_id}?ticket={ticket}` | Check existing tests (forge-cluster.nix) for the correct URL format before writing new tests. |
-| 2026-03-06 | self | Bash heredoc inside NixOS VM test Python string causes heredoc delimiter to appear literally in file content (NCL_EOF in .ncl file) | Use `pkgs.writeText` for multi-line config files in NixOS VM tests, then `cp` into place. Never use bash heredocs inside Python succeed() calls. |
-| 2026-03-06 | self | Plugin list count check may fail due to timing with CI workers — `plugin list` returns 0 even after successful reload (both plugins loaded) | Skip the count assertion and verify plugins work by actually using them (e.g., creating a forge repo). The reload logs confirm success. |
-| 2026-02-27 | self | `aspen-sql` had 14 tests that couldn't compile — missing `layer` feature on `aspen-core` dep | When a crate depends on `aspen-core`, check if it uses feature-gated modules (`layer`, `sql`, `global-discovery`). Always try `cargo nextest run -p <crate>` standalone before assuming zero tests. |
-| 2026-02-27 | self | `aspen-nix-handler` showed 0 tests but had 5 behind `cache` feature | Feature-gated test modules are invisible to default `cargo nextest run`. Check `#[cfg(test)]` blocks for feature gates, and test with `--features <feat>` when needed. |
-| 2026-02-26 | self | Snapshot race: `LogsSinceLast(100)` triggers openraft snapshot during tests, `snapshot.submitted(100) > apply_progress.submitted(99)` → panic → Raft core dead → all operations return NOT_LEADER | Increase snapshot threshold to `LogsSinceLast(10_000)`. Root cause: state machine eagerly applies during `append()` but openraft tracks via `apply()` callback. TOCTOU race between redb `last_applied` and openraft `apply_progress`. |
-| 2026-02-26 | self | `aspen-client-api` features (`ci`, `secrets`, `automerge`) defaulted to off → postcard enum discriminants shifted between CLI and server → "Found a bool that wasn't 0 or 1" deserialization crash | Make ALL `aspen-client-api` features default-on: `default = ["auth", "ci", "secrets", "automerge"]`. Wire format enum layout must be identical between all consumers. |
-| 2026-02-26 | self | `set -o pipefail` in test script: CLI returns non-zero for expected errors → pipeline exit code is non-zero even though grep matches | Use `{ $CLI cmd 2>&1 \|\| true; } \| grep ...` pattern to suppress CLI exit code when testing error messages. |
-| 2026-02-25 | self | delegate_task workers report success but file changes don't persist (5 incidents at the time) | **UPDATE 2026-03-10: pi bug fixed, delegate_task now persists file edits.** Previous guidance was correct for the old behavior. Now safe for both reads and writes. |
-| 2026-02-25 | self | Postcard enum discriminant mismatch: `ClientRpcResponse` variants shifted by `#[cfg(feature = "ci")]` causing CLI to deserialize wrong variant | Feature flags that add enum variants MUST match between producer (node) and consumer (CLI). Always build CLI with same feature set that affects aspen-client-api enum layout. Affects: secrets CLI needs `ci` feature for CacheMigration variants before Secrets variants. |
-| 2026-02-24 | self | WASM plugin AOT precompile version mismatch: wasmtime 36.0.6 vs hyperlight-wasm guest runtime 36.0.3 | Pin wasmtime exactly to match `hyperlight_wasm::get_wasmtime_version()`. Use `config.target("x86_64-unknown-none")` not `linux`. Enable `config.wasm_component_model(true)` to match guest runtime flags. |
-| 2026-02-24 | self | Guest SDK extern declarations used Rust high-level types (String, Vec<u8>) producing wrong wasm32 ABI | All host function externs MUST use raw C types (`*const c_char`, `*const u8`, `i32`, `i64`) matching hyperlight primitive ABI. Vec<u8> params require explicit `_len: i32` following the buffer param. |
-| 2026-02-24 | self | Host kv_get returned `\x02` (error) for non-existent keys; ALL tag bytes used `\x00` for success causing CString NUL termination issues | KV store `.read()` returns `Err(NotFound)`, NOT `Ok(None)`. Match `NotFound` specifically in host functions. Hyperlight marshals through CString → shift all tag bytes +1: success=`\x01`, not-found=`\x02`, error=`\x03`. |
-| 2026-02-24 | self | plugin_init GPF from heap corruption in guest free() | Guest malloc() must prepend 8-byte header with total size. Guest free() reads header to pass correct size to wasm32 dlmalloc (which uses layout.size() for chunk metadata lookup). Wrong size → heap corruption. |
-| 2026-02-23 | self | Adding field to widely-used struct breaks ~40 callers across repos | Don't add fields to public structs with many external users. Instead: add default trait method (purely additive, zero caller changes). |
-| 2026-02-23 | self | `path:` flake inputs for local repos timeout copying target/ dirs | Use `git+file://` (respects .gitignore) or `builtins.fetchGit`. Ensure repos have `.git` + `.gitignore` with `target/`. |
-| 2026-02-23 | self | Symlink causes Cargo package collision (same crate seen as two different paths) | Use SRCDIR variable to rewrite paths consistently instead of symlinks. Cargo sees physical paths, not logical equivalence. |
-| 2026-02-23 | self | Subcrates at `crates/{name}/Cargo.toml` used `../../aspen-*/` for cross-workspace paths (wrong depth) | Subcrates are 3 levels deep, need `../../../aspen-*/crates/...` to reach git root. |
-| 2026-02-23 | self | `aspen-jobs-guest` (no_std with `#[panic_handler]`) fails `cargo test` — duplicate panic_impl lang item | no_std test binaries link std (→ panic_impl), AND feature unification activates serde/std from siblings. Fix: `test = false` + `doctest = false` in `[lib]`. Add to `default-members` exclusion. |
-| 2026-02-19 | self | NixOS VM tests with large data (100KB+ KV, 200KB blobs) fail from log truncation | Keep test data small: 5KB for KV values, 10KB for blobs. Use `logLevel="info"` (not "aspen=debug") for multi-node tests to avoid tracing large payloads. |
-| 2026-02-19 | self | Multi-node test hit 50-connection client limit | MAX_CLIENT_CONNECTIONS was too low for tests making 80+ sequential CLI calls. Increased to 200. Batch operations when possible. |
-| 2026-02-25 | self | KV reads on followers returned silent "key not found" instead of NOT_LEADER error | KV/lease handlers must check `is_not_leader_error()` and return top-level `ClientRpcResponse::error("NOT_LEADER", ...)`, NOT bury error in domain response fields (WriteResultResponse.error, ReadResultResponse.error). Client `send()` only rotates peers on top-level Error with code="NOT_LEADER". |
-| 2026-02-25 | self | `GetClusterTicket` generated single-peer ticket → client loops on same follower after NOT_LEADER | Include all cluster nodes in bootstrap_peers (up to MAX_BOOTSTRAP_PEERS=16). Client rotation requires multi-peer ticket. |
-| 2026-02-26 | self | `verify blob` cross-node check fails in multi-node cluster (blobs are local, not Raft-replicated → 1/3 nodes have blob, below 50% threshold) | Blob cross-node check must be informational only. Only core ops (add/has/get) determine pass/fail. |
-| 2026-02-26 | self | `verify all` fails: DocsHandler not registered when `docs_sync` unavailable → dispatch returns "no handler found" → sanitized to "internal error" by `sanitize_error_for_client()` → didn't match "not enabled"/"disabled" | Server sanitization rewrites "no handler found" to generic "internal error" (code=INTERNAL_ERROR). Must match on BOTH code and sanitized message, not just raw error text. |
-| 2026-02-26 | self | Rate limiter fail-closed on StorageUnavailable caused cascading failure — ALL RPC requests blocked when KV backend had transient issues | Rate limiter must fail-OPEN on storage errors (like it already does for NotLeader). Rate limiting is best-effort, not safety-critical. |
-| 2026-02-26 | self | `openraft/openraft/src/docs/data/` dir untracked due to global `data/` gitignore rule → nix fileset excluded it → compile error E0583 "file not found for module `data`" | Check `git ls-files` for any dir that exists locally but might be gitignored. Global .gitignore patterns (`data/`, `target/`) can hide source files. Use `git add -f` to override. |
-| 2026-02-26 | self | Stubbing `iroh-proxy-utils` in fullSrc then enabling `proxy` feature → unresolved imports at compile time | Don't stub git deps whose features are ENABLED in the build. Only stub deps for features that are OFF. For deps with "requires a lock file" vendoring error: fetch source via `builtins.fetchGit`, copy into fullSrc tree, rewrite git dep to path dep, strip `source = "git+..."` line from Cargo.lock. |
-| 2026-02-26 | self | `wasmPluginsSrc` used `rawSrc` (no `crates/`) → WASM plugin build couldn't find `aspen-client-api` | `rawSrc` intentionally excludes `./crates` and `./openraft` for lightweight builds. WASM plugin builds need `fullRawSrc` which includes all workspace crates. |
-| 2026-02-26 | self | Regression tests for postcard discriminant stability: HealthResponse/FederationStatusResponse/CacheMigrationStartResultResponse struct fields changed since code was written | Always read struct definitions with `rg "pub struct FooResponse"` before constructing test values. Don't guess field names from memory. |
-| 2026-02-26 | self | Tests in private modules (`mod storage_init`, `mod sharding_init`) are not discovered by `cargo test --lib` | Put regression tests in publicly reachable modules (e.g., crate root `lib.rs`) or the constants crate. Compile-time assertions (`const _: ()`) work anywhere regardless of module visibility. |
-| 2026-02-26 | self | `PluginReloadResult` variant was placed AFTER `#[cfg(feature = "automerge")]` variants in `ClientRpcResponse` — its discriminant shifted when automerge was toggled | All non-gated variants MUST appear BEFORE the feature-gated section. Add golden-file discriminant tests to catch any reordering. |
-| 2026-02-26 | self | Snapshot TOCTOU race: `build_snapshot()` reads eagerly-applied `last_applied` from redb, but openraft's `apply_progress` only advances in `apply()` callback | Track `confirmed_last_applied` separately (updated only in `apply()`), use that in `build_snapshot()`. Keep `LogsSinceLast(10_000)` as defense-in-depth. |
-| 2026-02-26 | self | Pong is discriminant 12 (not 13) in ClientRpcResponse — miscounted because Pong is a unit variant between ChangeMembershipResult and ClusterState | Always verify discriminant values empirically with `postcard::to_stdvec()` before pinning in golden tests. Don't count by hand. |
-| 2026-02-26 | self | Automerge + Docs CLI commands had `other =>` catch-all without `ClientRpcResponse::Error` match → CAPABILITY_UNAVAILABLE showed raw Debug format "unexpected response: Error(ErrorResponse{...})" instead of clean error | Every match on `ClientRpcResponse` must have explicit `ClientRpcResponse::Error(e)` arm before the catch-all `other =>`. The client normalizes CapabilityUnavailable→Error, so all handlers must match Error. |
-| 2026-02-26 | self | Counter/Sequence test grep patterns expected `value\|error\|unavailable` but commands output bare numbers (`0`, `101`) on success | Match actual output format: `^[0-9]+$\|value\|error\|unavailable` to accept both numeric success values and error messages. |
-| 2026-02-26 | self | `cargo build --bin aspen-node --bin aspen-cli` fails because they're in different packages | Use `cargo build -p aspen -p aspen-cli` for multi-package builds. `aspen-node` requires features: `--features jobs,docs,blob,hooks,automerge`. |
+### Feature Gate Rules
 
-| 2026-02-27 | self | `SignedObject::new()` wraps with HLC timestamp → importing same git object twice produces different BLAKE3 hashes | Idempotency guarantee is at SHA-1 mapping level, not BLAKE3 level. Import always creates a new SignedObject, but the SHA-1↔BLAKE3 mapping gets overwritten to point to the latest. Tests should verify SHA-1 stability, not BLAKE3 stability. |
-| 2026-02-27 | self | Bridge export adds trailing `\n` to commit/tag messages; import strips trailing newlines via `lines().collect().join("\n")` | Test data must include trailing `\n` on commit/tag messages to match what the bridge export produces. The bridge normalizes messages to end with `\n`. |
-| 2026-02-27 | self | Wire-level test: `Command::output()` blocks tokio runtime — server can't process requests while client waits | Use `tokio::task::spawn_blocking()` for subprocess calls inside async tests. `timeout()` wrapping a blocking call doesn't actually timeout — it needs to be async-aware. |
-| 2026-02-27 | self | Wire-level test: `iroh::Endpoint::bound_sockets()` returns `0.0.0.0` — client can't connect | Convert `0.0.0.0` → `127.0.0.1` in `EndpointAddr.addrs` for loopback tests. `git-remote-aspen` detects local addrs and disables discovery. |
-| 2026-02-27 | self | Wire-level test: global push session state stomped by parallel tests | Use per-session-id `HashMap<String, PushSession>` instead of single `Option<PushSession>`. Random session IDs provide isolation. |
+| Rule | Why |
+|------|-----|
+| `#[cfg(feature = "ci")]` checks ROOT crate feature, not transitive | Use `--features ci` not `ci-basic` for binary checks |
+| Feature chains must propagate to ALL downstream handler crates | `ci = ["dep:aspen-ci-handler", "aspen-ci-handler/forge", "aspen-ci-handler/blob"]` |
+| When adding `#[cfg(feature)]` guards, verify feature is defined | Check `[features]` table AND propagation from parent crates |
+| After touching feature-gated code, `cargo check --features <each-combo>` | Feature combinations create different type signatures |
+| `cargo nextest run` (no flags) only runs root package (813 tests) | Use `--workspace` or `-p <crate>` to test non-root crates |
 
-| 2026-02-27 | self | `aspen-rpc-handlers` `git-bridge` feature only propagated to `aspen-forge/git-bridge`, NOT `aspen-forge-handler/git-bridge` — server returned GIT_BRIDGE_UNAVAILABLE | Feature chains must propagate to ALL downstream crates that have `#[cfg(feature = ...)]` guards. Check handler/executor crates too, not just core crates. |
-| 2026-02-27 | self | `bins.git-remote-aspen` uses `nodeCommonArgs` which has stub source (no `crates/`) — fails to compile with `aspen-auth` not found | Use `fullBin` (from `fullCommonArgs`) for binaries needed in VM tests. Stub-based builds only work for the main node/CLI that don't need real crate implementations. |
-| 2026-02-27 | self | `full-aspen-node-plugins` was missing `forge,git-bridge,blob` compile features — native git bridge handler never compiled in | VM test node builds need ALL features exercised by the test. Check what compile-time `#[cfg(feature)]` guards exist in handler code. |
-| 2026-02-27 | self | `git push` in VM test: chaining `git remote add && git push` in one `succeed()` call — if push fails, can't distinguish which command failed | Split multi-command shell operations into separate `succeed()` calls. Use `execute()` to capture exit codes for debugging. |
+### Nix Build System
 
-| 2026-02-27 | self | `cargo nextest run` (no flags) only runs root package (813 tests). `cargo nextest run --workspace` runs all 5,722 tests across 72 crates. Federation crate's 88 tests were never being run in default test runs. | Use `--workspace` or `-p <crate>` to test non-root workspace crates. Check `cargo nextest list -p <crate>` to verify test discovery. |
-| 2026-02-27 | self | `ForgeNodeRef` type alias = `Arc<ForgeNode<IrohBlobStore, dyn KeyValueStore>>` — can't substitute `InMemoryBlobStore` in tests | Test ForgeNode KV operations directly in `aspen-forge` (accepts generic blob store). Test handler functions that don't need ForgeNode (trust/untrust) separately in `aspen-forge-handler`. |
-| 2026-02-27 | self | iroh 0.95 `Endpoint::connect(PublicKey, alpn)` fails with `clear_discovery()` — no addressing info available | Use `Endpoint::connect(EndpointAddr, alpn)` with explicit socket addresses. Convert `0.0.0.0` → `127.0.0.1` from `endpoint.bound_sockets()`. Pattern: `EndpointAddr::new(endpoint.id())` + insert `TransportAddr::Ip(fixed_addr)`. |
-| 2026-02-27 | self | iroh 0.95 protocol handlers registered via `Router::builder(endpoint).accept(ALPN, handler).spawn()` — NOT `endpoint.add_protocol()` | Use `Router::builder(endpoint.clone()).accept(alpn_bytes, handler).spawn()`. Keep `Router` alive (it drives the accept loop). |
-| 2026-02-27 | self | `sync::wire` module was private — integration tests couldn't access `read_message`/`write_message` for manual handshake | Made `pub mod wire` in `sync/mod.rs`. Federation wire tests need it for direct protocol interaction without going through `connect_to_cluster()`. |
+| Date | What Went Wrong | What To Do Instead |
+|------|----------------|-------------------|
+| 2026-03-24 | nix-compat stub chain: `aspen-rpc-core → aspen-ci → aspen-cache → nix-compat` pulled stub into 12 handler crates | Move unused deps to `[dev-dependencies]`. Make deps optional behind same feature they're used in |
+| 2026-03-14 | Nix IFD caching: changing derivation script doesn't invalidate store output | Use completely separate derivation path (different name/inputs) instead of modifying existing one |
+| 2026-03-12 | unit2nix `buildRustCrate` ignores `required-features` on `[[test]]`; `nativeBuildInputs` only affects build, not test runner; `CARGO_BIN_EXE_*` not available | Exclude affected crates from per-crate tests; they still run under crane nextest |
+| 2026-03-08 | crane `buildDepsOnly` content-addresses from Cargo.toml/Cargo.lock — ciSrc script changes don't change deps drv | Add explicit `cargoLock = ciSrc + "/aspen/Cargo.lock"` |
+| 2026-03-06 | Nix sandbox tmpfs disk full kills redb tests | `ci-nix` nextest profile excludes `test(/test_redb/)`. `writableStoreUseTmpfs = false` + large `diskSize` for builds |
+| 2026-03-06 | `build-plan.json` stale after adding workspace members | Always `nix run .#generate-build-plan` after changes. Now using auto mode (IFD) |
+| general | New .nix files not visible to nix eval | Always `git add` new files before `nix eval`/`nix build` |
+| general | `nix-collect-garbage -d` freed only 3.8GB — `.direnv/` GC roots | `find ~ -name '.direnv' -type d -exec rm -rf {} +` first, then GC |
+| general | Nix SQLite cache corrupts when disk fills | `rm -f ~/.cache/nix/fetcher-cache-v4*` to recover |
 
-| 2026-02-28 | self | cdylib WASM guest crates (12 in aspen-plugins) SIGSEGV when nextest runs native test binary — FFI exports crash without hyperlight sandbox | Add `test = false` + `doctest = false` to `[lib]` in all cdylib plugin Cargo.toml files. Add `tests/smoke.rs` integration test so nextest still finds ≥1 test binary per crate. |
-| 2026-02-28 | self | `cargo nextest run` with 0 test binaries exits with error code — auto-test harness treats as failure | cdylib crates need at least one integration test file (`tests/*.rs`) even if lib tests are disabled. nextest `--no-tests pass` is CLI-only, not configurable via `.config/nextest.toml`. |
-| 2026-02-28 | self | Thought `aspen-wasm-plugin` had 0 integration tests — actually has 8 behind `#[ignore]` + `#[cfg(feature = "testing")]` | `cargo nextest run` shows "8 skipped" but doesn't explain why. Use `--run-ignored all` with `--features testing` to run them. All 8 pass with KVM (~8.7s each for AOT compile + hyperlight sandbox boot). |
-| 2026-02-28 | self | `vm_executor_test.rs` used manual `Job { ... }` struct literal — broke when `execution_token` field was added | Use `Job::from_spec(job_spec)` instead of manual construction. It handles all fields and stays compatible. |
-| 2026-02-28 | self | `vm_integration_test.rs` used `"test_blob_hash"` as BLAKE3 hash — `iroh_blobs::Hash::parse()` panics on non-64-hex-char strings | Always use valid 64-char hex strings for BLAKE3 hashes in tests (e.g., `"0000...0000"`), even when the blob won't exist. |
-| 2026-02-28 | self | `load_wasm_handler` test helper didn't AOT precompile or size input buffer — real 1.5MB plugins couldn't load (buffer too small) | Test helpers must match production code: AOT precompile via `precompile_wasm()`, set `with_guest_input_buffer_size(aot_bytes.len() + 128KB)`. Made `precompile_wasm` pub for this. |
-| 2026-02-28 | self | WASM plugin integration tests called `handler.handle()` before `call_init()` — handler rejected with "state: Loading" | Always call `handler.call_init().await` after `load_wasm_handler()` before dispatching requests. Plugin lifecycle: Loading → Initializing → Ready. |
-| 2026-02-28 | self | `PluginHostContext::new()` defaults to `PluginPermissions::default()` (all denied) — host `kv_get` silently returned error tag `\x03` | Test host contexts need `.with_permissions(PluginPermissions::all())` or explicit per-capability grants. Default is least-privilege (all denied). |
-| 2026-02-28 | self | Echo plugin didn't exist — integration tests referenced `aspen_echo_plugin.wasm` that was never built | Created `aspen-echo-plugin` crate in aspen-plugins repo. Handles Ping→Pong, ReadKey→kv_get, else→UNHANDLED error. |
+### NixOS VM Test Rules
 
-| 2026-03-03 | self | `host.succeed("socat ... &")` hangs — background `&` keeps shell alive in NixOS test `succeed()` | Use `systemd-run --unit=name command` for background processes in NixOS VM tests. Never use `&` in `succeed()`. |
-| 2026-03-03 | self | `cluster status` endpoint_id field is full `EndpointAddr { id: PublicKey(hex), addrs: {...} }` debug string — can't pass to CLI as `--endpoint-id` (shell chokes on `{` and `(`) | Extract hex public key with `re.search(r'PublicKey\(([0-9a-f]+)\)', raw_eid)` before passing to CLI. |
-| 2026-03-03 | self | `aspen-node-vm-test` is built with `ci,docs,hooks,shell-worker,automerge,secrets` but NOT `net` — NetHandler not compiled in, `net publish` silently fails | Use `full-aspen-node-plugins` for tests that need `net` feature. Always check which features are compiled into the node package. |
-| 2026-03-03 | self | WASM KV plugin install fails in nested KVM (hyperlight sandbox inside QEMU) — `plugin list` returns 0 plugins after reload | Native handlers (net, blob, cluster) work without plugins. Only use WASM plugins in tests when the feature actually requires them. `inmemory` storage backend doesn't need KV plugin. |
-| 2026-03-03 | self | `fullBin { name = "aspen-net"; }` uses root Cargo.toml pname and `--bin aspen-net` — fails with "no bin target named aspen-net in default-run packages" | For bins in subcrates, use explicit `craneLib.buildPackage` with `--package aspen-net --bin aspen-net` instead of `fullBin`. |
-| 2026-03-03 | self | `echo ''` in nix test string triggers alejandra parse error ('' is multiline string delimiter) | Avoid `''` in nix `''...''` strings. Use `echo empty` or `echo ""` (double-quoted) instead. |
-| 2026-03-03 | self | Git worktree for aspen has path collision: relative path deps in sibling crates (e.g., `aspen-dns = { path = "../../../aspen-dns/crates/..." }`) resolve differently, causing lockfile package collisions | Don't use git worktrees for development in aspen — the workspace has external sibling-repo path deps that break in worktrees. Work directly in the main repo. |
-| 2026-03-03 | self | Rust 2024 edition: `tokio::fs::write(path, &string)` fails type inference — needs explicit `string.as_bytes()` | In closures and async chains, use `.as_bytes()` for `tokio::fs::write` with String data. Also: `map_err(\|e: toml_edit::TomlError\|` needs explicit error type in closures. |
-| 2026-03-03 | self | `age::Encryptor::with_recipients()` takes `impl Iterator<Item = &dyn Recipient>`, not `Vec<Box<Recipient>>` | Create vec of `Box<dyn Recipient>`, then pass `recipients.iter().map(\|r\| r.as_ref() as &dyn age::Recipient)` |
+| Rule | Why |
+|------|-----|
+| `systemd-run` transient units don't inherit PATH | Use absolute nix store paths: `${pkg}/bin/name` |
+| `succeed("cmd &")` hangs | Use `systemd-run --unit=name command` for background processes |
+| `echo ''` in `''...''` nix string = parse error | Use `\|\| true` or `echo ""` (double-quoted) |
+| Use `pkgs.writeText` for multi-line configs | Never use bash heredocs inside Python `succeed()` calls |
+| `wait_until_succeeds` with 30s CLI timeout | Use `--timeout 5000` for fast-failing health checks |
+| `PrivateTmp=true` isolates `/tmp` per service | Use `/root` or `/var/lib` for shared paths |
+| Use VM clock (`date +%s`) not Python `time.time()` | Clocks differ between host and guest |
+| WASM plugins need bare-metal KVM | Make plugin count assertions non-fatal; test by actually using plugins |
+| VM `nix build` needs `writableStoreUseTmpfs = false` + 20GB+ disk | Default tmpfs limits to ~50% RAM |
+| `nix.settings.experimental-features = ["nix-command" "flakes"]` | Required for `nix build` in VMs |
 
-| 2026-03-04 | self | `aspen-sops` format/common.rs and `aspen-secrets` decryptor.rs both have `decrypt_sops_value()` and `is_sops_encrypted()` — but they use different error types (SopsError vs SecretsError) and the decryptor.rs version must work without the `sops` feature | Dedup requires unifying error types or extracting a common inner function that returns a generic error. For now, both versions stay — they're stable and tested. Unify when error types are consolidated. |
-| 2026-03-04 | self | `TransitStore` in aspen-secrets is a trait (not generic over backend). `DefaultTransitStore` is the concrete impl. | Use `Arc<dyn TransitStore>` for consumers that need Transit operations without knowing the backend type. Don't parameterize over `S: SecretsBackend` when you just need Transit operations. |
-| 2026-03-04 | self | Moving code between crates: `super::super::` paths are fragile in deeply nested modules | Use `crate::sops::sops_error::` (absolute crate paths) instead of relative `super::super::` for cross-module imports. Absolute paths survive refactors better. |
-| 2026-03-04 | self | Feature gates from source crate don't auto-transfer when moving code | `#[cfg(feature = "age-fallback")]` in aspen-sops needs to become unconditional in aspen-secrets (where age is always a dep). Remove feature gates that don't apply in the new crate. |
-| 2026-03-04 | self | **BUG FOUND**: `inject_metadata` in `sops/format/toml.rs` used `format!("[sops]\n{sops_toml_str}")` which broke `[[aspen_transit]]` array-of-tables — TOML parser interprets them as root-level, not nested under [sops] | Fixed by wrapping in a `toml::map::Map` with "sops" key first, then serializing the whole wrapper. This produces correct `[[sops.aspen_transit]]` headers. |
+### Iroh / Networking
 
-| 2026-03-05 | self | `age::x25519::Identity::to_string()` returns `SecretBox<str>`, not `String` — need `use age::secrecy::ExposeSecret` + `.expose_secret()` to get `&str` | Always use `age::secrecy::ExposeSecret` trait and `.expose_secret()` when accessing age identity strings. The secrecy crate is re-exported through `age::secrecy`, not standalone. |
-| 2026-03-05 | self | Test compiles fine with `-p aspen-secrets` but fails with `--workspace` because workspace feature unification activates `sops` feature which changes `age` types | Always test with `--workspace` for final verification — feature unification can change type signatures across the entire build. |
-| 2026-03-05 | self | cloud-hypervisor `--fs num_queues=N` adds a high-priority queue on top → total = N+1. snix virtiofs backend only supports 2 queues | Set `num_queues=1` (1 normal + 1 hiprio = 2 total). Don't set num_queues=num_cpus for vhost-user-fs. |
-| 2026-03-05 | self | `lib.fileset.toSource` requires real paths, not store paths from flake inputs | Use `pkgs.runCommand` to copy flake input into a writable tree, then pass that as crane `src`. Don't try `lib.fileset` with store paths. |
-| 2026-03-05 | self | snix-src is `flake = false` + pinned to specific rev — `nix flake lock --update-input` won't change it unless the rev in `flake.nix` is also changed | Edit the `url = "git+...?rev=..."` in flake.nix first, then run lock update. |
-| 2026-03-05 | self | FUSE cache, metadata, and SOPS decrypt/encrypt/edit already had `#[cfg(test)] mod tests` scaffolding with 0 tests — the empty test modules were created during initial development | When checking test coverage, look inside `#[cfg(test)]` blocks for actual test functions, not just the presence of the module. |
+| Date | Issue | Resolution |
+|------|-------|------------|
+| 2026-03-22 | Connection pool served stale connections after peer restart — election storms | `add_peer()` detects address changes, calls `connection_pool.evict(node_id)` |
+| 2026-03-21 | After `systemctl restart`, iroh gets new port, Raft has stale address | Three-layer defense: gossip cache fallback, persistent peer cache, authoritative membership update via `add_learner` |
+| 2026-03-21 | openraft randomizes election timeout once → persistent split-votes | Per-node election timeout jitter via `node_id % (range/3)` |
+| 2026-03-23 | Worker on follower: `RaftNode::write()` returns ForwardToLeader → stuck | `WriteForwarder` trait + `IrohWriteForwarder` forwards via CLIENT_ALPN QUIC |
+| 2026-03-23 | Write batcher bypassed forwarding entirely | flush_batch + write_direct now detect ForwardToLeader and forward. Followers skip batcher |
+| 2026-03-23 | `IrohWriteForwarder` only handled Set/Delete | Extended to CAS, SetMulti, SetMultiWithTTL, DeleteMulti, Batch |
+| 2026-02-25 | KV reads on followers returned silent "key not found" | Handlers check `is_not_leader_error()` → top-level `Error("NOT_LEADER")`. Client rotates peers |
+| 2026-02-26 | Rate limiter fail-closed on StorageUnavailable | Rate limiter fails-OPEN on storage errors (best-effort, not safety-critical) |
 
-| 2026-03-06 | self | `nix-executor` feature referenced in `#[cfg(feature = "nix-executor")]` in node binary but never defined in root Cargo.toml — NixBuildWorker was dead code | When adding `#[cfg(feature = "...")]` guards, verify the feature is actually defined in the crate's `[features]` table AND propagated from parent crates. Use `grep feature_name Cargo.toml` to verify. |
-| 2026-03-06 | self | EchoWorker's `excluded_types` (ci_nix_build, ci_vm) collected globally via union — ALL worker goroutines excluded these types from dequeue, preventing NixBuildWorker from ever picking up nix build jobs | `excluded_types` should filter out types that have NO registered handler. Changed `run_worker_collect_excluded_types` to check if a dedicated handler exists before excluding a type. |
-| 2026-03-06 | self | `snix-castore`, `snix-store`, `nix-compat` were unconditional deps of `aspen-ci-executor-nix` — broke Nix builds that use stub snix crates (the normal `full-aspen-node-plugins` build) | Make external git deps optional behind feature flags. The snix functionality in the nix executor is an add-on, not a requirement. Feature chain: root `snix` → `aspen-ci/nix-executor-snix` → `aspen-ci-executor-nix/snix`. |
-| 2026-03-06 | self | `NixBuildWorkerConfig` had `gateway_url` field added but not propagated to the node binary constructor — missing field compiler error | When adding fields to config structs, grep ALL construction sites: `rg 'NixBuildWorkerConfig {' src/` |
+### CI / Dogfood
+
+| Date | Issue | Resolution |
+|------|-------|------------|
+| 2026-03-24 | Rolling-restart test: CLI returned exit 0 on failed add-learner/change-membership; IPv6 regex captured fragments | CLI checks `is_success`, returns non-zero. Test uses IPv4-only regex, retries, verifies voter state |
+| 2026-03-21 | `nix flake archive` hangs indefinitely in VMs (no internet) | 120s `tokio::time::timeout`, `kill_on_drop(true)`. Pipeline continues without prefetch |
+| 2026-03-14 | CI failure cache returned `Err(InvalidConfig)` for cached flake refs | Changed from blocking to advisory: log warning + continue |
+| 2026-03-10 | Visibility timeout 300s < nix build duration 8+ min → ack failed → pipeline stuck | Increased to 3600s. `ack_job()` proceeds to `mark_completed()` regardless of queue ack result |
+| 2026-03-09 | Stage-level status always "pending" | Added `compute_stage_status()` that derives from job statuses |
+| 2026-03-08 | `VmPool::acquire()` used `mem::forget(permit)` → leaked on drop | Store `OwnedSemaphorePermit` in VM struct. Auto-released on drop |
+| 2026-03-07 | `ci logs` always "not found" — empty `run_id` in PipelineContext | Pass `run_id` from created run into `start_pipeline_build_updated_context` |
+| 2026-03-12 | Deploy executor took `output_paths[0]` = man pages | `select_primary_output()` prefers paths without `-man`/`-doc`/`-dev` suffixes |
 
 ## User Preferences
 
-- Improve plugin system iteratively
-- For multi-crate changes: delegate_task now works for file edits (pi bug fixed 2026-03-10). Use delegate for larger autonomous tasks, direct edits for surgical changes.
-- delegate_task for test writing: now works reliably for both single-file and multi-file edits.
-- CLI parse tests: always check actual clap subcommand names (e.g., `status` not `state`, `enqueue` not `push`, `--repo` flag not positional). Use `grep -A10 "pub enum.*Command"` on the command file first.
-- ~~`crates/aspen-client/src/rpc_types.rs` is orphaned~~ **DELETED 2026-03-12**: Removed rpc_types.rs (1,339 lines) + rpc_types/ directory (1,467 lines). All types duplicated in aspen-client-api.
-
-| 2026-02-27 | self | `kv_store.write()` takes `WriteRequest`, not `(&str, Vec<u8>)` — and `kv_store.delete()` takes `DeleteRequest`, returns `DeleteResult` with `is_deleted` | Always check trait signatures: `KeyValueStore::write(WriteRequest)`, `delete(DeleteRequest)`. Use `WriteRequest::set(key, value_string)`. IndexScanResult `primary_keys` are `Vec<Vec<u8>>`, not `Vec<String>` — hex-encode for wire format. |
-| 2026-02-27 | self | `ScanRequest` field is `limit_results` not `limit`, and it doesn't impl `Default` | Always check struct field names and trait impls with rg before using `..Default::default()`. `ScanRequest` has 3 fields: `prefix`, `limit_results`, `continuation_token`. |
-| 2026-02-27 | self | KV `KeyValueWithRevision.value` is `String`, not `Vec<u8>` — no need for `from_utf8()` | KV values are stored as String. When storing JSON, use `serde_json::to_string()` + store directly. When reading, `serde_json::from_str(&entry.value)` works. |
-| 2026-02-27 | self | `handle_index_drop` used `_sys:index:` prefix but `handle_index_create` stores under `/_sys/index/` (INDEX_METADATA_PREFIX) — keys didn't match | Always use `INDEX_METADATA_PREFIX` from `aspen_core::layer` for index system keys. The canonical format is `/_sys/index/{name}`, not `_sys:index:{name}`. |
-| 2026-02-27 | self | `kv_store.read()` takes `ReadRequest` (not `&str`), returns `ReadResult { kv: Option<KeyValueWithRevision> }` — not a direct value | Create a helper like `kv_read_value(ctx, key) -> Option<String>` that wraps the ReadRequest/ReadResult boilerplate. Use `.and_then()` for chained deserialization. |
-| 2026-02-27 | self | `super::*` in test modules doesn't re-export `use` items from parent — test module couldn't see `AlertSeverity` etc. | Always add explicit `use aspen_client_api::TypeName` imports in test modules for types used in test code, even if `super::*` is present. |
-
-| 2026-02-27 | self | `QuorumCheckResult` used in `assert_eq!` but missing `PartialEq` derive — test compilation fails | Always derive `PartialEq` on result types used in test assertions. Check all types in `Result<T, E>` — both T and E need `PartialEq`. |
-| 2026-02-27 | self | Rust 2024: explicit `ref` in pattern bindings not allowed when implicitly borrowing | Don't use `Some(ref x)` in Rust 2024 — use `Some(x)` instead. The borrow is implicit. |
-| 2026-02-27 | self | Adding field to `FederationSettings` breaks 3 constructor methods (`disabled()`, `public()`, `allowlist()`) | When adding fields to structs with constructor methods, update ALL constructors immediately. Use `#[serde(default)]` for backwards-compatible deserialization. |
-
-| 2026-03-03 | self | Background flush timer needs `AspenFs` for KV access but `AspenFs` is moved into `Server<AspenFs>` — can't hold `&AspenFs` in the timer thread | Use `clone_for_kv_access()` to create a lightweight KV-only clone that shares the `Arc`-wrapped backend. Share the `WriteBuffer` via `Arc<WriteBuffer>`. Timer thread holds its own `AspenFs` clone for writes. |
+- delegate_task works for file edits (pi bug fixed 2026-03-10). Use for larger autonomous tasks, direct edits for surgical changes.
+- CLI parse tests: check actual clap subcommand names first. Use `grep -A10 "pub enum.*Command"`.
+- Backwards compatibility is not a concern; prioritize clean solutions.
 
 ## Patterns That Work
 
-**Workspace Architecture (consolidated — formerly 48 sibling repos):**
+**General Rust:**
 
-- All 70+ crates live under `crates/` in the main workspace
-- Only 3 external repos needed: `aspen-wasm-plugin`, `aspen-plugins`, `aspen-wasm-guest-sdk`
-- `fullSrc` derivation: `$out/aspen/` (workspace) + `$out/aspen-wasm-plugin/` + `$out/iroh-proxy-utils/` as peers
-- Use `postUnpack = 'sourceRoot="$sourceRoot/aspen"'` for crane to enter the subdirectory
-- `rawSrc` = lightweight (no crates/, no openraft/) for quick builds; `fullRawSrc` = everything for VM tests
-- Git deps that are feature-enabled: fetch source, copy into tree, rewrite to path dep
-- Git deps that are feature-disabled: stub with empty crate to avoid vendoring failures
-- Strip `source = "git+..."` from Cargo.lock for any dep converted from git to path
+- `rg "pub struct TypeName" crates/ -A 20` before constructing ANY struct
+- `rg 'StructName\s*\{' --type rust -l` before adding fields to structs
+- `rg "enum TypeName" src/` before writing match arms
+- Check trait definitions for `#[async_trait]` annotation before implementing
+- `Path::starts_with()` matches whole components — use `.to_string_lossy().starts_with()` for prefix matching
+- `age::secrecy::ExposeSecret` + `.expose_secret()` for age identity strings
 
-**WASM Plugin System (hyperlight-wasm):**
+**Nix Build:**
 
-- Three-tier dispatch: native `RequestHandler` → `ServiceExecutor` → WASM `AspenPlugin`
-- Plugin KV namespace isolation: `allowed_kv_prefixes` + `validate_key_prefix()` enforcement
-- Empty `kv_prefixes` in manifest → auto-scoped to `__plugin:{name}:`
-- Target spec filename becomes target name: use `x86_64-hyperlight-none.json` for correct sysroot lookup
-- Pre-build wasm_runtime in separate derivation, patch vendored build.rs to use `HYPERLIGHT_WASM_RUNTIME` env var
-- cargo-hyperlight is `[patch.crates-io]` → replace entire build.rs to eliminate dependency in vendored builds
-- wasm32 malloc/free must track size: prepend 8-byte header, read in free() for dlmalloc chunk metadata
-- hyperlight host function string returns NOT auto-freed: guest must free host function returns itself
-- Permissions: `PluginPermissions` with per-capability bools (kv_read, kv_write, blob_read, blob_write, hooks, sql_query, etc.)
-- Plugin registry requires linearizable KV scan (ReadIndex) → **only works on Raft leader**; followers fail with "not leader"
-- **WASM plugin hot-reload after failover**: Pre-stage blobs on followers via `blob add`, trigger `plugin reload` on the **new leader** only
+- `ciSrc` (pure eval, stubs optional plugin) for CI checks; `ciPluginsSrc` (impure) for plugin tests
+- `ciVmTestBin { features = [...]; }` / `ciVmTestCliBin ["ci" "forge"]` for VM test binaries
+- unit2nix auto mode (IFD) — 68/80 crates with per-crate `test.check.<name>` in flake checks
+- `overrideVendorGitCheckout` + `snix-src` flake input for real snix deps
+- `noLocked = true` when stripping external deps from manifest
+- `skipStalenessCheck = true` for all `buildFromUnitGraph` calls
 
 **NixOS VM Tests:**
 
-- `skipLint = true` for complex Python scripts (type checker chokes on certain patterns)
-- Two CLIs in VM: `aspen-cli` (test features) + `aspen-plugin-cli` (plugins-rpc) avoids binary name conflict
-- CLI temp file pattern: `>/tmp/_cli_out.json 2>/dev/null` then `cat` (serial console mixes stdout/stderr)
-- Delete cluster-ticket.txt before systemd restart to avoid stale ticket with wrong ports
-- Restart nodes one at a time with health check between (simultaneous 2/3 restart breaks quorum)
-- `memorySize = 4096` (hyperlight needs more RAM than default 1024)
-- `logLevel = "info"` for multi-node tests (debug tracing of large payloads fills logs)
+- `skipLint = true; skipTypeCheck = true;` for complex Python test scripts
+- Delete cluster-ticket.txt before systemd restart (stale ports)
+- Restart nodes one at a time with health check between
+- `memorySize = 4096` for hyperlight; per-node resource config for multi-VM
+- `RUST_LOG=info,aspen_raft_network=warn,aspen_rpc_core=warn` to suppress heartbeat spam
+- `NO_COLOR=1` when log output will be parsed by scripts
 
-**Nix Flake:**
+**WASM Plugin System:**
 
-- `fullPluginsCargoVendorDir` needed for `cargo clippy --workspace` (compiles hyperlight-wasm even without `--features plugins-rpc`)
-- `fullNodeCargoArtifacts` uses patched vendor dir + `HYPERLIGHT_WASM_RUNTIME` for plugin builds
-- `pkgs.nixosTest` → `pkgs.testers.nixosTest` (renamed in newer nixpkgs)
+- Three-tier dispatch: native `RequestHandler` → `ServiceExecutor` → WASM `AspenPlugin`
+- `PluginPermissions::all()` in test host contexts (default is deny-all)
+- Always `call_init().await` after `load_wasm_handler()` before dispatching
+- AOT precompile + `with_guest_input_buffer_size(aot_bytes.len() + 128KB)` + output buffer 256KB
+- `test = false` + `doctest = false` in cdylib Cargo.toml; add `tests/smoke.rs` for nextest
+
+**Self-Hosting Pipeline:**
+
+- Full loop: `nix run .#dogfood-local -- full-loop` (~11 min pipeline + 2 min verify)
+- 3-node: `nix build .#dogfood-serial-multinode-vm`
+- Feature chain: root `ci` → `ci-basic` → `nix-executor` + `aspen-ci/nix-executor`
+- `.aspen/ci.ncl` is the real CI config; `type = 'nix` for builds, `type = 'shell` for checks
+- `json.JSONDecoder().raw_decode()` for CLI output parsing (tolerates trailing stderr)
+
+**VM Serial Testing:**
+
+- `vm_boot` + `vm_serial` for iterative dogfood without NixOS test framework rebuild
+- Boot milestones: `"Welcome to NixOS"` → `"login:"` → `"root@dogfood"` (auto-login)
+- Disk image from nix store is read-only — `cp` + `chmod +w` before `vm_boot`
+- vm_boot defaults to UEFI — use systemd-boot, not BIOS GRUB
+- Use `"root@dogfood"` as prompt, not `"[#$] "` (ANSI escapes break regex)
 
 ## Patterns That Don't Work
 
-- ~~delegate_task for file creation/edits~~ **FIXED 2026-03-10**: delegate_task now persists file edits correctly
-- Adding fields to public structs with many external consumers (use trait methods instead)
-- `workspace = true` in extracted crate workspace deps with git URLs (pulls entire repo, causes type duplication)
-- Bare EndpointId in `add-learner` (requires JSON with `addrs` array)
+- `path:` flake inputs for local repos (copies target/ dirs — use `git+file://`)
+- Git worktrees in aspen (external sibling-repo path deps break)
+- `workspace = true` for git URL deps (type duplication)
 - Plugin reload on Raft follower (KV scan needs ReadIndex leadership)
+- `nix flake archive` in VMs without internet (hangs forever without timeout)
+- Pre-populating build deps for inner `nix build` (nixpkgs version mismatch)
+- `--out-link` in daemon/systemd contexts (requires writable cwd — use `--no-link` + `--print-out-paths`)
 
 ## Domain Notes
 
-**Architecture:**
+**Key Architecture:**
 
-- Aspen node binary (main repo) + 47 sibling library repos
-- Plugin system: 3-tier dispatch (RequestHandler → ServiceExecutor → WASM)
-- Native handlers: blob, cluster, core-essentials, forge-federation+git-bridge only
-- WASM plugins: coordination, automerge, secrets, service-registry, hooks, kv, sql, dns, forge (30 ops), docs, jobs
-- FoundationDB-inspired unbundled database: stateless layers over KV/blob primitives
-
-**Plugin Architecture:**
-
-- Priority range 900-999 (WASM), 500-899 (native services), 100-499 (core infrastructure)
-- KV prefix namespacing: `__plugin:{name}:` auto-scope or explicit `kv_prefixes` in manifest
-- Host functions: 23 total (kv ops, blob ops, timers, hooks, sql_query, service_execute, random, signing, cluster info, capabilities)
-- API versioning: `PLUGIN_API_VERSION` (currently 0.3.0), `query_host_api_version()`, `host_capabilities()` probe
-- Plugin metrics: per-plugin counters (request_count, success/error, duration, active_requests) via AtomicU64
-- Hot-reload: graceful drain (wait for active_requests=0, bounded 30s timeout), cancel timers, unsubscribe hooks
-
-**Key Types:**
-
-- `ClientRpcRequest` enum: 100+ variants across all services
-- `ClientRpcResponse` enum: feature-flag-sensitive (postcard discriminant mismatch risk)
-- `PluginManifest`: name, version, priority, app_id, permissions, kv_prefixes, dependencies, min_api_version
-- `HandlerRegistry`: uses `ArcSwap` for hot-reload (`.load()` not field access)
-- `PluginHostContext`: permissions, kv_prefixes, timers, subscriptions, service_executors, hook_service
+- Iroh-only networking (no HTTP). ALPN-based protocol routing.
+- Raft consensus for all cluster-wide state. redb unified log + state machine.
+- KV prefix namespacing: `__plugin:{name}:` for WASM, `_sys:` for system, `_ci:` for CI
+- `ClientRpcResponse::Error` must be matched explicitly before catch-all in every match
 
 **Raft + NOT_LEADER Flow:**
 
-- KV scan linearizable read requires leadership (ReadIndex)
-- Write operations on follower → Raft ForwardToLeader → map_raft_write_error() → KeyValueStoreError::NotLeader
-- Handlers check `is_not_leader_error()` → return top-level `ClientRpcResponse::error("NOT_LEADER", ...)`
-- Client detects `e.code == "NOT_LEADER"` → rotates to next bootstrap peer → retries
-- Multi-peer tickets required for automatic failover (up to MAX_BOOTSTRAP_PEERS=16)
+- Write on follower → ForwardToLeader → IrohWriteForwarder → leader via CLIENT_ALPN QUIC
+- Batcher skipped on followers (falls through to forwarding path)
+- Handlers check `is_not_leader_error()` → top-level `Error("NOT_LEADER")`
+- Client detects NOT_LEADER → rotates to next bootstrap peer → retries
+- Multi-peer tickets required for automatic failover (up to 16 peers)
 
-**Git Bridge (git-remote-aspen):**
+**Git Bridge:**
 
-- Incremental push: three-phase protocol (enumerate SHA-1s → probe server → send missing only)
-- `GitBridgeProbeObjects` RPC: read-only (no Raft write), checks `has_sha1()` per hash, bounded 100K max
-- Probe graceful degradation: if server doesn't support it, falls back to full push
-- Fast path: when all objects already exist on server, uses `GitBridgePush` with empty objects + ref update only
-- Adding new RPC variants: add to BOTH `ClientRpcRequest` AND `ClientRpcResponse` enums, update variant_name(), domain(), to_operation(), executor dispatch, HANDLES list, and tests (handles_count + git_bridge_ops)
-- Four repos touched for new RPC: aspen-forge-protocol (response type), aspen-client-api (req/resp variants + auth ops), aspen-rpc (handler + executor + client rate-limit), aspen (git-remote-aspen client)
-- Chunked push: PushStart → PushChunk × N → PushComplete. Session state keyed by random session ID. PushStart stores repo_id + ref_updates; PushChunk imports objects; PushComplete applies refs.
-- Wire-level test pattern: `MinimalForgeServer` — lightweight iroh QUIC server handling only git bridge RPCs with `ForgeNode<InMemoryBlobStore>`. No Raft, no full handler registry. Tests are `#[ignore]` for CI sandboxes.
+- Incremental push: enumerate SHA-1s → probe server → send missing only
+- Chunked push: PushStart → PushChunk × N → PushComplete (session ID keyed)
+- Hash mappings batched via `store_batch` + `SetMulti` (chunked to MAX_SETMULTI_KEYS)
+- Wire-level tests: `MinimalForgeServer` with `#[ignore]` for CI sandboxes
 
-**Observability Pipeline:**
+**Nix Cache Round-Trip:**
 
-- Traces: complete (ingest → KV at `_sys:traces:{trace_id}:{span_id}` → query → CLI)
-- Metrics: complete (ingest → KV at `_sys:metrics:{name}:{ts:020}` + metadata at `_sys:metrics_meta:{name}` → query with aggregation → CLI)
-- Alerts: complete (rules at `_sys:alerts:rule:{name}`, state at `_sys:alerts:state:{name}`, history at `_sys:alerts:history:{name}:{ts:020}`)
-- Alert state machine: Ok → Pending (breached, waiting for_duration) → Firing (breached long enough) → Ok (resolved)
-- `AlertEvaluate` takes explicit `now_us` parameter for FCIS/deterministic testing
-- `MetricQuery` supports aggregation (avg/sum/min/max/count/last) + time-bucketed downsampling via `step_us`
-- Metric TTL: default 24h (`METRIC_DEFAULT_TTL_SECONDS`), max 7d (`METRIC_MAX_TTL_SECONDS`)
-- Periodic alert evaluation: `spawn_alert_evaluator()` runs on leader (skips on follower via NOT_LEADER). Default 60s interval, configurable via `--alert-evaluation-interval` CLI flag (0 = disabled). VM test: `alert-failover-test` proves alerts fire, survive leadership transfer, periodic evaluator picks up on new leader, and alerts resolve when metrics drop.
+- CI build → NAR upload to blob → narinfo in KV → gateway serves → nix substituter fetches
+- NAR hash in nix32 encoding (not hex). Signing uses nix32 NarHash in fingerprint.
+- `--extra-substituters` + `--extra-trusted-public-keys` (extra- prefix appends, doesn't replace)
 
-**Nix Cache Round-Trip (VERIFIED 2026-03-13):**
+**Observability:**
 
-- Full cycle: CI build → NAR upload to blob store → narinfo in KV → gateway serves narinfo+NAR → nix substituter fetches from cache
-- Upload path: NixBuildWorker uploads build outputs after `nix build`. 2 entries for cowsay (main + man pages). CacheEntry has store_path, blob_hash, nar_hash (nix32), references, deriver.
-- Gateway: `aspen-nix-cache-gateway --ticket <ticket> --port 8380 --bind 127.0.0.1`. Serves `/nix-cache-info`, `/{hash}.narinfo`, `/nar/{blob_hash}.nar`.
-- Signing: `ensure_signing_key` generates Ed25519 keypair at first boot, stores public key in KV at `_sys:nix-cache:public-key`. Narinfo `Sig` field uses nix32-encoded NarHash in fingerprint.
-- Substituter: `--extra-substituters http://127.0.0.1:8380 --extra-trusted-public-keys "aspen-cache:..."` passed to `nix build` by NixBuildWorker. Second build confirms cowsay fetched from aspen cache.
-- Narinfo cache race: nix caches negative narinfo responses. Use `--option narinfo-cache-negative-ttl 0` for manual testing. CI builds run fresh so this isn't an issue in practice.
-- Man pages came from cache.nixos.org in second build despite being in aspen cache — nix fetches concurrently from all substituters, nondeterministic which responds first.
+- Metrics: `_sys:metrics:{name}:{ts:020}`. Alert state: Ok → Pending → Firing → Ok
+- `AlertEvaluate` takes explicit `now_us` (FCIS). Periodic evaluator on leader only.
+- Metric TTL: default 24h, max 7d
 
-**Self-Hosting Pipeline (FULLY WORKING 2026-03-06, DEPLOY LOOP 2026-03-12, MULTI-NODE 2026-03-12):**
+**unit2nix Coverage:**
 
-- **Full loop (build + deploy + verify)**: `nix run .#dogfood-local -- full-loop`
-  - Push 27,933 objects → Forge → CI auto-trigger → 4-stage pipeline → deploy CI-built binary → verify
-  - CI-built aspen-node: 99.8MB at `/nix/store/1s3j8r1mqad6ki5wp83ggyhw1m9ghb6b-aspen-0.1.0/bin/aspen-node`
-  - Script-level deploy: stop old node → restart with CI-built binary → cluster healthy
-  - Verify: downloaded binary from blob store, smoke-tested `aspen-node 0.1.0` ✅
-- **3-node dogfood**: `nix build .#dogfood-serial-multinode-vm` — 3 aspen-node processes in single QEMU VM
-  - Scripts at `/etc/dogfood/`: start-cluster.sh, cowsay-test.sh, deploy-test.sh, cluster-status.sh
-  - NixOS VM test (`ab91fc6`) proves DeploymentCoordinator upgrades followers first, leader last
-  - Known gap: leader self-upgrade fails (iroh rejects self-connections)
-- **Full pipeline**: git push → forge gossip → CI auto-trigger → nix build → success
-- **Real dogfood run**: 3-stage pipeline, 5 jobs, ALL pass in 8m48s:
-  - Stage 1 (check): format-check ✅, clippy ✅
-  - Stage 2 (build): build-node ✅, build-cli ✅ (parallel)
-  - Stage 3 (test): nextest-quick ✅ (519/671 tests, 142 skipped by ci-nix profile)
-- **Dogfood script**: `scripts/dogfood-local.sh` (start/stop/push/build/full)
-  - `nix run .#dogfood-local` runs the complete pipeline
-  - Needs: `--enable-workers --enable-ci --ci-auto-trigger`
-- **Native forge ops**: ForgeCreateRepo/ListRepos now native (no WASM needed)
-- **VM test**: `ci-nix-build-test` — pushes a flake to Forge, NixBuildWorker runs `nix build`, verifies success
-- **VM test**: `ci-dogfood-test` — pushes ALL 80+ Aspen crates to Forge, CI auto-triggers 3-stage pipeline (validate → build 2 crates parallel → run tests)
-- **Feature chain for nix executor**: root `ci` → `ci-basic` → `nix-executor` (marker) + `aspen-ci/nix-executor`
-- **Feature chain for snix upload**: root `snix` → `aspen-ci/nix-executor-snix` → `aspen-ci-executor-nix/snix`
-- `.aspen/ci.ncl` is the real CI config for Aspen — uses `type = 'nix` for builds, `type = 'shell` for format checks
-- `.aspen/` is gitignored except `.aspen/ci.ncl` (via `!.aspen/ci.ncl` override)
-
-**unit2nix Build System (all three binaries via per-crate Nix builds):**
-
-- `nix build .#aspen-node` → 63MB (658 crates, features: ci,docs,hooks,shell-worker,automerge,secrets,git-bridge)
-- `nix build .#aspen-cli` → 21MB (472 crates, features: forge,ci,secrets,automerge)
-- `nix build .#git-remote-aspen` → 20MB (474 crates, features: git-bridge)
-- Three separate build plans: `build-plan.json`, `build-plan-cli.json`, `build-plan-git-remote.json`
-- Regenerate: `nix run .#generate-build-plan`, `nix run .#generate-build-plan-cli`, `nix run .#generate-build-plan-git-remote`
-- Shared `u2nCrateOverrides` for all three plans (description quoting, build.rs env vars, ring)
-- unit2nix input changed from local path to `github:brittonr/unit2nix` for portability
-- Crane builds preserved as `crane-{aspen-node,aspen-cli,git-remote-aspen}` for VM tests
-- ~~Per-crate test via unit2nix NOT YET WORKING~~ **FIXED upstream 2026-03-06**: unit2nix `--workspace` captures all workspace dev-deps. **ADOPTED 2026-03-12**: Switched to auto mode (IFD) — no checked-in build-plan JSON files. Three `buildFromUnitGraphAuto` calls replace manual `buildFromUnitGraph` + 73K lines of JSON. External optional deps (aspen-wasm-plugin, aspen-dns) stripped from IFD source via python script. Requires `noLocked = true` since Cargo.lock has stale entries from stripped deps. Per-crate `test.check.<name>` now available via `--workspace` and **wired into flake checks** (commit 969ab8087). 68 of 80 crates have `checks.x86_64-linux.test-<name>` entries; 12 excluded (stubs, sandbox-incompatible, CARGO_BIN_EXE, vendored). Crane nextest still runs full workspace as a separate check.
-
-**Pre-Existing Issues (not blockers):**
-
-- aspen-nix-cache-gateway: **gateway itself compiles fine** (rewritten to plain HTTP, no h3-iroh). The actual h3-iroh 0.96 vs iroh 0.95.1 mismatch is in `aspen-ci-executor-shell`'s `nix-cache-proxy` feature (never activated from root). Dead code — h3-iroh workspace dep + nix-cache-proxy feature could be cleaned up.
-- shellcheck warnings on scripts/ (not from our changes)
-
-**Testing:**
-
-- 1,781+ unit tests across workspace + sibling repos
-- 18 NixOS VM integration tests (10 non-plugin + 8 WASM plugin tests)
-- 42 aspen-wasm-plugin tests (34 unit + 8 KVM integration via `--run-ignored all --features testing`)
-- 28 aspen-plugins tests (16 signing/tooling + 12 cdylib smoke tests)
-- Coverage: ~48% workspace average (aspen-client 57%, aspen-blob 53%, aspen-transport 65%)
-
-**CI Worker Cache Integration:**
-
-- `RpcCacheIndex` in aspen-client implements `CacheIndex` trait via RPC (CacheQuery/CacheStats)
-- Feature-gated: `aspen-client/cache-index` (pulls aspen-cache + async-trait)
-- `ci-basic` feature activates `aspen-client/cache-index` automatically
-- Worker fetches cache public key via `SecretsNixCacheGetPublicKey` RPC at startup
-- Gateway selection: Ping probe → first responder (fallback: first bootstrap peer)
-- Cache substituter auto-enabled when public key available, gracefully disabled otherwise
-- Env vars: `ASPEN_CACHE_NAME` (default: "aspen-cache"), `ASPEN_TRANSIT_MOUNT` (default: "transit")
-
-**Cross-Repo Dependency Patterns:**
-
-- aspen-rpc → aspen-ci, aspen-nix, aspen-coordination, aspen-forge, aspen-secrets, aspen-docs, aspen-jobs, aspen-hooks (ServiceExecutor impls)
-- aspen-cluster → aspen-cluster-bridges, aspen-sharding, aspen-federation (optional features)
-- aspen-client → aspen-core, aspen-client-api, aspen-auth, aspen-blob, aspen-transport (all via workspace deps)
-- All plugin crates → aspen-plugin-api, aspen-wasm-guest-sdk (git deps)
-
-| 2026-03-03 | self | systemd-run `--property=StandardError=file:/tmp/foo.log` buffers and doesn't capture tracing output from Rust binaries | Use `bash -c 'export PATH=...; exec binary 2>/tmp/foo.log'` for log capture, or use `journalctl -u <unit>` to read systemd journal |
-| 2026-03-03 | self | Multiple `--property=Environment=VAR=val` in systemd-run — later values overwrite earlier ones | Use `bash -c 'export VAR1=val1 VAR2=val2; exec cmd'` pattern instead of multiple `--setenv` or `--property=Environment` |
-| 2026-03-03 | self | aspen-node starts but KV operations return NOT_INITIALIZED — cluster not auto-initialized | Must call `InitCluster` RPC explicitly before KV ops work. `FuseSyncClient::init_cluster()` added for this. The `cluster ticket generated` log is NOT proof of initialization — it just means the ticket was printed. |
-| 2026-03-03 | self | CH guest VirtioFS mount blocks NixOS boot when backend is slow (Raft cluster) | Every VirtioFS op is a network roundtrip through iroh QUIC to Raft leader. Guest boot with VirtioFS mount can take 30-60s. Increase curl timeouts to 180s for Raft-backed VirtioFS tests. |
-| 2026-03-03 | self | subagent created chunking.rs that called private methods on AspenFs | When designing a module that interacts with a struct's internals, make the required methods `pub(crate)` upfront, or design the API so the module only uses public methods. |
-| 2026-03-03 | self | VirtioFS+net test: `aspen-cluster-virtiofs-server` exits 1 because test called `cluster init` before the server, and server's `init_cluster()` returns `Ok(false)` on already-initialized clusters | Don't call `cluster init` via CLI before starting `aspen-cluster-virtiofs-server` — the server does its own `init_cluster()` and exits on `Ok(false)`. Let the server initialize the cluster. |
-| 2026-03-03 | self | `pureBin` build failed: new workspace member `aspen-contacts` not in `Cargo.lock` → vendoring fails with "snafu not found in workspace.dependencies" | Always run `cargo generate-lockfile` after adding new workspace members. Check `grep <crate-name> Cargo.lock` before committing. |
-| 2026-03-03 | self | `required_app()` match non-exhaustive when `ci`/`automerge` features are OFF — new variants (Contacts, Calendar) always present but feature-gated match arms at the end get removed | Add `#[allow(unreachable_patterns)] _ => None` catch-all at end of `required_app()` to handle any combination of feature flags. |
-| 2026-03-03 | self | FlushTimer needs AspenFs for KV writes but AspenFs owns the WriteBuffer — circular reference | Use `clone_for_kv_access()` to create a lightweight AspenFs clone that shares the Arc<KvBackend> but has fresh empty cache/buffer/prefetcher. Timer holds the clone, shares Arc<WriteBuffer> with the primary AspenFs. |
-| 2026-03-03 | self | Planned complex KvOps trait refactor across chunking/writeback when a simpler clone_for_kv_access approach works | Before designing a trait abstraction, check if a simpler structural pattern (clone with shared backend) solves the problem. Traits are better when you have genuinely different implementations; clones work when you just need to break a reference cycle. |
-| 2026-03-03 | self | `generate_id("contact", &contact.uid)` produced same ID for all contacts without UID — uid defaults to "" | When generating deterministic IDs from optional/empty fields, always include a disambiguator (parent_id + display_name + now_ms) to avoid collisions. Never hash only the empty string. |
-| 2026-03-03 | self | iCal test events used raw Unix-ms numbers as DTSTART (e.g. `DTSTART:1700001000000`) — parser expects `YYYYMMDDTHHMMSS` format and returned 0 | Use proper iCal datetime format: `20231114T090000Z` not raw milliseconds. Create `ical_dt(offset_hours)` helper for tests that computes valid iCal datetimes. |
-| 2026-03-04 | self | `AspenClient` doesn't implement `Clone` — can't share it across gRPC request handlers | For keyservice: connect a fresh `TransitClient` per-request via `TransitClient::connect()`. For other patterns, use `TransitClient::from_client()` only when you own the `AspenClient`. |
-| 2026-03-04 | self | Clippy `enum_variant_names` error on tonic-generated proto code (all variants end in `Key`) | Add `#[allow(clippy::enum_variant_names)]` on the proto include module. Generated code is upstream SOPS proto — can't rename variants. |
-| 2026-03-04 | self | SOPS format modules had crypto functions (encrypt_sops_value, decrypt_sops_value) duplicated in toml.rs | Extract format-agnostic crypto to `format/common.rs`, re-export from format modules for backwards compat. |
-| 2026-03-04 | self | Transit `datakey` returns base64-encoded plaintext, but `decrypt` returns raw binary bytes → comparing through JSON fails (binary gets mangled) | Don't compare binary round-trips through JSON CLI. The real TransitClient (Rust, postcard binary protocol) handles binary correctly. VM test approach: verify `decrypt` succeeds + second datakey is unique, instead of byte comparison. |
-| 2026-03-04 | self | `SopsMetadata` (config.rs, no feature gate) referenced `AspenTransitRecipient` (metadata.rs, behind `sops` feature) → compile error without sops feature | Feature-gate the `aspen_transit` field on `SopsMetadata` with `#[cfg(feature = "sops")]`. Also gate `TransitClient` import and all Transit-aware functions in decryptor.rs. |
-| 2026-03-05 | self | `IrohBlobService<S>` had `S: Clone` bound but store is `Arc<S>` internally — Clone bound unnecessary, prevented `IrohBlobStore` (non-Clone) from working | Remove unnecessary Clone bounds when struct already wraps in Arc. Arc provides Clone regardless of inner type. |
-| 2026-03-05 | self | `RaftDirectoryService<K>` had implicit `K: Sized` — couldn't use `Arc<dyn KeyValueStore>` since `dyn Trait` is unsized | Add `K: ?Sized` to struct, Clone impl, and trait impls. Split `new(kv: K)` (Sized only) from `from_arc(kv: Arc<K>)` (?Sized). |
-| 2026-03-05 | self | Nix store path hash must be exactly 32 chars of nix32 encoding (chars: 0-9, a-d, f-n, p-s, v-z) | Use known-good test store paths like `00bgd045z0d4icpbc2yyz4gx48ak44la-name`. Invalid chars (e/o/t/u) or wrong length → `InvalidHashEncoding`/`MissingDash`. |
-| 2026-03-05 | self | Proposed creating `aspen-snix-backend` crate — entire implementation already existed in `aspen-snix` (2,938 LOC) + `aspen-castore` (~800 LOC) | Always audit existing crates before proposing new ones. `grep -rn 'BlobService\|DirectoryService\|PathInfoService' crates/` would have found everything. |
-| 2026-03-05 | self | `AspenClient` doesn't impl Clone — can't share one between `RpcBlobStore` (takes owned) and `ClientKvAdapter` (takes Arc) | Connect two separate `AspenClient` instances: one for blob ops, one for KV ops. They share the same iroh discovery and will find the same cluster peers. |
-| 2026-03-05 | self | Pulling in `aspen-net` just for `ClientKvAdapter` brings massive dep tree (iroh-proxy-utils, proxy, DNS, etc.) | Copy the ~170-line `ClientKvAdapter` into the consuming crate. It's self-contained (only needs aspen-client, aspen-client-api, aspen-kv-types, aspen-traits). |
-| 2026-03-05 | self | Created duplicate `ForgeConfigFetcher` and `OrchestratorPipelineStarter` in `trigger/forge_integration.rs` when `adapters.rs` already had complete implementations used by `lib.rs` and node binary | Before implementing trait impls, check `lib.rs` pub exports and grep for existing implementations. The adapter module had been there all along. |
-| 2026-03-05 | self | Used `--features ci-basic` for binary check but `#[cfg(feature = "ci")]` gates checked root crate `ci` feature (which includes ci-basic). Binary compiled clean with `ci-basic` but fields were actually missing. | Root crate feature hierarchy: `ci` → `ci-basic` → concrete deps. The `#[cfg(feature = "ci")]` checks root-level feature, not transitive. Use `--features ci` not `ci-basic` for binary checks. |
-| 2026-03-05 | self | `CiJobInfo` struct uses `id` field not `job_id`, and requires `started_at_ms`/`ended_at_ms`/`error` fields | Always check the actual struct definition before constructing it. Copy the field pattern from existing code nearby (e.g., `handle_get_status`). |
-| 2026-03-06 | self | `nix build .#aspen-node` (unit2nix/buildRustCrate) fails when crate description contains embedded double quotes — `export CARGO_PKG_DESCRIPTION="...\"best effort\"..."` breaks bash | Add `defaultCrateOverrides` entries to replace `"` with `'` in descriptions: `crateName = _: {description = builtins.replaceStrings [''"''] ["'"] (_.description or "");};`. Affected crates: base16ct, base64ct, cobs, leb128, openssl-probe, ssh-key, syn-mid, zerocopy. |
-| 2026-03-06 | self | `build-plan.json` (unit2nix) was stale — missing `aspen-crypto` and other workspace crates added since last regen | Always run `nix run .#generate-build-plan` after adding workspace members or changing features. The build plan is NOT auto-updated. |
-| 2026-03-06 | self | unit2nix `--include-dev` with `--bin aspen-node` only captures dev-deps for the ROOT crate, not workspace members — `aspen-hlc` tests failed with missing `bincode` | Per-crate test support requires separate build plans per crate (or `--workspace` mode). Don't use `--include-dev` with `--bin`. |
-| 2026-03-06 | self | unit2nix `--members` flag requires the member name to exist in the unit graph — `aspen-cli` wasn't in `--bin aspen-node` graph since it's a separate package | Use separate build plans for binaries in different packages. Each `--bin`/`-p` invocation creates its own unit graph. Can't merge. |
-| 2026-03-06 | self | Nix nextest checks were stubs because they depended on `hasExternalRepos` (needs 3 sibling repos + `--impure`). Created `ciSrc` which stubs only `aspen-wasm-plugin` (optional, plugins-rpc only) and uses `fullRawSrc` for all workspace crates. | For CI checks that don't need plugins-rpc: create a source variant that stubs the optional external dep instead of requiring the real repo. This avoids the `--impure` requirement entirely. |
-| 2026-03-06 | self | Nix sandbox tmpfs disk full (98% > 95% threshold) kills redb tests. nextest `test()` filter matches test function names, `binary()` matches binary names, but `binary()` errors if no binary matches the regex | Use `test(/test_redb/)` to exclude redb-writing tests by function name pattern. Don't use `binary()` for patterns that may not exist in all builds. Created `ci-nix` nextest profile for Nix sandbox. |
-| 2026-03-06 | self | `aspen-castore`, `aspen-snix`, `aspen-snix-bridge` have unconditional `snix_castore`/`snix_store` deps — can't compile with snix stubs | **FIXED**: snix deps now vendored as real git deps via `overrideVendorGitCheckout` with `snix-src` flake input. CI clippy runs `--workspace --exclude aspen-nix-cache-gateway` only — all 3 snix crates (4,511 LOC) are linted. |
-| 2026-03-07 | self | VM workers registered for `shell_command` job type, but shell jobs use host checkout path (`/tmp/ci-checkout-{run_id}`) as working_dir — VMs can't access host paths, so `nix fmt` runs in empty `/tmp/workspaces/{job_id}` and fails with "could not find a flake.nix file" | Remove `shell_command` from VM worker job types. Only route `ci_nix_build` and `ci_vm` to VMs. Local workers handle shell jobs since they run on the host with access to checkout dirs. |
-| 2026-03-07 | self | `/tmp/aspen-ci-network-configured` marker file persists across reboots but nftables NAT rules don't — preflight check says "NAT configured" but VMs can't reach internet for crate downloads | Check actual nftables/iptables rules instead of marker file: `nft list table ip aspen-ci-nat` or `iptables -t nat -C`. Run `sudo nix run .#setup-ci-network` to restore NAT after reboot. |
-| 2026-03-07 | self | unit2nix staleness check: `lib.fileset.toSource` copies Cargo.lock to nix store with same content but unit2nix computes different hash (a8fc9fe7 vs 26ffd54e for identical content) | Add `skipStalenessCheck = true` to all `buildFromUnitGraph` calls. The build plans ARE current — it's a false positive from the fileset source hashing. |
-| 2026-03-06 | self | CI streaming logs show no output during builds: (1) `log_bridge` in NixBuildWorker only flushes at 8KB threshold with no periodic timer — sparse nix output stays buffered entire build; (2) `handle_get_job_logs` uses `start_key` as scan prefix, matching only ONE chunk per request since `0000000001` is not a prefix of `0000000002`; (3) CLI `ci logs --follow` exits immediately on `was_found=false` even in follow mode | (1) Add `tokio::select!` with 500ms periodic flush timer to `log_bridge` (matching SpawnedLogWriter design); (2) Use base prefix + `continuation_token` for pagination instead of start_key-as-prefix; (3) In follow mode, retry with 1s sleep instead of exit(1) when no logs found yet. |
-| 2026-03-07 | self | `ci logs` always returned "not found" even for completed jobs with 48+ log chunks in KV. Root cause: `start_pipeline_build_updated_context` created a NEW `PipelineContext` with `run_id: String::new()`, then `update_run_context` OVERWROTE the run's context (which had the correct run_id). All subsequent job payloads got empty `run_id` → log chunks written as `_ci:logs::<job_id>:<chunk>` (double colon = empty run_id) → handler queried with real run_id and found nothing. | Pass `run_id` from the already-created run into `start_pipeline_build_updated_context`. Never create a PipelineContext with placeholder `run_id` after the run has been created. The 3 previously-documented log streaming fixes (periodic flush, continuation_token, follow retry) were already correctly implemented — this was the actual blocking bug. |
-| 2026-03-08 | self | `VmPool::acquire()` used `std::mem::forget(permit)` for the semaphore permit — if VM dropped without `destroy_vm()` (panic, task cancellation), permit leaked permanently, silently reducing pool capacity | Store `OwnedSemaphorePermit` in `ManagedCiVm.pool_permit` field. Permit is released automatically on VM drop. All permit-acquiring paths (initialize, maintain, acquire) now store permits in VMs. |
-| 2026-03-08 | self | `VmState::Error` existed but nothing ever transitioned to it — VMs failing during `start()` were left in Creating/Booting state, occupying pool slots forever | Wrapped `start()` inner logic in `start_inner()` with error handler that transitions to `Error`, kills processes, and cleans sockets. `shutdown()` now handles Error state (skips API call since CH may be dead). |
-| 2026-03-08 | self | vsock_server sent duplicate `AgentMessage::Complete` — once from log channel stream, once from `exec_handle.await` result | Added `completion_sent` flag. Second send only fires if log channel didn't already send Complete. |
-| 2026-03-08 | self | `is_nix_command()` matched sh/bash/zsh → every shell job spawned `nix-store --load-db` subprocess unnecessarily | Made `load_nix_db_dump()` idempotent (tracks loaded workspaces in static HashSet), call unconditionally from executor since it fast-exits when dump file absent. Removed shell command matching. |
-| 2026-03-08 | self | Working dir validation used `starts_with` without canonicalize — `/workspace/../../etc/shadow` would pass prefix check | Added `path.canonicalize()` before prefix check. Existence check moved first since canonicalize requires the path to exist. |
-| 2026-03-08 | self | VM workspace cleanup did per-key `spawn_blocking` + await in a loop — O(n) thread spawns for n keys | Batched entire scan+delete loop into single `spawn_blocking` call. |
-| 2026-03-08 | self | `VmPool::status()` reported uncapped `config.max_vms` but semaphore used `min(max_vms, MAX_CI_VMS_PER_NODE)` — status showed inconsistent numbers | Changed `status()` to report `effective_max = config.max_vms.min(MAX_CI_VMS_PER_NODE)`. |
-
-| 2026-03-08 | self | Periodic alert evaluation now exists — `spawn_alert_evaluator()` in `aspen-core-essentials-handler`. Runs on leader only (follower nodes skip via NOT_LEADER from KV scan). Default 60s interval, configurable via `--alert-evaluation-interval` CLI flag (0 = disabled). VM test: `alert-failover-test` proves alerts survive leadership transfer. |
-| 2026-03-08 | self | `DeterministicKeyValueStore.read()` returns `Err(NotFound)` for missing keys (not `Ok(ReadResult{kv:None})`). Tests reading non-existent keys should `assert!(result.is_err())` not `assert!(result.kv.is_none())`. |
-| 2026-03-08 | self | MetricDataPoint requires `name` and `metric_type` fields — test data with only `timestamp_us`, `value`, `labels` won't deserialize correctly and alert evaluation silently returns 0 matching data points |
-| 2026-03-08 | self | `RequestHandler::handle()` signature is `handle(request, ctx)` not `handle(ctx, request)` — ctx is the second parameter |
-| 2026-03-08 | self | ciSrc stubbed snix-castore/snix-store/nix-compat/nix-compat-derive → aspen-castore, aspen-snix, aspen-snix-bridge excluded from CI clippy (4,500 LOC unlinked) | **FIXED**: Implemented the vendoring approach — snix as real git deps via `overrideVendorGitCheckout` + `snix-src` flake input + `ensureGitCheckoutLock`. Selective Cargo.lock stripping keeps snix.dev + tvlfyi source lines. All 3 crates now linted in CI. |
-| 2026-03-08 | self | Cargo nightly "requires a lock file" error when git dep is replaced with vendored directory source | `ensureGitCheckoutLock` adds Cargo.lock to each subcrate dir. Also needed for multi-crate git checkouts (snix has 6 crates in one repo). |
-| 2026-03-08 | self | crane `buildDepsOnly` content-addresses dummy source from Cargo.toml/Cargo.lock — changing only the ciSrc bash script doesn't change the deps drv hash | Add explicit `cargoLock = ciSrc + "/aspen/Cargo.lock"` to force the deps drv to depend on the ciSrc output. Without this, buildDepsOnly reuses cached deps from old ciSrc. |
-| 2026-03-08 | self | `nix build` kept using old failed deps drv despite flake.nix changes — eval-cache false and GC didn't help | The deps drv hash was deterministic and correct — crane's content-addressing produced the same hash. The fix was making `cargoLock` depend on `ciSrc` output, changing the deps drv inputs. |
-| 2026-03-08 | self | wu-manber (from github.com/tvlfyi) is a transitive dep of snix-castore — its git source line must survive Cargo.lock stripping | Use selective sed: `/^source = "git+/{ /snix\.dev/b; /tvlfyi/b; d }` — keeps snix.dev and tvlfyi lines, strips everything else. |
-| 2026-03-08 | self | `LocalExecutorPayload` didn't have `run_id` field — shell jobs couldn't stream logs to KV. Integration test also constructed `LocalExecutorPayload` directly and needed the new field. | Always grep for struct literal construction sites when adding fields: `rg "StructName {" crates/ --type rust` |
-| 2026-03-08 | self | `LogMessage` enum has 4 variants (Stdout, Stderr, Complete, Heartbeat) not just 2 — KV log bridge match needed to handle all cases | Always check enum definition with `rg "enum TypeName" src/` before writing match arms. Don't assume 2 variants. |
-| 2026-03-08 | self | `LocalExecutorWorker` integration test in `crates/aspen-ci/tests/` also asserted old job_types — needed updating alongside unit test in `crates/aspen-ci-executor-shell/` | When changing behavior, grep test files across ALL crates: `rg "function_or_type" crates/*/tests/` |
-| 2026-03-08 | self | `snix-src` flake input is `flake = false` (tarball, not a flake) — it doesn't expose `.url`. Extract rev from `flake.lock` with `builtins.fromJSON (builtins.readFile ./flake.lock)` instead. | Non-flake inputs have no `.url`/.`rev` attrs. Always use flake.lock for rev info. |
-| 2026-03-08 | self | Nix `writeText` with nested `''...''` strings causes escaping hell. Use simple `"..."` double-quoted strings for inner content like shell args. | Avoid nested `''` strings in `writeText`. Use `"..."` for inner strings, or separate the file. |
-| 2026-03-08 | self | `trigger/service.rs` is behind `#[cfg(feature = "nickel")]` in `trigger/mod.rs`. Tests require `--features nickel` to compile. | Check module-level cfg gates before wondering why tests aren't running. Use `cargo nextest list -p <crate> --features <feat>` to verify. |
-| 2026-03-08 | self | `PublicKey::from_bytes(&[2u8; 32])` fails — Ed25519 keys need valid curve points. Use `SecretKey::generate(&mut rand::rng()).public()` instead. | Never construct `PublicKey` from arbitrary bytes in tests. Generate from a secret key. |
-| 2026-03-08 | self | `WriteRequest` has a `command: WriteCommand` field, not `key`/`value`. Use `WriteCommand::Set { key, value }` pattern match. `WriteResult` and `DeleteResult` also have different fields than expected. | Always check actual struct definitions with `rg "pub struct TypeName" crates/ -A 10` before writing mock implementations. |
-| 2026-03-08 | self | `KeyValueStore` trait uses `#[async_trait]` — implementations must also use `#[async_trait::async_trait]`. | Check trait definition for `#[async_trait]` annotation before implementing. |
-| 2026-03-09 | self | VM dogfood test failed: `nix build` requires `experimental-features = ["nix-command" "flakes"]` in NixOS config. ci-nix-build.nix had it, ci-dogfood.nix didn't. | When using `nix build` (nix-command) in NixOS VM tests, always add `nix.settings.experimental-features = ["nix-command" "flakes"]` and `nix.settings.sandbox = false`. Copy from working tests (ci-nix-build.nix). |
-| 2026-03-09 | self | `systemd-run --unit=ci-log-stream bash -c "aspen-cli ..."` failed with "command not found" — transient systemd units don't inherit `environment.systemPackages` PATH | Use absolute paths in `systemd-run`: `/run/current-system/sw/bin/aspen-cli`. Never rely on PATH inside transient units in NixOS VM tests. |
-| 2026-03-09 | self | Stage-level `status` in `CiGetStatusResponse` always showed "pending" even when all jobs succeeded — `update_stage_job_info()` updated job statuses but never recomputed the aggregate stage status | Added `compute_stage_status()` that derives stage status from job statuses (any failed → failed, all success → success, any running → running, else pending). Called after updating job statuses in each stage. |
-| 2026-03-09 | self | ci-nix-build test "verify build output" subttest searched `final_status.get("jobs", [])` but API nests jobs inside `stages[].jobs[]` — job lookup always returned empty | Always traverse the actual response structure. CI status API returns stages→jobs hierarchy, not flat jobs list. |
-| 2026-03-09 | self | `dequeue_excluding_groups` logged at INFO with 8 lines/second per idle worker (2 workers × 4 priority levels) — drowned real test output | Changed to DEBUG. Queue scanning for empty queues is noise at INFO. Only log at INFO when items are actually found or dequeued. |
-| 2026-03-09 | self | NixOS VM test subtests used WARNING logs + no-op codepaths instead of hard assertions for expected behavior — "log stream captured output" silently passed with zero output, "ci logs diagnostic" passed with 0/4 jobs having logs | Replace all WARNING-only soft checks with `assert` when the behavior is expected to work. Soft checks hide real bugs. Reserve WARNINGs for genuinely optional/degraded behavior. |
-| 2026-03-09 | self | WASM plugin guest output buffer overflow: hyperlight-wasm defaults to 16KB (`0x4000`) for guest return values. CI job results (~19KB JSON) exceeded this, causing "Required: 19300, Available: 16376" error | Set `with_guest_output_buffer_size(DEFAULT_WASM_GUEST_OUTPUT_BUFFER_SIZE)` on `SandboxBuilder` — both production (`registry.rs`) and test support (`lib.rs`). Default now 256KB. Always configure BOTH input AND output buffer sizes when creating hyperlight sandboxes. |
-| 2026-03-09 | self | NixOS VM test `nix build` inside VM failed with "No space left on device" when downloading rustc (~1.6GB). Root cause: `virtualisation.writableStoreUseTmpfs = true` (default) limits writable nix store overlay to ~50% of RAM (2GB with 4096MB). Increasing diskSize to 40GB had no effect because the overlay was on tmpfs, not disk. | Set `virtualisation.writableStoreUseTmpfs = false` for VM tests that run `nix build` with large build deps. This uses disk-backed storage instead of tmpfs for the writable store overlay. Combined with sufficient `diskSize` (20GB+), allows downloading full Rust toolchain. |
-| 2026-03-09 | self | Tried to pre-populate vanilla nixpkgs rustc in VM store via `symlinkJoin` of `vanillaPkgs.{stdenv,rustc}`. The bundle contained rustc-1.91.1 while the inner `nix build` resolved to rustc-1.93.0. Root cause: Aspen flake's `nixpkgs` input (rev `35bdbbce4d6e`) differs from what the VM's `nix.registry.nixpkgs.flake` resolves to at eval time. | Don't try to pre-populate build deps for inner `nix build` — the nixpkgs version mismatch between `import nixpkgsFlake {}` and the inner flake's `inputs.nixpkgs` evaluation makes it unreliable. Instead, ensure the VM has enough writable store space (writableStoreUseTmpfs=false + large diskSize) and let nix download from cache.nixos.org. |
-| 2026-03-09 | self | `cargo-check` stage used `stdenv.mkDerivation` with raw `cargo check` — fails in nix sandbox when crate has external deps because crates.io HTTPS is blocked | Use `rustPlatform.buildRustPackage` for ALL cargo stages, even check-only ones. buildRustPackage handles vendoring. Only zero-dep crates (like aspen-constants alone) can use raw stdenv+cargo. |
-| 2026-03-09 | self | `ReadRequest` has a `consistency` field, `ScanRequest.limit_results` is `Option<u32>` not `u32`, `KeyValueWithRevision` has `version`/`create_revision`/`mod_revision` not `revision` | Always check actual struct definitions with `rg "pub struct TypeName" crates/ -A 10` before writing code that constructs them. Struct field names drift from what you remember. |
-| 2026-03-09 | self | New nix test files not visible to nix eval until `git add` — flake source filtering excludes untracked files | Always `git add` new .nix files and fixture files before running `nix eval` or `nix build`. |
-| 2026-03-09 | self | Wrote main.rs for 13-crate workspace with wrong struct fields on 7 different types (60 compile errors) — guessed field names instead of checking definitions | ALWAYS `rg "pub struct TypeName" crates/ -A 20` before constructing any struct. Affected: PipelineConfig, StageConfig, JobConfig, ForgeRepoInfo, ForgeTreeEntry, ForgeCommitInfo, JobDetails, JobQueueStatsResultResponse, ClusterNode, ClusterState, ClusterMetrics, HookHandlerConfig, HooksConfig. |
-| 2026-03-10 | self | delegate_task file edits now work — pi bug fixed. 6 previous incidents (2026-02-25 through 2026-03-06) were all the same pi-level bug, not user error | delegate_task is now safe for both read-only AND write operations. Use for larger autonomous tasks. Direct edits still preferred for surgical single-line changes. |
-| 2026-03-10 | self | ci-dogfood-test "run CI-built cowsay" took `output_paths[0]` which was `cowsay-3.8.4-man` (man pages), not the binary output `cowsay-3.8.4` | Nix multi-output packages return ALL outputs in `output_paths`. Iterate through paths and probe for the expected binary (`test -x {p}/bin/{name}`) instead of blindly taking `paths[0]`. |
-
-**VM Serial Testing (from Redox repo patterns):**
-
-Pi's `vm_boot` + `vm_serial` tools can run dogfood tests without NixOS VM test framework:
-
-- `vm_boot` starts QEMU headless with serial console
-- `vm_serial` sends commands and reads output (expect-style pattern matching)
-- `vm_screenshot` for GUI debugging
-- `vm_sendkey` for keyboard input to GUI
-
-Redox repo test protocol (reusable for Aspen):
-
-- Emit structured markers: `FUNC_TEST:<name>:PASS`, `FUNC_TEST:<name>:FAIL:<reason>`, `FUNC_TEST:<name>:SKIP`
-- Bracket with `FUNC_TESTS_START` / `FUNC_TESTS_COMPLETE`
-- Use `vm_serial expect:` to wait for markers: `"Boot Complete"`, `"[#$] "` (shell prompt)
-- File-based polling (`serial file=path` + grep) is more reliable than stdin piping for non-interactive OSes
-- For graphical VMs: serial READ always works for boot log monitoring, serial INPUT may not work (use `vm_sendkey` instead)
-
-Boot milestones for QEMU serial (NixOS):
-
-- `"Welcome to NixOS"` — systemd started
-- `"login:"` — getty ready
-- `"[#$] "` — root shell prompt (if autologin configured)
-
-Dogfood-via-serial approach (alternative to NixOS VM test framework):
-
-1. Build NixOS image with aspen-node, aspen-cli, git-remote-aspen pre-installed
-2. `vm_boot image=<path>` with serial enabled
-3. `vm_serial expect:"login:"` → wait for boot
-4. `vm_serial command:"aspen-node ..." prompt:"[#$] "` → start cluster
-5. `vm_serial command:"aspen-cli cluster health"` → verify
-6. Push source, trigger CI, poll status — all via `vm_serial command:`
-7. Parse structured output from serial for pass/fail
-
-Advantage over NixOS VM test framework: iterative (no full rebuild), debuggable (screenshot + serial), runs from any pi session.
-Disadvantage: no multi-machine orchestration (NixOS test has `nodes.node1`, `nodes.node2` etc.).
-
-**Confirmed working (2026-03-10)**: Full cowsay dogfood via vm_serial:
-
-- `nix build .#dogfood-serial-vm` → 2.4GB qcow2 with aspen-node+cli+git-remote+nix
-- `cp result/disk.qcow2 /tmp/dogfood-serial.qcow2 && chmod +w /tmp/dogfood-serial.qcow2`
-- `vm_boot image=/tmp/dogfood-serial.qcow2 format=qcow2 memory=4096M cpus=2`
-- `vm_serial expect:"Welcome to NixOS"` then `vm_serial expect:"root@dogfood"` (auto-login)
-- `vm_serial command:"/etc/dogfood/start-node.sh"` → cluster ready in ~10s
-- `vm_serial command:"/etc/dogfood/cowsay-test.sh 2>&1"` → full forge→CI→nix build pipeline
-- Pipeline completed, `cowsay "Built by Aspen CI via vm_serial!"` worked
-
-| 2026-03-10 | self | `Path::starts_with("/tmp/ci-workspace-")` in validation.rs and agent/executor.rs uses component-level matching, always returns false for `/tmp/ci-workspace-abc` (no path component equals `ci-workspace-abc`) | Convert to string first: `path.to_string_lossy().starts_with("/tmp/ci-workspace-")`. Rust's `Path::starts_with` matches whole components, not prefix substrings. |
-| 2026-03-10 | self | CI inner flake used `nix build -L .#default` but `builtins.storePath` requires `--impure` evaluation — sandbox error | Add `"--impure"` to args in the CI config NCL file when the inner flake uses `builtins.storePath`. |
-| 2026-03-10 | self | systemd service ReadWritePaths referenced `/workspace` but directory didn't exist → NAMESPACE error | Add `systemd.tmpfiles.rules` to create workspace directories before service start when `ciLocalExecutor = true`. |
-| 2026-03-10 | self | `default_visibility_timeout_secs` in WorkerService config was 300s (5 min) — nix builds taking 8+ minutes caused receipt handle expiry → ack failed → pipeline stuck "running" forever | The queue visibility timeout must exceed the longest expected job duration. Increased from 300s to 3600s (1 hour). The `aspen_jobs::WorkerConfig::default()` already used 3600s but the WorkerService config used 300s — a dangerous inconsistency. |
-| 2026-03-10 | self | Worker ack failure (receipt handle mismatch) silently records success at the worker level, but the job stays Running in the pipeline — pipeline never completes | **FIXED**: `ack_job()` now proceeds to `mark_completed()` regardless of queue ack result (lifecycle.rs:269-278). Regression tests: `test_ack_job_with_stale_receipt_handle_still_completes`, `test_nack_job_with_stale_receipt_handle_still_updates_status`. Visibility timeout also increased to 3600s. |
-
-| 2026-03-11 | self | `aspen-ci` doesn't depend on `aspen-client-api` — can't use `ClientRpcRequest`/`ClientRpcResponse` directly in the deploy executor | Use a trait (`DeployDispatcher`) with plain structs instead of RPC types. The handler layer bridges the trait to the actual RPC types. |
-| 2026-03-11 | self | `ReadRequest` requires `consistency` field (not just `key`) — use `ReadRequest::new(key)` constructor | Always use `::new()` constructors for KV request types instead of struct literals. |
-| 2026-03-11 | self | `JobId` is a newtype with no `From<String>` — use `serde_json::from_value(json!("id"))` in tests | Check if newtype has `From` impl before using `::from()`. Serde deserialization works as a fallback. |
-| 2026-03-11 | self | Adding fields to `JobConfig` (aspen-ci-core) broke 5 construction sites across workspace | When adding fields to widely-used config structs, grep `rg 'StructName\s*\{' --type rust -l` to find all construction sites. |
-
-Key gotchas:
-
-- Disk image is read-only in nix store — must `cp` + `chmod +w` before `vm_boot`
-- vm_boot defaults to UEFI — NixOS image must use systemd-boot, not BIOS GRUB
-- vm_boot `extra_args` splits on spaces — can't pass `-append "multi word"`. Use UEFI disk boot instead of direct kernel boot.
-- Auto-login types "root" as a command on first connect — ignore the `command not found`
-- aspen-node-vm-test package lacks `git-bridge` — created `aspen-node-serial-dogfood` with it
-- vm_serial `prompt:` for NixOS: use `"root@dogfood"` not `"[#$] "` (ANSI escapes break regex)
-
-| 2026-03-11 | self | `nix-collect-garbage -d` freed only 3.8GB when disk was 100% full — thousands of GC roots from `.direnv/flake-inputs/` in 20+ project dirs pinned nix store paths | Remove `.direnv/` dirs across projects first (`find ~ -name '.direnv' -type d -exec rm -rf {} +`), then run GC. Freed 155GB vs 3.8GB. |
-| 2026-03-11 | self | Nix SQLite fetcher cache (`~/.cache/nix/fetcher-cache-v4.sqlite`) corrupts when disk fills — subsequent `nix run`/`nix build` fail with "disk I/O error" even after freeing space | Remove ALL sqlite files and their WAL/shm companions: `rm -f ~/.cache/nix/fetcher-cache-v4*` AND the eval caches. They regenerate on next run. |
-| 2026-03-11 | self | `pre-commit install --hook-type pre-push` writes hardcoded nix store paths in `.git/hooks/pre-push` — after `nix-collect-garbage`, hooks fail with "No such file or directory" | After garbage collection, always re-run `pre-commit install && pre-commit install --hook-type pre-push` to refresh store paths. |
-| 2026-03-11 | self | unit2nix build-plan-cli.json missing marker features (ci, forge, secrets) because root CLI Cargo.toml defines them as `ci = []` (no optional deps) — unit2nix doesn't capture feature names that don't add dependencies | Post-process build-plan-cli.json: inject the features list into the root crate entry. Automated in `generate-build-plan-cli` flake app. Propagate marker features to sub-crates that DO have optional deps: `ci = ["aspen-client-api/ci"]`. |
-| 2026-03-11 | self | `stream_pid: unbound variable` in dogfood-local.sh — `trap cleanup_stream EXIT` set inside `stream_pipeline()` references local `stream_pid` that goes out of scope on return | Add `trap - EXIT` before any `return` from `stream_pipeline()` to clear the EXIT trap. Local variables in the trapped function are only valid during the function's execution. |
-| 2026-03-12 | self | unit2nix auto mode `fetchgit` with `leaveDotGit = true` creates read-only `.git` in nix store — `fakeGit` script doing `git fetch <store-path>` fails with permission errors when git tries to write temp files | Copy `.git/` contents to writable bare repos in `/tmp/git-repos/` at build time. fakeGit reads repo-map from `/tmp/git-repo-map` (build-time, not eval-time). Remove `.git/hooks/` to avoid nix store path references. |
-| 2026-03-12 | self | Stubbing external optional deps (aspen-wasm-plugin) with minimal Cargo.toml breaks `--locked` because Cargo.lock has the real dep's transitive deps (hyperlight-wasm, wasmtime, etc.) that don't match the stub | Strip external deps from manifest AND use `noLocked = true` (new unit2nix param). Stripping from Cargo.lock is impractical — transitive dep trees are too deep. `noLocked` lets cargo resolve from vendored sources without lockfile validation. |
-| 2026-03-12 | self | `sed -i '/aspen-wasm-plugin/d'` on Cargo.toml deleted feature DEFINITION lines (e.g. `hooks = [..., "aspen-wasm-plugin?/hooks"]`) not just the path dep line | Use targeted patterns: `/^aspen-wasm-plugin = { path/d` for dep lines, `s/, "aspen-wasm-plugin?\/hooks"//g` for feature refs. Or use python for complex multi-pattern edits. |
-| 2026-03-12 | self | unit2nix auto mode needs ALL workspace member manifests resolvable — even `--bin aspen-node` validates the entire workspace manifest including unrelated crates' external path deps | Wrap source in `pkgs.runCommand` that creates stubs or strips external deps. Use `workspaceDir` param when src has parent-level structure. For aspen: strip aspen-wasm-plugin/aspen-dns from manifests + noLocked. |
-| 2026-03-12 | self | unit2nix `buildRustCrate` ignores `required-features` on `[[test]]` sections — compiles all test targets regardless, causing failures when features like `simulation`/`testing` aren't enabled | Exclude crates with `required-features` tests from per-crate checks: `aspen`, `aspen-rpc-handlers`. These still run under crane nextest which activates proper features. |
-| 2026-03-12 | self | unit2nix crate overrides (`nativeBuildInputs`) only affect the build drv, not the test runner drv — adding `git` to `aspen-ci` override didn't make it available at test runtime | `nativeBuildInputs` in `defaultCrateOverrides` provides tools during compilation only. Test execution happens in a separate derivation. Exclude crates needing runtime tools (git, /dev/fuse) from per-crate tests instead. |
-| 2026-03-12 | self | `CARGO_BIN_EXE_*` env var (set by cargo for integration tests referencing binary targets) not available in `buildRustCrate` — `aspen-sops` cli_smoke_test fails at compile time | Exclude crates using `env!("CARGO_BIN_EXE_*")` in tests. This is a known `buildRustCrate` limitation. |
+- 68/80 crates. 12 excluded (stubs, sandbox-incompatible, CARGO_BIN_EXE, vendored)
+- All excluded crates still tested via crane nextest
 
 ## Investigation Items
 
-| Date | Topic | Resolution |
-|------|-------|------------|
-| 2026-03-13 | aspen-nix-cache-gateway dual AspenClient | **RESOLVED** (`a832193`): AspenClient fields were already Clone-able (Endpoint is Arc-wrapped, ticket derives Clone, Duration is Copy). Added `#[derive(Clone)]`. Gateway and snix-bridge now clone a single client instead of connecting twice. |
-
-**Per-crate unit2nix test coverage (68 of 80 workspace crates):**
-
-Excluded (12 crates, all still tested via crane nextest):
-
-- 7 stubs: h3-iroh, iroh-proxy-utils, mad-turmoil, nix-compat, nix-compat-derive, snix-castore, snix-store
-- 6 unconditional stub consumers: aspen-castore, aspen-snix, aspen-snix-bridge, aspen-proxy, aspen-net, aspen-testing-madsim
-- 2 required-features: aspen, aspen-rpc-handlers
-- 2 sandbox-incompatible: aspen-fuse (/dev/fuse), aspen-ci (git runtime)
-- 1 CARGO_BIN_EXE: aspen-sops
-- 2 vendored: openraft, openraft-macros
-| 2026-03-13 | self | `async-trait` is NOT a workspace dep in aspen — each crate specifies `async-trait = "0.1"` directly. Using `{ workspace = true }` fails with "not found in workspace.dependencies". | Always grep `crates/*/Cargo.toml` for a dep before assuming workspace. |
-| 2026-03-13 | self | `DeterministicKeyValueStore::new()` returns `Arc<Self>`, not `Self`. Double-wrapping with `Arc::new(DeterministicKeyValueStore::new())` fails with type mismatch. | Use `DeterministicKeyValueStore::new()` directly — it already returns Arc. |
-| 2026-03-13 | self | Branch overlay CAS pass-through + read set conflict: BranchOverlay reads key from parent (records mod_revision), then CAS write passes through to parent (changes mod_revision). On commit, OCC finds stale revision → false conflict. | Use `commit_no_conflict_check()` when the branch is combined with pass-through CAS writes. Added this method to BranchOverlay. |
-| 2026-03-13 | self | `test_get_status_falls_back_to_history` in aspen-deploy is a pre-existing failure (not related to kv-branching changes). Verified by stashing changes and re-running. | Don't debug test failures before checking if they're pre-existing. |
-| 2026-03-14 | self | `fullSrc` stubbed nix-compat as empty crate (since Feb 26), but `aspen-cache` adopted nix-compat unconditionally on Mar 14 (commit `e63f38623`). `ci` → `ci-basic` → `aspen-cache` → `nix_compat::nixbase32` broke all fullSrc builds. The fix (removing snix stubs from fullSrc) was correct but nix IFD caching in `vendorCargoDeps` prevented propagation — old vendor dir kept being reused. | Created `ciPluginsSrc` (extends ciSrc with real aspen-wasm-plugin) and `ciVmTestBin`/`ciVmTestCliBin` build functions using ciCommonArgs. VM tests now use ci-*bins instead of full-* bins, bypassing the fullSrc IFD caching issue entirely. Non-plugin tests use ciSrc directly (pure eval), plugin tests use ciPluginsSrc (requires --impure for wasmPluginRepo). |
-| 2026-03-14 | self | Nix IFD caching: when `vendorCargoDeps { src = derivation + "/subpath"; }` evaluates, the vendor plan is computed from the derivation's output. Even after changing the derivation script, the old output persists in the nix store and the IFD result is reused. GC, `--option eval-cache false`, new commits — nothing forces re-evaluation. | Avoid depending on IFD re-evaluation after derivation script changes. If the derivation output is in the store, nix reuses it. Use a completely separate derivation path (different name, different inputs) instead of modifying an existing one. |
-| 2026-03-15 | self | `SnixIO<Rc<SnixStoreIO>>` doesn't implement `AsRef<dyn EvalIO>` — must box through `Box<dyn EvalIO>`: `Box::new(SnixIO::new(store_io.clone() as Rc<dyn EvalIO>)) as Box<dyn EvalIO>` | Follow snix-glue test pattern: always box SnixIO into `Box<dyn EvalIO>` for EvaluationBuilder. |
-| 2026-03-15 | self | `DummyBuildService` is a unit-like struct with `{}` — `DummyBuildService` (no braces) fails with "expected value, found struct" | Always use `DummyBuildService {}` not `DummyBuildService`. Rust 2024 edition is strict about this. |
-| 2026-03-15 | self | snix-glue's `derivation_into_build_request` is `pub(crate)` — can't call it from outside snix-glue | Use nix-compat's `Derivation::from_aterm_bytes` directly for parsing, and build our own `parse_derivation` wrapper. |
-| 2026-03-15 | self | `compile_only` on Aspen's flake.nix reports `UnknownStaticVariable` for all flake input parameters — these are injected at runtime, not compile-time errors | For syntax-only validation, use `rnix::Root::parse()` instead of `compile_only`. compile_only does scope checking which fails for function parameters. |
-| 2026-03-15 | self | snix at rev 180bfc4 has no `MemoryDirectoryService` or `MemoryPathInfoService` — use `RedbDirectoryService::new_temporary()` and `LruPathInfoService::with_capacity()` for tests | Always check actual struct names at the pinned snix rev, not docs/memory. |
-| 2026-03-15 | self | `nix_compat::derivation::ParserError` doesn't impl Display for `&[u8]` input — use `{e:?}` (Debug) not `{e}` (Display) in format strings | Use Debug formatting for snix parser errors. |
-| 2026-03-15 | self | `systemd-run` transient units don't inherit `environment.systemPackages` PATH — `exec aspen-sops` fails with "not found" | Use absolute nix store path: `${aspenSopsPackage}/bin/aspen-sops` in the NixOS test Python driver, interpolated via `${...}` Nix string. |
-| 2026-03-15 | self | Go SOPS `decrypt` subcommand's `--input-type` only supports json/yaml/dotenv/binary — TOML not available even though SOPS 3.12 reads TOML. Error: `Error unmarshalling input json: invalid character 'd'` | Use JSON format for Go SOPS interop tests. TOML-only tests use native `aspen-sops decrypt`. |
-| 2026-03-15 | self | Go SOPS 3.12+ requires `key_groups` in `sops` metadata — flat keys (`hc_vault_transit: [...]` at top of `sops` section) produce "No keys found in file" | Add `key_groups: [{hc_vault_transit: [...], age: [...]}]` to metadata. Go SOPS 3.7+ reads key groups from `key_groups` array, not flat fields. |
-| 2026-03-15 | self | Go SOPS `--keyservice unix:///tmp/sock` with `key_groups` containing `hc_vault_transit` finds keys but fails decrypt — "no master key was able to decrypt the file" | Go SOPS keyservice gRPC client may not dispatch vault transit keys to external keyservice, or the tonic Unix socket server protocol differs from Go gRPC. Needs investigation. |
-| 2026-03-15 | self | Disk full (1.8T, 100%) during `git commit --amend` → "sha1 file write error" | `nix-collect-garbage -d` freed 24GB. VM test builds accumulate large derivations. Run GC proactively. |
-| 2026-03-21 | self | `dogfood-local` flake app referenced `bins.full-aspen-nix-cache-gateway` which requires `fullSrc` (impure, needs wasmPluginRepo). The gateway doesn't need plugins at all. | Created `bins.ci-aspen-nix-cache-gateway` built from `ciCommonArgs` (pure eval). Updated `dogfood-local` app to use it. |
-| 2026-03-21 | self | `parse_json` and 8 inline python parsers in `dogfood-local.sh` used `json.loads(raw[m.start():])` which fails when CLI output has trailing stderr content (e.g., "Endpoint dropped without calling close"). `json.loads` requires the entire string to be valid JSON. | Replaced all with `json.JSONDecoder().raw_decode(raw, m.start())` which parses the first JSON object and ignores trailing content. |
-| 2026-03-21 | self | `aspen-cli` proxy command used `iroh::discovery::static_provider::StaticProvider` which was removed in iroh 0.97. The builder method was also renamed from `.discovery()` to `.address_lookup()`. | Changed to `iroh::address_lookup::memory::MemoryLookup` with `MemoryLookup::from_endpoint_info([addr])` and `.address_lookup(static_lookup)`. |
-| 2026-03-21 | self | Full dogfood-local pipeline timings: format-check 1s (shell), clippy 283s (nix), build-node 211s (nix), build-cli 74s (nix), nextest-quick 107s (nix). Total pipeline ~11 min. Deploy (stop+restart) ~10s. Verify (blob download + compare) ~2 min. |
-| 2026-03-21 | self | VM test `ci-dogfood-full-loop` needed `git-bridge` + `blob` features on the node binary. `ci-aspen-node` only had `ci docs hooks shell-worker automerge secrets net` — missing `git-bridge` (for git push) and `blob` (for artifact storage). | Used inline `ciVmTestBin { features = [..., "git-bridge", "blob"]; }` instead of shared `ci-aspen-node`. |
-| 2026-03-21 | self | VM test `ci-aspen-cli` had zero features — `ci watch` requires `ci` feature, `git init` requires `forge`. | Used `ciVmTestCliBin ["ci" "forge"]` to enable required CLI features. |
-| 2026-03-21 | self | Inner flake `cargo clippy` in stdenv.mkDerivation fails in nix sandbox — can't download crate index even for zero-dep crates. `rustPlatform.buildRustPackage` handles vendoring, raw stdenv doesn't. | Replaced clippy with `cargo check` (which works for zero-dep crates since no network needed). |
-| 2026-03-21 | self | NixOS VM test Python strings with `echo ''` inside `''...''` nix string causes parse error — nix interprets inner `''` as antiquotation | Use `|| true` instead of `|| echo ''` in Python f-strings inside nix `''...''` blocks. |
-| 2026-03-21 | self | Shell jobs (format-check) complete before log streamer connects — `stream_job_logs` writes 0 bytes. Don't assert non-empty logs for shell jobs. | Changed log check from hard assertion to informational log. |
-| 2026-03-21 | self | `nix flake archive` hangs indefinitely in NixOS VM tests (no internet access). The `prefetch_flake_inputs()` in `adapters.rs` used `.output().await` with no timeout — blocked the entire CI pipeline at "checking_out" forever. | Added 120s `tokio::time::timeout` around the subprocess. On timeout, the `Child` is dropped (sends SIGKILL). Pipeline continues without prefetch — builds download inputs directly. |
-| 2026-03-21 | self | 2-of-3 Raft leader election in NixOS VMs is unreliable — persistent split-votes when 2 nodes have similar VM scheduling. After stopping the leader (node1), nodes 2 and 3 trigger elections simultaneously and split votes indefinitely. | **FIXED** (`178dbaed6`): Per-node election timeout jitter. Previous workaround (restart leader instead of asserting 2-of-3 election) still valid as defense-in-depth. |
-| 2026-03-21 | self | After `systemctl restart aspen-node`, iroh endpoint gets a new port. Raft membership retains the old endpoint address for that node. Other nodes can't reach the restarted node via the stale address. `wait_for_healthy` times out (120s+). | **FIXED** (`d267b7ea5`): Leader propagates gossip-discovered addresses into Raft membership via `add_learner`. Three-layer defense: (1) gossip cache fallback in network factory (`051b8c812`), (2) persistent peer cache across restarts (`df542c716`), (3) authoritative membership update (`d267b7ea5`). |
-| 2026-03-21 | self | NixOS VM test `writableStoreUseTmpfs = false` + `diskSize = 30720` (30GB) needed for node1 running CI builds. Inner `nix build` downloads rustc (~1.6GB) + builds. With 3 VMs, node1 (CI) needs more disk than follower nodes. | Use per-node resource config: node1 gets 4GB RAM + 30GB disk, followers get 2GB RAM + 10GB disk. |
-| 2026-03-21 | self | Raft membership stores stale `RaftMemberInfo` after node restart (new port, same endpoint ID). Gossip discovers the new address but only updates the factory cache — authoritative membership is never corrected. | **FIXED** (`d267b7ea5`): Leader now calls `add_learner` with updated `RaftMemberInfo` when gossip reports changed addresses. Debounced at 60s per (node_id, addr_hash). Deferred `MembershipRefreshSlot` handles bootstrap ordering (gossip Phase 3, Raft Phase 4). |
-| 2026-03-21 | self | openraft 0.10 randomizes election timeout once at `EngineConfig::new()` and never re-randomizes between election attempts. Two nodes with similar VM scheduling get nearly identical timeouts → persistent split-votes. | **FIXED** (`178dbaed6`): Added per-node election timeout jitter derived from `node_id % (range/3)`. With default 1500-3000ms, nodes 1/2/3 get 1/2/3ms offsets. Small but breaks the symmetry since the root cause is identical timeouts, not close ones. |
-| 2026-03-21 | self | `bootstrap::node::storage_init` is a private module behind feature gates (`blob`, `docs`, `jobs`, `hooks`). Tests in `#[cfg(test)]` inside it compile but never run — they're invisible to the test binary. | Put tests that exercise private module logic in `lib.rs` instead, using a helper function that mirrors the logic. Or add `#[cfg(test)] pub(crate) mod` re-exports. |
-| 2026-03-21 | self | `openraft::Membership::get()` doesn't exist — the method is `get_node()`. | Always check openraft API with `rg "fn get_node\|fn nodes" openraft/` before writing membership lookups. |
-| 2026-03-21 | self | `iroh::EndpointAddr.addrs` is `BTreeSet<TransportAddr>` not `Vec<DirectAddr>`. Use `BTreeSet::from([TransportAddr::Ip(socket_addr)])` to construct, not `push()`. | Check iroh 0.97 types before constructing test addresses. |
-| 2026-03-22 | self | Connection pool served stale connections after peer restart: `add_peer()` updated the `peer_addrs` map but the pool kept the old connection (to pre-restart port). Heartbeats routed through the dead connection for ~60s (idle timeout), causing election storms that broke all inter-node connectivity. | **FIXED** (`529bfe8fd`): `add_peer()` now detects address changes and calls `connection_pool.evict(node_id)` to force a fresh connection. Added `evict()` method to `RaftConnectionPool`. |
-| 2026-03-22 | self | NixOS VM test `wait_until_succeeds` hangs when the inner command (aspen-cli) has a 30s default timeout — each retry takes 30s, but the driver doesn't log retries clearly, making it look stuck | Use `--timeout 5000` for CLI health checks in VM tests so each attempt fails fast (5s) and `wait_until_succeeds` can retry meaningfully within its timeout window. |
-| 2026-03-23 | self | Multi-node dogfood: job ack fails after leader election — worker on follower node tries to ack via local `RaftNode::write()` which returns `ForwardToLeader` → `NotLeader`. Job manager retries 100x but all retries hit the same follower. Pipeline stuck forever. | **FIXED**: Added `WriteForwarder` trait + `IrohWriteForwarder` that catches `ForwardToLeader` in `RaftNode::write()` and forwards the write to the leader via CLIENT_ALPN iroh QUIC. Forwarder injected during bootstrap before `Arc<RaftNode>` is shared. |
-| 2026-03-23 | self | `Arc::get_mut` panics if called after the `Arc` has been cloned — the `RaftNodeHealth` clone happens inside `init_consensus()` before we can call `set_write_forwarder()` | Moved forwarder setup into `create_raft_node()` before `Arc::new()` wrapping. The forwarder is a plain `&mut self` method now, not `&mut Arc<Self>`. |
-| 2026-03-23 | self | Worker stats KV write failures (`"failed to write worker stats to KV"`) flood WARN logs (8 workers × every 10s) after any leader election | Downgraded to DEBUG. These are non-critical — forwarding now handles them silently. |
-| 2026-03-23 | self | Write batcher (when enabled) bypasses `RaftNode::write()` entirely — its flush path calls `raft().client_write()` directly without forwarding logic | Batched writes on followers will still fail after election. Since batch mode isn't enabled in dogfood, this is deferred. Would need to add forwarding to the batcher's flush path too. |
-| 2026-03-23 | self | `aspen-cli kv put` is actually `aspen-cli kv set` — the subcommand is `set` not `put` | Always check `--help` for correct subcommand names. |
-| 2026-03-23 | self | Write batcher (default=enabled) bypasses write forwarding entirely — `write_direct()` and `flush_batch()` call `raft.client_write()` directly without checking ForwardToLeader | Skip batcher on follower nodes: check `raft.metrics().borrow().current_leader == Some(self.node_id())` before routing to batcher. Followers fall through to the forwarding path. |
-| 2026-03-23 | self | `IrohWriteForwarder` only handled Set/Delete, rejected CAS as "complex" — rate limiter CAS on followers always failed, blocking ALL follower writes at the RPC layer | Extend `write_command_to_rpc_request()` to handle CAS, batch, and all write command variants. Map each `WriteCommand` to its `ClientRpcRequest` equivalent. |
-| 2026-03-23 | self | `cargo build -p aspen` doesn't rebuild `aspen-node` binary without `--features jobs,docs,blob,hooks,automerge` — binary timestamp unchanged, bugs appear to persist after fix | Always use `cargo build --features jobs,docs,blob,hooks,automerge --bin aspen-node` for the node binary. Or use `cargo build --features full`. |
-| 2026-03-23 | self | Git push to non-leader node: 31K objects × 2 KV writes = 62K individual forwarded QUIC connections to leader — slow and fragile, fails when inter-node connectivity is marginal | The git import handler should detect non-leader state and either (a) redirect the client to the leader node, or (b) batch the hash mapping writes into larger batches that reduce round-trips. For now: ensure the push goes to the leader node by checking `cluster status` first. |
+All resolved as of 2026-03-24.
