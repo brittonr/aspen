@@ -77,6 +77,13 @@ pub struct NixBuildPayload {
     #[serde(default)]
     pub cache_outputs: Vec<String>,
 
+    /// Target system for evaluation (e.g., `x86_64-linux`, `aarch64-linux`).
+    ///
+    /// When set, evaluation uses this system instead of detecting from the host.
+    /// Falls back to host system detection when `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system: Option<String>,
+
     /// Source archive hash for workspace seeding in VM workers.
     ///
     /// When a `ci_nix_build` job is dispatched to a VM worker, the host's

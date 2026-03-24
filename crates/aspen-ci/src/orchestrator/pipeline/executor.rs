@@ -384,6 +384,7 @@ async fn build_nix_payload<S: KeyValueStore + ?Sized>(
         should_upload_result: job.should_upload_result,
         publish_to_cache: job.publish_to_cache,
         cache_outputs: Vec::new(),
+        system: None,
         // VM workers cannot access the host checkout_dir, so they need
         // source_hash to download the checkout from blob store.
         source_hash: context.source_hash.clone(),

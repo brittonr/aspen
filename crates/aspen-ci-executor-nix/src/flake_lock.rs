@@ -127,6 +127,9 @@ pub struct LockedInput {
     pub url: Option<String>,   // tarball/git
     pub path: Option<String>,  // path type
     pub dir: Option<String>,   // subdir within source
+    /// Whether to fetch git submodules. Defaults to false when absent.
+    #[serde(default)]
+    pub submodules: bool,
 }
 
 /// A resolved input with its computed store path.
@@ -628,7 +631,7 @@ pub fn fetch_git_input(locked: &LockedInput, fetch_cache: Option<&crate::fetch::
     let rev_owned = rev.map(|r| r.to_string());
     // Note: flake.lock git inputs don't have a separate "ref" field in LockedInput;
     // the rev is always pinned in locked inputs. ref is only in the original spec.
-    let submodules = false; // TODO: parse from locked input when flake.lock includes it
+    let submodules = locked.submodules;
 
     cache
         .get_or_fetch(&cache_key, expected_nar_hash, |dest| {
@@ -759,6 +762,7 @@ mod tests {
                 url: None,
                 path: None,
                 dir: None,
+                submodules: false,
             }),
             flake: true,
         });
@@ -779,6 +783,7 @@ mod tests {
                 url: None,
                 path: None,
                 dir: None,
+                submodules: false,
             }),
             flake: true,
         });
@@ -967,6 +972,7 @@ mod tests {
                 url: None,
                 path: None,
                 dir: None,
+                submodules: false,
             },
             is_local: false,
         }];
@@ -1042,6 +1048,7 @@ mod tests {
             url: None,
             path: Some(".".to_string()),
             dir: None,
+            submodules: false,
         };
         // Use the crate root as flake_dir — it exists
         let result = resolve_path_input(&locked, env!("CARGO_MANIFEST_DIR"));
@@ -1062,6 +1069,7 @@ mod tests {
             url: None, // missing
             path: None,
             dir: None,
+            submodules: false,
         };
         let err = fetch_git_input(&locked, Some(&cache)).unwrap_err();
         assert!(err.to_string().contains("missing 'url'"));
@@ -1080,6 +1088,7 @@ mod tests {
             url: Some("https://example.com/repo.git".to_string()),
             path: None,
             dir: None,
+            submodules: false,
         };
         let err = fetch_git_input(&locked, None).unwrap_err();
         assert!(err.to_string().contains("no fetch cache"));
@@ -1119,6 +1128,7 @@ mod tests {
             url: Some(src.to_string_lossy().to_string()),
             path: None,
             dir: None,
+            submodules: false,
         };
         let result = fetch_git_input(&locked, Some(&cache));
         assert!(result.is_ok(), "fetch_git_input failed: {:?}", result.err());
@@ -1160,5 +1170,104 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ================================================================
+    // Submodule parsing tests
+    // ================================================================
+
+    /// Task 4.4: flake.lock with "submodules": true in a git input
+    #[test]
+    fn test_parse_git_input_with_submodules_true() {
+        let json = r#"{
+          "nodes": {
+            "my-git-dep": {
+              "locked": {
+                "type": "git",
+                "url": "https://example.com/repo.git",
+                "rev": "abc123def456",
+                "narHash": "sha256-OLdIz38tsFp1aXt8GsJ40s0/jxSkhlqftuDE7LvuhK4=",
+                "submodules": true
+              }
+            },
+            "root": {
+              "inputs": {
+                "my-git-dep": "my-git-dep"
+              }
+            }
+          },
+          "root": "root",
+          "version": 7
+        }"#;
+
+        let lock = FlakeLock::parse(json.as_bytes()).expect("should parse");
+        let node = lock.nodes.get("my-git-dep").expect("node should exist");
+        let locked = node.locked.as_ref().expect("should have locked input");
+
+        assert!(locked.submodules, "submodules should be true");
+        assert_eq!(locked.input_type, "git");
+        assert_eq!(locked.url.as_deref(), Some("https://example.com/repo.git"));
+    }
+
+    /// Task 4.5: flake.lock with submodules absent defaults to false
+    #[test]
+    fn test_parse_git_input_without_submodules_defaults_false() {
+        let json = r#"{
+          "nodes": {
+            "my-git-dep": {
+              "locked": {
+                "type": "git",
+                "url": "https://example.com/repo.git",
+                "rev": "abc123def456",
+                "narHash": "sha256-OLdIz38tsFp1aXt8GsJ40s0/jxSkhlqftuDE7LvuhK4="
+              }
+            },
+            "root": {
+              "inputs": {
+                "my-git-dep": "my-git-dep"
+              }
+            }
+          },
+          "root": "root",
+          "version": 7
+        }"#;
+
+        let lock = FlakeLock::parse(json.as_bytes()).expect("should parse");
+        let node = lock.nodes.get("my-git-dep").expect("node should exist");
+        let locked = node.locked.as_ref().expect("should have locked input");
+
+        assert!(!locked.submodules, "submodules should default to false");
+        assert_eq!(locked.input_type, "git");
+    }
+
+    /// Verify submodules field works with non-git input types (should still default to false)
+    #[test]
+    fn test_submodules_defaults_false_for_github_input() {
+        let json = r#"{
+          "nodes": {
+            "nixpkgs": {
+              "locked": {
+                "type": "github",
+                "owner": "NixOS",
+                "repo": "nixpkgs",
+                "rev": "35bdbbce4d6e84baa7df6544d6127db8dd7fbaef",
+                "narHash": "sha256-OLdIz38tsFp1aXt8GsJ40s0/jxSkhlqftuDE7LvuhK4="
+              }
+            },
+            "root": {
+              "inputs": {
+                "nixpkgs": "nixpkgs"
+              }
+            }
+          },
+          "root": "root",
+          "version": 7
+        }"#;
+
+        let lock = FlakeLock::parse(json.as_bytes()).expect("should parse");
+        let node = lock.nodes.get("nixpkgs").expect("node should exist");
+        let locked = node.locked.as_ref().expect("should have locked input");
+
+        assert!(!locked.submodules, "github inputs should default submodules to false");
     }
 }

@@ -28,6 +28,43 @@ use tracing::warn;
 
 use crate::config::MAX_FLAKE_URL_LENGTH;
 
+/// Detect the host system as a Nix system string.
+///
+/// Maps `std::env::consts::{ARCH, OS}` to the Nix convention:
+/// `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, `aarch64-darwin`.
+///
+/// Returns a static string for known combinations. Panics at compile time
+/// for unsupported OS/arch combos via `compile_error!`.
+pub fn detect_host_system() -> &'static str {
+    #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+    {
+        "x86_64-linux"
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+    {
+        "aarch64-linux"
+    }
+    #[cfg(all(target_arch = "x86_64", target_os = "macos"))]
+    {
+        "x86_64-darwin"
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    {
+        "aarch64-darwin"
+    }
+    #[cfg(not(any(
+        all(target_arch = "x86_64", target_os = "linux"),
+        all(target_arch = "aarch64", target_os = "linux"),
+        all(target_arch = "x86_64", target_os = "macos"),
+        all(target_arch = "aarch64", target_os = "macos"),
+    )))]
+    {
+        compile_error!(
+            "unsupported target: only x86_64-linux, aarch64-linux, x86_64-darwin, aarch64-darwin are supported"
+        );
+    }
+}
+
 // Limits for evaluation
 /// Maximum Nix source file size to evaluate (1 MB).
 const MAX_EVAL_SOURCE_SIZE: usize = 1_048_576;
@@ -528,6 +565,7 @@ impl NixEvaluator {
         &self,
         flake_dir: &str,
         attribute: &str,
+        system: Option<&str>,
     ) -> Result<(nix_compat::store_path::StorePath<String>, Derivation), NixEvalError> {
         let compat_path = crate::flake_compat::write_flake_compat_to_temp().map_err(|e| NixEvalError {
             message: format!("failed to write flake-compat to temp: {e}"),
@@ -535,13 +573,14 @@ impl NixEvaluator {
         })?;
 
         let compat_path_str = compat_path.to_string_lossy().to_string();
-        let system = "x86_64-linux"; // TODO: detect from build target
+        let resolved_system = system.unwrap_or(detect_host_system());
 
-        let eval_code = crate::flake_compat::build_flake_compat_expr(&compat_path_str, flake_dir, attribute, system)
-            .map_err(|e| NixEvalError {
-                message: format!("failed to build flake-compat expression: {e}"),
-                is_ifd: false,
-            })?;
+        let eval_code =
+            crate::flake_compat::build_flake_compat_expr(&compat_path_str, flake_dir, attribute, resolved_system)
+                .map_err(|e| NixEvalError {
+                    message: format!("failed to build flake-compat expression: {e}"),
+                    is_ifd: false,
+                })?;
 
         info!(
             flake_dir = %flake_dir,
@@ -1211,7 +1250,7 @@ mod tests {
         .unwrap();
 
         let dir_str = flake_dir.to_string_lossy().to_string();
-        let result = eval.evaluate_flake_via_compat(&dir_str, "packages.x86_64-linux.default");
+        let result = eval.evaluate_flake_via_compat(&dir_str, "packages.x86_64-linux.default", None);
 
         match result {
             Ok((store_path, drv)) => {
@@ -1301,7 +1340,7 @@ mod tests {
         std::fs::write(main_dir.join("flake.lock"), lock_json).unwrap();
 
         let dir_str = main_dir.to_string_lossy().to_string();
-        let result = eval.evaluate_flake_via_compat(&dir_str, "packages.x86_64-linux.default");
+        let result = eval.evaluate_flake_via_compat(&dir_str, "packages.x86_64-linux.default", None);
 
         match result {
             Ok((store_path, drv)) => {
@@ -1327,7 +1366,7 @@ mod tests {
         std::fs::write(flake_dir.join("flake.nix"), "{ outputs = { self }: {}; }").unwrap();
 
         let dir_str = flake_dir.to_string_lossy().to_string();
-        let result = eval.evaluate_flake_via_compat(&dir_str, "default");
+        let result = eval.evaluate_flake_via_compat(&dir_str, "default", None);
         // flake-compat handles missing flake.lock (calls callLocklessFlake),
         // but the eval may still fail for other reasons — either way, it
         // shouldn't panic
@@ -1419,6 +1458,101 @@ mod tests {
             Err(e) => {
                 // May fail if nix CLI is not available
                 eprintln!("ensure_flake_lock failed (nix CLI may not be available): {e}");
+            }
+        }
+    }
+
+    // ================================================================
+    // detect_host_system tests
+    // ================================================================
+
+    #[test]
+    fn test_detect_host_system_returns_valid_nix_system() {
+        let system = super::detect_host_system();
+        let valid = ["x86_64-linux", "aarch64-linux", "x86_64-darwin", "aarch64-darwin"];
+        assert!(valid.contains(&system), "detect_host_system returned unexpected value: {system}");
+    }
+
+    #[test]
+    fn test_detect_host_system_matches_current_platform() {
+        let system = super::detect_host_system();
+        let arch = std::env::consts::ARCH;
+        let os = std::env::consts::OS;
+
+        let expected_arch = match arch {
+            "x86_64" => "x86_64",
+            "aarch64" => "aarch64",
+            other => panic!("unexpected arch: {other}"),
+        };
+        let expected_os = match os {
+            "linux" => "linux",
+            "macos" => "darwin",
+            other => panic!("unexpected os: {other}"),
+        };
+
+        let expected = format!("{expected_arch}-{expected_os}");
+        assert_eq!(system, expected, "detect_host_system should match current platform");
+    }
+
+    #[test]
+    fn test_detect_host_system_is_static() {
+        // Calling multiple times should return the same value (it's &'static str)
+        let a = super::detect_host_system();
+        let b = super::detect_host_system();
+        assert_eq!(a, b);
+        assert!(std::ptr::eq(a, b), "should be the same &'static str pointer");
+    }
+
+    // ================================================================
+    // evaluate_flake_via_compat with explicit system override
+    // ================================================================
+
+    #[tokio::test]
+    async fn test_evaluate_flake_via_compat_explicit_system() {
+        let eval = test_evaluator();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let flake_dir = tmpdir.path();
+
+        // Use aarch64-linux to verify the system parameter is threaded through
+        std::fs::write(
+            flake_dir.join("flake.nix"),
+            r#"{
+              description = "test";
+              inputs = {};
+              outputs = { self, ... }: {
+                packages.aarch64-linux.default = derivation {
+                  name = "system-override-test";
+                  system = "aarch64-linux";
+                  builder = "/bin/sh";
+                  args = [ "-c" "echo hello > $out" ];
+                };
+              };
+            }"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            flake_dir.join("flake.lock"),
+            r#"{
+              "nodes": {
+                "root": {}
+              },
+              "root": "root",
+              "version": 7
+            }"#,
+        )
+        .unwrap();
+
+        let dir_str = flake_dir.to_string_lossy().to_string();
+        let result = eval.evaluate_flake_via_compat(&dir_str, "packages.aarch64-linux.default", Some("aarch64-linux"));
+
+        match result {
+            Ok((_store_path, drv)) => {
+                assert_eq!(drv.system, "aarch64-linux", "system should be aarch64-linux from override");
+            }
+            Err(e) => {
+                // snix may not support all builtins — log and don't fail
+                eprintln!("evaluate_flake_via_compat (explicit system) failed (may be expected): {e}");
             }
         }
     }

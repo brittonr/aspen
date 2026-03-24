@@ -267,6 +267,7 @@ mod tests {
                 url: None,
                 path: None,
                 dir: Some("pkgs".to_string()),
+                submodules: false,
             },
             is_local: true,
         }];
@@ -381,6 +382,7 @@ mod tests {
                     url: None,
                     path: None,
                     dir: None,
+                    submodules: false,
                 },
                 is_local: true,
             },
@@ -397,6 +399,7 @@ mod tests {
                     url: None,
                     path: None,
                     dir: None,
+                    submodules: false,
                 },
                 is_local: false,
             },
@@ -424,6 +427,7 @@ mod tests {
                 url: None,
                 path: None,
                 dir: None,
+                submodules: false,
             },
             is_local: true,
         }];
@@ -449,6 +453,7 @@ mod tests {
                 url: None,
                 path: None,
                 dir: None,
+                submodules: false,
             },
             is_local: true,
         }];

@@ -58,6 +58,8 @@ pub use cache::UploadedStorePath;
 pub use config::NixBuildWorkerConfig;
 #[cfg(feature = "snix-eval")]
 pub use eval::NixEvaluator;
+#[cfg(feature = "snix-eval")]
+pub use eval::detect_host_system;
 pub use executor::NixBuildWorker;
 pub use executor::ProjectType;
 pub use executor::detect_project_type;
@@ -85,6 +87,7 @@ mod tests {
             should_upload_result: true,
             publish_to_cache: true,
             cache_outputs: vec![],
+            system: None,
             source_hash: None,
         };
 
@@ -107,6 +110,7 @@ mod tests {
             should_upload_result: true,
             publish_to_cache: true,
             cache_outputs: vec![],
+            system: None,
             source_hash: None,
         };
 
@@ -129,6 +133,7 @@ mod tests {
             should_upload_result: true,
             publish_to_cache: true,
             cache_outputs: vec![],
+            system: None,
             source_hash: None,
         };
 
@@ -151,6 +156,7 @@ mod tests {
             should_upload_result: true,
             publish_to_cache: true,
             cache_outputs: vec![],
+            system: None,
             source_hash: None,
         };
 
@@ -173,6 +179,7 @@ mod tests {
             should_upload_result: true,
             publish_to_cache: true,
             cache_outputs: vec![],
+            system: None,
             source_hash: None,
         };
 
@@ -214,6 +221,7 @@ mod tests {
             should_upload_result: false,
             publish_to_cache: false,
             cache_outputs: vec![],
+            system: None,
             source_hash: None,
         };
 
@@ -266,6 +274,7 @@ mod tests {
             should_upload_result: false,
             publish_to_cache: false,
             cache_outputs: vec![],
+            system: None,
             source_hash: None,
         };
 

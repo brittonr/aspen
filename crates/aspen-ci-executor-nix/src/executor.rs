@@ -551,8 +551,11 @@ impl NixBuildWorker {
         let eval_clone = evaluator.clone();
         let dir = flake_dir.to_string();
         let attr = attribute.clone();
+        let system = payload.system.clone();
 
-        match tokio::task::spawn_blocking(move || eval_clone.evaluate_flake_via_compat(&dir, &attr)).await {
+        match tokio::task::spawn_blocking(move || eval_clone.evaluate_flake_via_compat(&dir, &attr, system.as_deref()))
+            .await
+        {
             Ok(Ok((_store_path, drv))) => {
                 info!(
                     flake_ref = %flake_ref,
