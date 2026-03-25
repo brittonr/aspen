@@ -61,6 +61,18 @@ pub struct ExecutionResult {
 
     /// Error message if execution failed before completion.
     pub error: Option<String>,
+
+    /// Execution cache hit count (when cached execution is enabled).
+    #[serde(default)]
+    pub cache_hits: u32,
+
+    /// Execution cache miss count (when cached execution is enabled).
+    #[serde(default)]
+    pub cache_misses: u32,
+
+    /// Estimated time saved by cache hits (milliseconds).
+    #[serde(default)]
+    pub cache_time_saved_ms: u64,
 }
 
 /// Log message streamed during execution.

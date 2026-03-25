@@ -396,6 +396,11 @@ impl LocalExecutorWorker {
         let mut env = payload.env.clone();
         env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
 
+        // Inject cached execution env var when enabled
+        if payload.cached_execution {
+            env.insert("ASPEN_CACHED_EXEC".to_string(), "1".to_string());
+        }
+
         ExecutionRequest {
             id: job_id.to_string(),
             command,
@@ -432,6 +437,11 @@ impl LocalExecutorWorker {
 
         let mut env = payload.env.clone();
         env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
+
+        // Inject cached execution env var when enabled
+        if payload.cached_execution {
+            env.insert("ASPEN_CACHED_EXEC".to_string(), "1".to_string());
+        }
 
         ExecutionRequest {
             id: job_id.to_string(),

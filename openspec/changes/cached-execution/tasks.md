@@ -49,16 +49,16 @@
 
 ## 7. CI Integration
 
-- [ ] 7.1 Add `cached_execution: bool` field to CI job spec in `aspen-ci-core`
-- [ ] 7.2 Wire `ASPEN_CACHED_EXEC=1` env var check in AspenFs mount setup for CI VMs
-- [ ] 7.3 Enable read tracking on AspenFs VirtioFS mounts when cached execution is active in `aspen-ci-executor-vm`
-- [ ] 7.4 Wire `CachedExecutor` into shell executor's process launch path in `aspen-ci-executor-shell`
-- [ ] 7.5 Add cache hit/miss metrics to CI job results (hit count, miss count, time saved)
+- [x] 7.1 Add `cached_execution: bool` field to CI job spec in `aspen-ci-core`
+- [x] 7.2 Wire `ASPEN_CACHED_EXEC=1` env var check in AspenFs mount setup for CI VMs
+- [x] 7.3 Enable read tracking on AspenFs VirtioFS mounts when cached execution is active in `aspen-ci-executor-vm`
+- [x] 7.4 Wire `CachedExecutor` into shell executor's process launch path in `aspen-ci-executor-shell`
+- [x] 7.5 Add cache hit/miss metrics to CI job results (hit count, miss count, time saved)
 
 ## 8. Branch Integration
 
-- [ ] 8.1 Ensure read tracking in `AspenFs::read()` records the branch-resolved content hash (dirty map value if present, parent value otherwise)
-- [ ] 8.2 Test: cached execution inside a `@branch` path uses branch-local file contents for cache key, not base store contents
+- [x] 8.1 Ensure read tracking in `AspenFs::read()` records the branch-resolved content hash (dirty map value if present, parent value otherwise)
+- [x] 8.2 Test: cached execution inside a `@branch` path uses branch-local file contents for cache key, not base store contents
 
 ## 9. Verus Verification
 

@@ -135,6 +135,9 @@ impl Executor {
                 stderr,
                 duration_ms,
                 error: None,
+                cache_hits: 0,
+                cache_misses: 0,
+                cache_time_saved_ms: 0,
             }),
             Err(e) => Ok(ExecutionResult {
                 id: job_id,
@@ -143,6 +146,9 @@ impl Executor {
                 stderr: String::new(),
                 duration_ms,
                 error: Some(e.to_string()),
+                cache_hits: 0,
+                cache_misses: 0,
+                cache_time_saved_ms: 0,
             }),
         }
     }

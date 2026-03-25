@@ -263,6 +263,22 @@ impl AspenFs {
 
     /// Create a lightweight clone for KV access only.
     ///
+    /// Enable execution cache read tracking on this filesystem.
+    ///
+    /// When enabled, every `read()` and `open()` call records which files
+    /// each PID reads, building a per-process read set for cache key
+    /// computation. Zero overhead when disabled (default).
+    #[cfg(feature = "exec-cache")]
+    pub fn enable_exec_cache_tracking(&self) {
+        self.read_tracker.set_enabled(true);
+    }
+
+    /// Get a reference to the read tracker (for session management).
+    #[cfg(feature = "exec-cache")]
+    pub fn read_tracker(&self) -> &aspen_exec_cache::ReadTracker {
+        &self.read_tracker
+    }
+
     /// Shares the same underlying KV connection (via Arc) but gets fresh
     /// cache, buffer, and prefetcher instances. Used by the background
     /// flush timer to write flushed data without holding a reference to

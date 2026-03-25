@@ -68,6 +68,12 @@ pub struct LocalExecutorPayload {
     /// to `_ci:logs:{run_id}:{job_id}:{chunk}` for real-time streaming via `ci logs --follow`.
     #[serde(default)]
     pub run_id: Option<String>,
+
+    /// Enable content-addressed execution caching.
+    /// When true, `ASPEN_CACHED_EXEC=1` is injected into the environment
+    /// and the FUSE read tracker is enabled for cache key computation.
+    #[serde(default)]
+    pub cached_execution: bool,
 }
 
 fn default_working_dir() -> String {

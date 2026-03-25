@@ -196,6 +196,18 @@ pub struct JobConfig {
     #[serde(default)]
     pub force_cold_boot: bool,
 
+    /// Enable content-addressed execution caching for this job.
+    ///
+    /// When `true`, process executions within this job are cached by
+    /// BLAKE3-hashing their inputs (command, args, env, and files read
+    /// via the FUSE mount). On cache hit, outputs are replayed from
+    /// iroh-blobs without re-executing the process.
+    /// Only effective when the workspace is a FUSE mount with the
+    /// `exec-cache` feature enabled.
+    /// Defaults to `false`.
+    #[serde(default)]
+    pub cached_execution: bool,
+
     /// Number of parallel speculative VMs to fork from the golden snapshot.
     ///
     /// When > 1, the pool forks N VMs from the same snapshot, each running
