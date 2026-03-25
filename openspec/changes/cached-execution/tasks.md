@@ -44,7 +44,7 @@
 
 - [x] 6.1 Add `last_accessed_ms` field to `CacheEntry`, update on cache hit
 - [x] 6.2 Implement background eviction task: scan `_exec_cache:` prefix, remove expired entries, then LRU evict if total size exceeds MAX_CACHE_STORAGE_BYTES
-- [ ] 6.3 Unprotect evicted output blobs from iroh-blobs GC
+- [x] 6.3 Unprotect evicted output blobs from iroh-blobs GC
 - [x] 6.4 Unit test: verify eviction removes oldest entries first, respects storage bound
 
 ## 7. CI Integration
@@ -64,4 +64,4 @@
 
 - [x] 9.1 Add `src/verified/cache_key.rs` with pure cache key computation function
 - [x] 9.2 Add `verus/cache_key_spec.rs` with ensures: determinism (same inputs → same output), sorted input invariant, env hash included
-- [ ] 9.3 Run `nix run .#verify-verus` and fix any proof failures
+- [x] 9.3 Run `nix run .#verify-verus` and fix any proof failures
