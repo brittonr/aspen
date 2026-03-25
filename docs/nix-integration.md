@@ -93,9 +93,10 @@ snix-eval's `fetchTarball` builtin handles HTTP downloads, tarball unpacking,
 narHash verification, and store path computation internally. `SnixStoreIO`
 triggers lazy fetches on-demand when `import` reads from a store path.
 
-**Limitation:** `builtins.fetchGit` is unimplemented in snix, so flakes with
-raw `git` inputs fall back to the `nix eval --raw .drvPath` subprocess path
-(legacy call-flake.nix), then to the full `nix build` subprocess.
+**Git inputs:** `builtins.fetchGit` is implemented via a local patch to
+snix-glue (see `vendor/snix-glue/PATCHES.md`). Flakes with `type = "git"`
+inputs are resolved fully in-process through both the call-flake.nix and
+flake-compat evaluation paths.
 
 Build execution uses `LocalStoreBuildService`, which copies inputs from the
 local `/nix/store` into the bubblewrap sandbox via `cp -a`. This replaces

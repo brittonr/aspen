@@ -1,0 +1,60 @@
+[workspace]
+
+[package]
+name = "snix-glue"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-compression = { version = "0.4.12", features = [
+  "tokio",
+  "gzip",
+  "bzip2",
+  "xz",
+] }
+async-stream = "0.3.5"
+bstr = "1.10.0"
+bytes = "1.7.1"
+data-encoding = "2.6.0"
+futures = "0.3.30"
+nix-compat = { git = "https://git.snix.dev/snix/snix.git", rev = "e20f82dd6fdebe953fb71bb2fde2f32841015c47", features = ["flakeref"] }
+pin-project = "1.1"
+regex = "1.10.6"
+reqwest = "0.13.1"
+snix-build = { git = "https://git.snix.dev/snix/snix.git", rev = "e20f82dd6fdebe953fb71bb2fde2f32841015c47", default-features = false, features = [] }
+snix-eval = { git = "https://git.snix.dev/snix/snix.git", rev = "e20f82dd6fdebe953fb71bb2fde2f32841015c47" }
+snix-castore = { git = "https://git.snix.dev/snix/snix.git", rev = "e20f82dd6fdebe953fb71bb2fde2f32841015c47" }
+snix-store = { git = "https://git.snix.dev/snix/snix.git", rev = "e20f82dd6fdebe953fb71bb2fde2f32841015c47", default-features = false, features = [] }
+snix-tracing = { git = "https://git.snix.dev/snix/snix.git", rev = "e20f82dd6fdebe953fb71bb2fde2f32841015c47" }
+tempfile = "3.12.0"
+tracing = "0.1.40"
+tracing-indicatif = "0.3.7"
+tokio = "1.39.3"
+tokio-tar = { package = "astral-tokio-tar", version = "0.5.6" }
+tokio-util = { version = "0.7.11", features = ["io", "io-util", "compat"] }
+thiserror = "2.0"
+serde = "1.0.209"
+serde_json = "1.0"
+sha2 = "0.10.8"
+sha1 = "0.10.6"
+md-5 = "0.10.6"
+url = "2.5.2"
+walkdir = "2.5.0"
+clap = "4.5.16"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+hex-literal = "0.4.1"
+mimalloc = "0.1.43"
+nix = { version = "0.27.1", features = ["fs"] }
+pretty_assertions = "1.4.0"
+rstest = { version = "0.26.1", default-features = false }
+tempfile = "3.12.0"
+
+[features]
+default = ["nix_tests"]
+nix_tests = []
+
+[[bench]]
+name = "eval"
+harness = false
