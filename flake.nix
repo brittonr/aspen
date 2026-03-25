@@ -2961,6 +2961,16 @@
                 inherit (self.packages.${system}) aspen-fuse-vm-test;
               };
 
+              # Lazy fetch test: open() doesn't prefetch, read() fetches on demand,
+              # access stats logged on unmount.
+              # Build: nix build .#checks.x86_64-linux.fuse-lazy-fetch-test
+              fuse-lazy-fetch-test = import ./nix/tests/fuse-lazy-fetch.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
+                inherit (self.packages.${system}) aspen-fuse-vm-test;
+              };
+
               # Execution cache test: FUSE mount + BLAKE3 content hashing +
               # cache entry storage/lookup via KV _exec_cache: prefix.
               # Build: nix build .#checks.x86_64-linux.exec-cache-test
