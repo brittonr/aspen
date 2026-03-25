@@ -1,13 +1,13 @@
 specs (
   {
-    name nostr-identity
-    include (crates/aspen-forge/docs/nostr-identity-requirements.md)
+    name snix-store
+    include (openspec/specs/snix-store/spec.md)
     impls (
       {
         name rust
-        include (crates/aspen-forge/src/**/*.rs crates/aspen-forge/verus/**/*.rs)
+        include (crates/aspen-snix/src/**/*.rs crates/aspen-castore/src/**/*.rs crates/aspen-core/src/circuit_breaker.rs)
         exclude (target/**)
-        test_include (crates/aspen-forge-web/tests/**/*.rs)
+        test_include (crates/aspen-snix/tests/**/*.rs crates/aspen-snix/src/**/*.rs crates/aspen-castore/tests/**/*.rs)
       }
     )
   }

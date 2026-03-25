@@ -86,6 +86,7 @@ impl<K: ?Sized> RaftDirectoryService<K> {
         }
     }
 
+    // r[impl snix.store.circuit-breaker]
     /// Check if the circuit breaker is open and return an error if so.
     async fn check_circuit(&self) -> Result<(), Error> {
         let cb = self.circuit_breaker.lock().await;
@@ -229,7 +230,7 @@ where K: aspen_core::KeyValueStore + Send + Sync + 'static + ?Sized
                 }
                 visited.insert(digest);
 
-                // Check depth limit
+                // r[impl snix.store.depth-bound]
                 if depth > MAX_DIRECTORY_DEPTH {
                     let err: Error = format!(
                         "maximum directory depth {} exceeded",

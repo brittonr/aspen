@@ -141,6 +141,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // r[verify snix.store.circuit-breaker]
     fn stays_closed_under_threshold() {
         let mut cb = CircuitBreaker::new(5, Duration::from_secs(30));
         let now = Instant::now();

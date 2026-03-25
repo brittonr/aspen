@@ -11,6 +11,7 @@ pub const MAX_BLOB_SIZE_BYTES: u64 = 1024 * 1024 * 1024;
 /// Maximum number of entries in a single directory.
 ///
 /// Prevents excessive memory usage when loading directories.
+// r[impl snix.store.directory-entry-bound]
 pub const MAX_DIRECTORY_ENTRIES: u32 = 100_000;
 
 /// Maximum depth for recursive directory traversal.
@@ -26,12 +27,14 @@ pub const MAX_RECURSIVE_BUFFER: u32 = 10_000;
 /// Maximum number of references a store path can have.
 ///
 /// Matches Nix's practical limits for package dependencies.
+// r[impl snix.store.reference-bound]
 pub const MAX_PATH_REFERENCES: u32 = 10_000;
 
 /// Maximum length of a deriver path in bytes.
 pub const MAX_DERIVER_LENGTH: u32 = 1024;
 
 /// Maximum number of signatures on a path info.
+// r[impl snix.store.signature-bound]
 pub const MAX_SIGNATURES: u32 = 100;
 
 /// Chunk size for streaming blob reads (256 KB).

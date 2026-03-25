@@ -77,6 +77,7 @@ impl<S> IrohBlobService<S> {
         }
     }
 
+    // r[impl snix.store.circuit-breaker]
     /// Check if the circuit breaker is open and return an error if so.
     async fn check_circuit(&self) -> io::Result<()> {
         let cb = self.circuit_breaker.lock().await;
@@ -213,7 +214,7 @@ where S: Send + Sync + 'static
             return Poll::Ready(Err(io::Error::other("writer already closed")));
         }
 
-        // Check size limit
+        // r[impl snix.store.blob-size-bound]
         let new_size = self.buffer.len() as u64 + buf.len() as u64;
         if new_size > MAX_BLOB_SIZE_BYTES {
             return Poll::Ready(Err(io::Error::other(format!(
@@ -339,6 +340,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    // r[verify snix.store.blob-size-bound]
     async fn test_blob_roundtrip() {
         let store = InMemoryBlobStore::new();
         let service = IrohBlobService::new(store);

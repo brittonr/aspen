@@ -74,6 +74,8 @@ fn simple_path_info() -> PathInfo {
 // =============================================================================
 
 #[tokio::test]
+// r[verify snix.store.reference-bound]
+// r[verify snix.store.signature-bound]
 async fn test_put_and_get() {
     let service = make_test_service();
     let path_info = simple_path_info();

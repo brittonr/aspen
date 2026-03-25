@@ -30,6 +30,7 @@ pub struct Manifest {
 
 impl Manifest {
     /// Create a manifest from chunk entries.
+    // r[impl snix.store.manifest-entry-bound]
     pub fn new(entries: Vec<ManifestEntry>) -> Self {
         let total_size = entries.iter().map(|e| e.size as u64).sum();
         Self { entries, total_size }
@@ -93,6 +94,7 @@ mod tests {
     }
 
     #[test]
+    // r[verify snix.store.manifest-entry-bound]
     fn roundtrip_many_entries() {
         let entries: Vec<ManifestEntry> = (0..100u8)
             .map(|i| ManifestEntry {

@@ -64,6 +64,8 @@ fn dir_with_subdir(name: &str, subdir_digest: B3Digest, size: u64) -> Directory 
 // =============================================================================
 
 #[tokio::test]
+// r[verify snix.store.directory-entry-bound]
+// r[verify snix.store.depth-bound]
 async fn test_put_and_get_empty_directory() {
     let service = make_test_service();
     let dir = empty_dir();

@@ -38,6 +38,7 @@ pub fn chunk_blob(data: &[u8]) -> Vec<Chunk> {
         return Vec::new();
     }
 
+    // r[impl snix.store.chunk-size-bound]
     let chunker = FastCDC::new(data, MIN_CHUNK_SIZE, AVG_CHUNK_SIZE, MAX_CHUNK_SIZE);
     let mut chunks = Vec::new();
 
@@ -100,6 +101,7 @@ mod tests {
     }
 
     #[test]
+    // r[verify snix.store.chunk-size-bound]
     fn chunk_sizes_within_bounds() {
         let data: Vec<u8> = (0..2_097_152u32).map(|i| (i.wrapping_mul(2654435761)) as u8).collect();
         let chunks = chunk_blob(&data);

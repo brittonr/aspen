@@ -86,6 +86,7 @@ impl<K: ?Sized> RaftPathInfoService<K> {
         }
     }
 
+    // r[impl snix.store.circuit-breaker]
     /// Check if the circuit breaker is open and return an error if so.
     async fn check_circuit(&self) -> Result<(), Error> {
         let cb = self.circuit_breaker.lock().await;
