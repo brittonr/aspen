@@ -232,14 +232,29 @@ pub const INTEGRITY_VERSION: u32 = 1;
 // ============================================================================
 // Constants for detecting and recovering orphaned pipelines after leader crash.
 
-/// Job orphan detection threshold in milliseconds (5 minutes).
+/// Job heartbeat interval in milliseconds (10 seconds).
 ///
-/// Tiger Style: Fixed threshold for detecting jobs that may have been orphaned.
+/// Tiger Style: Fixed interval for job liveness updates.
+/// Workers update job heartbeat at this interval during execution.
+///
+/// Used in:
+/// - `aspen-jobs/worker.rs`: Job heartbeat update loop
+pub const JOB_HEARTBEAT_INTERVAL_MS: u64 = 10_000;
+
+/// Maximum missed heartbeats before a job is considered orphaned.
+///
+/// Tiger Style: Derived constant — actual threshold is
+/// `JOB_HEARTBEAT_INTERVAL_MS × MAX_MISSED_JOB_HEARTBEATS`.
+pub const MAX_MISSED_JOB_HEARTBEATS: u64 = 30;
+
+/// Job orphan detection threshold in milliseconds.
+///
+/// Derived: `JOB_HEARTBEAT_INTERVAL_MS × MAX_MISSED_JOB_HEARTBEATS` = 300,000ms (5 min).
 /// If a job's heartbeat is older than this, consider it potentially orphaned.
 ///
 /// Used in:
 /// - `aspen-ci/orchestrator/recovery.rs`: Orphan detection logic
-pub const JOB_ORPHAN_DETECTION_THRESHOLD_MS: u64 = 300_000;
+pub const JOB_ORPHAN_DETECTION_THRESHOLD_MS: u64 = JOB_HEARTBEAT_INTERVAL_MS * MAX_MISSED_JOB_HEARTBEATS;
 
 /// Maximum pipelines to recover per scan (50).
 ///
@@ -249,15 +264,6 @@ pub const JOB_ORPHAN_DETECTION_THRESHOLD_MS: u64 = 300_000;
 /// Used in:
 /// - `aspen-ci/orchestrator/recovery.rs`: Recovery batch size
 pub const MAX_PIPELINE_RECOVERY_BATCH: u32 = 50;
-
-/// Job heartbeat interval in milliseconds (10 seconds).
-///
-/// Tiger Style: Fixed interval for job liveness updates.
-/// Workers update job heartbeat at this interval during execution.
-///
-/// Used in:
-/// - `aspen-jobs/worker.rs`: Job heartbeat update loop
-pub const JOB_HEARTBEAT_INTERVAL_MS: u64 = 10_000;
 
 // ============================================================================
 // Memory Pressure Detection

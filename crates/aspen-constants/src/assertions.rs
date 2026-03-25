@@ -350,9 +350,11 @@ const _: () = assert!(CI_VM_MAX_MESSAGE_SIZE > 0);
 // Pipeline Recovery Constants
 // ============================================================================
 
-const _: () = assert!(JOB_ORPHAN_DETECTION_THRESHOLD_MS > 0);
-const _: () = assert!(MAX_PIPELINE_RECOVERY_BATCH > 0);
 const _: () = assert!(JOB_HEARTBEAT_INTERVAL_MS > 0);
+const _: () = assert!(MAX_MISSED_JOB_HEARTBEATS > 0);
+const _: () = assert!(MAX_PIPELINE_RECOVERY_BATCH > 0);
+// Derived: orphan threshold = heartbeat_interval × max_missed
+const _: () = assert!(JOB_ORPHAN_DETECTION_THRESHOLD_MS == JOB_HEARTBEAT_INTERVAL_MS * MAX_MISSED_JOB_HEARTBEATS);
 // Orphan detection must be significantly larger than heartbeat interval
 const _: () = assert!(JOB_ORPHAN_DETECTION_THRESHOLD_MS > JOB_HEARTBEAT_INTERVAL_MS * 10);
 

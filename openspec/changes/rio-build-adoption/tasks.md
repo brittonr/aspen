@@ -10,9 +10,9 @@
 
 ## 2. Derived Timeouts
 
-- [ ] 2.1 Audit `aspen-constants` for independently-defined coupled timeout pairs
-- [ ] 2.2 Refactor to derived constants (`TIMEOUT = INTERVAL × MAX_MISSED`) with compile-time assertions
-- [ ] 2.3 Update any code referencing the old constant names
+- [x] 2.1 Audit `aspen-constants` for independently-defined coupled timeout pairs
+- [x] 2.2 Refactor to derived constants (`TIMEOUT = INTERVAL × MAX_MISSED`) with compile-time assertions
+- [x] 2.3 Update any code referencing the old constant names (names unchanged, values now derived)
 
 ## 3. Chunked Blob Storage
 
