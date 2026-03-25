@@ -1,43 +1,12 @@
-## ADDED Requirements
-
-### Requirement: BranchOverlay implements KeyValueStore
-
-The `BranchOverlay<S: KeyValueStore>` type SHALL implement `KeyValueStore`, enabling transparent use anywhere a `KeyValueStore` is accepted. Reads SHALL fall through to the parent store for keys not present in the branch's dirty map. Writes and deletes SHALL buffer in-memory without touching the parent.
-
-#### Scenario: Read falls through to parent
-
-- **WHEN** a branch has no dirty entry for key "config/db/host"
-- **AND** the parent store contains "config/db/host" with value "localhost"
-- **THEN** `branch.read("config/db/host")` SHALL return "localhost"
-- **AND** the branch SHALL record the key's `mod_revision` in its read set
-
-#### Scenario: Read returns branch delta
-
-- **WHEN** a branch has a dirty write for key "config/db/host" with value "remotehost"
-- **THEN** `branch.read("config/db/host")` SHALL return "remotehost"
-- **AND** the parent store SHALL NOT be queried
-
-#### Scenario: Read respects tombstone
-
-- **WHEN** a branch has a tombstone for key "config/db/host"
-- **AND** the parent store contains "config/db/host"
-- **THEN** `branch.read("config/db/host")` SHALL return `NotFound`
-
-#### Scenario: Write buffers in memory
-
-- **WHEN** `branch.write("key", "value")` is called
-- **THEN** the write SHALL be stored in the branch's dirty map
-- **AND** the parent store SHALL NOT receive any write
-
-#### Scenario: Delete creates tombstone
-
-- **WHEN** `branch.delete("key")` is called
-- **THEN** a tombstone SHALL be recorded in the branch's dirty map
-- **AND** the parent store SHALL NOT receive any delete
+## MODIFIED Requirements
 
 ### Requirement: Atomic commit via Raft batch
 
 A branch commit SHALL flush all buffered writes and deletes as a single atomic Raft operation. If the branch has a non-empty read set, the commit SHALL use `OptimisticTransaction`. If the read set is empty, the commit SHALL use `WriteCommand::Batch`.
+
+When the `commit-dag` feature is enabled, `commit()` SHALL additionally compute a `CommitId`, store a `Commit` snapshot in KV, update the branch tip pointer, and return the `CommitId` alongside the `WriteResult`. The commit metadata write SHALL be included in the same Raft batch as the data mutations.
+
+When the `commit-dag` feature is NOT enabled, `commit()` SHALL behave exactly as before, returning only a `WriteResult`.
 
 #### Scenario: Commit with empty read set
 
@@ -68,64 +37,44 @@ A branch commit SHALL flush all buffered writes and deletes as a single atomic R
 - **THEN** `branch.commit()` SHALL return an error indicating the batch is too large
 - **AND** the parent store SHALL NOT be modified
 
-### Requirement: Zero-cost abort via Drop
+#### Scenario: Commit with commit-dag feature produces CommitId
 
-Dropping a `BranchOverlay` SHALL discard all buffered writes and tombstones with no Raft interaction and no side effects on the parent store.
+- **WHEN** the `commit-dag` feature is enabled
+- **AND** a branch commits dirty writes for keys A, B
+- **THEN** `branch.commit()` SHALL return a `CommitResult` containing both the `WriteResult` and a `CommitId`
+- **AND** the Raft batch SHALL include `Set(_sys:commit:{commit_id_hex}, <serialized_commit>)` and `Set(_sys:commit-tip:{branch_id}, <commit_id_hex>)`
 
-#### Scenario: Abort discards writes
+#### Scenario: Commit without commit-dag feature is unchanged
 
-- **WHEN** a branch has dirty writes for keys A, B, C
-- **AND** the branch is dropped without calling `commit()`
-- **THEN** the parent store SHALL NOT contain any writes from the branch
-- **AND** no Raft operations SHALL be issued
+- **WHEN** the `commit-dag` feature is NOT enabled
+- **AND** a branch commits dirty writes
+- **THEN** `branch.commit()` SHALL return only a `WriteResult`
+- **AND** no `_sys:commit:` entries SHALL be written
 
-### Requirement: Nested branch composition
+#### Scenario: Commit metadata is atomic with data mutations
 
-`BranchOverlay<BranchOverlay<S>>` SHALL compose correctly. An inner branch commit SHALL merge its dirty map into the outer branch, not into Raft. Read resolution SHALL walk the chain from innermost to outermost to parent.
+- **WHEN** the `commit-dag` feature is enabled
+- **AND** a branch commits
+- **THEN** the data mutations and commit metadata SHALL be in the same Raft batch
+- **AND** either all entries (data + metadata) are applied or none are
 
-#### Scenario: Nested read resolution
+### Requirement: Branch tracks parent commit
 
-- **WHEN** an inner branch has no dirty entry for key K
-- **AND** the outer branch has a dirty write for key K with value "outer"
-- **THEN** `inner.read(K)` SHALL return "outer"
+When the `commit-dag` feature is enabled, `BranchOverlay` SHALL track the CommitId of the most recent commit on this branch. After `commit()`, the parent commit field SHALL be updated to the CommitId just produced. On branch creation, the parent commit SHALL be `None` (unless created via `fork_from`).
 
-#### Scenario: Inner commit merges into outer
+#### Scenario: First commit has no parent
 
-- **WHEN** an inner branch has dirty writes for keys A, B
-- **AND** `inner.commit()` is called
-- **THEN** the outer branch's dirty map SHALL contain A and B
-- **AND** no Raft operations SHALL be issued
+- **WHEN** a newly created branch commits for the first time
+- **THEN** the resulting Commit's `parent` field SHALL be `None`
 
-#### Scenario: Inner tombstone shadows outer write
+#### Scenario: Second commit chains from first
 
-- **WHEN** the outer branch has a dirty write for key K
-- **AND** the inner branch has a tombstone for key K
-- **THEN** `inner.read(K)` SHALL return `NotFound`
-- **AND** after `inner.commit()`, the outer branch SHALL have a tombstone for K
+- **WHEN** a branch commits producing `C1`
+- **AND** the branch accumulates new writes and commits again producing `C2`
+- **THEN** `C2.parent` SHALL be `Some(C1)`
 
-#### Scenario: Nesting depth limit
+#### Scenario: Fork branch tracks source commit as parent
 
-- **WHEN** branches are nested beyond `MAX_BRANCH_DEPTH` (8) levels
-- **THEN** creating a new nested branch SHALL return an error
-
-### Requirement: Tiger Style resource bounds
-
-All branch operations SHALL enforce explicit resource limits to prevent memory exhaustion.
-
-#### Scenario: Dirty key count limit
-
-- **WHEN** a branch already contains `MAX_BRANCH_DIRTY_KEYS` (10,000) dirty entries
-- **AND** a write is attempted for a new key
-- **THEN** the write SHALL return an error indicating the branch is full
-
-#### Scenario: Total bytes limit
-
-- **WHEN** the sum of dirty value sizes in a branch reaches `MAX_BRANCH_TOTAL_BYTES` (64 MB)
-- **AND** a write is attempted that would exceed the limit
-- **THEN** the write SHALL return an error indicating the byte limit is exceeded
-
-#### Scenario: Commit timeout
-
-- **WHEN** a branch commit's Raft write does not complete within `BRANCH_COMMIT_TIMEOUT` (10s)
-- **THEN** the commit SHALL return a timeout error
-- **AND** the branch's dirty state SHALL remain intact for retry
+- **WHEN** `fork_from(C5, "my-fork", store)` creates a new branch
+- **AND** the new branch commits producing `C6`
+- **THEN** `C6.parent` SHALL be `Some(C5)`

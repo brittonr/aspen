@@ -4,6 +4,8 @@
 
 The system SHALL allow administrators to establish federation links between independent Aspen clusters. Links SHALL be authenticated via capability tokens presented during the federation handshake, replacing the previous iroh endpoint ID authentication.
 
+When the `commit-dag-federation` feature is enabled, federation links SHALL additionally carry commit provenance metadata, enabling the importing cluster to verify that received KV state was produced by legitimate Raft consensus on the source cluster.
+
 #### Scenario: Establish federation link via token
 
 - **WHEN** Cluster A issues a capability token to Cluster B
@@ -25,62 +27,19 @@ The system SHALL allow administrators to establish federation links between inde
 - **THEN** the system SHALL fall back to `TrustManager` trust level checks
 - **AND** the system SHALL log a deprecation warning
 
-### Requirement: Federation Policy
+#### Scenario: Federation with commit verification
 
-The system SHALL enforce configurable policies governing what resources are shared, with whom, and in which direction. Authorization SHALL be determined by the capabilities in the presented credential, not by cluster-level trust levels alone.
+- **WHEN** the `commit-dag-federation` feature is enabled on both clusters
+- **AND** Cluster B imports KV entries from Cluster A
+- **THEN** Cluster B SHALL verify commit chain hashes for entries that include commit metadata
+- **AND** verified commits SHALL have `verified: true` in their provenance record
+- **AND** unverifiable entries (no commit metadata) SHALL be imported normally with no provenance record
 
-#### Scenario: Read-only federation enforced by token
+#### Scenario: Federation with mixed capability peers
 
-- **WHEN** Cluster B holds a credential with only `Read{prefix: "_forge:repos:"}` capabilities
-- **AND** Cluster B attempts a write-equivalent operation on Cluster A
-- **THEN** the operation SHALL be rejected with `Unauthorized`
-
-#### Scenario: Selective sharing via prefix scoping
-
-- **WHEN** Cluster A issues a token to Cluster B with `Read{prefix: "_forge:repos:public:"}`
-- **AND** Cluster B requests data under prefix `_forge:repos:private:`
-- **THEN** the request SHALL be rejected because the prefix is not within the token's capability scope
-- **AND** Cluster B SHALL only see resources under `_forge:repos:public:`
-
-### Requirement: Federation Handshake
-
-The federation sync protocol handshake SHALL include an optional `Credential` field. The handshake SHALL establish a session-scoped authorization context used for all subsequent sync requests on that connection.
-
-#### Scenario: Handshake with credential
-
-- **WHEN** a cluster initiates a federation handshake with a valid `Credential`
-- **THEN** the receiving cluster SHALL verify the credential (offline, chain walk)
-- **AND** store the verified capabilities as the session's authorization context
-- **AND** respond with a successful handshake including its own identity
-
-#### Scenario: Handshake with invalid credential
-
-- **WHEN** a cluster initiates a federation handshake with an expired or invalid `Credential`
-- **THEN** the receiving cluster SHALL reject the handshake
-- **AND** close the connection
-- **AND** no sync data SHALL be transferred
-
-#### Scenario: Authorization check on sync requests
-
-- **WHEN** a sync request (`ListResources`, `GetResourceState`, `SyncObjects`) is received
-- **THEN** the handler SHALL check the session's credential capabilities against the requested prefix
-- **AND** reject requests outside the credential's authorized scope with `Unauthorized`
-
-### Requirement: TrustManager as derived state
-
-The `TrustManager` SHALL derive trust levels from active credential state. A cluster with a valid, non-expired credential SHALL be considered `Trusted`. A cluster with a revoked credential SHALL be considered `Blocked`. A cluster with no credential SHALL be considered `Public`.
-
-#### Scenario: Trust level derived from active credential
-
-- **WHEN** Cluster B has an active federation credential from Cluster A
-- **THEN** `TrustManager.trust_level(cluster_b_key)` SHALL return `Trusted`
-
-#### Scenario: Trust level after credential expiry
-
-- **WHEN** Cluster B's federation credential from Cluster A expires without refresh
-- **THEN** `TrustManager.trust_level(cluster_b_key)` SHALL return `Public`
-
-#### Scenario: Trust level after explicit revocation
-
-- **WHEN** Cluster A revokes the credential issued to Cluster B
-- **THEN** `TrustManager.trust_level(cluster_b_key)` SHALL return `Blocked`
+- **WHEN** Cluster A has `commit-dag-federation` enabled
+- **AND** Cluster B does NOT have `commit-dag-federation` enabled
+- **THEN** Cluster A SHALL export commit metadata alongside regular entries
+- **AND** Cluster B SHALL import all entries (including `_sys:commit:` entries) as regular KV data
+- **AND** no verification SHALL occur on Cluster B (feature not enabled)
+- **AND** data sync SHALL function correctly regardless of feature mismatch
