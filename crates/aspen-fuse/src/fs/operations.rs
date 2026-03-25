@@ -380,6 +380,19 @@ impl FileSystem for AspenFs {
             self.prefetcher.prefetch_file_start(self, &key);
         }
 
+        // Exec cache: create child tracking session for new PIDs
+        #[cfg(feature = "exec-cache")]
+        if self.read_tracker.is_enabled() {
+            let pid = ctx.pid as u32;
+            if !self.read_tracker.has_session(pid) {
+                if let Some(ppid) = aspen_exec_cache::read_tracker::read_ppid(pid) {
+                    if self.read_tracker.has_session(ppid) {
+                        self.read_tracker.start_child_session(pid, ppid);
+                    }
+                }
+            }
+        }
+
         // No handle needed for stateless operations
         Ok((None, OpenOptions::empty(), None))
     }
@@ -442,6 +455,16 @@ impl FileSystem for AspenFs {
                 crate::prefetch::PrefetchRequest::DirMeta { .. } => {
                     // Dir prefetch handled by execute_pending
                 }
+            }
+        }
+
+        // Exec cache: record this read in the PID's tracking session
+        #[cfg(feature = "exec-cache")]
+        if self.read_tracker.is_enabled() {
+            let pid = ctx.pid as u32;
+            if self.read_tracker.has_session(pid) {
+                let content_hash = blake3::hash(&data);
+                self.read_tracker.record_read(pid, key.clone(), *content_hash.as_bytes());
             }
         }
 

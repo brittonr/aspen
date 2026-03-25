@@ -617,6 +617,7 @@ dependencies = [
  "aspen-core-essentials-handler",
  "aspen-deploy",
  "aspen-docs",
+ "aspen-exec-cache",
  "aspen-forge",
  "aspen-hooks",
  "aspen-hooks-types",
@@ -1558,6 +1559,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-exec-cache"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "dashmap",
+ "serde",
+ "serde_json",
+ "snafu",
+ "tracing",
+]
+
+[[package]]
 name = "aspen-federation"
 version = "0.1.0"
 dependencies = [
@@ -1734,6 +1747,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-client",
+ "aspen-exec-cache",
  "aspen-kv-branch",
  "blake3",
  "clap",

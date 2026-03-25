@@ -119,6 +119,10 @@ pub struct AspenFs {
     /// Branch manager for @branch virtual paths (feature-gated).
     #[cfg(feature = "kv-branch")]
     branch_manager: crate::branch::BranchManager,
+    /// Read tracker for execution caching (feature-gated).
+    /// Tracks which files each PID reads for cache key computation.
+    #[cfg(feature = "exec-cache")]
+    pub(crate) read_tracker: aspen_exec_cache::ReadTracker,
 }
 
 impl AspenFs {
@@ -137,6 +141,8 @@ impl AspenFs {
             flush_timer: Mutex::new(None),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
+            #[cfg(feature = "exec-cache")]
+            read_tracker: aspen_exec_cache::ReadTracker::new(),
         }
     }
 
@@ -159,6 +165,8 @@ impl AspenFs {
             flush_timer: Mutex::new(None),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
+            #[cfg(feature = "exec-cache")]
+            read_tracker: aspen_exec_cache::ReadTracker::new(),
         }
     }
 
@@ -178,6 +186,8 @@ impl AspenFs {
             flush_timer: Mutex::new(None),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
+            #[cfg(feature = "exec-cache")]
+            read_tracker: aspen_exec_cache::ReadTracker::new(),
         }
     }
 
@@ -198,6 +208,8 @@ impl AspenFs {
             flush_timer: Mutex::new(None),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
+            #[cfg(feature = "exec-cache")]
+            read_tracker: aspen_exec_cache::ReadTracker::new(),
         }
     }
 
@@ -221,6 +233,8 @@ impl AspenFs {
             flush_timer: Mutex::new(None),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
+            #[cfg(feature = "exec-cache")]
+            read_tracker: aspen_exec_cache::ReadTracker::new(),
         };
         (fs, store)
     }
@@ -242,6 +256,8 @@ impl AspenFs {
             flush_timer: Mutex::new(None),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
+            #[cfg(feature = "exec-cache")]
+            read_tracker: aspen_exec_cache::ReadTracker::new(),
         }
     }
 
@@ -267,6 +283,8 @@ impl AspenFs {
             flush_timer: Mutex::new(None),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
+            #[cfg(feature = "exec-cache")]
+            read_tracker: aspen_exec_cache::ReadTracker::new(),
         }
     }
 

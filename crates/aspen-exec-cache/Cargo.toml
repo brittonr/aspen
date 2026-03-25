@@ -1,0 +1,25 @@
+[package]
+name = "aspen-exec-cache"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Content-addressed execution cache for Aspen CI, caching process outputs by input file hashes"
+keywords = ["cache", "execution", "content-addressed", "fuse"]
+categories = ["caching"]
+
+[dependencies]
+# Hashing
+blake3 = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Concurrent data structures
+dashmap = "6.1"
+
+# Error handling
+snafu = "0.8.9"
+
+# Logging
+tracing = { workspace = true }

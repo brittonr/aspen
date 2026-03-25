@@ -146,6 +146,9 @@ members = [
     "crates/aspen-ci-executor-vm",
     "crates/aspen-nickel",
 
+    # Execution cache
+    "crates/aspen-exec-cache",
+
     # Nix integration
     "crates/aspen-cache",
     "crates/aspen-snix",
@@ -295,6 +298,7 @@ aspen-ci-executor-shell = { path = "crates/aspen-ci-executor-shell" }
 aspen-ci-executor-nix = { path = "crates/aspen-ci-executor-nix" }
 aspen-ci-executor-vm = { path = "crates/aspen-ci-executor-vm" }
 aspen-cache = { path = "crates/aspen-cache" }
+aspen-exec-cache = { path = "crates/aspen-exec-cache" }
 aspen-castore = { path = "crates/aspen-castore" }
 aspen-snix = { path = "crates/aspen-snix" }
 
@@ -372,6 +376,7 @@ aspen-secrets = { workspace = true, optional = true }
 aspen-automerge = { workspace = true, optional = true }
 aspen-deploy = { workspace = true, optional = true }
 aspen-kv-branch = { workspace = true, optional = true }
+aspen-exec-cache = { workspace = true, optional = true }
 aspen-nostr-relay = { workspace = true, optional = true }
 aspen-ci = { workspace = true, optional = true }
 aspen-cache = { workspace = true, optional = true }
@@ -505,6 +510,7 @@ net = ["dep:aspen-net", "proxy", "aspen-rpc-handlers/net"]
 # contacts and calendar are now WASM plugins (aspen-plugins repo)
 deploy = ["dep:aspen-deploy", "aspen-cluster/deploy", "aspen-rpc-handlers/deploy"]
 kv-branch = ["dep:aspen-kv-branch"]
+exec-cache = ["dep:aspen-exec-cache"]
 nostr-relay = ["dep:aspen-nostr-relay", "hooks", "aspen-cluster/nostr-relay"]
 federation = ["aspen-cluster/federation"]
 relay-server = ["aspen-cluster/relay-server"]

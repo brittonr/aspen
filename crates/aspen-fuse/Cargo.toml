@@ -50,6 +50,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 aspen-kv-branch = { path = "../aspen-kv-branch", optional = true }
 dashmap = { version = "6.1", optional = true }
 
+# Execution cache read tracking (optional)
+aspen-exec-cache = { path = "../aspen-exec-cache", optional = true }
+
 # Random number generation
 rand = "0.9"
 
@@ -67,6 +70,7 @@ virtiofs = [
     "fuse-backend-rs/vhost-user-fs",
 ]
 kv-branch = ["dep:aspen-kv-branch", "dep:dashmap"]
+exec-cache = ["dep:aspen-exec-cache"]
 
 [dev-dependencies]
 tempfile = "3.4"
