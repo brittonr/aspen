@@ -344,6 +344,46 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     // so gossip-discovered address changes propagate into Raft membership.
     crate::gossip_discovery::set_membership_refresh(&membership_refresh_slot, consensus.raft_node.clone()).await;
 
+    // Seed the network factory with Raft membership addresses.
+    //
+    // On restart, Raft loads its membership state from redb, which contains
+    // EndpointAddr for every member. Without this seeding, the node's gossip
+    // has no bootstrap peers and cannot discover other nodes (gossip was
+    // initialized in Phase 3, before Raft loaded membership). This feeds
+    // addresses into the network factory so gossip can bootstrap and the
+    // connection pool can reach peers at their known addresses.
+    //
+    // We wait briefly for Raft metrics to populate (the initial metrics watch
+    // channel may be empty right after Raft::new). The membership is loaded
+    // from redb during init, so this resolves within one Raft tick (~50ms).
+    {
+        let our_node_id = config.node_id;
+        let mut peer_count: u32 = 0;
+        let metrics_rx = consensus.raft_node.raft().metrics();
+        // Wait up to 2 seconds for metrics to contain membership.
+        for _ in 0..20u32 {
+            let metrics = metrics_rx.borrow().clone();
+            let has_nodes = metrics.membership_config.membership().nodes().count() > 1;
+            if has_nodes {
+                for (&node_id, member_info) in metrics.membership_config.membership().nodes() {
+                    if node_id == our_node_id.into() {
+                        continue;
+                    }
+                    let addr = &member_info.iroh_addr;
+                    // Feed into network factory for gossip bootstrap, connection pool,
+                    // and peer cache persistence.
+                    net.network_factory.add_peer(node_id, addr.clone()).await;
+                    peer_count = peer_count.saturating_add(1);
+                }
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        if peer_count > 0 {
+            info!(peer_count, "seeded network factory with Raft membership addresses");
+        }
+    }
+
     // Phase 5: Event broadcast channels for hook integration
     let event_channels = create_event_channels(&config);
 
