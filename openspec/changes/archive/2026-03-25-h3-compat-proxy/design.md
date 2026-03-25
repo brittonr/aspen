@@ -7,6 +7,7 @@ The `aspen-ci-executor-shell` already has a similar pattern — its `cache_proxy
 ## Goals / Non-Goals
 
 **Goals:**
+
 - TCP HTTP/1.1 listener on localhost that forwards to any iroh h3 endpoint
 - Works with any ALPN — forge web, nix cache, future h3 services
 - Standalone binary for development/local use
@@ -15,6 +16,7 @@ The `aspen-ci-executor-shell` already has a similar pattern — its `cache_proxy
 - Streams response body back without buffering entire response
 
 **Non-Goals:**
+
 - WebSocket bridging (different protocol, separate concern)
 - TLS termination on the TCP side (localhost only, no certs needed)
 - Authentication or access control (the iroh endpoint handles that)

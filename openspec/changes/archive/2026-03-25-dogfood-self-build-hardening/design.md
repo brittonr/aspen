@@ -13,12 +13,14 @@ The gap: nobody has verified that the production `.aspen/ci.ncl` pipeline — wh
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Run `dogfood-local.sh full-loop` end-to-end successfully: start → push → CI pipeline (check, build, test stages) → deploy → verify
 - Fix every concrete failure discovered during the run
 - Create a VM integration test that exercises the same loop in an isolated, reproducible environment
 - The VM test uses the real `.aspen/ci.ncl` pipeline config, not a simplified subset
 
 **Non-Goals:**
+
 - Multi-node cluster deployment (1-node is sufficient for self-build proof)
 - Bit-for-bit reproducibility between CI-built and locally-built binaries (different source tree inputs make this impossible)
 - WASM plugin builds (plugins-rpc requires the `aspen-wasm-plugin` sibling repo — excluded from ciSrc)

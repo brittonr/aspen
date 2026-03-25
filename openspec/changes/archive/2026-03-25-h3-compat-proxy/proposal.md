@@ -13,6 +13,7 @@ Aspen serves HTTP/3 over iroh QUIC (forge web frontend, nix binary cache gateway
 ## Capabilities
 
 ### New Capabilities
+
 - `h3-compat-proxy`: Local TCP-to-iroh-h3 proxy that makes iroh-served HTTP/3 content accessible to browsers and standard HTTP clients
 
 ### Modified Capabilities

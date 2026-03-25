@@ -13,6 +13,7 @@ The `dogfood-local.sh` script orchestrates the real-world loop: start cluster �
 ## Capabilities
 
 ### New Capabilities
+
 - `dogfood-full-loop-vm-test`: NixOS VM integration test that runs the complete self-build loop (Forge push → 3-stage CI pipeline → deploy → verify) in an isolated QEMU VM, using the real `.aspen/ci.ncl` config and the repo's own flake checks.
 
 ### Modified Capabilities
