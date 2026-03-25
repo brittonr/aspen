@@ -333,7 +333,10 @@ impl NixBuildWorker {
                     .await;
             }
 
-            // Realise input .drv files (builds/fetches their outputs)
+            // SUBPROCESS-ESCAPE: Realises input derivation outputs via `nix-store --realise`.
+            // Pure-snix replacement: resolve inputs from PathInfoService + BlobService,
+            // fetching missing paths from Aspen's distributed store or upstream substituters
+            // via snix-store's SubstitutionPathInfoService.
             if !input_drv_paths.is_empty() {
                 let mut cmd = Command::new("nix-store");
                 cmd.arg("--realise");
@@ -390,6 +393,9 @@ impl NixBuildWorker {
                 })
                 .collect();
 
+            // SUBPROCESS-ESCAPE: Fetches builder + input_sources store paths not yet on
+            // disk via `nix-store --realise`. Pure-snix replacement: fetch from Aspen's
+            // PathInfoService/BlobService or upstream substituters via snix-store.
             if !missing_extra.is_empty() {
                 info!(
                     missing = missing_extra.len(),
@@ -951,6 +957,10 @@ impl NixBuildWorker {
     ///
     /// Configures the command with cache substituters, sandbox mode, extra args,
     /// working directory, and piped stdout/stderr, then spawns the child process.
+    // SUBPROCESS-ESCAPE: This is the full `nix build` subprocess fallback path.
+    // Used when native snix-build is unavailable or fails. Pure-snix replacement:
+    // the entire native pipeline (snix-eval → derivation_to_build_request →
+    // NativeBuildService::build_derivation → upload_native_outputs) replaces this.
     fn spawn_nix_build(&self, payload: &NixBuildPayload, flake_ref: &str) -> Result<Child> {
         let mut cmd = Command::new(&self.config.nix_binary);
         // Use --no-link instead of --out-link to avoid creating a "result"

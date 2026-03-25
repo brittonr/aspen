@@ -21,6 +21,7 @@
 #   nix build .#checks.x86_64-linux.snix-boot-test
 #   nix build .#checks.x86_64-linux.snix-bridge-virtiofs-test
 #   nix build .#checks.x86_64-linux.snix-flake-native-build-test
+#   nix build .#checks.x86_64-linux.snix-pure-build-test
 
 set -euo pipefail
 

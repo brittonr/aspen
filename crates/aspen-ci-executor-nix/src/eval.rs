@@ -770,6 +770,9 @@ pub fn ensure_flake_lock(flake_dir: &std::path::Path) -> std::io::Result<bool> {
         "generating flake.lock via nix flake lock"
     );
 
+    // SUBPROCESS-ESCAPE: Generates flake.lock by running `nix flake lock`.
+    // Pure-snix replacement: parse flake.nix inputs in-process via snix-eval,
+    // resolve each input's locked ref, and write flake.lock JSON directly.
     let start = std::time::Instant::now();
     let output = std::process::Command::new("nix")
         .args(["flake", "lock"])
@@ -806,7 +809,7 @@ pub fn ensure_flake_lock(flake_dir: &std::path::Path) -> std::io::Result<bool> {
 /// Extract a `.drvPath` string from a successful `NixEvalOutput`.
 ///
 /// Validates the value is a string starting with `/nix/store/` and ending with `.drv`.
-fn extract_drv_path_string(output: &NixEvalOutput) -> Result<String, NixEvalError> {
+pub fn extract_drv_path_string(output: &NixEvalOutput) -> Result<String, NixEvalError> {
     let drv_path_str = match &output.value {
         Some(snix_eval::Value::String(s)) => std::str::from_utf8(s.as_bytes())
             .map_err(|e| NixEvalError {
@@ -839,7 +842,7 @@ fn extract_drv_path_string(output: &NixEvalOutput) -> Result<String, NixEvalErro
 }
 
 /// Convert snix-eval's `EvaluationResult` into our `NixEvalOutput`.
-fn convert_eval_result(result: EvaluationResult) -> NixEvalOutput {
+pub(crate) fn convert_eval_result(result: EvaluationResult) -> NixEvalOutput {
     let errors: Vec<NixEvalError> = result
         .errors
         .iter()

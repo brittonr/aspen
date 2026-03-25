@@ -52,6 +52,9 @@ mod snix;
 mod timing;
 mod worker;
 
+#[cfg(test)]
+pub(crate) mod test_support;
+
 #[cfg(feature = "snix-build")]
 pub use build_service::NativeBuildService;
 pub use cache::UploadedStorePath;

@@ -298,6 +298,12 @@ filter = "test(/evaluate_flake/) or test(/pure_eval/) or test(/store_eval/)"
 retries = 1
 slow-timeout = { period = "90s", terminate-after = 1 }
 
+# snix-only tests (no subprocess): unit, integration, proptest
+[[profile.snix.overrides]]
+filter = "binary(/snix_only/) and package(aspen-ci-executor-nix)"
+retries = 0
+slow-timeout = { period = "60s", terminate-after = 1 }
+
 # Fetch tests that download from network (ignored by default)
 [[profile.snix.overrides]]
 filter = "test(/fetch_real_github/) or test(/fetch_and_clone_git_remote/)"

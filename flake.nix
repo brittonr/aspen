@@ -2136,6 +2136,22 @@
                 name = "aspen-node";
                 features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "net"];
               };
+              # CI node with snix-build for native in-process builds.
+              # Pure eval (no --impure), uses ciSrc which keeps snix as real git deps.
+              ci-aspen-node-snix-build = craneLib.buildPackage (
+                ciCommonArgs
+                // {
+                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy,snix,snix-build";
+                  doCheck = false;
+                  PROTO_ROOT = "${snix-src}";
+                  SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
+                  postInstall = ''
+                    mkdir -p $out/share
+                    echo "${pkgs.busybox}/bin/sh" > $out/share/sandbox-shell-path
+                  '';
+                }
+              );
               ci-aspen-cli = ciVmTestCliBin [];
               ci-git-remote-aspen = ciVmTestBin {
                 name = "git-remote-aspen";
@@ -2212,8 +2228,10 @@
                 // {
                   cargoVendorDir = ciPluginsCargoVendorDir;
                   HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+                  PROTO_ROOT = "${snix-src}";
+                  SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
                   pnameSuffix = "-ci-plugins-deps";
-                  cargoExtraArgs = "--features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy,proxy";
+                  cargoExtraArgs = "--features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy,proxy,snix,snix-build";
                 }
               );
               ciPluginsCommonArgs =
@@ -2262,8 +2280,14 @@
                 ciPluginsCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy";
+                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy,snix,snix-build";
                   doCheck = false;
+                  PROTO_ROOT = "${snix-src}";
+                  SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
+                  postInstall = ''
+                    mkdir -p $out/share
+                    echo "${pkgs.busybox}/bin/sh" > $out/share/sandbox-shell-path
+                  '';
                 }
               );
               ci-aspen-cli-e2e = ciPluginsCliBin ["ci" "forge"];
@@ -2271,122 +2295,38 @@
             })
             # Full-source builds for VM integration tests (legacy, requires --impure).
             # These have IFD caching issues — prefer ci-* variants above.
-            // lib.optionalAttrs hasExternalRepos {
-              full-aspen-node = fullBin {
-                name = "aspen-node";
-                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "net"];
-              };
-              full-aspen-node-proxy = fullBin {
-                name = "aspen-node";
-                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "proxy"];
-              };
-              # Node with VM CI executor (Cloud Hypervisor). Used by dogfood-local-vmci.
-              # NOTE: Also built without hasExternalRepos below (as aspen-node-vmci)
-              full-aspen-node-vmci = fullBin {
-                name = "aspen-node";
-                features = ["ci" "ci-vm-executor" "docs" "hooks" "shell-worker" "automerge" "secrets" "git-bridge"];
-              };
-              # Node with forge, CI, snix, and blob for e2e push→build→cache testing.
-              # Uses fullSrcWithSnix because the snix feature needs real snix source (not stubs).
-              full-aspen-node-e2e = craneLib.buildPackage (
-                fullCommonArgs
-                // {
-                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  src = fullSrcWithSnix;
-                  cargoExtraArgs = "--bin aspen-node --features ci,forge,git-bridge,blob,docs,hooks,shell-worker,automerge,jobs,snix";
-                  doCheck = false;
-                }
-              );
-              # Node with WASM plugin runtime (hyperlight). Uses patched vendor dir.
-              full-aspen-node-plugins = craneLib.buildPackage (
-                fullPluginsCommonArgs
-                // {
-                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy";
-                  doCheck = false;
-                }
-              );
-              # Node with plugins + SNIX decomposed content-addressed storage.
-              # Used by ci-dogfood-self-build-test to verify SNIX upload path.
-              #
-              # fullSrc stubs snix git deps as empty crates. fullSrcWithSnix
-              # reverses that and restores the real git dep lines. We also
-              # need a vendor dir with the real snix source and PROTO_ROOT
-              # for snix-castore's build.rs (tonic protobuf generation).
-              full-aspen-node-plugins-snix = let
-                snixVendorDir = patchVendorForHyperlight (craneLib.vendorCargoDeps {
-                  src = fullSrcWithSnix + "/aspen";
-                  overrideVendorGitCheckout = ps: drv: let
-                    isSnixRepo =
-                      builtins.any (
-                        p:
-                          builtins.isString (p.source or null)
-                          && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
-                      )
-                      ps;
-                  in
-                    if isSnixRepo
-                    then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
-                    else ensureGitCheckoutLock drv;
-                });
-                snixBasicArgs =
-                  fullBasicArgs
-                  // {
-                    src = fullSrcWithSnix;
-                  };
-              in
-                craneLib.buildPackage (
-                  snixBasicArgs
-                  // {
-                    inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                    cargoArtifacts = fullPluginsCargoArtifacts;
-                    cargoVendorDir = snixVendorDir;
-                    cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,snix";
-                    doCheck = false;
-                    HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
-                    PROTO_ROOT = "${snix-src}";
-                    SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
-                    nativeBuildInputs =
-                      basicArgs.nativeBuildInputs
-                      ++ (with pkgs; [autoPatchelfHook]);
-                    buildInputs =
-                      basicArgs.buildInputs
-                      ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
-                        with pkgs; [darwin.apple_sdk.frameworks.Security]
-                      ));
-                  }
-                );
-              # Same as full-aspen-node-plugins-snix but with snix-build for native
-              # in-process builds via bubblewrap/OCI sandbox (no nix build subprocess).
-              full-aspen-node-plugins-snix-build = craneLib.buildPackage (
+            // lib.optionalAttrs hasExternalRepos (let
+              # Shared snix vendor dir for full-source builds with snix-build.
+              fullSnixVendorDir = patchVendorForHyperlight (craneLib.vendorCargoDeps {
+                src = fullSrcWithSnix + "/aspen";
+                overrideVendorGitCheckout = ps: drv: let
+                  isSnixRepo =
+                    builtins.any (
+                      p:
+                        builtins.isString (p.source or null)
+                        && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
+                    )
+                    ps;
+                in
+                  if isSnixRepo
+                  then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
+                  else ensureGitCheckoutLock drv;
+              });
+              # Node with WASM plugin runtime + snix-build for native in-process builds.
+              # Uses bubblewrap/OCI sandbox via snix-build's BuildService instead of
+              # shelling out to `nix build`. Falls back to subprocess at runtime if needed.
+              fullAspenNodePlugins = craneLib.buildPackage (
                 fullBasicArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
                   src = fullSrcWithSnix;
                   cargoArtifacts = fullPluginsCargoArtifacts;
-                  cargoVendorDir = patchVendorForHyperlight (craneLib.vendorCargoDeps {
-                    src = fullSrcWithSnix + "/aspen";
-                    overrideVendorGitCheckout = ps: drv: let
-                      isSnixRepo =
-                        builtins.any (
-                          p:
-                            builtins.isString (p.source or null)
-                            && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
-                        )
-                        ps;
-                    in
-                      if isSnixRepo
-                      then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
-                      else ensureGitCheckoutLock drv;
-                  });
-                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,snix,snix-build";
+                  cargoVendorDir = fullSnixVendorDir;
+                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy,snix,snix-build";
                   doCheck = false;
                   HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
                   PROTO_ROOT = "${snix-src}";
                   SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
-                  # The sandbox shell path is baked into the binary as a string
-                  # literal via env!(). Nix can't trace it as a runtime dep, so
-                  # we write the path to a file to keep busybox in the closure.
                   postInstall = ''
                     mkdir -p $out/share
                     echo "${pkgs.busybox}/bin/sh" > $out/share/sandbox-shell-path
@@ -2401,6 +2341,26 @@
                     ));
                 }
               );
+            in {
+              full-aspen-node = fullBin {
+                name = "aspen-node";
+                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "net"];
+              };
+              full-aspen-node-proxy = fullBin {
+                name = "aspen-node";
+                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "proxy"];
+              };
+              # Node with VM CI executor (Cloud Hypervisor). Used by dogfood-local-vmci.
+              # NOTE: Also built without hasExternalRepos below (as aspen-node-vmci)
+              full-aspen-node-vmci = fullBin {
+                name = "aspen-node";
+                features = ["ci" "ci-vm-executor" "docs" "hooks" "shell-worker" "automerge" "secrets" "git-bridge"];
+              };
+              full-aspen-node-plugins = fullAspenNodePlugins;
+              # Legacy alias — full-aspen-node-plugins now includes snix.
+              full-aspen-node-plugins-snix = fullAspenNodePlugins;
+              # Legacy alias — full-aspen-node-plugins now includes snix-build.
+              full-aspen-node-plugins-snix-build = fullAspenNodePlugins;
               full-aspen-net-daemon = craneLib.buildPackage (
                 fullCommonArgs
                 // {
@@ -2440,7 +2400,7 @@
                   doCheck = false;
                 }
               );
-            };
+            });
         in
           bins
           // rec {
@@ -3259,7 +3219,7 @@
               # Build: nix build .#checks.x86_64-linux.ci-dogfood-workspace-test --impure --option sandbox false
               ci-dogfood-workspace-test = import ./nix/tests/ci-dogfood-workspace.nix {
                 inherit pkgs kvPluginWasm forgePluginWasm;
-                aspenNodePackage = bins.full-aspen-node-plugins-snix;
+                aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli-e2e;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
                 gitRemoteAspenPackage = bins.full-git-remote-aspen;
@@ -3475,6 +3435,17 @@
               # in-process flake input resolution. No nix eval subprocess needed.
               # Build: nix build .#checks.x86_64-linux.snix-flake-native-build-test --impure
               snix-flake-native-build-test = import ./nix/tests/snix-flake-native-build.nix {
+                inherit pkgs kvPluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins-snix-build;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gatewayPackage = bins.full-aspen-nix-cache-gateway;
+              };
+
+              # Pure snix-build test: builds WITHOUT nix CLI in PATH.
+              # Proves the native pipeline works when nix/nix-store are absent.
+              # Build: nix build .#checks.x86_64-linux.snix-pure-build-test --impure
+              snix-pure-build-test = import ./nix/tests/snix-pure-build-test.nix {
                 inherit pkgs kvPluginWasm;
                 aspenNodePackage = bins.full-aspen-node-plugins-snix-build;
                 aspenCliPackage = bins.full-aspen-cli-e2e;
@@ -4321,8 +4292,10 @@
 
             # Local dogfood cluster (no VMs)
             # Usage: nix run .#dogfood-local
-            # Runs nodes as local processes for quick testing
+            # Runs nodes as local processes for quick testing.
+            # Uses ci-aspen-node-snix-build for native in-process nix builds.
             dogfood-local = let
+              dogfoodNode = bins.ci-aspen-node-snix-build;
               scriptsDir = pkgs.runCommand "aspen-scripts" {} ''
                 mkdir -p $out
                 cp -r ${./scripts}/* $out/
@@ -4335,7 +4308,7 @@
 
                 export PATH="${
                   pkgs.lib.makeBinPath [
-                    aspenNode
+                    dogfoodNode
                     bins.aspen-cli
                     bins.git-remote-aspen
                     bins.ci-aspen-nix-cache-gateway
@@ -4346,10 +4319,11 @@
                     pkgs.git
                     pkgs.curl
                     pkgs.nix # Required for CI jobs that run nix build/fmt
+                    pkgs.bubblewrap # Required for snix-build sandbox
                   ]
                 }:$PATH"
 
-                export ASPEN_NODE_BIN="${aspenNode}/bin/aspen-node"
+                export ASPEN_NODE_BIN="${dogfoodNode}/bin/aspen-node"
                 export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
                 export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
                 export ASPEN_NIX_CACHE_GATEWAY_BIN="${bins.ci-aspen-nix-cache-gateway}/bin/aspen-nix-cache-gateway"
@@ -4714,6 +4688,12 @@
                   aspen-node-serial-dogfood = pureBin {
                     name = "aspen-node-serial-dogfood";
                     cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy";
+                  };
+
+                  # Full-featured node for physical deployments (Forge + CI + blob + all services)
+                  aspen-node-clan = pureBin {
+                    name = "aspen-node-clan";
+                    cargoExtraArgs = "--bin aspen-node --features ci,forge,git-bridge,blob,docs,hooks,shell-worker,automerge,secrets,deploy";
                   };
                 })
                 // {

@@ -646,6 +646,9 @@ fn compute_input_closure(direct_names: &[String]) -> Vec<String> {
         return direct_names.to_vec();
     }
 
+    // SUBPROCESS-ESCAPE: Computes transitive closure of store paths via `nix-store -qR`.
+    // Pure-snix replacement: walk PathInfoService.references recursively to build the closure
+    // in-process. Falls back to direct_names when nix-store is absent.
     let output = std::process::Command::new("nix-store").arg("-qR").args(&store_paths).output();
 
     match output {
@@ -674,7 +677,7 @@ fn compute_input_closure(direct_names: &[String]) -> Vec<String> {
 ///
 /// Each line is an absolute `/nix/store/<hash>-<name>` path. Strips the
 /// prefix and deduplicates while preserving order.
-fn parse_closure_output(stdout: &str) -> Vec<String> {
+pub fn parse_closure_output(stdout: &str) -> Vec<String> {
     let mut closure: Vec<String> = stdout
         .lines()
         .filter_map(|line| {
@@ -770,8 +773,10 @@ fn register_output_in_store(source_path: &std::path::Path, target_store_path: &s
         }
     }
 
-    // Fallback: use nix-store --dump | nix-store --restore which goes through
-    // the nix daemon and works on read-only store overlays.
+    // SUBPROCESS-ESCAPE: Dumps a store path as NAR via `nix-store --dump`, then restores
+    // it at the target via `nix-store --restore`. Pure-snix replacement: use
+    // snix_store::nar::NarWriter to produce NAR bytes, then snix-castore ingest to
+    // register in the Aspen store directly. Non-fatal — castore/PathInfoService is primary.
     let dump_child = std::process::Command::new("nix-store")
         .arg("--dump")
         .arg(source_path)
@@ -1033,7 +1038,10 @@ pub fn derivation_to_build_request(
 }
 
 /// Replace output placeholder hashes with actual output paths in a string.
-fn replace_output_placeholders(s: &str, outputs: &BTreeMap<String, nix_compat::derivation::Output>) -> String {
+pub(crate) fn replace_output_placeholders(
+    s: &str,
+    outputs: &BTreeMap<String, nix_compat::derivation::Output>,
+) -> String {
     let mut result = s.to_string();
     for (name, output) in outputs {
         let placeholder = hash_placeholder(name);
@@ -1045,7 +1053,7 @@ fn replace_output_placeholders(s: &str, outputs: &BTreeMap<String, nix_compat::d
 }
 
 /// Replace output placeholder hashes in raw bytes.
-fn replace_output_placeholders_bytes(
+pub(crate) fn replace_output_placeholders_bytes(
     s: &bstr::BString,
     outputs: &BTreeMap<String, nix_compat::derivation::Output>,
 ) -> Vec<u8> {
