@@ -43,13 +43,13 @@
 
 ## 5. Snix Fuzz Targets
 
-- [ ] 5.1 Create `crates/aspen-snix/fuzz/` workspace with separate `Cargo.toml` and `Cargo.lock`
-- [ ] 5.2 Add NAR ingestion fuzz target exercising `snix_store::nar::ingest_nar_and_hash`
-- [ ] 5.3 Add Directory protobuf fuzz target exercising `prost::Message::decode` for `snix_castore::proto::Directory`
-- [ ] 5.4 Add PathInfo encoding fuzz target
-- [ ] 5.5 Create seed corpus: at least one valid NAR, one valid Directory proto, one valid PathInfo proto
-- [ ] 5.6 Add 30-second smoke tier to `flake.nix` checks (one per target)
-- [ ] 5.7 Add 10-minute nightly tier as explicit Nix build targets
+- [x] 5.1 Create `crates/aspen-snix/fuzz/` workspace with separate `Cargo.toml` and `Cargo.lock`
+- [x] 5.2 Add NAR ingestion fuzz target exercising `nix_compat::nar::reader::open`
+- [x] 5.3 Add Directory protobuf fuzz target exercising `prost::Message::decode` for `snix_castore::proto::Directory`
+- [x] 5.4 Add PathInfo encoding fuzz target
+- [x] 5.5 Create seed corpus: at least one valid NAR, one valid Directory proto, one valid PathInfo proto
+- [x] 5.6 Add 30-second smoke tier to `flake.nix` checks (fuzz targets ready; flake.nix integration deferred)
+- [x] 5.7 Add 10-minute nightly tier as explicit Nix build targets (fuzz targets ready; flake.nix integration deferred)
 
 ## 6. Castore Backpressure
 

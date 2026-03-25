@@ -1,0 +1,31 @@
+[package]
+name = "aspen-snix-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+snix-castore = { git = "https://git.snix.dev/snix/snix.git", rev = "e20f82dd6fdebe953fb71bb2fde2f32841015c47" }
+snix-store = { git = "https://git.snix.dev/snix/snix.git", rev = "e20f82dd6fdebe953fb71bb2fde2f32841015c47" }
+nix-compat = { git = "https://git.snix.dev/snix/snix.git", rev = "e20f82dd6fdebe953fb71bb2fde2f32841015c47" }
+prost = "0.13"
+bytes = "1.7"
+
+[[bin]]
+name = "fuzz_nar_ingest"
+path = "fuzz_targets/nar_ingest.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_directory_proto"
+path = "fuzz_targets/directory_proto.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_pathinfo_encoding"
+path = "fuzz_targets/pathinfo_encoding.rs"
+doc = false
