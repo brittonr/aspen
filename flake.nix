@@ -2952,6 +2952,16 @@
                 inherit (self.packages.${system}) aspen-fuse-vm-test;
               };
 
+              # Execution cache test: FUSE mount + BLAKE3 content hashing +
+              # cache entry storage/lookup via KV _exec_cache: prefix.
+              # Build: nix build .#checks.x86_64-linux.exec-cache-test
+              exec-cache-test = import ./nix/tests/exec-cache.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
+                inherit (self.packages.${system}) aspen-fuse-vm-test;
+              };
+
               # Blob operations test: add, get, has, list, protect/unprotect,
               # status, replication-status, delete, repair-cycle.
               # Build: nix build .#checks.x86_64-linux.blob-operations-test
