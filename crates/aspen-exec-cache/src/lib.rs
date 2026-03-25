@@ -19,6 +19,7 @@
 pub mod constants;
 pub mod error;
 pub mod eviction;
+pub mod executor;
 pub mod index;
 pub mod read_tracker;
 pub mod types;
@@ -27,6 +28,10 @@ pub mod verified;
 
 pub use error::ExecCacheError;
 pub use error::Result;
+pub use executor::BlobStore;
+pub use executor::CacheStats;
+pub use executor::CachedExecResult;
+pub use executor::CachedExecutor;
 pub use index::CacheKvStore;
 pub use index::ExecCacheIndex;
 pub use read_tracker::ReadTracker;

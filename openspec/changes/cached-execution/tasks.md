@@ -26,19 +26,19 @@
 
 ## 4. Cached Process Execution
 
-- [ ] 4.1 Implement `CachedExecutor` in `aspen-exec-cache`: wraps a process launch with cache-check-before / capture-after logic
-- [ ] 4.2 Implement cache lookup path: compute key from command+args+env+read_set → check ExecCacheIndex → return cached result or miss
-- [ ] 4.3 Implement output capture on miss: capture stdout, stderr, exit code; scan FUSE write set for output files; store all as iroh-blobs; create cache entry
-- [ ] 4.4 Implement output materialization on hit: write cached output files to FUSE from iroh-blobs, return cached stdout/stderr/exit_code
-- [ ] 4.5 Implement cache lookup timeout (100ms default): fall through to execution if lookup is slow
-- [ ] 4.6 Integration test: run a deterministic command twice, verify second run hits cache and skips execution
+- [x] 4.1 Implement `CachedExecutor` in `aspen-exec-cache`: wraps a process launch with cache-check-before / capture-after logic
+- [x] 4.2 Implement cache lookup path: compute key from command+args+env+read_set → check ExecCacheIndex → return cached result or miss
+- [x] 4.3 Implement output capture on miss: capture stdout, stderr, exit code; scan FUSE write set for output files; store all as iroh-blobs; create cache entry
+- [x] 4.4 Implement output materialization on hit: write cached output files to FUSE from iroh-blobs, return cached stdout/stderr/exit_code
+- [x] 4.5 Implement cache lookup timeout (100ms default): fall through to execution if lookup is slow
+- [x] 4.6 Integration test: run a deterministic command twice, verify second run hits cache and skips execution
 
 ## 5. Process Tree Tracking
 
 - [x] 5.1 Extend `ReadSession` with `child_cache_keys: Vec<CacheKey>` to record completed child process results
 - [x] 5.2 Implement PID→parent mapping via `/proc/{pid}/stat` ppid field lookup
-- [ ] 5.3 Implement recursive cache check: parent cache hit requires all child cache keys to also be valid
-- [ ] 5.4 Integration test: simulated cargo build (parent spawns 3 children, change one input, verify only affected child re-executes)
+- [x] 5.3 Implement recursive cache check: parent cache hit requires all child cache keys to also be valid
+- [x] 5.4 Integration test: simulated cargo build (parent spawns 3 children, change one input, verify only affected child re-executes)
 
 ## 6. LRU Eviction
 
