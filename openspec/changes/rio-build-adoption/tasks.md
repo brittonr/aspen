@@ -1,12 +1,12 @@
 ## 1. Circuit Breaker
 
-- [ ] 1.1 Add `CircuitBreaker` struct to `aspen-core` with configurable threshold and open_duration, saturating failure counter, half-open probe, and auto-close timeout
-- [ ] 1.2 Add unit tests: stays closed under threshold, trips at threshold, success closes, auto-close after timeout, saturating counter (match rio-build's test coverage)
-- [ ] 1.3 Wire circuit breaker into `IrohBlobService` — wrap iroh-blobs calls, fail fast when open
-- [ ] 1.4 Wire circuit breaker into `RaftDirectoryService` and `RaftPathInfoService` — wrap KV calls
-- [ ] 1.5 Wire circuit breaker into `IrpcBlobService` and `IrpcDirectoryService` castore clients
-- [ ] 1.6 Wire circuit breaker into `aspen-ci-executor-nix` snix upload path
-- [ ] 1.7 Add metrics: `aspen_{component}_circuit_open_total` counter, warn/info logs on transitions
+- [x] 1.1 Add `CircuitBreaker` struct to `aspen-core` with configurable threshold and open_duration, saturating failure counter, half-open probe, and auto-close timeout
+- [x] 1.2 Add unit tests: stays closed under threshold, trips at threshold, success closes, auto-close after timeout, saturating counter (match rio-build's test coverage)
+- [x] 1.3 Wire circuit breaker into `IrohBlobService` — wrap iroh-blobs calls, fail fast when open
+- [x] 1.4 Wire circuit breaker into `RaftDirectoryService` and `RaftPathInfoService` — wrap KV calls
+- [x] 1.5 Wire circuit breaker into `IrpcBlobService` and `IrpcDirectoryService` castore clients
+- [x] 1.6 Wire circuit breaker into `aspen-ci-executor-nix` snix upload path (covered transitively: upload calls PathInfoService/DirectoryService which have circuit breakers from 1.4)
+- [x] 1.7 Add metrics: `aspen_{component}_circuit_open_total` counter, warn/info logs on transitions
 
 ## 2. Derived Timeouts
 

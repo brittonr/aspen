@@ -16,6 +16,7 @@
 //! - `sql` (default): Include SQL query types and traits
 
 pub mod app_registry;
+pub mod circuit_breaker;
 pub mod cluster;
 pub mod constants;
 pub mod context;

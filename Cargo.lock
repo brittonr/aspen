@@ -831,6 +831,7 @@ name = "aspen-castore"
 version = "0.1.0"
 dependencies = [
  "aspen-blob",
+ "aspen-core",
  "async-stream",
  "async-trait",
  "futures",

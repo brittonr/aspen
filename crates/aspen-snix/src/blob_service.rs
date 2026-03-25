@@ -26,7 +26,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
+use std::time::Duration;
+use std::time::Instant;
 
+use aspen_core::circuit_breaker::CircuitBreaker;
 use async_trait::async_trait;
 use n0_future::io::AsyncWrite;
 use snix_castore::B3Digest;
@@ -34,10 +37,18 @@ use snix_castore::blobservice::BlobReader;
 use snix_castore::blobservice::BlobService;
 use snix_castore::blobservice::BlobWriter;
 use snix_castore::proto::stat_blob_response::ChunkMeta;
+use tokio::sync::Mutex;
 use tracing::debug;
 use tracing::instrument;
+use tracing::warn;
 
 use crate::constants::MAX_BLOB_SIZE_BYTES;
+
+/// Default consecutive failure threshold for the blob service circuit breaker.
+const BLOB_CB_THRESHOLD: u32 = 5;
+
+/// Default open duration for the blob service circuit breaker.
+const BLOB_CB_OPEN_DURATION: Duration = Duration::from_secs(30);
 
 /// SNIX BlobService implementation backed by Aspen's BlobStore.
 ///
@@ -46,17 +57,54 @@ use crate::constants::MAX_BLOB_SIZE_BYTES;
 #[derive(Clone)]
 pub struct IrohBlobService<S> {
     store: Arc<S>,
+    circuit_breaker: Arc<Mutex<CircuitBreaker>>,
 }
 
 impl<S> IrohBlobService<S> {
     /// Create a new IrohBlobService wrapping the given store.
     pub fn new(store: S) -> Self {
-        Self { store: Arc::new(store) }
+        Self {
+            store: Arc::new(store),
+            circuit_breaker: Arc::new(Mutex::new(CircuitBreaker::new(BLOB_CB_THRESHOLD, BLOB_CB_OPEN_DURATION))),
+        }
     }
 
     /// Create a new IrohBlobService from an Arc'd store.
     pub fn from_arc(store: Arc<S>) -> Self {
-        Self { store }
+        Self {
+            store,
+            circuit_breaker: Arc::new(Mutex::new(CircuitBreaker::new(BLOB_CB_THRESHOLD, BLOB_CB_OPEN_DURATION))),
+        }
+    }
+
+    /// Check if the circuit breaker is open and return an error if so.
+    async fn check_circuit(&self) -> io::Result<()> {
+        let cb = self.circuit_breaker.lock().await;
+        if cb.should_reject(Instant::now()) {
+            return Err(io::Error::other("iroh blob service circuit breaker is open — too many consecutive failures"));
+        }
+        Ok(())
+    }
+
+    /// Record a successful operation. Logs recovery if breaker was open.
+    async fn record_success(&self) {
+        if self.circuit_breaker.lock().await.record_success() {
+            tracing::info!("iroh blob service circuit breaker recovered — closed");
+        }
+    }
+
+    /// Record a failed operation. Logs a warning when the breaker trips open.
+    async fn record_failure(&self) {
+        let mut cb = self.circuit_breaker.lock().await;
+        let was_open = cb.should_reject(Instant::now());
+        cb.record_failure(Instant::now());
+        if !was_open && cb.should_reject(Instant::now()) {
+            warn!(
+                failures = cb.consecutive_failures(),
+                open_duration_secs = cb.open_duration().as_secs(),
+                "iroh blob service circuit breaker tripped open"
+            );
+        }
     }
 }
 
@@ -78,38 +126,53 @@ where S: aspen_blob::BlobStore + 'static
 {
     #[instrument(skip(self), fields(digest = %digest))]
     async fn has(&self, digest: &B3Digest) -> io::Result<bool> {
+        self.check_circuit().await?;
         let hash = b3_digest_to_iroh_hash(digest);
-        self.store.has(&hash).await.map_err(|e| io::Error::other(format!("blob store error: {}", e)))
+        match self.store.has(&hash).await {
+            Ok(result) => {
+                self.record_success().await;
+                Ok(result)
+            }
+            Err(e) => {
+                self.record_failure().await;
+                Err(io::Error::other(format!("blob store error: {}", e)))
+            }
+        }
     }
 
     #[instrument(skip(self), fields(digest = %digest))]
     async fn open_read(&self, digest: &B3Digest) -> io::Result<Option<Box<dyn BlobReader>>> {
+        self.check_circuit().await?;
         let hash = b3_digest_to_iroh_hash(digest);
 
         match self.store.get_bytes(&hash).await {
             Ok(Some(bytes)) => {
+                self.record_success().await;
                 debug!(size = bytes.len(), "blob read successfully");
-                // Wrap bytes in a Cursor which implements BlobReader
                 let cursor = Cursor::new(bytes);
                 Ok(Some(Box::new(cursor)))
             }
             Ok(None) => {
+                self.record_success().await;
                 debug!("blob not found");
                 Ok(None)
             }
-            Err(e) => Err(io::Error::other(format!("blob store error: {}", e))),
+            Err(e) => {
+                self.record_failure().await;
+                Err(io::Error::other(format!("blob store error: {}", e)))
+            }
         }
     }
 
     #[instrument(skip(self))]
     async fn open_write(&self) -> Box<dyn BlobWriter> {
         debug!("opening blob writer");
-        Box::new(IrohBlobWriter::new(Arc::clone(&self.store)))
+        Box::new(IrohBlobWriter::new(Arc::clone(&self.store), Arc::clone(&self.circuit_breaker)))
     }
 
     #[instrument(skip(self), fields(digest = %digest))]
     async fn chunks(&self, digest: &B3Digest) -> io::Result<Option<Vec<ChunkMeta>>> {
-        // Check if blob exists
+        // has() already checks circuit breaker
         if !self.has(digest).await? {
             return Ok(None);
         }
@@ -124,15 +187,17 @@ where S: aspen_blob::BlobStore + 'static
 /// memory pressure. For small blobs, data is buffered in memory.
 pub struct IrohBlobWriter<S> {
     store: Arc<S>,
+    circuit_breaker: Arc<Mutex<CircuitBreaker>>,
     buffer: Vec<u8>,
     is_closed: bool,
     digest: Option<B3Digest>,
 }
 
 impl<S> IrohBlobWriter<S> {
-    fn new(store: Arc<S>) -> Self {
+    fn new(store: Arc<S>, circuit_breaker: Arc<Mutex<CircuitBreaker>>) -> Self {
         Self {
             store,
+            circuit_breaker,
             buffer: Vec::new(),
             is_closed: false,
             digest: None,
@@ -212,16 +277,42 @@ where S: aspen_blob::BlobStore + Send + Sync + 'static
             return self.digest.ok_or_else(|| io::Error::other("writer closed without digest"));
         }
 
+        // Check circuit breaker before attempting write
+        {
+            let cb = self.circuit_breaker.lock().await;
+            if cb.should_reject(Instant::now()) {
+                return Err(io::Error::other(
+                    "iroh blob service circuit breaker is open — too many consecutive failures",
+                ));
+            }
+        }
+
         self.is_closed = true;
 
         tracing::info!(buffer_size = self.buffer.len(), "blob writer closing, writing to store");
 
         // Write to blob store
-        let result = self
-            .store
-            .add_bytes(&self.buffer)
-            .await
-            .map_err(|e| io::Error::other(format!("blob store error: {}", e)))?;
+        let result = match self.store.add_bytes(&self.buffer).await {
+            Ok(r) => {
+                if self.circuit_breaker.lock().await.record_success() {
+                    tracing::info!("iroh blob service circuit breaker recovered — closed");
+                }
+                r
+            }
+            Err(e) => {
+                let mut cb = self.circuit_breaker.lock().await;
+                let was_open = cb.should_reject(Instant::now());
+                cb.record_failure(Instant::now());
+                if !was_open && cb.should_reject(Instant::now()) {
+                    warn!(
+                        failures = cb.consecutive_failures(),
+                        "iroh blob service circuit breaker tripped open during write"
+                    );
+                }
+                self.is_closed = false; // allow retry
+                return Err(io::Error::other(format!("blob store error: {}", e)));
+            }
+        };
 
         let digest = iroh_hash_to_b3_digest(&result.blob_ref.hash);
         self.digest = Some(digest);

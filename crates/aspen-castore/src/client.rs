@@ -8,7 +8,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
+use std::time::Duration;
+use std::time::Instant;
 
+use aspen_core::circuit_breaker::CircuitBreaker;
 use async_trait::async_trait;
 use prost::Message;
 use snix_castore::B3Digest;
@@ -18,10 +21,18 @@ use snix_castore::blobservice::BlobService;
 use snix_castore::blobservice::BlobWriter;
 use snix_castore::directoryservice::DirectoryPutter;
 use snix_castore::directoryservice::DirectoryService;
+use tokio::sync::Mutex;
 use tracing::debug;
 use tracing::instrument;
+use tracing::warn;
 
 use crate::protocol::*;
+
+/// Default consecutive failure threshold for irpc client circuit breakers.
+const IRPC_CB_THRESHOLD: u32 = 5;
+
+/// Default open duration for irpc client circuit breakers.
+const IRPC_CB_OPEN_DURATION: Duration = Duration::from_secs(30);
 
 /// Type alias for a boxed stream, matching snix-castore's expectation.
 type BoxStream<'a, T> = futures::stream::BoxStream<'a, T>;
@@ -43,6 +54,7 @@ fn bytes_to_digest(bytes: &[u8; 32]) -> B3Digest {
 #[derive(Clone)]
 pub struct IrpcBlobService {
     client: irpc::Client<CastoreProtocol>,
+    circuit_breaker: Arc<Mutex<CircuitBreaker>>,
 }
 
 impl IrpcBlobService {
@@ -51,12 +63,39 @@ impl IrpcBlobService {
         let conn = IrohConnection::new(endpoint, addr.into(), crate::CASTORE_ALPN.to_vec());
         Self {
             client: irpc::Client::boxed(conn),
+            circuit_breaker: Arc::new(Mutex::new(CircuitBreaker::new(IRPC_CB_THRESHOLD, IRPC_CB_OPEN_DURATION))),
         }
     }
 
     /// Create from an existing irpc client (e.g. for local/in-process use).
     pub fn from_client(client: irpc::Client<CastoreProtocol>) -> Self {
-        Self { client }
+        Self {
+            client,
+            circuit_breaker: Arc::new(Mutex::new(CircuitBreaker::new(IRPC_CB_THRESHOLD, IRPC_CB_OPEN_DURATION))),
+        }
+    }
+
+    async fn check_circuit(&self) -> io::Result<()> {
+        let cb = self.circuit_breaker.lock().await;
+        if cb.should_reject(Instant::now()) {
+            return Err(io::Error::other("irpc blob client circuit breaker is open — too many consecutive failures"));
+        }
+        Ok(())
+    }
+
+    async fn record_success(&self) {
+        if self.circuit_breaker.lock().await.record_success() {
+            tracing::info!("irpc blob client circuit breaker recovered — closed");
+        }
+    }
+
+    async fn record_failure(&self) {
+        let mut cb = self.circuit_breaker.lock().await;
+        let was_open = cb.should_reject(Instant::now());
+        cb.record_failure(Instant::now());
+        if !was_open && cb.should_reject(Instant::now()) {
+            warn!(failures = cb.consecutive_failures(), "irpc blob client circuit breaker tripped open");
+        }
     }
 }
 
@@ -64,28 +103,45 @@ impl IrpcBlobService {
 impl BlobService for IrpcBlobService {
     #[instrument(skip(self), fields(digest = %digest))]
     async fn has(&self, digest: &B3Digest) -> io::Result<bool> {
+        self.check_circuit().await?;
         let msg = BlobHas {
             digest: *digest.as_ref(),
         };
-        self.client.rpc(msg).await.map_err(|e| io::Error::other(format!("irpc blob has: {e}")))
+        match self.client.rpc(msg).await {
+            Ok(result) => {
+                self.record_success().await;
+                Ok(result)
+            }
+            Err(e) => {
+                self.record_failure().await;
+                Err(io::Error::other(format!("irpc blob has: {e}")))
+            }
+        }
     }
 
     #[instrument(skip(self), fields(digest = %digest))]
     async fn open_read(&self, digest: &B3Digest) -> io::Result<Option<Box<dyn BlobReader>>> {
+        self.check_circuit().await?;
         let msg = BlobRead {
             digest: *digest.as_ref(),
         };
-        let resp: BlobReadResponse =
-            self.client.rpc(msg).await.map_err(|e| io::Error::other(format!("irpc blob read: {e}")))?;
-
-        match resp.data {
-            Some(data) => {
-                debug!(size = data.len(), "blob read");
-                Ok(Some(Box::new(io::Cursor::new(data))))
+        match self.client.rpc(msg).await {
+            Ok(resp) => {
+                self.record_success().await;
+                match resp.data {
+                    Some(data) => {
+                        debug!(size = data.len(), "blob read");
+                        Ok(Some(Box::new(io::Cursor::new(data))))
+                    }
+                    None => {
+                        debug!("blob not found");
+                        Ok(None)
+                    }
+                }
             }
-            None => {
-                debug!("blob not found");
-                Ok(None)
+            Err(e) => {
+                self.record_failure().await;
+                Err(io::Error::other(format!("irpc blob read: {e}")))
             }
         }
     }
@@ -94,6 +150,7 @@ impl BlobService for IrpcBlobService {
     async fn open_write(&self) -> Box<dyn BlobWriter> {
         Box::new(IrpcBlobWriter {
             client: self.client.clone(),
+            circuit_breaker: Arc::clone(&self.circuit_breaker),
             buffer: Vec::new(),
             digest: None,
         })
@@ -103,6 +160,7 @@ impl BlobService for IrpcBlobService {
 /// BlobWriter that buffers locally and uploads on close.
 struct IrpcBlobWriter {
     client: irpc::Client<CastoreProtocol>,
+    circuit_breaker: Arc<Mutex<CircuitBreaker>>,
     buffer: Vec<u8>,
     digest: Option<B3Digest>,
 }
@@ -131,15 +189,34 @@ impl BlobWriter for IrpcBlobWriter {
             return Ok(digest);
         }
 
+        // Check circuit breaker before write
+        {
+            let cb = self.circuit_breaker.lock().await;
+            if cb.should_reject(Instant::now()) {
+                return Err(io::Error::other(
+                    "irpc blob client circuit breaker is open — too many consecutive failures",
+                ));
+            }
+        }
+
         let data = std::mem::take(&mut self.buffer);
         let msg = BlobWrite { data };
-        let digest_bytes: [u8; 32] =
-            self.client.rpc(msg).await.map_err(|e| io::Error::other(format!("irpc blob write: {e}")))?;
-
-        let digest = bytes_to_digest(&digest_bytes);
-        self.digest = Some(digest);
-        debug!(digest = %digest, "blob written via irpc");
-        Ok(digest)
+        match self.client.rpc(msg).await {
+            Ok(digest_bytes) => {
+                if self.circuit_breaker.lock().await.record_success() {
+                    tracing::info!("irpc blob client circuit breaker recovered — closed");
+                }
+                let digest = bytes_to_digest(&digest_bytes);
+                self.digest = Some(digest);
+                debug!(digest = %digest, "blob written via irpc");
+                Ok(digest)
+            }
+            Err(e) => {
+                let mut cb = self.circuit_breaker.lock().await;
+                cb.record_failure(Instant::now());
+                Err(io::Error::other(format!("irpc blob write: {e}")))
+            }
+        }
     }
 }
 
@@ -153,6 +230,7 @@ impl BlobWriter for IrpcBlobWriter {
 #[derive(Clone)]
 pub struct IrpcDirectoryService {
     client: irpc::Client<CastoreProtocol>,
+    circuit_breaker: Arc<Mutex<CircuitBreaker>>,
 }
 
 impl IrpcDirectoryService {
@@ -161,12 +239,41 @@ impl IrpcDirectoryService {
         let conn = IrohConnection::new(endpoint, addr.into(), crate::CASTORE_ALPN.to_vec());
         Self {
             client: irpc::Client::boxed(conn),
+            circuit_breaker: Arc::new(Mutex::new(CircuitBreaker::new(IRPC_CB_THRESHOLD, IRPC_CB_OPEN_DURATION))),
         }
     }
 
     /// Create from an existing irpc client (e.g. for local/in-process use).
     pub fn from_client(client: irpc::Client<CastoreProtocol>) -> Self {
-        Self { client }
+        Self {
+            client,
+            circuit_breaker: Arc::new(Mutex::new(CircuitBreaker::new(IRPC_CB_THRESHOLD, IRPC_CB_OPEN_DURATION))),
+        }
+    }
+
+    async fn check_circuit(&self) -> Result<(), DirError> {
+        let cb = self.circuit_breaker.lock().await;
+        if cb.should_reject(Instant::now()) {
+            return Err(Box::new(io::Error::other(
+                "irpc directory client circuit breaker is open — too many consecutive failures",
+            )));
+        }
+        Ok(())
+    }
+
+    async fn record_success(&self) {
+        if self.circuit_breaker.lock().await.record_success() {
+            tracing::info!("irpc directory client circuit breaker recovered — closed");
+        }
+    }
+
+    async fn record_failure(&self) {
+        let mut cb = self.circuit_breaker.lock().await;
+        let was_open = cb.should_reject(Instant::now());
+        cb.record_failure(Instant::now());
+        if !was_open && cb.should_reject(Instant::now()) {
+            warn!(failures = cb.consecutive_failures(), "irpc directory client circuit breaker tripped open");
+        }
     }
 }
 
@@ -174,35 +281,52 @@ impl IrpcDirectoryService {
 impl DirectoryService for IrpcDirectoryService {
     #[instrument(skip(self), fields(digest = %digest))]
     async fn get(&self, digest: &B3Digest) -> Result<Option<Directory>, DirError> {
+        self.check_circuit().await?;
         let msg = DirGet {
             digest: *digest.as_ref(),
         };
-        let resp: DirGetResponse = self.client.rpc(msg).await?;
-
-        match resp.data {
-            Some(bytes) => {
-                let proto = snix_castore::proto::Directory::decode(bytes.as_slice())?;
-                let dir = Directory::try_from(proto)?;
-                debug!("directory found");
-                Ok(Some(dir))
+        match self.client.rpc(msg).await {
+            Ok(resp) => {
+                self.record_success().await;
+                match resp.data {
+                    Some(bytes) => {
+                        let proto = snix_castore::proto::Directory::decode(bytes.as_slice())?;
+                        let dir = Directory::try_from(proto)?;
+                        debug!("directory found");
+                        Ok(Some(dir))
+                    }
+                    None => {
+                        debug!("directory not found");
+                        Ok(None)
+                    }
+                }
             }
-            None => {
-                debug!("directory not found");
-                Ok(None)
+            Err(e) => {
+                self.record_failure().await;
+                Err(e.into())
             }
         }
     }
 
     #[instrument(skip(self, directory), fields(digest = %directory.digest()))]
     async fn put(&self, directory: Directory) -> Result<B3Digest, DirError> {
+        self.check_circuit().await?;
         let proto = snix_castore::proto::Directory::from(directory);
         let msg = DirPut {
             data: proto.encode_to_vec(),
         };
-        let digest_bytes: [u8; 32] = self.client.rpc(msg).await?;
-        let digest = bytes_to_digest(&digest_bytes);
-        debug!(digest = %digest, "directory stored via irpc");
-        Ok(digest)
+        match self.client.rpc(msg).await {
+            Ok(digest_bytes) => {
+                self.record_success().await;
+                let digest = bytes_to_digest(&digest_bytes);
+                debug!(digest = %digest, "directory stored via irpc");
+                Ok(digest)
+            }
+            Err(e) => {
+                self.record_failure().await;
+                Err(e.into())
+            }
+        }
     }
 
     fn get_recursive(&self, root_directory_digest: &B3Digest) -> BoxStream<'_, Result<Directory, DirError>> {
