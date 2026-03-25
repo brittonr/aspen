@@ -157,6 +157,7 @@ cargo run -p aspen-cli --bin aspen-cli -- kv get mykey
 - **quick**: Skips slow tests (proptest, chaos, madsim_multi, crash recovery)
 - **ci**: Extended 120s timeouts, fail-fast disabled
 - **network**: For tests requiring real network access
+- **snix**: All snix/nix-build tests (use `scripts/test-snix.sh`)
 
 ### Nix Apps (without entering shell)
 

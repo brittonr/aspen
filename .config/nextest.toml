@@ -252,3 +252,54 @@ slow-timeout = { period = "180s", terminate-after = 1 }
 filter = "test(/packet_loss/)"
 retries = 2
 slow-timeout = { period = "120s", terminate-after = 1 }
+
+# ============================================================================
+# SNIX Profile - All snix/nix-build related tests
+# ============================================================================
+# Usage: cargo nextest run -P snix -p aspen-snix -p aspen-ci-executor-nix -p aspen-snix-bridge -p aspen-nix-cache-gateway
+#
+# Shorthand: scripts/test-snix.sh
+#
+# Crates covered:
+#   - aspen-snix (BlobService, DirectoryService, PathInfoService, migration, DAG sync)
+#   - aspen-ci-executor-nix (eval, build_service, derivation, flake, fetch, cache)
+#   - aspen-snix-bridge (gRPC bridge)
+#   - aspen-nix-cache-gateway (HTTP binary cache)
+#
+# For sandbox-dependent tests (bubblewrap, nix daemon):
+#   scripts/test-snix.sh --run-ignored all
+
+[profile.snix]
+retries = 1
+fail-fast = true
+test-threads = 1
+slow-timeout = { period = "60s", terminate-after = 1 }
+
+[profile.snix.junit]
+path = "junit-snix.xml"
+store-success-output = false
+store-failure-output = true
+
+# Madsim simulation tests get extra time for deterministic replay
+[[profile.snix.overrides]]
+filter = "binary(/madsim/) and package(aspen-snix)"
+retries = 1
+slow-timeout = { period = "120s", terminate-after = 1 }
+
+# Native build tests requiring bubblewrap sandbox
+[[profile.snix.overrides]]
+filter = "test(/native_build/) or test(/build_output_registration/)"
+retries = 1
+slow-timeout = { period = "180s", terminate-after = 1 }
+
+# Eval tests that invoke snix-eval can be slow on first run
+[[profile.snix.overrides]]
+filter = "test(/evaluate_flake/) or test(/pure_eval/) or test(/store_eval/)"
+retries = 1
+slow-timeout = { period = "90s", terminate-after = 1 }
+
+# Fetch tests that download from network (ignored by default)
+[[profile.snix.overrides]]
+filter = "test(/fetch_real_github/) or test(/fetch_and_clone_git_remote/)"
+retries = 2
+slow-timeout = { period = "120s", terminate-after = 1 }

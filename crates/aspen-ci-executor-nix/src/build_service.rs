@@ -1748,6 +1748,511 @@ mod tests {
     }
 
     // ====================================================================
+    // Mock BuildService for testing the orchestration pipeline without bwrap
+    // ====================================================================
+
+    /// A BuildService that returns a configurable result. Tracks whether
+    /// do_build was called and with what request.
+    struct MockBuildService {
+        result: std::sync::Mutex<Option<io::Result<BuildResult>>>,
+        called: std::sync::atomic::AtomicBool,
+    }
+
+    impl MockBuildService {
+        fn succeeding(outputs: Vec<BuildOutput>) -> Self {
+            Self {
+                result: std::sync::Mutex::new(Some(Ok(BuildResult { outputs }))),
+                called: std::sync::atomic::AtomicBool::new(false),
+            }
+        }
+
+        fn failing(msg: &str) -> Self {
+            Self {
+                result: std::sync::Mutex::new(Some(Err(io::Error::other(msg.to_string())))),
+                called: std::sync::atomic::AtomicBool::new(false),
+            }
+        }
+
+        #[allow(dead_code)]
+        fn was_called(&self) -> bool {
+            self.called.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
+    #[::tonic::async_trait]
+    impl BuildService for MockBuildService {
+        async fn do_build(&self, _request: BuildRequest) -> io::Result<BuildResult> {
+            self.called.store(true, std::sync::atomic::Ordering::SeqCst);
+            self.result
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap_or_else(|| Err(io::Error::other("MockBuildService: no result configured")))
+        }
+    }
+
+    fn make_in_memory_services() -> (Arc<dyn BlobService>, Arc<dyn DirectoryService>, Arc<dyn PathInfoService>) {
+        let blob_service = Arc::new(snix_castore::blobservice::MemoryBlobService::default());
+        let directory_service = Arc::new(
+            snix_castore::directoryservice::RedbDirectoryService::new_temporary("test".to_string(), Default::default())
+                .expect("create temp dir service"),
+        );
+        let pathinfo_service = Arc::new(snix_store::pathinfoservice::LruPathInfoService::with_capacity(
+            "test".to_string(),
+            std::num::NonZeroUsize::new(100).unwrap(),
+        ));
+        (blob_service, directory_service, pathinfo_service)
+    }
+
+    // ====================================================================
+    // NativeBuildService::build_derivation() orchestration tests
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_build_derivation_calls_build_service() {
+        // Verify the full pipeline: resolve inputs → convert → do_build.
+        // Uses a mock that returns a single output.
+        let (bs, ds, ps) = make_in_memory_services();
+
+        let output_node = Node::File {
+            digest: *DUMMY_DIGEST,
+            size: 42,
+            executable: true,
+        };
+        let mock = MockBuildService::succeeding(vec![BuildOutput {
+            node: output_node.clone(),
+            output_needles: BTreeSet::new(),
+        }]);
+
+        let service = NativeBuildService::with_build_service(Box::new(mock), bs, ds, ps);
+
+        let drv = make_test_drv("mock-build");
+        let result = service.build_derivation(&drv, None).await;
+
+        let native_result = result.expect("build_derivation should succeed with mock");
+        assert_eq!(native_result.outputs.len(), 1);
+        assert_eq!(native_result.outputs[0].node, output_node);
+        assert!(
+            native_result.outputs[0].store_path.to_absolute_path().contains("mock-build"),
+            "output store path should match derivation"
+        );
+        assert!(native_result.resolve_ms < 5000, "resolve shouldn't take 5s");
+        assert!(native_result.build_ms < 5000, "build shouldn't take 5s");
+    }
+
+    #[tokio::test]
+    async fn test_build_derivation_propagates_build_error() {
+        let (bs, ds, ps) = make_in_memory_services();
+
+        let mock = MockBuildService::failing("sandbox exploded");
+        let service = NativeBuildService::with_build_service(Box::new(mock), bs, ds, ps);
+
+        let drv = make_test_drv("fail-build");
+        let result = service.build_derivation(&drv, None).await;
+
+        let err = result.expect_err("build_derivation should propagate do_build error");
+        assert!(err.to_string().contains("sandbox exploded"), "error message should come from mock: {err}");
+    }
+
+    #[tokio::test]
+    async fn test_build_derivation_streams_log_messages() {
+        let (bs, ds, ps) = make_in_memory_services();
+
+        let mock = MockBuildService::succeeding(vec![BuildOutput {
+            node: Node::File {
+                digest: *DUMMY_DIGEST,
+                size: 1,
+                executable: false,
+            },
+            output_needles: BTreeSet::new(),
+        }]);
+
+        let service = NativeBuildService::with_build_service(Box::new(mock), bs, ds, ps);
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(16);
+        let drv = make_test_drv("log-test");
+        service.build_derivation(&drv, Some(tx)).await.unwrap();
+
+        // Should have received at least "resolved N build inputs" and
+        // "starting native build" log messages.
+        let mut messages = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            messages.push(msg);
+        }
+        assert!(messages.len() >= 2, "expected at least 2 log messages, got {}: {:?}", messages.len(), messages);
+        assert!(messages.iter().any(|m| m.contains("resolved")), "should log input resolution: {:?}", messages);
+        assert!(
+            messages.iter().any(|m| m.contains("native build completed")),
+            "should log build completion: {:?}",
+            messages
+        );
+    }
+
+    #[tokio::test]
+    async fn test_build_derivation_maps_output_references() {
+        // Verify that output_needles indices are correctly mapped back to
+        // store paths in the result.
+        let (bs, ds, ps) = make_in_memory_services();
+
+        // Create a derivation with an input. The refscan_needles will contain
+        // [output_hash, input_hash]. If the build output references index 1,
+        // the result should contain the input's store path.
+        let input_path = StorePath::<String>::from_absolute_path(
+            SANDBOX_SHELL.split('/').take(4).collect::<Vec<_>>().join("/").as_bytes(),
+        )
+        .unwrap();
+
+        let mut drv = make_test_drv("refscan-test");
+        drv.input_sources.insert(input_path.clone());
+
+        // Mock returns an output that references needle index 1 (the input)
+        let mut needles = BTreeSet::new();
+        needles.insert(1u64); // index into refscan_needles
+        let mock = MockBuildService::succeeding(vec![BuildOutput {
+            node: Node::File {
+                digest: *DUMMY_DIGEST,
+                size: 100,
+                executable: true,
+            },
+            output_needles: needles,
+        }]);
+
+        let service = NativeBuildService::with_build_service(Box::new(mock), bs, ds, ps);
+
+        let result = service.build_derivation(&drv, None).await.unwrap();
+        assert_eq!(result.outputs.len(), 1);
+
+        // The output should reference the input store path
+        let refs = &result.outputs[0].references;
+        assert!(
+            refs.iter().any(|r| r.to_absolute_path() == input_path.to_absolute_path()),
+            "output should reference input path {}, got: {:?}",
+            input_path.to_absolute_path(),
+            refs.iter().map(|r| r.to_absolute_path()).collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_build_derivation_multi_output() {
+        // Verify build_derivation handles multiple outputs correctly.
+        let (bs, ds, ps) = make_in_memory_services();
+
+        let out_path =
+            StorePath::<String>::from_absolute_path(b"/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-multi").unwrap();
+        let dev_path =
+            StorePath::<String>::from_absolute_path(b"/nix/store/11bgd045z0d4icpbc2yyz4gx48ak44la-multi-dev").unwrap();
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("dev".to_string(), Output {
+            path: Some(dev_path),
+            ca_hash: None,
+        });
+        outputs.insert("out".to_string(), Output {
+            path: Some(out_path),
+            ca_hash: None,
+        });
+
+        let drv = Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".to_string(),
+            environment: BTreeMap::new(),
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        };
+
+        let mock = MockBuildService::succeeding(vec![
+            BuildOutput {
+                node: Node::File {
+                    digest: *DUMMY_DIGEST,
+                    size: 10,
+                    executable: false,
+                },
+                output_needles: BTreeSet::new(),
+            },
+            BuildOutput {
+                node: Node::Directory {
+                    digest: *DUMMY_DIGEST,
+                    size: 20,
+                },
+                output_needles: BTreeSet::new(),
+            },
+        ]);
+
+        let service = NativeBuildService::with_build_service(Box::new(mock), bs, ds, ps);
+
+        let result = service.build_derivation(&drv, None).await.unwrap();
+        assert_eq!(result.outputs.len(), 2, "should produce two outputs");
+    }
+
+    // ====================================================================
+    // upload_native_outputs() tests
+    // ====================================================================
+
+    fn make_nar_calc() -> (
+        snix_store::nar::SimpleRenderer<
+            snix_castore::blobservice::MemoryBlobService,
+            snix_castore::directoryservice::RedbDirectoryService,
+        >,
+        Arc<snix_castore::blobservice::MemoryBlobService>,
+        Arc<snix_castore::directoryservice::RedbDirectoryService>,
+    ) {
+        let bs = Arc::new(snix_castore::blobservice::MemoryBlobService::default());
+        let ds = Arc::new(
+            snix_castore::directoryservice::RedbDirectoryService::new_temporary("nar".to_string(), Default::default())
+                .unwrap(),
+        );
+        let calc = snix_store::nar::SimpleRenderer::new((*bs).clone(), (*ds).clone());
+        (calc, bs, ds)
+    }
+
+    #[tokio::test]
+    async fn test_upload_native_outputs_stores_pathinfo() {
+        let (_bs, _ds, ps) = make_in_memory_services();
+        let (nar_calc, bs, _ds) = make_nar_calc();
+
+        let store_path =
+            StorePath::<String>::from_absolute_path(b"/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-uploaded").unwrap();
+
+        // Write a blob so the NAR calculation can find it
+        use snix_castore::blobservice::BlobService as _;
+        let mut writer = bs.open_write().await;
+        let data = b"hello from native build";
+        tokio::io::AsyncWriteExt::write_all(&mut writer, data).await.unwrap();
+        let digest = writer.close().await.unwrap();
+
+        let output_node = Node::File {
+            digest,
+            size: data.len() as u64,
+            executable: false,
+        };
+
+        let outputs = vec![super::NativeBuildOutput {
+            store_path: store_path.clone(),
+            node: output_node,
+            references: vec![],
+        }];
+
+        let uploaded = super::upload_native_outputs(ps.as_ref(), &nar_calc, &outputs).await;
+
+        assert_eq!(uploaded.len(), 1, "should upload one output");
+        assert!(uploaded[0].store_path.contains("uploaded"), "store path should match: {}", uploaded[0].store_path);
+        assert!(uploaded[0].nar_size > 0, "NAR size should be positive");
+        assert!(!uploaded[0].nar_sha256.is_empty(), "NAR hash should be set");
+
+        // Verify PathInfoService now has the entry
+        let retrieved = ps.get(*store_path.digest()).await.unwrap();
+        assert!(retrieved.is_some(), "PathInfo should be stored");
+        let info = retrieved.unwrap();
+        assert_eq!(info.nar_size, uploaded[0].nar_size);
+    }
+
+    #[tokio::test]
+    async fn test_upload_native_outputs_empty_list() {
+        let (_bs, _ds, ps) = make_in_memory_services();
+        let (nar_calc, _bs2, _ds2) = make_nar_calc();
+
+        let uploaded = super::upload_native_outputs(ps.as_ref(), &nar_calc, &[]).await;
+
+        assert!(uploaded.is_empty(), "empty outputs should produce empty uploads");
+    }
+
+    #[tokio::test]
+    async fn test_upload_native_outputs_with_references() {
+        let (_bs, _ds, ps) = make_in_memory_services();
+        let (nar_calc, bs, _ds) = make_nar_calc();
+
+        let store_path =
+            StorePath::<String>::from_absolute_path(b"/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-with-refs").unwrap();
+
+        let ref_path =
+            StorePath::<String>::from_absolute_path(b"/nix/store/11bgd045z0d4icpbc2yyz4gx48ak44la-dep").unwrap();
+
+        use snix_castore::blobservice::BlobService as _;
+        let mut writer = bs.open_write().await;
+        tokio::io::AsyncWriteExt::write_all(&mut writer, b"data").await.unwrap();
+        let digest = writer.close().await.unwrap();
+
+        let outputs = vec![super::NativeBuildOutput {
+            store_path: store_path.clone(),
+            node: Node::File {
+                digest,
+                size: 4,
+                executable: false,
+            },
+            references: vec![ref_path.clone()],
+        }];
+
+        let uploaded = super::upload_native_outputs(ps.as_ref(), &nar_calc, &outputs).await;
+
+        assert_eq!(uploaded.len(), 1);
+        assert_eq!(uploaded[0].references_count, 1);
+
+        let info = ps.get(*store_path.digest()).await.unwrap().unwrap();
+        assert_eq!(info.references.len(), 1);
+        assert_eq!(info.references[0].to_absolute_path(), ref_path.to_absolute_path());
+    }
+
+    // ====================================================================
+    // replace_output_placeholders_bytes() tests
+    // ====================================================================
+
+    #[test]
+    fn test_replace_output_placeholders_bytes_basic() {
+        let store_path =
+            StorePath::<String>::from_absolute_path(b"/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-test").unwrap();
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("out".to_string(), Output {
+            path: Some(store_path),
+            ca_hash: None,
+        });
+
+        let placeholder = hash_placeholder("out");
+        let input: bstr::BString = format!("echo {placeholder}").into();
+        let result = super::replace_output_placeholders_bytes(&input, &outputs);
+
+        let result_str = String::from_utf8(result).unwrap();
+        assert!(
+            result_str.contains("/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-test"),
+            "should replace placeholder: {result_str}"
+        );
+        assert!(!result_str.contains(&placeholder), "placeholder should be gone: {result_str}");
+    }
+
+    #[test]
+    fn test_replace_output_placeholders_bytes_no_match() {
+        let outputs = BTreeMap::new();
+        let input: bstr::BString = "no placeholders here".into();
+        let result = super::replace_output_placeholders_bytes(&input, &outputs);
+        assert_eq!(result, b"no placeholders here");
+    }
+
+    #[test]
+    fn test_replace_output_placeholders_bytes_binary_data() {
+        // Ensure byte replacement works with non-UTF8 data surrounding
+        // the placeholder.
+        let store_path =
+            StorePath::<String>::from_absolute_path(b"/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-bin").unwrap();
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("out".to_string(), Output {
+            path: Some(store_path),
+            ca_hash: None,
+        });
+
+        let placeholder = hash_placeholder("out");
+        let mut input_bytes: Vec<u8> = vec![0xFF, 0xFE]; // non-UTF8 prefix
+        input_bytes.extend_from_slice(placeholder.as_bytes());
+        input_bytes.extend_from_slice(&[0x00, 0x01]); // non-UTF8 suffix
+        let input: bstr::BString = input_bytes.into();
+
+        let result = super::replace_output_placeholders_bytes(&input, &outputs);
+
+        // Result should contain the store path
+        assert!(
+            result.windows(b"/nix/store/".len()).any(|w| w == b"/nix/store/"),
+            "should contain store path in result"
+        );
+        // Non-UTF8 bookends should be preserved
+        assert_eq!(result[0], 0xFF);
+        assert_eq!(result[1], 0xFE);
+    }
+
+    // ====================================================================
+    // execute_native() tests
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_execute_native_converts_result() {
+        let (bs, ds, ps) = make_in_memory_services();
+
+        let mock = MockBuildService::succeeding(vec![BuildOutput {
+            node: Node::File {
+                digest: *DUMMY_DIGEST,
+                size: 99,
+                executable: true,
+            },
+            output_needles: BTreeSet::new(),
+        }]);
+
+        let service = NativeBuildService::with_build_service(Box::new(mock), bs, ds, ps);
+
+        let drv = make_test_drv("exec-test");
+        let output = super::execute_native(&service, &drv, None).await.unwrap();
+
+        assert_eq!(output.output_paths.len(), 1);
+        assert!(
+            output.output_paths[0].contains("exec-test"),
+            "output path should match drv: {}",
+            output.output_paths[0]
+        );
+        assert!(output.log.contains("native build completed"));
+        assert!(!output.log_truncated);
+        assert!(output.native_uploaded);
+    }
+
+    #[tokio::test]
+    async fn test_execute_native_propagates_error() {
+        let (bs, ds, ps) = make_in_memory_services();
+
+        let mock = MockBuildService::failing("build broke");
+        let service = NativeBuildService::with_build_service(Box::new(mock), bs, ds, ps);
+
+        let drv = make_test_drv("fail-exec");
+        let err = super::execute_native(&service, &drv, None).await.expect_err("should propagate error");
+
+        assert!(err.to_string().contains("build broke"), "got: {err}");
+    }
+
+    // ====================================================================
+    // Concurrency / semaphore tests
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_build_derivation_respects_concurrency_limit() {
+        // MAX_CONCURRENT_BUILDS = 4. Launching 4 concurrent builds should
+        // all succeed; the semaphore doesn't block, just limits.
+        let (bs, ds, ps) = make_in_memory_services();
+
+        // Use a mock that sleeps briefly to overlap builds
+        struct SlowMock;
+        #[::tonic::async_trait]
+        impl BuildService for SlowMock {
+            async fn do_build(&self, _req: BuildRequest) -> io::Result<BuildResult> {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                Ok(BuildResult {
+                    outputs: vec![BuildOutput {
+                        node: Node::File {
+                            digest: *DUMMY_DIGEST,
+                            size: 1,
+                            executable: false,
+                        },
+                        output_needles: BTreeSet::new(),
+                    }],
+                })
+            }
+        }
+
+        let service = Arc::new(NativeBuildService::with_build_service(Box::new(SlowMock), bs, ds, ps));
+
+        let mut handles = Vec::new();
+        for i in 0..4u32 {
+            let svc = Arc::clone(&service);
+            handles.push(tokio::spawn(async move {
+                let drv = make_test_drv(&format!("concurrent-{i}"));
+                svc.build_derivation(&drv, None).await
+            }));
+        }
+
+        for handle in handles {
+            let result = handle.await.unwrap();
+            assert!(result.is_ok(), "concurrent build should succeed");
+        }
+    }
+
+    // ====================================================================
     // Task 2.4: Integration test for bwrap build + output registration
     // ====================================================================
 
