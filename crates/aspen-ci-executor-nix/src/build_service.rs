@@ -284,47 +284,7 @@ impl NativeBuildService {
     /// Traverses `input_derivations` and `input_sources`, looking up each
     /// store path in the PathInfoService to get its root Node.
     async fn resolve_build_inputs(&self, drv: &Derivation) -> io::Result<BTreeMap<StorePath<String>, Node>> {
-        let mut resolved = BTreeMap::new();
-
-        // Collect all store paths we need to resolve
-        let mut paths_to_resolve: Vec<StorePath<String>> = Vec::new();
-
-        // From input_derivations: look up each output path
-        for (drv_path, output_names) in &drv.input_derivations {
-            // Read the .drv to find actual output paths
-            // For now, use the output names to construct expected paths
-            // In practice, the derivation's output paths are encoded in
-            // the .drv file itself
-            let drv_abs = drv_path.to_absolute_path();
-            debug!(drv = %drv_abs, outputs = ?output_names, "resolving input derivation outputs");
-
-            // Try to read the input derivation from the local store
-            let drv_store_path = drv_abs.to_string();
-            match tokio::fs::read(&drv_store_path).await {
-                Ok(bytes) => {
-                    if let Ok(input_drv) = Derivation::from_aterm_bytes(&bytes) {
-                        for output_name in output_names {
-                            if let Some(output) = input_drv.outputs.get(output_name)
-                                && let Some(path) = &output.path
-                            {
-                                paths_to_resolve.push(path.clone());
-                            }
-                        }
-                    } else {
-                        warn!(drv = %drv_abs, "failed to parse input derivation");
-                    }
-                }
-                Err(_) => {
-                    // If we can't read the .drv locally, try resolving via pathinfo
-                    debug!(drv = %drv_abs, "input derivation not on local disk, skipping");
-                }
-            }
-        }
-
-        // From input_sources: resolve directly
-        for source_path in &drv.input_sources {
-            paths_to_resolve.push(source_path.clone());
-        }
+        let paths_to_resolve = collect_input_store_paths(drv).await;
 
         if paths_to_resolve.len() > MAX_BUILD_INPUTS {
             return Err(io::Error::new(
@@ -333,62 +293,95 @@ impl NativeBuildService {
             ));
         }
 
-        // Resolve each store path to its Node via PathInfoService.
-        // Falls back to a synthetic Node when the path exists on the local
-        // filesystem but hasn't been imported into PathInfoService yet (the
-        // common case for fresh builds where inputs were just realised).
+        let mut resolved = BTreeMap::new();
         for store_path in paths_to_resolve {
-            match self.pathinfo_service.get(*store_path.digest()).await {
-                Ok(Some(path_info)) => {
-                    resolved.insert(store_path, path_info.node);
-                }
-                Ok(None) => {
-                    // PathInfoService doesn't know this path — check local disk.
-                    // After `nix-store --realise`, inputs exist in /nix/store but
-                    // haven't been imported into Aspen's content-addressed store.
-                    // Create a synthetic Node so LocalStoreBuildService can cp -a
-                    // from the local store into the bwrap sandbox.
-                    let abs_path = store_path.to_absolute_path();
-                    let local = std::path::Path::new(&abs_path);
-                    if local.exists() {
-                        // Placeholder digest — LocalStoreBuildService copies from
-                        // /nix/store via cp -a, so the digest is never read.
-                        let placeholder = snix_castore::B3Digest::from(&[0u8; 32]);
-                        let node = if local.is_dir() {
-                            Node::Directory {
-                                digest: placeholder,
-                                size: 0,
-                            }
-                        } else {
-                            Node::File {
-                                digest: placeholder,
-                                size: 0,
-                                executable: false,
-                            }
-                        };
-                        debug!(
-                            path = %abs_path,
-                            "input resolved from local /nix/store (not in PathInfoService)"
-                        );
-                        resolved.insert(store_path, node);
-                    } else {
-                        warn!(
-                            path = %abs_path,
-                            "input store path not found in PathInfoService or local store"
-                        );
-                    }
-                }
-                Err(e) => {
-                    warn!(
-                        path = %store_path.to_absolute_path(),
-                        error = %e,
-                        "error resolving input from PathInfoService"
-                    );
-                }
+            if let Some(node) = resolve_single_input(&*self.pathinfo_service, &store_path).await {
+                resolved.insert(store_path, node);
             }
         }
 
         Ok(resolved)
+    }
+}
+
+// ============================================================================
+// Input resolution helpers
+// ============================================================================
+
+/// Collect all store paths that a derivation needs as build inputs.
+///
+/// Reads `input_derivations` (parsing each `.drv` from local disk to find
+/// output paths) and `input_sources` (used directly).
+async fn collect_input_store_paths(drv: &Derivation) -> Vec<StorePath<String>> {
+    let mut paths: Vec<StorePath<String>> = Vec::new();
+
+    for (drv_path, output_names) in &drv.input_derivations {
+        let drv_abs = drv_path.to_absolute_path();
+        debug!(drv = %drv_abs, outputs = ?output_names, "resolving input derivation outputs");
+
+        match tokio::fs::read(drv_abs.to_string()).await {
+            Ok(bytes) => {
+                if let Ok(input_drv) = Derivation::from_aterm_bytes(&bytes) {
+                    for output_name in output_names {
+                        if let Some(output) = input_drv.outputs.get(output_name)
+                            && let Some(path) = &output.path
+                        {
+                            paths.push(path.clone());
+                        }
+                    }
+                } else {
+                    warn!(drv = %drv_abs, "failed to parse input derivation");
+                }
+            }
+            Err(_) => {
+                debug!(drv = %drv_abs, "input derivation not on local disk, skipping");
+            }
+        }
+    }
+
+    for source_path in &drv.input_sources {
+        paths.push(source_path.clone());
+    }
+
+    paths
+}
+
+/// Resolve a single store path to a castore Node.
+///
+/// Tries PathInfoService first. Falls back to a synthetic placeholder Node
+/// when the path exists on the local filesystem but hasn't been imported
+/// into PathInfoService yet (the common case after `nix-store --realise`).
+async fn resolve_single_input(pathinfo_service: &dyn PathInfoService, store_path: &StorePath<String>) -> Option<Node> {
+    match pathinfo_service.get(*store_path.digest()).await {
+        Ok(Some(path_info)) => Some(path_info.node),
+        Ok(None) => {
+            let abs_path = store_path.to_absolute_path();
+            let local = std::path::Path::new(&abs_path);
+            if local.exists() {
+                let placeholder = snix_castore::B3Digest::from(&[0u8; 32]);
+                let node = if local.is_dir() {
+                    Node::Directory {
+                        digest: placeholder,
+                        size: 0,
+                    }
+                } else {
+                    Node::File {
+                        digest: placeholder,
+                        size: 0,
+                        executable: false,
+                    }
+                };
+                debug!(path = %abs_path, "input resolved from local /nix/store (not in PathInfoService)");
+                Some(node)
+            } else {
+                warn!(path = %abs_path, "input store path not found in PathInfoService or local store");
+                None
+            }
+        }
+        Err(e) => {
+            warn!(path = %store_path.to_absolute_path(), error = %e, "error resolving input from PathInfoService");
+            None
+        }
     }
 }
 
@@ -485,141 +478,181 @@ impl BuildService for LocalStoreBuildService {
         let sandbox_path = self.workdir.join(build_id.to_string());
         info!(%build_id, "starting local-store bwrap build");
 
-        // Copy inputs from /nix/store to the host_inputs_dir.
-        // `SandboxSpec::with_inputs` expects a closure that populates a path
-        // and returns a guard. We do the copy inside the closure.
-        //
-        // The sandbox shell (SNIX_BUILD_SANDBOX_SHELL) is bind-mounted at
-        // /bin/sh by bwrap. It must be statically linked (busybox-sandbox-shell)
-        // because /nix/store inside the sandbox only contains build inputs —
-        // a dynamically linked shell can't find its ELF interpreter.
-        // Compute the full runtime closure of all inputs. Direct inputs alone
-        // aren't enough — the builder (bash) needs glibc, etc. Use nix-store -qR
-        // to get the transitive closure, then copy everything into the sandbox.
-        let direct_names: Vec<String> = request.inputs.keys().map(|k| k.to_string()).collect();
-        let closure_names = compute_input_closure(&direct_names);
+        // Phase 1: Build sandbox spec with input closure
+        let spec = build_sandbox_spec(&request, sandbox_path.clone())?;
 
-        let spec = snix_build::sandbox::SandboxSpec::builder()
-            .host_workdir(sandbox_path.clone())
-            .sandbox_workdir(request.working_dir.clone())
-            .scratches(request.scratch_paths.clone())
-            .command(request.command_args.clone())
-            .env_vars(request.environment_vars.clone())
-            .additional_files(request.additional_files.clone())
-            .with_inputs(request.inputs_dir.clone(), move |path: &std::path::Path| {
-                // Copy the full closure from /nix/store into the sandbox.
-                for name in &closure_names {
-                    let src = std::path::Path::new("/nix/store").join(name);
-                    let dst = path.join(name);
-                    if dst.exists() {
-                        continue; // already copied (dedup from closure)
-                    }
-                    if !src.exists() {
-                        return Err(io::Error::other(format!("input not in local store: {}", src.display())));
-                    }
-                    let status = std::process::Command::new("cp")
-                        .arg("-a")
-                        .arg(&src)
-                        .arg(&dst)
-                        .status()
-                        .map_err(|e| io::Error::other(format!("cp failed: {e}")))?;
-                    if !status.success() {
-                        return Err(io::Error::other(format!(
-                            "cp -a {} {} failed with {}",
-                            src.display(),
-                            dst.display(),
-                            status
-                        )));
-                    }
-                }
-                Ok(())
-            })
-            .allow_network(request.constraints.contains(&BuildConstraints::NetworkAccess))
-            .provide_shell(
-                request.constraints.contains(&BuildConstraints::ProvideBinSh).then_some(SANDBOX_SHELL.into()),
-            )
-            .build();
-
+        // Phase 2: Execute bwrap sandbox
         let outcome = snix_build::bwrap::Bwrap::initialize(spec)?.run().await?;
+        check_build_outcome(&outcome)?;
 
-        if !outcome.output().status.success() {
-            let stdout = String::from_utf8_lossy(&outcome.output().stdout);
-            let stderr = String::from_utf8_lossy(&outcome.output().stderr);
-            warn!(
-                stdout = %stdout,
-                stderr = %stderr,
-                exit_code = %outcome.output().status,
-                "local-store bwrap build failed"
-            );
-            return Err(io::Error::other(format!(
-                "nonzero exit code: {}, stderr: {}",
-                outcome.output().status,
-                stderr.chars().take(500).collect::<String>()
-            )));
-        }
-
-        // Collect outputs and ingest back into castore.
-        let outputs: Vec<_> = request.outputs.iter().filter_map(|o| outcome.find_path(o)).collect();
-        if outputs.len() != request.outputs.len() {
-            warn!("not all outputs produced");
-            return Err(io::Error::other("not all outputs produced"));
-        }
-
-        // After ingesting into castore, attempt to register outputs in the
-        // local /nix/store at the derivation's expected output path. This goes
-        // through the nix daemon (via nix-store --export/--import) to work on
-        // read-only store overlays.
-
-        // Capture host output paths for registration before moving into async closures.
-        let host_output_paths: Vec<PathBuf> = outputs.iter().map(|p| p.to_path_buf()).collect();
-
-        let patterns = snix_castore::refscan::ReferencePattern::new(request.refscan_needles);
-        let results = futures::future::try_join_all(outputs.into_iter().enumerate().map(|(i, host_output_path)| {
-            let output_path = &request.outputs[i];
-            debug!(host.path = ?host_output_path, output.path = ?output_path, "ingesting output");
-            let patterns = patterns.clone();
-            let blob_svc = &self.blob_service;
-            let dir_svc = &self.directory_service;
-            async move {
-                let scanner = snix_castore::refscan::ReferenceScanner::new(patterns);
-                let node = snix_castore::import::fs::ingest_path(
-                    blob_svc.as_ref(),
-                    dir_svc.as_ref(),
-                    host_output_path,
-                    Some(&scanner),
-                )
-                .await
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("ingest output: {e}")))?;
-
-                Ok::<_, io::Error>(BuildOutput {
-                    node,
-                    output_needles: scanner
-                        .matches()
-                        .into_iter()
-                        .enumerate()
-                        .filter(|(_, val)| *val)
-                        .map(|(idx, _)| idx as u64)
-                        .collect(),
-                })
-            }
-        }))
+        // Phase 3: Collect and ingest outputs into castore
+        let host_output_paths = collect_output_paths(&outcome, &request.outputs)?;
+        let results = ingest_build_outputs(
+            &host_output_paths,
+            &request.outputs,
+            request.refscan_needles,
+            &self.blob_service,
+            &self.directory_service,
+        )
         .await?;
 
-        // Register outputs in the local /nix/store at derivation output paths.
-        for (i, host_path) in host_output_paths.iter().enumerate() {
-            if let Some(store_target) = output_sandbox_path_to_store_path(host_path) {
-                register_output_in_store(host_path, &store_target);
-            } else {
-                debug!(host_path = %host_path.display(), index = i, "could not derive store path from sandbox output");
-            }
-        }
-
-        // Clean up sandbox directory.
+        // Phase 4: Register in local /nix/store and clean up
+        register_outputs_in_store(&host_output_paths);
         if let Err(e) = tokio::fs::remove_dir_all(&sandbox_path).await {
             warn!(path = %sandbox_path.display(), error = %e, "failed to clean up sandbox dir");
         }
 
         Ok(BuildResult { outputs: results })
+    }
+}
+
+// ============================================================================
+// do_build phase helpers
+// ============================================================================
+
+/// Build a `SandboxSpec` for bwrap execution.
+///
+/// Computes the full input closure via `nix-store -qR`, then creates a
+/// spec that copies all closure paths from `/nix/store` into the sandbox.
+fn build_sandbox_spec(request: &BuildRequest, sandbox_path: PathBuf) -> io::Result<snix_build::sandbox::SandboxSpec> {
+    let direct_names: Vec<String> = request.inputs.keys().map(|k| k.to_string()).collect();
+    let closure_names = compute_input_closure(&direct_names);
+
+    let spec = snix_build::sandbox::SandboxSpec::builder()
+        .host_workdir(sandbox_path)
+        .sandbox_workdir(request.working_dir.clone())
+        .scratches(request.scratch_paths.clone())
+        .command(request.command_args.clone())
+        .env_vars(request.environment_vars.clone())
+        .additional_files(request.additional_files.clone())
+        .with_inputs(request.inputs_dir.clone(), move |path: &std::path::Path| {
+            copy_closure_inputs(&closure_names, path)
+        })
+        .allow_network(request.constraints.contains(&BuildConstraints::NetworkAccess))
+        .provide_shell(request.constraints.contains(&BuildConstraints::ProvideBinSh).then_some(SANDBOX_SHELL.into()))
+        .build();
+
+    Ok(spec)
+}
+
+/// Copy store paths from `/nix/store` into the sandbox input directory.
+///
+/// Skips paths already present (dedup from closure). Uses `cp -a` to
+/// preserve permissions and symlinks.
+fn copy_closure_inputs(closure_names: &[String], dest: &std::path::Path) -> io::Result<()> {
+    for name in closure_names {
+        let src = std::path::Path::new("/nix/store").join(name);
+        let dst = dest.join(name);
+        if dst.exists() {
+            continue;
+        }
+        if !src.exists() {
+            return Err(io::Error::other(format!("input not in local store: {}", src.display())));
+        }
+        let status = std::process::Command::new("cp")
+            .arg("-a")
+            .arg(&src)
+            .arg(&dst)
+            .status()
+            .map_err(|e| io::Error::other(format!("cp failed: {e}")))?;
+        if !status.success() {
+            return Err(io::Error::other(format!("cp -a {} {} failed with {}", src.display(), dst.display(), status)));
+        }
+    }
+    Ok(())
+}
+
+/// Check that a bwrap build succeeded. Returns an error with stdout/stderr
+/// context on nonzero exit.
+fn check_build_outcome(outcome: &snix_build::bwrap::SandboxOutcome) -> io::Result<()> {
+    if outcome.output().status.success() {
+        return Ok(());
+    }
+    let stdout = String::from_utf8_lossy(&outcome.output().stdout);
+    let stderr = String::from_utf8_lossy(&outcome.output().stderr);
+    warn!(
+        stdout = %stdout,
+        stderr = %stderr,
+        exit_code = %outcome.output().status,
+        "local-store bwrap build failed"
+    );
+    Err(io::Error::other(format!(
+        "nonzero exit code: {}, stderr: {}",
+        outcome.output().status,
+        stderr.chars().take(500).collect::<String>()
+    )))
+}
+
+/// Collect host-side output paths from a bwrap outcome.
+///
+/// Each requested output path must be found in the outcome; returns an
+/// error if any are missing.
+fn collect_output_paths(
+    outcome: &snix_build::bwrap::SandboxOutcome,
+    requested_outputs: &[PathBuf],
+) -> io::Result<Vec<PathBuf>> {
+    let paths: Vec<PathBuf> = requested_outputs.iter().filter_map(|o| outcome.find_path(o)).collect();
+
+    if paths.len() != requested_outputs.len() {
+        warn!("not all outputs produced");
+        return Err(io::Error::other("not all outputs produced"));
+    }
+    Ok(paths)
+}
+
+/// Ingest build outputs into castore with reference scanning.
+///
+/// Each output path is ingested via `ingest_path`, producing a castore
+/// `Node` and a set of reference needle matches from the refscan.
+async fn ingest_build_outputs(
+    host_paths: &[PathBuf],
+    output_specs: &[PathBuf],
+    refscan_needles: Vec<String>,
+    blob_service: &Arc<dyn BlobService>,
+    directory_service: &Arc<dyn DirectoryService>,
+) -> io::Result<Vec<BuildOutput>> {
+    let patterns = snix_castore::refscan::ReferencePattern::new(refscan_needles);
+
+    futures::future::try_join_all(host_paths.iter().enumerate().map(|(i, host_output_path)| {
+        let output_path = &output_specs[i];
+        debug!(host.path = ?host_output_path, output.path = ?output_path, "ingesting output");
+        let patterns = patterns.clone();
+        let blob_svc = blob_service;
+        let dir_svc = directory_service;
+        async move {
+            let scanner = snix_castore::refscan::ReferenceScanner::new(patterns);
+            let node = snix_castore::import::fs::ingest_path(
+                blob_svc.as_ref(),
+                dir_svc.as_ref(),
+                host_output_path,
+                Some(&scanner),
+            )
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("ingest output: {e}")))?;
+
+            Ok::<_, io::Error>(BuildOutput {
+                node,
+                output_needles: scanner
+                    .matches()
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(_, val)| *val)
+                    .map(|(idx, _)| idx as u64)
+                    .collect(),
+            })
+        }
+    }))
+    .await
+}
+
+/// Register build outputs in the local `/nix/store` at their expected paths.
+fn register_outputs_in_store(host_paths: &[PathBuf]) {
+    for (i, host_path) in host_paths.iter().enumerate() {
+        if let Some(store_target) = output_sandbox_path_to_store_path(host_path) {
+            register_output_in_store(host_path, &store_target);
+        } else {
+            debug!(host_path = %host_path.display(), index = i, "could not derive store path from sandbox output");
+        }
     }
 }
 
@@ -729,12 +762,8 @@ pub fn output_sandbox_path_to_store_path(sandbox_path: &std::path::Path) -> Opti
 /// If the daemon is unavailable or the operation fails, a warning is logged
 /// but the build is NOT marked as failed (castore/PathInfoService is primary).
 fn register_output_in_store(source_path: &std::path::Path, target_store_path: &std::path::Path) {
-    // Skip if already registered.
     if target_store_path.exists() {
-        debug!(
-            target = %target_store_path.display(),
-            "output already exists in /nix/store, skipping registration"
-        );
+        debug!(target = %target_store_path.display(), "output already exists in /nix/store, skipping registration");
         return;
     }
 
@@ -744,99 +773,85 @@ fn register_output_in_store(source_path: &std::path::Path, target_store_path: &s
         "registering build output in local /nix/store"
     );
 
-    // Try cp -a first — works when the store is writable (e.g. in VMs with
-    // writable store overlay or tmpfs-backed /nix/store).
-    let cp_result = std::process::Command::new("cp")
+    // Try cp -a (writable store), then nix-store --dump/--restore (read-only store).
+    if try_register_via_copy(source_path, target_store_path) {
+        return;
+    }
+    try_register_via_nar_pipe(source_path, target_store_path);
+}
+
+/// Try to register via `cp -a`. Returns true on success.
+fn try_register_via_copy(source: &std::path::Path, target: &std::path::Path) -> bool {
+    let result = std::process::Command::new("cp")
         .arg("-a")
-        .arg(source_path)
-        .arg(target_store_path)
+        .arg(source)
+        .arg(target)
         .stderr(std::process::Stdio::piped())
         .output();
 
-    match cp_result {
+    match result {
         Ok(out) if out.status.success() => {
-            info!(
-                target = %target_store_path.display(),
-                "registered output via cp -a"
-            );
-            return;
+            info!(target = %target.display(), "registered output via cp -a");
+            true
         }
         Ok(out) => {
             let stderr = String::from_utf8_lossy(&out.stderr);
-            debug!(
-                stderr = %stderr,
-                "cp -a failed (read-only store?), trying nix-store --dump/--restore"
-            );
+            debug!(stderr = %stderr, "cp -a failed (read-only store?), trying nix-store --dump/--restore");
+            false
         }
         Err(e) => {
             debug!(error = %e, "cp -a failed, trying nix-store --dump/--restore");
+            false
         }
     }
+}
 
-    // SUBPROCESS-ESCAPE: Dumps a store path as NAR via `nix-store --dump`, then restores
-    // it at the target via `nix-store --restore`. Pure-snix replacement: use
-    // snix_store::nar::NarWriter to produce NAR bytes, then snix-castore ingest to
-    // register in the Aspen store directly. Non-fatal — castore/PathInfoService is primary.
-    let dump_child = std::process::Command::new("nix-store")
+/// Register via `nix-store --dump <source> | nix-store --restore <target>`.
+///
+/// Non-fatal — castore/PathInfoService is the primary store. This is a
+/// best-effort attempt to make outputs available in the local `/nix/store`.
+///
+/// SUBPROCESS-ESCAPE: Pure-snix replacement would use snix_store::nar::NarWriter
+/// to produce NAR bytes, then snix-castore ingest to register directly.
+fn try_register_via_nar_pipe(source: &std::path::Path, target: &std::path::Path) {
+    let dump_child = match std::process::Command::new("nix-store")
         .arg("--dump")
-        .arg(source_path)
+        .arg(source)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
-        .spawn();
-
-    let dump_child = match dump_child {
+        .spawn()
+    {
         Ok(child) => child,
         Err(e) => {
-            warn!(
-                error = %e,
-                target = %target_store_path.display(),
-                "failed to spawn nix-store --dump, output not registered in local store"
-            );
+            warn!(error = %e, target = %target.display(), "failed to spawn nix-store --dump");
             return;
         }
     };
 
-    let stdout = match dump_child.stdout {
-        Some(stdout) => stdout,
-        None => {
-            warn!(
-                target = %target_store_path.display(),
-                "nix-store --dump child has no stdout pipe, output not registered in local store"
-            );
-            return;
-        }
+    let Some(stdout) = dump_child.stdout else {
+        warn!(target = %target.display(), "nix-store --dump child has no stdout pipe");
+        return;
     };
 
-    let restore_result = std::process::Command::new("nix-store")
+    let result = std::process::Command::new("nix-store")
         .arg("--restore")
-        .arg(target_store_path)
+        .arg(target)
         .stdin(stdout)
         .stderr(std::process::Stdio::piped())
         .output();
 
-    match restore_result {
+    match result {
         Ok(out) if out.status.success() => {
-            info!(
-                target = %target_store_path.display(),
-                "registered output via nix-store --dump/--restore"
-            );
+            info!(target = %target.display(), "registered output via nix-store --dump/--restore");
         }
         Ok(out) => {
             let stderr = String::from_utf8_lossy(&out.stderr);
-            warn!(
-                stderr = %stderr,
-                target = %target_store_path.display(),
-                "nix-store --restore failed, output not registered in local store \
-                 (castore/PathInfoService is primary — this is non-fatal)"
-            );
+            warn!(stderr = %stderr, target = %target.display(),
+                "nix-store --restore failed (castore/PathInfoService is primary — non-fatal)");
         }
         Err(e) => {
-            warn!(
-                error = %e,
-                target = %target_store_path.display(),
-                "failed to run nix-store --restore, output not registered in local store \
-                 (castore/PathInfoService is primary — this is non-fatal)"
-            );
+            warn!(error = %e, target = %target.display(),
+                "failed to run nix-store --restore (castore/PathInfoService is primary — non-fatal)");
         }
     }
 }

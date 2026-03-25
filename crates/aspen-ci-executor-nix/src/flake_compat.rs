@@ -20,10 +20,10 @@ const MAX_EVAL_EXPRESSION_SIZE: usize = 8192;
 ///
 /// This file is MIT licensed. It parses flake.lock, resolves inputs via
 /// `fetchTarball` (github/gitlab/tarball/sourcehut), `builtins.path` (path),
-/// and `builtins.fetchGit` (git — not supported by snix, triggers fallback).
+/// and `builtins.fetchGit` (git inputs resolved via vendored snix-glue).
 ///
 /// We pass `src = { outPath = <dir>; }` to skip flake-compat's `tryFetchGit`
-/// on the root source, which would fail in snix since `fetchGit` is unimplemented.
+/// on the root source — the root is already a local checkout, no fetch needed.
 const FLAKE_COMPAT_NIX: &str = include_str!("flake_compat_bundled.nix");
 
 /// Write the embedded flake-compat to a temp file and return its path.
@@ -51,8 +51,8 @@ pub fn write_flake_compat_to_temp() -> io::Result<PathBuf> {
 /// ```
 ///
 /// Passing `src = { outPath = ...; }` (attrset with outPath) instead of a bare
-/// path skips flake-compat's `tryFetchGit` call on the root source, which would
-/// fail because snix-eval doesn't implement `builtins.fetchGit`.
+/// path skips flake-compat's `tryFetchGit` call on the root source — the root
+/// is already a local checkout, so no git fetch is needed.
 pub fn build_flake_compat_expr(
     compat_nix_path: &str,
     flake_dir: &str,
