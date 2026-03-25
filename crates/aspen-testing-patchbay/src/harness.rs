@@ -93,25 +93,9 @@ impl PatchbayHarness {
         let node_id: NodeId = (self.handles.len() as u64 + 1).into();
         let node_id_copy = node_id;
 
-        // Spawn the node inside the device's network namespace
-        let jh = device.spawn(async move |_dev| {
-            let (handle, cmd_loop) = node::bootstrap_node(node_id_copy).await?;
-            // Run the command loop — this blocks until shutdown
-            cmd_loop.await;
-            anyhow::Ok(handle)
-        })?;
-
-        // Wait for bootstrap to complete and get the handle
-        // The handle is returned when the command loop ends, which isn't what we want.
-        // We need a different approach: send the handle back via a channel.
-        // Actually, let's restructure: bootstrap returns immediately with the handle,
-        // and we spawn the command loop separately.
-
-        // FIXME: The device.spawn() API returns when the closure finishes.
-        // For a long-running node, we need the closure to run indefinitely
-        // while also getting the handle back. Use a oneshot channel.
-        drop(jh); // Drop the approach above
-
+        // Spawn the node inside the device's network namespace.
+        // The closure runs indefinitely (command loop), so we use a oneshot
+        // channel to get the handle back before the closure completes.
         let (handle_tx, handle_rx) = tokio::sync::oneshot::channel();
         let device_clone = device.clone();
 

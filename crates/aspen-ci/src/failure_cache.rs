@@ -3,12 +3,9 @@
 //! Caches failed derivation output paths in the KV store to prevent
 //! identical rebuilds. Entries expire after a configurable TTL.
 //!
-//! ## TODO: Retry Integration
-//!
-//! Task 4.8 requires clearing failure cache entries when jobs are retried.
-//! This needs integration with the aspen-jobs retry system to call
-//! `clear_failure()` when a job with retry_count > 0 is being retried.
-//! The hook point would be in the job manager when processing retries.
+//! On retry, `NixBuildWorker::execute()` clears the failure cache entry
+//! for the job's flake ref when `job.attempts > 0` (see
+//! `aspen-ci-executor-nix/src/worker.rs`).
 
 use aspen_core::DeleteRequest;
 use aspen_core::KeyValueStore;

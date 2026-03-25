@@ -1,6 +1,7 @@
 //! Worker trait implementation for NixBuildWorker.
 
 use aspen_ci_executor_shell::log_bridge;
+use aspen_core::DeleteRequest;
 use aspen_core::KeyValueStore;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
@@ -32,6 +33,21 @@ impl Worker for NixBuildWorker {
                 return JobResult::failure(format!("Invalid NixBuildPayload: {e}"));
             }
         };
+
+        // On retry, clear the failure cache so stale entries don't produce
+        // noisy "previous build failure cached" warnings in the pipeline executor.
+        if job.attempts > 0
+            && let Some(kv_store) = &self.config.kv_store
+        {
+            let flake_ref = payload.flake_ref();
+            if let Err(e) = clear_build_failure(kv_store.as_ref(), &flake_ref).await {
+                warn!(
+                    flake_ref = %flake_ref,
+                    error = %e,
+                    "Failed to clear failure cache on retry"
+                );
+            }
+        }
 
         // Set up log streaming if KV store and run_id are available.
         // Spawn a bridge task that reads stderr lines from a channel and
@@ -217,6 +233,18 @@ async fn record_build_failure<S: KeyValueStore + ?Sized>(
     store.write(request).await?;
     debug!(flake_ref = %flake_ref, "Cached build failure");
 
+    Ok(())
+}
+
+/// Clear a failure cache entry for a flake reference (e.g., on retry).
+async fn clear_build_failure<S: KeyValueStore + ?Sized>(
+    store: &S,
+    flake_ref: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let key = generate_failure_cache_key(flake_ref);
+    let request = DeleteRequest::new(&key);
+    store.delete(request).await?;
+    debug!(flake_ref = %flake_ref, "Cleared failure cache entry on retry");
     Ok(())
 }
 
