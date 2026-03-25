@@ -127,6 +127,7 @@
       logLevel = "info";
       relayMode = "disabled";
       inherit enableWorkers enableCi;
+      enableSnix = enableCi;
       features = ["forge" "blob" "deploy"];
     };
 
@@ -138,6 +139,7 @@
         gitRemoteAspenPackage
         pkgs.git
         pkgs.nix
+        pkgs.bubblewrap
       ];
 
     networking.firewall.enable = false;

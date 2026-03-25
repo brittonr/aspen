@@ -116,6 +116,7 @@ in
         relayMode = "disabled";
         enableWorkers = true;
         enableCi = true;
+        enableSnix = true;
         features = ["forge" "blob" "deploy"];
       };
 
@@ -124,6 +125,7 @@ in
         gitRemoteAspenPackage
         pkgs.git
         pkgs.nix
+        pkgs.bubblewrap
       ];
 
       networking.firewall.enable = false;

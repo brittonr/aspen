@@ -173,6 +173,7 @@ in
         relayMode = "disabled";
         enableWorkers = true;
         enableCi = true;
+        enableSnix = true;
         features = ["forge" "blob"];
         # Use local executor: handles ci_vm jobs directly without nested VMs.
         # The test VM is already isolated (QEMU), no need for Cloud Hypervisor.
@@ -185,6 +186,7 @@ in
         gitRemoteAspenPackage
         pkgs.git
         pkgs.nix
+        pkgs.bubblewrap
       ];
 
       networking.firewall.enable = false;

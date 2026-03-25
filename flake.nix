@@ -2359,8 +2359,34 @@
               full-aspen-node-plugins = fullAspenNodePlugins;
               # Legacy alias — full-aspen-node-plugins now includes snix.
               full-aspen-node-plugins-snix = fullAspenNodePlugins;
-              # Legacy alias — full-aspen-node-plugins now includes snix-build.
-              full-aspen-node-plugins-snix-build = fullAspenNodePlugins;
+              # Backward-compat alias: snix-build without deploy/ci-vm-executor.
+              # Used by snix-native-build-test which doesn't need those features.
+              full-aspen-node-plugins-snix-build = craneLib.buildPackage (
+                fullBasicArgs
+                // {
+                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                  src = fullSrcWithSnix;
+                  cargoArtifacts = fullPluginsCargoArtifacts;
+                  cargoVendorDir = fullSnixVendorDir;
+                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,snix,snix-build";
+                  doCheck = false;
+                  HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
+                  PROTO_ROOT = "${snix-src}";
+                  SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
+                  postInstall = ''
+                    mkdir -p $out/share
+                    echo "${pkgs.busybox}/bin/sh" > $out/share/sandbox-shell-path
+                  '';
+                  nativeBuildInputs =
+                    basicArgs.nativeBuildInputs
+                    ++ (with pkgs; [autoPatchelfHook]);
+                  buildInputs =
+                    basicArgs.buildInputs
+                    ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
+                      with pkgs; [darwin.apple_sdk.frameworks.Security]
+                    ));
+                }
+              );
               full-aspen-net-daemon = craneLib.buildPackage (
                 fullCommonArgs
                 // {

@@ -89,10 +89,11 @@ in
         secretKey = secretKey;
         storageBackend = "redb";
         dataDir = "/var/lib/aspen";
-        logLevel = "info";
+        logLevel = "info,aspen_ci_executor_nix=debug";
         relayMode = "disabled";
         enableWorkers = true;
         enableCi = true;
+        enableSnix = true;
         features = ["forge" "blob"];
       };
 
@@ -101,6 +102,7 @@ in
         gitRemoteAspenPackage
         pkgs.git
         pkgs.nix
+        pkgs.bubblewrap
       ];
 
       networking.firewall.enable = false;
