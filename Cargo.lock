@@ -612,6 +612,7 @@ dependencies = [
  "aspen-client",
  "aspen-client-api",
  "aspen-cluster",
+ "aspen-commit-dag",
  "aspen-coordination",
  "aspen-core",
  "aspen-core-essentials-handler",
@@ -1079,6 +1080,7 @@ dependencies = [
  "aspen-client",
  "aspen-client-api",
  "aspen-cluster",
+ "aspen-commit-dag",
  "aspen-core",
  "aspen-forge",
  "aspen-hooks-types",
@@ -1290,6 +1292,25 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "aspen-commit-dag"
+version = "0.1.0"
+dependencies = [
+ "aspen-constants",
+ "aspen-kv-types",
+ "aspen-raft",
+ "aspen-testing-core",
+ "aspen-traits",
+ "async-trait",
+ "blake3",
+ "hex",
+ "postcard",
+ "serde",
+ "snafu",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1517,6 +1538,7 @@ dependencies = [
  "anyhow",
  "aspen-blob",
  "aspen-client",
+ "aspen-commit-dag",
  "aspen-core",
  "aspen-raft",
  "aspen-testing",
@@ -2017,12 +2039,14 @@ dependencies = [
 name = "aspen-kv-branch"
 version = "0.1.0"
 dependencies = [
+ "aspen-commit-dag",
  "aspen-constants",
  "aspen-kv-types",
  "aspen-testing-core",
  "aspen-traits",
  "async-trait",
  "dashmap",
+ "hex",
  "proptest",
  "serde",
  "tokio",

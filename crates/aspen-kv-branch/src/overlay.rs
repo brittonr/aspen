@@ -22,6 +22,7 @@ use dashmap::DashMap;
 use tracing::debug;
 use tracing::warn;
 
+use crate::commit_result::CommitResult;
 use crate::config::BranchConfig;
 use crate::config::BranchStats;
 use crate::constants::*;
@@ -51,6 +52,9 @@ pub struct BranchOverlay<S: KeyValueStore + ?Sized> {
     depth: u8,
     /// Resource limits for this branch.
     config: BranchConfig,
+    /// The CommitId of the most recent commit on this branch (commit-dag feature).
+    #[cfg(feature = "commit-dag")]
+    parent_commit: std::sync::Mutex<Option<aspen_commit_dag::CommitId>>,
 }
 
 impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
@@ -64,6 +68,8 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
             dirty_bytes: AtomicU64::new(0),
             depth: 0,
             config: BranchConfig::default(),
+            #[cfg(feature = "commit-dag")]
+            parent_commit: std::sync::Mutex::new(None),
         }
     }
 
@@ -83,6 +89,8 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
             dirty_bytes: AtomicU64::new(0),
             depth,
             config: BranchConfig::default(),
+            #[cfg(feature = "commit-dag")]
+            parent_commit: std::sync::Mutex::new(None),
         })
     }
 
@@ -96,6 +104,8 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
             dirty_bytes: AtomicU64::new(0),
             depth: 0,
             config,
+            #[cfg(feature = "commit-dag")]
+            parent_commit: std::sync::Mutex::new(None),
         }
     }
 
@@ -117,6 +127,8 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
             dirty_bytes: AtomicU64::new(0),
             depth: child_depth,
             config: self.config.clone(),
+            #[cfg(feature = "commit-dag")]
+            parent_commit: std::sync::Mutex::new(None),
         })
     }
 
@@ -170,7 +182,7 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
     ///
     /// Returns an error if the batch exceeds `MAX_BATCH_SIZE`, the commit
     /// times out, or an optimistic transaction conflict is detected.
-    pub async fn commit(&self) -> Result<WriteResult, BranchError> {
+    pub async fn commit(&self) -> Result<CommitResult, BranchError> {
         let max_batch = aspen_constants::raft::MAX_BATCH_SIZE;
         let dirty_count = self.dirty.len() as u32;
 
@@ -199,7 +211,7 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
 
         if ops.is_empty() {
             debug!(branch_id = %self.branch_id, "commit with no dirty entries");
-            return Ok(WriteResult {
+            return Ok(CommitResult::without_commit_dag(WriteResult {
                 command: None,
                 batch_applied: Some(0),
                 conditions_met: None,
@@ -214,28 +226,52 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
                 conflict_key: None,
                 conflict_expected_version: None,
                 conflict_actual_version: None,
-            });
+            }));
         }
+
+        // Build the commit-dag metadata ops (if feature enabled).
+        #[cfg(feature = "commit-dag")]
+        let (commit_dag_ops, commit_id) = self.build_commit_dag_ops(&ops)?;
 
         // Choose command based on read set.
         let command = if self.read_set.is_empty() {
             // No reads from parent — use batch (no conflict detection needed).
-            let batch_ops = ops
+            let mut batch_ops: Vec<aspen_kv_types::batch::BatchOperation> = ops
                 .into_iter()
                 .map(|op| match op {
                     WriteOp::Set { key, value } => aspen_kv_types::batch::BatchOperation::Set { key, value },
                     WriteOp::Delete { key } => aspen_kv_types::batch::BatchOperation::Delete { key },
                 })
                 .collect();
+
+            // Append commit-dag metadata to the SAME batch (atomic).
+            #[cfg(feature = "commit-dag")]
+            batch_ops.extend(commit_dag_ops);
+
             WriteCommand::Batch { operations: batch_ops }
         } else {
             // Has reads — use optimistic transaction for conflict detection.
             let read_set: Vec<(String, i64)> =
                 self.read_set.iter().map(|entry| (entry.key().clone(), *entry.value())).collect();
-            WriteCommand::OptimisticTransaction {
-                read_set,
-                write_set: ops,
+
+            let mut write_set = ops;
+
+            // Append commit-dag metadata as write ops in the transaction.
+            #[cfg(feature = "commit-dag")]
+            {
+                for op in commit_dag_ops {
+                    match op {
+                        aspen_kv_types::batch::BatchOperation::Set { key, value } => {
+                            write_set.push(WriteOp::Set { key, value });
+                        }
+                        aspen_kv_types::batch::BatchOperation::Delete { key } => {
+                            write_set.push(WriteOp::Delete { key });
+                        }
+                    }
+                }
             }
+
+            WriteCommand::OptimisticTransaction { read_set, write_set }
         };
 
         let request = WriteRequest { command };
@@ -254,6 +290,13 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
             return Err(BranchError::CommitConflict { key: conflict_key });
         }
 
+        // Update parent_commit tracking.
+        #[cfg(feature = "commit-dag")]
+        {
+            let mut pc = self.parent_commit.lock().unwrap_or_else(|e| e.into_inner());
+            *pc = Some(commit_id);
+        }
+
         // Clear dirty state on successful commit.
         self.dirty.clear();
         self.read_set.clear();
@@ -264,7 +307,17 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
             "branch committed successfully"
         );
 
-        Ok(result)
+        #[cfg(feature = "commit-dag")]
+        {
+            Ok(CommitResult {
+                write_result: result,
+                commit_id: Some(commit_id),
+            })
+        }
+        #[cfg(not(feature = "commit-dag"))]
+        {
+            Ok(CommitResult::without_commit_dag(result))
+        }
     }
 
     /// Commit all buffered mutations without checking the read set.
@@ -272,7 +325,7 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
     /// Use this when the branch is combined with pass-through writes (CAS, batch)
     /// that legitimately modify keys the branch also read. The read set would
     /// report false conflicts in this case.
-    pub async fn commit_no_conflict_check(&self) -> Result<WriteResult, BranchError> {
+    pub async fn commit_no_conflict_check(&self) -> Result<CommitResult, BranchError> {
         let max_batch = aspen_constants::raft::MAX_BATCH_SIZE;
         let dirty_count = self.dirty.len() as u32;
 
@@ -283,25 +336,26 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
             });
         }
 
-        let ops: Vec<aspen_kv_types::batch::BatchOperation> = self
+        // Collect ops first as WriteOps for commit-dag building.
+        let write_ops: Vec<WriteOp> = self
             .dirty
             .iter()
             .map(|entry| {
                 let key = entry.key().clone();
                 match entry.value() {
-                    BranchEntry::Write { value } => aspen_kv_types::batch::BatchOperation::Set {
+                    BranchEntry::Write { value } => WriteOp::Set {
                         key,
                         value: value.clone(),
                     },
-                    BranchEntry::Tombstone => aspen_kv_types::batch::BatchOperation::Delete { key },
+                    BranchEntry::Tombstone => WriteOp::Delete { key },
                 }
             })
             .collect();
 
-        if ops.is_empty() {
+        if write_ops.is_empty() {
             debug!(branch_id = %self.branch_id, "commit (no conflict check) with no dirty entries");
             self.read_set.clear();
-            return Ok(WriteResult {
+            return Ok(CommitResult::without_commit_dag(WriteResult {
                 command: None,
                 batch_applied: Some(0),
                 conditions_met: None,
@@ -316,8 +370,24 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
                 conflict_key: None,
                 conflict_expected_version: None,
                 conflict_actual_version: None,
-            });
+            }));
         }
+
+        // Build commit-dag metadata.
+        #[cfg(feature = "commit-dag")]
+        let (commit_dag_ops, commit_id) = self.build_commit_dag_ops(&write_ops)?;
+
+        let mut ops: Vec<aspen_kv_types::batch::BatchOperation> = write_ops
+            .into_iter()
+            .map(|op| match op {
+                WriteOp::Set { key, value } => aspen_kv_types::batch::BatchOperation::Set { key, value },
+                WriteOp::Delete { key } => aspen_kv_types::batch::BatchOperation::Delete { key },
+            })
+            .collect();
+
+        // Append commit-dag metadata to the SAME batch (atomic).
+        #[cfg(feature = "commit-dag")]
+        ops.extend(commit_dag_ops);
 
         let command = WriteCommand::Batch { operations: ops };
         let request = WriteRequest { command };
@@ -330,6 +400,13 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
             .map_err(|_| BranchError::CommitTimeout { timeout_ms })?
             .map_err(|e| BranchError::StoreError { reason: e.to_string() })?;
 
+        // Update parent_commit tracking.
+        #[cfg(feature = "commit-dag")]
+        {
+            let mut pc = self.parent_commit.lock().unwrap_or_else(|e| e.into_inner());
+            *pc = Some(commit_id);
+        }
+
         self.dirty.clear();
         self.read_set.clear();
         self.dirty_bytes.store(0, Ordering::Relaxed);
@@ -339,7 +416,17 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
             "branch committed (no conflict check)"
         );
 
-        Ok(result)
+        #[cfg(feature = "commit-dag")]
+        {
+            Ok(CommitResult {
+                write_result: result,
+                commit_id: Some(commit_id),
+            })
+        }
+        #[cfg(not(feature = "commit-dag"))]
+        {
+            Ok(CommitResult::without_commit_dag(result))
+        }
     }
 
     /// Explicitly abort the branch, discarding all buffered state.
@@ -350,6 +437,95 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
         self.read_set.clear();
         self.dirty_bytes.store(0, Ordering::Relaxed);
         debug!(branch_id = %self.branch_id, dirty_count = count, "branch aborted");
+    }
+
+    /// Build commit-dag metadata operations for inclusion in the Raft batch.
+    ///
+    /// Returns the batch operations and the computed CommitId.
+    #[cfg(feature = "commit-dag")]
+    fn build_commit_dag_ops(
+        &self,
+        ops: &[WriteOp],
+    ) -> Result<(Vec<aspen_kv_types::batch::BatchOperation>, aspen_commit_dag::CommitId), BranchError> {
+        use aspen_commit_dag::CommitStore;
+        use aspen_commit_dag::MutationType;
+        use aspen_commit_dag::verified::commit_hash::compute_commit_id;
+        use aspen_commit_dag::verified::commit_hash::compute_mutations_hash;
+
+        // Snapshot the dirty map as sorted mutations.
+        let mut mutations: Vec<(String, MutationType)> = ops
+            .iter()
+            .map(|op| match op {
+                WriteOp::Set { key, value } => (key.clone(), MutationType::Set(value.clone())),
+                WriteOp::Delete { key } => (key.clone(), MutationType::Delete),
+            })
+            .collect();
+        mutations.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mutations_hash = compute_mutations_hash(&mutations);
+
+        // Read current parent commit.
+        let parent = {
+            let pc = self.parent_commit.lock().unwrap_or_else(|e| e.into_inner());
+            *pc
+        };
+
+        let timestamp_ms =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+
+        // We don't have the Raft revision yet (it's assigned by the Raft batch),
+        // so we use 0 as a placeholder. The chain_hash_at_commit is also [0; 32]
+        // since we don't have access to the Raft chain hash at this layer.
+        let raft_revision = 0u64;
+        let chain_hash_at_commit = [0u8; 32];
+
+        let commit_id = compute_commit_id(&parent, &self.branch_id, &mutations_hash, raft_revision, timestamp_ms);
+
+        let commit = aspen_commit_dag::Commit {
+            id: commit_id,
+            parent,
+            branch_id: self.branch_id.clone(),
+            mutations,
+            mutations_hash,
+            raft_revision,
+            chain_hash_at_commit,
+            timestamp_ms,
+        };
+
+        // Serialize commit for KV storage.
+        let commit_value =
+            CommitStore::serialize_commit(&commit).map_err(|e| BranchError::StoreError { reason: e.to_string() })?;
+
+        let commit_key = CommitStore::commit_key(&commit_id);
+        let tip_key = CommitStore::branch_tip_key(&self.branch_id);
+        let tip_value = hex::encode(commit_id);
+
+        let dag_ops = vec![
+            aspen_kv_types::batch::BatchOperation::Set {
+                key: commit_key,
+                value: commit_value,
+            },
+            aspen_kv_types::batch::BatchOperation::Set {
+                key: tip_key,
+                value: tip_value,
+            },
+        ];
+
+        Ok((dag_ops, commit_id))
+    }
+
+    /// Get the parent commit (commit-dag feature).
+    #[cfg(feature = "commit-dag")]
+    pub fn parent_commit(&self) -> Option<aspen_commit_dag::CommitId> {
+        let pc = self.parent_commit.lock().unwrap_or_else(|e| e.into_inner());
+        *pc
+    }
+
+    /// Set the parent commit (for fork_from).
+    #[cfg(feature = "commit-dag")]
+    pub fn set_parent_commit(&self, commit_id: aspen_commit_dag::CommitId) {
+        let mut pc = self.parent_commit.lock().unwrap_or_else(|e| e.into_inner());
+        *pc = Some(commit_id);
     }
 
     /// Access the parent store directly (for nested commit).

@@ -55,6 +55,7 @@
 //!
 //! Override with [`BranchConfig`].
 
+mod commit_result;
 mod config;
 mod constants;
 mod entry;
@@ -62,6 +63,7 @@ mod error;
 mod overlay;
 pub mod verified;
 
+pub use commit_result::CommitResult;
 pub use config::BranchConfig;
 pub use config::BranchStats;
 pub use constants::*;

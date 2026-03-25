@@ -122,6 +122,7 @@ members = [
     "crates/aspen-federation",
     "crates/aspen-deploy",
     "crates/aspen-kv-branch",
+    "crates/aspen-commit-dag",
     "crates/aspen-nostr-relay",
     "crates/aspen-cli",
     "crates/aspen-tui",
@@ -275,6 +276,7 @@ aspen-testing-patchbay = { path = "crates/aspen-testing-patchbay" }
 aspen-blob = { path = "crates/aspen-blob" }
 aspen-deploy = { path = "crates/aspen-deploy" }
 aspen-kv-branch = { path = "crates/aspen-kv-branch" }
+aspen-commit-dag = { path = "crates/aspen-commit-dag" }
 aspen-sql = { path = "crates/aspen-sql" }
 aspen-forge = { path = "crates/aspen-forge" }
 aspen-hooks = { path = "crates/aspen-hooks" }
@@ -376,6 +378,7 @@ aspen-secrets = { workspace = true, optional = true }
 aspen-automerge = { workspace = true, optional = true }
 aspen-deploy = { workspace = true, optional = true }
 aspen-kv-branch = { workspace = true, optional = true }
+aspen-commit-dag = { workspace = true, optional = true }
 aspen-exec-cache = { workspace = true, optional = true }
 aspen-nostr-relay = { workspace = true, optional = true }
 aspen-ci = { workspace = true, optional = true }
@@ -478,7 +481,7 @@ cloud-hypervisor-client = "0.3"
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
 default = []
 
-full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "snix-http", "snix-daemon", "snix-eval", "snix-build", "deploy", "kv-branch", "nostr-relay"]
+full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "snix-http", "snix-daemon", "snix-eval", "snix-build", "deploy", "kv-branch", "commit-dag", "nostr-relay"]
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
@@ -510,6 +513,7 @@ net = ["dep:aspen-net", "proxy", "aspen-rpc-handlers/net"]
 # contacts and calendar are now WASM plugins (aspen-plugins repo)
 deploy = ["dep:aspen-deploy", "aspen-cluster/deploy", "aspen-rpc-handlers/deploy"]
 kv-branch = ["dep:aspen-kv-branch"]
+commit-dag = ["kv-branch", "dep:aspen-commit-dag", "aspen-kv-branch/commit-dag"]
 exec-cache = ["dep:aspen-exec-cache"]
 nostr-relay = ["dep:aspen-nostr-relay", "hooks", "aspen-cluster/nostr-relay"]
 federation = ["aspen-cluster/federation"]
@@ -522,7 +526,7 @@ snix-build = ["snix-eval", "dep:snix-build", "aspen-ci?/nix-executor-snix-build"
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"snix-http\", \"snix-daemon\", \"snix-eval\", \"snix-build\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\", \"kv-branch\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"snix-http\", \"snix-daemon\", \"snix-eval\", \"snix-build\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\", \"kv-branch\", \"commit-dag\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit

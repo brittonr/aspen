@@ -2943,6 +2943,15 @@
                 aspenCliPackage = bins.ci-aspen-cli;
               };
 
+              # Commit DAG test: chain-hashed commits, system prefix storage,
+              # commit chain simulation, atomic batches, prefix isolation.
+              # Build: nix build .#checks.x86_64-linux.commit-dag-test
+              commit-dag-test = import ./nix/tests/commit-dag.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.ci-aspen-node;
+                aspenCliPackage = bins.ci-aspen-cli;
+              };
+
               # FUSE mount test: write, read, mkdir, delete, large file (100KB).
               # Build: nix build .#checks.x86_64-linux.fuse-operations-test
               fuse-operations-test = import ./nix/tests/fuse-operations.nix {
@@ -3614,6 +3623,7 @@
                     echo ""
                     echo "In-repo specs (can verify directly):"
                     echo "  Federation:   nix run .#verify-verus federation"
+                    echo "  Commit DAG:   nix run .#verify-verus commit-dag"
                     echo ""
                     echo "Extracted to sibling repos:"
                     echo "  Core:         cd ~/git/aspen-core && verus crates/aspen-core/verus/lib.rs"
@@ -3628,6 +3638,13 @@
                       --crate-type=bin \
                       "''${FLAKE_ROOT:-.}/crates/aspen-federation/verus/lib.rs"
                     echo "Federation: all specs verified ✓"
+                    ;;
+                  commit-dag|commitdag)
+                    echo "=== Verifying Commit DAG specs ==="
+                    "${verusRoot}/rust_verify" \
+                      --crate-type=lib \
+                      "''${FLAKE_ROOT:-.}/crates/aspen-commit-dag/verus/lib.rs"
+                    echo "Commit DAG: all specs verified ✓"
                     ;;
                   core)
                     echo "Core specs extracted to ~/git/aspen-core"

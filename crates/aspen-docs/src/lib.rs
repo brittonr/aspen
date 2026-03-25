@@ -53,6 +53,8 @@
 //! exporter.clone().spawn(log_receiver);
 //! ```
 
+#[cfg(feature = "commit-dag-federation")]
+pub mod commit_verification;
 pub mod constants;
 pub mod events;
 pub mod exporter;

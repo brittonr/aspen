@@ -216,6 +216,13 @@ async fn async_main() -> Result<()> {
         aspen_core_essentials_handler::spawn_alert_evaluator(client_context.clone(), config, node_mode.shutdown_token())
     });
 
+    // Spawn commit DAG garbage collection (periodically cleans expired commit entries)
+    #[cfg(feature = "commit-dag")]
+    let _commit_gc_handle = {
+        let interval = std::time::Duration::from_secs(aspen_commit_dag::COMMIT_GC_INTERVAL_SECS);
+        aspen_commit_dag::CommitGc::spawn_gc_task(client_context.kv_store.clone(), interval)
+    };
+
     // Spawn deploy resume watcher (detects leadership transitions and resumes
     // in-progress deployments that were left by the old leader)
     #[cfg(feature = "deploy")]

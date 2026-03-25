@@ -1,0 +1,24 @@
+[package]
+name = "aspen-commit-dag"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Chain-hashed commit DAG for Aspen KV branch history and federation integrity"
+
+[dependencies]
+aspen-raft = { workspace = true }
+aspen-kv-types = { workspace = true }
+aspen-traits = { workspace = true }
+aspen-constants = { workspace = true }
+blake3 = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+snafu = "0.8.9"
+hex = "0.4"
+postcard = { version = "1.0", features = ["alloc"] }
+tracing = { workspace = true }
+async-trait = "0.1"
+tokio = { workspace = true }
+
+[dev-dependencies]
+aspen-testing-core = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

@@ -24,6 +24,7 @@ aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-plugin-api = { path = "../aspen-plugin-api", optional = true }
 aspen-proxy = { path = "../aspen-proxy", optional = true }
+aspen-commit-dag = { path = "../aspen-commit-dag", optional = true }
 
 # Async runtime
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "process", "fs", "io-std"] }
@@ -96,3 +97,4 @@ secrets = ["aspen-client-api/secrets"]
 automerge = ["aspen-client-api/automerge"]
 plugins-rpc = ["dep:aspen-plugin-api"]
 proxy = ["dep:aspen-proxy"]
+commit-dag = ["dep:aspen-commit-dag"]

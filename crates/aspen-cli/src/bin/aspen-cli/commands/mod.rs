@@ -15,6 +15,8 @@ pub mod calendar;
 #[cfg(feature = "ci")]
 pub mod ci;
 pub mod cluster;
+#[cfg(feature = "commit-dag")]
+pub mod commit;
 pub mod contacts;
 pub mod counter;
 pub mod discussion;

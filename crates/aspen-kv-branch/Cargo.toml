@@ -5,10 +5,16 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Copy-on-write branch overlay for Aspen's KeyValueStore trait"
 
+[features]
+default = []
+commit-dag = ["dep:aspen-commit-dag"]
+
 [dependencies]
 aspen-traits = { workspace = true }
 aspen-kv-types = { workspace = true }
 aspen-constants = { workspace = true }
+aspen-commit-dag = { workspace = true, optional = true }
+hex = "0.4"
 async-trait = "0.1"
 dashmap = "6.1"
 serde = { workspace = true }
@@ -17,5 +23,8 @@ tokio = { workspace = true }
 
 [dev-dependencies]
 aspen-testing-core = { workspace = true }
+aspen-commit-dag = { workspace = true }
+aspen-traits = { workspace = true }
+hex = "0.4"
 proptest = "1.0"
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

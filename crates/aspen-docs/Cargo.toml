@@ -1,3 +1,7 @@
+[features]
+default = []
+commit-dag-federation = ["dep:aspen-commit-dag"]
+
 [package]
 name = "aspen-docs"
 version = "0.1.0"
@@ -12,6 +16,7 @@ aspen-core = { path = "../aspen-core" }
 aspen-raft = { path = "../aspen-raft" }
 aspen-blob = { path = "../aspen-blob" }
 aspen-client = { path = "../aspen-client" }
+aspen-commit-dag = { path = "../aspen-commit-dag", optional = true }
 
 # Iroh P2P and docs
 iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
