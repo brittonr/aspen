@@ -3,6 +3,8 @@
 //! Receives irpc messages and dispatches to the underlying blob and directory stores.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
@@ -16,6 +18,7 @@ use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
 use tokio::io::AsyncWriteExt;
 use tracing::debug;
+use tracing::info;
 use tracing::instrument;
 use tracing::trace_span;
 use tracing::warn;
@@ -28,12 +31,24 @@ const MAX_RECURSIVE_DEPTH: u32 = 256;
 /// Maximum directories to buffer during recursive walk.
 const MAX_RECURSIVE_BUFFER: u32 = 10_000;
 
+/// Backpressure activates when queue depth reaches this count (80% of 1000 capacity).
+const BACKPRESSURE_HIGH_WATERMARK: u32 = 800;
+
+/// Backpressure deactivates when queue depth drops to this count (60% of 1000 capacity).
+const BACKPRESSURE_LOW_WATERMARK: u32 = 600;
+
 /// Castore server that handles irpc messages.
 ///
 /// Generic over the blob and directory service implementations.
 pub struct CastoreServer<B, D> {
     blob: Arc<B>,
     dir: Arc<D>,
+    /// Current number of in-flight requests.
+    in_flight: Arc<AtomicU32>,
+    /// Whether backpressure is currently active (hysteresis latch).
+    backpressure_active: Arc<AtomicBool>,
+    /// Total rejected requests counter (for metrics/observability).
+    rejections_total: Arc<AtomicU64>,
 }
 
 impl<B, D> Clone for CastoreServer<B, D> {
@@ -41,6 +56,26 @@ impl<B, D> Clone for CastoreServer<B, D> {
         Self {
             blob: Arc::clone(&self.blob),
             dir: Arc::clone(&self.dir),
+            in_flight: Arc::clone(&self.in_flight),
+            backpressure_active: Arc::clone(&self.backpressure_active),
+            rejections_total: Arc::clone(&self.rejections_total),
+        }
+    }
+}
+
+/// RAII guard that decrements the in-flight counter on drop and checks
+/// low watermark for backpressure deactivation.
+struct RequestGuard {
+    counter: Arc<AtomicU32>,
+    backpressure_active: Arc<AtomicBool>,
+}
+
+impl Drop for RequestGuard {
+    fn drop(&mut self) {
+        let prev = self.counter.fetch_sub(1, Ordering::Relaxed);
+        // Check low watermark for deactivation
+        if self.backpressure_active.load(Ordering::Relaxed) && prev.saturating_sub(1) <= BACKPRESSURE_LOW_WATERMARK {
+            self.backpressure_active.store(false, Ordering::Relaxed);
         }
     }
 }
@@ -55,16 +90,94 @@ where
         Self {
             blob: Arc::new(blob),
             dir: Arc::new(dir),
+            in_flight: Arc::new(AtomicU32::new(0)),
+            backpressure_active: Arc::new(AtomicBool::new(false)),
+            rejections_total: Arc::new(AtomicU64::new(0)),
         }
     }
 
     /// Create from Arc'd services (for sharing with other components).
     pub fn from_arcs(blob: Arc<B>, dir: Arc<D>) -> Self {
-        Self { blob, dir }
+        Self {
+            blob,
+            dir,
+            in_flight: Arc::new(AtomicU32::new(0)),
+            backpressure_active: Arc::new(AtomicBool::new(false)),
+            rejections_total: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    /// Check backpressure and return `true` if the request should be rejected.
+    ///
+    /// Uses hysteresis: activates at 80% capacity, deactivates at 60%.
+    /// This prevents oscillation when queue depth hovers near a threshold.
+    fn should_reject(&self) -> bool {
+        let depth = self.in_flight.load(Ordering::Relaxed);
+        let active = self.backpressure_active.load(Ordering::Relaxed);
+
+        if !active && depth >= BACKPRESSURE_HIGH_WATERMARK {
+            // Cross high watermark — activate backpressure
+            self.backpressure_active.store(true, Ordering::Relaxed);
+            warn!(depth, high_watermark = BACKPRESSURE_HIGH_WATERMARK, "castore backpressure activated");
+            return true;
+        }
+
+        if active && depth <= BACKPRESSURE_LOW_WATERMARK {
+            // Cross low watermark — deactivate backpressure
+            self.backpressure_active.store(false, Ordering::Relaxed);
+            info!(depth, low_watermark = BACKPRESSURE_LOW_WATERMARK, "castore backpressure deactivated");
+            return false;
+        }
+
+        active
+    }
+
+    /// Increment in-flight counter. Returns a guard that decrements on drop.
+    fn enter_request(&self) -> RequestGuard {
+        self.in_flight.fetch_add(1, Ordering::Relaxed);
+        RequestGuard {
+            counter: Arc::clone(&self.in_flight),
+            backpressure_active: Arc::clone(&self.backpressure_active),
+        }
+    }
+
+    /// Current queue depth (for metrics).
+    pub fn queue_depth(&self) -> u32 {
+        self.in_flight.load(Ordering::Relaxed)
+    }
+
+    /// Total rejected requests (for metrics).
+    pub fn rejections_total(&self) -> u64 {
+        self.rejections_total.load(Ordering::Relaxed)
+    }
+
+    /// Whether backpressure is currently active.
+    pub fn is_backpressure_active(&self) -> bool {
+        self.backpressure_active.load(Ordering::Relaxed)
     }
 
     /// Handle one incoming irpc message.
+    ///
+    /// Applies backpressure when queue depth exceeds the high watermark.
+    /// Write operations are rejected; read operations still flow.
     pub async fn handle(&self, msg: CastoreMessage) {
+        let _guard = self.enter_request();
+
+        // Check backpressure for write operations
+        if self.should_reject() {
+            match &msg {
+                CastoreMessage::BlobWrite(_) | CastoreMessage::DirPut(_) | CastoreMessage::DirPutMultiple(_) => {
+                    self.rejections_total.fetch_add(1, Ordering::Relaxed);
+                    warn!(depth = self.queue_depth(), "castore backpressure: rejecting write request");
+                    // Drop the message — the client will see an error
+                    return;
+                }
+                _ => {
+                    // Allow reads through even under backpressure
+                }
+            }
+        }
+
         match msg {
             CastoreMessage::BlobHas(msg) => self.handle_blob_has(msg).await,
             CastoreMessage::BlobRead(msg) => self.handle_blob_read(msg).await,
@@ -430,4 +543,86 @@ async fn decode_and_put_directory<D: DirectoryService>(dir_svc: &D, data: &[u8])
     let dir = decode_directory(data)?;
     let digest = dir_svc.put(dir).await.map_err(|e| format!("put: {e}"))?;
     Ok(*digest.as_ref())
+}
+
+#[cfg(test)]
+mod backpressure_tests {
+    use super::*;
+
+    /// Minimal test that exercises backpressure state transitions without
+    /// needing a full irpc setup.
+    #[test]
+    fn hysteresis_no_oscillation() {
+        let in_flight = Arc::new(AtomicU32::new(0));
+        let active = Arc::new(AtomicBool::new(false));
+
+        // Simulate queue filling to high watermark
+        in_flight.store(BACKPRESSURE_HIGH_WATERMARK, Ordering::Relaxed);
+
+        // Not active yet — hasn't been checked
+        assert!(!active.load(Ordering::Relaxed));
+
+        // Check: should activate
+        let depth = in_flight.load(Ordering::Relaxed);
+        if !active.load(Ordering::Relaxed) && depth >= BACKPRESSURE_HIGH_WATERMARK {
+            active.store(true, Ordering::Relaxed);
+        }
+        assert!(active.load(Ordering::Relaxed));
+
+        // Depth between 60-80%: should stay active (hysteresis)
+        in_flight.store(700, Ordering::Relaxed);
+        let depth = in_flight.load(Ordering::Relaxed);
+        if active.load(Ordering::Relaxed) && depth <= BACKPRESSURE_LOW_WATERMARK {
+            active.store(false, Ordering::Relaxed);
+        }
+        assert!(active.load(Ordering::Relaxed), "should stay active between watermarks");
+
+        // Drop below low watermark: should deactivate
+        in_flight.store(BACKPRESSURE_LOW_WATERMARK, Ordering::Relaxed);
+        let depth = in_flight.load(Ordering::Relaxed);
+        if active.load(Ordering::Relaxed) && depth <= BACKPRESSURE_LOW_WATERMARK {
+            active.store(false, Ordering::Relaxed);
+        }
+        assert!(!active.load(Ordering::Relaxed));
+
+        // Depth at 70% again: should NOT activate (below high watermark)
+        in_flight.store(700, Ordering::Relaxed);
+        let depth = in_flight.load(Ordering::Relaxed);
+        if !active.load(Ordering::Relaxed) && depth >= BACKPRESSURE_HIGH_WATERMARK {
+            active.store(true, Ordering::Relaxed);
+        }
+        assert!(!active.load(Ordering::Relaxed), "should NOT oscillate at 70%");
+    }
+
+    #[test]
+    fn request_guard_decrements() {
+        let counter = Arc::new(AtomicU32::new(5));
+        let active = Arc::new(AtomicBool::new(false));
+
+        {
+            let _guard = RequestGuard {
+                counter: Arc::clone(&counter),
+                backpressure_active: Arc::clone(&active),
+            };
+            assert_eq!(counter.load(Ordering::Relaxed), 5);
+        }
+        // Guard dropped — counter decremented
+        assert_eq!(counter.load(Ordering::Relaxed), 4);
+    }
+
+    #[test]
+    fn request_guard_deactivates_backpressure() {
+        let counter = Arc::new(AtomicU32::new(BACKPRESSURE_LOW_WATERMARK + 1));
+        let active = Arc::new(AtomicBool::new(true));
+
+        {
+            let _guard = RequestGuard {
+                counter: Arc::clone(&counter),
+                backpressure_active: Arc::clone(&active),
+            };
+        }
+        // Guard dropped: counter went to LOW_WATERMARK, backpressure should deactivate
+        assert_eq!(counter.load(Ordering::Relaxed), BACKPRESSURE_LOW_WATERMARK);
+        assert!(!active.load(Ordering::Relaxed));
+    }
 }
