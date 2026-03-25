@@ -29,11 +29,14 @@
 //! - Structured error handling via snafu
 
 pub mod blob_service;
+pub mod chunked_blob_service;
+pub mod chunking;
 pub mod closure_sync;
 pub mod constants;
 pub mod dag_sync;
 pub mod directory_service;
 pub mod error;
+pub mod manifest;
 pub mod migration;
 pub mod pathinfo_service;
 pub mod rpc_blob_service;

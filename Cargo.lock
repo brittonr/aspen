@@ -2514,6 +2514,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "blake3",
+ "fastcdc",
  "hex",
  "iroh",
  "iroh-blobs",

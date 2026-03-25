@@ -44,6 +44,9 @@ hex = "0.4"
 # Hashing
 blake3 = { workspace = true }
 
+# Content-defined chunking
+fastcdc = { workspace = true }
+
 # Logging
 tracing = { workspace = true }
 

@@ -206,6 +206,7 @@ async-entry = "0.3.1"
 base64 = "0.22"  # Base64 encoding for binary data
 blake3 = "1.5"  # Hash function for content addressing
 byte-unit = "5.1.4"
+fastcdc = "3.1"  # Content-defined chunking for blob deduplication
 bytes = "1.7"
 chrono = "0.4"
 clap = { version = "4.5.4", features = ["derive", "env"] }

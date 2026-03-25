@@ -71,5 +71,6 @@ verus! {
 }
 
 mod blob_spec;
+mod chunking_spec;
 mod directory_spec;
 mod pathinfo_spec;
