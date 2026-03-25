@@ -11,10 +11,14 @@ mod operations;
 mod tests;
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::path::Component;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -50,6 +54,119 @@ const R_OK: u32 = 4;
 const W_OK: u32 = 2;
 const X_OK: u32 = 1;
 const F_OK: u32 = 0;
+
+/// Per-mount access pattern statistics for measuring lazy fetch effectiveness.
+///
+/// Tracks how many files are opened vs actually read, and how many bytes
+/// are fetched from the cluster vs served from cache. These counters
+/// quantify whether eager prefetch wastes bandwidth.
+pub struct FuseAccessStats {
+    /// Total number of `open()` calls.
+    pub files_opened: AtomicU64,
+    /// Number of files where at least one `read()` occurred (unique inodes).
+    pub files_read: AtomicU64,
+    /// Total bytes fetched from the cluster (cache misses).
+    pub bytes_fetched_from_cluster: AtomicU64,
+    /// Total bytes served from cache (cache hits).
+    pub bytes_served_from_cache: AtomicU64,
+    /// Total bytes fetched by `prefetch_file_start()` (eager prefetch).
+    pub prefetch_bytes_fetched: AtomicU64,
+    /// Set of inodes that have been read (for deduplication of files_read counter).
+    /// Protected by a mutex since HashSet isn't atomic.
+    read_inodes: Mutex<HashSet<u64>>,
+}
+
+impl Default for FuseAccessStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FuseAccessStats {
+    /// Create a new stats tracker with all counters at zero.
+    pub fn new() -> Self {
+        Self {
+            files_opened: AtomicU64::new(0),
+            files_read: AtomicU64::new(0),
+            bytes_fetched_from_cluster: AtomicU64::new(0),
+            bytes_served_from_cache: AtomicU64::new(0),
+            prefetch_bytes_fetched: AtomicU64::new(0),
+            read_inodes: Mutex::new(HashSet::new()),
+        }
+    }
+
+    /// Record a file open.
+    pub fn record_open(&self) {
+        self.files_opened.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a first read on an inode (deduplicates by inode).
+    /// Returns true if this is the first read for this inode.
+    pub fn record_read(&self, inode: u64) -> bool {
+        let Ok(mut set) = self.read_inodes.lock() else {
+            return false;
+        };
+        if set.insert(inode) {
+            self.files_read.fetch_add(1, Ordering::Relaxed);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Record bytes fetched from cluster (cache miss).
+    pub fn record_cluster_fetch(&self, bytes: u64) {
+        self.bytes_fetched_from_cluster.fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    /// Record bytes served from cache (cache hit).
+    pub fn record_cache_hit(&self, bytes: u64) {
+        self.bytes_served_from_cache.fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    /// Record bytes fetched by eager prefetch.
+    pub fn record_prefetch(&self, bytes: u64) {
+        self.prefetch_bytes_fetched.fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    /// Get a snapshot of all stats.
+    pub fn snapshot(&self) -> FuseAccessStatsSnapshot {
+        FuseAccessStatsSnapshot {
+            files_opened: self.files_opened.load(Ordering::Relaxed),
+            files_read: self.files_read.load(Ordering::Relaxed),
+            bytes_fetched_from_cluster: self.bytes_fetched_from_cluster.load(Ordering::Relaxed),
+            bytes_served_from_cache: self.bytes_served_from_cache.load(Ordering::Relaxed),
+            prefetch_bytes_fetched: self.prefetch_bytes_fetched.load(Ordering::Relaxed),
+        }
+    }
+}
+
+/// Point-in-time snapshot of access statistics.
+#[derive(Debug, Clone)]
+pub struct FuseAccessStatsSnapshot {
+    pub files_opened: u64,
+    pub files_read: u64,
+    pub bytes_fetched_from_cluster: u64,
+    pub bytes_served_from_cache: u64,
+    pub prefetch_bytes_fetched: u64,
+}
+
+impl FuseAccessStatsSnapshot {
+    /// Percentage of opened files that were actually read.
+    pub fn read_ratio_percent(&self) -> f64 {
+        if self.files_opened == 0 {
+            return 0.0;
+        }
+        (self.files_read as f64 / self.files_opened as f64) * 100.0
+    }
+
+    /// Bytes that would have been wasted by eager prefetch (opened but never read).
+    pub fn prefetch_savings_bytes(&self) -> u64 {
+        let unread = self.files_opened.saturating_sub(self.files_read);
+        // Each unread file would have prefetched PREFETCH_READAHEAD_BYTES (128KB)
+        unread.saturating_mul(128 * 1024)
+    }
+}
 
 /// Shared in-memory KV store handle.
 ///
@@ -116,6 +233,11 @@ pub struct AspenFs {
     ///
     /// Uses Mutex for interior mutability since FUSE's `init`/`destroy` take `&self`.
     flush_timer: Mutex<Option<FlushTimer>>,
+    /// Per-mount access pattern statistics for lazy fetch measurement.
+    pub(crate) access_stats: FuseAccessStats,
+    /// Whether the cluster connection is degraded (unreachable).
+    /// Set on RPC failure, cleared on next success.
+    pub(crate) is_degraded: AtomicBool,
     /// Branch manager for @branch virtual paths (feature-gated).
     #[cfg(feature = "kv-branch")]
     branch_manager: crate::branch::BranchManager,
@@ -139,6 +261,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            access_stats: FuseAccessStats::new(),
+            is_degraded: AtomicBool::new(false),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
             #[cfg(feature = "exec-cache")]
@@ -163,6 +287,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            access_stats: FuseAccessStats::new(),
+            is_degraded: AtomicBool::new(false),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
             #[cfg(feature = "exec-cache")]
@@ -184,6 +310,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            access_stats: FuseAccessStats::new(),
+            is_degraded: AtomicBool::new(false),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
             #[cfg(feature = "exec-cache")]
@@ -206,6 +334,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            access_stats: FuseAccessStats::new(),
+            is_degraded: AtomicBool::new(false),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
             #[cfg(feature = "exec-cache")]
@@ -231,6 +361,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            access_stats: FuseAccessStats::new(),
+            is_degraded: AtomicBool::new(false),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
             #[cfg(feature = "exec-cache")]
@@ -254,6 +386,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            access_stats: FuseAccessStats::new(),
+            is_degraded: AtomicBool::new(false),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
             #[cfg(feature = "exec-cache")]
@@ -279,6 +413,16 @@ impl AspenFs {
         &self.read_tracker
     }
 
+    /// Get a snapshot of access pattern statistics.
+    pub fn stats(&self) -> FuseAccessStatsSnapshot {
+        self.access_stats.snapshot()
+    }
+
+    /// Check if the cluster connection is in degraded mode.
+    pub fn is_degraded(&self) -> bool {
+        self.is_degraded.load(Ordering::Relaxed)
+    }
+
     /// Shares the same underlying KV connection (via Arc) but gets fresh
     /// cache, buffer, and prefetcher instances. Used by the background
     /// flush timer to write flushed data without holding a reference to
@@ -297,6 +441,8 @@ impl AspenFs {
             prefetcher: Prefetcher::new(),
             lock_manager: LockManager::new(),
             flush_timer: Mutex::new(None),
+            access_stats: FuseAccessStats::new(),
+            is_degraded: AtomicBool::new(false),
             #[cfg(feature = "kv-branch")]
             branch_manager: crate::branch::BranchManager::new(),
             #[cfg(feature = "exec-cache")]
@@ -455,29 +601,61 @@ impl AspenFs {
         }
     }
 
-    /// Read a key from the KV store (with caching).
+    /// Read a key from the KV store (with caching and offline fallback).
+    ///
+    /// Cache flow:
+    /// 1. Fresh cache hit → return immediately
+    /// 2. Stale cache hit with known hash → hash-check revalidation
+    /// 3. Cache miss → fetch from cluster
+    /// 4. Cluster unreachable + stale cache → serve stale (offline mode)
+    /// 5. Cluster unreachable + no cache → return error
     pub(crate) fn kv_read(&self, key: &str) -> std::io::Result<Option<Vec<u8>>> {
-        // Check cache first
+        // Check cache first (non-expired)
         if let Some(cached) = self.cache.get_data(key) {
+            self.access_stats.record_cache_hit(cached.len() as u64);
             return Ok(Some(cached));
         }
 
+        // Attempt cluster fetch
         let result = match &self.backend {
             KvBackend::Client(client) => {
                 let prefixed = self.prefixed_key(key);
                 debug!(key = %prefixed, "reading key from Aspen");
-                client.read_key(&prefixed).map_err(|e| std::io::Error::other(e.to_string()))?
+                match client.read_key(&prefixed) {
+                    Ok(value) => {
+                        // Clear degraded flag on success
+                        self.is_degraded.store(false, Ordering::Relaxed);
+                        Ok(value)
+                    }
+                    Err(e) => {
+                        // Set degraded flag
+                        self.is_degraded.store(true, Ordering::Relaxed);
+
+                        // Try stale cache (offline fallback)
+                        if let Some((stale_data, _is_expired, _hash)) = self.cache.get_data_with_staleness(key) {
+                            tracing::warn!(
+                                key = %key,
+                                "serving stale cached data (cluster unreachable)"
+                            );
+                            self.access_stats.record_cache_hit(stale_data.len() as u64);
+                            return Ok(Some(stale_data));
+                        }
+
+                        Err(std::io::Error::other(e.to_string()))
+                    }
+                }
             }
-            KvBackend::None => None,
+            KvBackend::None => Ok(None),
             KvBackend::InMemory(store) => {
                 let prefixed = self.prefixed_key(key);
                 let store = store.read().map_err(|_| std::io::Error::other("lock poisoned"))?;
-                store.get(&prefixed).cloned()
+                Ok(store.get(&prefixed).cloned())
             }
-        };
+        }?;
 
-        // Populate cache on hit
+        // Populate cache on hit, track fetch
         if let Some(ref value) = result {
+            self.access_stats.record_cluster_fetch(value.len() as u64);
             self.cache.put_data(key.to_string(), value.clone());
         }
 

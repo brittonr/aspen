@@ -2,8 +2,12 @@
 //!
 //! Reduces network round-trips by:
 //! - Prefetching metadata for all entries after `readdir()`
-//! - Prefetching the first 128 KB on file open
 //! - Detecting sequential access patterns and prefetching ahead
+//!
+//! Note: Eager file-start prefetch on `open()` has been removed. File
+//! content is now fetched lazily on first `read()`. The `prefetch_file_start()`
+//! method remains available for explicit use by callers who know they will
+//! read the file.
 //!
 //! # Design
 //!
@@ -314,14 +318,17 @@ impl Prefetcher {
         }
     }
 
-    /// Execute readahead for a specific file.
+    /// Execute readahead for the start of a specific file.
     ///
-    /// Called on open() to prefetch the start of the file.
+    /// No longer called from `open()` — file content is now fetched lazily
+    /// on first `read()`. This method remains available for explicit prefetch
+    /// by callers who know they will read the file (e.g., CI workspace setup).
     pub fn prefetch_file_start(&self, fs: &AspenFs, key: &str) {
         debug!(key = %key, size = PREFETCH_READAHEAD_BYTES, "prefetching file start");
 
         match crate::chunking::chunked_read_range(fs, key, 0, PREFETCH_READAHEAD_BYTES) {
             Ok(data) => {
+                fs.access_stats.record_prefetch(data.len() as u64);
                 let cache_key = format!("{}@0", key);
                 fs.cache.put_data(cache_key, data);
             }

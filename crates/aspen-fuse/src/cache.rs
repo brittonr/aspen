@@ -53,6 +53,22 @@ impl<T> CacheEntry<T> {
     fn is_expired(&self) -> bool {
         Instant::now() >= self.expires_at
     }
+
+    fn extend_ttl(&mut self, ttl: Duration) {
+        self.expires_at = Instant::now() + ttl;
+    }
+}
+
+/// A data cache entry that optionally stores the BLAKE3 content hash.
+///
+/// The hash enables revalidation without re-fetching: on TTL expiry,
+/// a lightweight hash-check RPC (32 bytes) can confirm the data is
+/// still fresh, avoiding a full content re-fetch.
+#[derive(Clone)]
+struct DataCacheEntry {
+    data: Vec<u8>,
+    /// BLAKE3 content hash from iroh-blobs (None for inline KV values).
+    content_hash: Option<[u8; 32]>,
 }
 
 /// Cached metadata for a file or directory.
@@ -78,8 +94,8 @@ pub struct CachedMeta {
 /// `RwLock`s. All operations are non-blocking reads where possible,
 /// with writes only on cache miss or invalidation.
 pub struct ReadCache {
-    /// Cached file data: KV key -> raw bytes.
-    data: RwLock<HashMap<String, CacheEntry<Vec<u8>>>>,
+    /// Cached file data: KV key -> data + optional content hash.
+    data: RwLock<HashMap<String, CacheEntry<DataCacheEntry>>>,
     /// Total bytes stored in the data cache (tracked for byte-limit eviction).
     data_bytes: RwLock<usize>,
     /// Cached metadata: path -> (entry_type, size, timestamps).
@@ -118,13 +134,42 @@ impl ReadCache {
         if entry.is_expired() {
             return None;
         }
-        Some(entry.value.clone())
+        Some(entry.value.data.clone())
     }
 
-    /// Insert file data into the cache.
+    /// Look up cached file data, returning stale entries too.
+    ///
+    /// Returns `Some((bytes, is_expired, content_hash))`. Used by offline
+    /// mode to serve stale data when the cluster is unreachable.
+    pub fn get_data_with_staleness(&self, key: &str) -> Option<(Vec<u8>, bool, Option<[u8; 32]>)> {
+        let cache = self.data.read().ok()?;
+        let entry = cache.get(key)?;
+        let is_expired = entry.is_expired();
+        Some((entry.value.data.clone(), is_expired, entry.value.content_hash))
+    }
+
+    /// Extend the TTL of a data cache entry (used after hash-check revalidation).
+    pub fn extend_data_ttl(&self, key: &str, ttl: Duration) {
+        let Ok(mut cache) = self.data.write() else {
+            return;
+        };
+        if let Some(entry) = cache.get_mut(key) {
+            entry.extend_ttl(ttl);
+        }
+    }
+
+    /// Insert file data into the cache (no content hash).
     ///
     /// Evicts expired entries first, then LRU-evicts if over limits.
     pub fn put_data(&self, key: String, value: Vec<u8>) {
+        self.put_data_with_hash(key, value, None);
+    }
+
+    /// Insert file data into the cache with an optional BLAKE3 content hash.
+    ///
+    /// The hash enables efficient revalidation on TTL expiry: a hash-check
+    /// RPC (32 bytes) can confirm freshness without re-fetching the content.
+    pub fn put_data_with_hash(&self, key: String, value: Vec<u8>, content_hash: Option<[u8; 32]>) {
         let value_len = value.len();
 
         let Ok(mut cache) = self.data.write() else {
@@ -139,12 +184,12 @@ impl ReadCache {
         cache.retain(|_, entry| !entry.is_expired());
         if cache.len() < before {
             // Recalculate total bytes after expiration eviction
-            *total_bytes = cache.values().map(|e| e.value.len()).sum();
+            *total_bytes = cache.values().map(|e| e.value.data.len()).sum();
         }
 
         // Remove old entry if updating
         if let Some(old) = cache.remove(&key) {
-            *total_bytes = total_bytes.saturating_sub(old.value.len());
+            *total_bytes = total_bytes.saturating_sub(old.value.data.len());
         }
 
         // Evict entries if over limits (remove oldest entries)
@@ -155,7 +200,7 @@ impl ReadCache {
             let oldest_key = cache.iter().min_by_key(|(_, e)| e.expires_at).map(|(k, _)| k.clone());
             if let Some(key) = oldest_key {
                 if let Some(evicted) = cache.remove(&key) {
-                    *total_bytes = total_bytes.saturating_sub(evicted.value.len());
+                    *total_bytes = total_bytes.saturating_sub(evicted.value.data.len());
                 }
             } else {
                 break;
@@ -163,7 +208,11 @@ impl ReadCache {
         }
 
         *total_bytes += value_len;
-        cache.insert(key, CacheEntry::new(value, CACHE_DATA_TTL));
+        let entry = DataCacheEntry {
+            data: value,
+            content_hash,
+        };
+        cache.insert(key, CacheEntry::new(entry, CACHE_DATA_TTL));
     }
 
     /// Invalidate a specific data cache entry.
@@ -172,7 +221,7 @@ impl ReadCache {
             && let Some(removed) = cache.remove(key)
             && let Ok(mut total_bytes) = self.data_bytes.write()
         {
-            *total_bytes = total_bytes.saturating_sub(removed.value.len());
+            *total_bytes = total_bytes.saturating_sub(removed.value.data.len());
         }
     }
 
@@ -268,7 +317,7 @@ impl ReadCache {
             if let Ok(mut total_bytes) = self.data_bytes.write() {
                 for key in &keys_to_remove {
                     if let Some(removed) = cache.remove(key) {
-                        *total_bytes = total_bytes.saturating_sub(removed.value.len());
+                        *total_bytes = total_bytes.saturating_sub(removed.value.data.len());
                     }
                 }
             }
@@ -407,7 +456,10 @@ mod tests {
         {
             let mut data = cache.data.write().unwrap();
             data.insert("expired".into(), CacheEntry {
-                value: b"old".to_vec(),
+                value: DataCacheEntry {
+                    data: b"old".to_vec(),
+                    content_hash: None,
+                },
                 expires_at: Instant::now() - Duration::from_secs(1),
             });
         }

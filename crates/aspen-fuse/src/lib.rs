@@ -6,6 +6,9 @@
 //! # Features
 //!
 //! - **File Operations**: Read, write, create, delete files
+//! - **Lazy Fetch**: File content fetched on first `read()`, not on `open()`
+//! - **Content-Hash Validation**: BLAKE3 hash-check revalidation on stale cache entries
+//! - **Offline Mode**: Stale cached data served when cluster is unreachable
 //! - **Directories**: Virtual directories derived from key prefixes
 //! - **Symlinks**: Symbolic link support via special key suffixes
 //! - **Extended Attributes**: xattr support for file metadata
@@ -52,6 +55,8 @@ pub use chunking::chunked_write;
 pub use client::FuseSyncClient;
 pub use client::SharedClient;
 pub use fs::AspenFs;
+pub use fs::FuseAccessStats;
+pub use fs::FuseAccessStatsSnapshot;
 pub use fs::SharedInMemoryStore;
 pub use inode::EntryType;
 pub use inode::InodeManager;

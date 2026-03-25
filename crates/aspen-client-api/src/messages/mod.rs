@@ -148,6 +148,7 @@ pub use cluster::ClusterStateResponse;
 pub use cluster::ClusterTicketResponse;
 pub use cluster::CompareAndSwapResultResponse;
 pub use cluster::ErrorResponse;
+pub use cluster::HashCheckResultResponse;
 pub use cluster::HealthResponse;
 pub use cluster::InitResultResponse;
 pub use cluster::MetricsResponse;
@@ -3663,6 +3664,20 @@ pub enum ClientRpcRequest {
         /// Schnorr signature over the challenge bytes (hex-encoded, 128 chars).
         signature_hex: String,
     },
+
+    // =========================================================================
+    // Content-hash cache validation
+    // =========================================================================
+    /// Check if a file's content hash has changed without fetching the content.
+    ///
+    /// Used by FUSE lazy fetch to revalidate stale cache entries. The response
+    /// is under 100 bytes (vs re-fetching potentially megabytes of file data).
+    HashCheck {
+        /// KV key to check.
+        key: String,
+        /// Expected BLAKE3 content hash (32 bytes).
+        expected_hash: [u8; 32],
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -4025,6 +4040,7 @@ impl ClientRpcRequest {
             Self::NostrAuthChallenge { .. } => "NostrAuthChallenge",
             Self::NostrAuthVerify { .. } => "NostrAuthVerify",
             Self::NostrGetProfile { .. } => "NostrGetProfile",
+            Self::HashCheck { .. } => "HashCheck",
         }
     }
 }
@@ -4096,7 +4112,8 @@ impl ClientRpcRequest {
             | Self::PluginReload { .. }
             | Self::NostrAuthChallenge { .. }
             | Self::NostrAuthVerify { .. }
-            | Self::NostrGetProfile { .. } => None,
+            | Self::NostrGetProfile { .. }
+            | Self::HashCheck { .. } => None,
 
             // Coordination primitives
             Self::LockAcquire { .. }
@@ -5250,6 +5267,9 @@ pub enum ClientRpcResponse {
     /// Automerge receive sync message result.
     #[cfg(feature = "automerge")]
     AutomergeReceiveSyncMessageResult(AutomergeReceiveSyncMessageResultResponse),
+
+    /// Content hash check result for FUSE lazy fetch cache revalidation.
+    HashCheckResult(HashCheckResultResponse),
 }
 
 /// Result of a plugin reload operation.

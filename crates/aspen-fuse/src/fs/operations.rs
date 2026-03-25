@@ -54,6 +54,19 @@ impl FileSystem for AspenFs {
     }
 
     fn destroy(&self) {
+        // Log access statistics summary on unmount
+        let stats = self.access_stats.snapshot();
+        tracing::info!(
+            files_opened = stats.files_opened,
+            files_read = stats.files_read,
+            read_ratio = format!("{:.1}%", stats.read_ratio_percent()),
+            bytes_fetched = stats.bytes_fetched_from_cluster,
+            bytes_cached = stats.bytes_served_from_cache,
+            prefetch_bytes = stats.prefetch_bytes_fetched,
+            prefetch_savings = stats.prefetch_savings_bytes(),
+            "FUSE access stats on unmount"
+        );
+
         // Drop all active branches (uncommitted state is discarded).
         #[cfg(feature = "kv-branch")]
         self.branch_manager.drop_all();
@@ -375,10 +388,8 @@ impl FileSystem for AspenFs {
         let mode = self.mode_for_entry_type(entry.entry_type);
         self.check_access(ctx, mode, perm_mask)?;
 
-        // Prefetch start of file for read access
-        if let Ok(key) = Self::path_to_key(&entry.path) {
-            self.prefetcher.prefetch_file_start(self, &key);
-        }
+        // Track file open for access stats
+        self.access_stats.record_open();
 
         // Exec cache: create child tracking session for new PIDs
         #[cfg(feature = "exec-cache")]
@@ -417,6 +428,9 @@ impl FileSystem for AspenFs {
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         let key = Self::path_to_key(&entry.path)?;
+
+        // Track first read per inode for access stats
+        self.access_stats.record_read(inode);
 
         // Execute any pending prefetch requests (populates cache)
         self.prefetcher.execute_pending(self);

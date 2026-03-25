@@ -809,4 +809,54 @@ mod tests {
         assert_eq!(MAX_XATTR_VALUE_SIZE, 64 * 1024);
         assert_eq!(MAX_XATTRS_PER_FILE, 100);
     }
+
+    // === Access Stats / Lazy Fetch Tests ===
+
+    #[test]
+    fn test_lazy_fetch_open_without_read_no_fetch() {
+        let fs = AspenFs::new_in_memory(1000, 1000);
+        let ctx = mock_context();
+        fs.init(FsOptions::empty()).unwrap();
+
+        // Create 100 files with content
+        for i in 0..100 {
+            let name = CString::new(format!("file{i}")).unwrap();
+            let args = fuse_backend_rs::abi::fuse_abi::CreateIn::default();
+            fs.create(&ctx, ROOT_INODE, &name, args).unwrap();
+            let path = format!("file{i}");
+            fs.kv_write(&path, &vec![0u8; 4096]).unwrap();
+        }
+
+        // Open all 100 files (just open, no read)
+        for i in 0..100 {
+            let name = CString::new(format!("file{i}")).unwrap();
+            let entry = fs.lookup(&ctx, ROOT_INODE, &name).unwrap();
+            let _ = fs.open(&ctx, entry.inode, libc::O_RDONLY as u32, 0).unwrap();
+        }
+
+        let stats = fs.stats();
+        assert_eq!(stats.files_opened, 100, "all 100 opens should be tracked");
+        assert_eq!(stats.files_read, 0, "no reads should have occurred");
+
+        // Simulate reading 10 files via access_stats.record_read (since
+        // the FUSE read() requires ZeroCopyWriter which isn't available
+        // in unit tests — real integration tests use actual FUSE mount)
+        for inode in 2..12 {
+            fs.access_stats.record_read(inode);
+        }
+
+        let stats = fs.stats();
+        assert_eq!(stats.files_opened, 100);
+        assert_eq!(stats.files_read, 10, "only 10 files should show as read");
+        assert!(stats.prefetch_savings_bytes() > 0, "should show savings from 90 unread files");
+
+        // Verify read ratio
+        let ratio = stats.read_ratio_percent();
+        assert!((ratio - 10.0).abs() < 0.1, "ratio should be 10%, got {ratio}");
+
+        // Verify deduplication: recording same inode again shouldn't increment
+        fs.access_stats.record_read(2);
+        let stats = fs.stats();
+        assert_eq!(stats.files_read, 10, "duplicate read on same inode shouldn't count");
+    }
 }

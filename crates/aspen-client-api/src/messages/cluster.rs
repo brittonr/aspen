@@ -350,6 +350,21 @@ pub struct ClientTicketResponse {
     pub error: Option<String>,
 }
 
+/// Content hash check result for FUSE lazy fetch cache revalidation.
+///
+/// Returned in response to `HashCheck` — tells the caller whether the
+/// file's BLAKE3 hash has changed without transferring file content.
+/// Payload is under 100 bytes on the wire.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HashCheckResultResponse {
+    /// Whether the content hash has changed.
+    pub is_changed: bool,
+    /// The new hash if changed, None if unchanged.
+    pub new_hash: Option<[u8; 32]>,
+    /// Error message if the check failed.
+    pub error: Option<String>,
+}
+
 /// Shard topology result for GetTopology RPC.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TopologyResultResponse {

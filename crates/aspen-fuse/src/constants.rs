@@ -246,6 +246,27 @@ pub const PREFETCH_LOOKAHEAD_BYTES: u32 = 512 * 1024;
 /// Access tracker entry TTL.
 pub const PREFETCH_TRACKER_TTL: Duration = Duration::from_secs(30);
 
+// ============================================================================
+// Content-Hash Cache Validation
+// ============================================================================
+
+/// TTL for cache entries revalidated by content-hash check (60 seconds).
+///
+/// Longer than the default data TTL (5s) because hash validation provides
+/// a stronger freshness guarantee than time-based expiry.
+pub const CACHE_REVALIDATED_TTL: Duration = Duration::from_secs(60);
+
+/// Timeout for hash-check RPC (100ms). Falls through to full fetch on timeout.
+pub const HASH_CHECK_TIMEOUT_MS: u64 = 100;
+
+/// Minimum interval between offline-mode stale-data warnings (60 seconds).
+pub const OFFLINE_STALE_WARN_INTERVAL: Duration = Duration::from_secs(60);
+
+// Content-hash validation constants
+const _: () = assert!(CACHE_REVALIDATED_TTL.as_secs() > CACHE_DATA_TTL.as_secs());
+const _: () = assert!(HASH_CHECK_TIMEOUT_MS > 0);
+const _: () = assert!(OFFLINE_STALE_WARN_INTERVAL.as_secs() > 0);
+
 // Prefetch limits
 const _: () = assert!(PREFETCH_READAHEAD_BYTES > 0);
 const _: () = assert!(PREFETCH_SEQUENTIAL_THRESHOLD > 0);
