@@ -6,6 +6,8 @@ The system SHALL allow administrators to establish federation links between inde
 
 When the `commit-dag-federation` feature is enabled, federation links SHALL additionally carry commit provenance metadata, enabling the importing cluster to verify that received KV state was produced by legitimate Raft consensus on the source cluster.
 
+The `FederationResourceResolver` SHALL return real resource state from cluster storage. For Forge repositories, the resolver SHALL read ref heads from KV and return git objects from blob storage. The resolver SHALL NOT return stub responses when storage is available.
+
 #### Scenario: Establish federation link via token
 
 - **WHEN** Cluster A issues a capability token to Cluster B
@@ -43,3 +45,31 @@ When the `commit-dag-federation` feature is enabled, federation links SHALL addi
 - **AND** Cluster B SHALL import all entries (including `_sys:commit:` entries) as regular KV data
 - **AND** no verification SHALL occur on Cluster B (feature not enabled)
 - **AND** data sync SHALL function correctly regardless of feature mismatch
+
+#### Scenario: Resource resolver returns real Forge data
+
+- **WHEN** a federation sync request arrives for a Forge repository's `FederatedId`
+- **AND** the repository exists on the local cluster with federation enabled
+- **THEN** `get_resource_state()` SHALL return current ref heads read from KV storage
+- **AND** `sync_objects()` SHALL return git objects from blob storage
+- **AND** `resource_exists()` SHALL return `true`
+
+#### Scenario: Resource resolver handles missing resources
+
+- **WHEN** a federation sync request arrives for a `FederatedId` that does not match any local resource
+- **THEN** `get_resource_state()` SHALL return `FederationResourceError::NotFound`
+- **AND** `resource_exists()` SHALL return `false`
+
+#### Scenario: Resource resolver respects federation settings
+
+- **WHEN** a federation sync request arrives for a Forge repository
+- **AND** the repository has `FederationMode::Disabled`
+- **THEN** `get_resource_state()` SHALL return `FederationResourceError::FederationDisabled`
+
+#### Scenario: Cross-cluster Forge sync end-to-end
+
+- **WHEN** Cluster A creates a Forge repository and federates it
+- **AND** Cluster B connects to Cluster A via the federation sync protocol
+- **AND** Cluster B requests the repository's resource state
+- **THEN** Cluster B SHALL receive the ref heads that Cluster A has
+- **AND** the ref names and hashes SHALL match exactly
