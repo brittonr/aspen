@@ -1,5 +1,5 @@
 {
-  description = "Aspen example clan — 2-node physical cluster for testing";
+  description = "Aspen example clan — 3-node physical cluster on GMK mini PCs";
 
   inputs = {
     clan-core.url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
@@ -21,7 +21,6 @@
     clan = clan-core.lib.clan {
       inherit self;
       imports = [./clan.nix];
-      specialArgs = {inherit inputs;};
     };
   in {
     inherit (clan.config) nixosConfigurations clanInternals;
