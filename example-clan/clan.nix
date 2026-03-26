@@ -6,19 +6,18 @@
 #
 # Connectivity: iroh-ssh proxy (P2P QUIC, NAT-traversing)
 # Deploy: `clan machines update aspen1` / `clan machines update aspen2`
-{ inputs, ... }:
-{
+{inputs, ...}: {
   meta.name = "aspen-cluster";
 
   inventory.machines = {
-    aspen1 = { };
-    aspen2 = { };
+    aspen1 = {};
+    aspen2 = {};
   };
 
   inventory.instances = {
     # SSH access
     sshd = {
-      roles.server.tags.all = { };
+      roles.server.tags.all = {};
       roles.server.settings.authorizedKeys = {
         "britton-framework" = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILYzh3yIsSTOYXkJMFHBKzkakoDfonm3/RED5rqMqhIO britton@framework";
       };
@@ -27,7 +26,7 @@
     # Root password
     user-root = {
       module.name = "users";
-      roles.default.tags.all = { };
+      roles.default.tags.all = {};
       roles.default.settings = {
         user = "root";
         prompt = true;
@@ -36,7 +35,12 @@
   };
 
   machines = {
-    aspen1 = { config, pkgs, lib, ... }: {
+    aspen1 = {
+      config,
+      pkgs,
+      lib,
+      ...
+    }: {
       imports = [
         inputs.aspen.nixosModules.aspen-node
         ./machines/aspen1/hardware-configuration.nix
@@ -56,10 +60,15 @@
         logLevel = "info,aspen=debug";
       };
 
-      networking.firewall.allowedUDPPorts = [ 7777 ]; # iroh QUIC
+      networking.firewall.allowedUDPPorts = [7777]; # iroh QUIC
     };
 
-    aspen2 = { config, pkgs, lib, ... }: {
+    aspen2 = {
+      config,
+      pkgs,
+      lib,
+      ...
+    }: {
       imports = [
         inputs.aspen.nixosModules.aspen-node
         ./machines/aspen2/hardware-configuration.nix
@@ -79,7 +88,7 @@
         logLevel = "info,aspen=debug";
       };
 
-      networking.firewall.allowedUDPPorts = [ 7777 ];
+      networking.firewall.allowedUDPPorts = [7777];
     };
   };
 }

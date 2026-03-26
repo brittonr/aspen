@@ -1,6 +1,10 @@
 # aspen1: Primary node — 128GB RAM, 3.6TB NVMe
-{ config, pkgs, lib, ... }:
 {
+  config,
+  pkgs,
+  lib,
+  ...
+}: {
   networking.hostName = "aspen1";
 
   # Boot
@@ -19,8 +23,8 @@
 
   # Nix settings
   nix.settings = {
-    experimental-features = [ "nix-command" "flakes" ];
-    trusted-users = [ "root" ];
+    experimental-features = ["nix-command" "flakes"];
+    trusted-users = ["root"];
     max-jobs = "auto";
   };
 
