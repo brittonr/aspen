@@ -6,7 +6,6 @@
 use tracing::debug;
 use tracing::info;
 
-use crate::constants::MAX_CACHE_STORAGE_BYTES;
 use crate::index::CacheKvStore;
 use crate::index::ExecCacheIndex;
 use crate::types::CacheEntry;
@@ -136,6 +135,7 @@ fn estimate_entry_size(entry: &CacheEntry) -> u64 {
 mod tests {
     use super::*;
     use crate::constants::DEFAULT_TTL_MS;
+    use crate::constants::MAX_CACHE_STORAGE_BYTES;
     use crate::index::test_store::InMemoryKvStore;
     use crate::types::OutputMapping;
 

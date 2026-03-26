@@ -29,10 +29,10 @@ impl CacheKey {
             return None;
         }
         let mut bytes = [0u8; 32];
-        for i in 0..32 {
+        for (i, byte) in bytes.iter_mut().enumerate() {
             let hi = hex_digit(hex.as_bytes()[i * 2])?;
             let lo = hex_digit(hex.as_bytes()[i * 2 + 1])?;
-            bytes[i] = (hi << 4) | lo;
+            *byte = (hi << 4) | lo;
         }
         Some(CacheKey(bytes))
     }

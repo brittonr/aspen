@@ -8,7 +8,6 @@ use tracing::debug;
 use crate::constants::EXEC_CACHE_KEY_PREFIX;
 use crate::error::ExecCacheError;
 use crate::error::Result;
-use crate::error::{self};
 use crate::types::CacheEntry;
 use crate::types::CacheKey;
 

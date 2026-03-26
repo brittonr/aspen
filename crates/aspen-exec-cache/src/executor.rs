@@ -70,6 +70,28 @@ pub trait BlobStore: Send + Sync {
     fn fetch(&self, hash: &[u8; 32]) -> std::result::Result<Vec<u8>, String>;
 }
 
+/// Parameters for storing an execution result in the cache.
+pub struct StoreResultParams<'a> {
+    /// The command that was executed.
+    pub command: &'a str,
+    /// Command-line arguments.
+    pub args: &'a [String],
+    /// Environment variables during execution.
+    pub env: &'a HashMap<String, String>,
+    /// Set of files read during execution (from FUSE tracking).
+    pub read_set: &'a ReadSet,
+    /// Process exit code.
+    pub exit_code: i32,
+    /// Captured stdout.
+    pub stdout: &'a [u8],
+    /// Captured stderr.
+    pub stderr: &'a [u8],
+    /// Output files as (path, content) pairs.
+    pub output_files: &'a [(&'a str, &'a [u8])],
+    /// Current timestamp in milliseconds.
+    pub now_ms: u64,
+}
+
 /// Cached process executor.
 ///
 /// Wraps process launches with transparent caching:
@@ -224,18 +246,18 @@ impl<S: CacheKvStore, B: BlobStore> CachedExecutor<S, B> {
     ///
     /// Call this after a cache miss when the process has finished executing.
     /// Captures stdout, stderr, exit code, and output files into the cache.
-    pub fn store_result(
-        &self,
-        command: &str,
-        args: &[String],
-        env: &HashMap<String, String>,
-        read_set: &ReadSet,
-        exit_code: i32,
-        stdout: &[u8],
-        stderr: &[u8],
-        output_files: &[(&str, &[u8])],
-        now_ms: u64,
-    ) -> Result<CacheKey> {
+    pub fn store_result(&self, params: &StoreResultParams<'_>) -> Result<CacheKey> {
+        let StoreResultParams {
+            command,
+            args,
+            env,
+            read_set,
+            exit_code,
+            stdout,
+            stderr,
+            output_files,
+            now_ms,
+        } = params;
         // Check output file count
         if output_files.len() > MAX_OUTPUT_FILES as usize {
             return Err(ExecCacheError::TooManyOutputFiles {
@@ -245,7 +267,7 @@ impl<S: CacheKvStore, B: BlobStore> CachedExecutor<S, B> {
         }
 
         // Check individual output sizes
-        for (path, data) in output_files {
+        for (path, data) in output_files.iter() {
             if data.len() as u64 > MAX_OUTPUT_BLOB_SIZE {
                 warn!(path, size = data.len(), "output too large, skipping cache storage");
                 return Err(ExecCacheError::OutputTooLarge {
@@ -263,7 +285,7 @@ impl<S: CacheKvStore, B: BlobStore> CachedExecutor<S, B> {
 
         // Store output files as blobs
         let mut outputs = Vec::with_capacity(output_files.len());
-        for (path, data) in output_files {
+        for (path, data) in output_files.iter() {
             let hash = self.blobs.store(data).map_err(|message| ExecCacheError::BlobStore { message })?;
             outputs.push(OutputMapping {
                 path: (*path).to_string(),
@@ -273,13 +295,13 @@ impl<S: CacheKvStore, B: BlobStore> CachedExecutor<S, B> {
         }
 
         let entry = CacheEntry {
-            exit_code,
+            exit_code: *exit_code,
             stdout_hash,
             stderr_hash,
             outputs,
-            created_at_ms: now_ms,
+            created_at_ms: *now_ms,
             ttl_ms: self.ttl_ms,
-            last_accessed_ms: now_ms,
+            last_accessed_ms: *now_ms,
             child_keys: read_set.child_keys.clone(),
         };
 
@@ -406,18 +428,18 @@ mod tests {
         let read_set = exec.tracker().finalize(100).unwrap();
 
         // Store result
-        let key = exec
-            .store_result(
+        let _key = exec
+            .store_result(&StoreResultParams {
                 command,
-                &args,
-                &env,
-                &read_set,
-                0,
-                b"compiled OK",
-                b"",
-                &[("target/main", b"binary content")],
-                now,
-            )
+                args: &args,
+                env: &env,
+                read_set: &read_set,
+                exit_code: 0,
+                stdout: b"compiled OK",
+                stderr: b"",
+                output_files: &[("target/main", b"binary content")],
+                now_ms: now,
+            })
             .unwrap();
 
         // Now simulate the same process again
@@ -451,7 +473,18 @@ mod tests {
         exec.tracker().start_session(100);
         exec.tracker().record_read(100, "src/main.rs".into(), [0x11; 32]);
         let read_set = exec.tracker().finalize(100).unwrap();
-        exec.store_result(command, &args, &env, &read_set, 0, b"ok", b"", &[], now).unwrap();
+        exec.store_result(&StoreResultParams {
+            command,
+            args: &args,
+            env: &env,
+            read_set: &read_set,
+            exit_code: 0,
+            stdout: b"ok",
+            stderr: b"",
+            output_files: &[],
+            now_ms: now,
+        })
+        .unwrap();
 
         // Lookup with different input hash [0x22; 32]
         exec.tracker().start_session(200);
@@ -474,17 +507,17 @@ mod tests {
         exec.tracker().record_read(100, "main.c".into(), [0x11; 32]);
         let read_set = exec.tracker().finalize(100).unwrap();
 
-        exec.store_result(
+        exec.store_result(&StoreResultParams {
             command,
-            &args,
-            &env,
-            &read_set,
-            0,
-            b"",
-            b"",
-            &[("a.out", b"ELF binary"), ("a.o", b"object file")],
-            now,
-        )
+            args: &args,
+            env: &env,
+            read_set: &read_set,
+            exit_code: 0,
+            stdout: b"",
+            stderr: b"",
+            output_files: &[("a.out", b"ELF binary"), ("a.o", b"object file")],
+            now_ms: now,
+        })
         .unwrap();
 
         // Lookup and materialize
@@ -508,8 +541,18 @@ mod tests {
         exec.tracker().record_read(100, "bad.c".into(), [0x11; 32]);
         let read_set = exec.tracker().finalize(100).unwrap();
 
-        exec.store_result("gcc", &["bad.c".into()], &sample_env(), &read_set, 1, b"", b"error: syntax", &[], now)
-            .unwrap();
+        exec.store_result(&StoreResultParams {
+            command: "gcc",
+            args: &["bad.c".into()],
+            env: &sample_env(),
+            read_set: &read_set,
+            exit_code: 1,
+            stdout: b"",
+            stderr: b"error: syntax",
+            output_files: &[],
+            now_ms: now,
+        })
+        .unwrap();
 
         // Replays the failure
         exec.tracker().start_session(200);
@@ -539,7 +582,18 @@ mod tests {
         exec.tracker().start_session(200);
         exec.tracker().record_read(200, "f".into(), [0x11; 32]);
         let rs = exec.tracker().finalize(200).unwrap();
-        exec.store_result("cmd", &[], &sample_env(), &rs, 0, b"", b"", &[], now).unwrap();
+        exec.store_result(&StoreResultParams {
+            command: "cmd",
+            args: &[],
+            env: &sample_env(),
+            read_set: &rs,
+            exit_code: 0,
+            stdout: b"",
+            stderr: b"",
+            output_files: &[],
+            now_ms: now,
+        })
+        .unwrap();
 
         exec.tracker().start_session(300);
         exec.tracker().record_read(300, "f".into(), [0x11; 32]);
@@ -559,7 +613,17 @@ mod tests {
 
         let too_many: Vec<(&str, &[u8])> = (0..MAX_OUTPUT_FILES + 1).map(|_| ("f", &b"x"[..])).collect();
 
-        let result = exec.store_result("cmd", &[], &sample_env(), &read_set, 0, b"", b"", &too_many, 1000);
+        let result = exec.store_result(&StoreResultParams {
+            command: "cmd",
+            args: &[],
+            env: &sample_env(),
+            read_set: &read_set,
+            exit_code: 0,
+            stdout: b"",
+            stderr: b"",
+            output_files: &too_many,
+            now_ms: 1000,
+        });
         assert!(matches!(result, Err(ExecCacheError::TooManyOutputFiles { .. })));
     }
 
@@ -575,7 +639,17 @@ mod tests {
         exec.tracker().record_read(10, "child.rs".into(), [0x11; 32]);
         let child_rs = exec.tracker().finalize(10).unwrap();
         let child_key = exec
-            .store_result("rustc", &["child.rs".into()], &sample_env(), &child_rs, 0, b"", b"", &[], now)
+            .store_result(&StoreResultParams {
+                command: "rustc",
+                args: &["child.rs".into()],
+                env: &sample_env(),
+                read_set: &child_rs,
+                exit_code: 0,
+                stdout: b"",
+                stderr: b"",
+                output_files: &[],
+                now_ms: now,
+            })
             .unwrap();
 
         // Store a parent result referencing the child
@@ -586,8 +660,18 @@ mod tests {
             }],
             child_keys: vec![child_key],
         };
-        exec.store_result("cargo", &["build".into()], &sample_env(), &parent_rs, 0, b"", b"", &[], now)
-            .unwrap();
+        exec.store_result(&StoreResultParams {
+            command: "cargo",
+            args: &["build".into()],
+            env: &sample_env(),
+            read_set: &parent_rs,
+            exit_code: 0,
+            stdout: b"",
+            stderr: b"",
+            output_files: &[],
+            now_ms: now,
+        })
+        .unwrap();
 
         // Lookup parent — should hit because child is still valid
         exec.tracker().start_session(200);
