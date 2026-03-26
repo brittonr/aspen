@@ -3,8 +3,12 @@
 //! Translates federation sync requests into reads against the Forge KV layout.
 //! Maps `FederatedId` → repo refs via `forge:refs:{repo_id}:{ref_name}` keys
 //! and checks federation settings via `forge:federation:settings:{fed_id}`.
+//!
+//! Optionally serves git objects (commits, trees, blobs) by walking the commit
+//! DAG via a `GitObjectExporter` — used for federation content transfer.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use aspen_cluster::federation::FederatedId;
@@ -19,29 +23,100 @@ use aspen_core::KeyValueStore;
 use aspen_core::ScanRequest;
 use async_trait::async_trait;
 use tracing::debug;
+#[cfg(feature = "git-bridge")]
+use tracing::warn;
 
 use crate::constants::KV_PREFIX_FEDERATION_SETTINGS;
 use crate::constants::KV_PREFIX_REFS;
 use crate::constants::KV_PREFIX_REPOS;
+#[cfg(feature = "git-bridge")]
+use crate::git::bridge::FederationExportResult;
+#[cfg(feature = "git-bridge")]
+use crate::identity::RepoId;
 
 /// Maximum refs returned per resource state query.
 const MAX_REFS_PER_QUERY: u32 = 1000;
+
+/// Maximum git objects returned per sync request.
+const MAX_GIT_OBJECTS_PER_SYNC: u32 = 1000;
+
+/// Trait for exporting git objects from a forge repo for federation.
+///
+/// Abstraction over `GitExporter` to avoid leaking blob store generics
+/// into the resolver. Implementations walk the commit DAG from a ref head
+/// and return objects the remote doesn't have.
+#[cfg(feature = "git-bridge")]
+#[async_trait]
+pub trait GitObjectExporter: Send + Sync {
+    /// Export git objects reachable from `commit_blake3`, excluding objects
+    /// whose BLAKE3 hashes appear in `known_blake3`.
+    ///
+    /// Returns at most `limit` objects in dependency order (blobs first),
+    /// plus a flag indicating whether the DAG was fully traversed.
+    async fn export_dag_blake3(
+        &self,
+        repo_id: &RepoId,
+        commit_blake3: blake3::Hash,
+        known_blake3: &HashSet<[u8; 32]>,
+        limit: usize,
+    ) -> Result<FederationExportResult, String>;
+}
+
+/// Blanket implementation for `GitExporter<K, B>`.
+#[cfg(feature = "git-bridge")]
+#[async_trait]
+impl<K, B> GitObjectExporter for crate::git::bridge::GitExporter<K, B>
+where
+    K: KeyValueStore + Send + Sync + ?Sized + 'static,
+    B: aspen_blob::prelude::BlobStore + Send + Sync + 'static,
+{
+    async fn export_dag_blake3(
+        &self,
+        repo_id: &RepoId,
+        commit_blake3: blake3::Hash,
+        known_blake3: &HashSet<[u8; 32]>,
+        limit: usize,
+    ) -> Result<FederationExportResult, String> {
+        self.export_commit_dag_blake3(repo_id, commit_blake3, known_blake3, limit)
+            .await
+            .map_err(|e| e.to_string())
+    }
+}
 
 /// Forge-specific federation resource resolver.
 ///
 /// Reads ref heads from the Forge KV layout (`forge:refs:{repo_id}:{ref_name}`)
 /// and checks federation settings from `forge:federation:settings:{fed_id}`.
 ///
+/// Optionally holds a `GitObjectExporter` for serving git objects (commits,
+/// trees, blobs) during federation sync. Without it, only ref entries are served.
+///
 /// The `FederatedId.local_id` is treated as a 32-byte repo identity hash.
 /// This maps directly to `RepoId` which is also a `[u8; 32]`.
 pub struct ForgeResourceResolver<K: KeyValueStore + ?Sized> {
     kv: Arc<K>,
+    /// Optional git object exporter for serving commit/tree/blob data.
+    #[cfg(feature = "git-bridge")]
+    git_exporter: Option<Arc<dyn GitObjectExporter>>,
 }
 
 impl<K: KeyValueStore + ?Sized> ForgeResourceResolver<K> {
-    /// Create a new Forge resource resolver.
+    /// Create a new Forge resource resolver (ref-only, no git object serving).
     pub fn new(kv: Arc<K>) -> Self {
-        Self { kv }
+        Self {
+            kv,
+            #[cfg(feature = "git-bridge")]
+            git_exporter: None,
+        }
+    }
+
+    /// Create a resolver with git object export capability.
+    #[cfg(feature = "git-bridge")]
+    pub fn with_git_exporter(kv: Arc<K>, exporter: Arc<dyn GitObjectExporter>) -> Self {
+        Self {
+            kv,
+            git_exporter: Some(exporter),
+        }
     }
 
     /// Derive the repo_id hex string from a FederatedId.
@@ -60,6 +135,105 @@ impl<K: KeyValueStore + ?Sized> ForgeResourceResolver<K> {
             Ok(result) => result.kv.and_then(|kv| serde_json::from_str::<FederationSettings>(&kv.value).ok()),
             Err(_) => None,
         }
+    }
+
+    /// Scan all ref heads for a repo from KV.
+    ///
+    /// Returns `(ref_name, blake3_hash)` pairs. The ref value in KV is a
+    /// hex-encoded BLAKE3 hash (stored by the git bridge as the commit's
+    /// BLAKE3 hash, not SHA1).
+    async fn scan_ref_heads(&self, refs_prefix: &str) -> Result<Vec<(String, [u8; 32])>, FederationResourceError> {
+        let scan_req = ScanRequest {
+            prefix: refs_prefix.to_string(),
+            limit_results: Some(MAX_REFS_PER_QUERY),
+            continuation_token: None,
+        };
+
+        let full_prefix = format!("{}:", refs_prefix);
+        let mut heads = Vec::new();
+
+        match self.kv.scan(scan_req).await {
+            Ok(result) => {
+                for entry in result.entries {
+                    let ref_name = entry.key.strip_prefix(&full_prefix).unwrap_or(&entry.key);
+                    if let Ok(hash_bytes) = hex::decode(entry.value.trim())
+                        && hash_bytes.len() == 32
+                    {
+                        let mut hash = [0u8; 32];
+                        hash.copy_from_slice(&hash_bytes);
+                        heads.push((ref_name.to_string(), hash));
+                    }
+                }
+            }
+            Err(aspen_core::KeyValueStoreError::NotFound { .. }) => {}
+            Err(e) => {
+                return Err(FederationResourceError::Internal {
+                    message: format!("scan refs failed: {e}"),
+                });
+            }
+        }
+
+        Ok(heads)
+    }
+
+    /// Export git objects reachable from ref heads using the git exporter.
+    ///
+    /// Walks the commit DAG from each ref head, skipping objects the remote
+    /// already has (by BLAKE3 hash). Returns `SyncObject` entries with raw
+    /// git content and BLAKE3 hashes.
+    #[cfg(feature = "git-bridge")]
+    async fn export_git_objects(
+        &self,
+        exporter: &Arc<dyn GitObjectExporter>,
+        repo_id: &RepoId,
+        ref_heads: &[(String, [u8; 32])],
+        have_set: &HashSet<[u8; 32]>,
+        limit: usize,
+    ) -> Vec<SyncObject> {
+        let mut objects = Vec::new();
+        let mut all_known: HashSet<[u8; 32]> = have_set.clone();
+
+        for (_ref_name, head_hash) in ref_heads {
+            if objects.len() >= limit {
+                break;
+            }
+
+            let commit_blake3 = blake3::Hash::from_bytes(*head_hash);
+            let remaining = limit.saturating_sub(objects.len());
+
+            match exporter.export_dag_blake3(repo_id, commit_blake3, &all_known, remaining).await {
+                Ok(result) => {
+                    for obj in result.objects {
+                        let object_type = obj.object_type.as_str().to_string();
+                        let b3_bytes: [u8; 32] = *obj.blake3.as_bytes();
+
+                        // BLAKE3 hash the raw content for the SyncObject hash
+                        // (this is the content hash the client will verify)
+                        let data = obj.content;
+                        let hash: [u8; 32] = blake3::hash(&data).into();
+
+                        all_known.insert(b3_bytes);
+
+                        objects.push(SyncObject {
+                            object_type,
+                            hash,
+                            data,
+                            signature: None,
+                            signer: None,
+                        });
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        repo_id = %hex::encode(repo_id.0),
+                        error = %e,
+                        "failed to export git objects for federation"
+                    );
+                }
+            }
+        }
+
+        objects
     }
 
     /// Check if a repo exists by scanning for any keys with its prefix.
@@ -100,42 +274,10 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Fo
             _ => {} // Public or AllowList — proceed
         }
 
-        // Scan refs for this repo: forge:refs:{repo_id}:{ref_name} → hash_hex
+        // Scan refs for this repo
         let refs_prefix = format!("{}{}", KV_PREFIX_REFS, repo_hex);
-        let scan_req = ScanRequest {
-            prefix: refs_prefix.clone(),
-            limit_results: Some(MAX_REFS_PER_QUERY),
-            continuation_token: None,
-        };
-
-        let mut heads = HashMap::new();
-        match self.kv.scan(scan_req).await {
-            Ok(result) => {
-                for entry in result.entries {
-                    // Key: forge:refs:{repo_id}:{ref_name}
-                    // Strip the prefix including the colon after repo_id
-                    let full_prefix = format!("{}:", refs_prefix);
-                    let ref_name = entry.key.strip_prefix(&full_prefix).unwrap_or(&entry.key);
-
-                    // Value is hex-encoded hash
-                    if let Ok(hash_bytes) = hex::decode(entry.value.trim())
-                        && hash_bytes.len() == 32
-                    {
-                        let mut hash = [0u8; 32];
-                        hash.copy_from_slice(&hash_bytes);
-                        heads.insert(ref_name.to_string(), hash);
-                    }
-                }
-            }
-            Err(aspen_core::KeyValueStoreError::NotFound { .. }) => {
-                // No refs yet
-            }
-            Err(e) => {
-                return Err(FederationResourceError::Internal {
-                    message: format!("scan refs failed: {e}"),
-                });
-            }
-        }
+        let ref_list = self.scan_ref_heads(&refs_prefix).await?;
+        let heads: HashMap<String, [u8; 32]> = ref_list.into_iter().collect();
 
         debug!(
             fed_id = %fed_id.short(),
@@ -188,77 +330,84 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Fo
             _ => {}
         }
 
-        // Only handle "refs" object type — git pack data goes via iroh-blobs
-        if !want_types.iter().any(|t| t == "refs") {
+        let wants_refs = want_types.iter().any(|t| t == "refs");
+        let wants_git_objects = want_types.iter().any(|t| t == "commit" || t == "tree" || t == "blob");
+
+        if !wants_refs && !wants_git_objects {
             return Ok(Vec::new());
         }
 
         let repo_hex = Self::repo_id_hex(fed_id);
         let refs_prefix = format!("{}{}", KV_PREFIX_REFS, repo_hex);
-        let limit = limit.min(MAX_REFS_PER_QUERY);
-
-        let have_set: std::collections::HashSet<[u8; 32]> = have_hashes.iter().copied().collect();
-
-        let scan_req = ScanRequest {
-            prefix: refs_prefix.clone(),
-            limit_results: Some(limit),
-            continuation_token: None,
-        };
-
+        let limit = limit.min(MAX_GIT_OBJECTS_PER_SYNC);
+        let have_set: HashSet<[u8; 32]> = have_hashes.iter().copied().collect();
         let mut objects = Vec::new();
-        match self.kv.scan(scan_req).await {
-            Ok(result) => {
-                let full_prefix = format!("{}:", refs_prefix);
-                for entry in result.entries {
-                    if objects.len() >= limit as usize {
-                        break;
-                    }
 
-                    let ref_name = entry.key.strip_prefix(&full_prefix).unwrap_or(&entry.key);
+        // Phase 1: Collect refs (always needed — git objects are walked from ref heads)
+        let ref_heads = self.scan_ref_heads(&refs_prefix).await?;
 
-                    // Parse the hex-encoded hash
-                    let head_hash = match hex::decode(entry.value.trim()) {
-                        Ok(bytes) if bytes.len() == 32 => {
-                            let mut h = [0u8; 32];
-                            h.copy_from_slice(&bytes);
-                            h
-                        }
-                        _ => continue,
-                    };
-
-                    let ref_entry = RefEntry {
-                        ref_name: ref_name.to_string(),
-                        head_hash,
-                    };
-                    let data = postcard::to_allocvec(&ref_entry).unwrap_or_default();
-                    let hash = blake3::hash(&data).into();
-
-                    // Skip if requester already has this object
-                    if have_set.contains(&hash) {
-                        continue;
-                    }
-
-                    objects.push(SyncObject {
-                        object_type: "ref".to_string(),
-                        hash,
-                        data,
-                        signature: None,
-                        signer: None,
-                    });
+        // Phase 2: Return ref entries if requested
+        if wants_refs {
+            for (ref_name, head_hash) in &ref_heads {
+                if objects.len() >= limit as usize {
+                    break;
                 }
-            }
-            Err(aspen_core::KeyValueStoreError::NotFound { .. }) => {}
-            Err(e) => {
-                return Err(FederationResourceError::Internal {
-                    message: format!("scan refs for sync_objects failed: {e}"),
+
+                let ref_entry = RefEntry {
+                    ref_name: ref_name.clone(),
+                    head_hash: *head_hash,
+                };
+                let data = postcard::to_allocvec(&ref_entry).unwrap_or_default();
+                let hash = blake3::hash(&data).into();
+
+                if have_set.contains(&hash) {
+                    continue;
+                }
+
+                objects.push(SyncObject {
+                    object_type: "ref".to_string(),
+                    hash,
+                    data,
+                    signature: None,
+                    signer: None,
                 });
             }
         }
 
+        // Phase 3: Export git objects if requested and exporter available
+        #[cfg(feature = "git-bridge")]
+        if wants_git_objects {
+            if let Some(ref exporter) = self.git_exporter {
+                let repo_id = RepoId(fed_id.local_id);
+                let remaining = (limit as usize).saturating_sub(objects.len());
+
+                if remaining > 0 {
+                    let git_objects =
+                        self.export_git_objects(exporter, &repo_id, &ref_heads, &have_set, remaining).await;
+                    objects.extend(git_objects);
+                }
+            } else {
+                debug!(
+                    fed_id = %fed_id.short(),
+                    "sync_objects: git objects requested but no exporter configured"
+                );
+            }
+        }
+
+        #[cfg(not(feature = "git-bridge"))]
+        if wants_git_objects {
+            debug!(
+                fed_id = %fed_id.short(),
+                "sync_objects: git objects requested but git-bridge feature not enabled"
+            );
+        }
+
         debug!(
             fed_id = %fed_id.short(),
-            ref_count = objects.len(),
-            "sync_objects: returning ref entries"
+            total = objects.len(),
+            refs = wants_refs,
+            git = wants_git_objects,
+            "sync_objects: returning objects"
         );
 
         Ok(objects)

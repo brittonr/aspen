@@ -98,6 +98,15 @@ pub enum FederationRequest {
         /// Federated resource ID string (origin:local_id).
         fed_id: String,
     },
+
+    /// Pull updates for a federation mirror repo.
+    ///
+    /// Reads the mirror's metadata to find origin peer and federated ID,
+    /// then performs an incremental fetch (refs + git objects).
+    FederationPull {
+        /// Local mirror repo ID (hex-encoded).
+        mirror_repo_id: String,
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -125,10 +134,12 @@ impl FederationRequest {
                 value: vec![],
             }),
             Self::FederationListTokens | Self::FederationListSubscriptions => None,
-            Self::FederationSyncPeer { .. } | Self::FederationFetchRefs { .. } => Some(Operation::Write {
-                key: "_sys:fed:sync".to_string(),
-                value: vec![],
-            }),
+            Self::FederationSyncPeer { .. } | Self::FederationFetchRefs { .. } | Self::FederationPull { .. } => {
+                Some(Operation::Write {
+                    key: "_sys:fed:sync".to_string(),
+                    value: vec![],
+                })
+            }
         }
     }
 }

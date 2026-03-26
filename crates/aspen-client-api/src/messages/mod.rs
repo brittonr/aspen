@@ -2137,6 +2137,11 @@ pub enum ClientRpcRequest {
         /// Federated resource ID string (origin:local_id).
         fed_id: String,
     },
+    /// Pull updates for a federation mirror repo.
+    FederationPull {
+        /// Local mirror repo ID (hex-encoded).
+        mirror_repo_id: String,
+    },
     ForgeFetchFederated {
         /// Federated ID (format: origin:local_id).
         federated_id: String,
@@ -3846,6 +3851,7 @@ impl ClientRpcRequest {
             Self::ForgeCreateTree { .. } => "ForgeCreateTree",
             Self::ForgeDeleteRef { .. } => "ForgeDeleteRef",
             Self::FederationFetchRefs { .. } => "FederationFetchRefs",
+            Self::FederationPull { .. } => "FederationPull",
             Self::FederationSyncPeer { .. } => "FederationSyncPeer",
             Self::ForgeFetchFederated { .. } => "ForgeFetchFederated",
             Self::ForgeForkRepo { .. } => "ForgeForkRepo",
@@ -4286,6 +4292,7 @@ impl ClientRpcRequest {
             | Self::ListFederatedRepositories
             | Self::FederationSyncPeer { .. }
             | Self::FederationFetchRefs { .. }
+            | Self::FederationPull { .. }
             | Self::ForgeFetchFederated { .. } => Some("forge"),
 
             // Git Bridge operations
@@ -4903,6 +4910,8 @@ pub enum ClientRpcResponse {
     FederationSyncPeerResult(FederationSyncPeerResponse),
     /// Federation ref fetch result.
     FederationFetchRefsResult(FederationFetchRefsResponse),
+    /// Federation pull result (same format as fetch).
+    FederationPullResult(FederationFetchRefsResponse),
 
     // =========================================================================
     // Git Bridge responses (for git-remote-aspen)

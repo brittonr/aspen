@@ -368,6 +368,141 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
     pub async fn get_sha1(&self, repo_id: &RepoId, blake3: &blake3::Hash) -> BridgeResult<Option<Sha1Hash>> {
         Ok(self.mapping.get_sha1(repo_id, blake3).await?.map(|(h, _)| h))
     }
+
+    /// Walk the DAG and collect objects, using BLAKE3 hashes for dedup.
+    ///
+    /// Like `export_commit_dag_collect` but accepts BLAKE3 hashes in
+    /// `known_blake3` instead of SHA1, skipping the SHA1 mapping lookup.
+    /// Used by federation sync where the remote sends BLAKE3 have_hashes.
+    ///
+    /// Returns `(objects_to_export, skipped_count)`. When `limit` is
+    /// reached, stops collecting and returns what it has — caller checks
+    /// whether the full DAG was traversed.
+    async fn collect_dag_blake3(
+        &self,
+        _repo_id: &RepoId,
+        commit_blake3: blake3::Hash,
+        known_blake3: &HashSet<[u8; 32]>,
+        limit: usize,
+    ) -> BridgeResult<(Vec<(blake3::Hash, SignedObject<GitObject>)>, usize, bool)> {
+        let mut to_export: Vec<(blake3::Hash, SignedObject<GitObject>)> = Vec::new();
+        let mut visited: HashSet<blake3::Hash> = HashSet::new();
+        let mut queue: VecDeque<blake3::Hash> = VecDeque::new();
+        let mut skipped = 0usize;
+        let mut depth = 0usize;
+        let mut hit_limit = false;
+
+        queue.push_back(commit_blake3);
+
+        while let Some(blake3) = queue.pop_front() {
+            if visited.contains(&blake3) {
+                continue;
+            }
+
+            depth += 1;
+            if depth > MAX_DAG_TRAVERSAL_DEPTH {
+                hit_limit = true;
+                break;
+            }
+
+            visited.insert(blake3);
+
+            // Check if remote already has this object (by BLAKE3 directly)
+            if known_blake3.contains(blake3.as_bytes()) {
+                skipped += 1;
+                continue;
+            }
+
+            // Fetch the object
+            let iroh_hash = iroh_blobs::Hash::from_bytes(*blake3.as_bytes());
+            let bytes = self
+                .blobs
+                .get_bytes(&iroh_hash)
+                .await
+                .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?
+                .ok_or_else(|| BridgeError::ObjectNotFound {
+                    hash: hex::encode(blake3.as_bytes()),
+                })?;
+
+            let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes)?;
+            Self::export_commit_dag_queue_deps(&mut queue, &signed.payload);
+            to_export.push((blake3, signed));
+
+            if to_export.len() >= limit {
+                hit_limit = true;
+                break;
+            }
+        }
+
+        Ok((to_export, skipped, hit_limit))
+    }
+
+    /// Export reachable objects from a commit using BLAKE3-based dedup.
+    ///
+    /// For federation sync: the remote peer sends BLAKE3 hashes of objects
+    /// it already has. Returns raw git object bytes (with header) keyed by
+    /// BLAKE3 hash and object type. Stops at `limit` objects and reports
+    /// `has_more` when the DAG was not fully traversed.
+    pub async fn export_commit_dag_blake3(
+        &self,
+        repo_id: &RepoId,
+        commit_blake3: blake3::Hash,
+        known_blake3: &HashSet<[u8; 32]>,
+        limit: usize,
+    ) -> BridgeResult<FederationExportResult> {
+        let (mut to_export, skipped, has_more) =
+            self.collect_dag_blake3(repo_id, commit_blake3, known_blake3, limit).await?;
+
+        // Reverse to get dependency order (blobs first, then trees, then commits)
+        to_export.reverse();
+
+        let mut objects = Vec::with_capacity(to_export.len());
+        for (b3, signed) in &to_export {
+            let object_type = match &signed.payload {
+                GitObject::Blob(_) => GitObjectType::Blob,
+                GitObject::Tree(_) => GitObjectType::Tree,
+                GitObject::Commit(_) => GitObjectType::Commit,
+                GitObject::Tag(_) => GitObjectType::Tag,
+            };
+
+            // Convert to git bytes (with header) for the receiver to import
+            let (content, _sha1) = self.converter.export_object(repo_id, &signed.payload).await?;
+
+            objects.push(FederationExportedObject {
+                blake3: *b3,
+                object_type,
+                content,
+            });
+        }
+
+        Ok(FederationExportResult {
+            objects,
+            objects_skipped: skipped as u32,
+            has_more,
+        })
+    }
+}
+
+/// A git object exported for federation (BLAKE3-keyed, no SHA1).
+#[derive(Debug)]
+pub struct FederationExportedObject {
+    /// BLAKE3 hash of the stored blob.
+    pub blake3: blake3::Hash,
+    /// Object type (commit, tree, blob, tag).
+    pub object_type: GitObjectType,
+    /// Git object content (without header).
+    pub content: Vec<u8>,
+}
+
+/// Result of a federation DAG export.
+#[derive(Debug)]
+pub struct FederationExportResult {
+    /// Objects exported in dependency order.
+    pub objects: Vec<FederationExportedObject>,
+    /// Number of objects skipped (already known to remote).
+    pub objects_skipped: u32,
+    /// Whether there are more objects to fetch (DAG not fully traversed).
+    pub has_more: bool,
 }
 
 #[cfg(test)]

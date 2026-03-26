@@ -167,6 +167,7 @@ impl ForgeServiceExecutor {
         "ListFederatedRepositories",
         "FederationSyncPeer",
         "FederationFetchRefs",
+        "FederationPull",
         "ForgeFetchFederated",
         "GitBridgeListRefs",
         "GitBridgeFetch",
@@ -1729,6 +1730,15 @@ impl ServiceExecutor for ForgeServiceExecutor {
                     &peer_node_id,
                     peer_addr.as_deref(),
                     &fed_id,
+                    self.federation_cluster_identity.as_ref(),
+                    self.iroh_endpoint.as_ref(),
+                    &self.forge_node,
+                )
+                .await
+            }
+            ClientRpcRequest::FederationPull { mirror_repo_id } => {
+                handle_federation_pull(
+                    &mirror_repo_id,
                     self.federation_cluster_identity.as_ref(),
                     self.iroh_endpoint.as_ref(),
                     &self.forge_node,

@@ -289,6 +289,17 @@ pub(crate) async fn handle_git_bridge_push(
         }
     };
 
+    // Reject pushes to federation mirror repos (read-only)
+    if super::federation::is_mirror_repo(forge_node, &repo_id).await {
+        return Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
+            is_success: false,
+            objects_imported: 0,
+            objects_skipped: 0,
+            ref_results: vec![],
+            error: Some("Cannot push to a federation mirror repo (read-only)".to_string()),
+        }));
+    };
+
     // Create importer
     let mapping = std::sync::Arc::new(HashMappingStore::new(forge_node.kv().clone()));
     let hlc = create_hlc(&forge_node.public_key().to_string());

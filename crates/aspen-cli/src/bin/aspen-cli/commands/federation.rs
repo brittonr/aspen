@@ -42,6 +42,9 @@ pub enum FederationCommand {
 
     /// Fetch ref objects from a remote federated repository.
     Fetch(FetchArgs),
+
+    /// Pull updates for a previously mirrored federation repo.
+    Pull(PullArgs),
 }
 
 #[derive(Args)]
@@ -103,6 +106,14 @@ pub struct FetchArgs {
     /// Federated resource ID (origin:local_id format).
     #[arg(long)]
     pub fed_id: String,
+}
+
+/// Arguments for federation pull command.
+#[derive(Args)]
+pub struct PullArgs {
+    /// Local mirror repo ID (hex-encoded).
+    #[arg(long)]
+    pub repo: String,
 }
 
 /// Federation status output.
@@ -263,6 +274,7 @@ impl FederationCommand {
             FederationCommand::ListFederated => federation_list_federated(client, json).await,
             FederationCommand::Sync(args) => federation_sync(client, args, json).await,
             FederationCommand::Fetch(args) => federation_fetch(client, args, json).await,
+            FederationCommand::Pull(args) => federation_pull(client, args, json).await,
         }
     }
 }
@@ -581,6 +593,38 @@ async fn federation_list_federated(client: &AspenClient, json: bool) -> Result<(
                 for repo in &result.repositories {
                     println!("{:32} | {:9} | {}", &repo.repo_id[..32.min(repo.repo_id.len())], repo.mode, repo.fed_id);
                 }
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn federation_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::FederationPull {
+            mirror_repo_id: args.repo.clone(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::FederationPullResult(result) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else if result.is_success || result.error.is_none() {
+                println!("Pull complete for mirror repo {}", args.repo);
+                println!("  Fetched:         {}", result.fetched);
+                println!("  Already present: {}", result.already_present);
+                if !result.errors.is_empty() {
+                    println!("  Errors:");
+                    for e in &result.errors {
+                        println!("    - {}", e);
+                    }
+                }
+            } else {
+                eprintln!("Pull failed: {}", result.error.as_deref().unwrap_or("unknown error"));
+                std::process::exit(1);
             }
             Ok(())
         }

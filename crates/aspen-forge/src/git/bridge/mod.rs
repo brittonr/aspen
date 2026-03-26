@@ -82,6 +82,8 @@ pub use error::BridgeError;
 pub use error::BridgeResult;
 pub use exporter::ExportResult;
 pub use exporter::ExportedObject;
+pub use exporter::FederationExportResult;
+pub use exporter::FederationExportedObject;
 pub use exporter::GitExporter;
 pub use importer::GitImporter;
 pub use importer::ImportResult;
