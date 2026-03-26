@@ -44,7 +44,7 @@ iroh = { version = "0.97.0", optional = true }
 default = []
 sql = ["dep:aspen-sql"]
 blob = ["dep:aspen-blob"]
-forge = ["dep:aspen-forge", "dep:aspen-cluster"]
+forge = ["dep:aspen-forge", "dep:aspen-cluster", "dep:iroh"]
 # secrets feature removed - SecretsService is handler-specific
 ci = ["dep:aspen-ci", "forge"]
 # nickel feature enables TriggerService in ci_trigger_service context field

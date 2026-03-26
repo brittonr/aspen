@@ -74,6 +74,15 @@ pub enum FederationRequest {
         /// KV prefix to unsubscribe from.
         prefix: String,
     },
+
+    /// Perform a one-shot federation sync pull from a remote cluster.
+    ///
+    /// Connects to the remote peer via iroh QUIC, performs a federation
+    /// handshake, and queries the peer's resource state.
+    FederationSyncPeer {
+        /// Remote peer's iroh node ID (base32-encoded PublicKey).
+        peer_node_id: String,
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -101,6 +110,10 @@ impl FederationRequest {
                 value: vec![],
             }),
             Self::FederationListTokens | Self::FederationListSubscriptions => None,
+            Self::FederationSyncPeer { .. } => Some(Operation::Write {
+                key: "_sys:fed:sync".to_string(),
+                value: vec![],
+            }),
         }
     }
 }
@@ -321,6 +334,34 @@ pub struct FederationUnsubscribeResponse {
     /// Whether the operation succeeded.
     pub is_success: bool,
     /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Remote resource info returned from a federation sync.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncPeerResourceInfo {
+    /// Resource type (e.g., "forge:repo").
+    pub resource_type: String,
+    /// Number of ref heads.
+    pub ref_count: u32,
+    /// Ref head names.
+    pub ref_names: Vec<String>,
+}
+
+/// Federation sync peer result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationSyncPeerResponse {
+    /// Whether the sync succeeded.
+    pub is_success: bool,
+    /// Remote cluster name.
+    pub remote_cluster_name: Option<String>,
+    /// Remote cluster public key (base32).
+    pub remote_cluster_key: Option<String>,
+    /// Whether the remote cluster trusts us.
+    pub trusted: Option<bool>,
+    /// Resources discovered on the remote cluster.
+    pub resources: Vec<SyncPeerResourceInfo>,
+    /// Error message if sync failed.
     pub error: Option<String>,
 }
 

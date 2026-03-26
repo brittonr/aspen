@@ -36,6 +36,9 @@ pub enum FederationCommand {
 
     /// List federated repositories.
     ListFederated,
+
+    /// Perform a one-shot federation sync pull from a remote cluster.
+    Sync(SyncArgs),
 }
 
 #[derive(Args)]
@@ -64,6 +67,14 @@ pub struct FederateArgs {
     /// Federation mode (public or allowlist).
     #[arg(long, default_value = "public")]
     pub mode: String,
+}
+
+/// Arguments for federation sync command.
+#[derive(Args)]
+pub struct SyncArgs {
+    /// Remote peer's iroh node ID (base32-encoded public key).
+    #[arg(long)]
+    pub peer: String,
 }
 
 /// Federation status output.
@@ -222,6 +233,7 @@ impl FederationCommand {
             FederationCommand::Untrust(args) => federation_untrust(client, args, json).await,
             FederationCommand::Federate(args) => federation_federate(client, args, json).await,
             FederationCommand::ListFederated => federation_list_federated(client, json).await,
+            FederationCommand::Sync(args) => federation_sync(client, args, json).await,
         }
     }
 }
@@ -410,6 +422,44 @@ async fn federation_federate(client: &AspenClient, args: FederateArgs, json: boo
             };
             print_output(&output, json);
             if !result.is_success {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn federation_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::FederationSyncPeer {
+            peer_node_id: args.peer.clone(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::FederationSyncPeerResult(result) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else if result.is_success {
+                println!("Federation sync successful!");
+                println!(
+                    "  Remote cluster: {} ({})",
+                    result.remote_cluster_name.as_deref().unwrap_or("unknown"),
+                    result.remote_cluster_key.as_deref().unwrap_or("?"),
+                );
+                println!("  Trusted: {}", result.trusted.map(|t| if t { "yes" } else { "no" }).unwrap_or("unknown"));
+                if result.resources.is_empty() {
+                    println!("  No resources discovered");
+                } else {
+                    println!("  Resources: {}", result.resources.len());
+                    for r in &result.resources {
+                        println!("    - {} (refs: {})", r.resource_type, r.ref_count);
+                    }
+                }
+            } else {
+                eprintln!("Federation sync failed: {}", result.error.as_deref().unwrap_or("unknown error"));
                 std::process::exit(1);
             }
             Ok(())

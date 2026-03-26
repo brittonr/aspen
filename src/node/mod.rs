@@ -535,6 +535,10 @@ impl Node {
             federation_identity: self.federation_identity.as_ref().map(|id| Arc::new(id.to_signed())),
             #[cfg(feature = "forge")]
             federation_trust_manager: self.federation_trust_manager.clone(),
+            #[cfg(feature = "forge")]
+            federation_cluster_identity: self.federation_identity.as_ref().map(|id| Arc::new(id.clone())),
+            #[cfg(feature = "forge")]
+            iroh_endpoint: Some(Arc::new(self.handle.network.iroh_manager.endpoint().clone())),
             #[cfg(all(feature = "forge", feature = "global-discovery"))]
             federation_discovery: None,
             #[cfg(feature = "ci")]

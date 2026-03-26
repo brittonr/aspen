@@ -237,7 +237,9 @@ pub use federation::FederatedRepoInfo;
 pub use federation::FederatedRepositoriesResponse;
 pub use federation::FederationRequest;
 pub use federation::FederationStatusResponse;
+pub use federation::FederationSyncPeerResponse;
 pub use federation::ForgeFetchFederatedResultResponse;
+pub use federation::SyncPeerResourceInfo;
 pub use federation::TrustClusterResultResponse;
 pub use federation::UntrustClusterResultResponse;
 pub use forge::ForgeBlobResultResponse;
@@ -2118,6 +2120,11 @@ pub enum ClientRpcRequest {
     ListFederatedRepositories,
 
     /// Fetch a federated repository from a remote cluster.
+    /// Perform a one-shot federation sync pull from a remote cluster.
+    FederationSyncPeer {
+        /// Remote peer's iroh node ID (base32-encoded PublicKey).
+        peer_node_id: String,
+    },
     ForgeFetchFederated {
         /// Federated ID (format: origin:local_id).
         federated_id: String,
@@ -3826,6 +3833,7 @@ impl ClientRpcRequest {
             Self::ForgeCreateRepo { .. } => "ForgeCreateRepo",
             Self::ForgeCreateTree { .. } => "ForgeCreateTree",
             Self::ForgeDeleteRef { .. } => "ForgeDeleteRef",
+            Self::FederationSyncPeer { .. } => "FederationSyncPeer",
             Self::ForgeFetchFederated { .. } => "ForgeFetchFederated",
             Self::ForgeForkRepo { .. } => "ForgeForkRepo",
             Self::ForgeSetMirror { .. } => "ForgeSetMirror",
@@ -4263,6 +4271,7 @@ impl ClientRpcRequest {
             | Self::UntrustCluster { .. }
             | Self::FederateRepository { .. }
             | Self::ListFederatedRepositories
+            | Self::FederationSyncPeer { .. }
             | Self::ForgeFetchFederated { .. } => Some("forge"),
 
             // Git Bridge operations
@@ -4876,6 +4885,8 @@ pub enum ClientRpcResponse {
 
     /// Forge fetch federated result.
     ForgeFetchResult(ForgeFetchFederatedResultResponse),
+    /// Federation sync peer result.
+    FederationSyncPeerResult(FederationSyncPeerResponse),
 
     // =========================================================================
     // Git Bridge responses (for git-remote-aspen)

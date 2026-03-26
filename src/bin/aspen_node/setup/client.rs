@@ -331,6 +331,10 @@ pub async fn setup_client_protocol(
         federation_identity,
         #[cfg(feature = "forge")]
         federation_trust_manager,
+        #[cfg(feature = "forge")]
+        federation_cluster_identity: None, // Set by Node::spawn_router_with_blobs
+        #[cfg(feature = "forge")]
+        iroh_endpoint: None, // Set by Node::spawn_router_with_blobs
         #[cfg(all(feature = "forge", feature = "global-discovery"))]
         federation_discovery: None,
         #[cfg(feature = "ci")]

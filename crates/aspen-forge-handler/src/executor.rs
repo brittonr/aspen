@@ -98,6 +98,10 @@ pub struct ForgeServiceExecutor {
     federation_discovery: Option<Arc<aspen_cluster::federation::FederationDiscoveryService>>,
     federation_identity: Option<Arc<aspen_cluster::federation::SignedClusterIdentity>>,
     federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
+    /// Cluster identity for federation handshakes (contains signing key).
+    federation_cluster_identity: Option<Arc<aspen_cluster::federation::ClusterIdentity>>,
+    /// Iroh endpoint for outbound federation connections.
+    iroh_endpoint: Option<Arc<iroh::Endpoint>>,
     /// Optional hook service for emitting forge events.
     #[cfg(all(feature = "hooks", feature = "git-bridge"))]
     hook_service: Option<Arc<aspen_hooks::HookService>>,
@@ -161,6 +165,7 @@ impl ForgeServiceExecutor {
         "UntrustCluster",
         "FederateRepository",
         "ListFederatedRepositories",
+        "FederationSyncPeer",
         "ForgeFetchFederated",
         "GitBridgeListRefs",
         "GitBridgeFetch",
@@ -188,6 +193,8 @@ impl ForgeServiceExecutor {
         >,
         federation_identity: Option<Arc<aspen_cluster::federation::SignedClusterIdentity>>,
         federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
+        federation_cluster_identity: Option<Arc<aspen_cluster::federation::ClusterIdentity>>,
+        iroh_endpoint: Option<Arc<iroh::Endpoint>>,
         #[cfg(all(feature = "hooks", feature = "git-bridge"))] hook_service: Option<Arc<aspen_hooks::HookService>>,
         node_id: u64,
     ) -> Self {
@@ -209,6 +216,8 @@ impl ForgeServiceExecutor {
             federation_discovery,
             federation_identity,
             federation_trust_manager,
+            federation_cluster_identity,
+            iroh_endpoint,
             #[cfg(all(feature = "hooks", feature = "git-bridge"))]
             hook_service,
             node_id,
@@ -1696,6 +1705,14 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 handle_federate_repository(&self.forge_node, repo_id, mode).await
             }
             ClientRpcRequest::ListFederatedRepositories => handle_list_federated_repositories(&self.forge_node).await,
+            ClientRpcRequest::FederationSyncPeer { peer_node_id } => {
+                handle_federation_sync_peer(
+                    &peer_node_id,
+                    self.federation_cluster_identity.as_ref(),
+                    self.iroh_endpoint.as_ref(),
+                )
+                .await
+            }
             ClientRpcRequest::ForgeFetchFederated {
                 federated_id,
                 remote_cluster,

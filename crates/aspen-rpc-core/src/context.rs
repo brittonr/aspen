@@ -113,6 +113,12 @@ pub struct ClientProtocolContext {
     /// Federation trust manager (optional).
     #[cfg(feature = "forge")]
     pub federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
+    /// Cluster identity with signing key for outbound federation handshakes.
+    #[cfg(feature = "forge")]
+    pub federation_cluster_identity: Option<Arc<aspen_cluster::federation::ClusterIdentity>>,
+    /// Iroh endpoint for outbound federation connections.
+    #[cfg(feature = "forge")]
+    pub iroh_endpoint: Option<Arc<iroh::Endpoint>>,
     /// Federation discovery service (optional).
     #[cfg(all(feature = "forge", feature = "global-discovery"))]
     pub federation_discovery: Option<Arc<aspen_cluster::federation::FederationDiscoveryService>>,
@@ -473,6 +479,10 @@ pub mod test_support {
                 federation_identity: None,
                 #[cfg(feature = "forge")]
                 federation_trust_manager: None,
+                #[cfg(feature = "forge")]
+                federation_cluster_identity: None,
+                #[cfg(feature = "forge")]
+                iroh_endpoint: None,
                 #[cfg(all(feature = "forge", feature = "global-discovery"))]
                 federation_discovery: None,
                 #[cfg(feature = "ci")]

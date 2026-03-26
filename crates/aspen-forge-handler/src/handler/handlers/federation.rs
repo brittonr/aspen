@@ -431,6 +431,96 @@ pub(crate) async fn handle_list_federated_repositories(forge_node: &ForgeNodeRef
     }
 }
 
+/// Handle a one-shot federation sync pull from a remote cluster.
+///
+/// Connects to the remote peer via iroh QUIC, performs a federation handshake,
+/// lists resources, and returns the remote cluster's identity and resource state.
+pub(crate) async fn handle_federation_sync_peer(
+    peer_node_id: &str,
+    cluster_identity: Option<&Arc<aspen_cluster::federation::ClusterIdentity>>,
+    iroh_endpoint: Option<&Arc<iroh::Endpoint>>,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::FederationSyncPeerResponse;
+    use aspen_client_api::SyncPeerResourceInfo;
+
+    let identity = match cluster_identity {
+        Some(id) => id,
+        None => {
+            return Ok(ClientRpcResponse::FederationSyncPeerResult(FederationSyncPeerResponse {
+                is_success: false,
+                remote_cluster_name: None,
+                remote_cluster_key: None,
+                trusted: None,
+                resources: Vec::new(),
+                error: Some("federation not configured on this cluster".to_string()),
+            }));
+        }
+    };
+
+    let endpoint = match iroh_endpoint {
+        Some(ep) => ep,
+        None => {
+            return Ok(ClientRpcResponse::FederationSyncPeerResult(FederationSyncPeerResponse {
+                is_success: false,
+                remote_cluster_name: None,
+                remote_cluster_key: None,
+                trusted: None,
+                resources: Vec::new(),
+                error: Some("iroh endpoint not available".to_string()),
+            }));
+        }
+    };
+
+    // Parse the peer node ID
+    let peer_key: iroh::PublicKey = peer_node_id
+        .parse()
+        .map_err(|e| anyhow::anyhow!("invalid peer node ID '{}': {}", peer_node_id, e))?;
+
+    // Connect and perform handshake
+    let (connection, remote_identity) =
+        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, peer_key).await {
+            Ok(result) => result,
+            Err(e) => {
+                return Ok(ClientRpcResponse::FederationSyncPeerResult(FederationSyncPeerResponse {
+                    is_success: false,
+                    remote_cluster_name: None,
+                    remote_cluster_key: None,
+                    trusted: None,
+                    resources: Vec::new(),
+                    error: Some(format!("connection failed: {e}")),
+                }));
+            }
+        };
+
+    // List resources on the remote cluster
+    let resources =
+        match aspen_cluster::federation::sync::list_remote_resources(&connection, Some("forge:repo"), 100).await {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to list remote resources, returning handshake only");
+                Vec::new()
+            }
+        };
+
+    let resource_infos: Vec<SyncPeerResourceInfo> = resources
+        .iter()
+        .map(|r| SyncPeerResourceInfo {
+            resource_type: r.resource_type.clone(),
+            ref_count: 0, // Would need GetResourceState per resource for counts
+            ref_names: Vec::new(),
+        })
+        .collect();
+
+    Ok(ClientRpcResponse::FederationSyncPeerResult(FederationSyncPeerResponse {
+        is_success: true,
+        remote_cluster_name: Some(remote_identity.name().to_string()),
+        remote_cluster_key: Some(remote_identity.public_key().to_string()),
+        trusted: Some(true), // We connected, so handshake succeeded
+        resources: resource_infos,
+        error: None,
+    }))
+}
+
 pub(crate) async fn handle_fetch_federated(
     _forge_node: &ForgeNodeRef,
     _federated_id: String,
