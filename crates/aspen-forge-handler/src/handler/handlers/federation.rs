@@ -973,6 +973,9 @@ pub struct FederationImportStats {
     pub total_bytes: u64,
     /// Per-object errors (non-fatal).
     pub errors: Vec<String>,
+    /// Mapping from SyncObject content hash → locally imported BLAKE3 hash.
+    /// Used to translate remote ref hashes to local hashes for mirror refs.
+    pub content_to_local_blake3: std::collections::HashMap<[u8; 32], blake3::Hash>,
 }
 
 /// Import federation `SyncObject` entries into a forge repo via the git bridge.
@@ -1029,7 +1032,11 @@ pub(crate) async fn federation_import_objects(
 
         // Import via git bridge
         match importer.import_object(repo_id, &git_bytes).await {
-            Ok(_blake3) => {
+            Ok(local_blake3) => {
+                // Map content hash → local BLAKE3 so mirror refs can be updated
+                let content_hash: [u8; 32] = blake3::hash(&obj.data).into();
+                stats.content_to_local_blake3.insert(content_hash, local_blake3);
+
                 stats.total_bytes += obj.data.len() as u64;
                 match git_type_str {
                     "commit" => stats.commits += 1,
@@ -1080,7 +1087,7 @@ pub struct MirrorMetadata {
 }
 
 impl MirrorMetadata {
-    fn to_json(&self) -> String {
+    pub(crate) fn to_json(&self) -> String {
         serde_json::json!({
             "fed_id": self.fed_id,
             "origin_cluster_key": self.origin_cluster_key,
@@ -1091,7 +1098,7 @@ impl MirrorMetadata {
         .to_string()
     }
 
-    fn from_json(s: &str) -> Option<Self> {
+    pub(crate) fn from_json(s: &str) -> Option<Self> {
         let v: serde_json::Value = serde_json::from_str(s).ok()?;
         Some(Self {
             fed_id: v.get("fed_id")?.as_str()?.to_string(),

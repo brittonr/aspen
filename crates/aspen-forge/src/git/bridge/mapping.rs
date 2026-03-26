@@ -147,6 +147,11 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
         }
     }
 
+    /// Get a reference to the underlying KV store.
+    pub fn kv(&self) -> &Arc<K> {
+        &self.kv
+    }
+
     /// Build the KV key for BLAKE3 -> SHA-1 lookup.
     fn b3_to_sha1_key(repo_id: &RepoId, blake3: &blake3::Hash) -> String {
         format!("{}{}:{}", KV_PREFIX_B3_TO_SHA1, repo_id.to_hex(), hex::encode(blake3.as_bytes()))

@@ -26,6 +26,8 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::FederateRepository { .. }
         | ClientRpcRequest::FederationSyncPeer { .. }
         | ClientRpcRequest::FederationFetchRefs { .. }
+        | ClientRpcRequest::FederationGitListRefs { .. }
+        | ClientRpcRequest::FederationGitFetch { .. }
         | ClientRpcRequest::FederationPull { .. }
         | ClientRpcRequest::ForgeFetchFederated { .. }
         | ClientRpcRequest::GitBridgePush { .. }

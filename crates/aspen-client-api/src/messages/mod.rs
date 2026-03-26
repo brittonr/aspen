@@ -2149,6 +2149,37 @@ pub enum ClientRpcRequest {
         remote_cluster: String,
     },
 
+    /// List refs for a repo on a remote federated cluster.
+    ///
+    /// The local cluster proxies the request through federation sync,
+    /// creating a mirror repo on first access. Returns the same shape
+    /// as `GitBridgeListRefs` so git-remote-aspen can use it transparently.
+    FederationGitListRefs {
+        /// Origin cluster's public key (base32-encoded, 52 chars).
+        origin_key: String,
+        /// Upstream repo ID on the origin cluster (hex-encoded BLAKE3 hash).
+        repo_id: String,
+        /// Optional direct socket address hint for the origin cluster.
+        origin_addr_hint: Option<String>,
+    },
+
+    /// Fetch git objects for a repo on a remote federated cluster.
+    ///
+    /// The local cluster serves objects from the local mirror, syncing
+    /// from the origin first if the mirror lacks the requested objects.
+    FederationGitFetch {
+        /// Origin cluster's public key (base32-encoded, 52 chars).
+        origin_key: String,
+        /// Upstream repo ID on the origin cluster (hex-encoded BLAKE3 hash).
+        repo_id: String,
+        /// SHA-1 hashes of objects the client wants.
+        want: Vec<String>,
+        /// SHA-1 hashes of objects the client already has.
+        have: Vec<String>,
+        /// Optional direct socket address hint for the origin cluster.
+        origin_addr_hint: Option<String>,
+    },
+
     // =========================================================================
     // Git Bridge operations (for git-remote-aspen)
     // =========================================================================
@@ -3851,6 +3882,8 @@ impl ClientRpcRequest {
             Self::ForgeCreateTree { .. } => "ForgeCreateTree",
             Self::ForgeDeleteRef { .. } => "ForgeDeleteRef",
             Self::FederationFetchRefs { .. } => "FederationFetchRefs",
+            Self::FederationGitFetch { .. } => "FederationGitFetch",
+            Self::FederationGitListRefs { .. } => "FederationGitListRefs",
             Self::FederationPull { .. } => "FederationPull",
             Self::FederationSyncPeer { .. } => "FederationSyncPeer",
             Self::ForgeFetchFederated { .. } => "ForgeFetchFederated",
@@ -4292,6 +4325,8 @@ impl ClientRpcRequest {
             | Self::ListFederatedRepositories
             | Self::FederationSyncPeer { .. }
             | Self::FederationFetchRefs { .. }
+            | Self::FederationGitListRefs { .. }
+            | Self::FederationGitFetch { .. }
             | Self::FederationPull { .. }
             | Self::ForgeFetchFederated { .. } => Some("forge"),
 
@@ -4912,6 +4947,12 @@ pub enum ClientRpcResponse {
     FederationFetchRefsResult(FederationFetchRefsResponse),
     /// Federation pull result (same format as fetch).
     FederationPullResult(FederationFetchRefsResponse),
+
+    /// Federated git list refs result (same shape as GitBridgeListRefs).
+    FederationGitListRefs(GitBridgeListRefsResponse),
+
+    /// Federated git fetch result (same shape as GitBridgeFetch).
+    FederationGitFetch(GitBridgeFetchResponse),
 
     // =========================================================================
     // Git Bridge responses (for git-remote-aspen)

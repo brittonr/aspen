@@ -107,6 +107,30 @@ pub enum FederationRequest {
         /// Local mirror repo ID (hex-encoded).
         mirror_repo_id: String,
     },
+
+    /// List refs for a repo on a remote federated cluster (for git-remote-aspen).
+    FederationGitListRefs {
+        /// Origin cluster's public key (base32-encoded).
+        origin_key: String,
+        /// Upstream repo ID on the origin cluster (hex-encoded).
+        repo_id: String,
+        /// Optional direct socket address hint.
+        origin_addr_hint: Option<String>,
+    },
+
+    /// Fetch git objects for a repo on a remote federated cluster (for git-remote-aspen).
+    FederationGitFetch {
+        /// Origin cluster's public key (base32-encoded).
+        origin_key: String,
+        /// Upstream repo ID on the origin cluster (hex-encoded).
+        repo_id: String,
+        /// SHA-1 hashes of objects the client wants.
+        want: Vec<String>,
+        /// SHA-1 hashes of objects the client already has.
+        have: Vec<String>,
+        /// Optional direct socket address hint.
+        origin_addr_hint: Option<String>,
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -134,12 +158,14 @@ impl FederationRequest {
                 value: vec![],
             }),
             Self::FederationListTokens | Self::FederationListSubscriptions => None,
-            Self::FederationSyncPeer { .. } | Self::FederationFetchRefs { .. } | Self::FederationPull { .. } => {
-                Some(Operation::Write {
-                    key: "_sys:fed:sync".to_string(),
-                    value: vec![],
-                })
-            }
+            Self::FederationSyncPeer { .. }
+            | Self::FederationFetchRefs { .. }
+            | Self::FederationPull { .. }
+            | Self::FederationGitListRefs { .. }
+            | Self::FederationGitFetch { .. } => Some(Operation::Write {
+                key: "_sys:fed:sync".to_string(),
+                value: vec![],
+            }),
         }
     }
 }

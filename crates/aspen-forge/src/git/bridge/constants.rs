@@ -86,6 +86,15 @@ pub const GIT_AUTH_TIMEOUT: Duration = Duration::from_secs(30);
 /// Value: SHA-1 hex string (40 chars)
 pub const KV_PREFIX_B3_TO_SHA1: &str = "forge:hashmap:b3:";
 
+/// KV prefix for git object bytes (serialized SignedObject).
+///
+/// Stores the postcard-serialized `SignedObject<GitObject>` in redb KV
+/// so the exporter can read without depending on iroh-blobs FsStore.
+///
+/// Key format: `{KV_PREFIX_OBJ}{repo_id_hex}:{blake3_hex}`
+/// Value: base64-encoded serialized bytes
+pub const KV_PREFIX_OBJ: &str = "forge:obj:";
+
 /// KV prefix for SHA-1 -> BLAKE3 hash mappings.
 ///
 /// Key format: `{KV_PREFIX_SHA1_TO_B3}{repo_id_hex}:{sha1_hex}`

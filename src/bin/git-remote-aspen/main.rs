@@ -69,8 +69,6 @@ use std::time::Duration;
 use aspen::client_rpc::ClientRpcRequest;
 use aspen::client_rpc::ClientRpcResponse;
 use aspen::client_rpc::ErrorResponse;
-use aspen::client_rpc::GitBridgeFetchResponse;
-use aspen::client_rpc::GitBridgeListRefsResponse;
 use aspen::client_rpc::GitBridgeRefUpdate;
 use aspen_core::MAX_GIT_OBJECT_SIZE;
 use aspen_core::MAX_GIT_OBJECT_TREE_DEPTH;
@@ -447,49 +445,64 @@ impl RemoteHelper {
             eprintln!("git-remote-aspen: listing refs for {}", repo_id);
         }
 
-        // Get client and send RPC
+        // Clone federated target before mutable borrow of self via get_client()
+        let federated = self.url.federated.clone();
+        let verbosity = self.options.verbosity;
+
+        // Get client and send RPC — route through federation if federated URL
         let client = self.get_client().await?;
-        let request = ClientRpcRequest::GitBridgeListRefs { repo_id };
+        let request = if let Some(ref fed) = federated {
+            if verbosity > 0 {
+                eprintln!(
+                    "git-remote-aspen: federated list via local cluster (origin: {}..)",
+                    &fed.origin_key[..16.min(fed.origin_key.len())]
+                );
+                eprintln!("git-remote-aspen: syncing from origin cluster (may take a moment on first clone)...");
+            }
+            ClientRpcRequest::FederationGitListRefs {
+                origin_key: fed.origin_key.clone(),
+                repo_id: fed.upstream_repo_id.clone(),
+                origin_addr_hint: fed.origin_addr_hint.clone(),
+            }
+        } else {
+            ClientRpcRequest::GitBridgeListRefs { repo_id }
+        };
 
         let response = client.send(request).await?;
 
-        match response {
-            ClientRpcResponse::GitBridgeListRefs(GitBridgeListRefsResponse {
-                is_success,
-                refs,
-                head,
-                error,
-            }) => {
-                if !is_success {
-                    let msg = error.unwrap_or_else(|| "unknown error".to_string());
-                    eprintln!("git-remote-aspen: list failed: {}", msg);
-                    return writer.write_end();
-                }
-
-                // Write HEAD symref if present
-                #[allow(clippy::collapsible_if)]
-                if let Some(head_target) = head {
-                    if let Some(head_ref) = refs.iter().find(|r| r.ref_name == head_target) {
-                        writer.write_head_symref(&head_ref.sha1, &head_target)?;
-                    }
-                }
-
-                // Write all refs
-                for ref_info in refs {
-                    writer.write_ref(&ref_info.sha1, &ref_info.ref_name)?;
-                }
-
-                writer.write_end()
-            }
+        // Both GitBridgeListRefs and FederationGitListRefs return the same response shape
+        let list_resp = match response {
+            ClientRpcResponse::GitBridgeListRefs(r) | ClientRpcResponse::FederationGitListRefs(r) => r,
             ClientRpcResponse::Error(ErrorResponse { code, message }) => {
                 eprintln!("git-remote-aspen: server error [{}]: {}", code, message);
-                writer.write_end()
+                return writer.write_end();
             }
             _ => {
                 eprintln!("git-remote-aspen: unexpected response type");
-                writer.write_end()
+                return writer.write_end();
+            }
+        };
+
+        if !list_resp.is_success {
+            let msg = list_resp.error.unwrap_or_else(|| "unknown error".to_string());
+            eprintln!("git-remote-aspen: list failed: {}", msg);
+            return writer.write_end();
+        }
+
+        // Write HEAD symref if present
+        #[allow(clippy::collapsible_if)]
+        if let Some(ref head_target) = list_resp.head {
+            if let Some(head_ref) = list_resp.refs.iter().find(|r| r.ref_name == *head_target) {
+                writer.write_head_symref(&head_ref.sha1, head_target)?;
             }
         }
+
+        // Write all refs
+        for ref_info in &list_resp.refs {
+            writer.write_ref(&ref_info.sha1, &ref_info.ref_name)?;
+        }
+
+        writer.write_end()
     }
 
     /// Handle a batch of fetch commands.
@@ -523,52 +536,68 @@ impl RemoteHelper {
         // Get list of commits we already have locally (must be done before mutable borrow of client)
         let have = self.get_local_commits(&repo_id)?;
 
-        // Single RPC with all wanted SHA-1s
+        // Clone federated target before mutable borrow of self via get_client()
+        let federated = self.url.federated.clone();
+        let verbosity = self.options.verbosity;
+
+        // Single RPC with all wanted SHA-1s — route through federation if federated URL
         let client = self.get_client().await?;
-        let request = ClientRpcRequest::GitBridgeFetch { repo_id, want, have };
+        let request = if let Some(ref fed) = federated {
+            if verbosity > 0 {
+                eprintln!(
+                    "git-remote-aspen: federated fetch via local cluster (origin: {}..)",
+                    &fed.origin_key[..16.min(fed.origin_key.len())]
+                );
+            }
+            ClientRpcRequest::FederationGitFetch {
+                origin_key: fed.origin_key.clone(),
+                repo_id: fed.upstream_repo_id.clone(),
+                want,
+                have,
+                origin_addr_hint: fed.origin_addr_hint.clone(),
+            }
+        } else {
+            ClientRpcRequest::GitBridgeFetch { repo_id, want, have }
+        };
 
         let response = client.send(request).await?;
 
-        match response {
-            ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
-                is_success,
-                objects,
-                skipped: _,
-                error,
-            }) => {
-                if !is_success {
-                    let msg = error.unwrap_or_else(|| "unknown error".to_string());
-                    eprintln!("git-remote-aspen: fetch failed: {}", msg);
-                    return writer.write_fetch_done();
-                }
-
-                if self.options.verbosity > 0 {
-                    eprintln!("git-remote-aspen: received {} objects", objects.len());
-                }
-
-                // Write objects to git's object store as loose objects
-                let git_dir = std::env::var("GIT_DIR").unwrap_or_else(|_| ".git".to_string());
-                let objects_dir = std::path::Path::new(&git_dir).join("objects");
-
-                for obj in &objects {
-                    if let Err(e) = self.write_loose_object(&objects_dir, obj) {
-                        eprintln!("git-remote-aspen: failed to write object {}: {}", obj.sha1, e);
-                    } else if self.options.verbosity > 1 {
-                        eprintln!("git-remote-aspen: wrote object {} ({})", obj.sha1, obj.object_type);
-                    }
-                }
-
-                writer.write_fetch_done()
-            }
+        // Both GitBridgeFetch and FederationGitFetch return the same response shape
+        let fetch_resp = match response {
+            ClientRpcResponse::GitBridgeFetch(r) | ClientRpcResponse::FederationGitFetch(r) => r,
             ClientRpcResponse::Error(ErrorResponse { code, message }) => {
                 eprintln!("git-remote-aspen: server error [{}]: {}", code, message);
-                writer.write_fetch_done()
+                return writer.write_fetch_done();
             }
             _ => {
                 eprintln!("git-remote-aspen: unexpected response type");
-                writer.write_fetch_done()
+                return writer.write_fetch_done();
+            }
+        };
+
+        if !fetch_resp.is_success {
+            let msg = fetch_resp.error.unwrap_or_else(|| "unknown error".to_string());
+            eprintln!("git-remote-aspen: fetch failed: {}", msg);
+            return writer.write_fetch_done();
+        }
+
+        if self.options.verbosity > 0 {
+            eprintln!("git-remote-aspen: received {} objects", fetch_resp.objects.len());
+        }
+
+        // Write objects to git's object store as loose objects
+        let git_dir = std::env::var("GIT_DIR").unwrap_or_else(|_| ".git".to_string());
+        let objects_dir = std::path::Path::new(&git_dir).join("objects");
+
+        for obj in &fetch_resp.objects {
+            if let Err(e) = self.write_loose_object(&objects_dir, obj) {
+                eprintln!("git-remote-aspen: failed to write object {}: {}", obj.sha1, e);
+            } else if self.options.verbosity > 1 {
+                eprintln!("git-remote-aspen: wrote object {} ({})", obj.sha1, obj.object_type);
             }
         }
+
+        writer.write_fetch_done()
     }
 
     /// Write a git object as a loose object file.
@@ -1499,8 +1528,12 @@ async fn main() -> io::Result<()> {
         eprintln!("It should be invoked by Git, not directly.");
         eprintln!();
         eprintln!("URL formats:");
-        eprintln!("  aspen://<ticket>/<repo_id>  - Connect via cluster ticket");
-        eprintln!("  aspen://<node_id>/<repo_id> - Direct node connection");
+        eprintln!("  aspen://<ticket>/<repo_id>                         - Local repo via cluster ticket");
+        eprintln!("  aspen://<ticket>/fed:<origin-key>:<repo-id>        - Federated repo via local cluster");
+        eprintln!("  aspen://<node_id>/<repo_id>                        - Direct node connection");
+        eprintln!();
+        eprintln!("Environment variables:");
+        eprintln!("  ASPEN_ORIGIN_ADDR  - Direct address hint for federated origin (e.g., 192.168.1.1:54866)");
         std::process::exit(1);
     }
 

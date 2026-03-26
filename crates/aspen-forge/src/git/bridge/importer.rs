@@ -128,6 +128,39 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             .await
             .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?;
 
+        // Also store in KV for reliable reads (iroh-blobs FsStore bao can be unreliable).
+        // Key: forge:obj:{repo_id}:{blake3_hex}, Value: base64-encoded serialized bytes.
+        let obj_key =
+            format!("{}{}:{}", super::constants::KV_PREFIX_OBJ, repo_id.to_hex(), hex::encode(blake3.as_bytes()));
+        use base64::Engine;
+        let obj_value = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        let obj_key_debug = obj_key.clone();
+        let write_req = aspen_core::WriteRequest {
+            command: aspen_core::WriteCommand::Set {
+                key: obj_key,
+                value: obj_value,
+            },
+        };
+        // Best-effort: log but don't fail import if KV write fails
+        match self.mapping.kv().write(write_req).await {
+            Ok(_) => {
+                tracing::info!(
+                    blake3 = %hex::encode(blake3.as_bytes()),
+                    key = %obj_key_debug,
+                    size = bytes.len(),
+                    "stored object bytes in KV"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    blake3 = %hex::encode(blake3.as_bytes()),
+                    key = %obj_key_debug,
+                    error = %e,
+                    "failed to store object bytes in KV (non-fatal)"
+                );
+            }
+        }
+
         Ok((blake3, sha1, obj_type))
     }
 
@@ -228,7 +261,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             tracing::trace!(wave = wave_idx, objects = wave_size, "wave import complete");
         }
 
-        tracing::debug!(
+        tracing::info!(
             total = total_objects,
             imported = imported,
             skipped = skipped_count,

@@ -167,6 +167,8 @@ impl ForgeServiceExecutor {
         "ListFederatedRepositories",
         "FederationSyncPeer",
         "FederationFetchRefs",
+        "FederationGitListRefs",
+        "FederationGitFetch",
         "FederationPull",
         "ForgeFetchFederated",
         "GitBridgeListRefs",
@@ -1744,6 +1746,49 @@ impl ServiceExecutor for ForgeServiceExecutor {
                     &self.forge_node,
                 )
                 .await
+            }
+            #[cfg(feature = "git-bridge")]
+            ClientRpcRequest::FederationGitListRefs {
+                origin_key,
+                repo_id,
+                origin_addr_hint,
+            } => {
+                crate::handler::handlers::federation_git::handle_federation_git_list_refs(
+                    &origin_key,
+                    &repo_id,
+                    origin_addr_hint.as_deref(),
+                    self.federation_cluster_identity.as_ref(),
+                    self.iroh_endpoint.as_ref(),
+                    &self.forge_node,
+                )
+                .await
+            }
+            #[cfg(feature = "git-bridge")]
+            ClientRpcRequest::FederationGitFetch {
+                origin_key,
+                repo_id,
+                want,
+                have,
+                origin_addr_hint,
+            } => {
+                crate::handler::handlers::federation_git::handle_federation_git_fetch(
+                    &origin_key,
+                    &repo_id,
+                    want,
+                    have,
+                    origin_addr_hint.as_deref(),
+                    self.federation_cluster_identity.as_ref(),
+                    self.iroh_endpoint.as_ref(),
+                    &self.forge_node,
+                )
+                .await
+            }
+            #[cfg(not(feature = "git-bridge"))]
+            ClientRpcRequest::FederationGitListRefs { .. } | ClientRpcRequest::FederationGitFetch { .. } => {
+                ClientRpcResponse::Error(ErrorResponse {
+                    code: "FEATURE_DISABLED".to_string(),
+                    message: "git-bridge feature is required for federated git operations".to_string(),
+                })
             }
             ClientRpcRequest::ForgeFetchFederated {
                 federated_id,

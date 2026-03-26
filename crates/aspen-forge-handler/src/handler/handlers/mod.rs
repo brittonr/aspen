@@ -6,6 +6,8 @@
 
 pub mod federation;
 #[cfg(feature = "git-bridge")]
+pub mod federation_git;
+#[cfg(feature = "git-bridge")]
 pub mod git_bridge;
 
 // Type alias for the concrete ForgeNode type used in the context

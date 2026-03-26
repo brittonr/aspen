@@ -109,6 +109,57 @@ mod tests {
         assert_eq!(decoded.variant_name(), "SecretsKvRead");
     }
 
+    /// Postcard roundtrip for federation git clone request/response variants.
+    #[test]
+    fn test_federation_git_clone_postcard_roundtrip() {
+        // FederationGitListRefs request
+        let req = ClientRpcRequest::FederationGitListRefs {
+            origin_key: "a".repeat(52),
+            repo_id: "bb".repeat(32),
+            origin_addr_hint: Some("192.168.1.1:12345".to_string()),
+        };
+        let bytes = postcard::to_stdvec(&req).expect("FederationGitListRefs req serialize");
+        let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("FederationGitListRefs req deserialize");
+        assert_eq!(decoded.variant_name(), "FederationGitListRefs");
+
+        // FederationGitFetch request
+        let req = ClientRpcRequest::FederationGitFetch {
+            origin_key: "c".repeat(52),
+            repo_id: "dd".repeat(32),
+            want: vec!["abc123".to_string()],
+            have: vec![],
+            origin_addr_hint: None,
+        };
+        let bytes = postcard::to_stdvec(&req).expect("FederationGitFetch req serialize");
+        let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("FederationGitFetch req deserialize");
+        assert_eq!(decoded.variant_name(), "FederationGitFetch");
+
+        // FederationGitListRefs response
+        let resp = ClientRpcResponse::FederationGitListRefs(GitBridgeListRefsResponse {
+            is_success: true,
+            refs: vec![GitBridgeRefInfo {
+                ref_name: "refs/heads/main".to_string(),
+                sha1: "a".repeat(40),
+            }],
+            head: Some("refs/heads/main".to_string()),
+            error: None,
+        });
+        let bytes = postcard::to_stdvec(&resp).expect("FederationGitListRefs resp serialize");
+        let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("FederationGitListRefs resp deserialize");
+        assert!(matches!(decoded, ClientRpcResponse::FederationGitListRefs(_)));
+
+        // FederationGitFetch response
+        let resp = ClientRpcResponse::FederationGitFetch(GitBridgeFetchResponse {
+            is_success: true,
+            objects: vec![],
+            skipped: 0,
+            error: None,
+        });
+        let bytes = postcard::to_stdvec(&resp).expect("FederationGitFetch resp serialize");
+        let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("FederationGitFetch resp deserialize");
+        assert!(matches!(decoded, ClientRpcResponse::FederationGitFetch(_)));
+    }
+
     /// Postcard roundtrip for core (non-gated) variants that sit at both ends
     /// of the enum. If feature-gated variants in the middle are removed, the
     /// discriminant for these will shift and this catches it.

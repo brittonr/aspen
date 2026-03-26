@@ -88,6 +88,76 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         }
     }
 
+    /// Read serialized SignedObject bytes for a BLAKE3 hash.
+    ///
+    /// Tries KV first (`forge:obj:{repo}:{b3}`) for reliable reads,
+    /// falls back to iroh-blobs `get_bytes` (may fail with bao encode
+    /// error on some filesystems).
+    async fn read_object_bytes(&self, repo_id: &RepoId, blake3: blake3::Hash) -> BridgeResult<bytes::Bytes> {
+        // Try KV first (reliable — stored in redb via Raft)
+        let obj_key =
+            format!("{}{}:{}", super::constants::KV_PREFIX_OBJ, repo_id.to_hex(), hex::encode(blake3.as_bytes()));
+        let obj_key_for_log = obj_key.clone();
+        let read_req = aspen_core::ReadRequest::new(obj_key);
+        match self.mapping.kv().read(read_req).await {
+            Ok(result) => {
+                if let Some(kv) = result.kv {
+                    use base64::Engine;
+                    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(&kv.value) {
+                        tracing::info!(
+                            blake3 = %hex::encode(blake3.as_bytes()),
+                            size = decoded.len(),
+                            "read object bytes from KV"
+                        );
+                        return Ok(bytes::Bytes::from(decoded));
+                    }
+                    tracing::warn!(blake3 = %hex::encode(blake3.as_bytes()), "KV object bytes base64 decode failed");
+                } else {
+                    tracing::info!(blake3 = %hex::encode(blake3.as_bytes()), key = %obj_key_for_log, "KV object key not found, falling back to iroh-blobs");
+                }
+            }
+            Err(e) => {
+                tracing::info!(blake3 = %hex::encode(blake3.as_bytes()), error = %e, "KV read failed, falling back to iroh-blobs");
+            }
+        }
+
+        // Fall back to iroh-blobs (may fail with bao encode error)
+        let iroh_hash = iroh_blobs::Hash::from_bytes(*blake3.as_bytes());
+        match self.blobs.get_bytes(&iroh_hash).await {
+            Ok(Some(bytes)) => Ok(bytes),
+            Ok(None) => {
+                // Wait for replication
+                let available = self
+                    .blobs
+                    .wait_available(&iroh_hash, aspen_blob::BLOB_READ_WAIT_TIMEOUT)
+                    .await
+                    .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?;
+                if !available {
+                    return Err(BridgeError::ObjectNotFound {
+                        hash: hex::encode(blake3.as_bytes()),
+                    });
+                }
+                self.blobs
+                    .get_bytes(&iroh_hash)
+                    .await
+                    .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?
+                    .ok_or_else(|| BridgeError::ObjectNotFound {
+                        hash: hex::encode(blake3.as_bytes()),
+                    })
+            }
+            Err(e) => {
+                tracing::warn!(
+                    blake3 = %hex::encode(blake3.as_bytes()),
+                    error = %e,
+                    "iroh-blobs get_bytes failed and KV had no object bytes"
+                );
+                Err(BridgeError::BlobStorage {
+                    message: format!("object {} not in KV, iroh-blobs failed: {}", hex::encode(blake3.as_bytes()), e),
+                })
+            }
+        }
+    }
+
     /// Export a single object to git format.
     ///
     /// Returns the git content and SHA-1 hash.
@@ -97,41 +167,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
     /// eventual consistency in multi-node clusters.
     /// Optimization: Try reading locally first before waiting for distributed availability.
     pub async fn export_object(&self, repo_id: &RepoId, blake3: blake3::Hash) -> BridgeResult<ExportedObject> {
-        // Fetch the object from blob store
-        let iroh_hash = iroh_blobs::Hash::from_bytes(*blake3.as_bytes());
-
-        // Optimization: Try reading locally first (fast path for locally available blobs)
-        // This avoids the 30-second wait when the blob is already present
-        let bytes = if let Some(bytes) = self
-            .blobs
-            .get_bytes(&iroh_hash)
-            .await
-            .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?
-        {
-            bytes
-        } else {
-            // Blob not available locally — wait briefly for replication.
-            let available = self
-                .blobs
-                .wait_available(&iroh_hash, aspen_blob::BLOB_READ_WAIT_TIMEOUT)
-                .await
-                .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?;
-
-            if !available {
-                return Err(BridgeError::ObjectNotFound {
-                    hash: hex::encode(blake3.as_bytes()),
-                });
-            }
-
-            // Now read the blob (should be available after wait)
-            self.blobs
-                .get_bytes(&iroh_hash)
-                .await
-                .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?
-                .ok_or_else(|| BridgeError::ObjectNotFound {
-                    hash: hex::encode(blake3.as_bytes()),
-                })?
-        };
+        let bytes = self.read_object_bytes(repo_id, blake3).await?;
 
         // Deserialize
         let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes)?;
@@ -230,17 +266,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 continue;
             }
 
-            // Fetch the object
-            let iroh_hash = iroh_blobs::Hash::from_bytes(*blake3.as_bytes());
-            let bytes = self
-                .blobs
-                .get_bytes(&iroh_hash)
-                .await
-                .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?
-                .ok_or_else(|| BridgeError::ObjectNotFound {
-                    hash: hex::encode(blake3.as_bytes()),
-                })?;
-
+            let bytes = self.read_object_bytes(repo_id, blake3).await?;
             let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes)?;
             Self::export_commit_dag_queue_deps(&mut queue, &signed.payload);
             to_export.push((blake3, signed));
@@ -380,7 +406,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
     /// whether the full DAG was traversed.
     async fn collect_dag_blake3(
         &self,
-        _repo_id: &RepoId,
+        repo_id: &RepoId,
         commit_blake3: blake3::Hash,
         known_blake3: &HashSet<[u8; 32]>,
         limit: usize,
@@ -413,17 +439,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 continue;
             }
 
-            // Fetch the object
-            let iroh_hash = iroh_blobs::Hash::from_bytes(*blake3.as_bytes());
-            let bytes = self
-                .blobs
-                .get_bytes(&iroh_hash)
-                .await
-                .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?
-                .ok_or_else(|| BridgeError::ObjectNotFound {
-                    hash: hex::encode(blake3.as_bytes()),
-                })?;
-
+            let bytes = self.read_object_bytes(repo_id, blake3).await?;
             let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes)?;
             Self::export_commit_dag_queue_deps(&mut queue, &signed.payload);
             to_export.push((blake3, signed));
@@ -520,5 +536,60 @@ mod tests {
         let bytes = obj.to_git_bytes();
         assert!(bytes.starts_with(b"blob 6\0"));
         assert!(bytes.ends_with(b"hello\n"));
+    }
+
+    /// Import a blob via GitImporter, then immediately export it via GitExporter.
+    /// Uses InMemoryBlobStore — if this fails, the issue is in the hash mapping
+    /// or SignedObject serialization, not iroh-blobs.
+    #[tokio::test]
+    async fn test_import_then_export_roundtrip_memory() {
+        use aspen_blob::InMemoryBlobStore;
+        use aspen_core::hlc::create_hlc;
+
+        use crate::git::bridge::HashMappingStore;
+        use crate::identity::RepoId;
+        use crate::refs::RefStore;
+
+        let kv: Arc<dyn aspen_core::KeyValueStore> = Arc::new(aspen_testing::DeterministicKeyValueStore::new());
+        let blobs = Arc::new(InMemoryBlobStore::new());
+        let mapping = Arc::new(HashMappingStore::new(Arc::clone(&kv)));
+        let refs = Arc::new(RefStore::new(Arc::clone(&kv)));
+        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+
+        let importer = crate::git::bridge::GitImporter::new(
+            Arc::clone(&mapping),
+            Arc::clone(&blobs),
+            Arc::clone(&refs),
+            secret_key.clone(),
+            create_hlc("test-import"),
+        );
+
+        let exporter = GitExporter::new(
+            Arc::clone(&mapping),
+            Arc::clone(&blobs),
+            Arc::clone(&refs),
+            secret_key.clone(),
+            create_hlc("test-export"),
+        );
+
+        let repo_id = RepoId::from_hash(blake3::hash(b"roundtrip-test"));
+
+        // Import a blob
+        let content = b"hello from roundtrip test\n";
+        let git_bytes = {
+            let header = format!("blob {}\0", content.len());
+            let mut bytes = Vec::with_capacity(header.len() + content.len());
+            bytes.extend_from_slice(header.as_bytes());
+            bytes.extend_from_slice(content);
+            bytes
+        };
+
+        let blake3_hash = importer.import_object(&repo_id, &git_bytes).await.expect("import should succeed");
+
+        // Export it back
+        let exported = exporter.export_object(&repo_id, blake3_hash).await.expect("export should succeed");
+
+        assert_eq!(exported.object_type, GitObjectType::Blob);
+        assert_eq!(exported.content, content);
     }
 }
