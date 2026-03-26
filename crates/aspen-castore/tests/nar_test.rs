@@ -132,7 +132,7 @@ async fn setup() -> (Arc<IrpcBlobService>, Arc<IrpcDirectoryService>, Router, En
 // ========================================================================
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn nar_ingest_symlink() {
     let (blob, dir, _router, _ep) = setup().await;
 
@@ -146,7 +146,7 @@ async fn nar_ingest_symlink() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn nar_ingest_file() {
     let (blob, dir, _router, _ep) = setup().await;
 
@@ -165,7 +165,7 @@ async fn nar_ingest_file() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn nar_ingest_complicated_directory() {
     let (blob, dir, _router, _ep) = setup().await;
 
@@ -191,7 +191,7 @@ async fn nar_ingest_complicated_directory() {
 // ========================================================================
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn nar_roundtrip_symlink() {
     let (blob, dir, _router, _ep) = setup().await;
 
@@ -206,7 +206,7 @@ async fn nar_roundtrip_symlink() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn nar_roundtrip_file() {
     let (blob, dir, _router, _ep) = setup().await;
 
@@ -221,7 +221,7 @@ async fn nar_roundtrip_file() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn nar_roundtrip_complicated() {
     let (blob, dir, _router, _ep) = setup().await;
 
@@ -237,7 +237,7 @@ async fn nar_roundtrip_complicated() {
 
 /// Full pipeline: ingest NAR → verify SHA256 → render back → compare bytes.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn nar_full_pipeline_with_hash() {
     let (blob, dir, _router, _ep) = setup().await;
 

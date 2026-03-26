@@ -277,7 +277,7 @@ async fn test_federation_handshake() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_federation_handshake_bidirectional() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -309,7 +309,7 @@ async fn test_federation_handshake_bidirectional() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_list_remote_resources_empty() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -335,7 +335,7 @@ async fn test_list_remote_resources_empty() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_list_remote_resources_with_public_repos() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -377,7 +377,7 @@ async fn test_list_remote_resources_with_public_repos() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_list_remote_resources_with_type_filter() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -414,7 +414,7 @@ async fn test_list_remote_resources_with_type_filter() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_get_resource_state_not_found() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -443,7 +443,7 @@ async fn test_get_resource_state_not_found() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_get_resource_state_found() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -473,7 +473,7 @@ async fn test_get_resource_state_found() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_sync_objects_empty_resource() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -506,7 +506,7 @@ async fn test_sync_objects_empty_resource() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_sync_objects_not_found() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -538,7 +538,7 @@ async fn test_sync_objects_not_found() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_multiple_streams_on_single_connection() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -572,7 +572,7 @@ async fn test_multiple_streams_on_single_connection() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_full_sync_flow() {
     // End-to-end: handshake → list → get state → sync objects
     let alice = TestCluster::new("alice").await;
@@ -633,7 +633,7 @@ async fn test_full_sync_flow() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_sync_objects_drops_bad_content_hash() {
     let alice = TestCluster::new("alice").await;
 
@@ -696,7 +696,7 @@ async fn test_sync_objects_drops_bad_content_hash() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_sync_objects_drops_bad_delegate_signature() {
     let alice = TestCluster::new("alice").await;
 
@@ -766,7 +766,7 @@ async fn test_sync_objects_drops_bad_delegate_signature() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_sync_objects_passes_valid_delegate_signature() {
     let alice = TestCluster::new("alice").await;
 
@@ -835,7 +835,7 @@ async fn test_sync_objects_passes_valid_delegate_signature() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_sync_objects_accepts_unsigned_when_no_delegates() {
     let alice = TestCluster::new("alice").await;
 

@@ -249,7 +249,7 @@ async fn connect_plain(
 /// A credential issued by bob's cluster key grants alice trusted status
 /// during the federation handshake, even without prior trust configuration.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_credential_grants_trust_on_handshake() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -285,7 +285,7 @@ async fn test_credential_grants_trust_on_handshake() {
 /// A credential issued by a different cluster (not bob) should fail
 /// verification at bob, and alice stays untrusted.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_credential_from_wrong_issuer_rejected() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -327,7 +327,7 @@ async fn test_credential_from_wrong_issuer_rejected() {
 /// A credential with a tampered signature should be rejected during
 /// handshake. This validates the handler's signature verification.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_tampered_credential_rejected() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -362,7 +362,7 @@ async fn test_tampered_credential_rejected() {
 /// A token with a very short lifetime (within clock skew tolerance) is
 /// still accepted. This validates the 60-second skew tolerance.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_recently_expired_credential_within_skew_accepted() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -396,7 +396,7 @@ async fn test_recently_expired_credential_within_skew_accepted() {
 /// Plain handshake without credential: alice is untrusted and can still
 /// access public resources but not allowlisted ones.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_plain_handshake_untrusted() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -420,7 +420,7 @@ async fn test_plain_handshake_untrusted() {
 /// With a valid credential, alice can access allowlisted resources on bob
 /// even though alice's cluster key is not in the allowlist.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_credential_grants_access_to_restricted_resource() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::with_resolver("bob", Some(Arc::new(MockResolver::empty()))).await;
@@ -463,7 +463,7 @@ async fn test_credential_grants_access_to_restricted_resource() {
 
 /// Without a credential, alice cannot access an allowlisted resource on bob.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_no_credential_blocked_from_restricted_resource() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::with_resolver("bob", Some(Arc::new(MockResolver::empty()))).await;
@@ -493,7 +493,7 @@ async fn test_no_credential_blocked_from_restricted_resource() {
 
 /// Public resources remain accessible without any credential.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_public_resource_accessible_without_credential() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::with_resolver("bob", Some(Arc::new(MockResolver::empty()))).await;
@@ -525,7 +525,7 @@ async fn test_public_resource_accessible_without_credential() {
 /// A two-level delegation chain works: bob issues to carol, carol delegates
 /// to alice, and alice can use the delegated credential to access bob.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_delegated_credential_two_levels() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::with_resolver("bob", Some(Arc::new(MockResolver::empty()))).await;
@@ -587,7 +587,7 @@ async fn test_delegated_credential_two_levels() {
 /// Escalated capabilities in a delegation chain are rejected. Carol has
 /// Read but tries to delegate Write to alice.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_delegation_escalation_rejected_locally() {
     let bob_sk = SecretKey::generate(&mut rand::rng());
     let carol_sk = SecretKey::generate(&mut rand::rng());
@@ -626,7 +626,7 @@ async fn test_delegation_escalation_rejected_locally() {
 /// Credential-derived trust expires when expire_credential is called,
 /// reverting the cluster to Public trust level.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_credential_trust_expiration() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -666,7 +666,7 @@ async fn test_credential_trust_expiration() {
 
 /// Revoking a credential blocks the cluster entirely.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_credential_revocation_blocks() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;
@@ -709,7 +709,7 @@ async fn test_credential_revocation_blocks() {
 /// Each spoke can access hub's resources via its credential, but spokes
 /// cannot access each other directly.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_hub_spoke_topology_with_credentials() {
     let hub = TestCluster::with_resolver("hub", Some(Arc::new(MockResolver::empty()))).await;
     let spoke_a = TestCluster::new("spoke-a").await;
@@ -784,7 +784,7 @@ async fn test_hub_spoke_topology_with_credentials() {
 /// Mutual federation: two clusters exchange credentials and can access
 /// each other's resources.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_mutual_credential_exchange() {
     let alice = TestCluster::with_resolver("alice", Some(Arc::new(MockResolver::empty()))).await;
     let bob = TestCluster::with_resolver("bob", Some(Arc::new(MockResolver::empty()))).await;
@@ -860,7 +860,7 @@ async fn test_mutual_credential_exchange() {
 
 /// Credential authorizes sync of objects from a restricted resource.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_sync_objects_with_credential() {
     let data1 = b"commit-object-1";
     let hash1 = *blake3::hash(data1).as_bytes();
@@ -930,7 +930,7 @@ async fn test_sync_objects_with_credential() {
 
 /// Without credential, syncing a restricted resource fails with ACCESS_DENIED.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_sync_objects_denied_without_credential() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::with_resolver("bob", Some(Arc::new(MockResolver::empty()))).await;
@@ -969,7 +969,7 @@ async fn test_sync_objects_denied_without_credential() {
 /// Note: the allowlist checks the iroh endpoint key (connection identity),
 /// not the cluster identity key.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_allowlist_with_explicit_key() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::with_resolver("bob", Some(Arc::new(MockResolver::empty()))).await;
@@ -1000,7 +1000,7 @@ async fn test_allowlist_with_explicit_key() {
 /// This is the expected behavior: credentials act as an admin override
 /// for per-resource federation settings.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_credential_overrides_disabled_resource() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::with_resolver("bob", Some(Arc::new(MockResolver::empty()))).await;
@@ -1039,7 +1039,7 @@ async fn test_credential_overrides_disabled_resource() {
 
 /// Without a credential, a disabled resource is inaccessible.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_disabled_resource_inaccessible_without_credential() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::with_resolver("bob", Some(Arc::new(MockResolver::empty()))).await;
@@ -1069,7 +1069,7 @@ async fn test_disabled_resource_inaccessible_without_credential() {
 /// Resource listing respects federation mode visibility regardless of trust.
 /// Public resources are always listed; disabled ones never are.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_resource_listing_visibility() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::new("bob").await;

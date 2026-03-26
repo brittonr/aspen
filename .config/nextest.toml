@@ -182,6 +182,66 @@ filter = "test(/relay_status/)"
 retries = 2
 slow-timeout = { period = "120s", terminate-after = 1 }
 
+# Federation tests: require iroh P2P for wire protocol and auth cluster tests
+[[profile.network.overrides]]
+filter = "package(aspen-federation)"
+retries = 2
+slow-timeout = { period = "120s", terminate-after = 1 }
+
+# Castore tests: NAR ingest/roundtrip and wire protocol over iroh
+[[profile.network.overrides]]
+filter = "package(aspen-castore)"
+retries = 1
+slow-timeout = { period = "60s", terminate-after = 1 }
+
+# Forge integration tests: real cluster + git wire protocol
+[[profile.network.overrides]]
+filter = "test(/forge_real_cluster/) or test(/forge_git_wire/)"
+retries = 2
+slow-timeout = { period = "180s", terminate-after = 1 }
+
+# Blob GC tests: garbage collection with real networking
+[[profile.network.overrides]]
+filter = "test(/blob_gc_integration/)"
+retries = 1
+slow-timeout = { period = "120s", terminate-after = 1 }
+
+# CI integration tests: pipeline orchestration with real networking
+[[profile.network.overrides]]
+filter = "test(/ci_integration/)"
+retries = 1
+slow-timeout = { period = "180s", terminate-after = 1 }
+
+# Consumer group tests: distributed consumer groups with real networking
+[[profile.network.overrides]]
+filter = "test(/consumer_group_integration/)"
+retries = 1
+slow-timeout = { period = "120s", terminate-after = 1 }
+
+# Node builder integration: cluster bootstrap with real networking
+[[profile.network.overrides]]
+filter = "test(/node_builder_integration/)"
+retries = 2
+slow-timeout = { period = "120s", terminate-after = 1 }
+
+# Pub/sub integration tests: real iroh gossip networking
+[[profile.network.overrides]]
+filter = "test(/pubsub_integration/)"
+retries = 1
+slow-timeout = { period = "120s", terminate-after = 1 }
+
+# Gossip E2E integration: iroh P2P + mDNS discovery
+[[profile.network.overrides]]
+filter = "test(/gossip_e2e/)"
+retries = 2
+slow-timeout = { period = "120s", terminate-after = 1 }
+
+# Shell command worker tests: job execution with real networking
+[[profile.network.overrides]]
+filter = "test(/shell_command_worker/)"
+retries = 1
+slow-timeout = { period = "120s", terminate-after = 1 }
+
 # Large file tests
 [[profile.network.overrides]]
 filter = "test(/large_file/)"

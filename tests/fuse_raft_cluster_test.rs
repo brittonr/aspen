@@ -57,7 +57,7 @@ fn spawn_fuse_workers(
 ///
 /// Requires /dev/fuse access (run with `--run-ignored all`).
 #[tokio::test(flavor = "multi_thread")]
-#[ignore]
+#[ignore = "requires /dev/fuse access - run with --run-ignored all"]
 async fn test_fuse_mount_with_raft_cluster() {
     let temp_dir = tempfile::tempdir().unwrap();
     let data_dir = temp_dir.path().join("node-1");

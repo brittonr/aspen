@@ -11,11 +11,15 @@
 //!
 //! # Requirements
 //!
-//! These tests require network access and are marked with `#[ignore]` for
-//! tests that require networking. Run with:
+//! These tests require:
+//! - Network access (marked with `#[ignore]` for Nix sandbox)
+//! - Features: `hooks`, `jobs`, `docs`, `federation` (needed for `real_cluster` test support
+//!   module)
+//!
+//! Run with:
 //!
 //! ```bash
-//! cargo nextest run hooks_integration --ignored
+//! cargo nextest run --features "hooks,jobs,docs,federation" hooks_integration --run-ignored all
 //! ```
 //!
 //! # Tiger Style

@@ -860,7 +860,7 @@ async fn test_git_push_clone_roundtrip() {
 
 /// Test: incremental push (second push after initial sends fewer objects).
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_git_incremental_push() {
     let _ = tracing_subscriber::fmt().with_env_filter("warn").with_test_writer().try_init();
 
@@ -928,7 +928,7 @@ async fn test_git_incremental_push() {
 
 /// Test: git fetch after push retrieves correct content.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_git_push_then_fetch() {
     let _ = tracing_subscriber::fmt().with_env_filter("warn").with_test_writer().try_init();
 

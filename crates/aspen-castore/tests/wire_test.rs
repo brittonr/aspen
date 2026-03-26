@@ -70,7 +70,7 @@ fn make_clients(endpoint: Endpoint, server_addr: EndpointAddr) -> (IrpcBlobServi
 // ========================================================================
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn wire_blob_roundtrip() {
     let (addr, _router, _server_ep) = start_server().await;
     let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
@@ -96,7 +96,7 @@ async fn wire_blob_roundtrip() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn wire_blob_not_found() {
     let (addr, _router, _server_ep) = start_server().await;
     let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
@@ -108,7 +108,7 @@ async fn wire_blob_not_found() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn wire_blob_large() {
     let (addr, _router, _server_ep) = start_server().await;
     let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
@@ -135,7 +135,7 @@ async fn wire_blob_large() {
 // ========================================================================
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn wire_dir_put_get() {
     let (addr, _router, _server_ep) = start_server().await;
     let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
@@ -152,7 +152,7 @@ async fn wire_dir_put_get() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn wire_dir_not_found() {
     let (addr, _router, _server_ep) = start_server().await;
     let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
@@ -163,7 +163,7 @@ async fn wire_dir_not_found() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn wire_dir_get_recursive() {
     let (addr, _router, _server_ep) = start_server().await;
     let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
@@ -188,7 +188,7 @@ async fn wire_dir_get_recursive() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn wire_dir_put_multiple() {
     let (addr, _router, _server_ep) = start_server().await;
     let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
@@ -216,7 +216,7 @@ async fn wire_dir_put_multiple() {
 // ========================================================================
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn wire_blob_and_dir_combined() {
     let (addr, _router, _server_ep) = start_server().await;
     let client_ep = Endpoint::builder(iroh::endpoint::presets::N0).clear_address_lookup().bind().await.unwrap();
@@ -237,7 +237,7 @@ async fn wire_blob_and_dir_combined() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn wire_multiple_clients() {
     let (addr, _router, _server_ep) = start_server().await;
 

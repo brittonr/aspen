@@ -13,12 +13,13 @@
 //!
 //! These tests require:
 //! - Network access (marked with `#[ignore]` for Nix sandbox)
-//! - The `secrets` feature enabled
+//! - Features: `secrets`, `jobs`, `docs`, `hooks`, `federation` (needed for `real_cluster` test
+//!   support module)
 //!
 //! Run with:
 //!
 //! ```bash
-//! cargo nextest run secrets_integration --ignored
+//! cargo nextest run --features "secrets,jobs,docs,hooks,federation" secrets_integration --run-ignored all
 //! ```
 //!
 //! # Tiger Style
