@@ -165,6 +165,19 @@ impl RouterBuilder {
         self
     }
 
+    /// Register the federation sync protocol handler (optional).
+    ///
+    /// Handles incoming cross-cluster federation connections for resource
+    /// discovery, state queries, and object synchronization.
+    ///
+    /// ALPN: `/aspen/federation/1`
+    #[cfg(feature = "federation")]
+    pub fn federation<F: iroh::protocol::ProtocolHandler>(mut self, handler: F) -> Self {
+        self.builder = self.builder.accept(aspen_federation::FEDERATION_ALPN, handler);
+        tracing::info!("registered federation sync protocol handler (ALPN: /aspen/federation/1)");
+        self
+    }
+
     /// Finalize the router configuration and spawn it.
     ///
     /// Automatically registers gossip if enabled on the endpoint.

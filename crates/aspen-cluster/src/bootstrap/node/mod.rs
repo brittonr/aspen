@@ -30,6 +30,8 @@
 
 mod blob_init;
 mod discovery_init;
+#[cfg(feature = "federation")]
+mod federation_init;
 mod hooks_init;
 mod network_init;
 mod sharding_init;
@@ -60,6 +62,10 @@ use aspen_raft::supervisor::Supervisor;
 pub use blob_init::auto_announce_local_blobs;
 pub use blob_init::initialize_blob_replication;
 pub use discovery_init::derive_topic_id_from_cookie;
+#[cfg(feature = "federation")]
+pub use federation_init::FederationInitResult;
+#[cfg(feature = "federation")]
+pub use federation_init::setup_federation;
 use iroh_gossip::proto::TopicId;
 pub use network_init::parse_peer_addresses;
 pub use sharding_init::BaseDiscoveryResources;
@@ -78,6 +84,7 @@ use crate::IrohEndpointManager;
 // Import Resource structs from resources module
 use crate::bootstrap::resources::BlobReplicationResources;
 use crate::bootstrap::resources::DiscoveryResources;
+use crate::bootstrap::resources::FederationResources;
 use crate::bootstrap::resources::HookResources;
 use crate::bootstrap::resources::NetworkResources;
 use crate::bootstrap::resources::ShutdownCoordinator;
@@ -135,6 +142,8 @@ pub struct NodeHandle {
     pub worker: WorkerResources,
     /// Blob replication resources.
     pub blob_replication: BlobReplicationResources,
+    /// Federation cross-cluster communication resources.
+    pub federation: FederationResources,
     /// Event hook system resources.
     pub hooks: HookResources,
     /// Shutdown coordination resources.
@@ -767,6 +776,8 @@ fn assemble_node_handle(
             worker_service_cancel: None, // Initialized in aspen-node after JobManager creation
         },
         blob_replication: BlobReplicationResources::disabled(), // Initialized in aspen-node after KV store is ready
+        federation: FederationResources::disabled(),            /* Initialized below or in aspen-node when federation
+                                                                 * is configured */
         hooks,
         shutdown: ShutdownCoordinator {
             shutdown_token: consensus.shutdown_token,

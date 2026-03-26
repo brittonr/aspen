@@ -422,6 +422,36 @@ impl HookResources {
 }
 
 // ============================================================================
+// Federation Resources
+// ============================================================================
+
+/// Federation cross-cluster communication resources.
+///
+/// Contains the cluster identity, trust manager, and protocol handler
+/// for serving incoming federation sync requests. Created during bootstrap
+/// when a cluster secret key is configured.
+pub struct FederationResources {
+    /// Cluster identity for signing federation messages.
+    #[cfg(feature = "federation")]
+    pub identity: Option<std::sync::Arc<aspen_federation::ClusterIdentity>>,
+    /// Trust manager for per-cluster access control.
+    #[cfg(feature = "federation")]
+    pub trust_manager: Option<std::sync::Arc<aspen_federation::TrustManager>>,
+}
+
+impl FederationResources {
+    /// Create disabled federation resources.
+    pub fn disabled() -> Self {
+        Self {
+            #[cfg(feature = "federation")]
+            identity: None,
+            #[cfg(feature = "federation")]
+            trust_manager: None,
+        }
+    }
+}
+
+// ============================================================================
 // Shutdown Coordinator
 // ============================================================================
 

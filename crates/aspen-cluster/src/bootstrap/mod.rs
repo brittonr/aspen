@@ -46,6 +46,8 @@ pub mod traits;
 // Re-export main types from resources for convenience
 pub use node::BaseDiscoveryResources;
 pub use node::BaseNodeResources;
+#[cfg(feature = "federation")]
+pub use node::FederationInitResult;
 pub use node::NodeHandle;
 pub use node::ShardedNodeHandle;
 pub use node::ShardingResources;
@@ -55,6 +57,8 @@ pub use node::bootstrap_node;
 pub use node::bootstrap_sharded_node;
 pub use node::initialize_blob_replication;
 pub use node::load_config;
+#[cfg(feature = "federation")]
+pub use node::setup_federation;
 pub use resources::BlobReplicationResources;
 pub use resources::DiscoveryResources;
 pub use resources::HookResources;

@@ -831,6 +831,39 @@ impl Node {
         builder = builder.accept(iroh_blobs::ALPN, blobs_handler);
         tracing::info!("registered Blobs protocol handler (ALPN: iroh-blobs/0)");
 
+        // Add federation handler if enabled
+        #[cfg(feature = "federation")]
+        if self.handle.config.federation.is_enabled {
+            let hlc = Arc::new(aspen_core::hlc::create_hlc(&self.handle.config.node_id.to_string()));
+            match aspen_cluster::bootstrap::setup_federation(
+                &self.handle.config,
+                self.handle.network.iroh_manager.endpoint(),
+                &hlc,
+            ) {
+                Some(fed) => {
+                    builder = builder.accept(FEDERATION_ALPN, fed.handler);
+                    tracing::info!(
+                        cluster_name = %fed.identity.name(),
+                        cluster_key = %fed.identity.public_key(),
+                        "registered Federation protocol handler (ALPN: /aspen/federation/1)"
+                    );
+
+                    // Store on NodeHandle for RPC handler access
+                    self.handle.federation = aspen_cluster::bootstrap::resources::FederationResources {
+                        identity: Some(fed.identity.clone()),
+                        trust_manager: Some(fed.trust_manager.clone()),
+                    };
+
+                    // Also store on Node for backward compatibility with existing accessors
+                    self.federation_identity = Some((*fed.identity).clone());
+                    self.federation_trust_manager = Some(fed.trust_manager);
+                }
+                None => {
+                    tracing::warn!("federation enabled but initialization failed, skipping");
+                }
+            }
+        }
+
         // Spawn the router and store the handle to keep it alive
         self.router = Some(builder.spawn());
         tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching (including blobs)");
