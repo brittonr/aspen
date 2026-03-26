@@ -23,17 +23,17 @@
 - [x] 4.3 Implement `get_resource_state()` — read ref heads from forge repo KV keys, return as `FederationResourceState`
 - [x] 4.4 Implement `sync_objects()` — return git objects from blob storage for requested hashes
 - [x] 4.5 Respect `FederationSettings` per resource: return `FederationDisabled` error when mode is `Disabled`
-- [ ] 4.6 Wire `ForgeResourceResolver` into the `FederationProtocolContext` during bootstrap when forge feature is enabled
+- [x] 4.6 Wire `ForgeResourceResolver` into the `FederationProtocolContext` during bootstrap when forge feature is enabled
 
 ## 5. Config plumbing
 
 - [x] 5.1 Verify `crates/aspen-cluster/src/config/federation.rs` has `cluster_secret_key`, `cluster_name`, `trusted_clusters` fields (may already exist)
-- [ ] 5.2 Add `federation.cluster_secret_key` and `federation.cluster_name` to NixOS module options in `nix/modules/aspen-node.nix` (as `secretKey` and `clusterName` under `services.aspen.node`)
-- [ ] 5.3 Ensure environment variable `ASPEN_CLUSTER_KEY` maps to the config field
+- [x] 5.2 Add `federation.cluster_secret_key` and `federation.cluster_name` to NixOS module options in `nix/modules/aspen-node.nix` (as `secretKey` and `clusterName` under `services.aspen.node`)
+- [x] 5.3 Ensure environment variable `ASPEN_CLUSTER_KEY` maps to the config field
 
 ## 6. Tests
 
-- [ ] 6.1 Unit test: `RouterBuilder::federation()` registers handler at correct ALPN
+- [x] 6.1 Unit test: `RouterBuilder::federation()` registers handler at correct ALPN
 - [x] 6.2 Unit test: `setup_federation()` returns `None` when no key configured
 - [x] 6.3 Unit test: `setup_federation()` returns handler when valid key provided
 - [x] 6.4 Unit test: `setup_federation()` returns `None` and logs error on invalid hex key

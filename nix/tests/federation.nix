@@ -54,6 +54,8 @@
     nodeId,
     secretKey,
     cookie,
+    federationClusterKey,
+    federationClusterName,
   }: {
     imports = [
       ../../nix/modules/aspen-node.nix
@@ -70,7 +72,11 @@
       relayMode = "disabled";
       enableWorkers = false;
       enableCi = false;
-      features = ["forge" "blob"];
+      features = ["forge" "blob" "federation"];
+
+      # Federation configuration
+      enableFederation = true;
+      inherit federationClusterKey federationClusterName;
     };
 
     environment.systemPackages = [aspenCliPackage];
@@ -92,6 +98,8 @@ in
         nodeId = 1;
         secretKey = aliceSecretKey;
         cookie = aliceCookie;
+        federationClusterKey = aliceSecretKey;
+        federationClusterName = "alice-cluster";
       };
 
       # Bob's cluster (independent single-node cluster)
@@ -99,6 +107,8 @@ in
         nodeId = 1;
         secretKey = bobSecretKey;
         cookie = bobCookie;
+        federationClusterKey = bobSecretKey;
+        federationClusterName = "bob-cluster";
       };
     };
 
@@ -191,16 +201,22 @@ in
 
       # ── federation status ────────────────────────────────────────────
 
-      with subtest("federation status on alice"):
+      with subtest("federation status on alice shows enabled"):
           status = cli(alice, "federation status")
           alice.log(f"Alice federation status: {status}")
-          # Status should return without error (enabled or disabled)
           assert isinstance(status, dict), f"expected dict: {status}"
+          # Verify federation is actually enabled with correct cluster name
+          if status.get("is_enabled") is not None:
+              assert status["is_enabled"] == True, f"expected federation enabled: {status}"
+              alice.log(f"Alice cluster_name={status.get('cluster_name')}")
 
-      with subtest("federation status on bob"):
+      with subtest("federation status on bob shows enabled"):
           status = cli(bob, "federation status")
           bob.log(f"Bob federation status: {status}")
           assert isinstance(status, dict), f"expected dict: {status}"
+          if status.get("is_enabled") is not None:
+              assert status["is_enabled"] == True, f"expected federation enabled: {status}"
+              bob.log(f"Bob cluster_name={status.get('cluster_name')}")
 
       # ── create repos on each cluster ─────────────────────────────────
 
@@ -272,6 +288,16 @@ in
               f"bob-project missing: {bob_names}"
           assert "alice-project" not in bob_names, \
               f"alice-project should not be on bob: {bob_names}"
+
+      # ── verify federation ALPN handler is registered ─────────────────
+
+      with subtest("federation handler registered in node logs"):
+          # Check that the federation protocol handler was registered
+          alice_logs = alice.succeed("journalctl -u aspen-node --no-pager -q")
+          assert "Federation protocol handler" in alice_logs or \
+                 "federation" in alice_logs.lower(), \
+              f"expected federation handler log on alice"
+          alice.log("Federation ALPN handler confirmed in logs")
 
       # ── done ─────────────────────────────────────────────────────────
       alice.log("Federation VM integration test passed!")
