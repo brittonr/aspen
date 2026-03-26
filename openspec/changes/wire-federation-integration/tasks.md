@@ -40,4 +40,4 @@
 - [x] 6.5 Unit test: `ForgeResourceResolver::get_resource_state()` returns ref heads from KV
 - [x] 6.6 Unit test: `ForgeResourceResolver` returns `NotFound` for unknown `FederatedId`
 - [x] 6.7 Unit test: `ForgeResourceResolver` returns `FederationDisabled` when mode is disabled
-- [ ] 6.8 Expand `nix/tests/federation.nix` — cluster A creates repo + federates, cluster B performs federation handshake + `GetResourceState`, assert ref heads match
+- [x] 6.8 Expand `nix/tests/federation.nix` — cluster A creates repo + federates, cluster B performs federation handshake + `GetResourceState`, assert ref heads match
