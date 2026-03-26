@@ -18,11 +18,11 @@
 
 ## 4. Forge resource resolver
 
-- [ ] 4.1 Create `ForgeResourceResolver` struct implementing `FederationResourceResolver` trait, located in `crates/aspen-forge/src/resolver.rs` (or `crates/aspen-forge-handler/`)
-- [ ] 4.2 Implement `resource_exists()` — scan KV for federation settings matching the `FederatedId`
-- [ ] 4.3 Implement `get_resource_state()` — read ref heads from forge repo KV keys, return as `FederationResourceState`
-- [ ] 4.4 Implement `sync_objects()` — return git objects from blob storage for requested hashes
-- [ ] 4.5 Respect `FederationSettings` per resource: return `FederationDisabled` error when mode is `Disabled`
+- [x] 4.1 Create `ForgeResourceResolver` struct implementing `FederationResourceResolver` trait, located in `crates/aspen-forge/src/resolver.rs` (or `crates/aspen-forge-handler/`)
+- [x] 4.2 Implement `resource_exists()` — scan KV for federation settings matching the `FederatedId`
+- [x] 4.3 Implement `get_resource_state()` — read ref heads from forge repo KV keys, return as `FederationResourceState`
+- [x] 4.4 Implement `sync_objects()` — return git objects from blob storage for requested hashes
+- [x] 4.5 Respect `FederationSettings` per resource: return `FederationDisabled` error when mode is `Disabled`
 - [ ] 4.6 Wire `ForgeResourceResolver` into the `FederationProtocolContext` during bootstrap when forge feature is enabled
 
 ## 5. Config plumbing
@@ -34,10 +34,10 @@
 ## 6. Tests
 
 - [ ] 6.1 Unit test: `RouterBuilder::federation()` registers handler at correct ALPN
-- [ ] 6.2 Unit test: `setup_federation()` returns `None` when no key configured
-- [ ] 6.3 Unit test: `setup_federation()` returns handler when valid key provided
-- [ ] 6.4 Unit test: `setup_federation()` returns `None` and logs error on invalid hex key
-- [ ] 6.5 Unit test: `ForgeResourceResolver::get_resource_state()` returns ref heads from KV
-- [ ] 6.6 Unit test: `ForgeResourceResolver` returns `NotFound` for unknown `FederatedId`
-- [ ] 6.7 Unit test: `ForgeResourceResolver` returns `FederationDisabled` when mode is disabled
+- [x] 6.2 Unit test: `setup_federation()` returns `None` when no key configured
+- [x] 6.3 Unit test: `setup_federation()` returns handler when valid key provided
+- [x] 6.4 Unit test: `setup_federation()` returns `None` and logs error on invalid hex key
+- [x] 6.5 Unit test: `ForgeResourceResolver::get_resource_state()` returns ref heads from KV
+- [x] 6.6 Unit test: `ForgeResourceResolver` returns `NotFound` for unknown `FederatedId`
+- [x] 6.7 Unit test: `ForgeResourceResolver` returns `FederationDisabled` when mode is disabled
 - [ ] 6.8 Expand `nix/tests/federation.nix` — cluster A creates repo + federates, cluster B performs federation handshake + `GetResourceState`, assert ref heads match

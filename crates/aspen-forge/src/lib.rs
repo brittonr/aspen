@@ -76,6 +76,7 @@ pub mod error;
 pub mod federation;
 pub mod mirror;
 pub mod mirror_worker;
+pub mod resolver;
 pub mod types;
 /// Verified pure functions for Forge logic.
 pub mod verified;
