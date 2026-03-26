@@ -85,6 +85,19 @@ pub enum FederationRequest {
         /// Optional direct socket address hint (e.g., "192.168.1.1:54866").
         peer_addr: Option<String>,
     },
+
+    /// Fetch ref objects from a remote federated repository.
+    ///
+    /// Connects to the remote peer, calls SyncObjects with `want_types: ["refs"]`,
+    /// and persists received refs locally under `_fed:mirror:` KV prefix.
+    FederationFetchRefs {
+        /// Remote peer's iroh node ID (base32-encoded PublicKey).
+        peer_node_id: String,
+        /// Optional direct socket address hint.
+        peer_addr: Option<String>,
+        /// Federated resource ID string (origin:local_id).
+        fed_id: String,
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -112,7 +125,7 @@ impl FederationRequest {
                 value: vec![],
             }),
             Self::FederationListTokens | Self::FederationListSubscriptions => None,
-            Self::FederationSyncPeer { .. } => Some(Operation::Write {
+            Self::FederationSyncPeer { .. } | Self::FederationFetchRefs { .. } => Some(Operation::Write {
                 key: "_sys:fed:sync".to_string(),
                 value: vec![],
             }),
@@ -370,6 +383,21 @@ pub struct FederationSyncPeerResponse {
     /// Resources discovered on the remote cluster.
     pub resources: Vec<SyncPeerResourceInfo>,
     /// Error message if sync failed.
+    pub error: Option<String>,
+}
+
+/// Federation ref fetch result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationFetchRefsResponse {
+    /// Whether the fetch succeeded.
+    pub is_success: bool,
+    /// Number of refs fetched (new).
+    pub fetched: u32,
+    /// Number of refs already present locally.
+    pub already_present: u32,
+    /// Per-ref errors encountered during fetch.
+    pub errors: Vec<String>,
+    /// Top-level error message if operation failed entirely.
     pub error: Option<String>,
 }
 

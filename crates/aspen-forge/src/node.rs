@@ -287,6 +287,21 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         Ok(())
     }
 
+    /// Scan KV entries matching a prefix.
+    ///
+    /// Returns `(key, value)` pairs. Limit defaults to 1000 if not specified.
+    pub async fn scan_kv(&self, prefix: &str, limit: Option<u32>) -> ForgeResult<Vec<(String, String)>> {
+        let result = self
+            .kv
+            .scan(aspen_core::ScanRequest {
+                prefix: prefix.to_string(),
+                limit_results: Some(limit.unwrap_or(1000)),
+                continuation_token: None,
+            })
+            .await?;
+        Ok(result.entries.into_iter().map(|e| (e.key, e.value)).collect())
+    }
+
     /// Resolve the signing key and npub for an operation.
     ///
     /// If a `UserContext` is provided, uses the user's assigned key and npub.

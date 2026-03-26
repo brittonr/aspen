@@ -39,6 +39,9 @@ pub enum FederationCommand {
 
     /// Perform a one-shot federation sync pull from a remote cluster.
     Sync(SyncArgs),
+
+    /// Fetch ref objects from a remote federated repository.
+    Fetch(FetchArgs),
 }
 
 #[derive(Args)]
@@ -80,6 +83,26 @@ pub struct SyncArgs {
     /// Helps iroh establish a QUIC connection without relay or discovery.
     #[arg(long)]
     pub addr: Option<String>,
+
+    /// After discovering refs, also fetch ref objects and persist locally.
+    #[arg(long)]
+    pub fetch: bool,
+}
+
+/// Arguments for federation fetch command.
+#[derive(Args)]
+pub struct FetchArgs {
+    /// Remote peer's iroh node ID (base32-encoded public key).
+    #[arg(long)]
+    pub peer: String,
+
+    /// Direct socket address hint for the remote peer.
+    #[arg(long)]
+    pub addr: Option<String>,
+
+    /// Federated resource ID (origin:local_id format).
+    #[arg(long)]
+    pub fed_id: String,
 }
 
 /// Federation status output.
@@ -239,6 +262,7 @@ impl FederationCommand {
             FederationCommand::Federate(args) => federation_federate(client, args, json).await,
             FederationCommand::ListFederated => federation_list_federated(client, json).await,
             FederationCommand::Sync(args) => federation_sync(client, args, json).await,
+            FederationCommand::Fetch(args) => federation_fetch(client, args, json).await,
         }
     }
 }
@@ -437,16 +461,20 @@ async fn federation_federate(client: &AspenClient, args: FederateArgs, json: boo
 }
 
 async fn federation_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<()> {
+    let do_fetch = args.fetch;
+    let peer = args.peer.clone();
+    let addr = args.addr.clone();
+
     let response = client
         .send(ClientRpcRequest::FederationSyncPeer {
-            peer_node_id: args.peer.clone(),
-            peer_addr: args.addr.clone(),
+            peer_node_id: peer.clone(),
+            peer_addr: addr.clone(),
         })
         .await?;
 
     match response {
         ClientRpcResponse::FederationSyncPeerResult(result) => {
-            if json {
+            if json && !do_fetch {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success {
                 println!("Federation sync successful!");
@@ -464,8 +492,63 @@ async fn federation_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Re
                         println!("    - {} (refs: {})", r.resource_type, r.ref_count);
                     }
                 }
+
+                // If --fetch was requested, fetch refs for each discovered resource
+                if do_fetch {
+                    println!();
+                    for r in &result.resources {
+                        if let Some(ref fid) = r.fed_id {
+                            print_fetch_result(client, &peer, addr.as_deref(), fid, json).await?;
+                        }
+                    }
+                }
             } else {
                 eprintln!("Federation sync failed: {}", result.error.as_deref().unwrap_or("unknown error"));
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn federation_fetch(client: &AspenClient, args: FetchArgs, json: bool) -> Result<()> {
+    print_fetch_result(client, &args.peer, args.addr.as_deref(), &args.fed_id, json).await
+}
+
+async fn print_fetch_result(
+    client: &AspenClient,
+    peer: &str,
+    addr: Option<&str>,
+    fed_id: &str,
+    json: bool,
+) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::FederationFetchRefs {
+            peer_node_id: peer.to_string(),
+            peer_addr: addr.map(|s| s.to_string()),
+            fed_id: fed_id.to_string(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::FederationFetchRefsResult(result) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else if result.is_success || result.error.is_none() {
+                let short_id = if fed_id.len() > 24 { &fed_id[..24] } else { fed_id };
+                println!("Fetch {}:", short_id);
+                println!("  Fetched:         {}", result.fetched);
+                println!("  Already present: {}", result.already_present);
+                if !result.errors.is_empty() {
+                    println!("  Errors:");
+                    for e in &result.errors {
+                        println!("    - {}", e);
+                    }
+                }
+            } else {
+                eprintln!("Fetch failed: {}", result.error.as_deref().unwrap_or("unknown error"));
                 std::process::exit(1);
             }
             Ok(())

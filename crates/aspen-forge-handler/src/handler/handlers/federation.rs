@@ -637,6 +637,211 @@ pub(crate) async fn handle_federation_sync_peer(
     }))
 }
 
+/// Fetch ref objects from a remote federated repository and persist locally.
+///
+/// Connects to the remote peer, performs a federation handshake, then calls
+/// `SyncObjects` with `want_types: ["refs"]`. Received refs are written to
+/// local KV under `_fed:mirror:{origin_short}:{local_id_short}:refs/{name}`.
+pub(crate) async fn handle_federation_fetch_refs(
+    peer_node_id: &str,
+    peer_addr: Option<&str>,
+    fed_id_str: &str,
+    cluster_identity: Option<&Arc<aspen_cluster::federation::ClusterIdentity>>,
+    iroh_endpoint: Option<&Arc<iroh::Endpoint>>,
+    forge_node: &ForgeNodeRef,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::FederationFetchRefsResponse;
+    use aspen_cluster::federation::FederatedId;
+    use aspen_cluster::federation::sync::RefEntry;
+
+    let identity = match cluster_identity {
+        Some(id) => id,
+        None => {
+            return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+                is_success: false,
+                fetched: 0,
+                already_present: 0,
+                errors: Vec::new(),
+                error: Some("federation not configured on this cluster".to_string()),
+            }));
+        }
+    };
+
+    let endpoint = match iroh_endpoint {
+        Some(ep) => ep,
+        None => {
+            return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+                is_success: false,
+                fetched: 0,
+                already_present: 0,
+                errors: Vec::new(),
+                error: Some("iroh endpoint not available".to_string()),
+            }));
+        }
+    };
+
+    // Parse the federated ID
+    let fed_id: FederatedId = match fed_id_str.parse() {
+        Ok(id) => id,
+        Err(e) => {
+            return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+                is_success: false,
+                fetched: 0,
+                already_present: 0,
+                errors: Vec::new(),
+                error: Some(format!("invalid fed_id '{}': {}", fed_id_str, e)),
+            }));
+        }
+    };
+
+    // Parse the peer node ID
+    let peer_key: iroh::PublicKey = match peer_node_id.parse() {
+        Ok(k) => k,
+        Err(e) => {
+            return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+                is_success: false,
+                fetched: 0,
+                already_present: 0,
+                errors: Vec::new(),
+                error: Some(format!("invalid peer node ID '{}': {}", peer_node_id, e)),
+            }));
+        }
+    };
+
+    // Build endpoint address
+    let endpoint_addr = if let Some(addr_str) = peer_addr {
+        if let Ok(socket_addr) = addr_str.parse::<std::net::SocketAddr>() {
+            let mut addr = iroh::EndpointAddr::from(peer_key);
+            addr.addrs.insert(iroh::TransportAddr::Ip(socket_addr));
+            addr
+        } else {
+            iroh::EndpointAddr::from(peer_key)
+        }
+    } else {
+        iroh::EndpointAddr::from(peer_key)
+    };
+
+    // Connect and handshake
+    let (connection, _remote_identity) =
+        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr).await {
+            Ok(result) => result,
+            Err(e) => {
+                return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+                    is_success: false,
+                    fetched: 0,
+                    already_present: 0,
+                    errors: Vec::new(),
+                    error: Some(format!("connection failed: {e}")),
+                }));
+            }
+        };
+
+    // Collect have_hashes from existing mirrored refs
+    let origin_short = {
+        let full = fed_id.origin().to_string();
+        full[..16.min(full.len())].to_string()
+    };
+    let local_short = fed_id.short();
+    let mirror_prefix = format!("_fed:mirror:{}:{}:refs/", origin_short, local_short);
+
+    let mut have_hashes = Vec::new();
+    if let Ok(scan_result) = forge_node.scan_kv(&mirror_prefix, Some(1000)).await {
+        for entry in &scan_result {
+            // Reconstruct the RefEntry to compute its hash for have_hashes
+            let ref_name = entry.0.strip_prefix(&mirror_prefix).unwrap_or(&entry.0);
+            if let Ok(hash_bytes) = hex::decode(entry.1.trim())
+                && hash_bytes.len() == 32
+            {
+                let mut head_hash = [0u8; 32];
+                head_hash.copy_from_slice(&hash_bytes);
+                let ref_entry = RefEntry {
+                    ref_name: ref_name.to_string(),
+                    head_hash,
+                };
+                let data = postcard::to_allocvec(&ref_entry).unwrap_or_default();
+                let hash: [u8; 32] = blake3::hash(&data).into();
+                have_hashes.push(hash);
+            }
+        }
+    }
+
+    let already_present = have_hashes.len() as u32;
+
+    // Fetch ref objects
+    let (objects, _has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
+        &connection,
+        &fed_id,
+        vec!["refs".to_string()],
+        have_hashes,
+        1000,
+        None, // No delegate verification for ref entries
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+                is_success: false,
+                fetched: 0,
+                already_present,
+                errors: Vec::new(),
+                error: Some(format!("sync objects failed: {e}")),
+            }));
+        }
+    };
+
+    // Parse and persist received refs
+    let mut fetched = 0u32;
+    let mut errors = Vec::new();
+    for obj in &objects {
+        if obj.object_type != "ref" {
+            continue;
+        }
+
+        // Verify BLAKE3 hash
+        let computed: [u8; 32] = blake3::hash(&obj.data).into();
+        if computed != obj.hash {
+            errors.push(format!("hash mismatch for object {}", hex::encode(&obj.hash[..8])));
+            continue;
+        }
+
+        // Deserialize RefEntry
+        let ref_entry: RefEntry = match postcard::from_bytes(&obj.data) {
+            Ok(e) => e,
+            Err(e) => {
+                errors.push(format!("failed to deserialize ref entry: {e}"));
+                continue;
+            }
+        };
+
+        // Persist to local KV
+        let key = format!("{}{}", mirror_prefix, ref_entry.ref_name);
+        let value = hex::encode(ref_entry.head_hash);
+        if let Err(e) = forge_node.write_kv(&key, &value).await {
+            errors.push(format!("failed to write {}: {e}", ref_entry.ref_name));
+            continue;
+        }
+
+        fetched += 1;
+    }
+
+    tracing::info!(
+        fed_id = %fed_id.short(),
+        fetched = fetched,
+        already_present = already_present,
+        errors = errors.len(),
+        "federation ref fetch complete"
+    );
+
+    Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+        is_success: errors.is_empty(),
+        fetched,
+        already_present,
+        errors,
+        error: None,
+    }))
+}
+
 pub(crate) async fn handle_fetch_federated(
     _forge_node: &ForgeNodeRef,
     _federated_id: String,

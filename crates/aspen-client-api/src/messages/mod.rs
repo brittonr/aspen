@@ -235,6 +235,7 @@ pub use federation::DiscoveredClustersResponse;
 pub use federation::FederateRepositoryResultResponse;
 pub use federation::FederatedRepoInfo;
 pub use federation::FederatedRepositoriesResponse;
+pub use federation::FederationFetchRefsResponse;
 pub use federation::FederationRequest;
 pub use federation::FederationStatusResponse;
 pub use federation::FederationSyncPeerResponse;
@@ -2127,6 +2128,15 @@ pub enum ClientRpcRequest {
         /// Optional direct socket address hint (e.g., "192.168.1.1:54866").
         peer_addr: Option<String>,
     },
+    /// Fetch ref objects from a remote federated repository.
+    FederationFetchRefs {
+        /// Remote peer's iroh node ID (base32-encoded PublicKey).
+        peer_node_id: String,
+        /// Optional direct socket address hint.
+        peer_addr: Option<String>,
+        /// Federated resource ID string (origin:local_id).
+        fed_id: String,
+    },
     ForgeFetchFederated {
         /// Federated ID (format: origin:local_id).
         federated_id: String,
@@ -3835,6 +3845,7 @@ impl ClientRpcRequest {
             Self::ForgeCreateRepo { .. } => "ForgeCreateRepo",
             Self::ForgeCreateTree { .. } => "ForgeCreateTree",
             Self::ForgeDeleteRef { .. } => "ForgeDeleteRef",
+            Self::FederationFetchRefs { .. } => "FederationFetchRefs",
             Self::FederationSyncPeer { .. } => "FederationSyncPeer",
             Self::ForgeFetchFederated { .. } => "ForgeFetchFederated",
             Self::ForgeForkRepo { .. } => "ForgeForkRepo",
@@ -4274,6 +4285,7 @@ impl ClientRpcRequest {
             | Self::FederateRepository { .. }
             | Self::ListFederatedRepositories
             | Self::FederationSyncPeer { .. }
+            | Self::FederationFetchRefs { .. }
             | Self::ForgeFetchFederated { .. } => Some("forge"),
 
             // Git Bridge operations
@@ -4889,6 +4901,8 @@ pub enum ClientRpcResponse {
     ForgeFetchResult(ForgeFetchFederatedResultResponse),
     /// Federation sync peer result.
     FederationSyncPeerResult(FederationSyncPeerResponse),
+    /// Federation ref fetch result.
+    FederationFetchRefsResult(FederationFetchRefsResponse),
 
     // =========================================================================
     // Git Bridge responses (for git-remote-aspen)

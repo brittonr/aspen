@@ -47,6 +47,7 @@ pub use handler::FederationProtocolHandler;
 // Types
 pub use types::FederationRequest;
 pub use types::FederationResponse;
+pub use types::RefEntry;
 pub use types::ResourceInfo;
 pub use types::ResourceMetadata;
 pub use types::SyncObject;

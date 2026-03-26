@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: CLI federation sync command
 
@@ -25,15 +25,3 @@ The system SHALL provide a `federation sync` CLI subcommand that triggers a one-
 - **THEN** the CLI SHALL first perform the standard sync (discover refs)
 - **AND** for each discovered resource, the CLI SHALL send a `FederationFetchRefs` RPC request
 - **AND** the CLI SHALL display per-resource fetch results (fetched count, already present, errors)
-
-### Requirement: FederationSyncPeer RPC request
-
-The client RPC API SHALL include a `FederationSyncPeer` request that accepts a remote peer's node ID and returns the federation handshake result and resource state from the remote cluster.
-
-#### Scenario: RPC returns remote resource state
-
-- **WHEN** the RPC handler receives a `FederationSyncPeer` request with a valid peer node ID
-- **THEN** the handler SHALL connect to the remote peer using the node's iroh endpoint
-- **AND** the handler SHALL perform a federation handshake
-- **AND** the handler SHALL query `GetResourceState` for discovered resources
-- **AND** the response SHALL include the remote cluster's identity, trust status, and resource heads

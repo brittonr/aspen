@@ -170,10 +170,12 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Fo
     async fn sync_objects(
         &self,
         fed_id: &FederatedId,
-        _want_types: &[String],
-        _have_hashes: &[[u8; 32]],
-        _limit: u32,
+        want_types: &[String],
+        have_hashes: &[[u8; 32]],
+        limit: u32,
     ) -> Result<Vec<SyncObject>, FederationResourceError> {
+        use aspen_cluster::federation::sync::RefEntry;
+
         // Check federation settings first
         let settings = self.load_settings(fed_id).await;
         match &settings {
@@ -186,11 +188,80 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Fo
             _ => {}
         }
 
-        // Object sync for Forge repos is handled by iroh-blobs (content-addressed).
-        // The federation protocol provides ref heads, and the actual git objects
-        // are transferred via iroh-blobs using their content hashes.
-        // Return empty — the caller uses the ref heads to know what to fetch via blobs.
-        Ok(Vec::new())
+        // Only handle "refs" object type — git pack data goes via iroh-blobs
+        if !want_types.iter().any(|t| t == "refs") {
+            return Ok(Vec::new());
+        }
+
+        let repo_hex = Self::repo_id_hex(fed_id);
+        let refs_prefix = format!("{}{}", KV_PREFIX_REFS, repo_hex);
+        let limit = limit.min(MAX_REFS_PER_QUERY);
+
+        let have_set: std::collections::HashSet<[u8; 32]> = have_hashes.iter().copied().collect();
+
+        let scan_req = ScanRequest {
+            prefix: refs_prefix.clone(),
+            limit_results: Some(limit),
+            continuation_token: None,
+        };
+
+        let mut objects = Vec::new();
+        match self.kv.scan(scan_req).await {
+            Ok(result) => {
+                let full_prefix = format!("{}:", refs_prefix);
+                for entry in result.entries {
+                    if objects.len() >= limit as usize {
+                        break;
+                    }
+
+                    let ref_name = entry.key.strip_prefix(&full_prefix).unwrap_or(&entry.key);
+
+                    // Parse the hex-encoded hash
+                    let head_hash = match hex::decode(entry.value.trim()) {
+                        Ok(bytes) if bytes.len() == 32 => {
+                            let mut h = [0u8; 32];
+                            h.copy_from_slice(&bytes);
+                            h
+                        }
+                        _ => continue,
+                    };
+
+                    let ref_entry = RefEntry {
+                        ref_name: ref_name.to_string(),
+                        head_hash,
+                    };
+                    let data = postcard::to_allocvec(&ref_entry).unwrap_or_default();
+                    let hash = blake3::hash(&data).into();
+
+                    // Skip if requester already has this object
+                    if have_set.contains(&hash) {
+                        continue;
+                    }
+
+                    objects.push(SyncObject {
+                        object_type: "ref".to_string(),
+                        hash,
+                        data,
+                        signature: None,
+                        signer: None,
+                    });
+                }
+            }
+            Err(aspen_core::KeyValueStoreError::NotFound { .. }) => {}
+            Err(e) => {
+                return Err(FederationResourceError::Internal {
+                    message: format!("scan refs for sync_objects failed: {e}"),
+                });
+            }
+        }
+
+        debug!(
+            fed_id = %fed_id.short(),
+            ref_count = objects.len(),
+            "sync_objects: returning ref entries"
+        );
+
+        Ok(objects)
     }
 
     async fn resource_exists(&self, fed_id: &FederatedId) -> bool {
@@ -357,6 +428,145 @@ mod tests {
 
         // Now exists
         assert!(resolver.resource_exists(&fed_id).await);
+    }
+
+    // ====================================================================
+    // sync_objects tests
+    // ====================================================================
+
+    /// Helper: set up a federated repo with refs and return (kv, fed_id).
+    async fn setup_federated_repo_with_refs(
+        ref_entries: &[(&str, [u8; 32])],
+    ) -> (Arc<DeterministicKeyValueStore>, FederatedId) {
+        let kv = DeterministicKeyValueStore::new();
+        let fed_id = test_fed_id();
+        let repo_hex = ForgeResourceResolver::<DeterministicKeyValueStore>::repo_id_hex(&fed_id);
+
+        // Create repo
+        kv.write(WriteRequest {
+            command: WriteCommand::Set {
+                key: format!("{}{}", KV_PREFIX_REPOS, repo_hex),
+                value: "{}".to_string(),
+            },
+        })
+        .await
+        .unwrap();
+
+        // Enable federation
+        let settings = FederationSettings::public();
+        kv.write(WriteRequest {
+            command: WriteCommand::Set {
+                key: format!("{}{}", KV_PREFIX_FEDERATION_SETTINGS, fed_id),
+                value: serde_json::to_string(&settings).unwrap(),
+            },
+        })
+        .await
+        .unwrap();
+
+        // Add refs
+        for (ref_name, hash) in ref_entries {
+            kv.write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: format!("{}{}:{}", KV_PREFIX_REFS, repo_hex, ref_name),
+                    value: hex::encode(hash),
+                },
+            })
+            .await
+            .unwrap();
+        }
+
+        (kv, fed_id)
+    }
+
+    #[tokio::test]
+    async fn test_sync_objects_returns_refs() {
+        let refs = [("heads/main", [0x11u8; 32]), ("heads/dev", [0x22u8; 32])];
+        let (kv, fed_id) = setup_federated_repo_with_refs(&refs).await;
+
+        let resolver = ForgeResourceResolver::new(kv);
+        let objects = resolver
+            .sync_objects(&fed_id, &["refs".to_string()], &[], 100)
+            .await
+            .expect("should return objects");
+
+        assert_eq!(objects.len(), 2);
+        for obj in &objects {
+            assert_eq!(obj.object_type, "ref");
+            // Verify BLAKE3 hash matches data
+            let expected_hash: [u8; 32] = blake3::hash(&obj.data).into();
+            assert_eq!(obj.hash, expected_hash);
+            // Verify data deserializes to RefEntry
+            let entry: aspen_cluster::federation::sync::RefEntry =
+                postcard::from_bytes(&obj.data).expect("should deserialize");
+            assert!(entry.ref_name == "heads/main" || entry.ref_name == "heads/dev");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sync_objects_filters_by_have_hashes() {
+        let refs = [("heads/main", [0x11u8; 32]), ("heads/dev", [0x22u8; 32])];
+        let (kv, fed_id) = setup_federated_repo_with_refs(&refs).await;
+
+        let resolver = ForgeResourceResolver::new(Arc::clone(&kv));
+
+        // First fetch to get all objects and their hashes
+        let all_objects = resolver.sync_objects(&fed_id, &["refs".to_string()], &[], 100).await.unwrap();
+        assert_eq!(all_objects.len(), 2);
+
+        // Now fetch again with one hash in have_hashes
+        let have = vec![all_objects[0].hash];
+        let filtered = resolver.sync_objects(&fed_id, &["refs".to_string()], &have, 100).await.unwrap();
+
+        assert_eq!(filtered.len(), 1);
+        assert_ne!(filtered[0].hash, all_objects[0].hash);
+    }
+
+    #[tokio::test]
+    async fn test_sync_objects_respects_limit() {
+        let refs = [
+            ("heads/a", [0x01u8; 32]),
+            ("heads/b", [0x02u8; 32]),
+            ("heads/c", [0x03u8; 32]),
+        ];
+        let (kv, fed_id) = setup_federated_repo_with_refs(&refs).await;
+
+        let resolver = ForgeResourceResolver::new(kv);
+        let objects = resolver.sync_objects(&fed_id, &["refs".to_string()], &[], 2).await.unwrap();
+
+        assert_eq!(objects.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_sync_objects_empty_repo() {
+        let (kv, fed_id) = setup_federated_repo_with_refs(&[]).await;
+
+        let resolver = ForgeResourceResolver::new(kv);
+        let objects = resolver.sync_objects(&fed_id, &["refs".to_string()], &[], 100).await.unwrap();
+
+        assert!(objects.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_sync_objects_ignores_non_ref_types() {
+        let refs = [("heads/main", [0x11u8; 32])];
+        let (kv, fed_id) = setup_federated_repo_with_refs(&refs).await;
+
+        let resolver = ForgeResourceResolver::new(kv);
+        let objects = resolver.sync_objects(&fed_id, &["blobs".to_string()], &[], 100).await.unwrap();
+
+        assert!(objects.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_sync_objects_federation_disabled() {
+        let kv = Arc::new(DeterministicKeyValueStore::new());
+        let fed_id = test_fed_id();
+
+        // No federation settings
+        let resolver = ForgeResourceResolver::new(kv);
+        let result = resolver.sync_objects(&fed_id, &["refs".to_string()], &[], 100).await;
+
+        assert!(matches!(result, Err(FederationResourceError::FederationDisabled { .. })));
     }
 
     #[tokio::test]

@@ -3330,6 +3330,15 @@
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
               };
 
+              # Federation ref-fetch: cross-cluster sync + fetch of ref objects.
+              # Build: nix build .#checks.x86_64-linux.federation-ref-fetch-test
+              federation-ref-fetch-test = import ./nix/tests/federation-ref-fetch.nix {
+                inherit pkgs kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-forge;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+              };
+
               # Net service mesh E2E: SOCKS5 proxy routing through a real Raft cluster.
               # Publishes an HTTP service, routes curl through SOCKS5 proxy over iroh QUIC tunnel.
               # Build: nix build .#checks.x86_64-linux.net-service-mesh-test --impure

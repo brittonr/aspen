@@ -25,6 +25,7 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::UntrustCluster { .. }
         | ClientRpcRequest::FederateRepository { .. }
         | ClientRpcRequest::FederationSyncPeer { .. }
+        | ClientRpcRequest::FederationFetchRefs { .. }
         | ClientRpcRequest::ForgeFetchFederated { .. }
         | ClientRpcRequest::GitBridgePush { .. }
         | ClientRpcRequest::GitBridgePushStart { .. }

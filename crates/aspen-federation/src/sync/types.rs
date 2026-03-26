@@ -221,6 +221,18 @@ pub struct ResourceMetadata {
     pub app_metadata: Vec<u8>,
 }
 
+/// A ref entry transferred during federation sync.
+///
+/// Represents a single ref head (e.g., `heads/main` → commit hash).
+/// Serialized with postcard inside `SyncObject.data` when `object_type == "ref"`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RefEntry {
+    /// Ref name (e.g., "heads/main", "tags/v1.0").
+    pub ref_name: String,
+    /// Commit hash this ref points to.
+    pub head_hash: [u8; 32],
+}
+
 /// A synced object.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncObject {
