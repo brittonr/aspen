@@ -14,6 +14,8 @@ use crate::output::ClusterStateOutput;
 use crate::output::DeployInitOutput;
 use crate::output::DeployNodeStatusEntry;
 use crate::output::DeployStatusOutput;
+use crate::output::DeployWaitFinalOutput;
+use crate::output::DeployWaitOutput;
 use crate::output::HealthOutput;
 use crate::output::NodeInfo;
 use crate::output::RaftMetricsOutput;
@@ -131,6 +133,14 @@ pub struct DeployArgs {
     /// Seconds to wait for a node to become healthy after upgrade.
     #[arg(long, default_value_t = 120)]
     pub health_timeout: u64,
+
+    /// Block until the deployment reaches a terminal state (completed/failed/rolled_back).
+    #[arg(long)]
+    pub wait: bool,
+
+    /// Maximum seconds to wait for deployment completion (requires --wait).
+    #[arg(long = "deploy-timeout", default_value_t = 3600)]
+    pub deploy_timeout: u64,
 }
 
 impl ClusterCommand {
@@ -459,6 +469,9 @@ async fn get_ticket(client: &AspenClient, json: bool) -> Result<()> {
 }
 
 async fn deploy(client: &AspenClient, args: DeployArgs, json: bool) -> Result<()> {
+    let wait = args.wait;
+    let timeout_secs = args.deploy_timeout;
+
     let response = client
         .send(ClientRpcRequest::ClusterDeploy {
             artifact: args.artifact,
@@ -484,9 +497,11 @@ async fn deploy(client: &AspenClient, args: DeployArgs, json: bool) -> Result<()
 
             print_output(&output, json);
 
-            // Poll for progress until terminal state
-            let deploy_id = result.deploy_id;
-            poll_deploy_progress(client, deploy_id.as_deref(), json).await
+            if wait {
+                deploy_wait(client, result.deploy_id.as_deref(), timeout_secs, json).await
+            } else {
+                Ok(())
+            }
         }
         ClientRpcResponse::Error(e) => {
             anyhow::bail!("{}: {}", e.code, e.message)
@@ -551,74 +566,166 @@ async fn rollback(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-/// Poll deployment status until a terminal state is reached.
-async fn poll_deploy_progress(client: &AspenClient, deploy_id: Option<&str>, json: bool) -> Result<()> {
-    // Matches aspen_constants::DEPLOY_STATUS_POLL_INTERVAL_SECS
-    const POLL_INTERVAL_SECS: u64 = 5;
+/// Poll deployment status until a terminal state or timeout.
+///
+/// Diffs per-node statuses against a snapshot and prints transitions.
+/// Returns `Ok(())` on completed, `Err` on failed/rolled_back/timeout.
+/// Exit codes (handled by caller or process): 0=completed, 1=failed, 2=timeout.
+async fn deploy_wait(client: &AspenClient, deploy_id: Option<&str>, timeout_secs: u64, json: bool) -> Result<()> {
+    use std::collections::HashMap;
 
+    const POLL_INTERVAL_SECS: u64 = 5;
     let interval = std::time::Duration::from_secs(POLL_INTERVAL_SECS);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+
+    // Track per-node status for diff-based output.
+    let mut prev_statuses: HashMap<u64, String> = HashMap::new();
+    // Count consecutive RPC errors to distinguish transient from persistent failures.
+    let mut consecutive_errors: u32 = 0;
+    const MAX_CONSECUTIVE_ERRORS: u32 = 12; // 60s at 5s intervals
 
     loop {
         tokio::time::sleep(interval).await;
 
-        let response = client.send(ClientRpcRequest::ClusterDeployStatus).await?;
+        // Check timeout.
+        if tokio::time::Instant::now() >= deadline {
+            let final_nodes: Vec<DeployNodeStatusEntry> = prev_statuses
+                .iter()
+                .map(|(id, status)| DeployNodeStatusEntry {
+                    node_id: *id,
+                    status: status.clone(),
+                    error: None,
+                })
+                .collect();
+            let output = DeployWaitFinalOutput {
+                deploy_id: deploy_id.map(String::from),
+                status: "timeout".to_string(),
+                elapsed_secs: timeout_secs,
+                nodes: final_nodes,
+                error: Some(format!("timed out after {}s", timeout_secs)),
+            };
+            print_output(&output, json);
+            // Exit code 2 for timeout — caller uses process::exit(2).
+            std::process::exit(2);
+        }
+
+        let response = match client.send(ClientRpcRequest::ClusterDeployStatus).await {
+            Ok(r) => {
+                consecutive_errors = 0;
+                r
+            }
+            Err(e) => {
+                consecutive_errors += 1;
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
+                    anyhow::bail!("lost connection to cluster after {} consecutive errors: {}", consecutive_errors, e);
+                }
+                if !json {
+                    eprintln!(
+                        "warning: status poll error (retry {}/{}): {}",
+                        consecutive_errors, MAX_CONSECUTIVE_ERRORS, e
+                    );
+                }
+                continue;
+            }
+        };
 
         match response {
             ClientRpcResponse::ClusterDeployStatusResult(result) => {
                 if !result.is_found {
-                    // Deployment disappeared (completed and archived)
-                    if !json {
-                        println!("Deployment completed");
-                    }
+                    // Deployment completed and was archived before we could see it.
+                    let output = DeployWaitFinalOutput {
+                        deploy_id: deploy_id.map(String::from),
+                        status: "completed".to_string(),
+                        elapsed_secs: 0,
+                        nodes: vec![],
+                        error: None,
+                    };
+                    print_output(&output, json);
                     return Ok(());
                 }
 
-                // Only show progress for the deployment we initiated
+                // Verify we're tracking the right deployment.
                 if let (Some(expected), Some(actual)) = (deploy_id, &result.deploy_id) {
                     if expected != actual {
                         anyhow::bail!("deployment ID mismatch: expected {}, found {}", expected, actual);
                     }
                 }
 
-                let status = result.status.as_deref().unwrap_or("unknown");
                 let elapsed_secs = result.elapsed_ms.unwrap_or(0) / 1000;
 
-                if !json {
-                    // Print per-node progress
-                    let node_summary: String = result
-                        .nodes
-                        .iter()
-                        .map(|n| format!("  node {}: {}", n.node_id, n.status))
-                        .collect::<Vec<_>>()
-                        .join("\n");
-                    println!("[{}s] status: {}\n{}", elapsed_secs, status, node_summary);
+                // Emit per-node status diffs.
+                for node in &result.nodes {
+                    let prev = prev_statuses.get(&node.node_id).cloned().unwrap_or_default();
+                    if prev != node.status {
+                        let transition = DeployWaitOutput {
+                            node_id: node.node_id,
+                            old_status: prev,
+                            new_status: node.status.clone(),
+                            error: node.error.clone(),
+                            elapsed_secs,
+                        };
+                        print_output(&transition, json);
+                        prev_statuses.insert(node.node_id, node.status.clone());
+                    }
                 }
 
-                // Check for terminal states
+                // Check terminal states.
+                let status = result.status.as_deref().unwrap_or("unknown");
                 match status {
                     "completed" => {
-                        if !json {
-                            println!("Deployment completed successfully");
-                        }
+                        let output = DeployWaitFinalOutput {
+                            deploy_id: deploy_id.map(String::from),
+                            status: "completed".to_string(),
+                            elapsed_secs,
+                            nodes: result
+                                .nodes
+                                .iter()
+                                .map(|n| DeployNodeStatusEntry {
+                                    node_id: n.node_id,
+                                    status: n.status.clone(),
+                                    error: n.error.clone(),
+                                })
+                                .collect(),
+                            error: None,
+                        };
+                        print_output(&output, json);
                         return Ok(());
                     }
-                    "failed" => {
-                        let err_msg = result.error.as_deref().unwrap_or("unknown failure");
-                        anyhow::bail!("deployment failed: {}", err_msg);
+                    "failed" | "rolled_back" => {
+                        let output = DeployWaitFinalOutput {
+                            deploy_id: deploy_id.map(String::from),
+                            status: status.to_string(),
+                            elapsed_secs,
+                            nodes: result
+                                .nodes
+                                .iter()
+                                .map(|n| DeployNodeStatusEntry {
+                                    node_id: n.node_id,
+                                    status: n.status.clone(),
+                                    error: n.error.clone(),
+                                })
+                                .collect(),
+                            error: result.error.clone(),
+                        };
+                        print_output(&output, json);
+                        anyhow::bail!("deployment {}: {}", status, result.error.as_deref().unwrap_or("unknown error"));
                     }
-                    "rolled_back" => {
-                        anyhow::bail!("deployment was rolled back");
-                    }
-                    _ => {
-                        // Still in progress (pending, deploying, rolling_back)
-                    }
+                    _ => { /* still in progress */ }
                 }
             }
             ClientRpcResponse::Error(e) => {
                 if e.code.contains("DEPLOY_UNAVAILABLE") {
                     anyhow::bail!("deploy feature not enabled on server");
                 }
-                // Transient errors — keep polling
+                consecutive_errors += 1;
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
+                    anyhow::bail!(
+                        "lost connection to cluster after {} consecutive RPC errors: {}: {}",
+                        consecutive_errors,
+                        e.code,
+                        e.message
+                    );
+                }
                 if !json {
                     eprintln!("warning: status poll error: {}: {}", e.code, e.message);
                 }
@@ -741,5 +848,135 @@ mod tests {
             "val",
         ]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cluster_deploy_wait_flag() {
+        let result = Cli::try_parse_from([
+            "aspen-cli",
+            "cluster",
+            "deploy",
+            "/nix/store/abc123-aspen-node",
+            "--wait",
+        ]);
+        assert!(result.is_ok(), "parse failed: {:?}", result.err());
+
+        let cli = result.unwrap();
+        match cli.command {
+            crate::cli::Commands::Cluster(cmd) => match cmd {
+                ClusterCommand::Deploy(args) => {
+                    assert!(args.wait);
+                    assert_eq!(args.deploy_timeout, 3600); // default
+                }
+                other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
+            },
+            other => panic!("expected Cluster, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+
+    #[test]
+    fn test_cluster_deploy_wait_with_timeout() {
+        let result = Cli::try_parse_from([
+            "aspen-cli",
+            "cluster",
+            "deploy",
+            "/nix/store/abc123-aspen-node",
+            "--wait",
+            "--deploy-timeout",
+            "120",
+        ]);
+        assert!(result.is_ok(), "parse failed: {:?}", result.err());
+
+        let cli = result.unwrap();
+        match cli.command {
+            crate::cli::Commands::Cluster(cmd) => match cmd {
+                ClusterCommand::Deploy(args) => {
+                    assert!(args.wait);
+                    assert_eq!(args.deploy_timeout, 120);
+                }
+                other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
+            },
+            other => panic!("expected Cluster, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+
+    #[test]
+    fn test_cluster_deploy_timeout_without_wait() {
+        // --timeout without --wait should parse fine (ignored at runtime)
+        let result = Cli::try_parse_from([
+            "aspen-cli",
+            "cluster",
+            "deploy",
+            "/nix/store/abc123-aspen-node",
+            "--deploy-timeout",
+            "60",
+        ]);
+        assert!(result.is_ok(), "parse failed: {:?}", result.err());
+
+        let cli = result.unwrap();
+        match cli.command {
+            crate::cli::Commands::Cluster(cmd) => match cmd {
+                ClusterCommand::Deploy(args) => {
+                    assert!(!args.wait);
+                    assert_eq!(args.deploy_timeout, 60);
+                }
+                other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
+            },
+            other => panic!("expected Cluster, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+
+    #[test]
+    fn test_cluster_deploy_wait_defaults_no_wait() {
+        let result = Cli::try_parse_from(["aspen-cli", "cluster", "deploy", "blobhash123"]);
+        assert!(result.is_ok());
+
+        let cli = result.unwrap();
+        match cli.command {
+            crate::cli::Commands::Cluster(cmd) => match cmd {
+                ClusterCommand::Deploy(args) => {
+                    assert!(!args.wait);
+                    assert_eq!(args.deploy_timeout, 3600);
+                }
+                other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
+            },
+            other => panic!("expected Cluster, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+
+    #[test]
+    fn test_cluster_deploy_all_flags_with_wait() {
+        let result = Cli::try_parse_from([
+            "aspen-cli",
+            "cluster",
+            "deploy",
+            "/nix/store/abc",
+            "--strategy",
+            "rolling",
+            "--max-concurrent",
+            "2",
+            "--health-timeout",
+            "60",
+            "--wait",
+            "--deploy-timeout",
+            "900",
+        ]);
+        assert!(result.is_ok(), "parse failed: {:?}", result.err());
+
+        let cli = result.unwrap();
+        match cli.command {
+            crate::cli::Commands::Cluster(cmd) => match cmd {
+                ClusterCommand::Deploy(args) => {
+                    assert_eq!(args.artifact, "/nix/store/abc");
+                    assert_eq!(args.strategy, "rolling");
+                    assert_eq!(args.max_concurrent, 2);
+                    assert_eq!(args.health_timeout, 60);
+                    assert!(args.wait);
+                    assert_eq!(args.deploy_timeout, 900);
+                }
+                other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
+            },
+            other => panic!("expected Cluster, got {:?}", std::mem::discriminant(&other)),
+        }
     }
 }

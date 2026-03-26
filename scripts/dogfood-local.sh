@@ -82,103 +82,6 @@ cli_node_json() {
   "$ASPEN_CLI" --ticket "$ticket" --timeout 5000 --json "$@"
 }
 
-# ── Raft Health Gate ──────────────────────────────────────────────────
-#
-# After restarting a node, wait until it has:
-#   1. Responded to health RPC (process is up and listening)
-#   2. Joined the Raft group (is_initialized=true, knows a leader)
-#   3. Caught up on log replication (last_applied is advancing)
-#
-# This prevents moving to the next node in a rolling deploy before the
-# restarted node is actually participating in consensus.
-
-wait_node_rejoined() {
-  local node_id="$1"
-  local timeout_secs="${2:-60}"
-  local start_time=$SECONDS
-
-  log "Waiting for node $node_id to rejoin Raft (timeout: ${timeout_secs}s)..."
-
-  local prev_applied=0
-  local has_leader=false
-  local is_initialized=false
-  local caught_up=false
-
-  while [ $((SECONDS - start_time)) -lt "$timeout_secs" ]; do
-    # Phase 1: Can we reach the node at all?
-    local health_out
-    health_out=$(cli_node_json "$node_id" cluster health 2>&1) || {
-      sleep 2
-      continue
-    }
-
-    # Phase 2: Is the node initialized? (status=healthy implies initialized)
-    local node_status
-    node_status=$(parse_json "d.get('status', '')" <<< "$health_out" 2>/dev/null) || true
-    if [ "$node_status" != "healthy" ]; then
-      sleep 2
-      continue
-    fi
-    if [ "$is_initialized" != "true" ]; then
-      is_initialized=true
-      ok "Node $node_id: initialized (status=$node_status)"
-    fi
-
-    # Phase 3: Does the node know who the leader is?
-    local metrics_out
-    metrics_out=$(cli_node_json "$node_id" cluster metrics 2>&1) || {
-      sleep 2
-      continue
-    }
-
-    local leader
-    leader=$(parse_json "d.get('current_leader', '')" <<< "$metrics_out" 2>/dev/null) || true
-    if [ -z "$leader" ] || [ "$leader" = "None" ] || [ "$leader" = "null" ]; then
-      sleep 2
-      continue
-    fi
-    if [ "$has_leader" != "true" ]; then
-      has_leader=true
-      ok "Node $node_id: sees leader=$leader"
-    fi
-
-    # Phase 4: Is the node caught up? (last_applied advancing or at leader's level)
-    local applied
-    applied=$(parse_json "d.get('last_applied', 0)" <<< "$metrics_out" 2>/dev/null) || applied=0
-
-    if [ "$applied" -gt 0 ] 2>/dev/null; then
-      if [ "$applied" -ge "$prev_applied" ] && [ "$prev_applied" -gt 0 ]; then
-        caught_up=true
-      fi
-      prev_applied="$applied"
-    fi
-
-    # For single-node clusters, initialized + has_leader is sufficient
-    if [ "$NODE_COUNT" -eq 1 ]; then
-      ok "Node $node_id: rejoined Raft (single-node, applied=$applied)"
-      return 0
-    fi
-
-    # For multi-node: need to see that the node is caught up
-    if [ "$caught_up" = "true" ]; then
-      ok "Node $node_id: rejoined Raft (applied=$applied, leader=$leader)"
-      return 0
-    fi
-
-    # Also accept if applied is already high (node had state from before restart)
-    if [ "$applied" -gt 0 ] 2>/dev/null && [ "$has_leader" = "true" ]; then
-      ok "Node $node_id: rejoined Raft (applied=$applied, leader=$leader)"
-      return 0
-    fi
-
-    sleep 2
-  done
-
-  local elapsed=$((SECONDS - start_time))
-  warn "Node $node_id: rejoin timed out after ${elapsed}s (initialized=$is_initialized, leader=$has_leader, applied=$prev_applied)"
-  return 1
-}
-
 # ── Post-Deploy Cluster Assertion ─────────────────────────────────────
 #
 # After all nodes are upgraded, verify the cluster is actually healthy:
@@ -1190,170 +1093,48 @@ print('')
   fi
   ok "CI-built binary validated: $ci_bin"
 
-  # ── Step 3: Script-level rolling deploy ──────────────────────────
+  # ── Step 3: Deploy via cluster deploy RPC ────────────────────────
   #
-  # For single-node: stop then restart (DeploymentCoordinator can't
-  # self-upgrade because it kills itself mid-flight).
-  #
-  # For multi-node: followers first, leader last. After each node
-  # restart, wait for the cluster to remain healthy before proceeding.
-  # This preserves quorum throughout the upgrade.
+  # Uses the DeploymentCoordinator's rolling upgrade path:
+  # follower-first ordering, quorum safety, drain/health lifecycle.
+  # The --wait flag blocks until the deployment reaches a terminal state.
 
-  # Build deploy order: followers first, leader last
-  local deploy_order=()
+  local deploy_timeout=1200
   if [ "$NODE_COUNT" -gt 1 ]; then
-    local leader_id
-    leader_id=$(parse_json "next((n.get('node_id',0) for n in d.get('nodes',[]) if n.get('is_leader')), 1)" <<< "$(cli_json cluster status 2>&1)") || leader_id=""
-    leader_id="${leader_id:-1}"
-    log "Current leader: node $leader_id (will be upgraded last)"
-
-    for i in $(seq 1 "$NODE_COUNT"); do
-      if [ "$i" -ne "$leader_id" ]; then
-        deploy_order+=("$i")
-      fi
-    done
-    deploy_order+=("$leader_id")
-  else
-    deploy_order=(1)
+    deploy_timeout=1800
   fi
 
-  log "Deploy order: ${deploy_order[*]}"
-
-  for i in "${deploy_order[@]}"; do
-    local pid
-    pid=$(cat "$CLUSTER_DIR/node$i.pid" 2>/dev/null || true)
-
-    if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
-      warn "Node $i not running (PID $pid), skipping stop"
-    else
-      log "Stopping node $i (PID $pid) for binary upgrade..."
-      kill "$pid" 2>/dev/null || true
-
-      # Wait for the process to actually exit
-      local wait_count=0
-      while kill -0 "$pid" 2>/dev/null && [ $wait_count -lt 15 ]; do
-        sleep 1
-        wait_count=$((wait_count + 1))
-      done
-
-      if kill -0 "$pid" 2>/dev/null; then
-        warn "Node $i didn't stop gracefully, sending SIGKILL"
-        kill -9 "$pid" 2>/dev/null || true
-        sleep 1
-      fi
-
-      ok "Node $i stopped"
+  log "Starting rolling deployment via cluster deploy RPC..."
+  if ! cli cluster deploy "$store_path" --wait --deploy-timeout "$deploy_timeout"; then
+    local exit_code=$?
+    err "Cluster deploy failed (exit code: $exit_code)"
+    if [ $exit_code -eq 2 ]; then
+      err "Deploy timed out after ${deploy_timeout}s"
     fi
+    # Show deploy status for debugging
+    cli cluster deploy-status 2>/dev/null || true
+    return 1
+  fi
 
-    # Read the iroh secret key used at start (deterministic from node id)
-    local key
-    key=$(printf '%064x' $((2000 + i)))
+  ok "Cluster deploy completed successfully"
 
-    log "Starting node $i with CI-built binary..."
-
-    # Restart with the same flags as do_start but using the CI binary.
-    # Data directory is preserved so Raft state and KV data persist.
-    ASPEN_DOCS_ENABLED=true \
-    ASPEN_DOCS_IN_MEMORY=true \
-    ASPEN_HOOKS_ENABLED=true \
-    "$ci_bin" \
-      --node-id "$i" \
-      --data-dir "$CLUSTER_DIR/node$i" \
-      --cookie "$COOKIE" \
-      --iroh-secret-key "$key" \
-      --disable-mdns \
-      --heartbeat-interval-ms 500 \
-      --election-timeout-min-ms 1500 \
-      --election-timeout-max-ms 3000 \
-      --enable-workers \
-      --enable-ci \
-      --ci-auto-trigger \
-      >> "$CLUSTER_DIR/node$i.log" 2>&1 &
-    echo $! > "$CLUSTER_DIR/node$i.pid"
-
-    # Wait for this node's ticket file to appear (proves it started)
-    local ticket_retries=30
-    while [ $ticket_retries -gt 0 ]; do
-      if [ -f "$CLUSTER_DIR/node$i/cluster-ticket.txt" ]; then
-        break
-      fi
-      sleep 1
-      ticket_retries=$((ticket_retries - 1))
-    done
-
-    local new_pid
-    new_pid=$(cat "$CLUSTER_DIR/node$i.pid" 2>/dev/null || true)
-    if [ -n "$new_pid" ] && kill -0 "$new_pid" 2>/dev/null; then
-      ok "Node $i (PID $new_pid): restarted with CI-built binary"
-    else
-      err "Node $i failed to restart — check $CLUSTER_DIR/node$i.log"
-      tail -10 "$CLUSTER_DIR/node$i.log" 2>/dev/null
-      return 1
-    fi
-
-    # NOTE: Per-node address re-announce removed. The post-deploy sweep
-    # below uses update-peer to push every node's address to every other
-    # node — no Raft consensus needed, works even when followers can't
-    # reach the leader.
-
-    # Wait for this node to rejoin Raft before moving to the next one.
-    # Single-node: quick check (just needs to be initialized).
-    # Multi-node: full rejoin gate (initialized + leader + caught up).
-    if ! wait_node_rejoined "$i" 60; then
-      err "Node $i failed to rejoin Raft — aborting deploy"
-      tail -20 "$CLUSTER_DIR/node$i.log" 2>/dev/null
-      return 1
-    fi
-  done
-
-  # ── Step 4: Post-deploy cluster assertion ───────────────────────
+  # ── Step 4: Post-deploy liveness check ───────────────────────────
   #
-  # All nodes are upgraded. Now verify the cluster is actually working:
-  # leader agreement, KV write/read round-trip, voter status.
+  # The DeploymentCoordinator already verified health during the deploy,
+  # but do a quick sanity check that all node processes are still running
+  # and the cluster is responsive.
 
-  log "Verifying final cluster state..."
+  log "Post-deploy liveness check..."
 
-  # Verify all nodes are alive
   for i in $(seq 1 "$NODE_COUNT"); do
     local pid
     pid=$(cat "$CLUSTER_DIR/node$i.pid" 2>/dev/null || true)
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-      ok "Node $i (PID $pid): running with CI-built binary"
+      ok "Node $i (PID $pid): running"
     else
-      err "Node $i failed to restart — check $CLUSTER_DIR/node$i.log"
-      return 1
+      warn "Node $i: PID file stale (expected after binary restart)"
     fi
   done
-
-  # Full address sweep: push every node's address to every OTHER node.
-  # Each node got a new iroh port on restart. update-peer operates on
-  # each node's local network factory — no Raft consensus, no leader
-  # required. This fixes the problem where add-learner (a Raft write)
-  # couldn't reach the leader after all nodes restarted.
-  if [ "$NODE_COUNT" -gt 1 ]; then
-    log "Updating peer addresses across all nodes..."
-    local strip_ansi='sed s/\x1b\[[0-9;]*m//g'
-    sleep 5
-
-    for i in $(seq 1 "$NODE_COUNT"); do
-      local new_endpoint new_addr
-      new_endpoint=$(grep "created Iroh endpoint" "$CLUSTER_DIR/node$i.log" \
-        | tail -1 | $strip_ansi | grep -oP 'endpoint_id=\K[a-f0-9]+')
-      new_addr=$(grep "direct_addrs" "$CLUSTER_DIR/node$i.log" \
-        | tail -1 | $strip_ansi | grep -oP '\d+\.\d+\.\d+\.\d+:\d+' | head -1)
-      if [ -n "$new_endpoint" ] && [ -n "$new_addr" ]; then
-        # Tell every OTHER node about this node's current address
-        for other in $(seq 1 "$NODE_COUNT"); do
-          [ "$other" -eq "$i" ] && continue
-          cli_node "$other" cluster update-peer --node-id "$i" \
-            --addr "{\"id\":\"$new_endpoint\",\"addrs\":[{\"Ip\":\"$new_addr\"}]}" 2>/dev/null \
-            && ok "Node $other: updated address for node $i ($new_addr)" \
-            || warn "Node $other: failed to update address for node $i"
-        done
-      fi
-    done
-    sleep 3
-  fi
 
   if ! assert_cluster_healthy 90; then
     err "Post-deploy cluster assertion failed"
@@ -1361,10 +1142,8 @@ print('')
   fi
 
   # Restart cache gateway with fresh ticket (node addresses may have changed)
-  if [ "$NODE_COUNT" -gt 1 ]; then
-    stop_cache_gateway
-    start_cache_gateway
-  fi
+  stop_cache_gateway
+  start_cache_gateway
 
   return 0
 }

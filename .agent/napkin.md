@@ -70,6 +70,13 @@
 | VM `nix build` needs `writableStoreUseTmpfs = false` + 20GB+ disk | Default tmpfs limits to ~50% RAM |
 | `nix.settings.experimental-features = ["nix-command" "flakes"]` | Required for `nix build` in VMs |
 
+### Deploy / Dogfood
+
+| Date | What Went Wrong | What To Do Instead |
+|------|----------------|-------------------|
+| 2026-03-25 | `--timeout` on DeployArgs conflicted with global `--timeout` (RPC timeout) | Use `--deploy-timeout` (long = "deploy-timeout") for deploy-specific timeout. Global `--timeout` is `timeout_ms` |
+| 2026-03-25 | Dogfood script `do_deploy` reimplemented rolling deploy in ~200 lines of bash | Use `cli cluster deploy --wait --deploy-timeout N` — let `DeploymentCoordinator` handle node ordering, quorum safety, drain, health |
+
 ### Iroh / Networking
 
 | Date | Issue | Resolution |

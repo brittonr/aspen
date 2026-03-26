@@ -1842,6 +1842,169 @@ mod tests {
         };
         assert_outputable(&patch_detail);
     }
+
+    // =============================================================================
+    // Deploy Wait Output Tests
+    // =============================================================================
+
+    #[test]
+    fn test_deploy_wait_output_human_normal_transition() {
+        let output = DeployWaitOutput {
+            node_id: 2,
+            old_status: "pending".to_string(),
+            new_status: "draining".to_string(),
+            error: None,
+            elapsed_secs: 15,
+        };
+        let human = output.to_human();
+        assert!(human.contains("[15s]"), "got: {human}");
+        assert!(human.contains("node 2"), "got: {human}");
+        assert!(human.contains("draining"), "got: {human}");
+    }
+
+    #[test]
+    fn test_deploy_wait_output_human_healthy_checkmark() {
+        let output = DeployWaitOutput {
+            node_id: 1,
+            old_status: "restarting".to_string(),
+            new_status: "healthy".to_string(),
+            error: None,
+            elapsed_secs: 30,
+        };
+        let human = output.to_human();
+        assert!(human.contains("✓"), "healthy should have checkmark, got: {human}");
+    }
+
+    #[test]
+    fn test_deploy_wait_output_human_failure_with_error() {
+        let output = DeployWaitOutput {
+            node_id: 3,
+            old_status: "upgrading".to_string(),
+            new_status: "failed".to_string(),
+            error: Some("health check timeout".to_string()),
+            elapsed_secs: 120,
+        };
+        let human = output.to_human();
+        assert!(human.contains("health check timeout"), "got: {human}");
+        assert!(human.contains("node 3"), "got: {human}");
+    }
+
+    #[test]
+    fn test_deploy_wait_output_json_structure() {
+        let output = DeployWaitOutput {
+            node_id: 1,
+            old_status: "pending".to_string(),
+            new_status: "draining".to_string(),
+            error: None,
+            elapsed_secs: 5,
+        };
+        let json = output.to_json();
+        assert_eq!(json["event"], "node_status_change");
+        assert_eq!(json["node_id"], 1);
+        assert_eq!(json["old_status"], "pending");
+        assert_eq!(json["new_status"], "draining");
+        assert_eq!(json["elapsed_secs"], 5);
+        assert!(json["error"].is_null());
+    }
+
+    #[test]
+    fn test_deploy_wait_final_output_completed() {
+        let output = DeployWaitFinalOutput {
+            deploy_id: Some("deploy-12345".to_string()),
+            status: "completed".to_string(),
+            elapsed_secs: 45,
+            nodes: vec![
+                DeployNodeStatusEntry {
+                    node_id: 1,
+                    status: "healthy".to_string(),
+                    error: None,
+                },
+                DeployNodeStatusEntry {
+                    node_id: 2,
+                    status: "healthy".to_string(),
+                    error: None,
+                },
+            ],
+            error: None,
+        };
+        let human = output.to_human();
+        assert!(human.contains("completed"), "got: {human}");
+        assert!(human.contains("45s"), "got: {human}");
+        assert!(human.contains("node 1: healthy"), "got: {human}");
+    }
+
+    #[test]
+    fn test_deploy_wait_final_output_failed() {
+        let output = DeployWaitFinalOutput {
+            deploy_id: Some("deploy-99".to_string()),
+            status: "failed".to_string(),
+            elapsed_secs: 80,
+            nodes: vec![
+                DeployNodeStatusEntry {
+                    node_id: 1,
+                    status: "healthy".to_string(),
+                    error: None,
+                },
+                DeployNodeStatusEntry {
+                    node_id: 2,
+                    status: "failed".to_string(),
+                    error: Some("timeout".to_string()),
+                },
+            ],
+            error: Some("node 2 failed health check".to_string()),
+        };
+        let human = output.to_human();
+        assert!(human.contains("failed"), "got: {human}");
+        assert!(human.contains("node 2 failed health check"), "got: {human}");
+        assert!(human.contains("node 2: failed — timeout"), "got: {human}");
+    }
+
+    #[test]
+    fn test_deploy_wait_final_output_timeout() {
+        let output = DeployWaitFinalOutput {
+            deploy_id: Some("deploy-77".to_string()),
+            status: "timeout".to_string(),
+            elapsed_secs: 3600,
+            nodes: vec![
+                DeployNodeStatusEntry {
+                    node_id: 1,
+                    status: "healthy".to_string(),
+                    error: None,
+                },
+                DeployNodeStatusEntry {
+                    node_id: 2,
+                    status: "upgrading".to_string(),
+                    error: None,
+                },
+            ],
+            error: Some("timed out after 3600s".to_string()),
+        };
+        let human = output.to_human();
+        assert!(human.contains("timed out"), "got: {human}");
+        assert!(human.contains("3600s"), "got: {human}");
+    }
+
+    #[test]
+    fn test_deploy_wait_final_output_json_structure() {
+        let output = DeployWaitFinalOutput {
+            deploy_id: Some("deploy-42".to_string()),
+            status: "completed".to_string(),
+            elapsed_secs: 30,
+            nodes: vec![DeployNodeStatusEntry {
+                node_id: 1,
+                status: "healthy".to_string(),
+                error: None,
+            }],
+            error: None,
+        };
+        let json = output.to_json();
+        assert_eq!(json["event"], "deploy_complete");
+        assert_eq!(json["deploy_id"], "deploy-42");
+        assert_eq!(json["status"], "completed");
+        assert_eq!(json["elapsed_secs"], 30);
+        assert_eq!(json["nodes"][0]["node_id"], 1);
+        assert_eq!(json["nodes"][0]["status"], "healthy");
+    }
 }
 
 /// Health status output.
@@ -3030,6 +3193,102 @@ impl Outputable for RollbackOutput {
         } else {
             format!("Rollback rejected: {}", self.error.as_deref().unwrap_or("unknown error"))
         }
+    }
+}
+
+/// Per-node status transition emitted during `cluster deploy --wait`.
+pub struct DeployWaitOutput {
+    /// Node that changed status.
+    pub node_id: u64,
+    /// Previous status (empty string for first observation).
+    pub old_status: String,
+    /// New status.
+    pub new_status: String,
+    /// Error message if the node failed.
+    pub error: Option<String>,
+    /// Elapsed seconds since deployment started.
+    pub elapsed_secs: u64,
+}
+
+impl Outputable for DeployWaitOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "event": "node_status_change",
+            "node_id": self.node_id,
+            "old_status": self.old_status,
+            "new_status": self.new_status,
+            "error": self.error,
+            "elapsed_secs": self.elapsed_secs,
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let suffix = if let Some(err) = &self.error {
+            format!(" — {}", err)
+        } else if self.new_status == "healthy" {
+            " ✓".to_string()
+        } else {
+            String::new()
+        };
+        format!("[{}s] node {}: {}{}", self.elapsed_secs, self.node_id, self.new_status, suffix)
+    }
+}
+
+/// Terminal result emitted when `cluster deploy --wait` finishes.
+pub struct DeployWaitFinalOutput {
+    /// Deploy ID.
+    pub deploy_id: Option<String>,
+    /// Terminal status: "completed", "failed", "rolled_back", or "timeout".
+    pub status: String,
+    /// Elapsed seconds.
+    pub elapsed_secs: u64,
+    /// Per-node final statuses.
+    pub nodes: Vec<DeployNodeStatusEntry>,
+    /// Error message if failed/timeout.
+    pub error: Option<String>,
+}
+
+impl Outputable for DeployWaitFinalOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "event": "deploy_complete",
+            "deploy_id": self.deploy_id,
+            "status": self.status,
+            "elapsed_secs": self.elapsed_secs,
+            "nodes": self.nodes.iter().map(|n| {
+                serde_json::json!({
+                    "node_id": n.node_id,
+                    "status": n.status,
+                    "error": n.error,
+                })
+            }).collect::<Vec<_>>(),
+            "error": self.error,
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let mut lines = Vec::new();
+        match self.status.as_str() {
+            "completed" => {
+                lines.push(format!("Deployment completed ({}s)", self.elapsed_secs));
+            }
+            "timeout" => {
+                lines.push(format!("Deployment timed out after {}s", self.elapsed_secs));
+            }
+            other => {
+                let err = self.error.as_deref().unwrap_or("unknown error");
+                lines.push(format!("Deployment {}: {} ({}s)", other, err, self.elapsed_secs));
+            }
+        }
+
+        if !self.nodes.is_empty() {
+            for node in &self.nodes {
+                let err_suffix = node.error.as_deref().map(|e| format!(" — {}", e)).unwrap_or_default();
+                lines.push(format!("  node {}: {}{}", node.node_id, node.status, err_suffix));
+            }
+        }
+
+        lines.join("\n")
     }
 }
 
