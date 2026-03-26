@@ -31,11 +31,13 @@ use crate::types::FederatedId;
 pub async fn connect_to_cluster(
     endpoint: &Endpoint,
     our_identity: &ClusterIdentity,
-    peer_id: iroh::PublicKey,
+    peer_addr: impl Into<iroh::EndpointAddr>,
 ) -> Result<(Connection, SignedClusterIdentity)> {
     // Connect to peer
-    let connection =
-        endpoint.connect(peer_id, FEDERATION_ALPN).await.context("failed to connect to federated cluster")?;
+    let connection = endpoint
+        .connect(peer_addr, FEDERATION_ALPN)
+        .await
+        .context("failed to connect to federated cluster")?;
 
     // Open a stream for handshake
     let (mut send, mut recv) = connection.open_bi().await.context("failed to open handshake stream")?;

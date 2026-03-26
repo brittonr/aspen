@@ -165,6 +165,11 @@ async fn handle_get_health(ctx: &ClientProtocolContext) -> anyhow::Result<Client
         Err(_) => ("unhealthy", false, None),
     };
 
+    let iroh_node_id = {
+        let peer_id = ctx.endpoint_manager.peer_id().await;
+        if peer_id.is_empty() { None } else { Some(peer_id) }
+    };
+
     Ok(ClientRpcResponse::Health(HealthResponse {
         status: status.to_string(),
         node_id: ctx.node_id,
@@ -172,6 +177,7 @@ async fn handle_get_health(ctx: &ClientProtocolContext) -> anyhow::Result<Client
         uptime_seconds,
         is_initialized,
         membership_node_count,
+        iroh_node_id,
     }))
 }
 

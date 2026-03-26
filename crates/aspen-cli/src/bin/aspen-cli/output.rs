@@ -70,6 +70,7 @@ mod tests {
             node_id: 1,
             raft_node_id: Some(42),
             uptime_seconds: 3600,
+            iroh_node_id: None,
         };
 
         let json = output.to_json();
@@ -86,6 +87,7 @@ mod tests {
             node_id: 2,
             raft_node_id: None,
             uptime_seconds: 0,
+            iroh_node_id: None,
         };
 
         let json = output.to_json();
@@ -799,6 +801,7 @@ mod tests {
             node_id: 1,
             raft_node_id: Some(42),
             uptime_seconds: 3600,
+            iroh_node_id: None,
         };
 
         let human = output.to_human();
@@ -816,6 +819,7 @@ mod tests {
             node_id: 99,
             raft_node_id: None,
             uptime_seconds: 0,
+            iroh_node_id: None,
         };
 
         let human = output.to_human();
@@ -1386,6 +1390,7 @@ mod tests {
             node_id: 1,
             raft_node_id: Some(2),
             uptime_seconds: 100,
+            iroh_node_id: None,
         };
 
         // Just ensure it doesn't panic - we can't easily capture stdout in tests
@@ -1399,6 +1404,7 @@ mod tests {
             node_id: 1,
             raft_node_id: Some(2),
             uptime_seconds: 100,
+            iroh_node_id: None,
         };
 
         // Just ensure it doesn't panic
@@ -1680,6 +1686,7 @@ mod tests {
             node_id: 1,
             raft_node_id: None,
             uptime_seconds: 0,
+            iroh_node_id: None,
         };
         assert_outputable(&health);
 
@@ -2013,6 +2020,7 @@ pub struct HealthOutput {
     pub node_id: u64,
     pub raft_node_id: Option<u64>,
     pub uptime_seconds: u64,
+    pub iroh_node_id: Option<String>,
 }
 
 impl Outputable for HealthOutput {
@@ -2021,12 +2029,14 @@ impl Outputable for HealthOutput {
             "status": self.status,
             "node_id": self.node_id,
             "raft_node_id": self.raft_node_id,
-            "uptime_seconds": self.uptime_seconds
+            "uptime_seconds": self.uptime_seconds,
+            "iroh_node_id": self.iroh_node_id
         })
     }
 
     fn to_human(&self) -> String {
         let raft_id = self.raft_node_id.map(|id| id.to_string()).unwrap_or_else(|| "N/A".to_string());
+        let iroh_id = self.iroh_node_id.as_deref().unwrap_or("N/A");
 
         format!(
             "Health Status\n\
@@ -2034,8 +2044,9 @@ impl Outputable for HealthOutput {
              Status:         {}\n\
              Node ID:        {}\n\
              Raft Node ID:   {}\n\
+             Iroh Node ID:   {}\n\
              Uptime:         {}s",
-            self.status, self.node_id, raft_id, self.uptime_seconds
+            self.status, self.node_id, raft_id, iroh_id, self.uptime_seconds
         )
     }
 }

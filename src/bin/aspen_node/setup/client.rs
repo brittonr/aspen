@@ -271,7 +271,7 @@ pub async fn setup_client_protocol(
 
     // Initialize federation identity and trust manager if federation is enabled
     #[cfg(feature = "forge")]
-    let (federation_identity, federation_trust_manager) = if config.federation.is_enabled {
+    let (federation_identity, federation_trust_manager, federation_cluster_identity) = if config.federation.is_enabled {
         let cluster_identity = crate::config::load_federation_identity(config)?;
         let signed_identity = Arc::new(cluster_identity.to_signed());
         let trusted_keys = crate::config::parse_trusted_cluster_keys(&config.federation.trusted_clusters)?;
@@ -284,9 +284,9 @@ pub async fn setup_client_protocol(
             "federation identity initialized"
         );
 
-        (Some(signed_identity), Some(trust_manager))
+        (Some(signed_identity), Some(trust_manager), Some(Arc::new(cluster_identity)))
     } else {
-        (None, None)
+        (None, None, None)
     };
 
     let client_context = ClientProtocolContext {
@@ -332,9 +332,9 @@ pub async fn setup_client_protocol(
         #[cfg(feature = "forge")]
         federation_trust_manager,
         #[cfg(feature = "forge")]
-        federation_cluster_identity: None, // Set by Node::spawn_router_with_blobs
+        federation_cluster_identity,
         #[cfg(feature = "forge")]
-        iroh_endpoint: None, // Set by Node::spawn_router_with_blobs
+        iroh_endpoint: Some(Arc::new(node_mode.iroh_manager().endpoint().clone())),
         #[cfg(all(feature = "forge", feature = "global-discovery"))]
         federation_discovery: None,
         #[cfg(feature = "ci")]

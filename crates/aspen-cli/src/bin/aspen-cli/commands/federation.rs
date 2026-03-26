@@ -75,6 +75,11 @@ pub struct SyncArgs {
     /// Remote peer's iroh node ID (base32-encoded public key).
     #[arg(long)]
     pub peer: String,
+
+    /// Direct socket address hint for the remote peer (e.g., "192.168.1.1:54866").
+    /// Helps iroh establish a QUIC connection without relay or discovery.
+    #[arg(long)]
+    pub addr: Option<String>,
 }
 
 /// Federation status output.
@@ -435,6 +440,7 @@ async fn federation_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Re
     let response = client
         .send(ClientRpcRequest::FederationSyncPeer {
             peer_node_id: args.peer.clone(),
+            peer_addr: args.addr.clone(),
         })
         .await?;
 

@@ -85,6 +85,7 @@ impl ProtocolHandler for TestDeployHandler {
                         uptime_seconds: 100,
                         is_initialized: true,
                         membership_node_count: Some(3),
+                        iroh_node_id: None,
                     })
                 }
                 _ => ClientRpcResponse::error("UNHANDLED", "unhandled request type"),

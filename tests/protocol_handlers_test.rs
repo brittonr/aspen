@@ -111,6 +111,7 @@ async fn test_client_response_serialization() {
             uptime_seconds: 3600,
             is_initialized: true,
             membership_node_count: Some(3),
+            iroh_node_id: None,
         }),
         ClientRpcResponse::RaftMetrics(RaftMetricsResponse {
             node_id: 1,

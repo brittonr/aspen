@@ -437,6 +437,7 @@ pub(crate) async fn handle_list_federated_repositories(forge_node: &ForgeNodeRef
 /// lists resources, and returns the remote cluster's identity and resource state.
 pub(crate) async fn handle_federation_sync_peer(
     peer_node_id: &str,
+    peer_addr: Option<&str>,
     cluster_identity: Option<&Arc<aspen_cluster::federation::ClusterIdentity>>,
     iroh_endpoint: Option<&Arc<iroh::Endpoint>>,
 ) -> anyhow::Result<ClientRpcResponse> {
@@ -476,9 +477,24 @@ pub(crate) async fn handle_federation_sync_peer(
         .parse()
         .map_err(|e| anyhow::anyhow!("invalid peer node ID '{}': {}", peer_node_id, e))?;
 
+    // Build endpoint address with optional direct address hint
+    let endpoint_addr = if let Some(addr_str) = peer_addr {
+        if let Ok(socket_addr) = addr_str.parse::<std::net::SocketAddr>() {
+            tracing::debug!(peer = %peer_key, addr = %socket_addr, "using direct address hint for federation peer");
+            let mut addr = iroh::EndpointAddr::from(peer_key);
+            addr.addrs.insert(iroh::TransportAddr::Ip(socket_addr));
+            addr
+        } else {
+            tracing::warn!(addr = %addr_str, "invalid peer address hint, using node ID only");
+            iroh::EndpointAddr::from(peer_key)
+        }
+    } else {
+        iroh::EndpointAddr::from(peer_key)
+    };
+
     // Connect and perform handshake
     let (connection, remote_identity) =
-        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, peer_key).await {
+        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr).await {
             Ok(result) => result,
             Err(e) => {
                 return Ok(ClientRpcResponse::FederationSyncPeerResult(FederationSyncPeerResponse {

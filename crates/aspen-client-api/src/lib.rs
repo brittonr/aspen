@@ -122,6 +122,7 @@ mod tests {
             uptime_seconds: 100,
             is_initialized: true,
             membership_node_count: Some(3),
+            iroh_node_id: None,
         });
         let first_bytes = postcard::to_stdvec(&first).expect("first serialize");
         // The first variant's postcard discriminant should be 0
@@ -208,6 +209,7 @@ mod tests {
                     uptime_seconds: 0,
                     is_initialized: false,
                     membership_node_count: None,
+                    iroh_node_id: None,
                 }),
                 0,
                 "Health",

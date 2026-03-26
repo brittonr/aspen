@@ -110,6 +110,38 @@ pub fn setup_router(
         }
     }
 
+    // Add federation protocol handler for cross-cluster sync.
+    // Accepts incoming federation handshake/sync requests from remote clusters.
+    #[cfg(feature = "federation")]
+    if config.federation.is_enabled {
+        if let Ok(cluster_identity) = crate::config::load_federation_identity(config) {
+            let hlc = Arc::new(aspen_core::hlc::create_hlc(&config.node_id.to_string()));
+            let trusted_keys =
+                crate::config::parse_trusted_cluster_keys(&config.federation.trusted_clusters).unwrap_or_default();
+            let trust_manager = Arc::new(aspen_cluster::federation::TrustManager::with_trusted(trusted_keys));
+            let resource_settings = Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
+
+            // Resource resolver is wired separately through the ForgeServiceExecutor.
+            // The ALPN handler here handles handshake and resource listing from settings.
+            let resolver: Option<Arc<dyn aspen_cluster::federation::FederationResourceResolver>> = None;
+
+            let context = aspen_cluster::federation::sync::FederationProtocolContext {
+                cluster_identity,
+                trust_manager,
+                resource_settings,
+                endpoint: Arc::new(node_mode.iroh_manager().endpoint().clone()),
+                hlc,
+                resource_resolver: resolver,
+                session_credential: std::sync::Mutex::new(None),
+            };
+            let federation_handler = aspen_cluster::federation::FederationProtocolHandler::new(context);
+            builder = builder.accept(aspen_cluster::federation::FEDERATION_ALPN, federation_handler);
+            info!("Federation protocol handler registered (ALPN: /aspen/federation/1)");
+        } else {
+            warn!("federation enabled but identity load failed, skipping ALPN registration");
+        }
+    }
+
     // Add DAG sync protocol handler for streaming content-addressed graph sync.
     // Serves incoming requests from peers doing forge repo sync or snix store closure sync.
     #[cfg(feature = "forge")]

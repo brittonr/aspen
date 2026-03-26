@@ -1705,9 +1705,13 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 handle_federate_repository(&self.forge_node, repo_id, mode).await
             }
             ClientRpcRequest::ListFederatedRepositories => handle_list_federated_repositories(&self.forge_node).await,
-            ClientRpcRequest::FederationSyncPeer { peer_node_id } => {
+            ClientRpcRequest::FederationSyncPeer {
+                peer_node_id,
+                peer_addr,
+            } => {
                 handle_federation_sync_peer(
                     &peer_node_id,
+                    peer_addr.as_deref(),
                     self.federation_cluster_identity.as_ref(),
                     self.iroh_endpoint.as_ref(),
                 )

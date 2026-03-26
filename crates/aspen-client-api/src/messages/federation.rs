@@ -82,6 +82,8 @@ pub enum FederationRequest {
     FederationSyncPeer {
         /// Remote peer's iroh node ID (base32-encoded PublicKey).
         peer_node_id: String,
+        /// Optional direct socket address hint (e.g., "192.168.1.1:54866").
+        peer_addr: Option<String>,
     },
 }
 

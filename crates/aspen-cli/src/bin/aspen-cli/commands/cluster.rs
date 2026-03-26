@@ -229,6 +229,7 @@ async fn health_check(client: &AspenClient, json: bool) -> Result<()> {
                 node_id: health.node_id,
                 raft_node_id: health.raft_node_id,
                 uptime_seconds: health.uptime_seconds,
+                iroh_node_id: health.iroh_node_id,
             };
             print_output(&output, json);
             Ok(())

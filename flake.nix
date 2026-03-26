@@ -2322,7 +2322,7 @@
                   src = fullSrcWithSnix;
                   cargoArtifacts = fullPluginsCargoArtifacts;
                   cargoVendorDir = fullSnixVendorDir;
-                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy,snix,snix-build";
+                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy,federation,snix,snix-build";
                   doCheck = false;
                   HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
                   PROTO_ROOT = "${snix-src}";

@@ -213,6 +213,7 @@ fn test_health_response_postcard_roundtrip() {
                 uptime_seconds: *uptime_seconds,
                 is_initialized: true,
                 membership_node_count: Some(3),
+                iroh_node_id: None,
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
             let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
@@ -592,6 +593,7 @@ mod unit_tests {
             uptime_seconds: 3600,
             is_initialized: true,
             membership_node_count: Some(3),
+            iroh_node_id: Some("abc123nodekey".to_string()),
         };
 
         let json = serde_json::to_string(&response).expect("serialize");
@@ -650,6 +652,7 @@ mod unit_tests {
                 uptime_seconds: 0,
                 is_initialized: true,
                 membership_node_count: Some(3),
+                iroh_node_id: None,
             }),
             ClientRpcResponse::RaftMetrics(RaftMetricsResponse {
                 node_id: 1,

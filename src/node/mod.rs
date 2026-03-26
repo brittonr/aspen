@@ -635,27 +635,9 @@ impl Node {
             tracing::info!("registered Gossip protocol handler");
         }
 
-        // Add Client RPC protocol handler
-        // This enables CLI and programmatic clients to connect via CLIENT_ALPN
-        let client_context = self.create_client_protocol_context();
-        let client_handler = ClientProtocolHandler::new(client_context);
-        builder = builder.accept(CLIENT_ALPN, client_handler);
-        tracing::info!("registered Client RPC protocol handler (ALPN: aspen-client)");
-
-        // Add ephemeral pub/sub protocol handler
-        // Enables fire-and-forget event streaming without Raft consensus
-        {
-            use aspen_hooks::pubsub::ephemeral::handler::EPHEMERAL_ALPN;
-            use aspen_hooks::pubsub::ephemeral::handler::EphemeralProtocolHandler;
-
-            let broker = Arc::new(aspen_hooks::pubsub::EphemeralBroker::new());
-            let ephemeral_handler = EphemeralProtocolHandler::new(Arc::clone(&broker));
-            builder = builder.accept(EPHEMERAL_ALPN, ephemeral_handler);
-            self.ephemeral_broker = Some(broker);
-            tracing::info!("registered ephemeral pub/sub protocol handler (ALPN: aspen-ephemeral/0)");
-        }
-
-        // Add federation handler if enabled
+        // Add federation handler if enabled.
+        // IMPORTANT: Must run before creating the client protocol context so
+        // that self.federation_identity is populated when the context is built.
         if self.handle.config.federation.is_enabled {
             let fed_config = &self.handle.config.federation;
 
@@ -741,6 +723,26 @@ impl Node {
             self.federation_resource_settings = Some(resource_settings);
         }
 
+        // Add Client RPC protocol handler.
+        // Must come after federation setup so the context captures federation_identity.
+        let client_context = self.create_client_protocol_context();
+        let client_handler = ClientProtocolHandler::new(client_context);
+        builder = builder.accept(CLIENT_ALPN, client_handler);
+        tracing::info!("registered Client RPC protocol handler (ALPN: aspen-client)");
+
+        // Add ephemeral pub/sub protocol handler
+        // Enables fire-and-forget event streaming without Raft consensus
+        {
+            use aspen_hooks::pubsub::ephemeral::handler::EPHEMERAL_ALPN;
+            use aspen_hooks::pubsub::ephemeral::handler::EphemeralProtocolHandler;
+
+            let broker = Arc::new(aspen_hooks::pubsub::EphemeralBroker::new());
+            let ephemeral_handler = EphemeralProtocolHandler::new(Arc::clone(&broker));
+            builder = builder.accept(EPHEMERAL_ALPN, ephemeral_handler);
+            self.ephemeral_broker = Some(broker);
+            tracing::info!("registered ephemeral pub/sub protocol handler (ALPN: aspen-ephemeral/0)");
+        }
+
         // Spawn the router and store the handle to keep it alive
         // Dropping the Router would shut down protocol handling!
         self.router = Some(builder.spawn());
@@ -813,29 +815,9 @@ impl Node {
             tracing::info!("registered Gossip protocol handler");
         }
 
-        // Add Client RPC protocol handler
-        let client_context = self.create_client_protocol_context();
-        let client_handler = ClientProtocolHandler::new(client_context);
-        builder = builder.accept(CLIENT_ALPN, client_handler);
-        tracing::info!("registered Client RPC protocol handler (ALPN: aspen-client)");
-
-        // Add ephemeral pub/sub protocol handler
-        {
-            use aspen_hooks::pubsub::ephemeral::handler::EPHEMERAL_ALPN;
-            use aspen_hooks::pubsub::ephemeral::handler::EphemeralProtocolHandler;
-
-            let broker = Arc::new(aspen_hooks::pubsub::EphemeralBroker::new());
-            let ephemeral_handler = EphemeralProtocolHandler::new(Arc::clone(&broker));
-            builder = builder.accept(EPHEMERAL_ALPN, ephemeral_handler);
-            self.ephemeral_broker = Some(broker);
-            tracing::info!("registered ephemeral pub/sub protocol handler (ALPN: aspen-ephemeral/0)");
-        }
-
-        // Register the blobs protocol handler
-        builder = builder.accept(iroh_blobs::ALPN, blobs_handler);
-        tracing::info!("registered Blobs protocol handler (ALPN: iroh-blobs/0)");
-
-        // Add federation handler if enabled
+        // Add federation handler if enabled.
+        // IMPORTANT: Must run before creating the client protocol context so
+        // that self.federation_identity is populated when the context is built.
         #[cfg(feature = "federation")]
         if self.handle.config.federation.is_enabled {
             let hlc = Arc::new(aspen_core::hlc::create_hlc(&self.handle.config.node_id.to_string()));
@@ -878,6 +860,29 @@ impl Node {
                 }
             }
         }
+
+        // Add Client RPC protocol handler.
+        // Must come after federation setup so the context captures federation_identity.
+        let client_context = self.create_client_protocol_context();
+        let client_handler = ClientProtocolHandler::new(client_context);
+        builder = builder.accept(CLIENT_ALPN, client_handler);
+        tracing::info!("registered Client RPC protocol handler (ALPN: aspen-client)");
+
+        // Add ephemeral pub/sub protocol handler
+        {
+            use aspen_hooks::pubsub::ephemeral::handler::EPHEMERAL_ALPN;
+            use aspen_hooks::pubsub::ephemeral::handler::EphemeralProtocolHandler;
+
+            let broker = Arc::new(aspen_hooks::pubsub::EphemeralBroker::new());
+            let ephemeral_handler = EphemeralProtocolHandler::new(Arc::clone(&broker));
+            builder = builder.accept(EPHEMERAL_ALPN, ephemeral_handler);
+            self.ephemeral_broker = Some(broker);
+            tracing::info!("registered ephemeral pub/sub protocol handler (ALPN: aspen-ephemeral/0)");
+        }
+
+        // Register the blobs protocol handler
+        builder = builder.accept(iroh_blobs::ALPN, blobs_handler);
+        tracing::info!("registered Blobs protocol handler (ALPN: iroh-blobs/0)");
 
         // Spawn the router and store the handle to keep it alive
         self.router = Some(builder.spawn());

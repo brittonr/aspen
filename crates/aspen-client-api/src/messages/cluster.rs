@@ -125,6 +125,9 @@ pub struct HealthResponse {
     /// Number of nodes in the current membership configuration.
     #[serde(default)]
     pub membership_node_count: Option<u32>,
+    /// Iroh node ID (base32-encoded PublicKey) for P2P addressing.
+    #[serde(default)]
+    pub iroh_node_id: Option<String>,
 }
 
 /// Raft metrics response.
