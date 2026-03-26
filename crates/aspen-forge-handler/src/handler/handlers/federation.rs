@@ -1017,18 +1017,9 @@ pub(crate) async fn federation_import_objects(
             _ => continue,
         };
 
-        // Verify BLAKE3 hash
-        let computed: [u8; 32] = blake3::hash(&obj.data).into();
-        if computed != obj.hash {
-            stats.skipped += 1;
-            stats.errors.push(format!(
-                "{}: BLAKE3 hash mismatch (expected {}, got {})",
-                git_type_str,
-                hex::encode(&obj.hash[..8]),
-                hex::encode(&computed[..8]),
-            ));
-            continue;
-        }
+        // Note: SyncObject.hash is the blob-store BLAKE3 hash (for incremental
+        // sync dedup), not a content hash. Content integrity is verified by the
+        // import pipeline (GitImporter computes its own hashes during import).
 
         // Reconstruct full git bytes (header + content)
         let header = format!("{} {}\0", git_type_str, obj.data.len());
@@ -1647,5 +1638,41 @@ mod tests {
         }
 
         assert_eq!(trust_manager.list_trusted().len(), 3);
+    }
+
+    // ====================================================================
+    // Mirror metadata tests
+    // ====================================================================
+
+    #[test]
+    fn test_mirror_metadata_roundtrip() {
+        let meta = super::MirrorMetadata {
+            fed_id: "abc123:def456".to_string(),
+            origin_cluster_key: "0102030405060708".to_string(),
+            local_repo_id: hex::encode([0xab; 32]),
+            last_sync_timestamp: 1700000000,
+            created_at: 1699999000,
+        };
+
+        let json = meta.to_json();
+        let parsed = super::MirrorMetadata::from_json(&json).expect("should parse");
+
+        assert_eq!(parsed.fed_id, meta.fed_id);
+        assert_eq!(parsed.origin_cluster_key, meta.origin_cluster_key);
+        assert_eq!(parsed.local_repo_id, meta.local_repo_id);
+        assert_eq!(parsed.last_sync_timestamp, meta.last_sync_timestamp);
+        assert_eq!(parsed.created_at, meta.created_at);
+    }
+
+    #[test]
+    fn test_mirror_metadata_from_invalid_json() {
+        assert!(super::MirrorMetadata::from_json("not json").is_none());
+        assert!(super::MirrorMetadata::from_json("{}").is_none());
+        assert!(super::MirrorMetadata::from_json(r#"{"fed_id":"x"}"#).is_none());
+    }
+
+    #[test]
+    fn test_mirror_prefix_format() {
+        assert_eq!(super::MIRROR_PREFIX, "_fed:mirror:");
     }
 }

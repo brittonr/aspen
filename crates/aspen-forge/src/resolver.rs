@@ -206,11 +206,13 @@ impl<K: KeyValueStore + ?Sized> ForgeResourceResolver<K> {
                     for obj in result.objects {
                         let object_type = obj.object_type.as_str().to_string();
                         let b3_bytes: [u8; 32] = *obj.blake3.as_bytes();
-
-                        // BLAKE3 hash the raw content for the SyncObject hash
-                        // (this is the content hash the client will verify)
                         let data = obj.content;
-                        let hash: [u8; 32] = blake3::hash(&data).into();
+
+                        // Use the blob-store BLAKE3 hash as the SyncObject hash.
+                        // This allows the client to send it back in have_hashes
+                        // for incremental sync (the DAG walk uses blob-store hashes).
+                        // Content integrity is verified by the import pipeline.
+                        let hash = b3_bytes;
 
                         all_known.insert(b3_bytes);
 
@@ -250,7 +252,7 @@ impl<K: KeyValueStore + ?Sized> ForgeResourceResolver<K> {
 }
 
 #[async_trait]
-impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for ForgeResourceResolver<K> {
+impl<K: ?Sized + KeyValueStore + Send + Sync + 'static> FederationResourceResolver for ForgeResourceResolver<K> {
     async fn get_resource_state(
         &self,
         fed_id: &FederatedId,
@@ -752,5 +754,394 @@ mod tests {
             matches!(result, Err(FederationResourceError::FederationDisabled { .. })),
             "expected FederationDisabled, got: {result:?}"
         );
+    }
+}
+
+/// Integration tests for git object serving via federation sync.
+///
+/// These tests exercise the full flow: create a repo with git objects,
+/// federate it, then sync via ForgeResourceResolver with a GitObjectExporter.
+#[cfg(all(test, feature = "git-bridge"))]
+mod git_bridge_tests {
+    use std::collections::HashSet;
+
+    use aspen_blob::InMemoryBlobStore;
+    use aspen_cluster::federation::FederatedId;
+    use aspen_cluster::federation::FederationResourceResolver;
+    use aspen_cluster::federation::FederationSettings;
+    use aspen_core::WriteCommand;
+    use aspen_core::WriteRequest;
+    use aspen_core::hlc::create_hlc;
+    use aspen_testing::DeterministicKeyValueStore;
+
+    use super::*;
+    use crate::constants::KV_PREFIX_FEDERATION_SETTINGS;
+    use crate::constants::KV_PREFIX_REFS;
+    use crate::constants::KV_PREFIX_REPOS;
+    use crate::git::bridge::GitExporter;
+    use crate::git::bridge::GitImporter;
+    use crate::git::bridge::HashMappingStore;
+    use crate::git::bridge::Sha1Hash;
+    use crate::identity::RepoId;
+    use crate::refs::RefStore;
+
+    /// Test harness: two forge "clusters" with shared types but separate storage.
+    struct FederationTestHarness {
+        /// Source cluster KV.
+        source_kv: Arc<dyn aspen_core::KeyValueStore>,
+        /// Source cluster blobs.
+        source_blobs: Arc<InMemoryBlobStore>,
+        /// Source importer (for creating objects).
+        source_importer: GitImporter<dyn aspen_core::KeyValueStore, InMemoryBlobStore>,
+        /// Source refs.
+        source_refs: Arc<RefStore<dyn aspen_core::KeyValueStore>>,
+        /// Source exporter (used by the resolver).
+        source_exporter: Arc<GitExporter<dyn aspen_core::KeyValueStore, InMemoryBlobStore>>,
+        /// Repo ID on source.
+        repo_id: RepoId,
+        /// Federated ID.
+        fed_id: FederatedId,
+    }
+
+    impl FederationTestHarness {
+        fn new() -> Self {
+            let source_kv: Arc<dyn aspen_core::KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());
+            let source_blobs = Arc::new(InMemoryBlobStore::new());
+            let mapping = Arc::new(HashMappingStore::new(Arc::clone(&source_kv)));
+            let refs = Arc::new(RefStore::new(Arc::clone(&source_kv)));
+            let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+
+            let importer = GitImporter::new(
+                Arc::clone(&mapping),
+                Arc::clone(&source_blobs),
+                Arc::clone(&refs),
+                secret_key.clone(),
+                create_hlc("test-source"),
+            );
+            let exporter = Arc::new(GitExporter::new(
+                Arc::clone(&mapping),
+                Arc::clone(&source_blobs),
+                Arc::clone(&refs),
+                secret_key.clone(),
+                create_hlc("test-source-export"),
+            ));
+
+            let repo_id = RepoId::from_hash(blake3::hash(b"federation-test-repo"));
+            let fed_id = FederatedId::new(secret_key.public(), repo_id.0);
+
+            Self {
+                source_kv,
+                source_blobs: source_blobs,
+                source_importer: importer,
+                source_refs: refs,
+                source_exporter: exporter,
+                repo_id,
+                fed_id,
+            }
+        }
+
+        /// Set up the repo as federated (create repo metadata + federation settings).
+        async fn federate_repo(&self) {
+            // Create repo metadata
+            self.source_kv
+                .write(WriteRequest {
+                    command: WriteCommand::Set {
+                        key: format!("{}{}", KV_PREFIX_REPOS, hex::encode(self.repo_id.0)),
+                        value: "{}".to_string(),
+                    },
+                })
+                .await
+                .unwrap();
+
+            // Enable federation
+            let settings = FederationSettings::public();
+            self.source_kv
+                .write(WriteRequest {
+                    command: WriteCommand::Set {
+                        key: format!("{}{}", KV_PREFIX_FEDERATION_SETTINGS, self.fed_id),
+                        value: serde_json::to_string(&settings).unwrap(),
+                    },
+                })
+                .await
+                .unwrap();
+        }
+
+        /// Import a git blob and return its BLAKE3 + SHA1 hashes.
+        async fn import_blob(&self, content: &[u8]) -> (blake3::Hash, Sha1Hash) {
+            let git_bytes = make_git_blob(content);
+            let sha1 = compute_sha1(&git_bytes);
+            let blake3 = self.source_importer.import_object(&self.repo_id, &git_bytes).await.unwrap();
+            (blake3, sha1)
+        }
+
+        /// Import a git tree with one blob entry.
+        async fn import_tree(&self, blob_sha1: &Sha1Hash, name: &str) -> (blake3::Hash, Sha1Hash) {
+            let entry = make_tree_entry("100644", name, blob_sha1);
+            let git_bytes = make_git_tree(&[entry]);
+            let sha1 = compute_sha1(&git_bytes);
+            let blake3 = self.source_importer.import_object(&self.repo_id, &git_bytes).await.unwrap();
+            (blake3, sha1)
+        }
+
+        /// Import a git commit pointing to a tree.
+        async fn import_commit(
+            &self,
+            tree_sha1: &Sha1Hash,
+            parents: &[&Sha1Hash],
+            message: &str,
+        ) -> (blake3::Hash, Sha1Hash) {
+            let git_bytes = make_git_commit(tree_sha1, parents, message);
+            let sha1 = compute_sha1(&git_bytes);
+            let blake3 = self.source_importer.import_object(&self.repo_id, &git_bytes).await.unwrap();
+            (blake3, sha1)
+        }
+
+        /// Set a ref on the source repo.
+        async fn set_ref(&self, ref_name: &str, blake3: blake3::Hash) {
+            self.source_refs.set(&self.repo_id, ref_name, blake3).await.unwrap();
+
+            // Also write the hex-encoded hash to KV (federation reads this)
+            let key = format!("{}{}:{}", KV_PREFIX_REFS, hex::encode(self.repo_id.0), ref_name);
+            self.source_kv
+                .write(WriteRequest {
+                    command: WriteCommand::Set {
+                        key,
+                        value: hex::encode(blake3.as_bytes()),
+                    },
+                })
+                .await
+                .unwrap();
+        }
+
+        /// Build a resolver with the git exporter attached.
+        fn resolver(&self) -> ForgeResourceResolver<dyn aspen_core::KeyValueStore> {
+            ForgeResourceResolver::with_git_exporter(Arc::clone(&self.source_kv), self.source_exporter.clone())
+        }
+    }
+
+    // ====================================================================
+    // Git object helpers (same as in git/bridge/tests.rs)
+    // ====================================================================
+
+    fn make_git_blob(content: &[u8]) -> Vec<u8> {
+        let header = format!("blob {}\0", content.len());
+        let mut bytes = Vec::with_capacity(header.len() + content.len());
+        bytes.extend_from_slice(header.as_bytes());
+        bytes.extend_from_slice(content);
+        bytes
+    }
+
+    fn compute_sha1(git_bytes: &[u8]) -> Sha1Hash {
+        use sha1::Digest;
+        let hash = sha1::Sha1::digest(git_bytes);
+        Sha1Hash::from_bytes(hash.into())
+    }
+
+    fn make_tree_entry(mode: &str, name: &str, sha1: &Sha1Hash) -> Vec<u8> {
+        let mut entry = Vec::new();
+        entry.extend_from_slice(mode.as_bytes());
+        entry.push(b' ');
+        entry.extend_from_slice(name.as_bytes());
+        entry.push(0);
+        entry.extend_from_slice(sha1.as_slice());
+        entry
+    }
+
+    fn make_git_tree(entries: &[Vec<u8>]) -> Vec<u8> {
+        let mut content = Vec::new();
+        for entry in entries {
+            content.extend_from_slice(entry);
+        }
+        let header = format!("tree {}\0", content.len());
+        let mut bytes = Vec::with_capacity(header.len() + content.len());
+        bytes.extend_from_slice(header.as_bytes());
+        bytes.extend_from_slice(&content);
+        bytes
+    }
+
+    fn make_git_commit(tree_sha1: &Sha1Hash, parents: &[&Sha1Hash], message: &str) -> Vec<u8> {
+        let mut content = String::new();
+        content.push_str(&format!("tree {}\n", tree_sha1));
+        for parent in parents {
+            content.push_str(&format!("parent {}\n", parent));
+        }
+        content.push_str("author Test User <test@example.com> 1700000000 +0000\n");
+        content.push_str("committer Test User <test@example.com> 1700000000 +0000\n");
+        content.push('\n');
+        content.push_str(message);
+        if !message.ends_with('\n') {
+            content.push('\n');
+        }
+        let header = format!("commit {}\0", content.len());
+        let mut bytes = Vec::with_capacity(header.len() + content.len());
+        bytes.extend_from_slice(header.as_bytes());
+        bytes.extend_from_slice(content.as_bytes());
+        bytes
+    }
+
+    // ====================================================================
+    // Test 6.1: Round-trip — create objects, federate, sync via resolver
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_federation_sync_git_objects_roundtrip() {
+        let h = FederationTestHarness::new();
+        h.federate_repo().await;
+
+        // Create: blob → tree → commit → ref
+        let (blob_b3, blob_sha1) = h.import_blob(b"hello federation\n").await;
+        let (_tree_b3, tree_sha1) = h.import_tree(&blob_sha1, "README.md").await;
+        let (commit_b3, _commit_sha1) = h.import_commit(&tree_sha1, &[], "initial commit").await;
+        h.set_ref("heads/main", commit_b3).await;
+
+        // Sync via resolver — request git objects
+        let resolver = h.resolver();
+        let objects = resolver
+            .sync_objects(&h.fed_id, &["commit".to_string(), "tree".to_string(), "blob".to_string()], &[], 1000)
+            .await
+            .expect("sync should succeed");
+
+        // Should get 3 objects: blob, tree, commit (in dependency order)
+        assert_eq!(objects.len(), 3, "expected 3 git objects (blob, tree, commit)");
+
+        // Verify types
+        let types: Vec<&str> = objects.iter().map(|o| o.object_type.as_str()).collect();
+        assert!(types.contains(&"blob"), "should contain a blob");
+        assert!(types.contains(&"tree"), "should contain a tree");
+        assert!(types.contains(&"commit"), "should contain a commit");
+
+        // Verify hashes are non-zero (blob-store BLAKE3 hashes, not content hashes)
+        for obj in &objects {
+            assert_ne!(obj.hash, [0u8; 32], "hash should be non-zero for {}", obj.object_type);
+            assert!(!obj.data.is_empty(), "data should be non-empty for {}", obj.object_type);
+        }
+    }
+
+    // ====================================================================
+    // Test 6.1b: Refs + git objects in a single sync request
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_federation_sync_refs_and_git_objects() {
+        let h = FederationTestHarness::new();
+        h.federate_repo().await;
+
+        let (blob_b3, blob_sha1) = h.import_blob(b"content\n").await;
+        let (_tree_b3, tree_sha1) = h.import_tree(&blob_sha1, "file.txt").await;
+        let (commit_b3, _) = h.import_commit(&tree_sha1, &[], "add file").await;
+        h.set_ref("heads/main", commit_b3).await;
+
+        let resolver = h.resolver();
+        let objects = resolver
+            .sync_objects(
+                &h.fed_id,
+                &[
+                    "refs".to_string(),
+                    "commit".to_string(),
+                    "tree".to_string(),
+                    "blob".to_string(),
+                ],
+                &[],
+                1000,
+            )
+            .await
+            .unwrap();
+
+        // 1 ref + 3 git objects = 4
+        assert_eq!(objects.len(), 4, "expected 1 ref + 3 git objects");
+
+        let ref_count = objects.iter().filter(|o| o.object_type == "ref").count();
+        let git_count = objects.iter().filter(|o| o.object_type != "ref").count();
+        assert_eq!(ref_count, 1);
+        assert_eq!(git_count, 3);
+    }
+
+    // ====================================================================
+    // Test 6.2: Incremental sync — have_hashes excludes known objects
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_federation_sync_incremental_with_have_hashes() {
+        let h = FederationTestHarness::new();
+        h.federate_repo().await;
+
+        // First commit: blob1 → tree1 → commit1
+        let (blob1_b3, blob1_sha1) = h.import_blob(b"first\n").await;
+        let (_tree1_b3, tree1_sha1) = h.import_tree(&blob1_sha1, "first.txt").await;
+        let (commit1_b3, commit1_sha1) = h.import_commit(&tree1_sha1, &[], "first commit").await;
+        h.set_ref("heads/main", commit1_b3).await;
+
+        // Sync everything first time
+        let resolver = h.resolver();
+        let first_sync = resolver
+            .sync_objects(&h.fed_id, &["commit".to_string(), "tree".to_string(), "blob".to_string()], &[], 1000)
+            .await
+            .unwrap();
+        assert_eq!(first_sync.len(), 3);
+
+        // Collect hashes from first sync as "already have"
+        let have_hashes: Vec<[u8; 32]> = first_sync.iter().map(|o| o.hash).collect();
+
+        // Second commit: blob2 → tree2 → commit2 (parent: commit1)
+        let (blob2_b3, blob2_sha1) = h.import_blob(b"second\n").await;
+        let (_tree2_b3, tree2_sha1) = h.import_tree(&blob2_sha1, "second.txt").await;
+        let (commit2_b3, _) = h.import_commit(&tree2_sha1, &[&commit1_sha1], "second commit").await;
+        h.set_ref("heads/main", commit2_b3).await;
+
+        // Incremental sync: provide have_hashes from first sync
+        let incremental = resolver
+            .sync_objects(
+                &h.fed_id,
+                &["commit".to_string(), "tree".to_string(), "blob".to_string()],
+                &have_hashes,
+                1000,
+            )
+            .await
+            .unwrap();
+
+        // Should only get the 3 new objects (blob2, tree2, commit2)
+        // The first commit's objects should be skipped via have_hashes
+        assert_eq!(incremental.len(), 3, "incremental sync should return only new objects, got {}", incremental.len());
+
+        // None of the returned hashes should be in our have set
+        for obj in &incremental {
+            assert!(!have_hashes.contains(&obj.hash), "incremental sync should not return objects we already have");
+        }
+    }
+
+    // ====================================================================
+    // Test 6.2b: No exporter returns empty for git object types
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_federation_sync_no_exporter_returns_refs_only() {
+        let h = FederationTestHarness::new();
+        h.federate_repo().await;
+
+        let (blob_b3, blob_sha1) = h.import_blob(b"data\n").await;
+        let (_tree_b3, tree_sha1) = h.import_tree(&blob_sha1, "f.txt").await;
+        let (commit_b3, _) = h.import_commit(&tree_sha1, &[], "commit").await;
+        h.set_ref("heads/main", commit_b3).await;
+
+        // Resolver without exporter
+        let resolver = ForgeResourceResolver::new(Arc::clone(&h.source_kv));
+        let objects = resolver
+            .sync_objects(
+                &h.fed_id,
+                &[
+                    "refs".to_string(),
+                    "commit".to_string(),
+                    "tree".to_string(),
+                    "blob".to_string(),
+                ],
+                &[],
+                1000,
+            )
+            .await
+            .unwrap();
+
+        // Should only get ref entries (no git objects without exporter)
+        assert_eq!(objects.len(), 1, "without exporter, should only get refs");
+        assert_eq!(objects[0].object_type, "ref");
     }
 }
