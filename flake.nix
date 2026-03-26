@@ -3339,6 +3339,14 @@
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
               };
 
+              # Build: nix build .#checks.x86_64-linux.federation-blob-transfer-test
+              federation-blob-transfer-test = import ./nix/tests/federation-blob-transfer.nix {
+                inherit pkgs kvPluginWasm forgePluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins;
+                aspenCliPackage = bins.full-aspen-cli-forge;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+              };
+
               # Net service mesh E2E: SOCKS5 proxy routing through a real Raft cluster.
               # Publishes an HTTP service, routes curl through SOCKS5 proxy over iroh QUIC tunnel.
               # Build: nix build .#checks.x86_64-linux.net-service-mesh-test --impure

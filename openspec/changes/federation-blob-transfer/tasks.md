@@ -38,4 +38,4 @@
 - [x] 6.1 Unit test: round-trip — create forge repo with objects on cluster A, federate it, fetch from cluster B, verify mirror has same refs and objects
 - [x] 6.2 Unit test: incremental sync — add a commit on cluster A, pull from cluster B, verify only new objects transferred
 - [x] 6.3 Unit test: mirror is read-only — attempt push to mirror repo, verify rejection
-- [ ] 6.4 NixOS VM test: two-node federation with full fetch and git clone from mirror
+- [x] 6.4 NixOS VM test: two-node federation with full fetch and git clone from mirror
