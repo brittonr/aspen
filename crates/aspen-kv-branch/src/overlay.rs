@@ -236,6 +236,7 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
         // Choose command based on read set.
         let command = if self.read_set.is_empty() {
             // No reads from parent — use batch (no conflict detection needed).
+            #[allow(unused_mut)]
             let mut batch_ops: Vec<aspen_kv_types::batch::BatchOperation> = ops
                 .into_iter()
                 .map(|op| match op {
@@ -254,6 +255,7 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
             let read_set: Vec<(String, i64)> =
                 self.read_set.iter().map(|entry| (entry.key().clone(), *entry.value())).collect();
 
+            #[allow(unused_mut)]
             let mut write_set = ops;
 
             // Append commit-dag metadata as write ops in the transaction.
@@ -377,6 +379,7 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
         #[cfg(feature = "commit-dag")]
         let (commit_dag_ops, commit_id) = self.build_commit_dag_ops(&write_ops)?;
 
+        #[allow(unused_mut)]
         let mut ops: Vec<aspen_kv_types::batch::BatchOperation> = write_ops
             .into_iter()
             .map(|op| match op {
