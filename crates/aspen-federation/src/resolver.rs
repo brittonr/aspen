@@ -175,6 +175,14 @@ pub trait FederationResourceResolver: Send + Sync {
     ///
     /// This is a lightweight check that doesn't return full state.
     async fn resource_exists(&self, fed_id: &FederatedId) -> bool;
+
+    /// List all federated resources.
+    ///
+    /// Returns (FederatedId, resource_type) pairs for all resources with
+    /// federation enabled (mode != Disabled). Default returns empty.
+    async fn list_resources(&self, _limit: u32) -> Vec<(FederatedId, String)> {
+        Vec::new()
+    }
 }
 
 /// Direct (non-sharded) resource resolver.

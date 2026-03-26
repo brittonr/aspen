@@ -272,6 +272,21 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         self.secret_key.public()
     }
 
+    /// Write a key-value entry to the underlying KV store.
+    ///
+    /// Used by federation sync to persist synced ref state.
+    pub async fn write_kv(&self, key: &str, value: &str) -> ForgeResult<()> {
+        self.kv
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::Set {
+                    key: key.to_string(),
+                    value: value.to_string(),
+                },
+            })
+            .await?;
+        Ok(())
+    }
+
     /// Resolve the signing key and npub for an operation.
     ///
     /// If a `UserContext` is provided, uses the user's assigned key and npub.

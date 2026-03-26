@@ -408,42 +408,53 @@ async fn handle_list_resources(
     limit: u32,
     context: &FederationProtocolContext,
 ) -> Result<FederationResponse> {
-    let _limit = limit.min(MAX_RESOURCES_PER_LIST);
+    let limit = limit.min(MAX_RESOURCES_PER_LIST);
 
-    // Get session credential for filtering
-    let session_cred = context.session_credential.lock().ok().and_then(|guard| guard.clone());
-
-    // Get resources from settings
-    let settings = context.resource_settings.read().await;
-    let mut resources: Vec<ResourceInfo> = settings
-        .iter()
-        .filter(|(_, s)| {
-            // Include public resources, or resources the credential authorizes
-            if matches!(s.mode, crate::types::FederationMode::Public) {
-                return true;
-            }
-            // If we have a credential, check if it authorizes read for this resource
-            if let Some(ref cred) = session_cred {
-                // Check if any capability authorizes a read for a key under this resource type
-                if let Some(ref rt) = s.resource_type {
-                    return cred
-                        .token
-                        .capabilities
-                        .iter()
-                        .any(|cap| cap.authorizes(&aspen_auth::Operation::Read { key: rt.clone() }));
+    // Try resource resolver first (reads from KV, authoritative source)
+    let mut resources: Vec<ResourceInfo> = if let Some(ref resolver) = context.resource_resolver {
+        resolver
+            .list_resources(limit)
+            .await
+            .into_iter()
+            .map(|(fed_id, rt)| ResourceInfo {
+                fed_id,
+                resource_type: rt,
+                name: fed_id.short(),
+                mode: "public".to_string(),
+                updated_at_hlc: SerializableTimestamp::from(context.hlc.new_timestamp()),
+            })
+            .collect()
+    } else {
+        // Fall back to in-memory settings
+        let session_cred = context.session_credential.lock().ok().and_then(|guard| guard.clone());
+        let settings = context.resource_settings.read().await;
+        settings
+            .iter()
+            .filter(|(_, s)| {
+                if matches!(s.mode, crate::types::FederationMode::Public) {
+                    return true;
                 }
-            }
-            false
-        })
-        .map(|(fed_id, s)| ResourceInfo {
-            fed_id: *fed_id,
-            resource_type: s.resource_type.clone().unwrap_or_else(|| "unknown".to_string()),
-            name: fed_id.short(),
-            mode: "public".to_string(),
-            updated_at_hlc: SerializableTimestamp::from(context.hlc.new_timestamp()),
-        })
-        .take(limit as usize)
-        .collect();
+                if let Some(ref cred) = session_cred {
+                    if let Some(ref rt) = s.resource_type {
+                        return cred
+                            .token
+                            .capabilities
+                            .iter()
+                            .any(|cap| cap.authorizes(&aspen_auth::Operation::Read { key: rt.clone() }));
+                    }
+                }
+                false
+            })
+            .map(|(fed_id, s)| ResourceInfo {
+                fed_id: *fed_id,
+                resource_type: s.resource_type.clone().unwrap_or_else(|| "unknown".to_string()),
+                name: fed_id.short(),
+                mode: "public".to_string(),
+                updated_at_hlc: SerializableTimestamp::from(context.hlc.new_timestamp()),
+            })
+            .take(limit as usize)
+            .collect()
+    };
 
     // Filter by resource type if specified
     if let Some(ref rt) = resource_type {
@@ -451,9 +462,9 @@ async fn handle_list_resources(
     }
 
     Ok(FederationResponse::ResourceList {
+        total: Some(resources.len() as u32),
         resources,
         next_cursor: None,
-        total: Some(settings.len() as u32),
     })
 }
 

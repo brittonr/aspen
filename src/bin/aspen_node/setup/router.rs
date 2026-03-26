@@ -121,9 +121,22 @@ pub fn setup_router(
             let trust_manager = Arc::new(aspen_cluster::federation::TrustManager::with_trusted(trusted_keys));
             let resource_settings = Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
-            // Resource resolver is wired separately through the ForgeServiceExecutor.
-            // The ALPN handler here handles handshake and resource listing from settings.
-            let resolver: Option<Arc<dyn aspen_cluster::federation::FederationResourceResolver>> = None;
+            // Wire Forge resource resolver for KV-backed resource listing and state queries.
+            // ForgeResourceResolver requires Sized K, so we use the concrete RaftNode type
+            // from node_mode rather than the Arc<dyn KeyValueStore>.
+            let resolver: Option<Arc<dyn aspen_cluster::federation::FederationResourceResolver>> = match &node_mode {
+                NodeMode::Single(handle) => {
+                    let raft_node = handle.storage.raft_node.clone();
+                    Some(Arc::new(aspen_forge::resolver::ForgeResourceResolver::new(raft_node)))
+                }
+                NodeMode::Sharded(handle) => {
+                    if let Some(shard) = handle.primary_shard() {
+                        Some(Arc::new(aspen_forge::resolver::ForgeResourceResolver::new(shard.clone())))
+                    } else {
+                        None
+                    }
+                }
+            };
 
             let context = aspen_cluster::federation::sync::FederationProtocolContext {
                 cluster_identity,

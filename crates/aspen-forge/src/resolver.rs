@@ -197,6 +197,41 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Fo
         let repo_hex = Self::repo_id_hex(fed_id);
         self.repo_exists(&repo_hex).await
     }
+
+    async fn list_resources(&self, limit: u32) -> Vec<(FederatedId, String)> {
+        use crate::constants::KV_PREFIX_FEDERATION_SETTINGS;
+
+        let scan_result = self
+            .kv
+            .scan(aspen_core::ScanRequest {
+                prefix: KV_PREFIX_FEDERATION_SETTINGS.to_string(),
+                limit_results: Some(limit),
+                continuation_token: None,
+            })
+            .await;
+
+        let entries = match scan_result {
+            Ok(resp) => resp.entries,
+            Err(_) => return Vec::new(),
+        };
+
+        let mut results = Vec::with_capacity(entries.len());
+        for entry in entries {
+            let settings_json = &entry.value;
+            if let Ok(settings) = serde_json::from_str::<FederationSettings>(settings_json) {
+                if matches!(settings.mode, FederationMode::Disabled) {
+                    continue;
+                }
+                // Parse FederatedId from the key suffix (after the prefix)
+                let fed_id_str = entry.key.strip_prefix(KV_PREFIX_FEDERATION_SETTINGS).unwrap_or(&entry.key);
+                if let Ok(fed_id) = fed_id_str.parse::<FederatedId>() {
+                    let resource_type = settings.resource_type.unwrap_or_else(|| "unknown".to_string());
+                    results.push((fed_id, resource_type));
+                }
+            }
+        }
+        results
+    }
 }
 
 #[cfg(test)]

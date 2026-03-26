@@ -348,6 +348,12 @@ pub struct SyncPeerResourceInfo {
     pub ref_count: u32,
     /// Ref head names.
     pub ref_names: Vec<String>,
+    /// Ref heads: (ref_name, hex_hash) pairs.
+    #[serde(default)]
+    pub ref_heads: Vec<(String, String)>,
+    /// Federated ID string for this resource.
+    #[serde(default)]
+    pub fed_id: Option<String>,
 }
 
 /// Federation sync peer result.

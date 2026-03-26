@@ -1702,7 +1702,8 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 handle_untrust_cluster(self.federation_trust_manager.as_ref(), cluster_key).await
             }
             ClientRpcRequest::FederateRepository { repo_id, mode } => {
-                handle_federate_repository(&self.forge_node, repo_id, mode).await
+                handle_federate_repository(&self.forge_node, repo_id, mode, self.federation_cluster_identity.as_ref())
+                    .await
             }
             ClientRpcRequest::ListFederatedRepositories => handle_list_federated_repositories(&self.forge_node).await,
             ClientRpcRequest::FederationSyncPeer {
@@ -1714,6 +1715,7 @@ impl ServiceExecutor for ForgeServiceExecutor {
                     peer_addr.as_deref(),
                     self.federation_cluster_identity.as_ref(),
                     self.iroh_endpoint.as_ref(),
+                    &self.forge_node,
                 )
                 .await
             }

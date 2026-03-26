@@ -299,44 +299,65 @@ in
               f"expected federation handler log on alice"
           alice.log("Federation ALPN handler confirmed in logs")
 
-      # ── cross-cluster federation sync ────────────────────────────────
+      # ── extract connection info for cross-cluster tests ──────────────
 
-      with subtest("bob syncs from alice via federation protocol"):
-          # Extract alice's iroh node ID from cluster health --json
-          alice_health = cli(alice, "cluster health")
-          alice.log(f"Alice health: {alice_health}")
-          assert isinstance(alice_health, dict), f"expected dict: {alice_health}"
+      # Get Alice's iroh node ID and direct address (used by multiple subtests)
+      import re
+      alice_health = cli(alice, "cluster health")
+      alice_node_id = alice_health.get("iroh_node_id")
+      assert alice_node_id, f"iroh_node_id missing from health: {alice_health}"
 
-          alice_node_id = alice_health.get("iroh_node_id")
-          assert alice_node_id, f"iroh_node_id missing from health: {alice_health}"
-          alice.log(f"Alice iroh node ID: {alice_node_id}")
+      alice_journal = alice.succeed("journalctl -u aspen-node --no-pager -q")
+      addr_match = re.search(r'192\.168\.1\.1:(\d+)', alice_journal)
+      assert addr_match, "could not find Alice's 192.168.1.x address in journal"
+      alice_addr = f"192.168.1.1:{addr_match.group(1)}"
+      alice.log(f"Alice: node_id={alice_node_id} addr={alice_addr}")
 
-          # Extract Alice's direct address from journal (format: direct_addrs=[..., 192.168.1.1:PORT, ...])
-          import re
-          alice_journal = alice.succeed("journalctl -u aspen-node --no-pager -q")
-          addr_match = re.search(r'192\.168\.1\.1:(\d+)', alice_journal)
-          assert addr_match, "could not find Alice's 192.168.1.x address in journal"
-          alice_addr = f"192.168.1.1:{addr_match.group(1)}"
-          alice.log(f"Alice direct address: {alice_addr}")
+      # ── cross-cluster handshake ──────────────────────────────────────
 
-          # Bob connects to Alice via federation sync with direct address hint
-          bob.log(f"Attempting federation sync with alice node: {alice_node_id} addr: {alice_addr}")
+      with subtest("bob handshakes with alice via federation protocol"):
           sync_result = cli(bob, f"federation sync --peer {alice_node_id} --addr {alice_addr}", check=False)
-          bob.log(f"Federation sync result: {sync_result}")
+          bob.log(f"Handshake result: {sync_result}")
+          assert isinstance(sync_result, dict) and sync_result.get("is_success"), \
+              f"handshake failed: {sync_result}"
+          assert sync_result.get("remote_cluster_name") == "alice-cluster"
+          bob.log("CROSS-CLUSTER HANDSHAKE SUCCEEDED!")
 
-          # With the direct address hint, the QUIC handshake should succeed
-          assert isinstance(sync_result, dict), f"expected dict: {sync_result}"
-          assert sync_result.get("is_success"), \
-              f"federation sync failed: {sync_result.get('error', sync_result)}"
+      # ── alice federates her repo ─────────────────────────────────────
 
-          bob.log("CROSS-CLUSTER FEDERATION HANDSHAKE SUCCEEDED!")
-          remote_name = sync_result.get("remote_cluster_name", "")
-          remote_key = sync_result.get("remote_cluster_key", "")
-          bob.log(f"Remote cluster: {remote_name} ({remote_key})")
+      with subtest("alice federates her repo"):
+          fed_result = cli(alice, f"federation federate {alice_repo_id} --mode public", check=False)
+          alice.log(f"Federate result: {fed_result}")
+          assert isinstance(fed_result, dict), f"expected dict: {fed_result}"
+          assert fed_result.get("is_success"), \
+              f"federate failed: {fed_result.get('error', fed_result)}"
+          alice_fed_id = fed_result.get("fed_id", "")
+          alice.log(f"Alice fed_id: {alice_fed_id}")
 
-          # Verify we got Alice's identity back
-          assert remote_name == "alice-cluster", \
-              f"expected alice-cluster, got {remote_name}"
+      with subtest("alice sees federated repo in list"):
+          fl = cli(alice, "federation list-federated")
+          alice.log(f"Alice federated repos: {fl}")
+          repos = fl.get("repositories", [])
+          assert len(repos) >= 1, f"expected at least 1 federated repo: {repos}"
+
+      # ── bob syncs and sees alice's refs ──────────────────────────────
+
+      with subtest("bob syncs from alice and sees resources"):
+          sync_result = cli(bob, f"federation sync --peer {alice_node_id} --addr {alice_addr}", check=False)
+          bob.log(f"Data sync result: {sync_result}")
+          assert isinstance(sync_result, dict) and sync_result.get("is_success"), \
+              f"sync failed: {sync_result}"
+
+          resources = sync_result.get("resources", [])
+          bob.log(f"Resources: {resources}")
+          # Alice federated a repo, so we should see at least one resource
+          assert len(resources) >= 1, \
+              f"expected at least 1 resource from alice, got {resources}"
+          bob.log(f"Bob sees {len(resources)} resource(s) from alice-cluster")
+
+          # Check resource details
+          r = resources[0]
+          bob.log(f"First resource: type={r.get('resource_type')} refs={r.get('ref_count')} fed_id={r.get('fed_id')}")
 
       # ── done ─────────────────────────────────────────────────────────
       alice.log("Federation VM integration test passed!")

@@ -377,17 +377,85 @@ pub(crate) async fn handle_untrust_cluster(
 }
 
 pub(crate) async fn handle_federate_repository(
-    _forge_node: &ForgeNodeRef,
-    _repo_id: String,
-    _mode: String,
+    forge_node: &ForgeNodeRef,
+    repo_id: String,
+    mode: String,
+    cluster_identity: Option<&Arc<aspen_cluster::federation::ClusterIdentity>>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_api::FederateRepositoryResultResponse;
+    use aspen_cluster::federation::FederatedId;
+    use aspen_cluster::federation::FederationSettings;
+    use aspen_forge::identity::RepoId;
 
-    // Federation integration is handled separately from ForgeNode
+    let identity = match cluster_identity {
+        Some(id) => id,
+        None => {
+            return Ok(ClientRpcResponse::FederateRepositoryResult(FederateRepositoryResultResponse {
+                is_success: false,
+                fed_id: None,
+                error: Some("federation not configured on this cluster".to_string()),
+            }));
+        }
+    };
+
+    // Parse repo ID
+    let repo_id_parsed = match RepoId::from_hex(&repo_id) {
+        Ok(id) => id,
+        Err(e) => {
+            return Ok(ClientRpcResponse::FederateRepositoryResult(FederateRepositoryResultResponse {
+                is_success: false,
+                fed_id: None,
+                error: Some(format!("invalid repo ID: {e}")),
+            }));
+        }
+    };
+
+    // Verify repo exists
+    if let Err(e) = forge_node.get_repo(&repo_id_parsed).await {
+        return Ok(ClientRpcResponse::FederateRepositoryResult(FederateRepositoryResultResponse {
+            is_success: false,
+            fed_id: None,
+            error: Some(format!("repo not found: {e}")),
+        }));
+    }
+
+    // Construct federated ID from cluster pubkey + repo hash
+    let fed_id = FederatedId::new(identity.public_key(), repo_id_parsed.0);
+
+    // Parse federation mode
+    let fed_mode = match mode.as_str() {
+        "public" => aspen_cluster::federation::FederationMode::Public,
+        "allowlist" => aspen_cluster::federation::FederationMode::AllowList,
+        "disabled" => aspen_cluster::federation::FederationMode::Disabled,
+        _ => aspen_cluster::federation::FederationMode::Public,
+    };
+
+    let settings = FederationSettings {
+        mode: fed_mode,
+        resource_type: Some("forge:repo".to_string()),
+        ..Default::default()
+    };
+
+    // Persist to KV
+    if let Err(e) = forge_node.set_federation_settings(&fed_id, &settings).await {
+        return Ok(ClientRpcResponse::FederateRepositoryResult(FederateRepositoryResultResponse {
+            is_success: false,
+            fed_id: None,
+            error: Some(format!("failed to persist federation settings: {e}")),
+        }));
+    }
+
+    tracing::info!(
+        repo_id = %repo_id,
+        fed_id = %fed_id,
+        mode = %mode,
+        "repository federated"
+    );
+
     Ok(ClientRpcResponse::FederateRepositoryResult(FederateRepositoryResultResponse {
-        is_success: false,
-        fed_id: None,
-        error: Some("Federation not available through RPC".to_string()),
+        is_success: true,
+        fed_id: Some(fed_id.to_string()),
+        error: None,
     }))
 }
 
@@ -440,6 +508,7 @@ pub(crate) async fn handle_federation_sync_peer(
     peer_addr: Option<&str>,
     cluster_identity: Option<&Arc<aspen_cluster::federation::ClusterIdentity>>,
     iroh_endpoint: Option<&Arc<iroh::Endpoint>>,
+    forge_node: &ForgeNodeRef,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_api::FederationSyncPeerResponse;
     use aspen_client_api::SyncPeerResourceInfo;
@@ -518,14 +587,45 @@ pub(crate) async fn handle_federation_sync_peer(
             }
         };
 
-    let resource_infos: Vec<SyncPeerResourceInfo> = resources
-        .iter()
-        .map(|r| SyncPeerResourceInfo {
+    // Query ref heads for each resource and store locally
+    let mut resource_infos = Vec::with_capacity(resources.len());
+    for r in &resources {
+        let (was_found, heads, _metadata) =
+            match aspen_cluster::federation::sync::get_remote_resource_state(&connection, &r.fed_id).await {
+                Ok(result) => result,
+                Err(e) => {
+                    tracing::warn!(fed_id = %r.fed_id.short(), error = %e, "failed to get resource state");
+                    (false, std::collections::HashMap::new(), None)
+                }
+            };
+
+        let ref_heads: Vec<(String, String)> = if was_found {
+            heads.iter().map(|(name, hash)| (name.clone(), hex::encode(hash))).collect()
+        } else {
+            Vec::new()
+        };
+
+        // Store synced refs in local KV for persistence (best-effort)
+        let origin_short = {
+            let full = r.fed_id.origin().to_string();
+            full[..16.min(full.len())].to_string()
+        };
+        let local_short = r.fed_id.short();
+        for (ref_name, hex_hash) in &ref_heads {
+            let key = format!("_fed:sync:{}:{}:refs/{}", origin_short, local_short, ref_name);
+            if let Err(e) = forge_node.write_kv(&key, hex_hash).await {
+                tracing::warn!(key = %key, error = %e, "failed to persist synced ref");
+            }
+        }
+
+        resource_infos.push(SyncPeerResourceInfo {
             resource_type: r.resource_type.clone(),
-            ref_count: 0, // Would need GetResourceState per resource for counts
-            ref_names: Vec::new(),
-        })
-        .collect();
+            ref_count: ref_heads.len() as u32,
+            ref_names: ref_heads.iter().map(|(name, _)| name.clone()).collect(),
+            ref_heads,
+            fed_id: Some(r.fed_id.to_string()),
+        });
+    }
 
     Ok(ClientRpcResponse::FederationSyncPeerResult(FederationSyncPeerResponse {
         is_success: true,
