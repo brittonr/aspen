@@ -835,10 +835,21 @@ impl Node {
         #[cfg(feature = "federation")]
         if self.handle.config.federation.is_enabled {
             let hlc = Arc::new(aspen_core::hlc::create_hlc(&self.handle.config.node_id.to_string()));
+
+            // Create Forge resource resolver if forge feature is enabled
+            #[cfg(feature = "forge")]
+            let resolver: Option<Arc<dyn aspen_cluster::federation::FederationResourceResolver>> = {
+                let kv = self.handle.storage.raft_node.clone();
+                Some(Arc::new(aspen_forge::resolver::ForgeResourceResolver::new(kv)))
+            };
+            #[cfg(not(feature = "forge"))]
+            let resolver: Option<Arc<dyn aspen_cluster::federation::FederationResourceResolver>> = None;
+
             match aspen_cluster::bootstrap::setup_federation(
                 &self.handle.config,
                 self.handle.network.iroh_manager.endpoint(),
                 &hlc,
+                resolver,
             ) {
                 Some(fed) => {
                     builder = builder.accept(FEDERATION_ALPN, fed.handler);

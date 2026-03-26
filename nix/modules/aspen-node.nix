@@ -174,6 +174,31 @@ in {
       description = "Directory for CI job workspaces when using local executor mode";
     };
 
+    # Federation cross-cluster communication
+    enableFederation = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Enable federation for cross-cluster communication";
+    };
+
+    federationClusterKey = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Hex-encoded Ed25519 cluster key for federation identity (64 hex chars). If null, a key is auto-generated.";
+    };
+
+    federationClusterName = lib.mkOption {
+      type = lib.types.str;
+      default = "aspen-cluster";
+      description = "Human-readable cluster name for federation announcements";
+    };
+
+    federationTrustedClusters = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [];
+      description = "List of hex-encoded public keys of trusted federated clusters";
+    };
+
     enableSnix = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -199,6 +224,17 @@ in {
         {
           RUST_LOG = cfg.logLevel;
           ASPEN_CI_WATCHED_REPOS = lib.concatStringsSep "," cfg.watchedRepos;
+        }
+        # Federation cross-cluster communication
+        // lib.optionalAttrs cfg.enableFederation {
+          ASPEN_FEDERATION_ENABLED = "true";
+          ASPEN_FEDERATION_CLUSTER_NAME = cfg.federationClusterName;
+        }
+        // lib.optionalAttrs (cfg.enableFederation && cfg.federationClusterKey != null) {
+          ASPEN_FEDERATION_CLUSTER_KEY = cfg.federationClusterKey;
+        }
+        // lib.optionalAttrs (cfg.enableFederation && cfg.federationTrustedClusters != []) {
+          ASPEN_FEDERATION_TRUSTED_CLUSTERS = lib.concatStringsSep "," cfg.federationTrustedClusters;
         }
         # SNIX decomposed content-addressed storage
         // lib.optionalAttrs cfg.enableSnix {

@@ -43,6 +43,7 @@ pub fn setup_federation(
     config: &NodeConfig,
     endpoint: &iroh::Endpoint,
     hlc: &Arc<aspen_core::hlc::HLC>,
+    resource_resolver: Option<Arc<dyn aspen_federation::FederationResourceResolver>>,
 ) -> Option<FederationInitResult> {
     use aspen_federation::ClusterIdentity;
     use aspen_federation::FederationProtocolHandler;
@@ -119,7 +120,7 @@ pub fn setup_federation(
         resource_settings: Arc::new(RwLock::new(HashMap::new())),
         endpoint: Arc::new(endpoint.clone()),
         hlc: hlc.clone(),
-        resource_resolver: None, // Resolver wired later when forge is available
+        resource_resolver,
         session_credential: std::sync::Mutex::new(None),
     };
 
@@ -196,7 +197,7 @@ mod tests {
 
         // Default config has federation disabled
         assert!(!config.federation.is_enabled);
-        let result = setup_federation(&config, &endpoint, &hlc);
+        let result = setup_federation(&config, &endpoint, &hlc, None);
         assert!(result.is_none());
     }
 
@@ -208,7 +209,7 @@ mod tests {
         let endpoint = make_test_endpoint();
         let hlc = Arc::new(aspen_core::hlc::HLC::new());
 
-        let result = setup_federation(&config, &endpoint, &hlc);
+        let result = setup_federation(&config, &endpoint, &hlc, None);
         assert!(result.is_some(), "should auto-generate identity when no key configured");
     }
 
@@ -223,7 +224,7 @@ mod tests {
         let endpoint = make_test_endpoint();
         let hlc = Arc::new(aspen_core::hlc::HLC::new());
 
-        let result = setup_federation(&config, &endpoint, &hlc);
+        let result = setup_federation(&config, &endpoint, &hlc, None);
         assert!(result.is_some());
 
         let r = result.unwrap();
@@ -239,7 +240,7 @@ mod tests {
         let endpoint = make_test_endpoint();
         let hlc = Arc::new(aspen_core::hlc::HLC::new());
 
-        let result = setup_federation(&config, &endpoint, &hlc);
+        let result = setup_federation(&config, &endpoint, &hlc, None);
         assert!(result.is_none());
     }
 
@@ -258,7 +259,7 @@ mod tests {
         let endpoint = make_test_endpoint();
         let hlc = Arc::new(aspen_core::hlc::HLC::new());
 
-        let result = setup_federation(&config, &endpoint, &hlc);
+        let result = setup_federation(&config, &endpoint, &hlc, None);
         assert!(result.is_some());
 
         let r = result.unwrap();
