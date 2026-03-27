@@ -2142,7 +2142,7 @@
                 ciCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy,snix,snix-build";
+                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy,federation,snix,snix-build";
                   doCheck = false;
                   PROTO_ROOT = "${snix-src}";
                   SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
@@ -4432,6 +4432,47 @@
               ''}";
             };
 
+            # Federated dogfood: two independent clusters, cross-cluster build
+            # Usage: nix run .#dogfood-federation
+            # Alice hosts source in Forge, Bob syncs via federation and builds with CI.
+            dogfood-federation = let
+              dogfoodNode = bins.ci-aspen-node-snix-build;
+              scriptsDir = pkgs.runCommand "aspen-scripts-fed" {} ''
+                mkdir -p $out
+                cp -r ${./scripts}/* $out/
+                chmod -R +w $out
+              '';
+            in {
+              type = "app";
+              program = "${pkgs.writeShellScript "dogfood-federation" ''
+                set -e
+
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    dogfoodNode
+                    bins.aspen-cli
+                    bins.git-remote-aspen
+                    pkgs.bash
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                    pkgs.gnused
+                    pkgs.git
+                    pkgs.curl
+                    pkgs.python3
+                    pkgs.nix
+                    pkgs.bubblewrap
+                  ]
+                }:$PATH"
+
+                export ASPEN_NODE_BIN="${dogfoodNode}/bin/aspen-node"
+                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
+                export PROJECT_DIR="$PWD"
+
+                exec ${scriptsDir}/dogfood-federation.sh "$@"
+              ''}";
+            };
+
             # Local nodes with VM-isolated CI
             # Usage: nix run .#dogfood-local-vmci
             # Runs nodes as local processes, CI jobs in Cloud Hypervisor VMs
@@ -4843,6 +4884,17 @@
                   # Build: nix build .#dogfood-serial-multinode-vm
                   # Boot:  vm_boot image="result/disk.qcow2" format="qcow2" memory="6144M" cpus=4
                   dogfood-serial-multinode-vm = import ./nix/vms/serial-dogfood-multinode.nix {
+                    inherit pkgs;
+                    lib = nixpkgs.lib;
+                    aspenNodePackage = self.packages.${system}.aspen-node-serial-dogfood;
+                    aspenCliPackage = aspenCli;
+                    gitRemoteAspenPackage = aspenGitRemote;
+                    nixpkgsFlake = nixpkgs;
+                  };
+
+                  # Build: nix build .#dogfood-serial-federation-vm
+                  # Boot:  vm_boot image="result/disk.qcow2" format="qcow2" memory="6144M" cpus=4
+                  dogfood-serial-federation-vm = import ./nix/vms/serial-dogfood-federation.nix {
                     inherit pkgs;
                     lib = nixpkgs.lib;
                     aspenNodePackage = self.packages.${system}.aspen-node-serial-dogfood;
