@@ -229,8 +229,15 @@ pub struct ResourceMetadata {
 pub struct RefEntry {
     /// Ref name (e.g., "heads/main", "tags/v1.0").
     pub ref_name: String,
-    /// Commit hash this ref points to.
+    /// Commit hash this ref points to (envelope BLAKE3 on the source).
     pub head_hash: [u8; 32],
+    /// Git SHA1 of the commit (deterministic across clusters).
+    ///
+    /// Used by the receiver to match this ref to the correct locally
+    /// imported commit. SHA1 is computed from the raw git content and
+    /// is identical on source and destination.
+    #[serde(default)]
+    pub commit_sha1: Option<[u8; 20]>,
 }
 
 /// A synced object.

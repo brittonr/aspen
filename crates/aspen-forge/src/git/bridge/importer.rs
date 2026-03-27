@@ -144,7 +144,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         // Best-effort: log but don't fail import if KV write fails
         match self.mapping.kv().write(write_req).await {
             Ok(_) => {
-                tracing::info!(
+                tracing::debug!(
                     blake3 = %hex::encode(blake3.as_bytes()),
                     key = %obj_key_debug,
                     size = bytes.len(),

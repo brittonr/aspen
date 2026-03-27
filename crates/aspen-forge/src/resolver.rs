@@ -20,6 +20,8 @@ use aspen_cluster::federation::FederationSettings;
 use aspen_cluster::federation::sync::ResourceMetadata;
 use aspen_cluster::federation::sync::SyncObject;
 use aspen_core::KeyValueStore;
+#[cfg(feature = "git-bridge")]
+use aspen_core::ReadRequest;
 use aspen_core::ScanRequest;
 use async_trait::async_trait;
 use tracing::debug;
@@ -197,8 +199,13 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
     /// Export git objects reachable from ref heads using the git exporter.
     ///
     /// Walks the commit DAG from each ref head, skipping objects the remote
-    /// already has (by BLAKE3 hash). Returns `SyncObject` entries with raw
-    /// git content and BLAKE3 hashes.
+    /// already has. Builds a content→envelope hash mapping as objects are
+    /// exported, converting `have_set` content hashes to envelope hashes
+    /// for progressively better DAG walk dedup across refs. Objects whose
+    /// content hashes appear in `have_set` are also post-filtered.
+    ///
+    /// Returns `SyncObject` entries with raw git content and BLAKE3 content
+    /// hashes.
     #[cfg(feature = "git-bridge")]
     async fn export_git_objects(
         &self,
@@ -209,7 +216,11 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
         limit: usize,
     ) -> Vec<SyncObject> {
         let mut objects = Vec::new();
-        let mut all_known: HashSet<[u8; 32]> = have_set.clone();
+        // Track envelope hashes for cross-ref dedup in the DAG walk.
+        let mut all_known_envelopes: HashSet<[u8; 32]> = HashSet::new();
+        // Map content hashes to envelope hashes. Built incrementally as
+        // objects are exported, used to convert have_set for DAG walk dedup.
+        let mut content_to_envelope: HashMap<[u8; 32], [u8; 32]> = HashMap::new();
 
         for (_ref_name, head_hash) in ref_heads {
             if objects.len() >= limit {
@@ -219,9 +230,19 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
             let commit_blake3 = blake3::Hash::from_bytes(*head_hash);
             let remaining = limit.saturating_sub(objects.len());
 
-            match exporter.export_dag_blake3(repo_id, commit_blake3, &all_known, remaining).await {
+            // Convert have_set content hashes to envelope hashes for the
+            // DAG walk. The mapping grows with each ref, so dedup becomes
+            // progressively more effective across shared objects.
+            let mut known_for_walk = all_known_envelopes.clone();
+            for content_hash in have_set {
+                if let Some(&envelope_hash) = content_to_envelope.get(content_hash) {
+                    known_for_walk.insert(envelope_hash);
+                }
+            }
+
+            match exporter.export_dag_blake3(repo_id, commit_blake3, &known_for_walk, remaining).await {
                 Ok(result) => {
-                    tracing::info!(
+                    debug!(
                         repo_id = %hex::encode(repo_id.0),
                         commit = %hex::encode(commit_blake3.as_bytes()),
                         exported = result.objects.len(),
@@ -234,17 +255,24 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
                         let b3_bytes: [u8; 32] = *obj.blake3.as_bytes();
                         let data = obj.content;
 
-                        // Hash the content directly (not the envelope BLAKE3).
-                        // The client verifies content hash on receipt:
+                        // Content hash for wire verification:
                         //   verify_content_hash(&obj.data, &obj.hash)
-                        // So hash must be blake3(data), not SignedObject::hash().
-                        let hash: [u8; 32] = blake3::hash(&data).into();
+                        let content_hash: [u8; 32] = blake3::hash(&data).into();
 
-                        all_known.insert(b3_bytes);
+                        // Build content→envelope mapping for future dedup.
+                        content_to_envelope.insert(content_hash, b3_bytes);
+                        all_known_envelopes.insert(b3_bytes);
+
+                        // Skip objects the client already has (by content hash).
+                        // Catches first-ref objects that the DAG walk couldn't
+                        // skip because the mapping wasn't built yet.
+                        if have_set.contains(&content_hash) {
+                            continue;
+                        }
 
                         objects.push(SyncObject {
                             object_type,
-                            hash,
+                            hash: content_hash,
                             data,
                             signature: None,
                             signer: None,
@@ -262,6 +290,38 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
         }
 
         objects
+    }
+
+    /// Look up the git SHA1 for a commit given its envelope BLAKE3 hash.
+    ///
+    /// Reads the hash mapping from KV (`forge:hashmap:b3:{repo}:{blake3}`)
+    /// and extracts the SHA1. Returns `None` if the mapping doesn't exist
+    /// (e.g., non-git objects or mapping not yet stored).
+    #[cfg(feature = "git-bridge")]
+    async fn lookup_commit_sha1(&self, repo_hex: &str, envelope_blake3: &[u8; 32]) -> Option<[u8; 20]> {
+        let key = format!("forge:hashmap:b3:{}:{}", repo_hex, hex::encode(envelope_blake3));
+        let read_req = ReadRequest::new(key);
+        match self.kv.read(read_req).await {
+            Ok(result) => {
+                if let Some(kv) = result.kv {
+                    // Value is base64-encoded postcard(HashMapping)
+                    use base64::Engine;
+                    if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(&kv.value)
+                        && let Ok(mapping) = postcard::from_bytes::<crate::git::bridge::mapping::HashMapping>(&bytes)
+                    {
+                        return Some(mapping.sha1);
+                    }
+                }
+                None
+            }
+            Err(_) => None,
+        }
+    }
+
+    /// Stub for non-git-bridge builds.
+    #[cfg(not(feature = "git-bridge"))]
+    async fn lookup_commit_sha1(&self, _repo_hex: &str, _envelope_blake3: &[u8; 32]) -> Option<[u8; 20]> {
+        None
     }
 
     /// Check if a repo exists by scanning for any keys with its prefix.
@@ -374,16 +434,24 @@ impl<K: ?Sized + KeyValueStore + Send + Sync + 'static> FederationResourceResolv
         // Phase 1: Collect refs (always needed — git objects are walked from ref heads)
         let ref_heads = self.scan_ref_heads(&refs_prefix).await?;
 
-        // Phase 2: Return ref entries if requested
+        // Phase 2: Return ref entries if requested.
+        //
+        // Includes commit_sha1 when hash mappings are available, enabling
+        // the receiver to match each ref to its specific locally imported
+        // commit (needed for multi-branch repos).
         if wants_refs {
             for (ref_name, head_hash) in &ref_heads {
                 if objects.len() >= limit as usize {
                     break;
                 }
 
+                // Look up git SHA1 for this commit's envelope BLAKE3.
+                let commit_sha1 = self.lookup_commit_sha1(&repo_hex, head_hash).await;
+
                 let ref_entry = RefEntry {
                     ref_name: ref_name.clone(),
                     head_hash: *head_hash,
+                    commit_sha1,
                 };
                 let data = postcard::to_allocvec(&ref_entry).unwrap_or_default();
                 let hash = blake3::hash(&data).into();
@@ -405,7 +473,7 @@ impl<K: ?Sized + KeyValueStore + Send + Sync + 'static> FederationResourceResolv
         // Phase 3: Export git objects if requested and exporter available
         #[cfg(feature = "git-bridge")]
         if wants_git_objects {
-            tracing::info!(
+            debug!(
                 fed_id = %fed_id.short(),
                 has_exporter = self.git_exporter.is_some(),
                 ref_head_count = ref_heads.len(),
@@ -1131,13 +1199,13 @@ mod git_bridge_tests {
             .await
             .unwrap();
 
-        // Should get at least the 3 new objects (blob2, tree2, commit2).
-        // May also include old objects since have_hashes dedup uses content
-        // hashes while DAG walk uses envelope hashes (incremental optimization
-        // is a future improvement — for now full DAG is returned).
-        assert!(
-            incremental.len() >= 3,
-            "incremental sync should return at least 3 new objects, got {}",
+        // Should get exactly 3 new objects (blob2, tree2, commit2).
+        // Objects from the first sync are skipped: have_hashes content
+        // hashes are post-filtered in export_git_objects.
+        assert_eq!(
+            incremental.len(),
+            3,
+            "incremental sync should return exactly 3 new objects, got {}",
             incremental.len()
         );
     }

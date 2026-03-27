@@ -6,10 +6,12 @@
 //!
 //! This module is feature-gated with `git-bridge`.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::GitBridgeListRefsResponse;
+use aspen_cluster::federation::sync::RefEntry;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -83,7 +85,6 @@ async fn sync_from_origin(
     mirror_repo_id: &aspen_forge::identity::RepoId,
 ) -> Result<(u32, u32, Vec<String>), String> {
     use aspen_cluster::federation::FederatedId;
-    use aspen_cluster::federation::sync::RefEntry;
 
     let fed_id_str = build_fed_id_str(origin_key, upstream_repo_hex);
 
@@ -135,13 +136,13 @@ async fn sync_from_origin(
     .await
     .map_err(|e| format!("ref fetch failed: {e}"))?;
 
-    let mut fetched_refs: Vec<(String, [u8; 32])> = Vec::new();
+    let mut fetched_refs: Vec<FetchedRef> = Vec::new();
     for obj in &ref_objects {
         if obj.object_type != "ref" {
             continue;
         }
         match postcard::from_bytes::<RefEntry>(&obj.data) {
-            Ok(entry) => fetched_refs.push((entry.ref_name, entry.head_hash)),
+            Ok(entry) => fetched_refs.push((entry.ref_name, entry.head_hash, entry.commit_sha1)),
             Err(e) => errors.push(format!("ref deserialize: {e}")),
         }
     }
@@ -155,7 +156,7 @@ async fn sync_from_origin(
     let mut current_have = have_hashes;
     let max_rounds = 10u32;
 
-    for _round in 0..max_rounds {
+    for round in 0..max_rounds {
         let (objects, has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
             &connection,
             &fed_id,
@@ -175,9 +176,9 @@ async fn sync_from_origin(
         };
 
         if objects.is_empty() {
-            tracing::info!(
+            debug!(
                 origin = %origin_key,
-                round = _round,
+                round = round,
                 "sync returned empty git objects batch — stopping"
             );
             break;
@@ -200,10 +201,9 @@ async fn sync_from_origin(
 
     // Translate remote ref hashes to local BLAKE3 hashes.
     //
-    // Remote refs point to Alice's envelope BLAKE3 (SignedObject::hash()),
-    // but the local import creates new SignedObjects with different hashes.
-    // Match by finding the commit SyncObject for each ref: compute its
-    // content hash, look up the locally imported BLAKE3 in the mapping.
+    // Each ref carries commit_sha1 (deterministic git SHA1). We compute
+    // SHA1 from each commit SyncObject's content, match by SHA1, then
+    // look up the locally imported BLAKE3 via content_to_local_blake3.
     let translated_refs = translate_ref_hashes(&fetched_refs, &all_git_objects, &stats);
 
     // Update mirror refs with locally imported hashes
@@ -224,56 +224,68 @@ async fn sync_from_origin(
     Ok((refs_fetched, objects_imported, errors))
 }
 
+/// A fetched ref entry: (ref_name, head_hash, commit_sha1).
+type FetchedRef = (String, [u8; 32], Option<[u8; 20]>);
+
 /// Translate remote ref hashes to locally imported BLAKE3 hashes.
 ///
-/// Remote refs point to the origin's envelope BLAKE3 hashes. After local
-/// import, objects have different envelope hashes. This function finds the
-/// commit SyncObject for each ref by matching content, then looks up the
-/// locally imported BLAKE3 via the content hash mapping.
+/// Each ref carries a `commit_sha1` (git SHA1 of the commit it points to).
+/// Since SHA1 is deterministic from the raw git content, it's identical on
+/// source and destination. We compute SHA1 from each commit SyncObject's
+/// raw content, build a SHA1→content_hash map, then look up the locally
+/// imported BLAKE3 via `content_to_local_blake3`.
+///
+/// For refs without `commit_sha1` (older protocol), falls back to trying
+/// all commit content hashes (single-branch only).
 ///
 /// For refs that can't be translated (no matching commit found), falls back
 /// to the original hash (which won't resolve locally, but at least the ref
 /// exists for later re-sync).
 fn translate_ref_hashes(
-    fetched_refs: &[(String, [u8; 32])],
+    fetched_refs: &[FetchedRef],
     git_objects: &[aspen_cluster::federation::sync::SyncObject],
     stats: &super::federation::FederationImportStats,
 ) -> Vec<(String, [u8; 32])> {
-    // Build content_hash → SyncObject index for commits only
-    let commit_content_hashes: Vec<[u8; 32]> = git_objects
-        .iter()
-        .filter(|o| o.object_type == "commit")
-        .map(|o| {
-            let h: [u8; 32] = blake3::hash(&o.data).into();
-            h
-        })
-        .collect();
+    use sha1::Digest;
+
+    // Build SHA1→content_hash map from commit SyncObjects.
+    // SHA1 is computed from the reconstructed full git bytes (header + content).
+    let mut sha1_to_content: HashMap<[u8; 20], [u8; 32]> = HashMap::new();
+    for obj in git_objects.iter().filter(|o| o.object_type == "commit") {
+        let header = format!("commit {}\0", obj.data.len());
+        let mut hasher = sha1::Sha1::new();
+        hasher.update(header.as_bytes());
+        hasher.update(&obj.data);
+        let sha1: [u8; 20] = hasher.finalize().into();
+        let content_hash: [u8; 32] = blake3::hash(&obj.data).into();
+        sha1_to_content.insert(sha1, content_hash);
+    }
 
     let mut translated = Vec::with_capacity(fetched_refs.len());
 
-    for (ref_name, _remote_hash) in fetched_refs {
-        // Try each commit's content hash to find a local BLAKE3 match.
-        // For single-branch repos, there's typically one commit.
-        let mut found = false;
-        for content_hash in &commit_content_hashes {
-            if let Some(local_blake3) = stats.content_to_local_blake3.get(content_hash) {
-                translated.push((ref_name.clone(), *local_blake3.as_bytes()));
-                tracing::info!(
-                    ref_name = %ref_name,
-                    local_blake3 = %hex::encode(local_blake3.as_bytes()),
-                    "translated ref to local BLAKE3"
-                );
-                found = true;
-                break;
-            }
-        }
-        if !found {
-            // Fallback: use remote hash (won't resolve, but ref is recorded)
+    for (ref_name, remote_hash, commit_sha1) in fetched_refs {
+        let local_blake3 = if let Some(sha1) = commit_sha1 {
+            // Match via SHA1 (correct for multi-branch repos).
+            sha1_to_content.get(sha1).and_then(|ch| stats.content_to_local_blake3.get(ch))
+        } else {
+            // Fallback for older protocol without commit_sha1:
+            // try all commit content hashes (works for single-branch only).
+            sha1_to_content.values().find_map(|ch| stats.content_to_local_blake3.get(ch))
+        };
+
+        if let Some(blake3) = local_blake3 {
+            debug!(
+                ref_name = %ref_name,
+                local_blake3 = %hex::encode(blake3.as_bytes()),
+                "translated ref to local BLAKE3"
+            );
+            translated.push((ref_name.clone(), *blake3.as_bytes()));
+        } else {
             tracing::warn!(
                 ref_name = %ref_name,
                 "could not translate ref to local BLAKE3, using remote hash"
             );
-            translated.push((ref_name.clone(), *_remote_hash));
+            translated.push((ref_name.clone(), *remote_hash));
         }
     }
 
@@ -531,5 +543,87 @@ mod tests {
         let origin = "abc123";
         let repo = "def456";
         assert_eq!(build_fed_id_str(origin, repo), "abc123:def456");
+    }
+
+    /// Two refs pointing to different commits must produce different local
+    /// BLAKE3 hashes after translation. Verifies SHA1-based matching works
+    /// correctly for multi-branch repos.
+    #[test]
+    fn test_translate_ref_hashes_multi_branch() {
+        use sha1::Digest;
+
+        // Build two distinct commit git objects (different tree SHA1s).
+        let commit_data_a = b"tree 1111111111111111111111111111111111111111\n\
+            author A <a@test> 1700000000 +0000\n\
+            committer A <a@test> 1700000000 +0000\n\n\
+            commit A\n";
+        let commit_data_b = b"tree 2222222222222222222222222222222222222222\n\
+            author B <b@test> 1700000000 +0000\n\
+            committer B <b@test> 1700000000 +0000\n\n\
+            commit B\n";
+
+        // Compute SHA1 for each commit (header + content).
+        let sha1_a: [u8; 20] = {
+            let header = format!("commit {}\0", commit_data_a.len());
+            let mut h = sha1::Sha1::new();
+            h.update(header.as_bytes());
+            h.update(commit_data_a.as_slice());
+            h.finalize().into()
+        };
+        let sha1_b: [u8; 20] = {
+            let header = format!("commit {}\0", commit_data_b.len());
+            let mut h = sha1::Sha1::new();
+            h.update(header.as_bytes());
+            h.update(commit_data_b.as_slice());
+            h.finalize().into()
+        };
+
+        assert_ne!(sha1_a, sha1_b, "commits must have different SHA1s");
+
+        // Content hashes (blake3 of raw content).
+        let ch_a: [u8; 32] = blake3::hash(commit_data_a).into();
+        let ch_b: [u8; 32] = blake3::hash(commit_data_b).into();
+
+        // Simulate SyncObjects for both commits.
+        let sync_objects = vec![
+            aspen_cluster::federation::sync::SyncObject {
+                object_type: "commit".to_string(),
+                hash: ch_a,
+                data: commit_data_a.to_vec(),
+                signature: None,
+                signer: None,
+            },
+            aspen_cluster::federation::sync::SyncObject {
+                object_type: "commit".to_string(),
+                hash: ch_b,
+                data: commit_data_b.to_vec(),
+                signature: None,
+                signer: None,
+            },
+        ];
+
+        // Simulate import stats: each content hash maps to a different local BLAKE3.
+        let local_b3_a = blake3::Hash::from_bytes([0xAA; 32]);
+        let local_b3_b = blake3::Hash::from_bytes([0xBB; 32]);
+        let mut stats = super::super::federation::FederationImportStats::default();
+        stats.content_to_local_blake3.insert(ch_a, local_b3_a);
+        stats.content_to_local_blake3.insert(ch_b, local_b3_b);
+
+        // Refs with commit_sha1 set (new protocol).
+        let fetched_refs = vec![
+            ("heads/main".to_string(), [0x11; 32], Some(sha1_a)),
+            ("heads/dev".to_string(), [0x22; 32], Some(sha1_b)),
+        ];
+
+        let translated = translate_ref_hashes(&fetched_refs, &sync_objects, &stats);
+
+        assert_eq!(translated.len(), 2);
+
+        let main_hash = translated.iter().find(|(n, _)| n == "heads/main").map(|(_, h)| *h);
+        let dev_hash = translated.iter().find(|(n, _)| n == "heads/dev").map(|(_, h)| *h);
+
+        assert_eq!(main_hash, Some(*local_b3_a.as_bytes()), "heads/main should map to local_b3_a");
+        assert_eq!(dev_hash, Some(*local_b3_b.as_bytes()), "heads/dev should map to local_b3_b");
+        assert_ne!(main_hash, dev_hash, "different refs must get different local hashes");
     }
 }

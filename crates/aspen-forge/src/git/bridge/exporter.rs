@@ -104,7 +104,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 if let Some(kv) = result.kv {
                     use base64::Engine;
                     if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(&kv.value) {
-                        tracing::info!(
+                        tracing::debug!(
                             blake3 = %hex::encode(blake3.as_bytes()),
                             size = decoded.len(),
                             "read object bytes from KV"
@@ -113,11 +113,11 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                     }
                     tracing::warn!(blake3 = %hex::encode(blake3.as_bytes()), "KV object bytes base64 decode failed");
                 } else {
-                    tracing::info!(blake3 = %hex::encode(blake3.as_bytes()), key = %obj_key_for_log, "KV object key not found, falling back to iroh-blobs");
+                    tracing::debug!(blake3 = %hex::encode(blake3.as_bytes()), key = %obj_key_for_log, "KV object key not found, falling back to iroh-blobs");
                 }
             }
             Err(e) => {
-                tracing::info!(blake3 = %hex::encode(blake3.as_bytes()), error = %e, "KV read failed, falling back to iroh-blobs");
+                tracing::debug!(blake3 = %hex::encode(blake3.as_bytes()), error = %e, "KV read failed, falling back to iroh-blobs");
             }
         }
 
