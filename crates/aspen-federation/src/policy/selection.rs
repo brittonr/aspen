@@ -414,4 +414,115 @@ mod tests {
             assert!(!format!("{:?}", parsed).is_empty());
         }
     }
+
+    // ── Empty seeders returns empty selection ──────────────────────
+    #[test]
+    fn test_selector_empty_seeders() {
+        let trust = TrustManager::new();
+        let selector = DefaultClusterSelector::new(SelectionStrategy::Scored);
+        let ranked = selector.rank(&[], &trust);
+        assert!(ranked.is_empty());
+    }
+
+    // ── Single seeder is always selected ───────────────────────────
+    #[test]
+    fn test_selector_single_seeder() {
+        let trust = TrustManager::new();
+        let key = test_key();
+        trust.add_trusted(key, "only".to_string(), None);
+
+        let seeders = vec![make_seeder(key, 3, 1)];
+        let selector = DefaultClusterSelector::new(SelectionStrategy::Scored);
+        let ranked = selector.rank(&seeders, &trust);
+
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0].seeder.cluster_key, key);
+        assert!(ranked[0].score > 0.0);
+    }
+
+    // ── All strategies produce same length output ──────────────────
+    #[test]
+    fn test_all_strategies_preserve_count() {
+        let trust = TrustManager::new();
+        let keys: Vec<_> = (0..5)
+            .map(|_| {
+                let k = test_key();
+                trust.add_trusted(k, format!("c-{}", k), None);
+                k
+            })
+            .collect();
+
+        let seeders: Vec<_> = keys.iter().map(|k| make_seeder(*k, 3, 2)).collect();
+
+        for strategy in [
+            SelectionStrategy::Scored,
+            SelectionStrategy::FreshestFirst,
+            SelectionStrategy::LowestLatency,
+            SelectionStrategy::TrustProximity,
+            SelectionStrategy::Random,
+        ] {
+            let selector = DefaultClusterSelector::new(strategy);
+            let ranked = selector.rank(&seeders, &trust);
+            assert_eq!(ranked.len(), 5, "strategy should preserve seeder count");
+        }
+    }
+
+    // ── Scores stay in [0.0, 1.0] range ───────────────────────────
+    #[test]
+    fn test_scores_bounded() {
+        let trust = TrustManager::new();
+        let key = test_key();
+        trust.add_trusted(key, "bounded".to_string(), None);
+
+        let seeder = make_seeder(key, 100, 50);
+        let selector = DefaultClusterSelector::new(SelectionStrategy::Scored);
+        let ranked = selector.rank(&[seeder], &trust);
+
+        assert!(ranked[0].score >= 0.0, "score should be >= 0.0");
+        assert!(ranked[0].score <= 1.0, "score should be <= 1.0, got {}", ranked[0].score);
+    }
+
+    // ── Node count affects ranking ─────────────────────────────────
+    #[test]
+    fn test_node_count_affects_score() {
+        let trust = TrustManager::new();
+        let key1 = test_key();
+        let key2 = test_key();
+        trust.add_trusted(key1, "few-nodes".to_string(), None);
+        trust.add_trusted(key2, "many-nodes".to_string(), None);
+
+        let few_nodes = make_seeder(key1, 5, 1);
+        let many_nodes = make_seeder(key2, 5, 10);
+
+        let selector = DefaultClusterSelector::new(SelectionStrategy::Scored);
+        let ranked = selector.rank(&[few_nodes, many_nodes], &trust);
+
+        // Many nodes should rank higher (NODE_COUNT_WEIGHT > 0)
+        assert_eq!(ranked[0].seeder.cluster_key, key2);
+    }
+
+    // ── Zero refs / zero nodes → lowest possible composite ─────────
+    #[test]
+    fn test_zero_refs_zero_nodes_score() {
+        let trust = TrustManager::new();
+        let key = test_key();
+
+        let seeder = make_seeder(key, 0, 0);
+        let selector = DefaultClusterSelector::new(SelectionStrategy::Scored);
+        let ranked = selector.rank(&[seeder], &trust);
+
+        // Public trust (0.3) × 0.40 + freshness × 0.30 + 0 + 0
+        // Should be low but non-zero (freshness is ~1.0 for just-created)
+        assert!(ranked[0].score < 0.5, "zero refs/nodes should score low: {}", ranked[0].score);
+        assert!(ranked[0].score > 0.0, "freshness still contributes");
+    }
+
+    // ── Cluster ranking with empty list ────────────────────────────
+    #[test]
+    fn test_rank_clusters_empty() {
+        let trust = TrustManager::new();
+        let selector = DefaultClusterSelector::new(SelectionStrategy::Scored);
+        let ranked = selector.rank_clusters(&[], &trust);
+        assert!(ranked.is_empty());
+    }
 }

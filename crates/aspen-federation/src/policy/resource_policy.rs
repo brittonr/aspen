@@ -122,6 +122,7 @@ impl ResourcePolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::FederationMode;
 
     #[test]
     fn test_resource_policy_defaults() {
@@ -158,5 +159,79 @@ mod tests {
         assert_eq!(parsed.resource_type, "blob:collection");
         assert_eq!(parsed.verification.quorum_threshold, 2);
         assert_eq!(parsed.app_metadata, vec![1, 2, 3, 4]);
+    }
+
+    // ── Default policy denies federation (mode=Disabled) ──────────
+    #[test]
+    fn test_default_policy_is_disabled() {
+        let policy = ResourcePolicy::new("test:res");
+        assert!(matches!(policy.access.mode, FederationMode::Disabled));
+        assert!(policy.access.allowed_clusters.is_empty());
+    }
+
+    // ── Public access means any cluster can sync ──────────────────
+    #[test]
+    fn test_public_access_mode() {
+        let policy = ResourcePolicy::new("test:res").with_access(FederationSettings::public());
+        assert!(matches!(policy.access.mode, FederationMode::Public));
+    }
+
+    // ── Allowlist with specific clusters ──────────────────────────
+    #[test]
+    fn test_allowlist_access_mode() {
+        let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let settings = FederationSettings::allowlist(vec![key]);
+        let policy = ResourcePolicy::new("test:res").with_access(settings);
+        assert!(matches!(policy.access.mode, FederationMode::AllowList));
+        assert_eq!(policy.access.allowed_clusters.len(), 1);
+        assert_eq!(policy.access.allowed_clusters[0], key);
+    }
+
+    // ── Builder is composable: each setter replaces previous value ──
+    #[test]
+    fn test_builder_replaces_values() {
+        let policy = ResourcePolicy::new("test:res")
+            .with_access(FederationSettings::public())
+            .with_access(FederationSettings::disabled());
+        // Second call wins
+        assert!(matches!(policy.access.mode, FederationMode::Disabled));
+    }
+
+    // ── Empty app_metadata by default ──────────────────────────────
+    #[test]
+    fn test_default_app_metadata_empty() {
+        let policy = ResourcePolicy::new("test:res");
+        assert!(policy.app_metadata.is_empty());
+    }
+
+    // ── Large app_metadata roundtrips correctly ────────────────────
+    #[test]
+    fn test_large_app_metadata_roundtrip() {
+        let metadata = vec![0xAB; 4096];
+        let policy = ResourcePolicy::new("test:res").with_app_metadata(metadata.clone());
+
+        let bytes = postcard::to_allocvec(&policy).unwrap();
+        let parsed: ResourcePolicy = postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(parsed.app_metadata, metadata);
+    }
+
+    // ── All fork detection modes are configurable ──────────────────
+    #[test]
+    fn test_all_fork_detection_modes() {
+        for mode in [
+            ForkDetectionMode::Disabled,
+            ForkDetectionMode::Warn,
+            ForkDetectionMode::Halt,
+        ] {
+            let policy = ResourcePolicy::new("test:res").with_fork_detection(mode.clone());
+            assert_eq!(std::mem::discriminant(&policy.fork_detection), std::mem::discriminant(&mode),);
+        }
+    }
+
+    // ── Verification quorum of zero means no quorum required ───────
+    #[test]
+    fn test_zero_quorum_is_no_quorum() {
+        let policy = ResourcePolicy::new("test:res").with_verification(VerificationConfig::default());
+        assert_eq!(policy.verification.quorum_threshold, 0);
     }
 }

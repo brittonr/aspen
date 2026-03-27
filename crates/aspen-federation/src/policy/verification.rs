@@ -334,4 +334,86 @@ mod tests {
         assert_eq!(parsed.quorum_threshold, 2);
         assert!(parsed.use_dynamic_majority);
     }
+
+    // ── No seeders at all → error ──────────────────────────────────
+    #[test]
+    fn test_verifier_no_seeders_quorum_disabled() {
+        let config = VerificationConfig::none();
+        let trust = TrustManager::new();
+        let verifier = SeederQuorumVerifier::new(&config, &trust);
+
+        let result = verifier.verify(&[], 0);
+        assert!(matches!(result, Err(QuorumFailure::NoReports)));
+    }
+
+    #[test]
+    fn test_verifier_no_seeders_quorum_enabled() {
+        let config = VerificationConfig::quorum(1);
+        let trust = TrustManager::new();
+        let verifier = SeederQuorumVerifier::new(&config, &trust);
+
+        let result = verifier.verify(&[], 0);
+        assert!(matches!(result, Err(QuorumFailure::NoReports)));
+    }
+
+    // ── Untrusted seeders don't count toward quorum ────────────────
+    #[test]
+    fn test_verifier_untrusted_seeders_insufficient() {
+        let config = VerificationConfig::quorum(1);
+        let trust = TrustManager::new();
+        // key is NOT added to trust manager → untrusted
+        let key = test_key();
+        let verifier = SeederQuorumVerifier::new(&config, &trust);
+
+        let seeders = vec![make_seeder(key, vec![("main", [0xaa; 32])])];
+        let result = verifier.verify(&seeders, 0);
+        assert!(matches!(result, Err(QuorumFailure::InsufficientSeeders { .. })));
+    }
+
+    // ── Delegate signatures config ─────────────────────────────────
+    #[test]
+    fn test_delegate_signatures_builder() {
+        let config = VerificationConfig::quorum(1).with_delegate_signatures();
+        assert!(config.require_delegate_signatures);
+        assert!(config.is_quorum_enabled());
+    }
+
+    // ── Max report age config ──────────────────────────────────────
+    #[test]
+    fn test_max_report_age_builder() {
+        let config = VerificationConfig::quorum(1).with_max_report_age_us(5_000_000);
+        assert_eq!(config.max_report_age_us, 5_000_000);
+    }
+
+    // ── Origin authority is quorum=1 ───────────────────────────────
+    #[test]
+    fn test_origin_authority_is_quorum_one() {
+        let config = VerificationConfig::origin_authority();
+        assert_eq!(config.quorum_threshold, 1);
+        assert!(config.is_quorum_enabled());
+        assert!(!config.use_dynamic_majority);
+    }
+
+    // ── Seeders with disagreeing heads → quorum only on agreed ─────
+    #[test]
+    fn test_verifier_disagreeing_seeders() {
+        let config = VerificationConfig::quorum(2);
+        let trust = TrustManager::new();
+
+        let key1 = test_key();
+        let key2 = test_key();
+        trust.add_trusted(key1, "c1".to_string(), None);
+        trust.add_trusted(key2, "c2".to_string(), None);
+
+        let verifier = SeederQuorumVerifier::new(&config, &trust);
+
+        // Both seeders disagree on "main" — only 1 vote per hash, need 2
+        let seeders = vec![
+            make_seeder(key1, vec![("main", [0xaa; 32])]),
+            make_seeder(key2, vec![("main", [0xbb; 32])]),
+        ];
+
+        let result = verifier.verify(&seeders, 0);
+        assert!(result.is_err());
+    }
 }

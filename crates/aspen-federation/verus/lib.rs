@@ -20,6 +20,22 @@
 //! 3. **FORK-3: Branch Completeness**: Every distinct hash value appears as a branch
 //! 4. **FORK-4: Supporter Accuracy**: Each supporter appears in exactly one branch
 //!
+//! ## Ref Diff (REFDIFF)
+//!
+//! 1. **REFDIFF-1: Partition Completeness**: Every ref in union of local and remote appears in
+//!    exactly one category
+//! 2. **REFDIFF-2: Partition Disjoint**: No ref appears in more than one category
+//! 3. **REFDIFF-3: Classification Correct**: Each category only contains refs that belong there
+//! 4. **REFDIFF-4: Empty Inputs**: Empty local and remote produce empty diff
+//!
+//! ## Conflict Resolution (RESOLVE)
+//!
+//! 1. **RESOLVE-1: Pull Wins**: After pull-wins resolution, conflicts move to to_pull, others
+//!    unchanged
+//! 2. **RESOLVE-2: Push Wins**: After push-wins resolution, conflicts move to to_push, others
+//!    unchanged
+//! 3. **RESOLVE-3: No-op**: Resolving empty conflicts changes nothing
+//!
 //! ## Content Verification (VERIFY)
 //!
 //! 1. **VERIFY-1: Hash Integrity**: `verify_content_hash(data, blake3(data))` always true
@@ -33,5 +49,6 @@
 
 mod fork_detection_spec;
 mod quorum_spec;
+mod ref_diff_spec;
 
 fn main() {}
