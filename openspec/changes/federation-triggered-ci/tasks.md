@@ -24,8 +24,8 @@
 
 ## 4. NixOS VM integration test
 
-- [ ] 4.1 Create `nix/tests/federation-ci-trigger-test.nix` with two VMs (alice, bob)
-- [ ] 4.2 Bob: start node, create repo with `.aspen/ci.ncl` containing a shell job, push a commit
-- [ ] 4.3 Alice: start node with `federation_ci_enabled = true`, federation-pull from Bob
-- [ ] 4.4 Assert: Alice's `ci runs` shows a pipeline run for the mirror repo
-- [ ] 4.5 Register test in `flake.nix` checks
+- [x] 4.1 Create `nix/tests/federation-ci-trigger.nix` with two VMs (alice, bob)
+- [x] 4.2 Alice: start node, create repo with `.aspen/ci.ncl` containing a shell job, push a commit
+- [x] 4.3 Bob: start node with `federation_ci_enabled = true`, federation-pull from Alice
+- [x] 4.4 Assert: Bob's `ci list` shows a pipeline run for the mirror repo
+- [x] 4.5 Register test in `flake.nix` checks

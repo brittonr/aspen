@@ -223,6 +223,15 @@
 - 68/80 crates. 12 excluded (stubs, sandbox-incompatible, CARGO_BIN_EXE, vendored)
 - All excluded crates still tested via crane nextest
 
+### Federation CI Integration
+
+| Date | What Went Wrong | What To Do Instead |
+|------|----------------|-------------------|
+| 2026-03-27 | Edits to `trigger/service.rs` silently reverted — dogfood-local script does `git stash`/checkout | Always commit changes before running dogfood. Or avoid dogfood during active editing. |
+| 2026-03-27 | `cached_execution` field missing in 3 test structs (pre-existing) | When adding fields to `JobConfig`/`LocalExecutorPayload`, rg all test constructors. These are never behind `..Default::default()` |
+| 2026-03-27 | `aspen_core::test_support` is `pub(crate)` — not usable from other crates' tests | Use `aspen_testing_core::DeterministicKeyValueStore` instead |
+| 2026-03-27 | `tracing::info!` macro holds `&dyn Value` (non-Send) across `.await` inside `task_tracker.spawn` | Compute values before the macro: `let x = foo.read().await.len(); info!(x = x, ...)` |
+
 ## Investigation Items
 
 All resolved as of 2026-03-24.

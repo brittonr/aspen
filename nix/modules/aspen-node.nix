@@ -100,6 +100,12 @@ in {
       description = "Automatically trigger CI on repository updates";
     };
 
+    ciFederationCiEnabled = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Enable CI triggering for federation mirror repositories";
+    };
+
     watchedRepos = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [];
@@ -224,6 +230,9 @@ in {
         {
           RUST_LOG = cfg.logLevel;
           ASPEN_CI_WATCHED_REPOS = lib.concatStringsSep "," cfg.watchedRepos;
+        }
+        // lib.optionalAttrs cfg.ciFederationCiEnabled {
+          ASPEN_CI_FEDERATION_CI_ENABLED = "true";
         }
         # Federation cross-cluster communication
         // lib.optionalAttrs cfg.enableFederation {
