@@ -170,6 +170,8 @@ impl ForgeServiceExecutor {
         "FederationGitListRefs",
         "FederationGitFetch",
         "FederationPull",
+        "FederationPush",
+        "FederationBidiSync",
         "ForgeFetchFederated",
         "GitBridgeListRefs",
         "GitBridgeFetch",
@@ -1776,6 +1778,31 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 code: "UNSUPPORTED".to_string(),
                 message: "federation push requires git-bridge feature".to_string(),
             })),
+            #[cfg(feature = "git-bridge")]
+            ClientRpcRequest::FederationBidiSync {
+                peer_node_id,
+                peer_addr,
+                repo_id,
+                push_wins,
+            } => {
+                handle_federation_bidi_sync(
+                    &peer_node_id,
+                    peer_addr.as_deref(),
+                    &repo_id,
+                    push_wins,
+                    self.federation_cluster_identity.as_ref(),
+                    self.iroh_endpoint.as_ref(),
+                    &self.forge_node,
+                )
+                .await
+            }
+            #[cfg(not(feature = "git-bridge"))]
+            ClientRpcRequest::FederationBidiSync { .. } => {
+                Ok(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
+                    code: "UNSUPPORTED".to_string(),
+                    message: "federation bidi sync requires git-bridge feature".to_string(),
+                }))
+            }
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::FederationGitListRefs {
                 origin_key,

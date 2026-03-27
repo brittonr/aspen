@@ -1425,6 +1425,247 @@ pub(crate) async fn handle_federation_pull_remote(
     }
 }
 
+/// Bidirectional federation sync: compare refs, pull what remote has, push what local has.
+#[cfg(feature = "git-bridge")]
+pub(crate) async fn handle_federation_bidi_sync(
+    peer_node_id: &str,
+    peer_addr: Option<&str>,
+    repo_id_hex: &str,
+    push_wins: bool,
+    cluster_identity: Option<&Arc<aspen_cluster::federation::ClusterIdentity>>,
+    iroh_endpoint: Option<&Arc<iroh::Endpoint>>,
+    forge_node: &ForgeNodeRef,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::FederationBidiSyncResponse;
+    use aspen_cluster::federation::FederatedId;
+    use aspen_cluster::federation::FederationResourceResolver;
+    use aspen_cluster::federation::sync::RefEntry;
+    use aspen_cluster::federation::sync::SyncObject;
+    use aspen_cluster::federation::verified::ref_diff;
+
+    let err_response = |msg: String| {
+        Ok(ClientRpcResponse::FederationBidiSyncResult(FederationBidiSyncResponse {
+            is_success: false,
+            pulled: 0,
+            pushed: 0,
+            pull_refs_updated: 0,
+            push_refs_updated: 0,
+            conflicts: Vec::new(),
+            errors: Vec::new(),
+            error: Some(msg),
+        }))
+    };
+
+    let identity = match cluster_identity {
+        Some(id) => id,
+        None => return err_response("federation not configured on this cluster".to_string()),
+    };
+
+    let endpoint = match iroh_endpoint {
+        Some(ep) => ep,
+        None => return err_response("iroh endpoint not available".to_string()),
+    };
+
+    let peer_key: iroh::PublicKey = match peer_node_id.parse() {
+        Ok(k) => k,
+        Err(e) => return err_response(format!("invalid peer node ID '{}': {}", peer_node_id, e)),
+    };
+
+    let repo_id_bytes: [u8; 32] = match hex::decode(repo_id_hex) {
+        Ok(b) if b.len() == 32 => {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&b);
+            arr
+        }
+        Ok(b) => return err_response(format!("repo_id must be 32 bytes, got {}", b.len())),
+        Err(e) => return err_response(format!("invalid repo_id hex '{}': {}", repo_id_hex, e)),
+    };
+
+    let endpoint_addr = build_endpoint_addr(peer_key, peer_addr);
+
+    // Step 1: Connect and handshake
+    let (connection, remote_identity) =
+        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr).await {
+            Ok(result) => result,
+            Err(e) => return err_response(format!("connection failed: {e}")),
+        };
+
+    let remote_cluster_key = remote_identity.public_key();
+
+    // Step 2: Get remote ref state
+    let remote_fed_id = FederatedId::new(remote_cluster_key, repo_id_bytes);
+    let (remote_found, remote_heads, _) =
+        match aspen_cluster::federation::sync::get_remote_resource_state(&connection, &remote_fed_id).await {
+            Ok(result) => result,
+            Err(e) => return err_response(format!("failed to get remote state: {e}")),
+        };
+
+    if !remote_found {
+        return err_response(format!("remote resource not found: {}", remote_fed_id.short()));
+    }
+
+    // Step 3: Get local ref state
+    let local_fed_id = FederatedId::new(identity.public_key(), repo_id_bytes);
+    let resolver = aspen_forge::resolver::ForgeResourceResolver::new(forge_node.kv().clone());
+    let local_state: aspen_cluster::federation::resolver::FederationResourceState =
+        resolver.get_resource_state(&local_fed_id).await.unwrap_or_default();
+
+    // Step 4: Compute ref diff
+    let mut diff = ref_diff::compute_ref_diff(&local_state.heads, &remote_heads);
+    let conflict_names = diff.conflicts.clone();
+    ref_diff::resolve_conflicts(&mut diff, !push_wins); // pull_wins = !push_wins
+
+    let mut errors = Vec::new();
+    let mut pulled = 0u32;
+    let mut pushed = 0u32;
+    let mut pull_refs_updated = 0u32;
+    let mut push_refs_updated = 0u32;
+
+    // Step 5: Pull — fetch objects for refs we need from remote
+    if !diff.to_pull.is_empty() {
+        // Ensure mirror exists
+        let _ = get_or_create_mirror(
+            forge_node,
+            &remote_fed_id.to_string(),
+            &remote_cluster_key.to_string(),
+            Some(peer_node_id),
+            peer_addr,
+        )
+        .await;
+
+        let have_hashes =
+            collect_local_blake3_hashes(forge_node, &aspen_forge::identity::RepoId(repo_id_bytes), 10_000).await;
+
+        // Fetch git objects from remote
+        let (objects, _has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
+            &connection,
+            &remote_fed_id,
+            vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
+            have_hashes,
+            1000,
+            None,
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(e) => {
+                errors.push(format!("pull objects failed: {e}"));
+                (Vec::new(), false)
+            }
+        };
+
+        pulled = objects.len() as u32;
+
+        // Import into mirror
+        if !objects.is_empty()
+            && let Ok(mirror_id) = get_or_create_mirror(
+                forge_node,
+                &remote_fed_id.to_string(),
+                &remote_cluster_key.to_string(),
+                Some(peer_node_id),
+                peer_addr,
+            )
+            .await
+        {
+            let stats = federation_import_objects(forge_node, &mirror_id, &objects).await;
+            pulled = stats.commits + stats.trees + stats.blobs;
+        }
+
+        // Update mirror refs for pulled refs
+        let pull_ref_updates: Vec<(String, [u8; 32])> =
+            diff.to_pull.iter().filter_map(|name| remote_heads.get(name).map(|h| (name.clone(), *h))).collect();
+        pull_refs_updated = pull_ref_updates.len() as u32;
+
+        if let Ok(mirror_id) = get_or_create_mirror(
+            forge_node,
+            &remote_fed_id.to_string(),
+            &remote_cluster_key.to_string(),
+            Some(peer_node_id),
+            peer_addr,
+        )
+        .await
+            && let Err(e) = update_mirror_refs(forge_node, &mirror_id, &pull_ref_updates).await
+        {
+            errors.push(format!("pull ref update: {e}"));
+        }
+    }
+
+    // Step 6: Push — send local objects for refs remote needs
+    if !diff.to_push.is_empty() {
+        let want_types = vec![
+            "refs".to_string(),
+            "commit".to_string(),
+            "tree".to_string(),
+            "blob".to_string(),
+        ];
+        let objects: Vec<SyncObject> = match resolver.sync_objects(&local_fed_id, &want_types, &[], 1000).await {
+            Ok(objs) => objs,
+            Err(e) => {
+                errors.push(format!("push export failed: {e}"));
+                Vec::new()
+            }
+        };
+
+        // Separate refs from git objects
+        let mut git_objects = Vec::new();
+        let mut ref_updates = Vec::new();
+        for obj in objects {
+            if obj.object_type == "ref" {
+                if let Ok(entry) = postcard::from_bytes::<RefEntry>(&obj.data) {
+                    // Only push refs that are in to_push set
+                    if diff.to_push.contains(&entry.ref_name) {
+                        ref_updates.push(entry);
+                    }
+                }
+            } else {
+                git_objects.push(obj);
+            }
+        }
+
+        // Also include refs from local heads as fallback
+        if ref_updates.is_empty() {
+            for ref_name in &diff.to_push {
+                if let Some(hash) = local_state.heads.get(ref_name) {
+                    ref_updates.push(RefEntry {
+                        ref_name: ref_name.clone(),
+                        head_hash: *hash,
+                        commit_sha1: None,
+                    });
+                }
+            }
+        }
+
+        match aspen_cluster::federation::sync::push_to_cluster(&connection, &local_fed_id, git_objects, ref_updates)
+            .await
+        {
+            Ok(result) => {
+                pushed = result.imported;
+                push_refs_updated = result.refs_updated;
+                if !result.accepted {
+                    errors.push("push not accepted by remote".to_string());
+                }
+                errors.extend(result.errors);
+            }
+            Err(e) => {
+                errors.push(format!("push failed: {e}"));
+            }
+        }
+    }
+
+    let is_success = pulled > 0 || pushed > 0 || (diff.to_pull.is_empty() && diff.to_push.is_empty());
+
+    Ok(ClientRpcResponse::FederationBidiSyncResult(FederationBidiSyncResponse {
+        is_success,
+        pulled,
+        pushed,
+        pull_refs_updated,
+        push_refs_updated,
+        conflicts: conflict_names,
+        errors,
+        error: None,
+    }))
+}
+
 /// Push a local repo's objects and refs to a remote cluster.
 #[cfg(feature = "git-bridge")]
 pub(crate) async fn handle_federation_push(

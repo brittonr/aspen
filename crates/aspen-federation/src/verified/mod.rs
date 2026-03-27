@@ -8,6 +8,7 @@
 
 pub mod fork_detection;
 pub mod quorum;
+pub mod ref_diff;
 
 pub use fork_detection::ForkBranch;
 pub use fork_detection::ForkInfo;
@@ -17,3 +18,6 @@ pub use quorum::QuorumFailure;
 pub use quorum::SeederReport;
 pub use quorum::calculate_seeder_quorum;
 pub use quorum::check_quorum;
+pub use ref_diff::RefDiff;
+pub use ref_diff::compute_ref_diff;
+pub use ref_diff::resolve_conflicts;

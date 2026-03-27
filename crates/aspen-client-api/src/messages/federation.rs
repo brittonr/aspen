@@ -134,6 +134,21 @@ pub enum FederationRequest {
         repo_id: String,
     },
 
+    /// Bidirectional sync: compare local and remote ref heads, pull what's
+    /// newer on remote, push what's newer locally.
+    FederationBidiSync {
+        /// Remote peer's iroh node ID (base32-encoded PublicKey).
+        peer_node_id: String,
+        /// Optional direct socket address hint.
+        peer_addr: Option<String>,
+        /// Local repo ID (hex-encoded).
+        repo_id: String,
+        /// If true, local wins on divergent refs (push-wins).
+        /// Default false = remote wins (pull-biased).
+        #[serde(default)]
+        push_wins: bool,
+    },
+
     /// List refs for a repo on a remote federated cluster (for git-remote-aspen).
     FederationGitListRefs {
         /// Origin cluster's public key (base32-encoded).
@@ -188,6 +203,7 @@ impl FederationRequest {
             | Self::FederationFetchRefs { .. }
             | Self::FederationPull { .. }
             | Self::FederationPush { .. }
+            | Self::FederationBidiSync { .. }
             | Self::FederationGitListRefs { .. }
             | Self::FederationGitFetch { .. } => Some(Operation::Write {
                 key: "_sys:fed:sync".to_string(),
@@ -479,6 +495,27 @@ pub struct FederationPushResponse {
     /// Per-object/ref errors encountered during push.
     pub errors: Vec<String>,
     /// Top-level error message if operation failed entirely.
+    pub error: Option<String>,
+}
+
+/// Result of a bidirectional federation sync.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationBidiSyncResponse {
+    /// Whether the sync succeeded (at least one direction worked).
+    pub is_success: bool,
+    /// Number of objects pulled from the remote.
+    pub pulled: u32,
+    /// Number of objects pushed to the remote.
+    pub pushed: u32,
+    /// Number of refs updated locally (pull direction).
+    pub pull_refs_updated: u32,
+    /// Number of refs updated on the remote (push direction).
+    pub push_refs_updated: u32,
+    /// Ref names that were divergent and resolved.
+    pub conflicts: Vec<String>,
+    /// Non-fatal errors from either direction.
+    pub errors: Vec<String>,
+    /// Top-level error if sync failed entirely.
     pub error: Option<String>,
 }
 

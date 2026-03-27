@@ -1071,3 +1071,214 @@ async fn test_pull_incremental_with_have_hashes() {
     assert_eq!(objects_inc[0].hash, hash2);
     assert_eq!(objects_inc[0].data, data2);
 }
+
+// ============================================================================
+// Bidirectional Sync Tests
+// ============================================================================
+
+/// Test: compute_ref_diff correctly categorizes refs from two clusters,
+/// then wire protocol can transfer objects in both directions.
+#[tokio::test]
+#[ignore = "requires network access (iroh socket binding)"]
+async fn test_bidi_sync_both_directions() {
+    use aspen_federation::verified::ref_diff;
+
+    // Alice has blob_a; Bob has blob_b. Both serve via resolvers.
+    let data_a = b"alice-only-blob";
+    let hash_a: [u8; 32] = blake3::hash(data_a).into();
+    let data_b = b"bob-only-blob";
+    let hash_b: [u8; 32] = blake3::hash(data_b).into();
+
+    struct DirectionalResolver {
+        objects: Vec<SyncObject>,
+        heads: std::collections::HashMap<String, [u8; 32]>,
+    }
+
+    #[async_trait]
+    impl FederationResourceResolver for DirectionalResolver {
+        async fn get_resource_state(
+            &self,
+            _fed_id: &FederatedId,
+        ) -> Result<FederationResourceState, FederationResourceError> {
+            Ok(FederationResourceState {
+                was_found: true,
+                heads: self.heads.clone(),
+                metadata: None,
+            })
+        }
+
+        async fn sync_objects(
+            &self,
+            _fed_id: &FederatedId,
+            _want_types: &[String],
+            have_hashes: &[[u8; 32]],
+            _limit: u32,
+        ) -> Result<Vec<SyncObject>, FederationResourceError> {
+            Ok(self.objects.iter().filter(|o| !have_hashes.contains(&o.hash)).cloned().collect())
+        }
+
+        async fn resource_exists(&self, _fed_id: &FederatedId) -> bool {
+            true
+        }
+
+        async fn import_pushed_objects(
+            &self,
+            _fed_id: &FederatedId,
+            objects: Vec<SyncObject>,
+            _ref_updates: Vec<aspen_federation::sync::RefEntry>,
+        ) -> Result<(u32, u32, u32), FederationResourceError> {
+            Ok((objects.len() as u32, 0, 0))
+        }
+    }
+
+    // Alice: has heads/feature with hash_a
+    let alice_heads = {
+        let mut h = std::collections::HashMap::new();
+        h.insert("heads/main".to_string(), [0x11; 32]); // shared
+        h.insert("heads/feature".to_string(), hash_a); // alice-only
+        h
+    };
+
+    // Bob: has heads/experiment with hash_b, plus shared main
+    let bob_heads = {
+        let mut h = std::collections::HashMap::new();
+        h.insert("heads/main".to_string(), [0x11; 32]); // shared
+        h.insert("heads/experiment".to_string(), hash_b); // bob-only
+        h
+    };
+
+    // Step 1: compute_ref_diff
+    let diff = ref_diff::compute_ref_diff(&alice_heads, &bob_heads);
+    assert_eq!(diff.in_sync, vec!["heads/main"]);
+    assert_eq!(diff.to_pull, vec!["heads/experiment"]); // bob has, alice doesn't
+    assert_eq!(diff.to_push, vec!["heads/feature"]); // alice has, bob doesn't
+    assert!(diff.conflicts.is_empty());
+
+    // Step 2: Wire protocol — Alice pulls bob's objects
+    let bob_resolver = DirectionalResolver {
+        objects: vec![SyncObject {
+            object_type: "blob".to_string(),
+            hash: hash_b,
+            data: data_b.to_vec(),
+            signature: None,
+            signer: None,
+        }],
+        heads: bob_heads.clone(),
+    };
+
+    let alice = TestCluster::new("alice-bidi").await;
+    let bob = TestCluster::new_with_resolver("bob-bidi", Some(Arc::new(bob_resolver))).await;
+
+    alice.trust_manager.add_trusted(bob.cluster_key(), "bob".to_string(), None);
+    bob.trust_manager.add_trusted(alice.cluster_key(), "alice".to_string(), None);
+    // Push handler checks connection.remote_id() (iroh endpoint key), not cluster key
+    bob.trust_manager.add_trusted(alice.endpoint.id(), "alice-node".to_string(), None);
+
+    let repo = test_fed_id(bob.cluster_key(), "bidi-repo");
+    bob.add_resource(repo, FederationMode::Public).await;
+
+    let (conn, _) = tokio::time::timeout(
+        Duration::from_secs(10),
+        connect_and_handshake(&alice.endpoint, &alice.identity, bob.endpoint_addr()),
+    )
+    .await
+    .expect("timeout")
+    .expect("handshake");
+
+    // Pull from bob
+    let (pulled_objects, _) = tokio::time::timeout(
+        Duration::from_secs(5),
+        sync_remote_objects(&conn, &repo, vec!["blob".to_string()], vec![], 100, None),
+    )
+    .await
+    .expect("timeout")
+    .expect("pull");
+
+    assert_eq!(pulled_objects.len(), 1);
+    assert_eq!(pulled_objects[0].hash, hash_b);
+
+    // Push to bob (alice's objects)
+    use aspen_federation::sync::RefEntry;
+    use aspen_federation::sync::push_to_cluster;
+
+    let alice_objects = vec![SyncObject {
+        object_type: "blob".to_string(),
+        hash: hash_a,
+        data: data_a.to_vec(),
+        signature: None,
+        signer: None,
+    }];
+    let ref_updates = vec![RefEntry {
+        ref_name: "heads/feature".to_string(),
+        head_hash: hash_a,
+        commit_sha1: None,
+    }];
+
+    let push_result =
+        tokio::time::timeout(Duration::from_secs(5), push_to_cluster(&conn, &repo, alice_objects, ref_updates))
+            .await
+            .expect("timeout")
+            .expect("push");
+
+    assert!(push_result.accepted);
+    assert_eq!(push_result.imported, 1);
+}
+
+/// Test: push half fails (untrusted) but pull still succeeds.
+#[tokio::test]
+#[ignore = "requires network access (iroh socket binding)"]
+async fn test_bidi_sync_push_rejected_pull_succeeds() {
+    let data_b = b"bob-data";
+    let hash_b: [u8; 32] = blake3::hash(data_b).into();
+
+    let resolver = MockResolver::new(vec![SyncObject {
+        object_type: "blob".to_string(),
+        hash: hash_b,
+        data: data_b.to_vec(),
+        signature: None,
+        signer: None,
+    }]);
+
+    let alice = TestCluster::new("alice-partial").await;
+    let bob = TestCluster::new_with_resolver("bob-partial", Some(Arc::new(resolver))).await;
+
+    // Bob trusts Alice for pull (resource is public), but NOT for push
+    // Push requires explicit trust via TrustManager
+    alice.trust_manager.add_trusted(bob.cluster_key(), "bob".to_string(), None);
+    // Bob does NOT add alice to trust_manager → push will be rejected
+
+    let repo = test_fed_id(bob.cluster_key(), "partial-repo");
+    bob.add_resource(repo, FederationMode::Public).await;
+
+    let (conn, _) = tokio::time::timeout(
+        Duration::from_secs(10),
+        connect_and_handshake(&alice.endpoint, &alice.identity, bob.endpoint_addr()),
+    )
+    .await
+    .expect("timeout")
+    .expect("handshake");
+
+    // Pull succeeds (public resource, no trust needed for pull)
+    let (objects, _) = tokio::time::timeout(
+        Duration::from_secs(5),
+        sync_remote_objects(&conn, &repo, vec!["blob".to_string()], vec![], 100, None),
+    )
+    .await
+    .expect("timeout")
+    .expect("pull should succeed");
+
+    assert_eq!(objects.len(), 1, "pull should work even though push will fail");
+
+    // Push fails (bob doesn't trust alice)
+    use aspen_federation::sync::push_to_cluster;
+
+    let push_result = tokio::time::timeout(Duration::from_secs(5), push_to_cluster(&conn, &repo, vec![], vec![]))
+        .await
+        .expect("timeout");
+
+    // Push should fail with unauthorized error
+    assert!(
+        push_result.is_err() || !push_result.as_ref().unwrap().accepted,
+        "push should fail when bob doesn't trust alice"
+    );
+}

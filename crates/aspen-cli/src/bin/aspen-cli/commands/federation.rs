@@ -93,6 +93,15 @@ pub struct SyncArgs {
     /// After discovering refs, also fetch ref objects and persist locally.
     #[arg(long)]
     pub fetch: bool,
+
+    /// Repo ID (hex-encoded) for bidirectional sync. When set, compares
+    /// local and remote ref heads and transfers objects in both directions.
+    #[arg(long)]
+    pub repo: Option<String>,
+
+    /// On divergent refs, local wins (push to remote). Default: remote wins (pull).
+    #[arg(long)]
+    pub push_wins: bool,
 }
 
 /// Arguments for federation fetch command.
@@ -507,6 +516,16 @@ async fn federation_federate(client: &AspenClient, args: FederateArgs, json: boo
 }
 
 async fn federation_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<()> {
+    // If --repo is set, dispatch to bidirectional sync
+    if let Some(ref repo) = args.repo {
+        return federation_bidi_sync(client, &args.peer, args.addr.as_deref(), repo, args.push_wins, json).await;
+    }
+
+    // Validate: --push-wins only makes sense with --repo
+    if args.push_wins {
+        anyhow::bail!("--push-wins requires --repo (bidirectional sync mode)");
+    }
+
     let do_fetch = args.fetch;
     let peer = args.peer.clone();
     let addr = args.addr.clone();
@@ -550,6 +569,54 @@ async fn federation_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Re
                 }
             } else {
                 eprintln!("Federation sync failed: {}", result.error.as_deref().unwrap_or("unknown error"));
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn federation_bidi_sync(
+    client: &AspenClient,
+    peer: &str,
+    addr: Option<&str>,
+    repo: &str,
+    push_wins: bool,
+    json: bool,
+) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::FederationBidiSync {
+            peer_node_id: peer.to_string(),
+            peer_addr: addr.map(|s| s.to_string()),
+            repo_id: repo.to_string(),
+            push_wins,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::FederationBidiSyncResult(result) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else if result.is_success || result.error.is_none() {
+                println!("Bidirectional sync complete for repo {}", repo);
+                println!("  Pulled:             {} objects", result.pulled);
+                println!("  Pushed:             {} objects", result.pushed);
+                println!("  Pull refs updated:  {}", result.pull_refs_updated);
+                println!("  Push refs updated:  {}", result.push_refs_updated);
+                if !result.conflicts.is_empty() {
+                    let direction = if push_wins { "local wins" } else { "remote wins" };
+                    println!("  Conflicts ({}):  {}", direction, result.conflicts.join(", "));
+                }
+                if !result.errors.is_empty() {
+                    println!("  Warnings:");
+                    for e in &result.errors {
+                        println!("    - {}", e);
+                    }
+                }
+            } else {
+                eprintln!("Sync failed: {}", result.error.as_deref().unwrap_or("unknown error"));
                 std::process::exit(1);
             }
             Ok(())
