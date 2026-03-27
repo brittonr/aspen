@@ -748,8 +748,9 @@ pub(crate) async fn handle_federation_fetch_refs(
         }
     };
 
-    // Parse ref entries
-    let mut fetched_refs: Vec<(String, [u8; 32])> = Vec::new();
+    // Parse ref entries.
+    // Keep full RefEntry so we can use commit_sha1 for local hash lookup.
+    let mut fetched_ref_entries: Vec<RefEntry> = Vec::new();
     let mut errors = Vec::new();
     for obj in &ref_objects {
         if obj.object_type != "ref" {
@@ -761,10 +762,13 @@ pub(crate) async fn handle_federation_fetch_refs(
             continue;
         }
         match postcard::from_bytes::<RefEntry>(&obj.data) {
-            Ok(entry) => fetched_refs.push((entry.ref_name, entry.head_hash)),
+            Ok(entry) => fetched_ref_entries.push(entry),
             Err(e) => errors.push(format!("ref deserialize: {e}")),
         }
     }
+    // Initial refs with source hashes (translated to local after import)
+    let mut fetched_refs: Vec<(String, [u8; 32])> =
+        fetched_ref_entries.iter().map(|e| (e.ref_name.clone(), e.head_hash)).collect();
 
     let refs_fetched = fetched_refs.len() as u32;
 
@@ -838,7 +842,48 @@ pub(crate) async fn handle_federation_fetch_refs(
         // Import git objects into mirror
         let stats = federation_import_objects(forge_node, &mirror_repo_id, &all_git_objects).await;
 
-        // Update mirror refs
+        // Translate ref hashes from source envelope BLAKE3 to local BLAKE3.
+        // The source's head_hash is its SignedObject BLAKE3 which differs from
+        // ours (different signature + HLC). Use commit_sha1 (deterministic) to
+        // look up the local BLAKE3 via the SHA1→BLAKE3 mapping created during import.
+        {
+            use aspen_forge::git::bridge::HashMappingStore;
+            use aspen_forge::git::bridge::Sha1Hash;
+            let mapping = HashMappingStore::new(forge_node.kv().clone());
+            for (i, ref_entry) in fetched_ref_entries.iter().enumerate() {
+                if let Some(sha1_bytes) = &ref_entry.commit_sha1 {
+                    let sha1 = Sha1Hash::from_bytes(*sha1_bytes);
+                    match mapping.get_blake3(&mirror_repo_id, &sha1).await {
+                        Ok(Some((local_blake3, _obj_type))) => {
+                            tracing::debug!(
+                                ref_name = %ref_entry.ref_name,
+                                source_hash = %hex::encode(&ref_entry.head_hash[..8]),
+                                local_hash = %hex::encode(&local_blake3.as_bytes()[..8]),
+                                sha1 = %sha1.to_hex(),
+                                "translated federation ref to local BLAKE3"
+                            );
+                            fetched_refs[i].1 = *local_blake3.as_bytes();
+                        }
+                        Ok(None) => {
+                            tracing::warn!(
+                                ref_name = %ref_entry.ref_name,
+                                sha1 = %sha1.to_hex(),
+                                "no SHA1→BLAKE3 mapping for federation ref, using source hash"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                ref_name = %ref_entry.ref_name,
+                                error = %e,
+                                "failed to look up local BLAKE3 for federation ref"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // Update mirror refs (now with local BLAKE3 hashes)
         if let Err(e) = update_mirror_refs(forge_node, &mirror_repo_id, &fetched_refs).await {
             errors.push(format!("mirror ref update: {e}"));
         }
