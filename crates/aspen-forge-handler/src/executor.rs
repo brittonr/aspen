@@ -1748,6 +1748,27 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 .await
             }
             #[cfg(feature = "git-bridge")]
+            ClientRpcRequest::FederationPush {
+                peer_node_id,
+                peer_addr,
+                repo_id,
+            } => {
+                handle_federation_push(
+                    &peer_node_id,
+                    peer_addr.as_deref(),
+                    &repo_id,
+                    self.federation_cluster_identity.as_ref(),
+                    self.iroh_endpoint.as_ref(),
+                    &self.forge_node,
+                )
+                .await
+            }
+            #[cfg(not(feature = "git-bridge"))]
+            ClientRpcRequest::FederationPush { .. } => Ok(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
+                code: "UNSUPPORTED".to_string(),
+                message: "federation push requires git-bridge feature".to_string(),
+            })),
+            #[cfg(feature = "git-bridge")]
             ClientRpcRequest::FederationGitListRefs {
                 origin_key,
                 repo_id,

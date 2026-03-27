@@ -42,6 +42,101 @@ const MAX_REFS_PER_QUERY: u32 = 1000;
 /// Maximum git objects returned per sync request.
 const MAX_GIT_OBJECTS_PER_SYNC: u32 = 1000;
 
+/// Result of a push import operation.
+#[cfg(feature = "git-bridge")]
+#[derive(Debug, Default)]
+pub struct PushImportResult {
+    /// Number of objects imported.
+    pub imported: u32,
+    /// Number of objects skipped (already present or non-git).
+    pub skipped: u32,
+    /// Number of refs updated.
+    pub refs_updated: u32,
+    /// Non-fatal errors.
+    pub errors: Vec<String>,
+}
+
+/// Trait for importing git objects into a forge repo for federation push.
+///
+/// Abstraction over `GitImporter` to avoid leaking blob store generics
+/// into the resolver. Implementations import raw git objects and update refs.
+#[cfg(feature = "git-bridge")]
+#[async_trait]
+pub trait GitObjectImporter: Send + Sync {
+    /// Import git objects and update refs from a federation push.
+    ///
+    /// Objects are `SyncObject` items with `object_type` of "commit", "tree", "blob".
+    /// Ref updates map ref names to commit SHA1s (used to look up local BLAKE3 after import).
+    async fn import_push(
+        &self,
+        repo_id: &RepoId,
+        objects: &[SyncObject],
+        ref_updates: &[(String, Option<[u8; 20]>)],
+    ) -> Result<PushImportResult, String>;
+}
+
+/// Blanket implementation for `GitImporter<K, B>`.
+#[cfg(feature = "git-bridge")]
+#[async_trait]
+impl<K, B> GitObjectImporter for crate::git::bridge::GitImporter<K, B>
+where
+    K: KeyValueStore + Send + Sync + ?Sized + 'static,
+    B: aspen_blob::prelude::BlobStore + Send + Sync + 'static,
+{
+    async fn import_push(
+        &self,
+        repo_id: &RepoId,
+        objects: &[SyncObject],
+        ref_updates: &[(String, Option<[u8; 20]>)],
+    ) -> Result<PushImportResult, String> {
+        use crate::git::bridge::Sha1Hash;
+
+        let mut result = PushImportResult::default();
+
+        // Import git objects (they arrive as raw content without git headers)
+        for obj in objects {
+            let git_type_str = match obj.object_type.as_str() {
+                "commit" | "tree" | "blob" => obj.object_type.as_str(),
+                _ => {
+                    result.skipped += 1;
+                    continue;
+                }
+            };
+
+            // Reconstruct full git bytes (header + content)
+            let header = format!("{} {}\0", git_type_str, obj.data.len());
+            let mut git_bytes = Vec::with_capacity(header.len() + obj.data.len());
+            git_bytes.extend_from_slice(header.as_bytes());
+            git_bytes.extend_from_slice(&obj.data);
+
+            match self.import_object(repo_id, &git_bytes).await {
+                Ok(_local_blake3) => {
+                    result.imported += 1;
+                }
+                Err(e) => {
+                    result.skipped += 1;
+                    result.errors.push(format!("{}: {}", git_type_str, e));
+                }
+            }
+        }
+
+        // Update refs using commit SHA1 → local BLAKE3 lookup via update_ref
+        for (ref_name, commit_sha1) in ref_updates {
+            if let Some(sha1_bytes) = commit_sha1 {
+                let sha1 = Sha1Hash(*sha1_bytes);
+                match self.update_ref(repo_id, ref_name, sha1).await {
+                    Ok(_blake3) => result.refs_updated += 1,
+                    Err(e) => result.errors.push(format!("ref {}: {}", ref_name, e)),
+                }
+            } else {
+                result.errors.push(format!("ref {}: no commit SHA1 provided", ref_name));
+            }
+        }
+
+        Ok(result)
+    }
+}
+
 /// Trait for exporting git objects from a forge repo for federation.
 ///
 /// Abstraction over `GitExporter` to avoid leaking blob store generics
@@ -100,6 +195,9 @@ pub struct ForgeResourceResolver<K: KeyValueStore + ?Sized> {
     /// Optional git object exporter for serving commit/tree/blob data.
     #[cfg(feature = "git-bridge")]
     git_exporter: Option<Arc<dyn GitObjectExporter>>,
+    /// Optional git object importer for receiving pushed objects.
+    #[cfg(feature = "git-bridge")]
+    git_importer: Option<Arc<dyn GitObjectImporter>>,
 }
 
 impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
@@ -112,21 +210,34 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
     /// was added.
     pub fn new(kv: Arc<K>) -> Self {
         #[cfg(feature = "git-bridge")]
-        let git_exporter = {
+        let (git_exporter, git_importer) = {
             let mapping = Arc::new(crate::git::bridge::HashMappingStore::new(Arc::clone(&kv)));
             let blobs = Arc::new(aspen_blob::InMemoryBlobStore::new());
             let refs = Arc::new(crate::refs::RefStore::new(Arc::clone(&kv)));
             let secret_key = iroh::SecretKey::from_bytes(&[0u8; 32]);
-            let hlc = aspen_core::hlc::create_hlc("federation-resolver");
-            let exporter: Arc<dyn GitObjectExporter> =
-                Arc::new(crate::git::bridge::GitExporter::new(mapping, blobs, refs, secret_key, hlc));
-            Some(exporter)
+            let exporter: Arc<dyn GitObjectExporter> = Arc::new(crate::git::bridge::GitExporter::new(
+                Arc::clone(&mapping),
+                Arc::clone(&blobs),
+                Arc::clone(&refs),
+                secret_key.clone(),
+                aspen_core::hlc::create_hlc("federation-resolver-export"),
+            ));
+            let importer: Arc<dyn GitObjectImporter> = Arc::new(crate::git::bridge::GitImporter::new(
+                mapping,
+                blobs,
+                refs,
+                secret_key,
+                aspen_core::hlc::create_hlc("federation-resolver-import"),
+            ));
+            (Some(exporter), Some(importer))
         };
 
         Self {
             kv,
             #[cfg(feature = "git-bridge")]
             git_exporter,
+            #[cfg(feature = "git-bridge")]
+            git_importer,
         }
     }
 
@@ -136,6 +247,7 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
         Self {
             kv,
             git_exporter: Some(exporter),
+            git_importer: None,
         }
     }
 
@@ -553,6 +665,58 @@ impl<K: ?Sized + KeyValueStore + Send + Sync + 'static> FederationResourceResolv
             }
         }
         results
+    }
+
+    #[cfg(feature = "git-bridge")]
+    async fn import_pushed_objects(
+        &self,
+        fed_id: &FederatedId,
+        objects: Vec<SyncObject>,
+        ref_updates: Vec<aspen_cluster::federation::sync::RefEntry>,
+    ) -> Result<(u32, u32, u32), FederationResourceError> {
+        let Some(ref importer) = self.git_importer else {
+            return Err(FederationResourceError::Internal {
+                message: "no git importer configured".to_string(),
+            });
+        };
+
+        let repo_id = RepoId(fed_id.local_id);
+
+        // Ensure repo exists in KV (create a minimal entry if not)
+        let repo_hex = Self::repo_id_hex(fed_id);
+        if !self.repo_exists(&repo_hex).await {
+            // Create a minimal repo entry so refs and objects have a home
+            let repo_key = format!("{}{}:meta", KV_PREFIX_REPOS, repo_hex);
+            let meta = serde_json::json!({
+                "mirror_of": fed_id.to_string(),
+                "created_by": "federation-push",
+            });
+            let write_req = aspen_core::WriteRequest::set(repo_key, meta.to_string());
+            if let Err(e) = self.kv.write(write_req).await {
+                return Err(FederationResourceError::Internal {
+                    message: format!("failed to create mirror repo: {}", e),
+                });
+            }
+            debug!(fed_id = %fed_id.short(), "created mirror repo for push");
+        }
+
+        // Convert ref_updates to (name, commit_sha1) tuples
+        let ref_tuples: Vec<(String, Option<[u8; 20]>)> =
+            ref_updates.iter().map(|r| (r.ref_name.clone(), r.commit_sha1)).collect();
+
+        match importer.import_push(&repo_id, &objects, &ref_tuples).await {
+            Ok(result) => {
+                if !result.errors.is_empty() {
+                    for err in &result.errors {
+                        warn!(fed_id = %fed_id.short(), error = %err, "push import warning");
+                    }
+                }
+                Ok((result.imported, result.skipped, result.refs_updated))
+            }
+            Err(e) => Err(FederationResourceError::Internal {
+                message: format!("push import failed: {}", e),
+            }),
+        }
     }
 }
 

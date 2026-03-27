@@ -258,6 +258,12 @@ async fn process_federation_request(
             signer,
         } => handle_verify_ref_update(fed_id, ref_name, new_hash, signature, signer),
 
+        FederationRequest::PushObjects {
+            fed_id,
+            objects,
+            ref_updates,
+        } => handle_push_objects(fed_id, objects, ref_updates, context, remote_peer).await,
+
         FederationRequest::VerifyUpdate {
             fed_id,
             update_type: _,
@@ -592,6 +598,89 @@ async fn handle_sync_objects_resolved(
     }
 }
 
+/// Handle a push of objects and ref updates from a remote cluster.
+///
+/// Authorization: requires the sender to be trusted (via TrustManager or session
+/// credential). Public mode is not sufficient for push — only pull.
+async fn handle_push_objects(
+    fed_id: FederatedId,
+    objects: Vec<super::types::SyncObject>,
+    ref_updates: Vec<super::types::RefEntry>,
+    context: &FederationProtocolContext,
+    remote_peer: PublicKey,
+) -> Result<FederationResponse> {
+    // Check trust: push requires explicit trust, not just public access
+    let trust_level = context.trust_manager.trust_level(&remote_peer);
+    let has_credential =
+        context.session_credential.lock().ok().and_then(|guard| guard.is_some().then_some(())).is_some();
+
+    if trust_level != crate::trust::TrustLevel::Trusted && !has_credential {
+        warn!(
+            fed_id = %fed_id.short(),
+            remote_peer = %remote_peer,
+            "push rejected: peer not trusted"
+        );
+        return Ok(FederationResponse::Error {
+            code: "unauthorized".to_string(),
+            message: "Push requires trusted peer or valid credential".to_string(),
+        });
+    }
+
+    // Enforce object limit
+    let object_count = objects.len() as u32;
+    if object_count > MAX_OBJECTS_PER_SYNC {
+        return Ok(FederationResponse::Error {
+            code: "limit_exceeded".to_string(),
+            message: format!("Push contains {} objects, max is {}", object_count, MAX_OBJECTS_PER_SYNC),
+        });
+    }
+
+    // Delegate to resource resolver
+    let Some(ref resolver) = context.resource_resolver else {
+        return Ok(FederationResponse::Error {
+            code: "NOT_CONFIGURED".to_string(),
+            message: "No resource resolver configured for push import".to_string(),
+        });
+    };
+
+    match resolver.import_pushed_objects(&fed_id, objects, ref_updates).await {
+        Ok((imported, skipped, refs_updated)) => {
+            info!(
+                fed_id = %fed_id.short(),
+                imported,
+                skipped,
+                refs_updated,
+                "push accepted"
+            );
+            Ok(FederationResponse::PushResult {
+                accepted: true,
+                imported,
+                skipped,
+                refs_updated,
+                errors: vec![],
+            })
+        }
+        Err(FederationResourceError::NotFound { fed_id }) => Ok(FederationResponse::Error {
+            code: "NOT_FOUND".to_string(),
+            message: format!("Resource not found: {}", fed_id),
+        }),
+        Err(FederationResourceError::FederationDisabled { fed_id }) => Ok(FederationResponse::Error {
+            code: "FEDERATION_DISABLED".to_string(),
+            message: format!("Federation disabled for resource: {}", fed_id),
+        }),
+        Err(e) => {
+            warn!(fed_id = %fed_id.short(), error = %e, "push import failed");
+            Ok(FederationResponse::PushResult {
+                accepted: false,
+                imported: 0,
+                skipped: 0,
+                refs_updated: 0,
+                errors: vec![e.to_string()],
+            })
+        }
+    }
+}
+
 fn handle_refresh_token(
     credential: aspen_auth::Credential,
     context: &FederationProtocolContext,
@@ -694,5 +783,88 @@ fn handle_verify_ref_update(
             is_valid: false,
             error: Some(format!("Signature verification failed: {}", e)),
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::trust::TrustManager;
+
+    async fn make_context_with_trust(trusted_peer: Option<PublicKey>) -> FederationProtocolContext {
+        let identity = crate::identity::ClusterIdentity::generate("test-cluster".to_string());
+        let trust_manager = Arc::new(TrustManager::new());
+        if let Some(pk) = trusted_peer {
+            trust_manager.add_trusted(pk, "trusted-peer".to_string(), None);
+        }
+        let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0).bind().await.expect("bind endpoint");
+        FederationProtocolContext {
+            cluster_identity: identity,
+            trust_manager,
+            resource_settings: Arc::new(RwLock::new(HashMap::new())),
+            endpoint: Arc::new(endpoint),
+            hlc: Arc::new(aspen_core::hlc::create_hlc("test")),
+            resource_resolver: None,
+            session_credential: std::sync::Mutex::new(None),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_push_rejected_from_untrusted_peer() {
+        let remote_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let context = make_context_with_trust(None).await; // no trusted peers
+
+        let fed_id = crate::types::FederatedId::new(remote_key, [0xaa; 32]);
+        let result = handle_push_objects(fed_id, vec![], vec![], &context, remote_key).await.unwrap();
+
+        match result {
+            super::super::types::FederationResponse::Error { code, .. } => {
+                assert_eq!(code, "unauthorized");
+            }
+            other => panic!("expected unauthorized error, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_push_limit_exceeded() {
+        let remote_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let context = make_context_with_trust(Some(remote_key)).await;
+
+        let fed_id = crate::types::FederatedId::new(remote_key, [0xaa; 32]);
+        // Create more objects than MAX_OBJECTS_PER_SYNC
+        let objects: Vec<_> = (0..super::MAX_OBJECTS_PER_SYNC + 1)
+            .map(|i| super::super::types::SyncObject {
+                object_type: "blob".to_string(),
+                hash: [i as u8; 32],
+                data: vec![i as u8],
+                signature: None,
+                signer: None,
+            })
+            .collect();
+
+        let result = handle_push_objects(fed_id, objects, vec![], &context, remote_key).await.unwrap();
+
+        match result {
+            super::super::types::FederationResponse::Error { code, .. } => {
+                assert_eq!(code, "limit_exceeded");
+            }
+            other => panic!("expected limit_exceeded error, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_push_no_resolver_returns_not_configured() {
+        let remote_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let context = make_context_with_trust(Some(remote_key)).await;
+
+        let fed_id = crate::types::FederatedId::new(remote_key, [0xaa; 32]);
+        let result = handle_push_objects(fed_id, vec![], vec![], &context, remote_key).await.unwrap();
+
+        match result {
+            super::super::types::FederationResponse::Error { code, .. } => {
+                assert_eq!(code, "NOT_CONFIGURED");
+            }
+            other => panic!("expected NOT_CONFIGURED error, got: {:?}", other),
+        }
     }
 }

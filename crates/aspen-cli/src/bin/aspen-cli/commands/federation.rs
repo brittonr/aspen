@@ -45,6 +45,9 @@ pub enum FederationCommand {
 
     /// Pull updates for a previously mirrored federation repo.
     Pull(PullArgs),
+
+    /// Push a local repo's objects and refs to a remote cluster.
+    Push(PushArgs),
 }
 
 #[derive(Args)]
@@ -106,6 +109,22 @@ pub struct FetchArgs {
     /// Federated resource ID (origin:local_id format).
     #[arg(long)]
     pub fed_id: String,
+}
+
+/// Arguments for federation push command.
+#[derive(Args)]
+pub struct PushArgs {
+    /// Remote peer's iroh node ID (base32-encoded public key).
+    #[arg(long)]
+    pub peer: String,
+
+    /// Direct socket address hint for the remote peer.
+    #[arg(long)]
+    pub addr: Option<String>,
+
+    /// Local repo ID to push (hex-encoded).
+    #[arg(long)]
+    pub repo: String,
 }
 
 /// Arguments for federation pull command.
@@ -275,6 +294,7 @@ impl FederationCommand {
             FederationCommand::Sync(args) => federation_sync(client, args, json).await,
             FederationCommand::Fetch(args) => federation_fetch(client, args, json).await,
             FederationCommand::Pull(args) => federation_pull(client, args, json).await,
+            FederationCommand::Push(args) => federation_push(client, args, json).await,
         }
     }
 }
@@ -624,6 +644,41 @@ async fn federation_pull(client: &AspenClient, args: PullArgs, json: bool) -> Re
                 }
             } else {
                 eprintln!("Pull failed: {}", result.error.as_deref().unwrap_or("unknown error"));
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn federation_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::FederationPush {
+            peer_node_id: args.peer.clone(),
+            peer_addr: args.addr.clone(),
+            repo_id: args.repo.clone(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::FederationPushResult(result) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else if result.is_success {
+                println!("Push complete!");
+                println!("  Imported:     {}", result.imported);
+                println!("  Skipped:      {}", result.skipped);
+                println!("  Refs updated: {}", result.refs_updated);
+                if !result.errors.is_empty() {
+                    println!("  Warnings:");
+                    for e in &result.errors {
+                        println!("    - {}", e);
+                    }
+                }
+            } else {
+                eprintln!("Push failed: {}", result.error.as_deref().unwrap_or("unknown error"));
                 std::process::exit(1);
             }
             Ok(())

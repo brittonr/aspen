@@ -108,6 +108,19 @@ pub enum FederationRequest {
         mirror_repo_id: String,
     },
 
+    /// Push a local repo's objects and refs to a remote cluster.
+    ///
+    /// Connects to the remote peer, exports the local repo's git objects,
+    /// and sends them as a PushObjects request.
+    FederationPush {
+        /// Remote peer's iroh node ID (base32-encoded PublicKey).
+        peer_node_id: String,
+        /// Optional direct socket address hint.
+        peer_addr: Option<String>,
+        /// Local repo ID to push (hex-encoded).
+        repo_id: String,
+    },
+
     /// List refs for a repo on a remote federated cluster (for git-remote-aspen).
     FederationGitListRefs {
         /// Origin cluster's public key (base32-encoded).
@@ -161,6 +174,7 @@ impl FederationRequest {
             Self::FederationSyncPeer { .. }
             | Self::FederationFetchRefs { .. }
             | Self::FederationPull { .. }
+            | Self::FederationPush { .. }
             | Self::FederationGitListRefs { .. }
             | Self::FederationGitFetch { .. } => Some(Operation::Write {
                 key: "_sys:fed:sync".to_string(),
@@ -433,6 +447,23 @@ pub struct FederationFetchRefsResponse {
     /// Number of refs already present locally.
     pub already_present: u32,
     /// Per-ref errors encountered during fetch.
+    pub errors: Vec<String>,
+    /// Top-level error message if operation failed entirely.
+    pub error: Option<String>,
+}
+
+/// Result of a federation push operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationPushResponse {
+    /// Whether the push succeeded.
+    pub is_success: bool,
+    /// Number of objects imported by the receiver.
+    pub imported: u32,
+    /// Number of objects skipped (already present on receiver).
+    pub skipped: u32,
+    /// Number of refs updated on the receiver.
+    pub refs_updated: u32,
+    /// Per-object/ref errors encountered during push.
     pub errors: Vec<String>,
     /// Top-level error message if operation failed entirely.
     pub error: Option<String>,

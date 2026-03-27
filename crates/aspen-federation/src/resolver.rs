@@ -44,6 +44,7 @@ use tracing::debug;
 use tracing::warn;
 
 use crate::sync::MAX_OBJECTS_PER_SYNC;
+use crate::sync::RefEntry;
 use crate::sync::ResourceMetadata;
 use crate::sync::SyncObject;
 use crate::types::FederatedId;
@@ -182,6 +183,23 @@ pub trait FederationResourceResolver: Send + Sync {
     /// federation enabled (mode != Disabled). Default returns empty.
     async fn list_resources(&self, _limit: u32) -> Vec<(FederatedId, String)> {
         Vec::new()
+    }
+
+    /// Import objects and ref updates pushed by a remote cluster.
+    ///
+    /// Creates a mirror repo if one doesn't exist for the `fed_id`, imports
+    /// the git objects, and updates mirror refs.
+    ///
+    /// Returns `(imported, skipped, refs_updated)` counts.
+    async fn import_pushed_objects(
+        &self,
+        _fed_id: &FederatedId,
+        _objects: Vec<SyncObject>,
+        _ref_updates: Vec<RefEntry>,
+    ) -> Result<(u32, u32, u32), FederationResourceError> {
+        Err(FederationResourceError::Internal {
+            message: "push import not supported by this resolver".to_string(),
+        })
     }
 }
 

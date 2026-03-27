@@ -16,6 +16,7 @@ use super::FEDERATION_ALPN;
 use super::FEDERATION_PROTOCOL_VERSION;
 use super::types::FederationRequest;
 use super::types::FederationResponse;
+use super::types::RefEntry;
 use super::types::ResourceInfo;
 use super::types::ResourceMetadata;
 use super::types::SyncObject;
@@ -217,5 +218,78 @@ pub async fn sync_remote_objects(
             anyhow::bail!("Sync objects failed: {} - {}", code, message)
         }
         _ => anyhow::bail!("Unexpected response"),
+    }
+}
+
+/// Push result from a remote cluster.
+#[derive(Debug)]
+pub struct PushResult {
+    /// Whether the push was accepted.
+    pub accepted: bool,
+    /// Number of objects imported by the receiver.
+    pub imported: u32,
+    /// Number of objects skipped (already present).
+    pub skipped: u32,
+    /// Number of refs updated.
+    pub refs_updated: u32,
+    /// Non-fatal errors encountered during import.
+    pub errors: Vec<String>,
+}
+
+/// Push objects and ref updates to a remote cluster.
+///
+/// Sends git objects and ref updates to the remote peer, which imports
+/// them into a mirror repo. The connection must already be established
+/// via `connect_to_cluster`.
+pub async fn push_to_cluster(
+    connection: &Connection,
+    fed_id: &FederatedId,
+    objects: Vec<SyncObject>,
+    ref_updates: Vec<RefEntry>,
+) -> Result<PushResult> {
+    let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream for push")?;
+
+    let object_count = objects.len();
+    let ref_count = ref_updates.len();
+
+    let request = FederationRequest::PushObjects {
+        fed_id: *fed_id,
+        objects,
+        ref_updates,
+    };
+    write_message(&mut send, &request).await?;
+
+    let response: FederationResponse = read_message(&mut recv).await?;
+
+    match response {
+        FederationResponse::PushResult {
+            accepted,
+            imported,
+            skipped,
+            refs_updated,
+            errors,
+        } => {
+            info!(
+                fed_id = %fed_id.short(),
+                accepted,
+                imported,
+                skipped,
+                refs_updated,
+                sent_objects = object_count,
+                sent_refs = ref_count,
+                "push complete"
+            );
+            Ok(PushResult {
+                accepted,
+                imported,
+                skipped,
+                refs_updated,
+                errors,
+            })
+        }
+        FederationResponse::Error { code, message } => {
+            anyhow::bail!("Push failed: {} - {}", code, message)
+        }
+        _ => anyhow::bail!("Unexpected push response"),
     }
 }

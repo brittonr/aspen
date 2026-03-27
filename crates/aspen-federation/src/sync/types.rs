@@ -83,6 +83,19 @@ pub enum FederationRequest {
         credential: aspen_auth::Credential,
     },
 
+    /// Push objects and ref updates to a remote cluster.
+    ///
+    /// The origin cluster sends git objects and ref updates to the receiver.
+    /// The receiver validates trust, imports objects, and updates mirror refs.
+    PushObjects {
+        /// The federated resource ID.
+        fed_id: FederatedId,
+        /// Git objects to push.
+        objects: Vec<SyncObject>,
+        /// Ref updates to apply after importing objects.
+        ref_updates: Vec<RefEntry>,
+    },
+
     /// Verify an update signature (generic, any resource type).
     ///
     /// This is the app-agnostic version of `VerifyRefUpdate`. Any application
@@ -156,6 +169,20 @@ pub enum FederationResponse {
         is_valid: bool,
         /// Error message if invalid.
         error: Option<String>,
+    },
+
+    /// Result of a push operation.
+    PushResult {
+        /// Whether the push was accepted.
+        accepted: bool,
+        /// Number of objects imported.
+        imported: u32,
+        /// Number of objects skipped (already present).
+        skipped: u32,
+        /// Number of refs updated.
+        refs_updated: u32,
+        /// Errors encountered during import (non-fatal).
+        errors: Vec<String>,
     },
 
     /// Token refresh response.
@@ -253,4 +280,76 @@ pub struct SyncObject {
     pub signature: Option<Signature>,
     /// Optional signer (for signed objects).
     pub signer: Option<[u8; 32]>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn push_objects_request_roundtrip() {
+        let fed_id = FederatedId::new(iroh::SecretKey::generate(&mut rand::rng()).public(), [0xaa; 32]);
+        let obj = SyncObject {
+            object_type: "blob".to_string(),
+            hash: [0xbb; 32],
+            data: b"hello world".to_vec(),
+            signature: None,
+            signer: None,
+        };
+        let ref_entry = RefEntry {
+            ref_name: "heads/main".to_string(),
+            head_hash: [0xcc; 32],
+            commit_sha1: Some([0xdd; 20]),
+        };
+        let request = FederationRequest::PushObjects {
+            fed_id,
+            objects: vec![obj],
+            ref_updates: vec![ref_entry],
+        };
+        let bytes = postcard::to_stdvec(&request).expect("serialize");
+        let decoded: FederationRequest = postcard::from_bytes(&bytes).expect("deserialize");
+        match decoded {
+            FederationRequest::PushObjects {
+                fed_id: fid,
+                objects,
+                ref_updates,
+            } => {
+                assert_eq!(fid, fed_id);
+                assert_eq!(objects.len(), 1);
+                assert_eq!(objects[0].object_type, "blob");
+                assert_eq!(ref_updates.len(), 1);
+                assert_eq!(ref_updates[0].ref_name, "heads/main");
+            }
+            _ => panic!("expected PushObjects"),
+        }
+    }
+
+    #[test]
+    fn push_result_response_roundtrip() {
+        let response = FederationResponse::PushResult {
+            accepted: true,
+            imported: 5,
+            skipped: 2,
+            refs_updated: 1,
+            errors: vec!["minor issue".to_string()],
+        };
+        let bytes = postcard::to_stdvec(&response).expect("serialize");
+        let decoded: FederationResponse = postcard::from_bytes(&bytes).expect("deserialize");
+        match decoded {
+            FederationResponse::PushResult {
+                accepted,
+                imported,
+                skipped,
+                refs_updated,
+                errors,
+            } => {
+                assert!(accepted);
+                assert_eq!(imported, 5);
+                assert_eq!(skipped, 2);
+                assert_eq!(refs_updated, 1);
+                assert_eq!(errors, vec!["minor issue"]);
+            }
+            _ => panic!("expected PushResult"),
+        }
+    }
 }

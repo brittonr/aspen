@@ -236,6 +236,7 @@ pub use federation::FederateRepositoryResultResponse;
 pub use federation::FederatedRepoInfo;
 pub use federation::FederatedRepositoriesResponse;
 pub use federation::FederationFetchRefsResponse;
+pub use federation::FederationPushResponse;
 pub use federation::FederationRequest;
 pub use federation::FederationStatusResponse;
 pub use federation::FederationSyncPeerResponse;
@@ -2142,6 +2143,15 @@ pub enum ClientRpcRequest {
         /// Local mirror repo ID (hex-encoded).
         mirror_repo_id: String,
     },
+    /// Push a local repo's objects and refs to a remote cluster.
+    FederationPush {
+        /// Remote peer's iroh node ID (base32-encoded PublicKey).
+        peer_node_id: String,
+        /// Optional direct socket address hint.
+        peer_addr: Option<String>,
+        /// Local repo ID to push (hex-encoded).
+        repo_id: String,
+    },
     ForgeFetchFederated {
         /// Federated ID (format: origin:local_id).
         federated_id: String,
@@ -3885,6 +3895,7 @@ impl ClientRpcRequest {
             Self::FederationGitFetch { .. } => "FederationGitFetch",
             Self::FederationGitListRefs { .. } => "FederationGitListRefs",
             Self::FederationPull { .. } => "FederationPull",
+            Self::FederationPush { .. } => "FederationPush",
             Self::FederationSyncPeer { .. } => "FederationSyncPeer",
             Self::ForgeFetchFederated { .. } => "ForgeFetchFederated",
             Self::ForgeForkRepo { .. } => "ForgeForkRepo",
@@ -4328,6 +4339,7 @@ impl ClientRpcRequest {
             | Self::FederationGitListRefs { .. }
             | Self::FederationGitFetch { .. }
             | Self::FederationPull { .. }
+            | Self::FederationPush { .. }
             | Self::ForgeFetchFederated { .. } => Some("forge"),
 
             // Git Bridge operations
@@ -4947,6 +4959,8 @@ pub enum ClientRpcResponse {
     FederationFetchRefsResult(FederationFetchRefsResponse),
     /// Federation pull result (same format as fetch).
     FederationPullResult(FederationFetchRefsResponse),
+    /// Federation push result.
+    FederationPushResult(FederationPushResponse),
 
     /// Federated git list refs result (same shape as GitBridgeListRefs).
     FederationGitListRefs(GitBridgeListRefsResponse),
