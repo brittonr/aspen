@@ -17,7 +17,8 @@
     lib,
     ...
   }: {
-    imports = [./disko.nix];
+    # NOTE: disko.nix removed — each machine defines its own fileSystems
+    # in configuration.nix to match actual partition layout (by UUID).
 
     # Boot (GRUB EFI)
     boot.loader.grub.enable = true;

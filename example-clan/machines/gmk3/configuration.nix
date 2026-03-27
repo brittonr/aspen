@@ -14,6 +14,17 @@
   boot.loader.grub.efiInstallAsRemovable = true;
   boot.loader.grub.device = "nodev";
 
+  # Filesystems — by UUID (from blkid)
+  fileSystems."/" = {
+    device = "/dev/disk/by-uuid/21a31c98-b33e-47c4-9c41-7f6043ed13c3";
+    fsType = "ext4";
+  };
+  fileSystems."/boot" = {
+    device = "/dev/disk/by-uuid/D3B8-5DDB";
+    fsType = "vfat";
+    options = ["fmask=0022" "dmask=0022"];
+  };
+
   # Networking
   networking.useDHCP = true;
   networking.firewall.enable = true;
