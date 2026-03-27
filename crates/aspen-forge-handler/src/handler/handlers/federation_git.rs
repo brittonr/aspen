@@ -349,7 +349,7 @@ pub(crate) async fn handle_federation_git_list_refs(
         None => {
             debug!(fed_id = %fed_id_str, "no mirror exists, creating and syncing");
             // Create the mirror repo via the existing helper
-            if let Err(e) = get_or_create_mirror(forge_node, &fed_id_str, origin_key).await {
+            if let Err(e) = get_or_create_mirror(forge_node, &fed_id_str, origin_key, None, None).await {
                 return Ok(ClientRpcResponse::FederationGitListRefs(GitBridgeListRefsResponse {
                     is_success: false,
                     refs: vec![],

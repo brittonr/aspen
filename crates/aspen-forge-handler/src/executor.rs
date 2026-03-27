@@ -1738,9 +1738,17 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 )
                 .await
             }
-            ClientRpcRequest::FederationPull { mirror_repo_id } => {
+            ClientRpcRequest::FederationPull {
+                mirror_repo_id,
+                peer_node_id,
+                peer_addr,
+                repo_id,
+            } => {
                 handle_federation_pull(
-                    &mirror_repo_id,
+                    mirror_repo_id.as_deref(),
+                    peer_node_id.as_deref(),
+                    peer_addr.as_deref(),
+                    repo_id.as_deref(),
                     self.federation_cluster_identity.as_ref(),
                     self.iroh_endpoint.as_ref(),
                     &self.forge_node,

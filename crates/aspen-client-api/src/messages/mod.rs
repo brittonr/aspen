@@ -2138,10 +2138,20 @@ pub enum ClientRpcRequest {
         /// Federated resource ID string (origin:local_id).
         fed_id: String,
     },
-    /// Pull updates for a federation mirror repo.
+    /// Pull a repo from a remote cluster or update an existing mirror.
     FederationPull {
-        /// Local mirror repo ID (hex-encoded).
-        mirror_repo_id: String,
+        /// Local mirror repo ID (hex-encoded). For mirror-pull mode.
+        #[serde(default)]
+        mirror_repo_id: Option<String>,
+        /// Remote peer's iroh node ID (base32). For cold-pull mode.
+        #[serde(default)]
+        peer_node_id: Option<String>,
+        /// Optional direct socket address hint.
+        #[serde(default)]
+        peer_addr: Option<String>,
+        /// Remote repo ID (hex-encoded). For cold-pull mode.
+        #[serde(default)]
+        repo_id: Option<String>,
     },
     /// Push a local repo's objects and refs to a remote cluster.
     FederationPush {

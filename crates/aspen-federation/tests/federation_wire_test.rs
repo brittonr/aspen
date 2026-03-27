@@ -894,3 +894,180 @@ async fn test_sync_objects_accepts_unsigned_when_no_delegates() {
     assert_eq!(objects[0].hash, hash1);
     assert_eq!(objects[1].hash, hash2);
 }
+
+// ============================================================================
+// Pull Protocol Flow Tests
+// ============================================================================
+
+/// Test: Cold pull protocol — connect, handshake to discover cluster identity,
+/// then fetch objects. Mirrors what handle_federation_pull_remote does.
+#[tokio::test]
+#[ignore = "requires network access (iroh socket binding)"]
+async fn test_pull_cold_handshake_discovers_cluster_identity() {
+    // Bob has a repo; Alice wants to pull it knowing only Bob's node ID + repo hash
+    let bob_data = b"commit: initial";
+    let bob_hash: [u8; 32] = blake3::hash(bob_data).into();
+
+    let resolver = MockResolver::new(vec![SyncObject {
+        object_type: "commit".to_string(),
+        hash: bob_hash,
+        data: bob_data.to_vec(),
+        signature: None,
+        signer: None,
+    }]);
+
+    let alice = TestCluster::new("alice-puller").await;
+    let bob = TestCluster::new_with_resolver("bob-origin", Some(Arc::new(resolver))).await;
+
+    alice.trust_manager.add_trusted(bob.cluster_key(), "bob".to_string(), None);
+    bob.trust_manager.add_trusted(alice.cluster_key(), "alice".to_string(), None);
+
+    // Bob publishes a repo
+    let repo_local_id: [u8; 32] = blake3::hash(b"my-repo").into();
+    let repo = FederatedId::new(bob.cluster_key(), repo_local_id);
+    bob.add_resource(repo, FederationMode::Public).await;
+
+    // Alice connects to Bob (simulating cold pull: she knows node ID but not cluster key)
+    let (conn, remote_identity) = tokio::time::timeout(
+        Duration::from_secs(10),
+        connect_and_handshake(&alice.endpoint, &alice.identity, bob.endpoint_addr()),
+    )
+    .await
+    .expect("timeout")
+    .expect("handshake");
+
+    // Alice learns Bob's cluster identity key from the handshake
+    let discovered_key = remote_identity.public_key();
+    assert_eq!(discovered_key, bob.cluster_key());
+
+    // Alice constructs the FederatedId using discovered key + known repo ID
+    let constructed_fed_id = FederatedId::new(discovered_key, repo_local_id);
+    assert_eq!(constructed_fed_id, repo);
+
+    // Alice fetches objects
+    let (objects, _has_more) = tokio::time::timeout(
+        Duration::from_secs(5),
+        sync_remote_objects(&conn, &constructed_fed_id, vec!["commit".to_string()], vec![], 100, None),
+    )
+    .await
+    .expect("timeout")
+    .expect("sync");
+
+    assert_eq!(objects.len(), 1);
+    assert_eq!(objects[0].hash, bob_hash);
+    assert_eq!(objects[0].data, bob_data);
+}
+
+/// Test: Incremental pull — second pull sends have_hashes so server can skip known objects.
+#[tokio::test]
+#[ignore = "requires network access (iroh socket binding)"]
+async fn test_pull_incremental_with_have_hashes() {
+    // Bob has two objects; Alice already has the first one
+    let data1 = b"blob: old data";
+    let hash1: [u8; 32] = blake3::hash(data1).into();
+    let data2 = b"blob: new data";
+    let hash2: [u8; 32] = blake3::hash(data2).into();
+
+    // Resolver that filters out objects in have_hashes
+    struct IncrementalResolver {
+        objects: Vec<SyncObject>,
+    }
+
+    #[async_trait]
+    impl FederationResourceResolver for IncrementalResolver {
+        async fn get_resource_state(
+            &self,
+            _fed_id: &FederatedId,
+        ) -> Result<FederationResourceState, FederationResourceError> {
+            Ok(FederationResourceState::default())
+        }
+
+        async fn sync_objects(
+            &self,
+            _fed_id: &FederatedId,
+            _want_types: &[String],
+            have_hashes: &[[u8; 32]],
+            _limit: u32,
+        ) -> Result<Vec<SyncObject>, FederationResourceError> {
+            // Filter out objects the client already has
+            Ok(self.objects.iter().filter(|o| !have_hashes.contains(&o.hash)).cloned().collect())
+        }
+
+        async fn resource_exists(&self, _fed_id: &FederatedId) -> bool {
+            true
+        }
+
+        async fn list_resources(&self, _limit: u32) -> Vec<(FederatedId, String)> {
+            vec![]
+        }
+
+        async fn import_pushed_objects(
+            &self,
+            _fed_id: &FederatedId,
+            _objects: Vec<SyncObject>,
+            _ref_updates: Vec<aspen_federation::sync::RefEntry>,
+        ) -> Result<(u32, u32, u32), FederationResourceError> {
+            Ok((0, 0, 0))
+        }
+    }
+
+    let resolver = IncrementalResolver {
+        objects: vec![
+            SyncObject {
+                object_type: "blob".to_string(),
+                hash: hash1,
+                data: data1.to_vec(),
+                signature: None,
+                signer: None,
+            },
+            SyncObject {
+                object_type: "blob".to_string(),
+                hash: hash2,
+                data: data2.to_vec(),
+                signature: None,
+                signer: None,
+            },
+        ],
+    };
+
+    let alice = TestCluster::new("alice-inc").await;
+    let bob = TestCluster::new_with_resolver("bob-inc", Some(Arc::new(resolver))).await;
+
+    alice.trust_manager.add_trusted(bob.cluster_key(), "bob".to_string(), None);
+    bob.trust_manager.add_trusted(alice.cluster_key(), "alice".to_string(), None);
+
+    let repo = test_fed_id(bob.cluster_key(), "incremental-repo");
+    bob.add_resource(repo, FederationMode::Public).await;
+
+    let (conn, _) = tokio::time::timeout(
+        Duration::from_secs(10),
+        connect_and_handshake(&alice.endpoint, &alice.identity, bob.endpoint_addr()),
+    )
+    .await
+    .expect("timeout")
+    .expect("handshake");
+
+    // First pull: Alice has nothing → gets both objects
+    let (objects_full, _) = tokio::time::timeout(
+        Duration::from_secs(5),
+        sync_remote_objects(&conn, &repo, vec!["blob".to_string()], vec![], 100, None),
+    )
+    .await
+    .expect("timeout")
+    .expect("full sync");
+
+    assert_eq!(objects_full.len(), 2, "first pull should get all objects");
+
+    // Second pull: Alice has hash1 → only gets hash2
+    let (objects_inc, _) = tokio::time::timeout(
+        Duration::from_secs(5),
+        sync_remote_objects(&conn, &repo, vec!["blob".to_string()], vec![hash1], 100, None),
+    )
+    .await
+    .expect("timeout")
+    .expect("incremental sync");
+
+    assert_eq!(objects_inc.len(), 1, "incremental pull should skip known objects");
+    assert_eq!(objects_inc[0].hash, hash2);
+    assert_eq!(objects_inc[0].data, data2);
+}

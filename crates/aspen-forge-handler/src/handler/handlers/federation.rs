@@ -774,20 +774,23 @@ pub(crate) async fn handle_federation_fetch_refs(
     #[cfg(feature = "git-bridge")]
     let git_stats = {
         // Get or create mirror repo
-        let mirror_repo_id = match get_or_create_mirror(forge_node, fed_id_str, &peer_key.to_string()).await {
-            Ok(id) => id,
-            Err(e) => {
-                errors.push(format!("mirror creation failed: {e}"));
-                // Still return ref results even if mirror fails
-                return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
-                    is_success: false,
-                    fetched: refs_fetched,
-                    already_present: 0,
-                    errors,
-                    error: Some(e),
-                }));
-            }
-        };
+        let mirror_repo_id =
+            match get_or_create_mirror(forge_node, fed_id_str, &peer_key.to_string(), Some(peer_node_id), peer_addr)
+                .await
+            {
+                Ok(id) => id,
+                Err(e) => {
+                    errors.push(format!("mirror creation failed: {e}"));
+                    // Still return ref results even if mirror fails
+                    return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+                        is_success: false,
+                        fetched: refs_fetched,
+                        already_present: 0,
+                        errors,
+                        error: Some(e),
+                    }));
+                }
+            };
 
         // Collect have_hashes from existing mirror objects
         let have_hashes = collect_local_blake3_hashes(forge_node, &mirror_repo_id, 10_000).await;
@@ -1084,18 +1087,28 @@ pub struct MirrorMetadata {
     pub last_sync_timestamp: u64,
     /// When the mirror was created (Unix seconds).
     pub created_at: u64,
+    /// Origin peer's iroh node ID (base32). Used to reconnect for pulls.
+    pub origin_node_id: Option<String>,
+    /// Origin peer's direct socket address hint (e.g., "192.168.1.5:12345").
+    pub origin_addr_hint: Option<String>,
 }
 
 impl MirrorMetadata {
     pub(crate) fn to_json(&self) -> String {
-        serde_json::json!({
+        let mut v = serde_json::json!({
             "fed_id": self.fed_id,
             "origin_cluster_key": self.origin_cluster_key,
             "local_repo_id": self.local_repo_id,
             "last_sync_timestamp": self.last_sync_timestamp,
             "created_at": self.created_at
-        })
-        .to_string()
+        });
+        if let Some(ref nid) = self.origin_node_id {
+            v["origin_node_id"] = serde_json::Value::String(nid.clone());
+        }
+        if let Some(ref hint) = self.origin_addr_hint {
+            v["origin_addr_hint"] = serde_json::Value::String(hint.clone());
+        }
+        v.to_string()
     }
 
     pub(crate) fn from_json(s: &str) -> Option<Self> {
@@ -1106,6 +1119,8 @@ impl MirrorMetadata {
             local_repo_id: v.get("local_repo_id")?.as_str()?.to_string(),
             last_sync_timestamp: v.get("last_sync_timestamp")?.as_u64()?,
             created_at: v.get("created_at")?.as_u64()?,
+            origin_node_id: v.get("origin_node_id").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            origin_addr_hint: v.get("origin_addr_hint").and_then(|v| v.as_str()).map(|s| s.to_string()),
         })
     }
 }
@@ -1114,10 +1129,15 @@ impl MirrorMetadata {
 ///
 /// If a mirror already exists (looked up by fed_id), returns its repo ID.
 /// Otherwise creates a new forge repo and stores mirror metadata.
+///
+/// `origin_node_id` and `origin_addr_hint` are stored in mirror metadata
+/// for reconnection on subsequent pulls.
 pub(crate) async fn get_or_create_mirror(
     forge_node: &ForgeNodeRef,
     fed_id_str: &str,
     origin_cluster_key: &str,
+    origin_node_id: Option<&str>,
+    origin_addr_hint: Option<&str>,
 ) -> Result<aspen_forge::identity::RepoId, String> {
     // Check if mirror already exists
     let meta_key = format!("{}{}", MIRROR_PREFIX, fed_id_str);
@@ -1148,6 +1168,8 @@ pub(crate) async fn get_or_create_mirror(
         local_repo_id: hex::encode(repo_id.0),
         last_sync_timestamp: now,
         created_at: now,
+        origin_node_id: origin_node_id.map(|s| s.to_string()),
+        origin_addr_hint: origin_addr_hint.map(|s| s.to_string()),
     };
 
     forge_node
@@ -1232,17 +1254,40 @@ pub(crate) async fn get_mirror_metadata(forge_node: &ForgeNodeRef, fed_id_str: &
     None
 }
 
-/// Handle a federation pull for an existing mirror repo.
+/// Handle a federation pull request.
 ///
-/// Reads mirror metadata to find the origin peer and federated ID,
-/// then delegates to the fetch handler for incremental sync.
+/// Dispatches between two modes:
+/// - **Cold pull** (`peer_node_id` + `repo_id`): connect to remote, create mirror, fetch.
+/// - **Mirror pull** (`mirror_repo_id`): read stored metadata, reconnect, incremental fetch.
 pub(crate) async fn handle_federation_pull(
-    mirror_repo_id: &str,
+    mirror_repo_id: Option<&str>,
+    peer_node_id: Option<&str>,
+    peer_addr: Option<&str>,
+    repo_id: Option<&str>,
     cluster_identity: Option<&Arc<aspen_cluster::federation::ClusterIdentity>>,
     iroh_endpoint: Option<&Arc<iroh::Endpoint>>,
     forge_node: &ForgeNodeRef,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_api::FederationFetchRefsResponse;
+
+    // Cold pull: peer + repo specified
+    if let (Some(peer), Some(repo)) = (peer_node_id, repo_id) {
+        return handle_federation_pull_remote(peer, peer_addr, repo, cluster_identity, iroh_endpoint, forge_node).await;
+    }
+
+    // Mirror pull: mirror_repo_id specified
+    let mirror_id = match mirror_repo_id {
+        Some(id) => id,
+        None => {
+            return Ok(ClientRpcResponse::FederationPullResult(FederationFetchRefsResponse {
+                is_success: false,
+                fetched: 0,
+                already_present: 0,
+                errors: Vec::new(),
+                error: Some("either --peer + --repo (cold pull) or --repo (mirror pull) required".to_string()),
+            }));
+        }
+    };
 
     // Scan all mirror metadata to find one matching this repo ID
     let meta = {
@@ -1250,7 +1295,7 @@ pub(crate) async fn handle_federation_pull(
         if let Ok(entries) = forge_node.scan_kv(MIRROR_PREFIX, Some(100)).await {
             for (_key, value) in &entries {
                 if let Some(m) = MirrorMetadata::from_json(value)
-                    && m.local_repo_id == mirror_repo_id
+                    && m.local_repo_id == mirror_id
                 {
                     found = Some(m);
                     break;
@@ -1268,15 +1313,18 @@ pub(crate) async fn handle_federation_pull(
                 fetched: 0,
                 already_present: 0,
                 errors: Vec::new(),
-                error: Some(format!("repo {} is not a federation mirror", mirror_repo_id)),
+                error: Some(format!("repo {} is not a federation mirror", mirror_id)),
             }));
         }
     };
 
+    // Use stored node ID for reconnection, falling back to cluster key
+    let peer_id = meta.origin_node_id.as_deref().unwrap_or(&meta.origin_cluster_key);
+
     // Delegate to the fetch handler using stored origin info
     let result = handle_federation_fetch_refs(
-        &meta.origin_cluster_key,
-        None, // No address hint for pull (use discovery)
+        peer_id,
+        meta.origin_addr_hint.as_deref(),
         &meta.fed_id,
         cluster_identity,
         iroh_endpoint,
@@ -1285,6 +1333,92 @@ pub(crate) async fn handle_federation_pull(
     .await?;
 
     // Re-wrap as FederationPullResult
+    match result {
+        ClientRpcResponse::FederationFetchRefsResult(resp) => Ok(ClientRpcResponse::FederationPullResult(resp)),
+        other => Ok(other),
+    }
+}
+
+/// Handle a cold federation pull: connect to a remote peer, discover the
+/// repo's federated ID via handshake, create a local mirror, then fetch.
+///
+/// This is the entry point when the user specifies `--peer` + `--repo` without
+/// an existing mirror. The remote's cluster identity key is obtained from the
+/// handshake and used to construct the `FederatedId`.
+pub(crate) async fn handle_federation_pull_remote(
+    peer_node_id: &str,
+    peer_addr: Option<&str>,
+    repo_id_hex: &str,
+    cluster_identity: Option<&Arc<aspen_cluster::federation::ClusterIdentity>>,
+    iroh_endpoint: Option<&Arc<iroh::Endpoint>>,
+    forge_node: &ForgeNodeRef,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::FederationFetchRefsResponse;
+
+    let err_response = |msg: String| {
+        Ok(ClientRpcResponse::FederationPullResult(FederationFetchRefsResponse {
+            is_success: false,
+            fetched: 0,
+            already_present: 0,
+            errors: Vec::new(),
+            error: Some(msg),
+        }))
+    };
+
+    let identity = match cluster_identity {
+        Some(id) => id,
+        None => return err_response("federation not configured on this cluster".to_string()),
+    };
+
+    let endpoint = match iroh_endpoint {
+        Some(ep) => ep,
+        None => return err_response("iroh endpoint not available".to_string()),
+    };
+
+    let peer_key: iroh::PublicKey = match peer_node_id.parse() {
+        Ok(k) => k,
+        Err(e) => return err_response(format!("invalid peer node ID '{}': {}", peer_node_id, e)),
+    };
+
+    // Validate repo_id is 32-byte hex
+    let repo_id_bytes: [u8; 32] = match hex::decode(repo_id_hex) {
+        Ok(b) if b.len() == 32 => {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&b);
+            arr
+        }
+        Ok(b) => return err_response(format!("repo_id must be 32 bytes, got {}", b.len())),
+        Err(e) => return err_response(format!("invalid repo_id hex '{}': {}", repo_id_hex, e)),
+    };
+
+    let endpoint_addr = build_endpoint_addr(peer_key, peer_addr);
+
+    // Connect and handshake to get the remote cluster's identity key
+    let (_connection, remote_identity) =
+        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr).await {
+            Ok(result) => result,
+            Err(e) => return err_response(format!("connection failed: {e}")),
+        };
+
+    // Construct FederatedId from remote cluster identity + repo_id
+    let remote_cluster_key = remote_identity.public_key();
+    let fed_id = aspen_cluster::federation::FederatedId::new(remote_cluster_key, repo_id_bytes);
+    let fed_id_str = fed_id.to_string();
+
+    // Ensure mirror exists with origin info stored
+    match get_or_create_mirror(forge_node, &fed_id_str, &remote_cluster_key.to_string(), Some(peer_node_id), peer_addr)
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => return err_response(format!("mirror creation failed: {e}")),
+    }
+
+    // Delegate to the fetch handler (reuses the same connection peer info)
+    let result =
+        handle_federation_fetch_refs(peer_node_id, peer_addr, &fed_id_str, cluster_identity, iroh_endpoint, forge_node)
+            .await?;
+
+    // Re-wrap as PullResult
     match result {
         ClientRpcResponse::FederationFetchRefsResult(resp) => Ok(ClientRpcResponse::FederationPullResult(resp)),
         other => Ok(other),
@@ -1788,6 +1922,8 @@ mod tests {
             fed_id: "abc123:def456".to_string(),
             origin_cluster_key: "0102030405060708".to_string(),
             local_repo_id: hex::encode([0xab; 32]),
+            origin_node_id: None,
+            origin_addr_hint: None,
             last_sync_timestamp: 1700000000,
             created_at: 1699999000,
         };
@@ -1800,6 +1936,44 @@ mod tests {
         assert_eq!(parsed.local_repo_id, meta.local_repo_id);
         assert_eq!(parsed.last_sync_timestamp, meta.last_sync_timestamp);
         assert_eq!(parsed.created_at, meta.created_at);
+    }
+
+    #[test]
+    fn test_mirror_metadata_roundtrip_with_origin_fields() {
+        let meta = super::MirrorMetadata {
+            fed_id: "abc123:def456".to_string(),
+            origin_cluster_key: "0102030405060708".to_string(),
+            local_repo_id: hex::encode([0xab; 32]),
+            origin_node_id: Some("n4bech3tdbfhtncf5hhi3lbmg2dqmj3q".to_string()),
+            origin_addr_hint: Some("192.168.1.5:12345".to_string()),
+            last_sync_timestamp: 1700000000,
+            created_at: 1699999000,
+        };
+
+        let json = meta.to_json();
+        let parsed = super::MirrorMetadata::from_json(&json).expect("should parse");
+
+        assert_eq!(parsed.origin_node_id.as_deref(), Some("n4bech3tdbfhtncf5hhi3lbmg2dqmj3q"));
+        assert_eq!(parsed.origin_addr_hint.as_deref(), Some("192.168.1.5:12345"));
+        assert_eq!(parsed.fed_id, meta.fed_id);
+        assert_eq!(parsed.origin_cluster_key, meta.origin_cluster_key);
+    }
+
+    #[test]
+    fn test_mirror_metadata_backwards_compat_missing_origin_fields() {
+        // Old-format JSON without origin_node_id / origin_addr_hint
+        let old_json = r#"{
+            "fed_id": "abc:def",
+            "origin_cluster_key": "aabbccdd",
+            "local_repo_id": "0011223344556677",
+            "last_sync_timestamp": 100,
+            "created_at": 99
+        }"#;
+
+        let parsed = super::MirrorMetadata::from_json(old_json).expect("should parse old format");
+        assert_eq!(parsed.fed_id, "abc:def");
+        assert!(parsed.origin_node_id.is_none());
+        assert!(parsed.origin_addr_hint.is_none());
     }
 
     #[test]

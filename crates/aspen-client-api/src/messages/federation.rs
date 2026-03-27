@@ -99,13 +99,26 @@ pub enum FederationRequest {
         fed_id: String,
     },
 
-    /// Pull updates for a federation mirror repo.
+    /// Pull a repo from a remote cluster or update an existing mirror.
     ///
-    /// Reads the mirror's metadata to find origin peer and federated ID,
-    /// then performs an incremental fetch (refs + git objects).
+    /// Two modes:
+    /// - **Cold pull**: `peer_node_id` + `repo_id` set → connect to remote, create local mirror if
+    ///   needed, fetch refs + git objects.
+    /// - **Mirror pull**: `mirror_repo_id` set → read stored metadata for origin peer, perform
+    ///   incremental fetch.
     FederationPull {
-        /// Local mirror repo ID (hex-encoded).
-        mirror_repo_id: String,
+        /// Local mirror repo ID (hex-encoded). Used for mirror-pull mode.
+        #[serde(default)]
+        mirror_repo_id: Option<String>,
+        /// Remote peer's iroh node ID (base32-encoded PublicKey). Used for cold-pull mode.
+        #[serde(default)]
+        peer_node_id: Option<String>,
+        /// Optional direct socket address hint for the remote peer.
+        #[serde(default)]
+        peer_addr: Option<String>,
+        /// Remote repo ID (hex-encoded). Used for cold-pull mode.
+        #[serde(default)]
+        repo_id: Option<String>,
     },
 
     /// Push a local repo's objects and refs to a remote cluster.

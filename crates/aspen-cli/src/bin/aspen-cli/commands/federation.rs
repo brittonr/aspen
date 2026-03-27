@@ -128,11 +128,25 @@ pub struct PushArgs {
 }
 
 /// Arguments for federation pull command.
+///
+/// Two modes:
+/// - Cold pull: `--peer <node-id> --repo <remote-repo-hex>` creates a mirror.
+/// - Mirror pull: `--repo <mirror-id>` updates an existing mirror.
 #[derive(Args)]
 pub struct PullArgs {
-    /// Local mirror repo ID (hex-encoded).
+    /// Repo ID (hex-encoded). Interpretation depends on --peer:
+    /// with --peer: remote repo ID on the peer cluster.
+    /// without --peer: local mirror repo ID.
     #[arg(long)]
     pub repo: String,
+
+    /// Remote peer's iroh node ID (base32-encoded). Enables cold-pull mode.
+    #[arg(long)]
+    pub peer: Option<String>,
+
+    /// Direct socket address hint for the remote peer (e.g., "192.168.1.5:12345").
+    #[arg(long)]
+    pub addr: Option<String>,
 }
 
 /// Federation status output.
@@ -622,18 +636,41 @@ async fn federation_list_federated(client: &AspenClient, json: bool) -> Result<(
 }
 
 async fn federation_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<()> {
+    // Validate: --addr only makes sense with --peer
+    if args.addr.is_some() && args.peer.is_none() {
+        anyhow::bail!("--addr requires --peer (cold-pull mode)");
+    }
+
+    // Build request based on mode: cold-pull (--peer set) vs mirror-pull
+    let (mirror_repo_id, peer_node_id, peer_addr, repo_id) = if let Some(ref peer) = args.peer {
+        // Cold pull: --repo is the remote repo ID
+        (None, Some(peer.clone()), args.addr.clone(), Some(args.repo.clone()))
+    } else {
+        // Mirror pull: --repo is the local mirror ID
+        (Some(args.repo.clone()), None, None, None)
+    };
+
     let response = client
         .send(ClientRpcRequest::FederationPull {
-            mirror_repo_id: args.repo.clone(),
+            mirror_repo_id,
+            peer_node_id,
+            peer_addr,
+            repo_id,
         })
         .await?;
+
+    let label = if args.peer.is_some() {
+        "remote repo"
+    } else {
+        "mirror repo"
+    };
 
     match response {
         ClientRpcResponse::FederationPullResult(result) => {
             if json {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success || result.error.is_none() {
-                println!("Pull complete for mirror repo {}", args.repo);
+                println!("Pull complete for {} {}", label, args.repo);
                 println!("  Fetched:         {}", result.fetched);
                 println!("  Already present: {}", result.already_present);
                 if !result.errors.is_empty() {
