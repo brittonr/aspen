@@ -563,6 +563,7 @@ mod tests {
             validate_only: None,
             force_cold_boot: false,
             speculative_count: None,
+            cached_execution: false,
         }
     }
 }

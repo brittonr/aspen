@@ -113,6 +113,7 @@ fn create_shell_payload(command: &str, args: Vec<&str>) -> LocalExecutorPayload 
         checkout_dir: None,
         flake_attr: None,
         run_id: None,
+        cached_execution: false,
     }
 }
 
@@ -356,6 +357,7 @@ async fn test_empty_command_validation() {
         checkout_dir: None,
         flake_attr: None,
         run_id: None,
+        cached_execution: false,
     };
     let job = create_test_job(payload, "shell_command");
 
@@ -391,6 +393,7 @@ async fn test_command_too_long_validation() {
         checkout_dir: None,
         flake_attr: None,
         run_id: None,
+        cached_execution: false,
     };
     let job = create_test_job(payload, "shell_command");
 

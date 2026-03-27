@@ -118,6 +118,16 @@ pub struct CiConfig {
     /// Default: 4 GB (4294967296 bytes)
     #[serde(default = "default_ci_max_memory_bytes")]
     pub max_job_memory_bytes: u64,
+
+    /// Enable CI triggering for federation mirror repositories.
+    ///
+    /// When enabled, federation sync (pull/push/bidi-sync) that updates
+    /// mirror refs will trigger CI pipelines on the receiving cluster.
+    /// Mirror repos are auto-watched via periodic KV scan.
+    ///
+    /// Default: false (operators must opt in)
+    #[serde(default)]
+    pub federation_ci_enabled: bool,
 }
 
 pub(crate) fn default_ci_max_concurrent_runs() -> u32 {

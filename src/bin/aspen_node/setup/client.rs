@@ -200,9 +200,15 @@ pub async fn setup_client_protocol(
             (Some(forge), Some(orchestrator)) => {
                 let config_fetcher = Arc::new(ForgeConfigFetcher::new(forge.clone()));
                 let pipeline_starter = Arc::new(OrchestratorPipelineStarter::new(orchestrator.clone(), forge.clone()));
-                let trigger_config = TriggerServiceConfig::default();
+                let trigger_config = TriggerServiceConfig {
+                    federation_ci_enabled: config.ci.federation_ci_enabled,
+                    ..Default::default()
+                };
 
                 let service = TriggerService::new(trigger_config, config_fetcher, pipeline_starter);
+
+                // Start periodic mirror scanning for federation CI
+                service.start_mirror_scan_task(kv_store.clone());
 
                 if !config.ci.watched_repos.is_empty() {
                     for repo_id_hex in &config.ci.watched_repos {

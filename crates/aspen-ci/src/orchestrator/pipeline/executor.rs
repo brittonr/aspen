@@ -475,6 +475,9 @@ mod tests {
             expected_binary: None,
             stateful: None,
             validate_only: None,
+            force_cold_boot: false,
+            speculative_count: None,
+            cached_execution: false,
         }
     }
 
@@ -721,6 +724,7 @@ mod deploy_ref_tests {
             validate_only: None,
             force_cold_boot: false,
             speculative_count: None,
+            cached_execution: false,
         }
     }
 

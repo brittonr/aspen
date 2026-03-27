@@ -52,6 +52,12 @@ const MAX_REPLAY_BUFFER: usize = 32;
 const REPLAY_BUFFER_TTL_MS: u64 = 30_000;
 /// Default CI config path.
 const DEFAULT_CI_CONFIG_PATH: &str = ".aspen/ci.ncl";
+/// Interval between periodic mirror scans (seconds).
+const MIRROR_SCAN_INTERVAL_SECS: u64 = 60;
+/// KV prefix for federation mirror metadata.
+const MIRROR_KV_PREFIX: &str = "_fed:mirror:";
+/// Maximum mirror entries to scan per sweep.
+const MAX_MIRROR_SCAN: u32 = 100;
 
 /// Configuration for the TriggerService.
 #[derive(Debug, Clone)]
@@ -62,6 +68,9 @@ pub struct TriggerServiceConfig {
     pub default_trigger_refs: Vec<String>,
     /// Whether to enable auto-triggering by default.
     pub auto_trigger_enabled: bool,
+    /// Whether to trigger CI for federation mirror repos.
+    /// Defaults to `false` — operators must opt in.
+    pub federation_ci_enabled: bool,
 }
 
 impl Default for TriggerServiceConfig {
@@ -70,6 +79,7 @@ impl Default for TriggerServiceConfig {
             config_path: PathBuf::from(DEFAULT_CI_CONFIG_PATH),
             default_trigger_refs: vec!["refs/heads/main".to_string()],
             auto_trigger_enabled: true,
+            federation_ci_enabled: false,
         }
     }
 }
@@ -159,6 +169,8 @@ pub struct TriggerService {
     pipeline_starter: Arc<dyn PipelineStarter>,
     /// Repositories being watched for triggers.
     watched_repos: RwLock<HashSet<RepoId>>,
+    /// Repo IDs that are federation mirrors (for gating by `federation_ci_enabled`).
+    mirror_repos: RwLock<HashSet<RepoId>>,
     /// Channel for sending trigger events to processing task.
     trigger_tx: mpsc::Sender<PendingTrigger>,
     /// Tracks all spawned tasks for graceful shutdown.
@@ -254,6 +266,21 @@ fn segment_matches(segment: &str, pattern: &str) -> bool {
 ///
 /// Returns `true` if the trigger should fire, `false` if it should be skipped.
 ///
+/// Parse a mirror metadata JSON value to extract the local repo ID.
+///
+/// Returns `None` if parsing fails or the repo ID is malformed.
+fn parse_mirror_repo_id(json_str: &str) -> Option<RepoId> {
+    let v: serde_json::Value = serde_json::from_str(json_str).ok()?;
+    let repo_hex = v.get("local_repo_id")?.as_str()?;
+    let bytes = hex::decode(repo_hex).ok()?;
+    if bytes.len() != 32 {
+        return None;
+    }
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&bytes);
+    Some(RepoId::from_hash(blake3::Hash::from_bytes(arr)))
+}
+
 /// Rules:
 /// - If `only_paths` is non-empty: trigger fires only if ANY changed path matches
 /// - If `ignore_paths` is non-empty: trigger fires only if ANY changed path does NOT match
@@ -304,6 +331,7 @@ impl TriggerService {
             config_fetcher,
             pipeline_starter,
             watched_repos: RwLock::new(HashSet::new()),
+            mirror_repos: RwLock::new(HashSet::new()),
             trigger_tx,
             task_tracker,
             replay_buffer: RwLock::new(std::collections::VecDeque::with_capacity(MAX_REPLAY_BUFFER)),
@@ -418,6 +446,86 @@ impl TriggerService {
     /// Useful for debugging and verifying watch state.
     pub async fn watched_repos(&self) -> Vec<RepoId> {
         self.watched_repos.read().await.iter().copied().collect()
+    }
+
+    /// Check if a repo is a known federation mirror.
+    pub async fn is_mirror_repo(&self, repo_id: &RepoId) -> bool {
+        self.mirror_repos.read().await.contains(repo_id)
+    }
+
+    /// Scan KV for federation mirrors and auto-watch them.
+    ///
+    /// Reads `_fed:mirror:*` entries, extracts the `local_repo_id` from
+    /// each mirror's JSON metadata, and calls `watch_repo()` for any
+    /// mirrors not yet being watched.
+    pub async fn scan_and_watch_mirrors(&self, kv: &dyn aspen_core::KeyValueStore) -> u32 {
+        let entries = match kv
+            .scan(aspen_core::ScanRequest {
+                prefix: MIRROR_KV_PREFIX.to_string(),
+                limit_results: Some(MAX_MIRROR_SCAN),
+                continuation_token: None,
+            })
+            .await
+        {
+            Ok(result) => result.entries,
+            Err(e) => {
+                warn!(error = %e, "failed to scan for federation mirrors");
+                return 0;
+            }
+        };
+
+        let mut newly_watched = 0u32;
+        for entry in &entries {
+            let repo_id = match parse_mirror_repo_id(&entry.value) {
+                Some(id) => id,
+                None => continue,
+            };
+
+            self.mirror_repos.write().await.insert(repo_id);
+
+            if !self.is_watching(&repo_id).await {
+                if let Err(e) = self.watch_repo(repo_id).await {
+                    warn!(
+                        repo_id = %hex::encode(repo_id.0),
+                        error = %e,
+                        "failed to auto-watch federation mirror"
+                    );
+                } else {
+                    newly_watched += 1;
+                    info!(
+                        repo_id = %hex::encode(repo_id.0),
+                        "auto-watching federation mirror for CI triggers"
+                    );
+                }
+            }
+        }
+
+        if newly_watched > 0 {
+            let total_mirrors = self.mirror_repos.read().await.len();
+            info!(newly_watched = newly_watched, total_mirrors = total_mirrors, "federation mirror scan complete");
+        }
+
+        newly_watched
+    }
+
+    /// Start periodic mirror scanning in the background.
+    ///
+    /// Only active when `federation_ci_enabled` is true.
+    pub fn start_mirror_scan_task(self: &Arc<Self>, kv: Arc<dyn aspen_core::KeyValueStore>) {
+        if !self.config.federation_ci_enabled {
+            return;
+        }
+
+        let service = self.clone();
+        self.task_tracker.spawn(async move {
+            let interval = std::time::Duration::from_secs(MIRROR_SCAN_INTERVAL_SECS);
+            loop {
+                service.scan_and_watch_mirrors(kv.as_ref()).await;
+                tokio::time::sleep(interval).await;
+            }
+        });
+
+        info!("federation mirror scan task started (interval: {}s)", MIRROR_SCAN_INTERVAL_SECS);
     }
 
     /// Process incoming triggers from the channel.
@@ -633,6 +741,15 @@ impl AnnouncementCallback for CiTriggerHandler {
                 info!(
                     repo_id = %repo_id.to_hex(),
                     "auto-triggering disabled in config - skipping"
+                );
+                return;
+            }
+
+            // Gate federation mirror repos behind federation_ci_enabled
+            if trigger_service.is_mirror_repo(&repo_id).await && !trigger_service.config.federation_ci_enabled {
+                debug!(
+                    repo_id = %repo_id.to_hex(),
+                    "federation CI disabled - skipping trigger for mirror repo"
                 );
                 return;
             }
@@ -915,5 +1032,99 @@ mod tests {
 
         // Should be capped at MAX_REPLAY_BUFFER
         assert_eq!(service.replay_buffer.read().await.len(), MAX_REPLAY_BUFFER);
+    }
+
+    // ── Mirror scan tests ───────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_scan_and_watch_mirrors() {
+        use aspen_core::KeyValueStore;
+        use aspen_core::WriteRequest;
+
+        let config = TriggerServiceConfig {
+            federation_ci_enabled: true,
+            ..Default::default()
+        };
+        let fetcher = Arc::new(MockConfigFetcher { config: None });
+        let starter = Arc::new(MockPipelineStarter {
+            started_count: AtomicU32::new(0),
+        });
+
+        let service = TriggerService::new(config, fetcher, starter);
+
+        // Create an in-memory KV store with a mirror entry
+        let kv = aspen_testing_core::DeterministicKeyValueStore::new();
+        let repo_hex = hex::encode([42u8; 32]);
+        let mirror_json = serde_json::json!({
+            "fed_id": "abc:def",
+            "origin_cluster_key": "0000",
+            "local_repo_id": repo_hex,
+            "last_sync_timestamp": 1000,
+            "created_at": 1000
+        });
+        aspen_core::KeyValueStore::write(
+            kv.as_ref(),
+            WriteRequest::set("_fed:mirror:abc:def", mirror_json.to_string()),
+        )
+        .await
+        .unwrap();
+
+        // Scan should discover and watch the mirror
+        let newly_watched = service.scan_and_watch_mirrors(kv.as_ref()).await;
+        assert_eq!(newly_watched, 1);
+
+        // The repo should now be watched and tracked as a mirror
+        let repo_id = RepoId::from_hash(blake3::Hash::from_bytes([42u8; 32]));
+        assert!(service.is_watching(&repo_id).await);
+        assert!(service.is_mirror_repo(&repo_id).await);
+
+        // Second scan should not re-watch
+        let newly_watched = service.scan_and_watch_mirrors(kv.as_ref()).await;
+        assert_eq!(newly_watched, 0);
+    }
+
+    #[tokio::test]
+    async fn test_mirror_repo_gated_when_federation_ci_disabled() {
+        let config = TriggerServiceConfig {
+            federation_ci_enabled: false,
+            ..Default::default()
+        };
+        let fetcher = Arc::new(MockConfigFetcher { config: None });
+        let starter = Arc::new(MockPipelineStarter {
+            started_count: AtomicU32::new(0),
+        });
+
+        let service = TriggerService::new(config, fetcher, starter);
+
+        // Manually mark a repo as a mirror and watch it
+        let repo_id = RepoId::from_hash(blake3::hash(b"mirror-repo"));
+        service.mirror_repos.write().await.insert(repo_id);
+        service.watch_repo(repo_id).await.unwrap();
+
+        assert!(service.is_mirror_repo(&repo_id).await);
+        assert!(service.is_watching(&repo_id).await);
+        // federation_ci_enabled = false, so triggers should be dropped for this repo
+        assert!(!service.config.federation_ci_enabled);
+    }
+
+    #[test]
+    fn test_parse_mirror_repo_id_valid() {
+        let repo_hex = hex::encode([99u8; 32]);
+        let json = serde_json::json!({
+            "fed_id": "abc:def",
+            "origin_cluster_key": "0000",
+            "local_repo_id": repo_hex,
+            "last_sync_timestamp": 1000,
+            "created_at": 1000
+        });
+        let parsed = parse_mirror_repo_id(&json.to_string());
+        assert!(parsed.is_some());
+    }
+
+    #[test]
+    fn test_parse_mirror_repo_id_invalid() {
+        assert!(parse_mirror_repo_id("not json").is_none());
+        assert!(parse_mirror_repo_id("{}").is_none());
+        assert!(parse_mirror_repo_id(r#"{"local_repo_id": "short"}"#).is_none());
     }
 }

@@ -203,6 +203,39 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         self.gossip.as_ref()
     }
 
+    /// Emit a `RefUpdate` gossip announcement for a ref change.
+    ///
+    /// No-op if gossip is not configured. Used by federation handlers
+    /// to notify the CI TriggerService after mirror ref updates.
+    pub async fn announce_ref_update(
+        &self,
+        repo_id: &RepoId,
+        ref_name: &str,
+        new_hash: [u8; 32],
+        old_hash: Option<[u8; 32]>,
+    ) {
+        let gossip = match &self.gossip {
+            Some(g) => g,
+            None => return,
+        };
+
+        let announcement = crate::gossip::Announcement::RefUpdate {
+            repo_id: *repo_id,
+            ref_name: ref_name.to_string(),
+            new_hash,
+            old_hash,
+        };
+
+        if let Err(e) = gossip.broadcast(announcement).await {
+            tracing::warn!(
+                repo_id = %repo_id.to_hex(),
+                ref_name = %ref_name,
+                error = %e,
+                "failed to broadcast federation RefUpdate announcement"
+            );
+        }
+    }
+
     /// Set the announcement handler for gossip.
     ///
     /// This can be called after `enable_gossip` to register a handler
@@ -1673,6 +1706,15 @@ mod tests {
     async fn test_has_gossip_default_false() {
         let node = create_test_node().await;
         assert!(!node.has_gossip(), "gossip should be disabled by default");
+    }
+
+    #[tokio::test]
+    async fn test_announce_ref_update_noop_without_gossip() {
+        let node = create_test_node().await;
+        assert!(!node.has_gossip());
+        let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+        // Should not panic — silent no-op
+        node.announce_ref_update(&repo_id, "refs/heads/main", [1u8; 32], None).await;
     }
 
     // ========================================================================

@@ -1228,6 +1228,7 @@ fn from_env_ci() -> CiConfig {
         avoid_leader: parse_env("ASPEN_CI_AVOID_LEADER").unwrap_or_else(default_ci_avoid_leader),
         resource_isolation: parse_env("ASPEN_CI_RESOURCE_ISOLATION").unwrap_or_else(default_ci_resource_isolation),
         max_job_memory_bytes: parse_env("ASPEN_CI_MAX_JOB_MEMORY_BYTES").unwrap_or_else(default_ci_max_memory_bytes),
+        federation_ci_enabled: parse_env("ASPEN_CI_FEDERATION_CI_ENABLED").unwrap_or(false),
     }
 }
 

@@ -1218,6 +1218,10 @@ pub(crate) async fn get_or_create_mirror(
 ///
 /// Writes each ref as `forge:refs:{repo_id}:{ref_name} → hash_hex`.
 #[cfg(feature = "git-bridge")]
+/// Update refs on a mirror repo and emit gossip `RefUpdate` announcements.
+///
+/// For each updated ref, a `RefUpdate` gossip announcement is emitted so
+/// the CI `TriggerService` can detect the change and trigger pipelines.
 pub(crate) async fn update_mirror_refs(
     forge_node: &ForgeNodeRef,
     repo_id: &aspen_forge::identity::RepoId,
@@ -1234,6 +1238,9 @@ pub(crate) async fn update_mirror_refs(
             continue;
         }
         updated += 1;
+
+        // Emit gossip so CI TriggerService sees the ref change
+        forge_node.announce_ref_update(repo_id, ref_name, *hash, None).await;
     }
 
     Ok(updated)
