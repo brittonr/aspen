@@ -983,12 +983,12 @@ pub struct FederationImportStats {
 
 /// Import federation `SyncObject` entries into a forge repo via the git bridge.
 ///
-/// Each `SyncObject` with `object_type` of `"commit"`, `"tree"`, or `"blob"`
-/// is verified (BLAKE3 hash check), reconstructed as full git bytes (with
-/// header), and imported via `GitImporter::import_object`.
+/// Converts SyncObjects to the `(Sha1Hash, GitObjectType, Vec<u8>)` format
+/// expected by `import_objects()`, which performs topological sorting (wave-based
+/// parallelism) to ensure dependencies are imported before dependents.
 ///
-/// Returns import statistics. Errors on individual objects are collected
-/// but don't abort the overall import.
+/// Returns import statistics including a `content_to_local_blake3` map for
+/// translating remote ref hashes to locally imported BLAKE3 hashes.
 #[cfg(feature = "git-bridge")]
 pub(crate) async fn federation_import_objects(
     forge_node: &ForgeNodeRef,
@@ -997,7 +997,9 @@ pub(crate) async fn federation_import_objects(
 ) -> FederationImportStats {
     use aspen_core::hlc::create_hlc;
     use aspen_forge::git::bridge::GitImporter;
+    use aspen_forge::git::bridge::GitObjectType;
     use aspen_forge::git::bridge::HashMappingStore;
+    use aspen_forge::git::bridge::Sha1Hash;
 
     let mut stats = FederationImportStats::default();
 
@@ -1005,7 +1007,51 @@ pub(crate) async fn federation_import_objects(
         return stats;
     }
 
-    // Create importer
+    // Phase 1: Convert SyncObjects to import_objects() input format.
+    // Track content hashes (blake3 of raw content) in parallel so we can
+    // correlate them with SHA-1s after import.
+    let mut import_objects = Vec::with_capacity(objects.len());
+    // sha1_hex → content_hash, for post-import correlation
+    let mut sha1_to_content_hash: std::collections::HashMap<[u8; 20], [u8; 32]> = std::collections::HashMap::new();
+    let mut type_counts: [u32; 3] = [0; 3]; // [blobs, trees, commits]
+
+    for obj in objects {
+        let (git_type, type_idx) = match obj.object_type.as_str() {
+            "blob" => (GitObjectType::Blob, 0),
+            "tree" => (GitObjectType::Tree, 1),
+            "commit" => (GitObjectType::Commit, 2),
+            _ => continue,
+        };
+
+        // Reconstruct full git bytes (header + content)
+        let type_str = obj.object_type.as_str();
+        let header = format!("{} {}\0", type_str, obj.data.len());
+        let mut git_bytes = Vec::with_capacity(header.len() + obj.data.len());
+        git_bytes.extend_from_slice(header.as_bytes());
+        git_bytes.extend_from_slice(&obj.data);
+
+        // Compute SHA-1 from full git bytes
+        let sha1 = {
+            use sha1::Digest;
+            let digest: [u8; 20] = sha1::Sha1::digest(&git_bytes).into();
+            Sha1Hash::from_bytes(digest)
+        };
+
+        // Track content hash for post-import ref translation
+        let content_hash: [u8; 32] = blake3::hash(&obj.data).into();
+        sha1_to_content_hash.insert(*sha1.as_bytes(), content_hash);
+
+        stats.total_bytes += obj.data.len() as u64;
+        type_counts[type_idx] += 1;
+
+        import_objects.push((sha1, git_type, git_bytes));
+    }
+
+    stats.blobs = type_counts[0];
+    stats.trees = type_counts[1];
+    stats.commits = type_counts[2];
+
+    // Phase 2: Import via topologically-sorted wave-based parallelism.
     let mapping = std::sync::Arc::new(HashMappingStore::new(forge_node.kv().clone()));
     let hlc = create_hlc(&forge_node.public_key().to_string());
     let importer = GitImporter::new(
@@ -1016,42 +1062,23 @@ pub(crate) async fn federation_import_objects(
         hlc,
     );
 
-    for obj in objects {
-        // Only handle git object types
-        let git_type_str = match obj.object_type.as_str() {
-            "commit" | "tree" | "blob" => obj.object_type.as_str(),
-            _ => continue,
-        };
+    let result = match importer.import_objects(repo_id, import_objects).await {
+        Ok(r) => r,
+        Err(e) => {
+            stats.errors.push(format!("import_objects failed: {e}"));
+            tracing::warn!(error = %e, "federation import_objects failed");
+            return stats;
+        }
+    };
 
-        // Note: SyncObject.hash is the blob-store BLAKE3 hash (for incremental
-        // sync dedup), not a content hash. Content integrity is verified by the
-        // import pipeline (GitImporter computes its own hashes during import).
+    stats.skipped = result.objects_skipped;
 
-        // Reconstruct full git bytes (header + content)
-        let header = format!("{} {}\0", git_type_str, obj.data.len());
-        let mut git_bytes = Vec::with_capacity(header.len() + obj.data.len());
-        git_bytes.extend_from_slice(header.as_bytes());
-        git_bytes.extend_from_slice(&obj.data);
-
-        // Import via git bridge
-        match importer.import_object(repo_id, &git_bytes).await {
-            Ok(local_blake3) => {
-                // Map content hash → local BLAKE3 so mirror refs can be updated
-                let content_hash: [u8; 32] = blake3::hash(&obj.data).into();
-                stats.content_to_local_blake3.insert(content_hash, local_blake3);
-
-                stats.total_bytes += obj.data.len() as u64;
-                match git_type_str {
-                    "commit" => stats.commits += 1,
-                    "tree" => stats.trees += 1,
-                    "blob" => stats.blobs += 1,
-                    _ => {}
-                }
-            }
-            Err(e) => {
-                stats.skipped += 1;
-                stats.errors.push(format!("{}: import failed: {}", git_type_str, e));
-            }
+    // Phase 3: Build content_to_local_blake3 from ImportResult.mappings.
+    // Each mapping is (sha1, blake3). We look up the content hash via the
+    // sha1_to_content_hash map built in phase 1.
+    for (sha1, local_blake3) in &result.mappings {
+        if let Some(content_hash) = sha1_to_content_hash.get(sha1.as_bytes()) {
+            stats.content_to_local_blake3.insert(*content_hash, *local_blake3);
         }
     }
 
@@ -1061,6 +1088,7 @@ pub(crate) async fn federation_import_objects(
         blobs = stats.blobs,
         skipped = stats.skipped,
         total_bytes = stats.total_bytes,
+        mappings = result.mappings.len(),
         "federation git object import complete"
     );
 

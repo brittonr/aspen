@@ -51,6 +51,11 @@ pub struct ImportResult {
     pub objects_skipped: u32,
     /// Refs that were updated.
     pub refs_updated: Vec<(String, blake3::Hash)>,
+    /// Per-object hash mappings: (SHA-1, BLAKE3) for every object processed
+    /// (both newly imported and already-present). Callers that need to correlate
+    /// git SHA-1 hashes with Forge BLAKE3 hashes (e.g., federation ref translation)
+    /// can use this without extra KV lookups.
+    pub mappings: Vec<(Sha1Hash, blake3::Hash)>,
 }
 
 /// Service for importing Git objects into Forge.
@@ -234,6 +239,15 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         // writes to ceil(2×N / MAX_SETMULTI_KEYS) batched writes.
         let repo_id = *repo_id;
         let mut imported = 0u32;
+        let mut all_mappings: Vec<(Sha1Hash, blake3::Hash)> =
+            Vec::with_capacity(total_objects as usize + skipped_count as usize);
+
+        // Include skipped objects (already had mappings) in the result.
+        for sha1 in &waves.skipped {
+            if let Ok(Some((blake3, _))) = self.mapping.get_blake3(&repo_id, sha1).await {
+                all_mappings.push((*sha1, blake3));
+            }
+        }
 
         for (wave_idx, wave) in waves.waves.into_iter().enumerate() {
             let wave_size = wave.len();
@@ -248,7 +262,9 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             // Collect successful mappings, propagate first error.
             let mut wave_mappings: Vec<(blake3::Hash, Sha1Hash, GitObjectType)> = Vec::with_capacity(wave_size);
             for result in results {
-                wave_mappings.push(result?);
+                let (blake3, sha1, obj_type) = result?;
+                all_mappings.push((sha1, blake3));
+                wave_mappings.push((blake3, sha1, obj_type));
                 imported += 1;
             }
 
@@ -273,6 +289,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             objects_imported: imported,
             objects_skipped: skipped_count,
             refs_updated: Vec::new(),
+            mappings: all_mappings,
         })
     }
 

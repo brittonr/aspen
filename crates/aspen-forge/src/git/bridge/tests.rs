@@ -1236,3 +1236,192 @@ async fn test_e2e_push_empty_blob() {
     let blob_obj = export.objects.iter().find(|o| o.sha1 == blob_sha1).unwrap();
     assert!(blob_obj.content.is_empty(), "empty blob should round-trip as empty");
 }
+
+// ============================================================================
+// ImportResult.mappings tests
+// ============================================================================
+
+/// import_objects() with reverse-dependency-order input (commit → tree → blob)
+/// should still import all objects and produce a complete mappings vec.
+#[tokio::test]
+async fn test_import_objects_reverse_order_has_complete_mappings() {
+    let h = BridgeTestHarness::new();
+
+    // Build objects
+    let blob_git = make_git_blob(b"reverse order test\n");
+    let blob_sha1 = compute_sha1(&blob_git);
+    let (_, blob_data) = split_git_object(&blob_git);
+
+    let entry = make_tree_entry("100644", "file.txt", &blob_sha1);
+    let tree_git = make_git_tree(&[entry]);
+    let tree_sha1 = compute_sha1(&tree_git);
+    let (_, tree_data) = split_git_object(&tree_git);
+
+    let commit_git = make_git_commit(&tree_sha1, &[], "reverse order");
+    let commit_sha1 = compute_sha1(&commit_git);
+    let (_, commit_data) = split_git_object(&commit_git);
+
+    // Feed in REVERSE dependency order: commit first, blob last
+    let objects = vec![
+        (commit_sha1, "commit", commit_data),
+        (tree_sha1, "tree", tree_data),
+        (blob_sha1, "blob", blob_data),
+    ];
+    let result = handler_push_objects(&h, &objects).await;
+
+    // All 3 must be imported (topological sort reorders them)
+    assert_eq!(result.objects_imported, 3, "all 3 objects should be imported");
+    assert_eq!(result.objects_skipped, 0);
+
+    // mappings must contain all 3 objects
+    assert_eq!(result.mappings.len(), 3, "mappings should have 3 entries");
+
+    // Verify each SHA-1 appears in mappings with a valid BLAKE3
+    let mapping_sha1s: std::collections::HashSet<_> = result.mappings.iter().map(|(s, _)| *s).collect();
+    assert!(mapping_sha1s.contains(&blob_sha1), "blob sha1 missing from mappings");
+    assert!(mapping_sha1s.contains(&tree_sha1), "tree sha1 missing from mappings");
+    assert!(mapping_sha1s.contains(&commit_sha1), "commit sha1 missing from mappings");
+
+    // Verify the BLAKE3 hashes in mappings are non-zero and resolvable
+    for (sha1, blake3) in &result.mappings {
+        assert_ne!(*blake3.as_bytes(), [0u8; 32], "blake3 should be non-zero for {}", sha1);
+        let (looked_up, _) = h.mapping.get_blake3(&h.repo_id, sha1).await.unwrap().unwrap();
+        assert_eq!(looked_up, *blake3, "mapping blake3 should match KV store for {}", sha1);
+    }
+}
+
+/// import_objects() with partially-known objects includes both new and
+/// already-present entries in the mappings vec.
+#[tokio::test]
+async fn test_import_objects_partial_known_has_all_mappings() {
+    let h = BridgeTestHarness::new();
+
+    // Import blob first (so it's "already known" on second call)
+    let blob_git = make_git_blob(b"pre-existing blob\n");
+    let blob_sha1 = compute_sha1(&blob_git);
+    h.importer.import_object(&h.repo_id, &blob_git).await.unwrap();
+
+    // Build tree + commit referencing the existing blob
+    let entry = make_tree_entry("100644", "known.txt", &blob_sha1);
+    let tree_git = make_git_tree(&[entry]);
+    let tree_sha1 = compute_sha1(&tree_git);
+    let (_, tree_data) = split_git_object(&tree_git);
+
+    let commit_git = make_git_commit(&tree_sha1, &[], "partial known");
+    let commit_sha1 = compute_sha1(&commit_git);
+    let (_, commit_data) = split_git_object(&commit_git);
+
+    // Push all 3: blob is already known, tree + commit are new
+    let (_, blob_data) = split_git_object(&blob_git);
+    let objects = vec![
+        (blob_sha1, "blob", blob_data),
+        (tree_sha1, "tree", tree_data),
+        (commit_sha1, "commit", commit_data),
+    ];
+    let result = handler_push_objects(&h, &objects).await;
+
+    assert_eq!(result.objects_imported, 2, "tree + commit should be imported");
+    assert_eq!(result.objects_skipped, 1, "blob should be skipped");
+
+    // mappings must contain all 3 (2 new + 1 existing)
+    assert_eq!(result.mappings.len(), 3, "mappings should include skipped objects too");
+
+    let mapping_sha1s: std::collections::HashSet<_> = result.mappings.iter().map(|(s, _)| *s).collect();
+    assert!(mapping_sha1s.contains(&blob_sha1), "existing blob should be in mappings");
+    assert!(mapping_sha1s.contains(&tree_sha1), "new tree should be in mappings");
+    assert!(mapping_sha1s.contains(&commit_sha1), "new commit should be in mappings");
+}
+
+/// Simulates the federation import flow: objects arrive in random order,
+/// get imported via import_objects(), and SHA-1→BLAKE3 correlation via
+/// content hashes works for ref translation.
+#[tokio::test]
+async fn test_federation_style_import_with_content_hash_correlation() {
+    use sha1::Digest;
+
+    let h = BridgeTestHarness::new();
+
+    // Build objects as raw content (no git header) — mirrors SyncObject.data
+    let blob_content = b"federation clone test\n";
+    let blob_git = make_git_blob(blob_content);
+    let blob_sha1 = compute_sha1(&blob_git);
+
+    let entry = make_tree_entry("100644", "readme.md", &blob_sha1);
+    let tree_git = make_git_tree(&[entry]);
+    let tree_sha1 = compute_sha1(&tree_git);
+    let (_, tree_content) = split_git_object(&tree_git);
+
+    let commit_git = make_git_commit(&tree_sha1, &[], "initial");
+    let commit_sha1 = compute_sha1(&commit_git);
+    let (_, commit_content) = split_git_object(&commit_git);
+
+    // Phase 1: Convert to import format (mirrors federation_import_objects phase 1).
+    // Track sha1 → content_hash for post-import correlation.
+    struct SyncObj {
+        type_str: &'static str,
+        content: Vec<u8>,
+    }
+    let sync_objects = vec![
+        SyncObj {
+            type_str: "commit",
+            content: commit_content.to_vec(),
+        },
+        SyncObj {
+            type_str: "tree",
+            content: tree_content.to_vec(),
+        },
+        SyncObj {
+            type_str: "blob",
+            content: blob_content.to_vec(),
+        },
+    ];
+
+    let mut import_objects = Vec::new();
+    let mut sha1_to_content_hash: std::collections::HashMap<[u8; 20], [u8; 32]> = std::collections::HashMap::new();
+
+    for obj in &sync_objects {
+        let header = format!("{} {}\0", obj.type_str, obj.content.len());
+        let mut git_bytes = Vec::with_capacity(header.len() + obj.content.len());
+        git_bytes.extend_from_slice(header.as_bytes());
+        git_bytes.extend_from_slice(&obj.content);
+
+        let sha1_digest: [u8; 20] = sha1::Sha1::digest(&git_bytes).into();
+        let sha1 = Sha1Hash::from_bytes(sha1_digest);
+
+        let obj_type = match obj.type_str {
+            "blob" => GitObjectType::Blob,
+            "tree" => GitObjectType::Tree,
+            "commit" => GitObjectType::Commit,
+            _ => unreachable!(),
+        };
+
+        let content_hash: [u8; 32] = blake3::hash(&obj.content).into();
+        sha1_to_content_hash.insert(sha1_digest, content_hash);
+
+        import_objects.push((sha1, obj_type, git_bytes));
+    }
+
+    // Phase 2: Import (topological sort handles the reverse order)
+    let result = h.importer.import_objects(&h.repo_id, import_objects).await.unwrap();
+    assert_eq!(result.objects_imported, 3);
+    assert_eq!(result.mappings.len(), 3);
+
+    // Phase 3: Build content_to_local_blake3 (mirrors federation_import_objects phase 3)
+    let mut content_to_local_blake3: std::collections::HashMap<[u8; 32], blake3::Hash> =
+        std::collections::HashMap::new();
+    for (sha1, local_blake3) in &result.mappings {
+        if let Some(content_hash) = sha1_to_content_hash.get(sha1.as_bytes()) {
+            content_to_local_blake3.insert(*content_hash, *local_blake3);
+        }
+    }
+
+    // Verify: content hash of the commit content maps to a valid local BLAKE3
+    let commit_content_hash: [u8; 32] = blake3::hash(commit_content).into();
+    let local_b3 = content_to_local_blake3.get(&commit_content_hash);
+    assert!(local_b3.is_some(), "commit content hash should map to a local BLAKE3");
+
+    // Verify: that BLAKE3 can be exported back to the same SHA-1
+    let exported = h.exporter.export_object(&h.repo_id, *local_b3.unwrap()).await.unwrap();
+    assert_eq!(exported.sha1, commit_sha1, "exported commit SHA-1 should match original");
+    assert_eq!(exported.object_type, GitObjectType::Commit);
+}

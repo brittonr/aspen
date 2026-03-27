@@ -78,7 +78,7 @@
 | 2026-03-27 | `kv scan` takes prefix as positional, not `--prefix` | CLI prefix is positional: `kv scan "prefix:"` |
 | 2026-03-27 | `ci-aspen-node-snix-build` missing `federation` feature → ALPN handshake fail | Add `federation` to features when using federation sync protocol |
 | 2026-03-27 | Federation cluster key ≠ iroh secret key → `FederatedId` mismatch → FEDERATION_DISABLED | Federation cluster key MUST match iroh secret key (NixOS tests already do this) |
-| 2026-03-27 | `git-remote-aspen` federated clone path (`fed:` URL) silently returns empty repo | Known limitation: federated clone object fetch path needs work. Push directly to bob's forge instead. |
+| 2026-03-27 | `git-remote-aspen` federated clone path (`fed:` URL) silently returns empty repo | Fixed: `federation_import_objects` now uses `import_objects()` (plural) with topological sort instead of sequential `import_object()`. Objects arriving in non-dependency order (commit before tree) no longer fail silently. |
 
 ### Deploy / Dogfood
 
