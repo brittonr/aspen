@@ -48,8 +48,11 @@ const MAX_WATCHED_REPOS: usize = 100;
 const MAX_DIFF_PATHS: usize = 10_000;
 /// Maximum buffered announcements for the watch-before-push race window.
 const MAX_REPLAY_BUFFER: usize = 32;
-/// How long to keep buffered announcements before eviction (30 seconds).
-const REPLAY_BUFFER_TTL_MS: u64 = 30_000;
+/// How long to keep buffered announcements before eviction.
+/// Must be longer than `MIRROR_SCAN_INTERVAL_SECS` so that announcements
+/// arriving between scans survive until the next `scan_and_watch_mirrors`
+/// call replays them.
+const REPLAY_BUFFER_TTL_MS: u64 = 90_000;
 /// Default CI config path.
 const DEFAULT_CI_CONFIG_PATH: &str = ".aspen/ci.ncl";
 /// Interval between periodic mirror scans (seconds).

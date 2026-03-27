@@ -711,6 +711,18 @@ impl ForgeGossipService {
         })
     }
 
+    /// Invoke the local announcement handler directly.
+    ///
+    /// Used by `ForgeNode::announce_ref_update` for federation mirror repos
+    /// that are not subscribed to gossip topics. Without this, the gossip
+    /// `broadcast()` silently drops the message because no repo topic exists,
+    /// and the CI trigger handler never fires.
+    pub async fn notify_local_handler(&self, announcement: &Announcement) {
+        if let Some(ref h) = *self.handler.read().await {
+            h.on_announcement(announcement, &self.node_id);
+        }
+    }
+
     /// Get the number of subscribed repos.
     #[cfg(test)]
     pub async fn subscribed_repo_count(&self) -> usize {

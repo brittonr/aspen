@@ -207,6 +207,12 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     ///
     /// No-op if gossip is not configured. Used by federation handlers
     /// to notify the CI TriggerService after mirror ref updates.
+    ///
+    /// Always invokes the local handler directly (for CI triggers on this
+    /// node), then attempts gossip broadcast for remote nodes. The local
+    /// handler call is necessary because federation mirror repos are not
+    /// subscribed to gossip topics, so `broadcast()` would silently drop
+    /// the message.
     pub async fn announce_ref_update(
         &self,
         repo_id: &RepoId,
@@ -226,12 +232,18 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
             old_hash,
         };
 
+        // Invoke local handler directly so CI triggers fire even when
+        // the repo is not subscribed to a gossip topic (federation mirrors).
+        gossip.notify_local_handler(&announcement).await;
+
+        // Also broadcast over gossip for remote nodes.
         if let Err(e) = gossip.broadcast(announcement).await {
-            tracing::warn!(
+            // Not an error for mirror repos — they have no gossip subscription.
+            tracing::debug!(
                 repo_id = %repo_id.to_hex(),
                 ref_name = %ref_name,
                 error = %e,
-                "failed to broadcast federation RefUpdate announcement"
+                "gossip broadcast skipped for RefUpdate (mirror repo without subscription)"
             );
         }
     }
