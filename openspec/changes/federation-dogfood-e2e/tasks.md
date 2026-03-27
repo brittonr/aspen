@@ -18,5 +18,5 @@
 ## 3. Test and Fix
 
 - [x] 3.1 Run `nix run .#dogfood-federation` on host, fix any federation sync or CI trigger bugs exposed
-- [ ] 3.2 Build and boot VM via `vm_boot`, run full pipeline via `vm_serial`, fix any VM-specific issues
+- [x] 3.2 Build and boot VM via `vm_boot`, run full pipeline via `vm_serial`, fix any VM-specific issues
 - [x] 3.3 Verify existing federation NixOS tests still pass (`federation-test`, `federation-git-clone-test`)

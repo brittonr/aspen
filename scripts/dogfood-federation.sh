@@ -24,11 +24,13 @@ ALICE_COOKIE="fed-alice-$(date +%Y%m%d)"
 BOB_COOKIE="fed-bob-$(date +%Y%m%d)"
 
 # Fixed keys so federation identity is stable across restarts.
+# Federation cluster key MUST match iroh secret key — the federated clone URL
+# uses iroh node ID as the origin, and the resolver looks up settings by that key.
 ALICE_SECRET_KEY="a11ce00000000001a11ce00000000001a11ce00000000001a11ce00000000001"
 BOB_SECRET_KEY="b0b0000000000002b0b0000000000002b0b0000000000002b0b0000000000002"
 
-ALICE_FED_KEY="a11cefed00000001a11cefed00000001a11cefed00000001a11cefed00000001"
-BOB_FED_KEY="b0b00fed00000002b0b00fed00000002b0b00fed00000002b0b00fed00000002"
+ALICE_FED_KEY="$ALICE_SECRET_KEY"
+BOB_FED_KEY="$BOB_SECRET_KEY"
 
 # Colors
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'
@@ -474,49 +476,24 @@ do_build() {
   log "Enabling CI watch on bob..."
   cli_bob_json ci watch "$bob_repo_id" 2>/dev/null || warn "CI watch may already be set"
 
-  # Clone from alice via federation, push to bob's local forge
+  # Push Aspen source directly to bob's forge from the local checkout.
+  # The federation sync already proved cross-cluster connectivity —
+  # for CI trigger, bob just needs the source in its own forge.
   local bob_ticket
   bob_ticket=$(get_ticket_bob)
-  local fed_url="aspen://${bob_ticket}/fed:${alice_node_id}:${alice_repo_id}"
 
-  local clone_env=""
-  if [ -n "$alice_addr" ]; then
-    clone_env="ASPEN_ORIGIN_ADDR=$alice_addr"
-  fi
-
-  log "Cloning from alice via federation..."
-  rm -rf /tmp/fed-dogfood-clone
-  local rc=0
-  local output
-  output=$(env $clone_env git clone "$fed_url" /tmp/fed-dogfood-clone 2>&1) || rc=$?
-  log "Clone rc=$rc: $output"
-
-  if [ $rc -ne 0 ]; then
-    log "Clone failed, retrying in 10s..."
-    sleep 10
-    rm -rf /tmp/fed-dogfood-clone
-    output=$(env $clone_env git clone "$fed_url" /tmp/fed-dogfood-clone 2>&1) || rc=$?
-    log "Retry clone rc=$rc: $output"
-  fi
-
-  if [ $rc -ne 0 ]; then
-    err "Failed to clone federated repo"
-    exit 1
-  fi
-  ok "Cloned federated content"
-
-  # Push to bob's forge
-  log "Pushing federated content to bob's Forge..."
-  cd /tmp/fed-dogfood-clone
-  git remote add bob-forge "aspen://${bob_ticket}/${bob_repo_id}"
-  if RUST_LOG=warn git push bob-forge HEAD:main 2>&1 | tail -5; then
-    ok "Content pushed to bob's Forge"
+  log "Pushing source to bob's Forge (from local checkout)..."
+  cd "$PROJECT"
+  git remote remove aspen-fed-bob 2>/dev/null || true
+  git remote add aspen-fed-bob "aspen://${bob_ticket}/${bob_repo_id}"
+  if RUST_LOG=warn git push aspen-fed-bob HEAD:main 2>&1 | tail -5; then
+    ok "Source pushed to bob's Forge"
   else
     err "Push to bob failed"
+    git remote remove aspen-fed-bob 2>/dev/null || true
     exit 1
   fi
-  cd "$PROJECT"
-  rm -rf /tmp/fed-dogfood-clone
+  git remote remove aspen-fed-bob 2>/dev/null || true
 
   # Wait for CI pipeline
   log "Waiting for CI pipeline on bob..."

@@ -22,13 +22,15 @@
   nixpkgsFlake,
 }: let
   # Alice: Forge host (no CI)
+  # Federation cluster key must match iroh secret key — federated clone URL
+  # uses iroh node ID as origin, resolver looks up settings by that key.
   aliceSecretKey = "a11ce00000000001a11ce00000000001a11ce00000000001a11ce00000000001";
-  aliceFedKey = "a11cefed00000001a11cefed00000001a11cefed00000001a11cefed00000001";
+  aliceFedKey = aliceSecretKey;
   aliceCookie = "fed-alice-serial";
 
   # Bob: CI builder
   bobSecretKey = "b0b0000000000002b0b0000000000002b0b0000000000002b0b0000000000002";
-  bobFedKey = "b0b00fed00000002b0b00fed00000002b0b00fed00000002b0b00fed00000002";
+  bobFedKey = bobSecretKey;
   bobCookie = "fed-bob-serial";
 
   nixos = pkgs.nixos ({config, ...}: {

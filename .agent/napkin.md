@@ -70,6 +70,16 @@
 | VM `nix build` needs `writableStoreUseTmpfs = false` + 20GB+ disk | Default tmpfs limits to ~50% RAM |
 | `nix.settings.experimental-features = ["nix-command" "flakes"]` | Required for `nix build` in VMs |
 
+### Federation Dogfood
+
+| Date | What Went Wrong | What To Do Instead |
+|------|----------------|-------------------|
+| 2026-03-27 | `federation sync` CLI takes `--peer` (named flag), not positional | Check clap args: `rg "struct SyncArgs" -A 10` before scripting |
+| 2026-03-27 | `kv scan` takes prefix as positional, not `--prefix` | CLI prefix is positional: `kv scan "prefix:"` |
+| 2026-03-27 | `ci-aspen-node-snix-build` missing `federation` feature → ALPN handshake fail | Add `federation` to features when using federation sync protocol |
+| 2026-03-27 | Federation cluster key ≠ iroh secret key → `FederatedId` mismatch → FEDERATION_DISABLED | Federation cluster key MUST match iroh secret key (NixOS tests already do this) |
+| 2026-03-27 | `git-remote-aspen` federated clone path (`fed:` URL) silently returns empty repo | Known limitation: federated clone object fetch path needs work. Push directly to bob's forge instead. |
+
 ### Deploy / Dogfood
 
 | Date | What Went Wrong | What To Do Instead |
