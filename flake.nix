@@ -3371,7 +3371,7 @@
               federation-ci-trigger-test = import ./nix/tests/federation-ci-trigger.nix {
                 inherit pkgs kvPluginWasm forgePluginWasm;
                 aspenNodePackage = bins.full-aspen-node-plugins;
-                aspenCliPackage = bins.full-aspen-cli-forge;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
                 gitRemoteAspenPackage = bins.full-git-remote-aspen;
               };
