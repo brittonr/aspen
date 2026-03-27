@@ -48,6 +48,13 @@ pub enum FederationCommand {
 
     /// Push a local repo's objects and refs to a remote cluster.
     Push(PushArgs),
+
+    /// Issue a federation capability token to a remote cluster.
+    Grant(GrantArgs),
+
+    /// Manage federation tokens.
+    #[command(subcommand)]
+    Token(TokenCommand),
 }
 
 #[derive(Args)]
@@ -156,6 +163,40 @@ pub struct PullArgs {
     /// Direct socket address hint for the remote peer (e.g., "192.168.1.5:12345").
     #[arg(long)]
     pub addr: Option<String>,
+}
+
+/// Arguments for federation grant command.
+#[derive(Args)]
+pub struct GrantArgs {
+    /// Remote cluster's public key (audience).
+    #[arg(long)]
+    pub audience: String,
+
+    /// Capabilities: comma-separated list of "pull", "push", or "pull,push".
+    /// Each can have an optional `:prefix` suffix (e.g., "pull:forge:org-a/").
+    #[arg(long, default_value = "pull")]
+    pub caps: String,
+
+    /// Token lifetime in seconds (default: 86400 = 24 hours).
+    #[arg(long, default_value = "86400")]
+    pub lifetime: u64,
+}
+
+/// Token management subcommands.
+#[derive(Subcommand)]
+pub enum TokenCommand {
+    /// List active federation tokens issued by this cluster.
+    List,
+
+    /// Inspect a base64-encoded federation token (decode without verifying).
+    Inspect(InspectArgs),
+}
+
+/// Arguments for token inspect command.
+#[derive(Args)]
+pub struct InspectArgs {
+    /// Base64-encoded token string to inspect.
+    pub token_b64: String,
 }
 
 /// Federation status output.
@@ -318,6 +359,11 @@ impl FederationCommand {
             FederationCommand::Fetch(args) => federation_fetch(client, args, json).await,
             FederationCommand::Pull(args) => federation_pull(client, args, json).await,
             FederationCommand::Push(args) => federation_push(client, args, json).await,
+            FederationCommand::Grant(args) => federation_grant(client, args, json).await,
+            FederationCommand::Token(cmd) => match cmd {
+                TokenCommand::List => federation_token_list(client, json).await,
+                TokenCommand::Inspect(args) => federation_token_inspect(args, json).await,
+            },
         }
     }
 }
@@ -790,4 +836,109 @@ async fn federation_push(client: &AspenClient, args: PushArgs, json: bool) -> Re
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
     }
+}
+
+async fn federation_grant(client: &AspenClient, args: GrantArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::FederationGrant {
+            audience: args.audience.clone(),
+            capabilities: args.caps.clone(),
+            lifetime_secs: args.lifetime,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::FederationGrantResult(result) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else if result.is_success {
+                println!("Token issued successfully");
+                if let Some(ref token_b64) = result.token_b64 {
+                    println!("  Token: {}", token_b64);
+                }
+                if let Some(ref hash) = result.token_hash {
+                    println!("  Hash:  {}", hash);
+                }
+                println!("\nShare this token with the remote cluster operator.");
+                println!("They can import it with: aspen-cli federation token import <token>");
+            } else {
+                eprintln!("Grant failed: {}", result.error.as_deref().unwrap_or("unknown error"));
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn federation_token_list(client: &AspenClient, json: bool) -> Result<()> {
+    let response = client.send(ClientRpcRequest::FederationListTokens).await?;
+
+    match response {
+        ClientRpcResponse::FederationListTokensResult(result) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else if let Some(ref err) = result.error {
+                eprintln!("Error: {}", err);
+                std::process::exit(1);
+            } else if result.tokens.is_empty() {
+                println!("No active federation tokens.");
+            } else {
+                println!("Active Federation Tokens ({}):", result.tokens.len());
+                for t in &result.tokens {
+                    println!();
+                    println!("  Hash:         {}", t.token_hash);
+                    println!("  Audience:     {}", t.audience);
+                    println!("  Capabilities: {}", t.capabilities);
+                    println!("  Expires:      {}", format_expiry(t.expires_at));
+                    println!("  Delegation:   depth {}", t.delegation_depth);
+                }
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+fn format_expiry(expires_at: u64) -> String {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    if expires_at <= now {
+        "EXPIRED".to_string()
+    } else {
+        let remaining = expires_at - now;
+        if remaining < 3600 {
+            format!("in {} minutes", remaining / 60)
+        } else if remaining < 86400 {
+            format!("in {} hours", remaining / 3600)
+        } else {
+            format!("in {} days", remaining / 86400)
+        }
+    }
+}
+
+async fn federation_token_inspect(args: InspectArgs, json: bool) -> Result<()> {
+    // Decode without verification — show credential fields
+    let credential = aspen_auth::Credential::from_base64(&args.token_b64)
+        .map_err(|e| anyhow::anyhow!("failed to decode credential: {}", e))?;
+
+    let token = &credential.token;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&credential)?);
+    } else {
+        println!("Federation Credential (unverified)");
+        println!("  Issuer:       {}", hex::encode(&token.issuer));
+        println!("  Audience:     {:?}", token.audience);
+        println!("  Issued at:    {}", token.issued_at);
+        println!("  Expires at:   {} ({})", token.expires_at, format_expiry(token.expires_at));
+        println!("  Depth:        {}", token.delegation_depth);
+        println!("  Proofs:       {}", credential.proofs.len());
+        println!("  Capabilities: {}", token.capabilities.len());
+        for cap in &token.capabilities {
+            println!("    - {:?}", cap);
+        }
+    }
+    Ok(())
 }

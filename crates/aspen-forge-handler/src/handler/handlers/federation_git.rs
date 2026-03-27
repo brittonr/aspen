@@ -118,7 +118,7 @@ async fn sync_from_origin(
 
     // Connect and handshake
     let (connection, _remote_identity) =
-        aspen_cluster::federation::sync::connect_to_cluster(iroh_endpoint, cluster_identity, endpoint_addr)
+        aspen_cluster::federation::sync::connect_to_cluster(iroh_endpoint, cluster_identity, endpoint_addr, None)
             .await
             .map_err(|e| format!("connection to origin failed: {e}"))?;
 

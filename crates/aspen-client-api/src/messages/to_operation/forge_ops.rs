@@ -31,6 +31,7 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::FederationPull { .. }
         | ClientRpcRequest::FederationPush { .. }
         | ClientRpcRequest::FederationBidiSync { .. }
+        | ClientRpcRequest::FederationGrant { .. }
         | ClientRpcRequest::ForgeFetchFederated { .. }
         | ClientRpcRequest::GitBridgePush { .. }
         | ClientRpcRequest::GitBridgePushStart { .. }
@@ -58,7 +59,8 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::ForgeGetDelegateKey { .. }
         | ClientRpcRequest::GitBridgeListRefs { .. }
         | ClientRpcRequest::GitBridgeFetch { .. }
-        | ClientRpcRequest::GitBridgeProbeObjects { .. } => Some(Some(Operation::Read {
+        | ClientRpcRequest::GitBridgeProbeObjects { .. }
+        | ClientRpcRequest::FederationListTokens => Some(Some(Operation::Read {
             key: "_forge:".to_string(),
         })),
 

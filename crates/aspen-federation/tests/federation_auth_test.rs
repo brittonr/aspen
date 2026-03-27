@@ -349,3 +349,213 @@ fn test_trust_manager_credential_lifecycle() {
     manager.revoke_credential(remote_pk);
     assert_eq!(manager.trust_level(&remote_pk), TrustLevel::Blocked);
 }
+
+// =========================================================================
+// Federation capability enforcement tests
+// =========================================================================
+
+#[test]
+fn test_federation_push_credential_authorizes_push() {
+    // Cluster A issues a push credential to Cluster B
+    let cluster_a_sk = test_secret_key();
+    let cluster_a_pk = cluster_a_sk.public();
+    let cluster_b_pk = test_secret_key().public();
+
+    let token = TokenBuilder::new(cluster_a_sk)
+        .for_key(cluster_b_pk)
+        .with_capability(Capability::FederationPush {
+            repo_prefix: "forge:".into(),
+        })
+        .with_lifetime(Duration::from_secs(3600))
+        .build()
+        .unwrap();
+
+    let cred = Credential::from_root(token);
+
+    // Verify credential
+    assert!(cred.verify(&[cluster_a_pk], Some(&cluster_b_pk)).is_ok());
+
+    // Check that FederationPush authorizes push
+    let push_op = aspen_auth::Operation::FederationPush {
+        fed_id: "forge:my-repo".into(),
+    };
+    assert!(cred.token.capabilities.iter().any(|c| c.authorizes(&push_op)));
+
+    // But NOT pull
+    let pull_op = aspen_auth::Operation::FederationPull {
+        fed_id: "forge:my-repo".into(),
+    };
+    assert!(!cred.token.capabilities.iter().any(|c| c.authorizes(&pull_op)));
+}
+
+#[test]
+fn test_federation_pull_credential_rejected_for_push() {
+    let cluster_a_sk = test_secret_key();
+    let cluster_b_pk = test_secret_key().public();
+
+    let token = TokenBuilder::new(cluster_a_sk)
+        .for_key(cluster_b_pk)
+        .with_capability(Capability::FederationPull {
+            repo_prefix: "forge:".into(),
+        })
+        .with_lifetime(Duration::from_secs(3600))
+        .build()
+        .unwrap();
+
+    let cred = Credential::from_root(token);
+
+    // Pull-only credential should NOT authorize push
+    let push_op = aspen_auth::Operation::FederationPush {
+        fed_id: "forge:my-repo".into(),
+    };
+    assert!(!cred.token.capabilities.iter().any(|c| c.authorizes(&push_op)));
+}
+
+#[test]
+fn test_federation_credential_wrong_prefix_denied() {
+    let cluster_a_sk = test_secret_key();
+    let cluster_b_pk = test_secret_key().public();
+
+    let token = TokenBuilder::new(cluster_a_sk)
+        .for_key(cluster_b_pk)
+        .with_capability(Capability::FederationPush {
+            repo_prefix: "forge:org-a/".into(),
+        })
+        .with_lifetime(Duration::from_secs(3600))
+        .build()
+        .unwrap();
+
+    let cred = Credential::from_root(token);
+
+    // Matching prefix
+    let push_a = aspen_auth::Operation::FederationPush {
+        fed_id: "forge:org-a/my-repo".into(),
+    };
+    assert!(cred.token.capabilities.iter().any(|c| c.authorizes(&push_a)));
+
+    // Non-matching prefix
+    let push_b = aspen_auth::Operation::FederationPush {
+        fed_id: "forge:org-b/my-repo".into(),
+    };
+    assert!(!cred.token.capabilities.iter().any(|c| c.authorizes(&push_b)));
+}
+
+#[test]
+fn test_blocked_peer_denied_despite_credential() {
+    use aspen_federation::trust::TrustLevel;
+    use aspen_federation::trust::TrustManager;
+
+    let manager = TrustManager::new();
+    let cluster_sk = test_secret_key();
+    let remote_pk = test_secret_key().public();
+
+    // Issue valid credential
+    let token = TokenBuilder::new(cluster_sk)
+        .for_key(remote_pk)
+        .with_capability(Capability::FederationPush {
+            repo_prefix: String::new(),
+        })
+        .with_lifetime(Duration::from_secs(3600))
+        .build()
+        .unwrap();
+    let cred = Credential::from_root(token);
+
+    // Block the peer
+    manager.block(remote_pk);
+    assert_eq!(manager.trust_level(&remote_pk), TrustLevel::Blocked);
+
+    // Even with a valid credential, blocked peers should be denied
+    // The handler checks blocked status before credential capabilities
+    assert!(manager.is_blocked(&remote_pk));
+
+    // The credential is valid, but the trust layer overrides it
+    let push_op = aspen_auth::Operation::FederationPush {
+        fed_id: "forge:anything".into(),
+    };
+    assert!(cred.token.capabilities.iter().any(|c| c.authorizes(&push_op)));
+    // ^ credential authorizes, but handler would still deny because blocked
+}
+
+#[test]
+fn test_federation_delegation_attenuation() {
+    let cluster_a_sk = test_secret_key();
+    let cluster_a_pk = cluster_a_sk.public();
+    let cluster_b_sk = test_secret_key();
+    let cluster_b_pk = cluster_b_sk.public();
+    let cluster_c_pk = test_secret_key().public();
+
+    // A → B: broad pull + delegate
+    let a_to_b = TokenBuilder::new(cluster_a_sk)
+        .for_key(cluster_b_pk)
+        .with_capability(Capability::FederationPull {
+            repo_prefix: String::new(), // all repos
+        })
+        .with_capability(Capability::Delegate)
+        .with_lifetime(Duration::from_secs(86400))
+        .with_random_nonce()
+        .build()
+        .unwrap();
+
+    let b_cred = Credential::from_root(a_to_b);
+
+    // B → C: narrower pull (org-a only)
+    let c_cred = b_cred
+        .delegate(
+            &cluster_b_sk,
+            cluster_c_pk,
+            vec![Capability::FederationPull {
+                repo_prefix: "forge:org-a/".into(),
+            }],
+            Duration::from_secs(3600),
+        )
+        .unwrap();
+
+    // C's credential should verify
+    assert!(c_cred.verify(&[cluster_a_pk], Some(&cluster_c_pk)).is_ok());
+
+    // C can pull from org-a
+    let pull_a = aspen_auth::Operation::FederationPull {
+        fed_id: "forge:org-a/repo".into(),
+    };
+    assert!(c_cred.token.capabilities.iter().any(|c| c.authorizes(&pull_a)));
+
+    // C cannot pull from org-b (attenuated away)
+    let pull_b = aspen_auth::Operation::FederationPull {
+        fed_id: "forge:org-b/repo".into(),
+    };
+    assert!(!c_cred.token.capabilities.iter().any(|c| c.authorizes(&pull_b)));
+}
+
+#[test]
+fn test_federation_delegation_escalation_rejected() {
+    let cluster_a_sk = test_secret_key();
+    let cluster_b_sk = test_secret_key();
+    let cluster_b_pk = cluster_b_sk.public();
+    let cluster_c_pk = test_secret_key().public();
+
+    // A → B: narrow pull for org-a only + delegate
+    let a_to_b = TokenBuilder::new(cluster_a_sk)
+        .for_key(cluster_b_pk)
+        .with_capability(Capability::FederationPull {
+            repo_prefix: "forge:org-a/".into(),
+        })
+        .with_capability(Capability::Delegate)
+        .with_lifetime(Duration::from_secs(86400))
+        .with_random_nonce()
+        .build()
+        .unwrap();
+
+    let b_cred = Credential::from_root(a_to_b);
+
+    // B → C: try to escalate to all repos (should fail)
+    let result = b_cred.delegate(
+        &cluster_b_sk,
+        cluster_c_pk,
+        vec![Capability::FederationPull {
+            repo_prefix: String::new(), // all repos — broader than parent
+        }],
+        Duration::from_secs(3600),
+    );
+
+    assert!(result.is_err(), "delegation escalation should be rejected");
+}

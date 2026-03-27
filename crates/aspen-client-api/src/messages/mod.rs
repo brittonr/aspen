@@ -237,10 +237,13 @@ pub use federation::FederatedRepoInfo;
 pub use federation::FederatedRepositoriesResponse;
 pub use federation::FederationBidiSyncResponse;
 pub use federation::FederationFetchRefsResponse;
+pub use federation::FederationGrantResponse;
+pub use federation::FederationListTokensResponse;
 pub use federation::FederationPushResponse;
 pub use federation::FederationRequest;
 pub use federation::FederationStatusResponse;
 pub use federation::FederationSyncPeerResponse;
+pub use federation::FederationTokenInfo;
 pub use federation::ForgeFetchFederatedResultResponse;
 pub use federation::SyncPeerResourceInfo;
 pub use federation::TrustClusterResultResponse;
@@ -2182,6 +2185,20 @@ pub enum ClientRpcRequest {
         remote_cluster: String,
     },
 
+    /// Issue a federation capability token to a remote cluster.
+    FederationGrant {
+        /// Remote cluster's public key (audience).
+        audience: String,
+        /// Capabilities: comma-separated list of "pull", "push", or "pull,push".
+        /// Each can have an optional `:prefix` suffix (e.g., "pull:forge:org-a/").
+        capabilities: String,
+        /// Token lifetime in seconds.
+        lifetime_secs: u64,
+    },
+
+    /// List active federation tokens issued by this cluster.
+    FederationListTokens,
+
     /// List refs for a repo on a remote federated cluster.
     ///
     /// The local cluster proxies the request through federation sync,
@@ -3921,6 +3938,8 @@ impl ClientRpcRequest {
             Self::FederationPush { .. } => "FederationPush",
             Self::FederationBidiSync { .. } => "FederationBidiSync",
             Self::FederationSyncPeer { .. } => "FederationSyncPeer",
+            Self::FederationGrant { .. } => "FederationGrant",
+            Self::FederationListTokens => "FederationListTokens",
             Self::ForgeFetchFederated { .. } => "ForgeFetchFederated",
             Self::ForgeForkRepo { .. } => "ForgeForkRepo",
             Self::ForgeSetMirror { .. } => "ForgeSetMirror",
@@ -4365,6 +4384,8 @@ impl ClientRpcRequest {
             | Self::FederationPull { .. }
             | Self::FederationPush { .. }
             | Self::FederationBidiSync { .. }
+            | Self::FederationGrant { .. }
+            | Self::FederationListTokens
             | Self::ForgeFetchFederated { .. } => Some("forge"),
 
             // Git Bridge operations
@@ -4988,6 +5009,10 @@ pub enum ClientRpcResponse {
     FederationPushResult(FederationPushResponse),
     /// Bidirectional federation sync result.
     FederationBidiSyncResult(FederationBidiSyncResponse),
+    /// Federation grant result.
+    FederationGrantResult(FederationGrantResponse),
+    /// Federation list tokens result.
+    FederationListTokensResult(FederationListTokensResponse),
 
     /// Federated git list refs result (same shape as GitBridgeListRefs).
     FederationGitListRefs(GitBridgeListRefsResponse),

@@ -265,7 +265,8 @@ async fn query_single_seeder(
     our_identity: &ClusterIdentity,
     peer_key: PublicKey,
 ) -> Result<HashMap<String, [u8; 32]>> {
-    let (conn, _peer_id) = connect_to_cluster(endpoint, our_identity, peer_key).await.context("handshake failed")?;
+    let (conn, _peer_id) =
+        connect_to_cluster(endpoint, our_identity, peer_key, None).await.context("handshake failed")?;
 
     let (was_found, heads, _metadata) =
         get_remote_resource_state(&conn, fed_id).await.context("get resource state failed")?;
@@ -352,7 +353,7 @@ async fn sync_from_best(
     req: &SyncRequest<'_>,
     seeder: &SeederEndpoint,
 ) -> Result<(Vec<SyncObject>, bool), OrchestratedSyncError> {
-    let (conn, _peer_id) = connect_to_cluster(req.endpoint, req.our_identity, seeder.cluster_key)
+    let (conn, _peer_id) = connect_to_cluster(req.endpoint, req.our_identity, seeder.cluster_key, None)
         .await
         .context("handshake with best seeder failed")?;
 

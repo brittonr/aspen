@@ -12,6 +12,7 @@ aspen-auth = { path = "../aspen-auth" }
 aspen-core = { path = "../aspen-core" }
 aspen-hlc = { path = "../aspen-hlc" }
 aspen-sharding = { path = "../aspen-sharding" }
+aspen-traits = { path = "../aspen-traits" }
 
 # Networking and P2P
 iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }

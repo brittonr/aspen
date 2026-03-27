@@ -284,29 +284,53 @@ async fn process_federation_request(
 /// Returns `Some(FederationResponse::Error)` if denied, `None` if allowed.
 ///
 /// Authorization flow:
-/// 1. If session has a credential, check if it authorizes Read for the resource prefix
-/// 2. Fall back to legacy TrustManager / per-resource settings check
-/// 3. Public resources allow everyone; AllowList requires explicit permission
+/// 1. Blocked peers are always denied (regardless of credential)
+/// 2. If session has a credential with `FederationPull` matching the resource, allow
+/// 3. Fall back to legacy TrustManager / per-resource settings check
+/// 4. Public resources allow everyone; AllowList requires explicit trust or credential
 async fn check_resource_access(
     fed_id: &FederatedId,
     remote_peer: &PublicKey,
     context: &FederationProtocolContext,
 ) -> Option<FederationResponse> {
-    // Check session credential first (new token-based auth)
+    // Blocked peers are always denied, regardless of credential
+    if context.trust_manager.is_blocked(remote_peer) {
+        warn!(
+            fed_id = %fed_id.short(),
+            remote_peer = %remote_peer,
+            "access denied: peer is blocked"
+        );
+        return Some(FederationResponse::Error {
+            code: "ACCESS_DENIED".to_string(),
+            message: format!("Access denied for resource: {}", fed_id.short()),
+        });
+    }
+
+    // Check session credential for FederationPull capability
     let session_cred = context.session_credential.lock().ok().and_then(|guard| guard.clone());
 
     if let Some(ref cred) = session_cred {
-        // Check if credential authorizes reading keys under this resource's prefix
+        let fed_id_short = fed_id.short();
+        let pull_authorized = cred.token.capabilities.iter().any(|cap| {
+            cap.authorizes(&aspen_auth::Operation::FederationPull {
+                fed_id: fed_id_short.clone(),
+            })
+        });
+        if pull_authorized {
+            return None; // Allowed by FederationPull credential
+        }
+
+        // Also check legacy Read-based authorization for backward compatibility
         let settings = context.resource_settings.read().await;
         if let Some(resource_settings) = settings.get(fed_id) {
             if let Some(ref rt) = resource_settings.resource_type {
-                let authorized = cred
+                let read_authorized = cred
                     .token
                     .capabilities
                     .iter()
                     .any(|cap| cap.authorizes(&aspen_auth::Operation::Read { key: rt.clone() }));
-                if authorized {
-                    return None; // Allowed by credential
+                if read_authorized {
+                    return None; // Allowed by legacy Read credential
                 }
             }
         } else {
@@ -609,20 +633,45 @@ async fn handle_push_objects(
     context: &FederationProtocolContext,
     remote_peer: PublicKey,
 ) -> Result<FederationResponse> {
-    // Check trust: push requires explicit trust, not just public access
-    let trust_level = context.trust_manager.trust_level(&remote_peer);
-    let has_credential =
-        context.session_credential.lock().ok().and_then(|guard| guard.is_some().then_some(())).is_some();
-
-    if trust_level != crate::trust::TrustLevel::Trusted && !has_credential {
+    // Blocked peers always denied
+    if context.trust_manager.is_blocked(&remote_peer) {
         warn!(
             fed_id = %fed_id.short(),
             remote_peer = %remote_peer,
-            "push rejected: peer not trusted"
+            "push rejected: peer is blocked"
         );
         return Ok(FederationResponse::Error {
             code: "unauthorized".to_string(),
             message: "Push requires trusted peer or valid credential".to_string(),
+        });
+    }
+
+    // Check trust: push requires explicit trust or a FederationPush credential
+    let trust_level = context.trust_manager.trust_level(&remote_peer);
+    let mut push_authorized = trust_level == crate::trust::TrustLevel::Trusted;
+
+    if !push_authorized {
+        // Check session credential for FederationPush capability matching this resource
+        let session_cred = context.session_credential.lock().ok().and_then(|guard| guard.clone());
+        if let Some(ref cred) = session_cred {
+            let fed_id_short = fed_id.short();
+            push_authorized = cred.token.capabilities.iter().any(|cap| {
+                cap.authorizes(&aspen_auth::Operation::FederationPush {
+                    fed_id: fed_id_short.clone(),
+                })
+            });
+        }
+    }
+
+    if !push_authorized {
+        warn!(
+            fed_id = %fed_id.short(),
+            remote_peer = %remote_peer,
+            "push rejected: peer not trusted and no FederationPush credential"
+        );
+        return Ok(FederationResponse::Error {
+            code: "unauthorized".to_string(),
+            message: "Push requires trusted peer or FederationPush credential".to_string(),
         });
     }
 

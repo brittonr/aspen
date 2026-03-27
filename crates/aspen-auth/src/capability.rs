@@ -221,6 +221,27 @@ pub enum Capability {
     },
     /// Full net admin access (registry, DNS overrides, all net operations).
     NetAdmin,
+
+    // ==========================================================================
+    // Federation Sync Capabilities
+    // ==========================================================================
+    /// Pull (read) federated resources matching a repo prefix.
+    ///
+    /// Authorizes SyncObjects / GetResourceState / pull operations for
+    /// resources whose federated ID starts with `repo_prefix`.
+    /// An empty prefix matches all repos.
+    FederationPull {
+        /// Federated resource ID prefix (e.g., "forge:" or "forge:org-a/").
+        repo_prefix: String,
+    },
+    /// Push (write) federated resources matching a repo prefix.
+    ///
+    /// Authorizes PushObjects / ref updates for resources whose federated
+    /// ID starts with `repo_prefix`. An empty prefix matches all repos.
+    FederationPush {
+        /// Federated resource ID prefix.
+        repo_prefix: String,
+    },
 }
 
 impl Capability {
@@ -397,6 +418,16 @@ impl Capability {
                 service.starts_with(service_prefix)
             }
 
+            // ==========================================================================
+            // Federation Sync authorization
+            // ==========================================================================
+            (Capability::FederationPull { repo_prefix }, Operation::FederationPull { fed_id }) => {
+                fed_id.starts_with(repo_prefix)
+            }
+            (Capability::FederationPush { repo_prefix }, Operation::FederationPush { fed_id }) => {
+                fed_id.starts_with(repo_prefix)
+            }
+
             // No match
             _ => false,
         }
@@ -568,6 +599,17 @@ impl Capability {
                 p2.starts_with(p1)
             }
 
+            // ==========================================================================
+            // Federation Sync capability containment
+            // ==========================================================================
+            (Capability::FederationPull { repo_prefix: p1 }, Capability::FederationPull { repo_prefix: p2 }) => {
+                p2.starts_with(p1)
+            }
+
+            (Capability::FederationPush { repo_prefix: p1 }, Capability::FederationPush { repo_prefix: p2 }) => {
+                p2.starts_with(p1)
+            }
+
             _ => false,
         }
     }
@@ -723,6 +765,20 @@ pub enum Operation {
         /// Description of admin action.
         action: String,
     },
+
+    // ==========================================================================
+    // Federation Sync Operations
+    // ==========================================================================
+    /// Pull (read) a federated resource.
+    FederationPull {
+        /// Federated resource ID (short form).
+        fed_id: String,
+    },
+    /// Push (write) to a federated resource.
+    FederationPush {
+        /// Federated resource ID (short form).
+        fed_id: String,
+    },
 }
 
 impl std::fmt::Display for Operation {
@@ -759,6 +815,9 @@ impl std::fmt::Display for Operation {
             Operation::NetPublish { service } => write!(f, "NetPublish({service})"),
             Operation::NetUnpublish { service } => write!(f, "NetUnpublish({service})"),
             Operation::NetAdmin { action } => write!(f, "NetAdmin({action})"),
+            // Federation operations
+            Operation::FederationPull { fed_id } => write!(f, "FederationPull({fed_id})"),
+            Operation::FederationPush { fed_id } => write!(f, "FederationPush({fed_id})"),
         }
     }
 }

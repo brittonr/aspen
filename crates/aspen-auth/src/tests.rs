@@ -1249,3 +1249,97 @@ fn net_connect_does_not_contain_publish() {
     };
     assert!(!connect.contains(&publish));
 }
+
+// ============================================================================
+// Federation Capability Tests
+// ============================================================================
+
+#[test]
+fn federation_pull_authorizes_matching_fed_id() {
+    let cap = Capability::FederationPull {
+        repo_prefix: "forge:".into(),
+    };
+    assert!(cap.authorizes(&Operation::FederationPull {
+        fed_id: "forge:abc123".into(),
+    }));
+    assert!(cap.authorizes(&Operation::FederationPull {
+        fed_id: "forge:org-a/repo".into(),
+    }));
+    // Non-matching prefix
+    assert!(!cap.authorizes(&Operation::FederationPull {
+        fed_id: "ci:build-1".into(),
+    }));
+}
+
+#[test]
+fn federation_push_authorizes_matching_fed_id() {
+    let cap = Capability::FederationPush {
+        repo_prefix: "forge:org-a/".into(),
+    };
+    assert!(cap.authorizes(&Operation::FederationPush {
+        fed_id: "forge:org-a/my-repo".into(),
+    }));
+    // Wrong org
+    assert!(!cap.authorizes(&Operation::FederationPush {
+        fed_id: "forge:org-b/my-repo".into(),
+    }));
+}
+
+#[test]
+fn federation_pull_does_not_authorize_push() {
+    let cap = Capability::FederationPull {
+        repo_prefix: String::new(),
+    };
+    assert!(!cap.authorizes(&Operation::FederationPush {
+        fed_id: "forge:abc".into(),
+    }));
+}
+
+#[test]
+fn federation_empty_prefix_matches_all() {
+    let cap = Capability::FederationPush {
+        repo_prefix: String::new(),
+    };
+    assert!(cap.authorizes(&Operation::FederationPush {
+        fed_id: "forge:anything".into(),
+    }));
+    assert!(cap.authorizes(&Operation::FederationPush {
+        fed_id: "ci:anything".into(),
+    }));
+}
+
+#[test]
+fn federation_pull_contains_narrower_prefix() {
+    let parent = Capability::FederationPull {
+        repo_prefix: "forge:".into(),
+    };
+    let child = Capability::FederationPull {
+        repo_prefix: "forge:org-a/".into(),
+    };
+    assert!(parent.contains(&child));
+    assert!(!child.contains(&parent));
+}
+
+#[test]
+fn federation_push_contains_narrower_prefix() {
+    let parent = Capability::FederationPush {
+        repo_prefix: String::new(),
+    };
+    let child = Capability::FederationPush {
+        repo_prefix: "forge:org-a/".into(),
+    };
+    assert!(parent.contains(&child));
+    assert!(!child.contains(&parent));
+}
+
+#[test]
+fn federation_pull_does_not_contain_push() {
+    let pull = Capability::FederationPull {
+        repo_prefix: String::new(),
+    };
+    let push = Capability::FederationPush {
+        repo_prefix: String::new(),
+    };
+    assert!(!pull.contains(&push));
+    assert!(!push.contains(&pull));
+}

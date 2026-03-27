@@ -563,7 +563,7 @@ pub(crate) async fn handle_federation_sync_peer(
 
     // Connect and perform handshake
     let (connection, remote_identity) =
-        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr).await {
+        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr, None).await {
             Ok(result) => result,
             Err(e) => {
                 return Ok(ClientRpcResponse::FederationSyncPeerResult(FederationSyncPeerResponse {
@@ -710,7 +710,7 @@ pub(crate) async fn handle_federation_fetch_refs(
 
     // Connect and handshake
     let (connection, _remote_identity) =
-        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr).await {
+        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr, None).await {
             Ok(result) => result,
             Err(e) => {
                 return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
@@ -1395,7 +1395,7 @@ pub(crate) async fn handle_federation_pull_remote(
 
     // Connect and handshake to get the remote cluster's identity key
     let (_connection, remote_identity) =
-        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr).await {
+        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr, None).await {
             Ok(result) => result,
             Err(e) => return err_response(format!("connection failed: {e}")),
         };
@@ -1485,7 +1485,7 @@ pub(crate) async fn handle_federation_bidi_sync(
 
     // Step 1: Connect and handshake
     let (connection, remote_identity) =
-        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr).await {
+        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr, None).await {
             Ok(result) => result,
             Err(e) => return err_response(format!("connection failed: {e}")),
         };
@@ -1772,7 +1772,7 @@ pub(crate) async fn handle_federation_push(
 
     // Connect and push
     let (connection, _remote_identity) =
-        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr).await {
+        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr, None).await {
             Ok(result) => result,
             Err(e) => return err_response(format!("failed to connect to peer: {}", e)),
         };

@@ -365,6 +365,9 @@ fn format_capability(cap: &Capability) -> String {
         Capability::NetConnect { service_prefix } => format!("NetConnect (prefix: {service_prefix})"),
         Capability::NetPublish { service_prefix } => format!("NetPublish (prefix: {service_prefix})"),
         Capability::NetAdmin => "NetAdmin".to_string(),
+        // Federation sync
+        Capability::FederationPull { repo_prefix } => format!("FederationPull (prefix: {repo_prefix})"),
+        Capability::FederationPush { repo_prefix } => format!("FederationPush (prefix: {repo_prefix})"),
     }
 }
 

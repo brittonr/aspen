@@ -29,10 +29,15 @@ use crate::trust::verify_delegate_signature;
 use crate::types::FederatedId;
 
 /// Connect to a federated cluster and perform handshake.
+///
+/// If `credential` is provided, it is sent in the handshake request so the
+/// remote handler can authorize subsequent sync operations based on the
+/// token's capabilities (e.g., `FederationPull`, `FederationPush`).
 pub async fn connect_to_cluster(
     endpoint: &Endpoint,
     our_identity: &ClusterIdentity,
     peer_addr: impl Into<iroh::EndpointAddr>,
+    credential: Option<aspen_auth::Credential>,
 ) -> Result<(Connection, SignedClusterIdentity)> {
     // Connect to peer
     let connection = endpoint
@@ -48,7 +53,7 @@ pub async fn connect_to_cluster(
         identity: our_identity.to_signed(),
         protocol_version: FEDERATION_PROTOCOL_VERSION,
         capabilities: vec!["forge".to_string()],
-        credential: None,
+        credential,
     };
     write_message(&mut send, &request).await?;
 

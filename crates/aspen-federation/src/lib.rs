@@ -110,6 +110,7 @@ pub mod policy;
 pub mod resolver;
 pub mod subscription;
 pub mod sync;
+pub mod token_store;
 pub mod trust;
 pub mod types;
 pub mod verified;

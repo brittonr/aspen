@@ -629,10 +629,24 @@ fn parse_capability(s: &str) -> Result<Capability> {
         "pki-read-ca" => Ok(Capability::PkiReadCa),
         "pki-manage" => Ok(Capability::PkiManage),
 
+        // Federation sync capabilities
+        "federation-pull" => {
+            let prefix = if parts.len() == 2 { parts[1] } else { "" };
+            Ok(Capability::FederationPull {
+                repo_prefix: prefix.to_string(),
+            })
+        }
+        "federation-push" => {
+            let prefix = if parts.len() == 2 { parts[1] } else { "" };
+            Ok(Capability::FederationPush {
+                repo_prefix: prefix.to_string(),
+            })
+        }
+
         _ => anyhow::bail!(
             "unknown capability type '{}'. Use: read:PREFIX, write:PREFIX, delete:PREFIX, \
              full:PREFIX, watch:PREFIX, cluster-admin, delegate, secrets-*:MOUNT:PREFIX, \
-             transit-*:KEY_PREFIX, pki-*",
+             transit-*:KEY_PREFIX, pki-*, federation-pull[:PREFIX], federation-push[:PREFIX]",
             parts[0]
         ),
     }
@@ -678,6 +692,9 @@ fn format_capability(cap: &Capability) -> String {
         Capability::NetConnect { service_prefix } => format!("net-connect:{}", service_prefix),
         Capability::NetPublish { service_prefix } => format!("net-publish:{}", service_prefix),
         Capability::NetAdmin => "net-admin".to_string(),
+        // Federation sync capabilities
+        Capability::FederationPull { repo_prefix } => format!("federation-pull:{}", repo_prefix),
+        Capability::FederationPush { repo_prefix } => format!("federation-push:{}", repo_prefix),
     }
 }
 

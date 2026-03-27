@@ -1603,6 +1603,7 @@ dependencies = [
  "aspen-hlc",
  "aspen-sharding",
  "aspen-testing",
+ "aspen-traits",
  "async-trait",
  "blake3",
  "bytes",
