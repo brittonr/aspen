@@ -86,6 +86,9 @@
 
 | Date | What Went Wrong | What To Do Instead |
 |------|----------------|-------------------|
+| 2026-03-28 | `block_on()` inside tokio runtime in `with_peer_cache_dir` — panics on startup | Use `Arc::get_mut()` + `RwLock::get_mut()` for sync access during builder phase when Arc isn't shared yet |
+| 2026-03-28 | NixOS `aspen-init-profile` only set profile on first boot (`if [ ! -L ]`) — deploys kept running stale binary | Compare `readlink -f` of profile target vs `cfg.package` and update when they differ |
+| 2026-03-28 | `pureSrc`/`pureCargoVendorDir` missing subwayrat handling — Nix sandbox can't fetch git dep | Add `/subwayrat/b` to sed keep-list AND `isSubwayrat` override in `overrideVendorGitCheckout` (match other vendor dirs) |
 | 2026-03-28 | 1-node dogfood deploy fails: "Connecting to ourself is not supported" | DeploymentCoordinator uses iroh QUIC to push updates — can't connect to self. Use 3-node cluster (`ASPEN_NODE_COUNT=3`) or skip deploy stage |
 | 2026-03-25 | `--timeout` on DeployArgs conflicted with global `--timeout` (RPC timeout) | Use `--deploy-timeout` (long = "deploy-timeout") for deploy-specific timeout. Global `--timeout` is `timeout_ms` |
 | 2026-03-25 | Dogfood script `do_deploy` reimplemented rolling deploy in ~200 lines of bash | Use `cli cluster deploy --wait --deploy-timeout N` — let `DeploymentCoordinator` handle node ordering, quorum safety, drain, health |
@@ -94,6 +97,8 @@
 
 | Date | Issue | Resolution |
 |------|-------|------------|
+| 2026-03-28 | `--bind-port 7777` accepted but nodes bind to random ports; firewall only allows 7777 | Nodes communicate via mDNS on LAN anyway, but CLI ticket connectivity to non-local nodes fails. Use ticket from the leader node directly |
+| 2026-03-28 | CLI on follower gets "not leader" for reads (git list, kv scan) — no auto-redirect | Single-node tickets don't support failover. Run CLI on the leader node, or use multi-peer ticket |
 | 2026-03-22 | Connection pool served stale connections after peer restart — election storms | `add_peer()` detects address changes, calls `connection_pool.evict(node_id)` |
 | 2026-03-21 | After `systemctl restart`, iroh gets new port, Raft has stale address | Three-layer defense: gossip cache fallback, persistent peer cache, authoritative membership update via `add_learner` |
 | 2026-03-21 | openraft randomizes election timeout once → persistent split-votes | Per-node election timeout jitter via `node_id % (range/3)` |

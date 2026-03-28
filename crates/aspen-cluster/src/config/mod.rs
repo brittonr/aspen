@@ -811,6 +811,9 @@ fn merge_iroh_config(target: &mut IrohConfig, other: IrohConfig) {
     if other.enable_raft_auth {
         target.enable_raft_auth = other.enable_raft_auth;
     }
+    if other.bind_port != 0 {
+        target.bind_port = other.bind_port;
+    }
 }
 
 /// Merge iroh-docs real-time synchronization configuration.
