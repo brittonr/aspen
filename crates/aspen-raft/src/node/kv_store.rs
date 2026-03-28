@@ -1,5 +1,7 @@
 //! KeyValueStore trait implementation for RaftNode.
 
+use std::time::Duration;
+
 use aspen_constants::api::DEFAULT_SCAN_LIMIT;
 use aspen_constants::api::MAX_SCAN_RESULTS;
 use aspen_core::validate_write_command;
@@ -94,11 +96,10 @@ impl KeyValueStore for RaftNode {
 
         self.ensure_initialized_kv()?;
 
-        // Apply consistency level based on request
-        match self.read_ensure_consistency(request.consistency).await {
-            Ok(()) => {}
-            Err(KeyValueStoreError::NotLeader { .. }) => {
-                // Follower: forward to leader for linearizable read
+        // Apply consistency level with retry for transient ReadIndex failures on leader
+        if let Err(e) = self.read_ensure_consistency_with_retry(request.consistency).await {
+            // Forward to leader if we're a follower
+            if matches!(&e, KeyValueStoreError::NotLeader { .. }) {
                 // Guard: never forward to self (iroh can't self-connect)
                 if let Some(forwarder) = self.write_forwarder()
                     && let Some((leader_id, leader_addr)) = self.current_leader_info()
@@ -107,12 +108,8 @@ impl KeyValueStore for RaftNode {
                     debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding read to leader");
                     return forwarder.forward_read(leader_id, leader_addr, request).await;
                 }
-                return Err(KeyValueStoreError::NotLeader {
-                    leader: self.raft().metrics().borrow().current_leader.map(|id| id.0),
-                    reason: "no write forwarder or leader unknown".to_string(),
-                });
             }
-            Err(e) => return Err(e),
+            return Err(e);
         }
 
         // Read directly from state machine (linearizability guaranteed by consistency check above)
@@ -179,10 +176,10 @@ impl KeyValueStore for RaftNode {
 
         self.ensure_initialized_kv()?;
 
-        // Ensure linearizable read via ReadIndex — forward to leader on follower
-        match self.scan_ensure_linearizable().await {
-            Ok(()) => {}
-            Err(KeyValueStoreError::NotLeader { .. }) => {
+        // Ensure linearizable read with retry for transient ReadIndex failures on leader
+        if let Err(e) = self.scan_ensure_linearizable_with_retry().await {
+            // Forward to leader if we're a follower
+            if matches!(&e, KeyValueStoreError::NotLeader { .. }) {
                 // Guard: never forward to self (iroh can't self-connect)
                 if let Some(forwarder) = self.write_forwarder()
                     && let Some((leader_id, leader_addr)) = self.current_leader_info()
@@ -191,12 +188,8 @@ impl KeyValueStore for RaftNode {
                     debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding scan to leader");
                     return forwarder.forward_scan(leader_id, leader_addr, _request).await;
                 }
-                return Err(KeyValueStoreError::NotLeader {
-                    leader: self.raft().metrics().borrow().current_leader.map(|id| id.0),
-                    reason: "no write forwarder or leader unknown".to_string(),
-                });
             }
-            Err(e) => return Err(e),
+            return Err(e);
         }
 
         // Apply default limit if not specified
@@ -357,6 +350,72 @@ impl RaftNode {
     /// Ensure linearizable read via ReadIndex protocol.
     async fn scan_ensure_linearizable(&self) -> Result<(), KeyValueStoreError> {
         self.read_ensure_linearizable_with_policy(ReadPolicy::ReadIndex).await
+    }
+
+    /// Maximum retry attempts for transient ReadIndex failures on the leader.
+    /// During heavy write load (e.g. git push), the leader's ReadIndex quorum
+    /// confirmation can fail transiently. Retrying avoids returning NotLeader
+    /// when we ARE the leader.
+    const READ_INDEX_RETRIES: u32 = 3;
+
+    /// Read consistency check with retry for transient leader-side ReadIndex failures.
+    ///
+    /// When the leader's own ReadIndex fails (quorum timeout under load), retrying
+    /// typically succeeds within 1-2 attempts. Without this, the leader would
+    /// return NotLeader to callers even though it IS the leader, because iroh
+    /// can't self-connect so forwarding to self is impossible.
+    async fn read_ensure_consistency_with_retry(&self, consistency: ReadConsistency) -> Result<(), KeyValueStoreError> {
+        let mut last_err = None;
+        for attempt in 0..Self::READ_INDEX_RETRIES {
+            match self.read_ensure_consistency(consistency).await {
+                Ok(()) => return Ok(()),
+                Err(e @ KeyValueStoreError::NotLeader { leader, .. }) => {
+                    // Only retry if the leader hint points to us (transient self-failure)
+                    if leader == Some(self.node_id().0) && attempt + 1 < Self::READ_INDEX_RETRIES {
+                        debug!(
+                            node_id = self.node_id().0,
+                            attempt = attempt + 1,
+                            "ReadIndex failed on leader, retrying"
+                        );
+                        tokio::time::sleep(Duration::from_millis(50 * (attempt as u64 + 1))).await;
+                        last_err = Some(e);
+                        continue;
+                    }
+                    return Err(e);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Err(last_err.unwrap_or_else(|| KeyValueStoreError::Failed {
+            reason: "read consistency retries exhausted".to_string(),
+        }))
+    }
+
+    /// Scan linearizable check with retry for transient leader-side ReadIndex failures.
+    async fn scan_ensure_linearizable_with_retry(&self) -> Result<(), KeyValueStoreError> {
+        let mut last_err = None;
+        for attempt in 0..Self::READ_INDEX_RETRIES {
+            match self.scan_ensure_linearizable().await {
+                Ok(()) => return Ok(()),
+                Err(e @ KeyValueStoreError::NotLeader { leader, .. }) => {
+                    if leader == Some(self.node_id().0) && attempt + 1 < Self::READ_INDEX_RETRIES {
+                        debug!(
+                            node_id = self.node_id().0,
+                            attempt = attempt + 1,
+                            "ReadIndex failed on leader (scan), retrying"
+                        );
+                        tokio::time::sleep(Duration::from_millis(50 * (attempt as u64 + 1))).await;
+                        last_err = Some(e);
+                        continue;
+                    }
+                    return Err(e);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Err(last_err.unwrap_or_else(|| KeyValueStoreError::Failed {
+            reason: "scan consistency retries exhausted".to_string(),
+        }))
     }
 
     /// Scan from in-memory state machine with pagination.
