@@ -210,6 +210,9 @@ impl ClusterController for DeterministicClusterController {
 /// let store = DeterministicKeyValueStore::new();
 /// store.write(WriteRequest::set("key", "value")).await?;
 /// ```
+pub mod failing_store;
+pub use failing_store::FailingKeyValueStore;
+
 pub struct DeterministicKeyValueStore {
     inner: Arc<Mutex<HashMap<String, VersionedValue>>>,
     /// Global revision counter (simulates Raft log index)

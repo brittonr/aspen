@@ -75,6 +75,7 @@
 pub use aspen_testing_core as deterministic;
 pub use aspen_testing_core::DeterministicClusterController;
 pub use aspen_testing_core::DeterministicKeyValueStore;
+pub use aspen_testing_core::FailingKeyValueStore;
 // Re-export fixtures from aspen-testing-fixtures
 pub use aspen_testing_fixtures as fixtures;
 pub use aspen_testing_fixtures::ClusterBuilder;
