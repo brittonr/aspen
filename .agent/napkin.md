@@ -246,6 +246,16 @@ All resolved as of 2026-03-24.
 
 ## Session Log
 
+### 2026-03-28: Testing improvements (continued)
+
+Round 2 additions:
+
+- Error injection tests for coordination (rate limiter fail-open, counter/sequence/lock error propagation) — 10 tests
+- Feature matrix nix CI check (12 feature combos in flake checks)
+- Property tests for raft-network encoding (shard prefix, NTP, EWMA, backoff, health transitions) — 11 tests
+- Found and fixed: `calculate_connection_retry_backoff` shift overflow on attempt >= 64, no 60s cap
+- Round-trip fuzz target for ClientRpcRequest/ClientRpcResponse serialization idempotency
+
 ### 2026-03-28: Wire format golden tests for aspen-client-api
 
 Added comprehensive postcard discriminant stability tests:
