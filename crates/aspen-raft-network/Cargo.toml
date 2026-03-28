@@ -45,6 +45,7 @@ madsim = { version = "0.2.34", features = ["macros"], optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+proptest = "1.0"
 
 [features]
 default = []

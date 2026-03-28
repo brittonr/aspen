@@ -206,7 +206,11 @@ pub fn transition_connection_health(
 /// ```
 #[inline]
 pub fn calculate_connection_retry_backoff(attempt: u32, base_ms: u64) -> Duration {
-    Duration::from_millis(base_ms.saturating_mul(1u64 << (attempt.saturating_sub(1))))
+    const MAX_BACKOFF_MS: u64 = 60_000; // 60 seconds
+    let shift = attempt.saturating_sub(1).min(63);
+    let multiplier = 1u64.checked_shl(shift).unwrap_or(u64::MAX);
+    let backoff_ms = base_ms.saturating_mul(multiplier).min(MAX_BACKOFF_MS);
+    Duration::from_millis(backoff_ms)
 }
 
 // ============================================================================
