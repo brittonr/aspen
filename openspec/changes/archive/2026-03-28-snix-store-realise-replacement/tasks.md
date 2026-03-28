@@ -33,4 +33,4 @@
 
 - [x] 5.1 Run `cargo clippy` and `cargo nextest run` for the full test suite
 - [x] 5.2 Update `docs/nix-integration.md` subprocess escape table to reflect the replacement
-- [ ] 5.3 Commit with descriptive message
+- [x] 5.3 Commit with descriptive message
