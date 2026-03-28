@@ -2336,6 +2336,7 @@ dependencies = [
  "aspen-core",
  "blake3",
  "hex",
+ "proptest",
  "serde",
  "tempfile",
 ]
