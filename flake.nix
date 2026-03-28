@@ -2603,55 +2603,56 @@
               # Verifies the workspace compiles under important feature flag combos.
               # Catches dead code, unused imports, and type mismatches that only
               # surface with specific features on or off.
-              feature-matrix = pkgs.runCommand "aspen-feature-matrix" {
-                nativeBuildInputs = ciCommonArgs.nativeBuildInputs;
-              } ''
-                cd ${ciSrc}/aspen
+              feature-matrix =
+                pkgs.runCommand "aspen-feature-matrix" {
+                  nativeBuildInputs = ciCommonArgs.nativeBuildInputs;
+                } ''
+                  cd ${ciSrc}/aspen
 
-                combos=(
-                  ""
-                  "full"
-                  "forge-full"
-                  "ci"
-                  "forge"
-                  "sql"
-                  "blob"
-                  "secrets"
-                  "automerge"
-                  "jobs"
-                  "deploy"
-                  "federation"
-                )
+                  combos=(
+                    ""
+                    "full"
+                    "forge-full"
+                    "ci"
+                    "forge"
+                    "sql"
+                    "blob"
+                    "secrets"
+                    "automerge"
+                    "jobs"
+                    "deploy"
+                    "federation"
+                  )
 
-                failed=0
-                for combo in "''${combos[@]}"; do
-                  label="''${combo:-no features}"
-                  echo -n "[CHECK] $label ... "
-                  if [ -z "$combo" ]; then
-                    if cargo check --all-targets 2>/dev/null; then
-                      echo "OK"
+                  failed=0
+                  for combo in "''${combos[@]}"; do
+                    label="''${combo:-no features}"
+                    echo -n "[CHECK] $label ... "
+                    if [ -z "$combo" ]; then
+                      if cargo check --all-targets 2>/dev/null; then
+                        echo "OK"
+                      else
+                        echo "FAIL"
+                        failed=$((failed + 1))
+                      fi
                     else
-                      echo "FAIL"
-                      failed=$((failed + 1))
+                      if cargo check --features "$combo" --all-targets 2>/dev/null; then
+                        echo "OK"
+                      else
+                        echo "FAIL"
+                        failed=$((failed + 1))
+                      fi
                     fi
-                  else
-                    if cargo check --features "$combo" --all-targets 2>/dev/null; then
-                      echo "OK"
-                    else
-                      echo "FAIL"
-                      failed=$((failed + 1))
-                    fi
+                  done
+
+                  if [ "$failed" -gt 0 ]; then
+                    echo "ERROR: $failed feature combos failed"
+                    exit 1
                   fi
-                done
 
-                if [ "$failed" -gt 0 ]; then
-                  echo "ERROR: $failed feature combos failed"
-                  exit 1
-                fi
-
-                echo "All feature combinations passed"
-                touch $out
-              '';
+                  echo "All feature combinations passed"
+                  touch $out
+                '';
             }
             // {
               # Run quick tests with cargo-nextest (for CI)
