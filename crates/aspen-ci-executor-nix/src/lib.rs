@@ -46,6 +46,8 @@ pub mod flake_compat;
 #[cfg(feature = "snix-eval")]
 pub mod flake_lock;
 pub mod flakeref;
+#[cfg(feature = "snix-build")]
+pub mod materialize;
 mod payload;
 #[cfg(feature = "snix")]
 mod snix;

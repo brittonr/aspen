@@ -84,6 +84,7 @@ git push → Forge gossip → CI trigger
       1. evaluate_flake_via_compat(): import flake-compat { src = <dir>; }
       2. snix-eval's fetchTarball resolves inputs (HTTP download, narHash verify)
       3. derivationStrict → Derivation extracted from KnownPaths
+    → materialize_store_paths(): missing inputs fetched from PathInfoService → disk
     → LocalStoreBuildService: Derivation → BuildRequest → bubblewrap sandbox
     → Upload outputs directly to PathInfoService + BlobService
     → nar-bridge serves built paths to downstream consumers
@@ -102,6 +103,15 @@ Build execution uses `LocalStoreBuildService`, which copies inputs from the
 local `/nix/store` into the bubblewrap sandbox via `cp -a`. This replaces
 upstream snix-build's FUSE-based input mounting, which fails under systemd's
 `ProtectSystem=strict`.
+
+**Input closure materialization:** When input store paths are missing from the
+local `/nix/store`, the executor materializes them from the cluster's castore
+services (PathInfoService + BlobService + DirectoryService) by walking the
+castore Node tree and writing files/directories/symlinks directly to disk.
+This replaces the previous `nix-store --realise` subprocess fallback.
+
+If castore cannot resolve all paths and the `nix-cli-fallback` feature is
+enabled, `nix-store --realise` is used as a last-resort fallback.
 
 #### 3. Subprocess fallback
 
