@@ -97,8 +97,8 @@
 
 | Date | Issue | Resolution |
 |------|-------|------------|
-| 2026-03-28 | `--bind-port 7777` accepted but nodes bind to random ports; firewall only allows 7777 | Nodes communicate via mDNS on LAN anyway, but CLI ticket connectivity to non-local nodes fails. Use ticket from the leader node directly |
-| 2026-03-28 | CLI on follower gets "not leader" for reads (git list, kv scan) — no auto-redirect | Single-node tickets don't support failover. Run CLI on the leader node, or use multi-peer ticket |
+| 2026-03-28 | `--bind-port 7777` accepted but nodes bind to random ports | `merge_iroh_config` was missing `bind_port` — CLI override silently dropped. Fixed: merge `bind_port` when non-zero |
+| 2026-03-28 | CLI on follower gets "not leader" for reads (git list, kv scan) | Root cause was bind_port bug: firewall blocked random ports → follower couldn't reach leader for linearizable reads. With port 7777, reads work cross-node via leader's ticket |
 | 2026-03-22 | Connection pool served stale connections after peer restart — election storms | `add_peer()` detects address changes, calls `connection_pool.evict(node_id)` |
 | 2026-03-21 | After `systemctl restart`, iroh gets new port, Raft has stale address | Three-layer defense: gossip cache fallback, persistent peer cache, authoritative membership update via `add_learner` |
 | 2026-03-21 | openraft randomizes election timeout once → persistent split-votes | Per-node election timeout jitter via `node_id % (range/3)` |
