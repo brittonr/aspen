@@ -888,87 +888,78 @@ fn register_output_in_store(source_path: &std::path::Path, target_store_path: &s
         "registering build output in local /nix/store"
     );
 
-    // Try cp -a (writable store), then nix-store --dump/--restore (read-only store).
-    if try_register_via_copy(source_path, target_store_path) {
-        return;
-    }
-    try_register_via_nar_pipe(source_path, target_store_path);
-}
-
-/// Try to register via `cp -a`. Returns true on success.
-fn try_register_via_copy(source: &std::path::Path, target: &std::path::Path) -> bool {
-    let result = std::process::Command::new("cp")
-        .arg("-a")
-        .arg(source)
-        .arg(target)
-        .stderr(std::process::Stdio::piped())
-        .output();
-
-    match result {
-        Ok(out) if out.status.success() => {
-            info!(target = %target.display(), "registered output via cp -a");
-            true
-        }
-        Ok(out) => {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            debug!(stderr = %stderr, "cp -a failed (read-only store?), trying nix-store --dump/--restore");
-            false
+    match copy_tree(source_path, target_store_path) {
+        Ok(count) => {
+            info!(
+                target = %target_store_path.display(),
+                files = count,
+                "registered output in local /nix/store"
+            );
         }
         Err(e) => {
-            debug!(error = %e, "cp -a failed, trying nix-store --dump/--restore");
-            false
+            // Non-fatal — castore/PathInfoService is the primary store.
+            // Local /nix/store registration fails on read-only stores
+            // (ProtectSystem=strict) and that's fine.
+            warn!(
+                error = %e,
+                target = %target_store_path.display(),
+                "failed to register output in local /nix/store (castore/PathInfoService is primary — non-fatal)"
+            );
         }
     }
 }
 
-/// Register via `nix-store --dump <source> | nix-store --restore <target>`.
+/// Copy a filesystem tree recursively, preserving symlinks and file
+/// permissions. Pure Rust replacement for `cp -a`.
 ///
-/// Non-fatal — castore/PathInfoService is the primary store. This is a
-/// best-effort attempt to make outputs available in the local `/nix/store`.
-///
-/// SUBPROCESS-ESCAPE: Pure-snix replacement would use snix_store::nar::NarWriter
-/// to produce NAR bytes, then snix-castore ingest to register directly.
-fn try_register_via_nar_pipe(source: &std::path::Path, target: &std::path::Path) {
-    let dump_child = match std::process::Command::new("nix-store")
-        .arg("--dump")
-        .arg(source)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-    {
-        Ok(child) => child,
-        Err(e) => {
-            warn!(error = %e, target = %target.display(), "failed to spawn nix-store --dump");
-            return;
-        }
-    };
+/// Returns `Ok(file_count)` on success. Fails on permission errors
+/// (e.g. read-only `/nix/store` with `ProtectSystem=strict`).
+fn copy_tree(source: &std::path::Path, target: &std::path::Path) -> io::Result<u32> {
+    let meta = std::fs::symlink_metadata(source)?;
+    let file_type = meta.file_type();
 
-    let Some(stdout) = dump_child.stdout else {
-        warn!(target = %target.display(), "nix-store --dump child has no stdout pipe");
-        return;
-    };
-
-    let result = std::process::Command::new("nix-store")
-        .arg("--restore")
-        .arg(target)
-        .stdin(stdout)
-        .stderr(std::process::Stdio::piped())
-        .output();
-
-    match result {
-        Ok(out) if out.status.success() => {
-            info!(target = %target.display(), "registered output via nix-store --dump/--restore");
-        }
-        Ok(out) => {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            warn!(stderr = %stderr, target = %target.display(),
-                "nix-store --restore failed (castore/PathInfoService is primary — non-fatal)");
-        }
-        Err(e) => {
-            warn!(error = %e, target = %target.display(),
-                "failed to run nix-store --restore (castore/PathInfoService is primary — non-fatal)");
-        }
+    if file_type.is_symlink() {
+        let link_target = std::fs::read_link(source)?;
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&link_target, target)?;
+        #[cfg(not(unix))]
+        std::fs::copy(source, target)?;
+        return Ok(1);
     }
+
+    if file_type.is_file() {
+        std::fs::copy(source, target)?;
+        // Preserve permissions
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(meta.permissions().mode());
+            std::fs::set_permissions(target, perms)?;
+        }
+        return Ok(1);
+    }
+
+    if file_type.is_dir() {
+        std::fs::create_dir_all(target)?;
+        let mut count: u32 = 0;
+        for entry in std::fs::read_dir(source)? {
+            let entry = entry?;
+            let src_child = entry.path();
+            let dst_child = target.join(entry.file_name());
+            count = count.saturating_add(copy_tree(&src_child, &dst_child)?);
+        }
+        // Preserve directory permissions
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(meta.permissions().mode());
+            std::fs::set_permissions(target, perms)?;
+        }
+        return Ok(count);
+    }
+
+    // Skip special files (devices, sockets, etc.)
+    Ok(0)
 }
 
 // ============================================================================
@@ -1600,6 +1591,90 @@ mod tests {
                 eprintln!("create_build_service failed (expected without bwrap): {e}");
             }
         }
+    }
+
+    // ====================================================================
+    // copy_tree (pure Rust recursive copy)
+    // ====================================================================
+
+    #[test]
+    fn test_copy_tree_single_file() {
+        let src_dir = tempfile::tempdir().unwrap();
+        let dst_dir = tempfile::tempdir().unwrap();
+        let src_file = src_dir.path().join("hello.txt");
+        std::fs::write(&src_file, "hello world").unwrap();
+
+        let dst_file = dst_dir.path().join("hello.txt");
+        let count = super::copy_tree(&src_file, &dst_file).unwrap();
+
+        assert_eq!(count, 1);
+        assert_eq!(std::fs::read_to_string(&dst_file).unwrap(), "hello world");
+    }
+
+    #[test]
+    fn test_copy_tree_directory_recursive() {
+        let src_dir = tempfile::tempdir().unwrap();
+        let sub = src_dir.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(src_dir.path().join("a.txt"), "aaa").unwrap();
+        std::fs::write(sub.join("b.txt"), "bbb").unwrap();
+
+        let dst_dir = tempfile::tempdir().unwrap();
+        let dst = dst_dir.path().join("out");
+        let count = super::copy_tree(src_dir.path(), &dst).unwrap();
+
+        assert_eq!(count, 2);
+        assert_eq!(std::fs::read_to_string(dst.join("a.txt")).unwrap(), "aaa");
+        assert_eq!(std::fs::read_to_string(dst.join("sub/b.txt")).unwrap(), "bbb");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_tree_preserves_symlinks() {
+        let src_dir = tempfile::tempdir().unwrap();
+        let src_file = src_dir.path().join("target.txt");
+        std::fs::write(&src_file, "target content").unwrap();
+        let src_link = src_dir.path().join("link.txt");
+        std::os::unix::fs::symlink("target.txt", &src_link).unwrap();
+
+        let dst_dir = tempfile::tempdir().unwrap();
+        let dst = dst_dir.path().join("out");
+        let count = super::copy_tree(src_dir.path(), &dst).unwrap();
+
+        assert_eq!(count, 2);
+        let dst_link = dst.join("link.txt");
+        assert!(dst_link.symlink_metadata().unwrap().file_type().is_symlink());
+        assert_eq!(std::fs::read_link(&dst_link).unwrap().to_str().unwrap(), "target.txt");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_tree_preserves_executable_permission() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let src_dir = tempfile::tempdir().unwrap();
+        let src_file = src_dir.path().join("run.sh");
+        std::fs::write(&src_file, "#!/bin/sh\necho hi").unwrap();
+        std::fs::set_permissions(&src_file, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let dst_dir = tempfile::tempdir().unwrap();
+        let dst_file = dst_dir.path().join("run.sh");
+        super::copy_tree(&src_file, &dst_file).unwrap();
+
+        let mode = dst_file.metadata().unwrap().permissions().mode();
+        assert_eq!(mode & 0o111, 0o111, "executable bits should be preserved");
+    }
+
+    #[test]
+    fn test_copy_tree_empty_directory() {
+        let src_dir = tempfile::tempdir().unwrap();
+
+        let dst_dir = tempfile::tempdir().unwrap();
+        let dst = dst_dir.path().join("empty");
+        let count = super::copy_tree(src_dir.path(), &dst).unwrap();
+
+        assert_eq!(count, 0);
+        assert!(dst.is_dir());
     }
 
     // Task 69: Build a simple hello-world flake end-to-end via snix-build.
