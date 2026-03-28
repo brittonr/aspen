@@ -767,6 +767,7 @@ pub(crate) async fn handle_federation_fetch_refs(
         }
     }
     // Initial refs with source hashes (translated to local after import)
+    #[allow(unused_mut)]
     let mut fetched_refs: Vec<(String, [u8; 32])> =
         fetched_ref_entries.iter().map(|e| (e.ref_name.clone(), e.head_hash)).collect();
 
@@ -1008,6 +1009,7 @@ pub(crate) async fn handle_get_delegate_key(
 
 /// Statistics from importing federation sync objects into a local forge repo.
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub struct FederationImportStats {
     /// Number of commit objects imported.
     pub commits: u32,
@@ -1292,6 +1294,7 @@ pub(crate) async fn update_mirror_refs(
 }
 
 /// Update the last sync timestamp on a mirror's metadata.
+#[cfg(feature = "git-bridge")]
 pub(crate) async fn update_mirror_sync_timestamp(forge_node: &ForgeNodeRef, fed_id_str: &str) -> Result<(), String> {
     let meta_key = format!("{}{}", MIRROR_PREFIX, fed_id_str);
 
@@ -1308,6 +1311,7 @@ pub(crate) async fn update_mirror_sync_timestamp(forge_node: &ForgeNodeRef, fed_
 }
 
 /// Check if a repo is a federation mirror.
+#[cfg(feature = "git-bridge")]
 pub(crate) async fn is_mirror_repo(forge_node: &ForgeNodeRef, repo_id: &aspen_forge::identity::RepoId) -> bool {
     let repo_hex = hex::encode(repo_id.0);
     if let Ok(entries) = forge_node.scan_kv(MIRROR_PREFIX, Some(100)).await {

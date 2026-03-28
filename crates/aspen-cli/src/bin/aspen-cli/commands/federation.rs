@@ -929,7 +929,7 @@ async fn federation_token_inspect(args: InspectArgs, json: bool) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&credential)?);
     } else {
         println!("Federation Credential (unverified)");
-        println!("  Issuer:       {}", hex::encode(&token.issuer));
+        println!("  Issuer:       {}", hex::encode(token.issuer));
         println!("  Audience:     {:?}", token.audience);
         println!("  Issued at:    {}", token.issued_at);
         println!("  Expires at:   {} ({})", token.expires_at, format_expiry(token.expires_at));

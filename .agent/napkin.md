@@ -35,6 +35,8 @@
 
 | Rule | Why |
 |------|-----|
+| After touching feature-gated code, test WITHOUT the feature too | CI clippy runs workspace clippy without features — dead code, unused imports, missing Ok() wrappers surface only in the no-feature path |
+| `#[allow(dead_code)]` for structs used in both cfg paths, `#[cfg]` for functions only used in one | Struct behind `#[cfg(feature)]` breaks the `#[cfg(not(feature))]` fallback that uses `::default()` |
 | `#[cfg(feature = "ci")]` checks ROOT crate feature, not transitive | Use `--features ci` not `ci-basic` for binary checks |
 | Feature chains must propagate to ALL downstream handler crates | `ci = ["dep:aspen-ci-handler", "aspen-ci-handler/forge", "aspen-ci-handler/blob"]` |
 | When adding `#[cfg(feature)]` guards, verify feature is defined | Check `[features]` table AND propagation from parent crates |
@@ -84,6 +86,7 @@
 
 | Date | What Went Wrong | What To Do Instead |
 |------|----------------|-------------------|
+| 2026-03-28 | 1-node dogfood deploy fails: "Connecting to ourself is not supported" | DeploymentCoordinator uses iroh QUIC to push updates — can't connect to self. Use 3-node cluster (`ASPEN_NODE_COUNT=3`) or skip deploy stage |
 | 2026-03-25 | `--timeout` on DeployArgs conflicted with global `--timeout` (RPC timeout) | Use `--deploy-timeout` (long = "deploy-timeout") for deploy-specific timeout. Global `--timeout` is `timeout_ms` |
 | 2026-03-25 | Dogfood script `do_deploy` reimplemented rolling deploy in ~200 lines of bash | Use `cli cluster deploy --wait --deploy-timeout N` — let `DeploymentCoordinator` handle node ordering, quorum safety, drain, health |
 

@@ -8,6 +8,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+#[cfg(not(feature = "git-bridge"))]
+use aspen_client_api::ErrorResponse;
 use aspen_rpc_core::ServiceExecutor;
 use async_trait::async_trait;
 
@@ -1841,10 +1843,10 @@ impl ServiceExecutor for ForgeServiceExecutor {
             }
             #[cfg(not(feature = "git-bridge"))]
             ClientRpcRequest::FederationGitListRefs { .. } | ClientRpcRequest::FederationGitFetch { .. } => {
-                ClientRpcResponse::Error(ErrorResponse {
+                Ok(ClientRpcResponse::Error(ErrorResponse {
                     code: "FEATURE_DISABLED".to_string(),
                     message: "git-bridge feature is required for federated git operations".to_string(),
-                })
+                }))
             }
             ClientRpcRequest::ForgeFetchFederated {
                 federated_id,
