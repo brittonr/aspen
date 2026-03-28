@@ -86,6 +86,7 @@
 
 | Date | What Went Wrong | What To Do Instead |
 |------|----------------|-------------------|
+| 2026-03-28 | Leader ReadIndex quorum timeout during heavy git push → self-forwarding attempt → iroh QUIC self-connect crash | Guard all 6 forwarding sites with `leader_id != self.node_id()`. Add ReadIndex retry (3 attempts, 50ms backoff) when leader hint is self. Belt-and-suspenders endpoint ID check in `IrohWriteForwarder::get_connection()` |
 | 2026-03-28 | `block_on()` inside tokio runtime in `with_peer_cache_dir` — panics on startup | Use `Arc::get_mut()` + `RwLock::get_mut()` for sync access during builder phase when Arc isn't shared yet |
 | 2026-03-28 | NixOS `aspen-init-profile` only set profile on first boot (`if [ ! -L ]`) — deploys kept running stale binary | Compare `readlink -f` of profile target vs `cfg.package` and update when they differ |
 | 2026-03-28 | `pureSrc`/`pureCargoVendorDir` missing subwayrat handling — Nix sandbox can't fetch git dep | Add `/subwayrat/b` to sed keep-list AND `isSubwayrat` override in `overrideVendorGitCheckout` (match other vendor dirs) |
@@ -245,6 +246,16 @@
 All resolved as of 2026-03-24.
 
 ## Session Log
+
+### 2026-03-28: Dogfood self-forwarding fix
+
+Fixed two bugs blocking dogfood git push on 3-node cluster:
+
+1. **Self-forwarding crash**: 6 forwarding sites (read/write/delete/scan in kv_store, flush/direct_write in write_batcher) lacked `leader_id != self.node_id()` guard. When leader's ReadIndex timed out under load, it tried to forward to itself via iroh QUIC, which hard-rejects self-connections. Added guards to all sites + belt-and-suspenders endpoint ID check in `IrohWriteForwarder::get_connection()`.
+
+2. **Transient ReadIndex failure on leader**: During heavy write load (33k git objects), leader's quorum confirmation times out transiently. Added retry loop (3 attempts, 50/100/150ms backoff) that only triggers when leader hint points to self. Followers still forward immediately.
+
+Result: git push to Forge succeeded (33,439 objects imported). CI pipeline reached build stage but format-check failed due to pre-existing nix sandbox issue ("cannot get current path").
 
 ### 2026-03-28: Testing improvements (continued)
 
