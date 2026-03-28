@@ -523,33 +523,8 @@ impl NixBuildWorker {
             reason: "NixEvaluator not initialized for flake eval".to_string(),
         })?;
 
-        // Generate flake.lock if missing — snix-eval requires it for input resolution.
-        let flake_path = std::path::Path::new(&flake_dir);
-        if crate::eval::needs_flake_lock(flake_path) {
-            if let Some(tx) = log_sender {
-                let _ = tx.send("generating flake.lock (missing in checkout)\n".to_string()).await;
-            }
-            match crate::eval::ensure_flake_lock(flake_path) {
-                Ok(true) => {
-                    if let Some(tx) = log_sender {
-                        let _ = tx.send("flake.lock generated successfully\n".to_string()).await;
-                    }
-                }
-                Ok(false) => {} // already present (race condition — fine)
-                Err(e) => {
-                    warn!(
-                        error = %e,
-                        flake_dir = %flake_dir,
-                        "flake.lock generation failed, eval may fall back to subprocess"
-                    );
-                    if let Some(tx) = log_sender {
-                        let _ = tx.send(format!("flake.lock generation failed ({e}), continuing\n")).await;
-                    }
-                }
-            }
-        }
-
         // Primary path: flake-compat — snix-eval handles all input fetching
+        // (no flake.lock needed — flake-compat resolves inputs internally)
         if let Some(tx) = log_sender {
             let _ = tx.send("attempting in-process flake eval via flake-compat\n".to_string()).await;
         }
@@ -591,7 +566,31 @@ impl NixBuildWorker {
             }
         }
 
-        // Fallback: legacy call-flake.nix + manual input resolution
+        // Fallback: legacy call-flake.nix + manual input resolution.
+        // This path requires flake.lock — generate it now if missing.
+        // Deferred to here so the primary flake-compat path (above) never
+        // spawns a subprocess.
+        let flake_path = std::path::Path::new(&flake_dir);
+        if crate::eval::needs_flake_lock(flake_path) {
+            if let Some(tx) = log_sender {
+                let _ = tx.send("generating flake.lock for legacy eval path\n".to_string()).await;
+            }
+            match crate::eval::ensure_flake_lock(flake_path) {
+                Ok(true) => {
+                    if let Some(tx) = log_sender {
+                        let _ = tx.send("flake.lock generated successfully\n".to_string()).await;
+                    }
+                }
+                Ok(false) => {}
+                Err(e) => {
+                    return Err(CiCoreError::NixBuildFailed {
+                        flake: flake_ref.to_string(),
+                        reason: format!("flake-compat eval failed and flake.lock generation failed: {e}"),
+                    });
+                }
+            }
+        }
+
         let eval_clone = evaluator.clone();
         let dir = flake_dir.to_string();
         let attr = attribute.clone();

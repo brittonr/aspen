@@ -771,9 +771,10 @@ pub fn ensure_flake_lock(flake_dir: &std::path::Path) -> std::io::Result<bool> {
         "generating flake.lock via nix flake lock"
     );
 
-    // SUBPROCESS-ESCAPE: Generates flake.lock by running `nix flake lock`.
-    // Pure-snix replacement: parse flake.nix inputs in-process via snix-eval,
-    // resolve each input's locked ref, and write flake.lock JSON directly.
+    // SUBPROCESS-FALLBACK: Generates flake.lock by running `nix flake lock`.
+    // Only reached when the primary flake-compat eval path fails and the
+    // legacy call-flake.nix path needs a lock file. The zero-subprocess
+    // build path (flake-compat) never calls this function.
     let start = std::time::Instant::now();
     let output = std::process::Command::new("nix")
         .args(["flake", "lock"])
