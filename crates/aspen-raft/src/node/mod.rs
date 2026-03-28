@@ -179,6 +179,17 @@ impl RaftNode {
         self.write_forwarder.as_ref()
     }
 
+    /// Get current leader's NodeId and EndpointAddr from Raft membership.
+    ///
+    /// Returns `None` if no leader is known or the leader's address isn't in membership.
+    pub(crate) fn current_leader_info(&self) -> Option<(NodeId, iroh::EndpointAddr)> {
+        let metrics = self.raft().metrics().borrow().clone();
+        let leader_id = metrics.current_leader?;
+        let membership = metrics.membership_config.membership();
+        let leader_node = membership.get_node(&leader_id)?;
+        Some((leader_id, leader_node.iroh_addr.clone()))
+    }
+
     /// Get the underlying Raft instance.
     pub fn raft(&self) -> &Arc<Raft<AppTypeConfig>> {
         &self.raft

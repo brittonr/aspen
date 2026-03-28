@@ -94,7 +94,23 @@ impl KeyValueStore for RaftNode {
         self.ensure_initialized_kv()?;
 
         // Apply consistency level based on request
-        self.read_ensure_consistency(request.consistency).await?;
+        match self.read_ensure_consistency(request.consistency).await {
+            Ok(()) => {}
+            Err(KeyValueStoreError::NotLeader { .. }) => {
+                // Follower: forward to leader for linearizable read
+                if let Some(forwarder) = self.write_forwarder()
+                    && let Some((leader_id, leader_addr)) = self.current_leader_info()
+                {
+                    debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding read to leader");
+                    return forwarder.forward_read(leader_id, leader_addr, request).await;
+                }
+                return Err(KeyValueStoreError::NotLeader {
+                    leader: self.raft().metrics().borrow().current_leader.map(|id| id.0),
+                    reason: "no write forwarder or leader unknown".to_string(),
+                });
+            }
+            Err(e) => return Err(e),
+        }
 
         // Read directly from state machine (linearizability guaranteed by consistency check above)
         self.read_from_state_machine(&request.key).await
@@ -159,8 +175,23 @@ impl KeyValueStore for RaftNode {
 
         self.ensure_initialized_kv()?;
 
-        // Ensure linearizable read via ReadIndex
-        self.scan_ensure_linearizable().await?;
+        // Ensure linearizable read via ReadIndex — forward to leader on follower
+        match self.scan_ensure_linearizable().await {
+            Ok(()) => {}
+            Err(KeyValueStoreError::NotLeader { .. }) => {
+                if let Some(forwarder) = self.write_forwarder()
+                    && let Some((leader_id, leader_addr)) = self.current_leader_info()
+                {
+                    debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding scan to leader");
+                    return forwarder.forward_scan(leader_id, leader_addr, _request).await;
+                }
+                return Err(KeyValueStoreError::NotLeader {
+                    leader: self.raft().metrics().borrow().current_leader.map(|id| id.0),
+                    reason: "no write forwarder or leader unknown".to_string(),
+                });
+            }
+            Err(e) => return Err(e),
+        }
 
         // Apply default limit if not specified
         let limit = _request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;

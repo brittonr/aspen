@@ -18,6 +18,11 @@ use aspen_client_api::messages::ClientRpcRequest;
 use aspen_client_api::messages::ClientRpcResponse;
 use aspen_client_api::messages::MAX_CLIENT_MESSAGE_SIZE;
 use aspen_kv_types::KeyValueStoreError;
+use aspen_kv_types::KeyValueWithRevision;
+use aspen_kv_types::ReadRequest;
+use aspen_kv_types::ReadResult;
+use aspen_kv_types::ScanRequest;
+use aspen_kv_types::ScanResult;
 use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
@@ -296,63 +301,26 @@ impl IrohWriteForwarder {
         }
     }
 
-    /// Execute a single write on the given connection as a new bidirectional stream.
-    async fn execute_on_stream(
-        connection: &Connection,
-        rpc_request: ClientRpcRequest,
-        leader_id: NodeId,
-    ) -> Result<WriteResult, KeyValueStoreError> {
-        let (mut send, mut recv) = connection.open_bi().await.map_err(|e| KeyValueStoreError::Failed {
-            reason: format!("failed to open stream to leader {}: {e}", leader_id.0),
-        })?;
-
-        let authenticated = AuthenticatedRequest::unauthenticated(rpc_request);
-        let request_bytes = postcard::to_stdvec(&authenticated).map_err(|e| KeyValueStoreError::Failed {
-            reason: format!("failed to serialize forwarded write: {e}"),
-        })?;
-
-        send.write_all(&request_bytes).await.map_err(|e| KeyValueStoreError::Failed {
-            reason: format!("failed to send forwarded write: {e}"),
-        })?;
-
-        send.finish().map_err(|e| KeyValueStoreError::Failed {
-            reason: format!("failed to finish send stream: {e}"),
-        })?;
-
-        let response_bytes =
-            recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.map_err(|e| KeyValueStoreError::Failed {
-                reason: format!("failed to read forwarded write response: {e}"),
-            })?;
-
-        let response: ClientRpcResponse =
-            postcard::from_bytes(&response_bytes).map_err(|e| KeyValueStoreError::Failed {
-                reason: format!("failed to deserialize forwarded write response: {e}"),
-            })?;
-
-        interpret_write_response(response, leader_id)
-    }
+    // execute_on_stream replaced by send_rpc_on_stream + forward_rpc
 }
 
-#[async_trait]
-impl WriteForwarder for IrohWriteForwarder {
-    async fn forward_write(
+impl IrohWriteForwarder {
+    /// Send an RPC request to the leader with automatic reconnect on dead connections.
+    async fn forward_rpc(
         &self,
         leader_id: NodeId,
-        leader_addr: EndpointAddr,
-        request: WriteRequest,
-    ) -> Result<WriteResult, KeyValueStoreError> {
-        let rpc_request = write_command_to_rpc_request(&request.command, leader_id)?;
-
+        leader_addr: &EndpointAddr,
+        rpc_request: ClientRpcRequest,
+    ) -> Result<ClientRpcResponse, KeyValueStoreError> {
         let result = timeout(FORWARD_TIMEOUT, async {
-            let connection = self.get_connection(leader_id, &leader_addr).await?;
+            let connection = self.get_connection(leader_id, leader_addr).await?;
 
-            match Self::execute_on_stream(&connection, rpc_request.clone(), leader_id).await {
-                Ok(result) => Ok(result),
+            match Self::send_rpc_on_stream(&connection, &rpc_request, leader_id).await {
+                Ok(resp) => Ok(resp),
                 Err(KeyValueStoreError::Failed { ref reason }) if reason.contains("failed to open stream") => {
-                    // Connection is dead — evict, reconnect, retry once
                     self.evict_connection(leader_id).await;
-                    let fresh = self.get_connection(leader_id, &leader_addr).await?;
-                    Self::execute_on_stream(&fresh, rpc_request, leader_id).await
+                    let fresh = self.get_connection(leader_id, leader_addr).await?;
+                    Self::send_rpc_on_stream(&fresh, &rpc_request, leader_id).await
                 }
                 Err(e) => Err(e),
             }
@@ -365,12 +333,152 @@ impl WriteForwarder for IrohWriteForwarder {
                 warn!(
                     leader_id = leader_id.0,
                     timeout_secs = FORWARD_TIMEOUT.as_secs(),
-                    "write forwarding to leader timed out"
+                    "RPC forwarding to leader timed out"
                 );
                 Err(KeyValueStoreError::Timeout {
                     duration_ms: FORWARD_TIMEOUT.as_millis() as u64,
                 })
             }
+        }
+    }
+
+    /// Low-level: serialize, send, receive, deserialize on a single stream.
+    async fn send_rpc_on_stream(
+        connection: &Connection,
+        rpc_request: &ClientRpcRequest,
+        leader_id: NodeId,
+    ) -> Result<ClientRpcResponse, KeyValueStoreError> {
+        let (mut send, mut recv) = connection.open_bi().await.map_err(|e| KeyValueStoreError::Failed {
+            reason: format!("failed to open stream to leader {}: {e}", leader_id.0),
+        })?;
+
+        let authenticated = AuthenticatedRequest::unauthenticated(rpc_request.clone());
+        let request_bytes = postcard::to_stdvec(&authenticated).map_err(|e| KeyValueStoreError::Failed {
+            reason: format!("failed to serialize forwarded request: {e}"),
+        })?;
+
+        send.write_all(&request_bytes).await.map_err(|e| KeyValueStoreError::Failed {
+            reason: format!("failed to send forwarded request: {e}"),
+        })?;
+
+        send.finish().map_err(|e| KeyValueStoreError::Failed {
+            reason: format!("failed to finish send stream: {e}"),
+        })?;
+
+        let response_bytes =
+            recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.map_err(|e| KeyValueStoreError::Failed {
+                reason: format!("failed to read forwarded response: {e}"),
+            })?;
+
+        postcard::from_bytes(&response_bytes).map_err(|e| KeyValueStoreError::Failed {
+            reason: format!("failed to deserialize forwarded response: {e}"),
+        })
+    }
+}
+
+#[async_trait]
+impl WriteForwarder for IrohWriteForwarder {
+    async fn forward_write(
+        &self,
+        leader_id: NodeId,
+        leader_addr: EndpointAddr,
+        request: WriteRequest,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        let rpc_request = write_command_to_rpc_request(&request.command, leader_id)?;
+        let response = self.forward_rpc(leader_id, &leader_addr, rpc_request).await?;
+        interpret_write_response(response, leader_id)
+    }
+
+    async fn forward_read(
+        &self,
+        leader_id: NodeId,
+        leader_addr: EndpointAddr,
+        request: ReadRequest,
+    ) -> Result<ReadResult, KeyValueStoreError> {
+        let rpc_request = ClientRpcRequest::ReadKey {
+            key: request.key.clone(),
+        };
+        let response = self.forward_rpc(leader_id, &leader_addr, rpc_request).await?;
+
+        match response {
+            ClientRpcResponse::ReadResult(resp) => {
+                if let Some(ref err) = resp.error {
+                    if err.contains("not leader") || err.contains("ForwardToLeader") {
+                        return Err(KeyValueStoreError::NotLeader {
+                            leader: None,
+                            reason: err.clone(),
+                        });
+                    }
+                    return Err(KeyValueStoreError::Failed { reason: err.clone() });
+                }
+                if resp.was_found {
+                    let value = resp.value.map(|v| String::from_utf8_lossy(&v).to_string()).unwrap_or_default();
+                    Ok(ReadResult {
+                        kv: Some(KeyValueWithRevision {
+                            key: request.key,
+                            value,
+                            version: 1,
+                            create_revision: 0,
+                            mod_revision: 0,
+                        }),
+                    })
+                } else {
+                    Err(KeyValueStoreError::NotFound { key: request.key })
+                }
+            }
+            ClientRpcResponse::Error(e) => Err(KeyValueStoreError::Failed { reason: e.message }),
+            _ => Err(KeyValueStoreError::Failed {
+                reason: "unexpected response type for forwarded read".to_string(),
+            }),
+        }
+    }
+
+    async fn forward_scan(
+        &self,
+        leader_id: NodeId,
+        leader_addr: EndpointAddr,
+        request: ScanRequest,
+    ) -> Result<ScanResult, KeyValueStoreError> {
+        let rpc_request = ClientRpcRequest::ScanKeys {
+            prefix: request.prefix.clone(),
+            limit: request.limit_results,
+            continuation_token: request.continuation_token.clone(),
+        };
+        let response = self.forward_rpc(leader_id, &leader_addr, rpc_request).await?;
+
+        match response {
+            ClientRpcResponse::ScanResult(resp) => {
+                if let Some(ref err) = resp.error {
+                    if err.contains("not leader") || err.contains("ForwardToLeader") {
+                        return Err(KeyValueStoreError::NotLeader {
+                            leader: None,
+                            reason: err.clone(),
+                        });
+                    }
+                    return Err(KeyValueStoreError::Failed { reason: err.clone() });
+                }
+                let entries = resp
+                    .entries
+                    .into_iter()
+                    .map(|e| KeyValueWithRevision {
+                        key: e.key,
+                        value: e.value,
+                        version: e.version,
+                        create_revision: e.create_revision,
+                        mod_revision: e.mod_revision,
+                    })
+                    .collect::<Vec<_>>();
+                Ok(ScanResult {
+                    result_count: resp.count,
+                    is_truncated: resp.is_truncated,
+                    continuation_token: resp.continuation_token,
+                    entries,
+                })
+            }
+            ClientRpcResponse::Error(e) => Err(KeyValueStoreError::Failed { reason: e.message }),
+            _ => Err(KeyValueStoreError::Failed {
+                reason: "unexpected response type for forwarded scan".to_string(),
+            }),
         }
     }
 }
