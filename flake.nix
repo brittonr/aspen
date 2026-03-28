@@ -4744,11 +4744,12 @@
                     ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
                     # Strip git source lines from Cargo.lock for stubbed deps only.
-                    # Keep snix.dev and tvlfyi (wu-manber, a snix dep) source lines —
+                    # Keep snix.dev, tvlfyi (wu-manber), and subwayrat (aspen-tui) —
                     # these are vendored via overrideVendorGitCheckout in pureCargoVendorDir.
                     ${pkgs.gnused}/bin/sed -i '/^source = "git+/{
                       /snix\.dev/b
                       /tvlfyi/b
+                      /subwayrat/b
                       d
                     }' $out/aspen/Cargo.lock
 
@@ -4786,9 +4787,18 @@
                             && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
                         )
                         ps;
+                      isSubwayrat =
+                        builtins.any (
+                          p:
+                            builtins.isString (p.source or null)
+                            && lib.hasPrefix "git+https://github.com/brittonr/subwayrat" (p.source or "")
+                        )
+                        ps;
                     in
                       if isSnixRepo
                       then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
+                      else if isSubwayrat
+                      then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = subwayratSrc;}))
                       else ensureGitCheckoutLock drv;
                   };
                   pureBin = {
