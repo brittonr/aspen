@@ -17,7 +17,7 @@
 //!
 //! ```ignore
 //! // Create a shared batcher (required for timeout-based flushing)
-//! let batcher = WriteBatcher::new_shared(raft.clone(), BatchConfig::default());
+//! let batcher = WriteBatcher::new_shared(raft.clone(), node_id, BatchConfig::default());
 //!
 //! // These writes are batched together
 //! let result = batcher.write(WriteCommand::Set { key, value }).await?;
@@ -41,6 +41,7 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 
 use crate::types::AppTypeConfig;
+use crate::types::NodeId;
 use crate::write_forwarder::WriteForwarder;
 
 /// A pending write waiting for batch submission.
@@ -88,6 +89,8 @@ struct BatcherState {
 pub struct WriteBatcher {
     /// Raft instance for submitting batches
     raft: Arc<openraft::Raft<AppTypeConfig>>,
+    /// This node's ID (used to prevent self-forwarding)
+    node_id: NodeId,
     /// Batcher configuration
     config: BatchConfig,
     /// Shared state protected by mutex
@@ -104,9 +107,10 @@ impl WriteBatcher {
     ///
     /// This is the preferred constructor as it enables timeout-based flushing
     /// which requires spawning background tasks with Arc<Self>.
-    pub fn new_shared(raft: Arc<openraft::Raft<AppTypeConfig>>, config: BatchConfig) -> Arc<Self> {
+    pub fn new_shared(raft: Arc<openraft::Raft<AppTypeConfig>>, node_id: NodeId, config: BatchConfig) -> Arc<Self> {
         Arc::new(Self {
             raft,
+            node_id,
             config,
             state: Mutex::new(BatcherState {
                 pending: Vec::with_capacity(128),
@@ -124,9 +128,10 @@ impl WriteBatcher {
     /// Note: Timeout-based flushing requires Arc<Self>. Use `new_shared()` if
     /// you need timeout functionality. This constructor is useful for testing
     /// or when batching is disabled.
-    pub fn new(raft: Arc<openraft::Raft<AppTypeConfig>>, config: BatchConfig) -> Self {
+    pub fn new(raft: Arc<openraft::Raft<AppTypeConfig>>, node_id: NodeId, config: BatchConfig) -> Self {
         Self {
             raft,
+            node_id,
             config,
             state: Mutex::new(BatcherState {
                 pending: Vec::with_capacity(128),
@@ -149,6 +154,11 @@ impl WriteBatcher {
     /// Get the write forwarder, if set.
     pub(super) fn write_forwarder(&self) -> Option<Arc<dyn WriteForwarder>> {
         self.write_forwarder.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// Get this node's ID.
+    pub(super) fn node_id(&self) -> NodeId {
+        self.node_id
     }
 
     /// Submit a write operation for batching (Arc version with timeout support).

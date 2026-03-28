@@ -39,8 +39,10 @@ impl WriteBatcher {
             Err(e) => {
                 // Forward to leader if this is a leadership change during write
                 if let Some(forward_info) = e.forward_to_leader() {
+                    // Guard: never forward to self (iroh can't self-connect)
                     if let Some(forwarder) = self.write_forwarder()
                         && let Some(lid) = forward_info.leader_id
+                        && NodeId(lid.0) != self.node_id()
                         && let Some(node) = &forward_info.leader_node
                     {
                         debug!(leader_id = lid.0, "forwarding direct write to leader after leadership change");

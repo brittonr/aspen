@@ -255,6 +255,15 @@ impl IrohWriteForwarder {
         leader_id: NodeId,
         leader_addr: &EndpointAddr,
     ) -> Result<Connection, KeyValueStoreError> {
+        // Belt-and-suspenders: iroh rejects self-connections, catch it early
+        // with a clear error instead of a cryptic QUIC failure.
+        if leader_addr.id == self.endpoint.id() {
+            return Err(KeyValueStoreError::NotLeader {
+                leader: Some(leader_id.0),
+                reason: "cannot forward to self (leader is this node)".to_string(),
+            });
+        }
+
         let mut cached = self.cached.lock().await;
 
         // Reuse if same leader and connection is still open

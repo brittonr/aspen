@@ -147,7 +147,7 @@ impl RaftNode {
         state_machine: StateMachineVariant,
         batch_config: BatchConfig,
     ) -> Self {
-        let write_batcher = WriteBatcher::new_shared(raft.clone(), batch_config);
+        let write_batcher = WriteBatcher::new_shared(raft.clone(), node_id, batch_config);
         Self {
             raft,
             node_id,

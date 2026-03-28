@@ -24,14 +24,20 @@
 
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
-use async_trait::async_trait;
-use aspen_kv_types::{
-    DeleteRequest, DeleteResult, KeyValueStoreError, ReadRequest, ReadResult, ScanRequest,
-    ScanResult, WriteRequest, WriteResult,
-};
+use aspen_kv_types::DeleteRequest;
+use aspen_kv_types::DeleteResult;
+use aspen_kv_types::KeyValueStoreError;
+use aspen_kv_types::ReadRequest;
+use aspen_kv_types::ReadResult;
+use aspen_kv_types::ScanRequest;
+use aspen_kv_types::ScanResult;
+use aspen_kv_types::WriteRequest;
+use aspen_kv_types::WriteResult;
 use aspen_traits::KeyValueStore;
+use async_trait::async_trait;
 use tokio::sync::RwLock;
 
 /// Configurable failure injection modes.
@@ -68,12 +74,11 @@ impl FaultConfig {
 
     fn should_fail(&self, key: Option<&str>) -> bool {
         // Check key filter first
-        if !self.fail_keys.is_empty() {
-            if let Some(k) = key {
-                if !self.fail_keys.contains(k) {
-                    return false;
-                }
-            }
+        if !self.fail_keys.is_empty()
+            && let Some(k) = key
+            && !self.fail_keys.contains(k)
+        {
+            return false;
         }
 
         match &self.mode {
@@ -81,7 +86,7 @@ impl FaultConfig {
             FaultMode::All => true,
             FaultMode::EveryN(n) => {
                 let count = self.counter.fetch_add(1, Ordering::Relaxed) + 1;
-                count % n == 0
+                count.is_multiple_of(*n)
             }
         }
     }
@@ -264,9 +269,7 @@ mod tests {
         let inner = DeterministicKeyValueStore::new();
         let store = FailingKeyValueStore::new(inner);
 
-        let write_result = store
-            .write(WriteRequest::set("key1", "value1"))
-            .await;
+        let write_result = store.write(WriteRequest::set("key1", "value1")).await;
         assert!(write_result.is_ok());
 
         let read_result = store.read(ReadRequest::new("key1")).await;

@@ -3,12 +3,13 @@
 //! Tests shard prefix encoding/decoding round-trip and
 //! RPC response deserialization robustness.
 
+use std::time::Duration;
+
+use aspen_raft_network::ConnectionHealth;
 use aspen_raft_network::verified::encoding::*;
 use aspen_raft_network::verified::heuristics::*;
 use aspen_raft_network::verified::network::*;
-use aspen_raft_network::ConnectionHealth;
 use proptest::prelude::*;
-use std::time::Duration;
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(1000))]

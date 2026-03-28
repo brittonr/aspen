@@ -7,9 +7,11 @@
 //! This catches bugs in the async shell layer that Verus-verified pure functions
 //! can't reach: retry logic, CAS loops, serialization, key encoding, etc.
 
-use aspen_coordination::{
-    AtomicCounter, CounterConfig, SequenceConfig, SequenceGenerator, SignedAtomicCounter,
-};
+use aspen_coordination::AtomicCounter;
+use aspen_coordination::CounterConfig;
+use aspen_coordination::SequenceConfig;
+use aspen_coordination::SequenceGenerator;
+use aspen_coordination::SignedAtomicCounter;
 use aspen_testing::DeterministicKeyValueStore;
 use proptest::prelude::*;
 

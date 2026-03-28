@@ -178,9 +178,10 @@ impl WriteBatcher {
         let leader_id = forward_info.leader_id;
         let leader_node = forward_info.leader_node.as_ref();
 
-        // Try to forward via the write forwarder
+        // Try to forward via the write forwarder (never forward to self — iroh can't self-connect)
         if let Some(forwarder) = self.write_forwarder()
             && let Some(lid) = leader_id
+            && NodeId(lid.0) != self.node_id()
             && let Some(node) = leader_node
         {
             debug!(leader_id = lid.0, batch_size, "forwarding batched write to leader after leadership change");

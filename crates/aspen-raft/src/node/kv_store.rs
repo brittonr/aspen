@@ -74,6 +74,7 @@ impl KeyValueStore for RaftNode {
                 if let Some(forward_info) = err.forward_to_leader()
                     && let Some(forwarder) = self.write_forwarder()
                     && let Some(leader_id) = forward_info.leader_id
+                    && leader_id != self.node_id()
                     && let Some(leader_node) = &forward_info.leader_node
                 {
                     let leader_addr = leader_node.iroh_addr.clone();
@@ -98,8 +99,10 @@ impl KeyValueStore for RaftNode {
             Ok(()) => {}
             Err(KeyValueStoreError::NotLeader { .. }) => {
                 // Follower: forward to leader for linearizable read
+                // Guard: never forward to self (iroh can't self-connect)
                 if let Some(forwarder) = self.write_forwarder()
                     && let Some((leader_id, leader_addr)) = self.current_leader_info()
+                    && leader_id != self.node_id()
                 {
                     debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding read to leader");
                     return forwarder.forward_read(leader_id, leader_addr, request).await;
@@ -147,6 +150,7 @@ impl KeyValueStore for RaftNode {
                 if let Some(forward_info) = err.forward_to_leader()
                     && let Some(forwarder) = self.write_forwarder()
                     && let Some(leader_id) = forward_info.leader_id
+                    && leader_id != self.node_id()
                     && let Some(leader_node) = &forward_info.leader_node
                 {
                     let leader_addr = leader_node.iroh_addr.clone();
@@ -179,8 +183,10 @@ impl KeyValueStore for RaftNode {
         match self.scan_ensure_linearizable().await {
             Ok(()) => {}
             Err(KeyValueStoreError::NotLeader { .. }) => {
+                // Guard: never forward to self (iroh can't self-connect)
                 if let Some(forwarder) = self.write_forwarder()
                     && let Some((leader_id, leader_addr)) = self.current_leader_info()
+                    && leader_id != self.node_id()
                 {
                     debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding scan to leader");
                     return forwarder.forward_scan(leader_id, leader_addr, _request).await;
