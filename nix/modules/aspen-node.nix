@@ -296,7 +296,9 @@ in {
           profilePath = "${profileDir}/aspen-node";
         in "+${pkgs.writeShellScript "aspen-init-profile" ''
           mkdir -p ${profileDir}
-          if [ ! -L ${profilePath} ]; then
+          current=$(readlink -f ${profilePath}/bin/aspen-node 2>/dev/null || true)
+          target=$(readlink -f ${cfg.package}/bin/aspen-node)
+          if [ "$current" != "$target" ]; then
             ${pkgs.nix}/bin/nix-env --profile ${profilePath} --set ${cfg.package}
           fi
         ''}";
