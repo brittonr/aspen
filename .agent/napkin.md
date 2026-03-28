@@ -243,3 +243,13 @@
 ## Investigation Items
 
 All resolved as of 2026-03-24.
+
+## Session Log
+
+### 2026-03-28: Wire format golden tests for aspen-client-api
+
+Added comprehensive postcard discriminant stability tests:
+- Golden files: `crates/aspen-client-api/tests/golden/{request,response}_discriminants.txt`
+- Test file: `crates/aspen-client-api/tests/wire_format_golden.rs`
+- 10 new tests: variant counts (334 req, 267 resp), ~130 pinned discriminants across all sections, structural invariants, critical discriminant pins (Error=14, Pong=12, GetHealth=0)
+- Gotcha: many response struct fields differ from what you'd guess (e.g., `was_found` not `is_found`, `was_deleted` not `is_success`). Always `rg "pub struct FooResponse"` before constructing.
