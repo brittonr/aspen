@@ -287,56 +287,84 @@ impl NixBuildWorker {
             let _ = tx.send(format!("native build: starting build for {flake_ref}\n")).await;
         }
 
-        // Step 2: Realise the build's input closure in the local /nix/store.
+        // Step 2: Ensure the build's input closure exists in local /nix/store.
         //
-        // `nix eval` only instantiates the derivation — it doesn't build the
-        // input closure. LocalStoreBuildService needs all referenced store
-        // paths physically present in /nix/store so it can cp -a them into
-        // the bwrap sandbox.
+        // LocalStoreBuildService copies inputs from /nix/store into the bwrap
+        // sandbox. When eval resolved inputs in-process (snix-eval with
+        // flake-compat or npins), the paths are typically already present.
         //
-        // We collect: (a) all input .drv files, (b) input_sources, and
-        // (c) the builder path itself (e.g. bash from stdenv). Then run
-        // `nix-store --realise` on the .drv files and `nix-store --add`
-        // isn't needed for store paths that come from substitution.
-        //
-        // Simplest approach: realise the top-level .drv's entire input
-        // closure by passing --derivation to nix build. This fetches
-        // everything the build needs from substituters without actually
-        // building the derivation itself.
+        // Check first, and only fall back to `nix-store --realise` subprocess
+        // when paths are actually missing.
         let realise_start = Instant::now();
-        let input_drv_paths: Vec<String> = drv.input_derivations.keys().map(|p| p.to_absolute_path()).collect();
 
-        // Also collect store paths from builder and input_sources that
-        // need to be present (these are direct references, not .drv files).
-        let mut extra_paths: Vec<String> = Vec::new();
+        // Collect all store paths that need to be physically present:
+        // (a) output paths of input derivations, (b) input_sources, (c) builder
+        let mut required_paths: Vec<String> = Vec::new();
+        for (drv_path, output_names) in &drv.input_derivations {
+            let drv_abs = drv_path.to_absolute_path();
+            if let Ok(bytes) = std::fs::read(&drv_abs)
+                && let Ok(input_drv) = Derivation::from_aterm_bytes(&bytes)
+            {
+                for output_name in output_names {
+                    if let Some(output) = input_drv.outputs.get(output_name)
+                        && let Some(path) = &output.path
+                    {
+                        required_paths.push(path.to_absolute_path());
+                    }
+                }
+            }
+        }
         if drv.builder.starts_with("/nix/store/") {
-            extra_paths.push(drv.builder.clone());
+            required_paths.push(drv.builder.clone());
         }
         for source in &drv.input_sources {
-            extra_paths.push(source.to_absolute_path());
+            required_paths.push(source.to_absolute_path());
         }
 
-        let total_inputs = input_drv_paths.len() + extra_paths.len();
-        if total_inputs > 0 {
+        // Check which paths are missing from local /nix/store
+        let missing_paths: Vec<String> = required_paths
+            .iter()
+            .filter_map(|p| {
+                let components: Vec<&str> = p.splitn(5, '/').collect();
+                if components.len() >= 4 {
+                    let store_root = components[..4].join("/");
+                    if !std::path::Path::new(&store_root).exists() {
+                        return Some(store_root);
+                    }
+                }
+                None
+            })
+            .collect();
+
+        if missing_paths.is_empty() {
+            info!(total = required_paths.len(), "all input store paths already present, skipping nix-store --realise");
+            if let Some(ref tx) = log_sender {
+                let _ = tx
+                    .send(format!("all {} input store paths present (zero subprocesses)\n", required_paths.len()))
+                    .await;
+            }
+        } else {
             info!(
-                drv_count = input_drv_paths.len(),
-                extra_count = extra_paths.len(),
-                "realising input closure for native build"
+                missing = missing_paths.len(),
+                total = required_paths.len(),
+                "some input store paths missing, fetching via nix-store --realise"
             );
             if let Some(ref tx) = log_sender {
                 let _ = tx
                     .send(format!(
-                        "realising {} input derivations + {} extra paths\n",
-                        input_drv_paths.len(),
-                        extra_paths.len()
+                        "fetching {} missing input store paths via nix-store --realise\n",
+                        missing_paths.len()
                     ))
                     .await;
             }
 
-            // SUBPROCESS-ESCAPE: Realises input derivation outputs via `nix-store --realise`.
-            // Pure-snix replacement: resolve inputs from PathInfoService + BlobService,
-            // fetching missing paths from Aspen's distributed store or upstream substituters
-            // via snix-store's SubstitutionPathInfoService.
+            // SUBPROCESS-FALLBACK: Fetch missing store paths via nix-store --realise.
+            // Only reached when in-process eval didn't materialize all inputs
+            // (e.g. when derivation came from `nix eval` subprocess fallback).
+            // The zero-subprocess path (flake-compat/npins + snix-eval) skips this.
+
+            // First try realising the input derivations (builds their outputs)
+            let input_drv_paths: Vec<String> = drv.input_derivations.keys().map(|p| p.to_absolute_path()).collect();
             if !input_drv_paths.is_empty() {
                 let mut cmd = Command::new("nix-store");
                 cmd.arg("--realise");
@@ -374,38 +402,21 @@ impl NixBuildWorker {
                 }
             }
 
-            // Ensure extra store paths (builder, input sources) exist.
-            // The builder (e.g. bash) may be a transitive dep not directly
-            // in input_derivations. `nix-store --realise` accepts output
-            // paths and fetches them from substituters if missing.
-            let missing_extra: Vec<String> = extra_paths
-                .iter()
-                .filter_map(|p| {
-                    // Extract the store path root (e.g. /nix/store/xxx-bash-5.3p9)
-                    let components: Vec<&str> = p.splitn(5, '/').collect();
-                    if components.len() >= 4 {
-                        let store_root = components[..4].join("/");
-                        if !std::path::Path::new(&store_root).exists() {
-                            return Some(store_root);
-                        }
-                    }
-                    None
-                })
-                .collect();
+            // Then fetch any remaining missing store paths (builder, sources)
+            // that weren't outputs of the input derivations.
+            let still_missing: Vec<&String> =
+                missing_paths.iter().filter(|p| !std::path::Path::new(p.as_str()).exists()).collect();
 
-            // SUBPROCESS-ESCAPE: Fetches builder + input_sources store paths not yet on
-            // disk via `nix-store --realise`. Pure-snix replacement: fetch from Aspen's
-            // PathInfoService/BlobService or upstream substituters via snix-store.
-            if !missing_extra.is_empty() {
+            if !still_missing.is_empty() {
                 info!(
-                    missing = missing_extra.len(),
-                    paths = ?missing_extra,
-                    "fetching missing extra paths via nix-store --realise"
+                    missing = still_missing.len(),
+                    paths = ?still_missing,
+                    "fetching remaining missing paths via nix-store --realise"
                 );
                 let mut cmd = Command::new("nix-store");
                 cmd.arg("--realise");
-                for path in &missing_extra {
-                    cmd.arg(path);
+                for path in &still_missing {
+                    cmd.arg(path.as_str());
                 }
                 cmd.arg("--option").arg("substitute").arg("true");
                 cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -433,7 +444,6 @@ impl NixBuildWorker {
                         ),
                     });
                 }
-                info!("extra store paths fetched successfully");
             }
 
             let realise_ms = realise_start.elapsed().as_millis();
