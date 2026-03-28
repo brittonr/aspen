@@ -179,16 +179,19 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         if let Ok(contents) = std::fs::read_to_string(&path) {
             match serde_json::from_str::<HashMap<u64, iroh::EndpointAddr>>(&contents) {
                 Ok(cached) => {
-                    let rt = tokio::runtime::Handle::current();
-                    rt.block_on(async {
-                        let mut peers = self.peer_addrs.write().await;
+                    // Use synchronous access since we're in the builder phase
+                    // and no other references to peer_addrs exist yet.
+                    if let Some(lock) = Arc::get_mut(&mut self.peer_addrs) {
+                        let peers = lock.get_mut();
                         for (node_id, addr) in cached {
                             if peers.len() < MAX_PEERS as usize || peers.contains_key(&node_id.into()) {
                                 peers.insert(node_id.into(), addr);
                             }
                         }
-                    });
-                    info!(path = %path.display(), "loaded peer address cache");
+                        info!(path = %path.display(), "loaded peer address cache");
+                    } else {
+                        warn!(path = %path.display(), "peer_addrs Arc already shared, cannot load cache");
+                    }
                 }
                 Err(e) => {
                     debug!(path = %path.display(), error = %e, "failed to parse peer address cache, starting fresh");
