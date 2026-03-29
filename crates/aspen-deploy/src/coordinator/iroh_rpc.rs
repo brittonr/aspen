@@ -77,6 +77,12 @@ impl IrohNodeRpcClient {
     }
 
     /// Send a ClientRpcRequest to a specific node and return the response.
+    ///
+    /// The entire RPC (connect + stream open + write + read) is bounded by
+    /// `DEPLOY_RPC_TIMEOUT_SECS`. Previously, only connect and read had
+    /// individual timeouts, which meant `open_bi()` and `write_all()` could
+    /// block indefinitely if the target node was under load (e.g., full QUIC
+    /// flow-control window). A single outer timeout catches all such hangs.
     async fn send_rpc(
         &self,
         node_id: u64,
@@ -85,51 +91,53 @@ impl IrohNodeRpcClient {
         let target_addr = self.resolve_node_addr(node_id).await?;
         let timeout_duration = Duration::from_secs(DEPLOY_RPC_TIMEOUT_SECS);
 
-        // Connect via CLIENT_ALPN
-        let connection = tokio::time::timeout(timeout_duration, async {
-            self.endpoint
-                .connect(target_addr.clone(), aspen_client_api::CLIENT_ALPN)
-                .await
-                .map_err(|e| RpcError::new(format!("connection to node {node_id} failed: {e}")))
-        })
-        .await
-        .map_err(|_| RpcError::new(format!("connection to node {node_id} timed out")))??;
-
-        // Open bidirectional stream
-        let (mut send, mut recv) = connection
-            .open_bi()
-            .await
-            .map_err(|e| RpcError::new(format!("failed to open stream to node {node_id}: {e}")))?;
-
         // Wrap as unauthenticated request (inter-node, same cluster)
         let authenticated_request = aspen_client_api::AuthenticatedRequest::unauthenticated(request);
 
-        // Serialize and send
+        // Serialize before entering the timeout block (pure CPU work).
         let request_bytes = postcard::to_stdvec(&authenticated_request)
             .map_err(|e| RpcError::new(format!("failed to serialize request for node {node_id}: {e}")))?;
 
-        send.write_all(&request_bytes)
-            .await
-            .map_err(|e| RpcError::new(format!("failed to send request to node {node_id}: {e}")))?;
-
-        send.finish()
-            .map_err(|e| RpcError::new(format!("failed to finish send stream to node {node_id}: {e}")))?;
-
-        // Read response with timeout
-        let response_bytes = tokio::time::timeout(timeout_duration, async {
-            recv.read_to_end(MAX_DEPLOY_RPC_RESPONSE)
+        // Single timeout around the entire I/O sequence: connect → open_bi → write → read.
+        let response = tokio::time::timeout(timeout_duration, async {
+            // Connect via CLIENT_ALPN
+            let connection = self
+                .endpoint
+                .connect(target_addr.clone(), aspen_client_api::CLIENT_ALPN)
                 .await
-                .map_err(|e| RpcError::new(format!("failed to read response from node {node_id}: {e}")))
+                .map_err(|e| RpcError::new(format!("connection to node {node_id} failed: {e}")))?;
+
+            // Open bidirectional stream
+            let (mut send, mut recv) = connection
+                .open_bi()
+                .await
+                .map_err(|e| RpcError::new(format!("failed to open stream to node {node_id}: {e}")))?;
+
+            // Send request
+            send.write_all(&request_bytes)
+                .await
+                .map_err(|e| RpcError::new(format!("failed to send request to node {node_id}: {e}")))?;
+
+            send.finish()
+                .map_err(|e| RpcError::new(format!("failed to finish send stream to node {node_id}: {e}")))?;
+
+            // Read response
+            let response_bytes = recv
+                .read_to_end(MAX_DEPLOY_RPC_RESPONSE)
+                .await
+                .map_err(|e| RpcError::new(format!("failed to read response from node {node_id}: {e}")))?;
+
+            // Deserialize
+            let resp: ClientRpcResponse = postcard::from_bytes(&response_bytes)
+                .map_err(|e| RpcError::new(format!("failed to deserialize response from node {node_id}: {e}")))?;
+
+            // Close connection gracefully
+            connection.close(iroh::endpoint::VarInt::from_u32(0), b"done");
+
+            Ok::<ClientRpcResponse, RpcError>(resp)
         })
         .await
-        .map_err(|_| RpcError::new(format!("response from node {node_id} timed out")))??;
-
-        // Deserialize response
-        let response: ClientRpcResponse = postcard::from_bytes(&response_bytes)
-            .map_err(|e| RpcError::new(format!("failed to deserialize response from node {node_id}: {e}")))?;
-
-        // Close connection gracefully
-        connection.close(iroh::endpoint::VarInt::from_u32(0), b"done");
+        .map_err(|_| RpcError::new(format!("RPC to node {node_id} timed out after {DEPLOY_RPC_TIMEOUT_SECS}s")))??;
 
         Ok(response)
     }

@@ -30,6 +30,7 @@
 | `EndpointAddr.addrs` | `BTreeSet<TransportAddr>` not `Vec<DirectAddr>` (iroh 0.97) |
 | `aspen-cli kv set` | Not `kv put` |
 | `async-trait` | NOT a workspace dep — each crate specifies `async-trait = "0.1"` directly |
+| `tokio::sync::Notify` | Edge-triggered: create `notified()` future BEFORE checking the condition, then `.await`. If you check-then-await, notification between check and await is lost |
 
 ### Feature Gate Rules
 
@@ -280,3 +281,13 @@ Added comprehensive postcard discriminant stability tests:
 - Test file: `crates/aspen-client-api/tests/wire_format_golden.rs`
 - 10 new tests: variant counts (334 req, 267 resp), ~130 pinned discriminants across all sections, structural invariants, critical discriminant pins (Error=14, Pong=12, GetHealth=0)
 - Gotcha: many response struct fields differ from what you'd guess (e.g., `was_found` not `is_found`, `was_deleted` not `is_success`). Always `rg "pub struct FooResponse"` before constructing.
+
+### 2026-03-29: Fix deploy drain timeout (node 3 stuck draining)
+
+Two bugs causing "node 3 stuck draining" during 3-node dogfood deploy:
+
+1. **Notify race in `execute_drain`**: Classic TOCTOU — `finish_op()` calls `notify_waiters()` between the `in_flight_count()` check and `notified().await`, losing the notification. Drain then waits for the full 30s timeout instead of completing instantly. Fix: create the `Notified` future BEFORE checking the count (standard tokio::sync::Notify pattern).
+
+2. **Missing timeout on QUIC stream ops in `IrohNodeRpcClient::send_rpc`**: Only `connect()` and `read_to_end()` had 30s timeouts. `open_bi()`, `write_all()`, and `finish()` had no timeout — if the target node was under load (full QUIC flow-control window from 33k git objects), these could block indefinitely. The coordinator's status stayed at "Draining" because `send_upgrade` never returned. Fix: single outer timeout around the entire I/O sequence (connect + open_bi + write + read).
+
+Also fixed: pre-existing compilation error in `deploy_rpc_integration.rs` (`handle_node_upgrade` missing `expected_binary` arg).

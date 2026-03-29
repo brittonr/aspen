@@ -356,6 +356,7 @@ async fn test_blob_artifact_without_blob_store_rejected() {
         &ctx,
         "deploy-blob-1".to_string(),
         "deadbeef".repeat(8),
+        None,
     )
     .await
     .expect("handler should not return Err");

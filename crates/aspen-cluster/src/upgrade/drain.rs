@@ -51,12 +51,20 @@ pub async fn execute_drain(drain_state: &Arc<DrainState>, timeout: Duration) -> 
     info!(in_flight, "draining in-flight operations");
 
     // Wait for in-flight ops to complete, with timeout.
+    //
+    // IMPORTANT: Register the Notify future BEFORE checking the count.
+    // tokio::sync::Notify is edge-triggered — if finish_op() calls
+    // notify_waiters() between our count check and the .await, the
+    // notification is lost and we'd block until timeout. By creating
+    // the Notified future first, any notification after that point
+    // will wake us up.
     let drained = tokio::time::timeout(timeout, async {
         loop {
+            let notified = drain_state.drained.notified();
             if drain_state.in_flight_count() == 0 {
                 break;
             }
-            drain_state.drained.notified().await;
+            notified.await;
         }
     })
     .await;
@@ -192,5 +200,76 @@ mod tests {
         assert!(state.is_draining());
         reset_drain(&state);
         assert!(!state.is_draining());
+    }
+
+    /// Regression test for Notify race condition.
+    ///
+    /// The old code had a TOCTOU race:
+    ///   1. Check in_flight_count() → sees 1
+    ///   2. finish_op() fires notify_waiters() — but nobody is awaiting yet
+    ///   3. notified().await blocks forever (notification was lost)
+    ///
+    /// The fix: create the Notified future BEFORE checking the count, so
+    /// any notification after that point wakes us up.
+    ///
+    /// This test verifies drain completes quickly when the op finishes
+    /// between the count check and the await. With the old code, this
+    /// would hit the 200ms timeout.
+    #[tokio::test]
+    async fn test_drain_notify_race_no_spurious_timeout() {
+        // Run multiple iterations to increase the chance of hitting the race window.
+        for _ in 0..20 {
+            let state = DrainState::new();
+            assert!(state.try_start_op());
+
+            let state_clone = state.clone();
+            // Finish the op immediately — no delay. This maximizes the chance
+            // of the notification arriving between count check and await.
+            tokio::spawn(async move {
+                // yield once to let execute_drain start
+                tokio::task::yield_now().await;
+                state_clone.finish_op();
+            });
+
+            let result = execute_drain(&state, Duration::from_millis(200)).await;
+            assert!(result.completed, "drain should complete without hitting timeout (took {:?})", result.elapsed);
+            // Should complete well under the 200ms timeout.
+            assert!(
+                result.elapsed < Duration::from_millis(100),
+                "drain took too long ({:?}), possible Notify race",
+                result.elapsed
+            );
+        }
+    }
+
+    /// Test drain with concurrent ops finishing at different times.
+    /// Exercises the notify loop path where multiple notifications arrive.
+    #[tokio::test]
+    async fn test_drain_concurrent_finish_interleaved() {
+        let state = DrainState::new();
+        // Start 5 in-flight ops.
+        for _ in 0..5 {
+            assert!(state.try_start_op());
+        }
+        assert_eq!(state.in_flight_count(), 5);
+
+        let state_clone = state.clone();
+        tokio::spawn(async move {
+            // Finish ops one at a time with tiny delays.
+            for i in 0..5u64 {
+                // Alternate: some finish immediately, some after a short delay.
+                if i % 2 == 0 {
+                    tokio::task::yield_now().await;
+                } else {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+                state_clone.finish_op();
+            }
+        });
+
+        let result = execute_drain(&state, Duration::from_secs(5)).await;
+        assert!(result.completed);
+        assert_eq!(result.cancelled_ops, 0);
+        assert!(result.elapsed < Duration::from_millis(200), "drain took too long: {:?}", result.elapsed);
     }
 }
