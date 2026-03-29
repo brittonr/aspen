@@ -255,7 +255,12 @@ Fixed two bugs blocking dogfood git push on 3-node cluster:
 
 2. **Transient ReadIndex failure on leader**: During heavy write load (33k git objects), leader's quorum confirmation times out transiently. Added retry loop (3 attempts, 50/100/150ms backoff) that only triggers when leader hint points to self. Followers still forward immediately.
 
-Result: git push to Forge succeeded (33,439 objects imported). CI pipeline reached build stage but format-check failed due to pre-existing nix sandbox issue ("cannot get current path").
+Results:
+
+- Git push to Forge succeeded (33,446 objects imported)
+- Full CI pipeline passed: format-check ✅, clippy ✅, build-node ✅, build-cli ✅, nextest-quick ✅
+- Deploy stage: node 2 upgraded healthy, node 3 stuck draining (pre-existing deploy drain timeout)
+- Earlier format-check failure was just `flake.nix` needing alejandra formatting (feature-matrix nix check wasn't formatted)
 
 ### 2026-03-28: Testing improvements (continued)
 
