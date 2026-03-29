@@ -219,11 +219,19 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         })?;
         let committer = self.parse_git_author_line(committer_line, "committer")?;
 
-        // Skip blank line
-        lines.next();
-
-        // Rest is the commit message
-        let message: String = lines.collect::<Vec<_>>().join("\n");
+        // The message is everything after the blank line separator.
+        // We use byte-offset slicing instead of lines.collect().join("\n")
+        // to preserve the exact bytes (including trailing newlines) for
+        // byte-identical round-trip through import → export.
+        //
+        // Find the blank line ("\n\n") in the original content string.
+        // Everything after it is the raw message.
+        let message = if let Some(blank_pos) = content.find("\n\n") {
+            content[blank_pos + 2..].to_string()
+        } else {
+            // No blank line — empty message (shouldn't happen in valid commits)
+            String::new()
+        };
 
         Ok(CommitObject {
             tree: *tree_blake3.as_bytes(),
@@ -315,15 +323,13 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         })?;
         let tagger = self.parse_git_author_line(tagger_line, "tagger")?;
 
-        // Skip blank line
-        lines.next();
-
-        // Rest is the tag message
-        let message_lines: Vec<_> = lines.collect();
-        let message = if message_lines.is_empty() {
-            None
+        // The message is everything after the blank line separator.
+        // Use byte-offset slicing to preserve exact bytes for round-trip.
+        let message = if let Some(blank_pos) = content.find("\n\n") {
+            let msg = &content[blank_pos + 2..];
+            if msg.is_empty() { None } else { Some(msg.to_string()) }
         } else {
-            Some(message_lines.join("\n"))
+            None
         };
 
         Ok(TagObject {

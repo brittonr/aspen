@@ -75,11 +75,54 @@ pub struct TreeObject {
 impl TreeObject {
     /// Create a new tree with the given entries.
     ///
-    /// Entries will be sorted by name.
+    /// Entries are sorted using git's mode-aware comparison: directory entries
+    /// (mode 040000) are compared as if their name has `/` appended. This
+    /// matches git's `base_name_compare` and ensures byte-identical round-trip
+    /// through import → Forge storage → export.
     pub fn new(mut entries: Vec<TreeEntry>) -> Self {
-        entries.sort_by(|a, b| a.name.cmp(&b.name));
+        entries.sort_by(git_tree_entry_cmp);
         Self { entries }
     }
+}
+
+/// Compare two tree entries using git's mode-aware sort order.
+///
+/// Git sorts tree entries by treating directory names as if they end with `/`.
+/// For example, `foo` (dir, mode 040000) sorts as `"foo/"` while `foo.c`
+/// (file) sorts as `"foo.c"`. Since `'.'` (0x2E) < `'/'` (0x2F), the file
+/// `foo.c` sorts before the directory `foo`.
+///
+/// For entries where neither is a directory, or where names don't share a
+/// prefix, this produces the same result as plain lexicographic comparison.
+fn git_tree_entry_cmp(a: &TreeEntry, b: &TreeEntry) -> std::cmp::Ordering {
+    let a_bytes = a.name.as_bytes();
+    let b_bytes = b.name.as_bytes();
+    let min_len = a_bytes.len().min(b_bytes.len());
+
+    // Compare the common prefix
+    match a_bytes[..min_len].cmp(&b_bytes[..min_len]) {
+        std::cmp::Ordering::Equal => {}
+        ord => return ord,
+    }
+
+    // Common prefix matches — compare the "virtual" next byte.
+    // Directories get '/' appended, others get '\0' (sorts before anything).
+    let a_next = if a_bytes.len() > min_len {
+        a_bytes[min_len]
+    } else if a.is_directory() {
+        b'/'
+    } else {
+        0
+    };
+    let b_next = if b_bytes.len() > min_len {
+        b_bytes[min_len]
+    } else if b.is_directory() {
+        b'/'
+    } else {
+        0
+    };
+
+    a_next.cmp(&b_next)
 }
 
 /// An entry in a tree object.
@@ -278,6 +321,42 @@ mod tests {
         assert_eq!(tree.entries[0].name, "a.txt");
         assert_eq!(tree.entries[1].name, "m");
         assert_eq!(tree.entries[2].name, "z.txt");
+    }
+
+    /// Test git's mode-aware sort: directory `foo` (sorts as "foo/") vs
+    /// file `foo.c`. Since '.' (0x2E) < '/' (0x2F), the file comes first.
+    #[test]
+    fn test_tree_sorting_git_mode_aware() {
+        let hash = blake3::hash(b"test");
+
+        let entries = vec![
+            TreeEntry::directory("foo", hash),
+            TreeEntry::file("foo.c", hash),
+            TreeEntry::file("foo-bar", hash),
+        ];
+
+        let tree = TreeObject::new(entries);
+
+        // Git sort: "foo-bar" ('-'=0x2D), "foo.c" ('.'=0x2E), "foo" (dir, '/'=0x2F)
+        assert_eq!(tree.entries[0].name, "foo-bar");
+        assert_eq!(tree.entries[1].name, "foo.c");
+        assert_eq!(tree.entries[2].name, "foo");
+    }
+
+    /// Two entries with the same name but different types: directory vs file.
+    /// The directory sorts after the file because '/' > '\0'.
+    #[test]
+    fn test_tree_sorting_same_name_different_mode() {
+        let hash = blake3::hash(b"test");
+
+        // This is unusual but valid in the sort algorithm
+        let entries = vec![TreeEntry::directory("lib", hash), TreeEntry::file("lib", hash)];
+
+        let tree = TreeObject::new(entries);
+
+        // File "lib" (virtual next byte = 0) < dir "lib" (virtual next byte = '/')
+        assert_eq!(tree.entries[0].mode, 0o100644); // file first
+        assert_eq!(tree.entries[1].mode, 0o040000); // dir second
     }
 
     #[test]

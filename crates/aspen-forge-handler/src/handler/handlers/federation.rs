@@ -1023,9 +1023,10 @@ pub struct FederationImportStats {
     pub total_bytes: u64,
     /// Per-object errors (non-fatal).
     pub errors: Vec<String>,
-    /// Mapping from SyncObject content hash → locally imported BLAKE3 hash.
+    /// Mapping from git SHA-1 → locally imported BLAKE3 envelope hash.
     /// Used to translate remote ref hashes to local hashes for mirror refs.
-    pub content_to_local_blake3: std::collections::HashMap<[u8; 32], blake3::Hash>,
+    /// Keyed by SHA-1 (20 bytes) for deterministic lookup.
+    pub sha1_to_local_blake3: std::collections::HashMap<[u8; 20], blake3::Hash>,
 }
 
 /// Import federation `SyncObject` entries into a forge repo via the git bridge.
@@ -1034,7 +1035,7 @@ pub struct FederationImportStats {
 /// expected by `import_objects()`, which performs topological sorting (wave-based
 /// parallelism) to ensure dependencies are imported before dependents.
 ///
-/// Returns import statistics including a `content_to_local_blake3` map for
+/// Returns import statistics including a `sha1_to_local_blake3` map for
 /// translating remote ref hashes to locally imported BLAKE3 hashes.
 #[cfg(feature = "git-bridge")]
 pub(crate) async fn federation_import_objects(
@@ -1055,11 +1056,7 @@ pub(crate) async fn federation_import_objects(
     }
 
     // Phase 1: Convert SyncObjects to import_objects() input format.
-    // Track content hashes (blake3 of raw content) in parallel so we can
-    // correlate them with SHA-1s after import.
     let mut import_objects = Vec::with_capacity(objects.len());
-    // sha1_hex → content_hash, for post-import correlation
-    let mut sha1_to_content_hash: std::collections::HashMap<[u8; 20], [u8; 32]> = std::collections::HashMap::new();
     let mut type_counts: [u32; 3] = [0; 3]; // [blobs, trees, commits]
 
     for obj in objects {
@@ -1083,10 +1080,6 @@ pub(crate) async fn federation_import_objects(
             let digest: [u8; 20] = sha1::Sha1::digest(&git_bytes).into();
             Sha1Hash::from_bytes(digest)
         };
-
-        // Track content hash for post-import ref translation
-        let content_hash: [u8; 32] = blake3::hash(&obj.data).into();
-        sha1_to_content_hash.insert(*sha1.as_bytes(), content_hash);
 
         stats.total_bytes += obj.data.len() as u64;
         type_counts[type_idx] += 1;
@@ -1152,13 +1145,11 @@ pub(crate) async fn federation_import_objects(
 
     stats.skipped = total_skipped;
 
-    // Phase 3: Build content_to_local_blake3 from all mappings.
-    // Each mapping is (sha1, blake3). We look up the content hash via the
-    // sha1_to_content_hash map built in phase 1.
+    // Phase 3: Build sha1_to_local_blake3 from all mappings.
+    // Each mapping is (sha1, blake3). Keyed directly by SHA-1 bytes —
+    // no content_hash indirection needed since SHA-1 is deterministic.
     for (sha1, local_blake3) in &all_mappings {
-        if let Some(content_hash) = sha1_to_content_hash.get(sha1.as_bytes()) {
-            stats.content_to_local_blake3.insert(*content_hash, *local_blake3);
-        }
+        stats.sha1_to_local_blake3.insert(*sha1.as_bytes(), *local_blake3);
     }
 
     tracing::info!(
@@ -1959,6 +1950,56 @@ pub(crate) async fn collect_local_blake3_hashes(
         repo_id = %repo_id.to_hex(),
         count = hashes.len(),
         "collected local BLAKE3 hashes for incremental sync"
+    );
+
+    hashes
+}
+
+/// Collect SHA-1 hashes of locally imported git objects for a mirror repo.
+///
+/// Scans the SHA-1→BLAKE3 hash mapping store (`forge:hashmap:sha1:{repo}:`)
+/// and returns SHA-1 hashes zero-padded to 32 bytes for the federation wire
+/// format. The exporter truncates back to 20 bytes for c2e lookup.
+///
+/// Returns at most `limit` hashes.
+#[cfg(feature = "git-bridge")]
+pub(crate) async fn collect_local_sha1_hashes(
+    forge_node: &ForgeNodeRef,
+    repo_id: &aspen_forge::identity::RepoId,
+    limit: u32,
+) -> Vec<[u8; 32]> {
+    let prefix = format!("forge:hashmap:sha1:{}:", repo_id.to_hex());
+    let scan_req = aspen_core::ScanRequest {
+        prefix: prefix.clone(),
+        limit_results: Some(limit.min(50_000)),
+        continuation_token: None,
+    };
+
+    let entries = match forge_node.kv().scan(scan_req).await {
+        Ok(result) => result.entries,
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to scan local SHA-1 hashes for mirror");
+            return Vec::new();
+        }
+    };
+
+    let mut hashes = Vec::with_capacity(entries.len());
+    for entry in &entries {
+        // Key: forge:hashmap:sha1:{repo_id}:{sha1_hex}
+        if let Some(sha1_hex) = entry.key.strip_prefix(&prefix)
+            && let Ok(bytes) = hex::decode(sha1_hex)
+            && bytes.len() == 20
+        {
+            let mut sha1 = [0u8; 20];
+            sha1.copy_from_slice(&bytes);
+            hashes.push(aspen_forge::resolver::sha1_to_have_hash(&sha1));
+        }
+    }
+
+    tracing::debug!(
+        repo_id = %repo_id.to_hex(),
+        count = hashes.len(),
+        "collected local SHA-1 hashes for incremental sync"
     );
 
     hashes

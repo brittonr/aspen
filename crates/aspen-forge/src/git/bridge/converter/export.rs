@@ -91,13 +91,9 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         // Committer line
         content.push_str(&format!("committer {}\n", self.format_git_author(&commit.committer)));
 
-        // Blank line + message + trailing newline
+        // Blank line + message (preserved verbatim from import)
         content.push('\n');
         content.push_str(&commit.message);
-        // Git commit messages always end with a newline
-        if !commit.message.ends_with('\n') {
-            content.push('\n');
-        }
 
         let content_bytes = content.into_bytes();
         let sha1 = compute_sha1("commit", &content_bytes);
@@ -131,14 +127,10 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         // Tagger
         content.push_str(&format!("tagger {}\n", self.format_git_author(&tag.tagger)));
 
-        // Message (if present)
+        // Message (if present, preserved verbatim from import)
         if let Some(msg) = &tag.message {
             content.push('\n');
             content.push_str(msg);
-            // Git tag messages always end with a newline
-            if !msg.ends_with('\n') {
-                content.push('\n');
-            }
         }
 
         let content_bytes = content.into_bytes();

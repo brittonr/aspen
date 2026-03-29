@@ -44,6 +44,16 @@ const MAX_REFS_PER_QUERY: u32 = 1000;
 /// Maximum git objects returned per sync request.
 const MAX_GIT_OBJECTS_PER_SYNC: u32 = 5000;
 
+/// Zero-pad a 20-byte SHA-1 hash to 32 bytes for the federation have_set wire format.
+///
+/// The have_set uses `[u8; 32]` on the wire. SHA-1 is 20 bytes. We zero-pad the
+/// remaining 12 bytes. The exporter truncates back to 20 for c2e lookup.
+pub fn sha1_to_have_hash(sha1: &[u8; 20]) -> [u8; 32] {
+    let mut padded = [0u8; 32];
+    padded[..20].copy_from_slice(sha1);
+    padded
+}
+
 /// Result of a push import operation.
 #[cfg(feature = "git-bridge")]
 #[derive(Debug, Default)]
@@ -332,13 +342,14 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
         let mut objects = Vec::new();
         // Track envelope hashes for cross-ref dedup in the DAG walk.
         let mut all_known_envelopes: HashSet<[u8; 32]> = HashSet::new();
-        // Map content hashes to envelope hashes. Built incrementally as
-        // objects are exported, used to convert have_set for DAG walk dedup.
-        let mut content_to_envelope: HashMap<[u8; 32], [u8; 32]> = HashMap::new();
+        // Map SHA-1 (as 20-byte array) to envelope BLAKE3 hashes.
+        // Built incrementally as objects are exported, used to convert
+        // have_set (SHA-1 zero-padded to 32 bytes) for DAG walk dedup.
+        let mut sha1_to_envelope: HashMap<[u8; 20], [u8; 32]> = HashMap::new();
 
-        // Pre-populate content→envelope mapping from the c2e index.
-        // Scan all c2e entries for this repo (single KV scan, much faster
-        // than N individual reads). Then filter to those in have_set.
+        // Pre-populate SHA-1→envelope mapping from the c2e index.
+        // c2e keys are now `forge:c2e:{repo}:{sha1_hex}` → `envelope_blake3_hex`.
+        // Scan all c2e entries for this repo, filter to those in have_set.
         if !have_set.is_empty() {
             let c2e_prefix = format!("forge:c2e:{}:", repo_id.to_hex());
             if let Ok(scan_result) = self
@@ -351,29 +362,31 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
                 .await
             {
                 for entry in &scan_result.entries {
-                    let ch_hex = entry.key.strip_prefix(&c2e_prefix).unwrap_or("");
-                    if let Ok(ch_bytes) = hex::decode(ch_hex)
-                        && ch_bytes.len() == 32
+                    let sha1_hex = entry.key.strip_prefix(&c2e_prefix).unwrap_or("");
+                    if let Ok(sha1_bytes) = hex::decode(sha1_hex)
+                        && sha1_bytes.len() == 20
                         && let Ok(env_bytes) = hex::decode(entry.value.trim())
                         && env_bytes.len() == 32
                     {
-                        let mut ch = [0u8; 32];
-                        ch.copy_from_slice(&ch_bytes);
-                        if have_set.contains(&ch) {
+                        let mut sha1 = [0u8; 20];
+                        sha1.copy_from_slice(&sha1_bytes);
+                        // have_set contains SHA-1 zero-padded to 32 bytes
+                        let padded = sha1_to_have_hash(&sha1);
+                        if have_set.contains(&padded) {
                             let mut env_hash = [0u8; 32];
                             env_hash.copy_from_slice(&env_bytes);
-                            content_to_envelope.insert(ch, env_hash);
+                            sha1_to_envelope.insert(sha1, env_hash);
                             all_known_envelopes.insert(env_hash);
                         }
                     }
                 }
             }
-            if !content_to_envelope.is_empty() {
+            if !sha1_to_envelope.is_empty() {
                 info!(
                     repo_id = %hex::encode(repo_id.0),
-                    mapped = content_to_envelope.len(),
+                    mapped = sha1_to_envelope.len(),
                     have_set_size = have_set.len(),
-                    "pre-populated content→envelope mapping from c2e index"
+                    "pre-populated SHA-1→envelope mapping from c2e index"
                 );
             }
         }
@@ -387,12 +400,13 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
             let remaining = limit.saturating_sub(objects.len());
 
             // Build known set for DAG walk dedup.
-            // have_set contains content hashes from the client. Convert to
-            // envelope hashes using the mapping (built in prior iterations
-            // of this loop and pre-populated below).
+            // have_set contains SHA-1 hashes zero-padded to 32 bytes.
+            // Convert to envelope BLAKE3 hashes via the SHA-1→envelope mapping.
             let mut known_for_walk = all_known_envelopes.clone();
-            for content_hash in have_set {
-                if let Some(&envelope_hash) = content_to_envelope.get(content_hash) {
+            for have_hash in have_set {
+                // Extract SHA-1 (first 20 bytes of zero-padded 32-byte entry)
+                let sha1: [u8; 20] = have_hash[..20].try_into().unwrap_or([0u8; 20]);
+                if let Some(&envelope_hash) = sha1_to_envelope.get(&sha1) {
                     known_for_walk.insert(envelope_hash);
                 }
             }
@@ -414,22 +428,24 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
                         let object_type = obj.object_type.as_str().to_string();
                         let b3_bytes: [u8; 32] = *obj.blake3.as_bytes();
                         let data = obj.content;
+                        let sha1_bytes: [u8; 20] = *obj.sha1.as_bytes();
 
                         // Content hash for wire verification
                         let content_hash: [u8; 32] = blake3::hash(&data).into();
 
-                        // Build content→envelope mapping for future dedup.
-                        content_to_envelope.insert(content_hash, b3_bytes);
+                        // Build SHA-1→envelope mapping for future dedup.
+                        sha1_to_envelope.insert(sha1_bytes, b3_bytes);
                         all_known_envelopes.insert(b3_bytes);
 
-                        // Queue c2e mapping for batch write.
+                        // Queue c2e mapping for batch write (keyed by SHA-1).
                         new_c2e_entries.push((
-                            format!("forge:c2e:{}:{}", hex::encode(repo_id.0), hex::encode(content_hash)),
+                            format!("forge:c2e:{}:{}", hex::encode(repo_id.0), obj.sha1.to_hex()),
                             hex::encode(b3_bytes),
                         ));
 
-                        // Skip objects the client already has (by content hash).
-                        if have_set.contains(&content_hash) {
+                        // Skip objects the client already has (by SHA-1 zero-padded).
+                        let padded = sha1_to_have_hash(&sha1_bytes);
+                        if have_set.contains(&padded) {
                             continue;
                         }
 
@@ -1409,8 +1425,22 @@ mod git_bridge_tests {
             .unwrap();
         assert_eq!(first_sync.len(), 3);
 
-        // Collect hashes from first sync as "already have"
-        let have_hashes: Vec<[u8; 32]> = first_sync.iter().map(|o| o.hash).collect();
+        // Collect SHA-1 hashes from first sync as "already have".
+        // The have_set now uses SHA-1 zero-padded to 32 bytes.
+        let have_hashes: Vec<[u8; 32]> = first_sync
+            .iter()
+            .map(|o| {
+                use sha1::Digest as _;
+                // Reconstruct full git bytes (header + content) to compute SHA-1
+                let obj_type = &o.object_type;
+                let header = format!("{} {}\0", obj_type, o.data.len());
+                let mut hasher = sha1::Sha1::new();
+                hasher.update(header.as_bytes());
+                hasher.update(&o.data);
+                let sha1: [u8; 20] = hasher.finalize().into();
+                sha1_to_have_hash(&sha1)
+            })
+            .collect();
 
         // Second commit: blob2 → tree2 → commit2 (parent: commit1)
         let (blob2_b3, blob2_sha1) = h.import_blob(b"second\n").await;
@@ -1455,7 +1485,7 @@ mod git_bridge_tests {
         h.set_ref("heads/main", commit_b3).await;
 
         // Default resolver (new() auto-creates git exporter with KV-backed reads)
-        let resolver = ForgeResourceResolver::new(Arc::clone(&h.source_kv));
+        let resolver = ForgeResourceResolver::<dyn aspen_core::KeyValueStore>::new(Arc::clone(&h.source_kv));
         let objects = resolver
             .sync_objects(
                 &h.fed_id,
@@ -1477,5 +1507,58 @@ mod git_bridge_tests {
         let git_count = objects.iter().filter(|o| o.object_type != "ref").count();
         assert_eq!(ref_count, 1);
         assert_eq!(git_count, 3);
+    }
+
+    // ====================================================================
+    // Test: Incremental sync dedup via SHA-1 c2e index
+    // ====================================================================
+
+    /// Import objects via import_objects() (writes c2e entries keyed by SHA-1),
+    /// then verify the exporter skips all known objects when have_set contains
+    /// the same SHA-1 hashes.
+    #[tokio::test]
+    async fn test_incremental_federation_sync_dedup_via_sha1() {
+        let h = FederationTestHarness::new();
+        h.federate_repo().await;
+
+        // Create: blob → tree → commit → ref
+        let (_blob_b3, blob_sha1) = h.import_blob(b"dedup test\n").await;
+        let (_tree_b3, tree_sha1) = h.import_tree(&blob_sha1, "test.txt").await;
+        let (commit_b3, commit_sha1) = h.import_commit(&tree_sha1, &[], "dedup commit\n").await;
+        h.set_ref("heads/main", commit_b3).await;
+
+        // Import via import_objects to get c2e entries written (keyed by SHA-1)
+        let blob_bytes = make_git_blob(b"dedup test\n");
+        let tree_entry = make_tree_entry("100644", "test.txt", &blob_sha1);
+        let tree_bytes = make_git_tree(&[tree_entry]);
+        let commit_bytes = make_git_commit(&tree_sha1, &[], "dedup commit\n");
+
+        let objects = vec![
+            (blob_sha1, crate::git::bridge::GitObjectType::Blob, blob_bytes),
+            (tree_sha1, crate::git::bridge::GitObjectType::Tree, tree_bytes),
+            (commit_sha1, crate::git::bridge::GitObjectType::Commit, commit_bytes),
+        ];
+        let _result = h.source_importer.import_objects(&h.repo_id, objects).await.unwrap();
+
+        // Build have_set with SHA-1 hashes (as the client would)
+        let have_hashes: Vec<[u8; 32]> = vec![
+            sha1_to_have_hash(blob_sha1.as_bytes()),
+            sha1_to_have_hash(tree_sha1.as_bytes()),
+            sha1_to_have_hash(commit_sha1.as_bytes()),
+        ];
+
+        // Sync with have_set — should get 0 git objects (all known)
+        let resolver = h.resolver();
+        let objects = resolver
+            .sync_objects(
+                &h.fed_id,
+                &["commit".to_string(), "tree".to_string(), "blob".to_string()],
+                &have_hashes,
+                1000,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(objects.len(), 0, "all objects are in have_set — should return 0, got {}", objects.len());
     }
 }

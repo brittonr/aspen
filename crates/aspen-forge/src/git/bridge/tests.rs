@@ -1377,7 +1377,6 @@ async fn test_federation_style_import_with_content_hash_correlation() {
     ];
 
     let mut import_objects = Vec::new();
-    let mut sha1_to_content_hash: std::collections::HashMap<[u8; 20], [u8; 32]> = std::collections::HashMap::new();
 
     for obj in &sync_objects {
         let header = format!("{} {}\0", obj.type_str, obj.content.len());
@@ -1395,9 +1394,6 @@ async fn test_federation_style_import_with_content_hash_correlation() {
             _ => unreachable!(),
         };
 
-        let content_hash: [u8; 32] = blake3::hash(&obj.content).into();
-        sha1_to_content_hash.insert(sha1_digest, content_hash);
-
         import_objects.push((sha1, obj_type, git_bytes));
     }
 
@@ -1406,22 +1402,166 @@ async fn test_federation_style_import_with_content_hash_correlation() {
     assert_eq!(result.objects_imported, 3);
     assert_eq!(result.mappings.len(), 3);
 
-    // Phase 3: Build content_to_local_blake3 (mirrors federation_import_objects phase 3)
-    let mut content_to_local_blake3: std::collections::HashMap<[u8; 32], blake3::Hash> =
-        std::collections::HashMap::new();
+    // Phase 3: Build sha1_to_local_blake3 (mirrors federation_import_objects phase 3)
+    let mut sha1_to_local_blake3: std::collections::HashMap<[u8; 20], blake3::Hash> = std::collections::HashMap::new();
     for (sha1, local_blake3) in &result.mappings {
-        if let Some(content_hash) = sha1_to_content_hash.get(sha1.as_bytes()) {
-            content_to_local_blake3.insert(*content_hash, *local_blake3);
-        }
+        sha1_to_local_blake3.insert(*sha1.as_bytes(), *local_blake3);
     }
 
-    // Verify: content hash of the commit content maps to a valid local BLAKE3
-    let commit_content_hash: [u8; 32] = blake3::hash(commit_content).into();
-    let local_b3 = content_to_local_blake3.get(&commit_content_hash);
-    assert!(local_b3.is_some(), "commit content hash should map to a local BLAKE3");
+    // Verify: commit SHA-1 maps to a valid local BLAKE3
+    let local_b3 = sha1_to_local_blake3.get(commit_sha1.as_bytes());
+    assert!(local_b3.is_some(), "commit SHA-1 should map to a local BLAKE3");
 
     // Verify: that BLAKE3 can be exported back to the same SHA-1
     let exported = h.exporter.export_object(&h.repo_id, *local_b3.unwrap()).await.unwrap();
     assert_eq!(exported.sha1, commit_sha1, "exported commit SHA-1 should match original");
     assert_eq!(exported.object_type, GitObjectType::Commit);
+}
+
+// =============================================================================
+// Round-trip byte-fidelity tests for c2e fix
+// =============================================================================
+
+/// Import a tree with directory+file name prefix overlap (git mode-aware sort
+/// edge case), export it, verify byte-identical output and SHA-1 match.
+#[tokio::test]
+async fn test_tree_roundtrip_mode_aware_sort() {
+    let h = BridgeTestHarness::new();
+
+    // Create three blobs
+    let blob_a = make_git_blob(b"file content a");
+    let blob_b = make_git_blob(b"file content b");
+    let blob_c = make_git_blob(b"file content c");
+
+    let sha1_a = compute_sha1(&blob_a);
+    let sha1_b = compute_sha1(&blob_b);
+    let sha1_c = compute_sha1(&blob_c);
+
+    h.importer.import_object(&h.repo_id, &blob_a).await.unwrap();
+    h.importer.import_object(&h.repo_id, &blob_b).await.unwrap();
+    h.importer.import_object(&h.repo_id, &blob_c).await.unwrap();
+
+    // Build a tree with entries that trigger git's mode-aware sort:
+    // "foo" (dir, 040000) sorts as "foo/" → '/' = 0x2F
+    // "foo.c" (file, 100644) sorts as "foo.c" → '.' = 0x2E
+    // "foo-bar" (file, 100644) sorts as "foo-bar" → '-' = 0x2D
+    //
+    // Git sort order: foo-bar (0x2D), foo.c (0x2E), foo (0x2F)
+    // We intentionally put them in a different order to test that
+    // TreeObject::new() sorts correctly.
+    let entry_foobar = make_tree_entry("100644", "foo-bar", &sha1_a);
+    let entry_foo_dir = make_tree_entry("40000", "foo", &sha1_b);
+    let entry_foo_c = make_tree_entry("100644", "foo.c", &sha1_c);
+
+    // Build the tree in git-canonical order (as git would write it)
+    let git_tree_bytes = make_git_tree(&[entry_foobar.clone(), entry_foo_c.clone(), entry_foo_dir.clone()]);
+    let tree_sha1 = compute_sha1(&git_tree_bytes);
+
+    // Import
+    let tree_blake3 = h.importer.import_object(&h.repo_id, &git_tree_bytes).await.unwrap();
+
+    // Export
+    let exported = h.exporter.export_object(&h.repo_id, tree_blake3).await.unwrap();
+
+    // Verify SHA-1 match
+    assert_eq!(exported.sha1, tree_sha1, "exported tree SHA-1 must match original");
+
+    // Verify byte-identical content (strip header from original for comparison)
+    let content_start = git_tree_bytes.iter().position(|&b| b == 0).unwrap() + 1;
+    let original_content = &git_tree_bytes[content_start..];
+    assert_eq!(exported.content, original_content, "exported tree content must be byte-identical to original");
+}
+
+/// Import a commit with a multi-paragraph message, export it, verify
+/// byte-identical content including trailing newlines.
+#[tokio::test]
+async fn test_commit_roundtrip_message_preservation() {
+    let h = BridgeTestHarness::new();
+
+    // Create a blob and tree
+    let blob = make_git_blob(b"hello");
+    let blob_sha1 = compute_sha1(&blob);
+    h.importer.import_object(&h.repo_id, &blob).await.unwrap();
+
+    let tree_entry = make_tree_entry("100644", "file.txt", &blob_sha1);
+    let tree_bytes = make_git_tree(&[tree_entry]);
+    let tree_sha1 = compute_sha1(&tree_bytes);
+    h.importer.import_object(&h.repo_id, &tree_bytes).await.unwrap();
+
+    // Multi-paragraph message with trailing newline
+    let message = "Fix critical bug in federation sync\n\nThe c2e index was keyed by content hash which\ndiffers between import and export paths.\n\nSigned-off-by: Test User <test@example.com>\n";
+    let commit_bytes = make_git_commit(&tree_sha1, &[], message);
+    let commit_sha1 = compute_sha1(&commit_bytes);
+
+    // Import
+    let commit_blake3 = h.importer.import_object(&h.repo_id, &commit_bytes).await.unwrap();
+
+    // Export
+    let exported = h.exporter.export_object(&h.repo_id, commit_blake3).await.unwrap();
+
+    // Verify SHA-1 match
+    assert_eq!(exported.sha1, commit_sha1, "exported commit SHA-1 must match original");
+
+    // Verify byte-identical content
+    let content_start = commit_bytes.iter().position(|&b| b == 0).unwrap() + 1;
+    let original_content = &commit_bytes[content_start..];
+    assert_eq!(exported.content, original_content, "exported commit content must be byte-identical to original");
+}
+
+/// Verify c2e index entries are keyed by SHA-1 hex after import,
+/// and that export can look them up via SHA-1.
+#[tokio::test]
+async fn test_c2e_index_sha1_roundtrip() {
+    let h = BridgeTestHarness::new();
+
+    // Import several objects via import_objects (which writes c2e entries)
+    let blob1 = make_git_blob(b"content one");
+    let blob2 = make_git_blob(b"content two");
+    let blob1_sha1 = compute_sha1(&blob1);
+    let blob2_sha1 = compute_sha1(&blob2);
+
+    let objects = vec![
+        (blob1_sha1, GitObjectType::Blob, blob1),
+        (blob2_sha1, GitObjectType::Blob, blob2),
+    ];
+
+    let result = h.importer.import_objects(&h.repo_id, objects).await.unwrap();
+    assert_eq!(result.objects_imported, 2);
+
+    // Verify c2e entries are keyed by SHA-1 hex
+    let c2e_prefix = format!("forge:c2e:{}:", h.repo_id.to_hex());
+    let scan_result = h
+        .mapping
+        .kv()
+        .scan(aspen_core::ScanRequest {
+            prefix: c2e_prefix.clone(),
+            limit_results: Some(100),
+            continuation_token: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(scan_result.entries.len(), 2, "should have 2 c2e entries");
+
+    // Each key should be the SHA-1 hex of the object
+    let expected_sha1s: std::collections::HashSet<String> =
+        [blob1_sha1.to_hex(), blob2_sha1.to_hex()].into_iter().collect();
+
+    for entry in &scan_result.entries {
+        let sha1_hex = entry.key.strip_prefix(&c2e_prefix).unwrap();
+        assert!(expected_sha1s.contains(sha1_hex), "c2e key '{}' should be a known SHA-1 hex", sha1_hex);
+        // Value should be a valid 32-byte hex envelope hash
+        let env_bytes = hex::decode(entry.value.trim()).unwrap();
+        assert_eq!(env_bytes.len(), 32, "c2e value should be 32 bytes");
+    }
+
+    // Verify we can look up each SHA-1 and get the correct envelope hash
+    for (sha1, blake3) in &result.mappings {
+        let key = format!("forge:c2e:{}:{}", h.repo_id.to_hex(), sha1.to_hex());
+        let read_result = h.mapping.kv().read(aspen_core::ReadRequest::new(key)).await.unwrap();
+        let kv = read_result.kv.expect("c2e entry should exist");
+        let env_hex = kv.value.trim();
+        let expected_hex = hex::encode(blake3.as_bytes());
+        assert_eq!(env_hex, expected_hex, "c2e value for {} should match envelope hash", sha1.to_hex());
+    }
 }

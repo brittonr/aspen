@@ -542,13 +542,14 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 GitObject::Tag(_) => GitObjectType::Tag,
             };
 
-            // Convert to git bytes (with header) for the receiver to import
-            let (content, _sha1) = self.converter.export_object(repo_id, &signed.payload).await?;
+            // Convert to git bytes (without header) for the receiver to import
+            let (content, sha1) = self.converter.export_object(repo_id, &signed.payload).await?;
 
             objects.push(FederationExportedObject {
                 blake3: *b3,
                 object_type,
                 content,
+                sha1,
             });
         }
 
@@ -560,13 +561,15 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
     }
 }
 
-/// A git object exported for federation (BLAKE3-keyed, no SHA1).
+/// A git object exported for federation.
 #[derive(Debug)]
 pub struct FederationExportedObject {
-    /// BLAKE3 hash of the stored blob.
+    /// BLAKE3 hash of the stored blob (envelope hash).
     pub blake3: blake3::Hash,
     /// Object type (commit, tree, blob, tag).
     pub object_type: GitObjectType,
+    /// Git SHA-1 hash, computed from the exported content.
+    pub sha1: super::sha1::Sha1Hash,
     /// Git object content (without header).
     pub content: Vec<u8>,
 }
