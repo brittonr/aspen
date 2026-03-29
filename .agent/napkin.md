@@ -31,6 +31,9 @@
 | `aspen-cli kv set` | Not `kv put` |
 | `async-trait` | NOT a workspace dep — each crate specifies `async-trait = "0.1"` directly |
 | `tokio::sync::Notify` | Edge-triggered: create `notified()` future BEFORE checking the condition, then `.await`. If you check-then-await, notification between check and await is lost |
+| Worker `mark_started` | If it fails, MUST release the queue item back (nack/release_unchanged). Otherwise job is orphaned: dequeued from queue but never started. Fixed in `run_worker_execute_with_handler` |
+| 3-node dogfood | QUIC stream contention during heavy git push (33K objects) causes 21-140ms node unreachability blips. ReadIndex quorum confirmations fail → forwarded reads fail → `get_job` returns None → `JobNotFound`. Single-node dogfood doesn't hit this |
+| Bash `set -u` + EXIT traps | Local vars go out of scope after function returns, but EXIT trap persists. Use `${var:-}` in cleanup functions called from traps |
 
 ### Feature Gate Rules
 

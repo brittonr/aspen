@@ -639,6 +639,23 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     ///
     /// The job's status remains unchanged (typically Pending) and the queue
     /// item is returned to the queue for another worker to pick up.
+    /// Acknowledge a queue item using the job's priority directly.
+    ///
+    /// Use when the job is already running on another worker — the queue item
+    /// should be consumed (not released) to prevent infinite redelivery.
+    pub async fn ack_queue_item_by_priority(&self, receipt_handle: &str, priority: Priority) -> Result<()> {
+        let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+
+        if let Some(queue_manager) = self.queue_managers.get(&priority) {
+            queue_manager
+                .ack(&queue_name, receipt_handle)
+                .await
+                .map_err(|e| JobError::QueueError { source: e })?;
+        }
+
+        Ok(())
+    }
+
     /// Release a queue item back to the queue using the job's priority directly.
     ///
     /// Unlike `release_unhandled_job`, this does NOT look up the job from storage,
