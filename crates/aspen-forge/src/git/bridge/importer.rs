@@ -235,22 +235,6 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             }
         }
 
-        // Store content→envelope hash mapping for federation DAG dedup.
-        // Content hash = blake3(raw git content without header).
-        // Envelope hash = blake3 of the SignedObject wrapper (stored as `blake3`).
-        let content_hash = ::blake3::hash(content);
-        let c2e_key = format!("forge:c2e:{}:{}", repo_id.to_hex(), hex::encode(content_hash.as_bytes()));
-        let _ = self
-            .mapping
-            .kv()
-            .write(aspen_core::WriteRequest {
-                command: aspen_core::WriteCommand::Set {
-                    key: c2e_key,
-                    value: hex::encode(blake3.as_bytes()),
-                },
-            })
-            .await;
-
         Ok((blake3, sha1, obj_type))
     }
 
@@ -337,19 +321,30 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         for (wave_idx, wave) in waves.waves.into_iter().enumerate() {
             let wave_size = wave.len();
 
-            // Store blobs concurrently, collect mapping info.
-            let results: Vec<BridgeResult<(blake3::Hash, Sha1Hash, GitObjectType)>> = n0_future::stream::iter(wave)
-                .map(|obj| async move { self.import_object_store_blob(&repo_id, &obj.data).await })
-                .buffered_unordered(MAX_IMPORT_CONCURRENCY)
-                .collect()
-                .await;
+            // Store blobs concurrently, collect mapping info + content hash for c2e.
+            // Import each object and also compute the content hash inline.
+            #[allow(clippy::type_complexity)]
+            let results: Vec<BridgeResult<(blake3::Hash, Sha1Hash, GitObjectType, [u8; 32])>> =
+                n0_future::stream::iter(wave)
+                    .map(|obj| async move {
+                        // Content hash = blake3(raw git content without header)
+                        let content_start = obj.data.iter().position(|&b| b == 0).map(|p| p + 1).unwrap_or(0);
+                        let content_hash = *::blake3::hash(&obj.data[content_start..]).as_bytes();
+                        let (blake3, sha1, obj_type) = self.import_object_store_blob(&repo_id, &obj.data).await?;
+                        Ok((blake3, sha1, obj_type, content_hash))
+                    })
+                    .buffered_unordered(MAX_IMPORT_CONCURRENCY)
+                    .collect()
+                    .await;
 
             // Collect successful mappings, propagate first error.
             let mut wave_mappings: Vec<(blake3::Hash, Sha1Hash, GitObjectType)> = Vec::with_capacity(wave_size);
+            let mut wave_c2e: Vec<([u8; 32], [u8; 32])> = Vec::with_capacity(wave_size);
             for result in results {
-                let (blake3, sha1, obj_type) = result?;
+                let (blake3, sha1, obj_type, content_hash) = result?;
                 all_mappings.push((sha1, blake3));
                 wave_mappings.push((blake3, sha1, obj_type));
+                wave_c2e.push((content_hash, *blake3.as_bytes()));
                 imported += 1;
             }
 
@@ -357,6 +352,28 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             // store_batch chunks internally to respect MAX_SETMULTI_KEYS.
             for chunk in wave_mappings.chunks(MAX_HASH_MAPPING_BATCH_SIZE) {
                 self.mapping.store_batch(&repo_id, chunk).await?;
+            }
+
+            // Batch-write c2e (content→envelope) index for federation DAG dedup.
+            // content_hash = blake3(raw git content without header)
+            // We get this from the git_bytes by stripping the header.
+            {
+                let mut c2e_pairs: Vec<(String, String)> = Vec::with_capacity(wave_c2e.len());
+                for (content_hash, env_hash) in &wave_c2e {
+                    c2e_pairs.push((
+                        format!("forge:c2e:{}:{}", repo_id.to_hex(), hex::encode(content_hash)),
+                        hex::encode(env_hash),
+                    ));
+                }
+                for chunk in c2e_pairs.chunks(500) {
+                    let _ = self
+                        .mapping
+                        .kv()
+                        .write(aspen_core::WriteRequest {
+                            command: aspen_core::WriteCommand::SetMulti { pairs: chunk.to_vec() },
+                        })
+                        .await;
+                }
             }
 
             tracing::trace!(wave = wave_idx, objects = wave_size, "wave import complete");
