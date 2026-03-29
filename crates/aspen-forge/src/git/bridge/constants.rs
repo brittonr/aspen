@@ -92,8 +92,21 @@ pub const KV_PREFIX_B3_TO_SHA1: &str = "forge:hashmap:b3:";
 /// so the exporter can read without depending on iroh-blobs FsStore.
 ///
 /// Key format: `{KV_PREFIX_OBJ}{repo_id_hex}:{blake3_hex}`
-/// Value: base64-encoded serialized bytes
+/// Value: base64-encoded serialized bytes (for objects ≤ CHUNK_THRESHOLD),
+///        or `chunks:N` for large objects (chunks stored at `...:{hash}:c:{0..N}`)
 pub const KV_PREFIX_OBJ: &str = "forge:obj:";
+
+/// Maximum base64-encoded size to store in a single KV value.
+///
+/// Objects whose base64 encoding exceeds this are split into chunks.
+/// Raft MAX_VALUE_SIZE is 1MB; keep 256KB headroom for key/overhead.
+pub const OBJ_CHUNK_THRESHOLD: usize = 768 * 1024;
+
+/// Size of each chunk for large git objects.
+pub const OBJ_CHUNK_SIZE: usize = 768 * 1024;
+
+/// Maximum number of chunks for a single object (768KB × 200 ≈ 150MB).
+pub const OBJ_MAX_CHUNKS: usize = 200;
 
 /// KV prefix for SHA-1 -> BLAKE3 hash mappings.
 ///

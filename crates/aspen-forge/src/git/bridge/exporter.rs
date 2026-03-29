@@ -98,20 +98,44 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         let obj_key =
             format!("{}{}:{}", super::constants::KV_PREFIX_OBJ, repo_id.to_hex(), hex::encode(blake3.as_bytes()));
         let obj_key_for_log = obj_key.clone();
-        let read_req = aspen_core::ReadRequest::new(obj_key);
+        let read_req = aspen_core::ReadRequest::new(obj_key.clone());
         match self.mapping.kv().read(read_req).await {
             Ok(result) => {
                 if let Some(kv) = result.kv {
-                    use base64::Engine;
-                    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(&kv.value) {
-                        tracing::debug!(
-                            blake3 = %hex::encode(blake3.as_bytes()),
-                            size = decoded.len(),
-                            "read object bytes from KV"
-                        );
-                        return Ok(bytes::Bytes::from(decoded));
+                    // Check for chunked storage manifest
+                    if let Some(rest) = kv.value.strip_prefix("chunks:") {
+                        if let Ok(num_chunks) = rest.parse::<usize>() {
+                            match self.read_chunked_object(&obj_key, num_chunks).await {
+                                Ok(decoded) => {
+                                    tracing::debug!(
+                                        blake3 = %hex::encode(blake3.as_bytes()),
+                                        size = decoded.len(),
+                                        chunks = num_chunks,
+                                        "read chunked object bytes from KV"
+                                    );
+                                    return Ok(bytes::Bytes::from(decoded));
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        blake3 = %hex::encode(blake3.as_bytes()),
+                                        error = %e,
+                                        "failed to read chunked object, falling back to iroh-blobs"
+                                    );
+                                }
+                            }
+                        }
+                    } else {
+                        use base64::Engine;
+                        if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(&kv.value) {
+                            tracing::debug!(
+                                blake3 = %hex::encode(blake3.as_bytes()),
+                                size = decoded.len(),
+                                "read object bytes from KV"
+                            );
+                            return Ok(bytes::Bytes::from(decoded));
+                        }
+                        tracing::warn!(blake3 = %hex::encode(blake3.as_bytes()), "KV object bytes base64 decode failed");
                     }
-                    tracing::warn!(blake3 = %hex::encode(blake3.as_bytes()), "KV object bytes base64 decode failed");
                 } else {
                     tracing::debug!(blake3 = %hex::encode(blake3.as_bytes()), key = %obj_key_for_log, "KV object key not found, falling back to iroh-blobs");
                 }
@@ -156,6 +180,43 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 })
             }
         }
+    }
+
+    /// Read a chunked object from multiple KV entries.
+    ///
+    /// Large objects (> OBJ_CHUNK_THRESHOLD) are stored as:
+    ///   main key → "chunks:N"
+    ///   main key + ":c:0" → base64 chunk 0
+    ///   main key + ":c:1" → base64 chunk 1
+    ///   ...
+    async fn read_chunked_object(&self, obj_key: &str, num_chunks: usize) -> Result<Vec<u8>, String> {
+        use base64::Engine;
+
+        if num_chunks == 0 || num_chunks > super::constants::OBJ_MAX_CHUNKS {
+            return Err(format!("invalid chunk count: {num_chunks}"));
+        }
+
+        let mut combined_b64 = String::new();
+        for i in 0..num_chunks {
+            let chunk_key = format!("{obj_key}:c:{i}");
+            let read_req = aspen_core::ReadRequest::new(chunk_key.clone());
+            match self.mapping.kv().read(read_req).await {
+                Ok(result) => {
+                    if let Some(kv) = result.kv {
+                        combined_b64.push_str(&kv.value);
+                    } else {
+                        return Err(format!("chunk {i}/{num_chunks} not found: {chunk_key}"));
+                    }
+                }
+                Err(e) => {
+                    return Err(format!("chunk {i}/{num_chunks} read error: {e}"));
+                }
+            }
+        }
+
+        base64::engine::general_purpose::STANDARD
+            .decode(&combined_b64)
+            .map_err(|e| format!("chunked base64 decode failed: {e}"))
     }
 
     /// Export a single object to git format.

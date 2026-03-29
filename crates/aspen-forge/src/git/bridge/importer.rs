@@ -135,34 +135,103 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
 
         // Also store in KV for reliable reads (iroh-blobs FsStore bao can be unreliable).
         // Key: forge:obj:{repo_id}:{blake3_hex}, Value: base64-encoded serialized bytes.
+        // Large objects (> CHUNK_THRESHOLD base64) are split across multiple KV entries.
         let obj_key =
             format!("{}{}:{}", super::constants::KV_PREFIX_OBJ, repo_id.to_hex(), hex::encode(blake3.as_bytes()));
         use base64::Engine;
         let obj_value = base64::engine::general_purpose::STANDARD.encode(&bytes);
         let obj_key_debug = obj_key.clone();
-        let write_req = aspen_core::WriteRequest {
-            command: aspen_core::WriteCommand::Set {
-                key: obj_key,
-                value: obj_value,
-            },
-        };
-        // Best-effort: log but don't fail import if KV write fails
-        match self.mapping.kv().write(write_req).await {
-            Ok(_) => {
-                tracing::debug!(
-                    blake3 = %hex::encode(blake3.as_bytes()),
-                    key = %obj_key_debug,
-                    size = bytes.len(),
-                    "stored object bytes in KV"
-                );
+
+        if obj_value.len() <= super::constants::OBJ_CHUNK_THRESHOLD {
+            // Small object: single KV entry
+            let write_req = aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::Set {
+                    key: obj_key,
+                    value: obj_value,
+                },
+            };
+            // Best-effort: log but don't fail import if KV write fails
+            match self.mapping.kv().write(write_req).await {
+                Ok(_) => {
+                    tracing::debug!(
+                        blake3 = %hex::encode(blake3.as_bytes()),
+                        key = %obj_key_debug,
+                        size = bytes.len(),
+                        "stored object bytes in KV"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        blake3 = %hex::encode(blake3.as_bytes()),
+                        key = %obj_key_debug,
+                        error = %e,
+                        "failed to store object bytes in KV (non-fatal)"
+                    );
+                }
             }
-            Err(e) => {
-                tracing::warn!(
-                    blake3 = %hex::encode(blake3.as_bytes()),
-                    key = %obj_key_debug,
-                    error = %e,
-                    "failed to store object bytes in KV (non-fatal)"
-                );
+        } else {
+            // Large object: split across multiple KV entries
+            let chunk_size = super::constants::OBJ_CHUNK_SIZE;
+            let chunks: Vec<&str> = obj_value
+                .as_bytes()
+                .chunks(chunk_size)
+                .map(|c| {
+                    // SAFETY: base64 output is always valid UTF-8
+                    std::str::from_utf8(c).unwrap_or("")
+                })
+                .collect();
+            let num_chunks = chunks.len().min(super::constants::OBJ_MAX_CHUNKS);
+
+            // Write chunk data first, then the manifest
+            let mut chunk_ok = true;
+            for (i, chunk_data) in chunks.iter().take(num_chunks).enumerate() {
+                let chunk_key = format!("{}:c:{}", obj_key, i);
+                let write_req = aspen_core::WriteRequest {
+                    command: aspen_core::WriteCommand::Set {
+                        key: chunk_key,
+                        value: (*chunk_data).to_string(),
+                    },
+                };
+                if let Err(e) = self.mapping.kv().write(write_req).await {
+                    tracing::warn!(
+                        blake3 = %hex::encode(blake3.as_bytes()),
+                        chunk = i,
+                        error = %e,
+                        "failed to store object chunk in KV (non-fatal)"
+                    );
+                    chunk_ok = false;
+                    break;
+                }
+            }
+
+            if chunk_ok {
+                // Write manifest: main key stores "chunks:N"
+                let manifest = format!("chunks:{}", num_chunks);
+                let write_req = aspen_core::WriteRequest {
+                    command: aspen_core::WriteCommand::Set {
+                        key: obj_key,
+                        value: manifest,
+                    },
+                };
+                match self.mapping.kv().write(write_req).await {
+                    Ok(_) => {
+                        tracing::debug!(
+                            blake3 = %hex::encode(blake3.as_bytes()),
+                            key = %obj_key_debug,
+                            size = bytes.len(),
+                            chunks = num_chunks,
+                            "stored large object bytes in KV (chunked)"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            blake3 = %hex::encode(blake3.as_bytes()),
+                            key = %obj_key_debug,
+                            error = %e,
+                            "failed to store object manifest in KV (non-fatal)"
+                        );
+                    }
+                }
             }
         }
 

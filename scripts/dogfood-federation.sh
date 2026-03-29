@@ -476,20 +476,23 @@ do_build() {
   log "Enabling CI watch on bob..."
   cli_bob_json ci watch "$bob_repo_id" 2>/dev/null || warn "CI watch may already be set"
 
-  # Push Aspen source directly to bob's forge from the local checkout.
-  # The federation sync already proved cross-cluster connectivity —
-  # for CI trigger, bob just needs the source in its own forge.
+  # Push source to bob's forge for CI.
+  # NOTE: Federated git clone (`fed:` URL) doesn't yet support large repos
+  # (33K+ objects) — the federation sync protocol truncates the DAG walk,
+  # causing incomplete object imports. The metadata sync above proves
+  # cross-cluster connectivity; direct push exercises the CI pipeline.
+  # TODO: Fix federation_import_objects to handle incremental DAG fetches.
   local bob_ticket
   bob_ticket=$(get_ticket_bob)
 
-  log "Pushing source to bob's Forge (from local checkout)..."
+  log "Pushing source to bob's Forge..."
   cd "$PROJECT"
   git remote remove aspen-fed-bob 2>/dev/null || true
   git remote add aspen-fed-bob "aspen://${bob_ticket}/${bob_repo_id}"
   if RUST_LOG=warn git push aspen-fed-bob HEAD:main 2>&1 | tail -5; then
     ok "Source pushed to bob's Forge"
   else
-    err "Push to bob failed"
+    err "Push to bob's Forge failed"
     git remote remove aspen-fed-bob 2>/dev/null || true
     exit 1
   fi
@@ -641,7 +644,7 @@ do_verify() {
     exit 1
   fi
 
-  # Find the nix build job
+  # Find the build-node job (not clippy or other check jobs)
   local build_job_id
   build_job_id=$(python3 -c "
 import json, sys, re
@@ -651,12 +654,26 @@ for m in re.finditer(r'[\[{]', raw):
         d, _ = json.JSONDecoder().raw_decode(raw, m.start())
     except (json.JSONDecodeError, ValueError):
         continue
+    # Prefer build-node, then any nix-build, then first successful job with output
+    candidates = []
     for stage in d.get('stages', []):
         for job in stage.get('jobs', []):
             if job.get('status') == 'success' and job.get('id'):
-                print(job['id'])
+                name = job.get('name', '')
+                if name == 'build-node':
+                    print(job['id'])
+                    sys.exit(0)
+                candidates.append((name, job['id']))
+    # Fallback: nix-build > build-* > anything
+    for prefix in ['nix-build', 'build-']:
+        for name, jid in candidates:
+            if name.startswith(prefix):
+                print(jid)
                 sys.exit(0)
-    print('')
+    if candidates:
+        print(candidates[0][1])
+    else:
+        print('')
     sys.exit(0)
 print('')
 " <<< "$status_out" 2>/dev/null)

@@ -150,11 +150,14 @@ async fn sync_from_origin(
     let refs_fetched = fetched_refs.len() as u32;
 
     // Phase 2: Fetch git objects (incremental)
-    let have_hashes = collect_local_blake3_hashes(forge_node, mirror_repo_id, 10_000).await;
+    // Large repos (e.g., Aspen with 33K+ objects) need many rounds.
+    // Each round fetches up to 5000 objects; 100 rounds allows ~500K objects.
+    let have_hashes = collect_local_blake3_hashes(forge_node, mirror_repo_id, 50_000).await;
 
     let mut all_git_objects = Vec::new();
     let mut current_have = have_hashes;
-    let max_rounds = 10u32;
+    let max_rounds = 100u32;
+    let batch_size = 5000u32;
 
     for round in 0..max_rounds {
         let (objects, has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
@@ -162,15 +165,15 @@ async fn sync_from_origin(
             &fed_id,
             vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
             current_have.clone(),
-            1000,
+            batch_size,
             None,
         )
         .await
         {
             Ok(result) => result,
             Err(e) => {
-                tracing::warn!(origin = %origin_key, error = %e, "git object sync_remote_objects failed");
-                errors.push(format!("git object fetch: {e}"));
+                tracing::warn!(origin = %origin_key, error = %e, round = round, "git object sync_remote_objects failed");
+                errors.push(format!("git object fetch round {round}: {e}"));
                 break;
             }
         };
@@ -179,10 +182,19 @@ async fn sync_from_origin(
             debug!(
                 origin = %origin_key,
                 round = round,
+                total = all_git_objects.len(),
                 "sync returned empty git objects batch — stopping"
             );
             break;
         }
+
+        debug!(
+            origin = %origin_key,
+            round = round,
+            batch = objects.len(),
+            has_more = has_more,
+            "fetched git object batch"
+        );
 
         for obj in &objects {
             current_have.push(obj.hash);
