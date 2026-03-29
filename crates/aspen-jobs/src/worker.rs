@@ -602,7 +602,25 @@ async fn run_worker_execute_with_handler<S: aspen_core::KeyValueStore + ?Sized +
     let execution_token = match manager.mark_started(&job.id, worker_id.to_string()).await {
         Ok(token) => token,
         Err(e) => {
-            error!(worker_id, job_id = %job.id, error = ?e, "failed to mark job as started");
+            error!(worker_id, job_id = %job.id, error = ?e, "failed to mark job as started, releasing queue item");
+            // Release the queue item back so another worker can pick it up.
+            // This prevents job orphaning when mark_started fails due to
+            // transient errors (leadership transitions, network blips).
+            if let Err(release_err) = manager
+                .release_queue_item_by_priority(
+                    &queue_item.receipt_handle,
+                    job.spec.config.priority,
+                    &format!("mark_started failed: {e}"),
+                )
+                .await
+            {
+                error!(
+                    worker_id,
+                    job_id = %job.id,
+                    error = ?release_err,
+                    "failed to release queue item after mark_started failure — job may be orphaned"
+                );
+            }
             return;
         }
     };

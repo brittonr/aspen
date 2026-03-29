@@ -639,6 +639,35 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     ///
     /// The job's status remains unchanged (typically Pending) and the queue
     /// item is returned to the queue for another worker to pick up.
+    /// Release a queue item back to the queue using the job's priority directly.
+    ///
+    /// Unlike `release_unhandled_job`, this does NOT look up the job from storage,
+    /// making it safe to call even when the job record is transiently unavailable
+    /// (e.g., during leadership transitions or network blips between nodes).
+    pub async fn release_queue_item_by_priority(
+        &self,
+        receipt_handle: &str,
+        priority: Priority,
+        reason: &str,
+    ) -> Result<()> {
+        let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+
+        if let Some(queue_manager) = self.queue_managers.get(&priority) {
+            queue_manager
+                .release_unchanged(&queue_name, receipt_handle)
+                .await
+                .map_err(|e| JobError::QueueError { source: e })?;
+        }
+
+        info!(receipt_handle, ?priority, reason, "released queue item back to queue (delivery count unchanged)");
+
+        Ok(())
+    }
+
+    /// Release a job back to the queue when no handler is available.
+    ///
+    /// Looks up the job to determine its priority queue, then releases
+    /// the queue item via `release_unchanged` so delivery count is preserved.
     pub async fn release_unhandled_job(&self, job_id: &JobId, receipt_handle: &str, reason: String) -> Result<()> {
         // Get job to determine priority/queue
         let job = self.get_job(job_id).await?.ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
