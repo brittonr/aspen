@@ -42,10 +42,15 @@ pub fn detect_restart_method() -> RestartMethod {
 ///
 /// For execve: replaces the current process with the new binary. This function
 /// does not return on success.
-pub async fn restart_process(method: &RestartMethod) -> Result<()> {
+///
+/// `resolved_binary`: For Nix upgrades, this should be the binary path
+/// resolved through the profile (e.g., `/tmp/.../nix-profile/bin/aspen-node`).
+/// `/proc/self/exe` still points to the OLD nix store path after a profile
+/// switch, so we must use the profile-resolved path instead.
+pub async fn restart_process(method: &RestartMethod, resolved_binary: Option<&std::path::Path>) -> Result<()> {
     match method {
         RestartMethod::Systemd { unit_name } => restart_systemd(unit_name).await,
-        RestartMethod::Execve => restart_execve(),
+        RestartMethod::Execve => restart_execve(resolved_binary),
     }
 }
 
@@ -77,7 +82,7 @@ async fn restart_systemd(unit_name: &str) -> Result<()> {
 ///
 /// Reads `/proc/self/exe` to find the current binary path and
 /// `std::env::args()` for the original arguments.
-fn restart_execve() -> Result<()> {
+fn restart_execve(resolved_binary: Option<&std::path::Path>) -> Result<()> {
     info!("executing process re-exec via execve");
 
     #[cfg(unix)]
@@ -85,10 +90,17 @@ fn restart_execve() -> Result<()> {
         use std::ffi::CString;
         use std::os::unix::ffi::OsStrExt;
 
-        // Read the current binary path from /proc/self/exe.
-        let exe_path = std::fs::read_link("/proc/self/exe").map_err(|e| NodeUpgradeError::RestartFailed {
-            reason: format!("read /proc/self/exe: {e}"),
-        })?;
+        // Use the resolved binary path if provided (Nix profile switch).
+        // /proc/self/exe still points to the OLD nix store path, so the
+        // profile-resolved path is the only way to pick up the new binary.
+        let exe_path = if let Some(bin) = resolved_binary {
+            info!(path = %bin.display(), "using profile-resolved binary for execve");
+            bin.to_path_buf()
+        } else {
+            std::fs::read_link("/proc/self/exe").map_err(|e| NodeUpgradeError::RestartFailed {
+                reason: format!("read /proc/self/exe: {e}"),
+            })?
+        };
 
         let exe_cstring =
             CString::new(exe_path.as_os_str().as_bytes()).map_err(|e| NodeUpgradeError::RestartFailed {

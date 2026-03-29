@@ -16,6 +16,7 @@ use aspen_client_api::messages::AuthenticatedRequest;
 use aspen_client_api::messages::BatchWriteOperation;
 use aspen_client_api::messages::ClientRpcRequest;
 use aspen_client_api::messages::ClientRpcResponse;
+use aspen_client_api::messages::ErrorResponse;
 use aspen_client_api::messages::MAX_CLIENT_MESSAGE_SIZE;
 use aspen_kv_types::KeyValueStoreError;
 use aspen_kv_types::KeyValueWithRevision;
@@ -191,6 +192,9 @@ fn interpret_write_response(response: ClientRpcResponse, leader_id: NodeId) -> R
                 let reason = resp.error.unwrap_or_else(|| "conditional batch failed".to_string());
                 check_not_leader_error(reason, leader_id)
             }
+        }
+        ClientRpcResponse::Error(ErrorResponse { code, message }) => {
+            check_not_leader_error(format!("{code}: {message}"), leader_id)
         }
         other => {
             warn!(

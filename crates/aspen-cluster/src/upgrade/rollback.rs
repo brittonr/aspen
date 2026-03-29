@@ -30,7 +30,10 @@ pub async fn execute_rollback(upgrade_method: &UpgradeMethod, restart_method: &R
     }
 
     info!("rollback complete, initiating restart");
-    restart::restart_process(restart_method).await
+    // Rollback doesn't know the resolved binary — execve will use /proc/self/exe.
+    // For Nix rollbacks, the profile already points to the previous generation,
+    // but /proc/self/exe is the currently running binary which is fine for rollback.
+    restart::restart_process(restart_method, None).await
 }
 
 /// Nix rollback: switch profile to previous generation.

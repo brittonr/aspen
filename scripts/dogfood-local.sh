@@ -340,6 +340,8 @@ do_start() {
     ASPEN_DOCS_IN_MEMORY=true \
     ASPEN_HOOKS_ENABLED=true \
     ASPEN_NIX_CACHE_ENABLED=${cache_args:+true} \
+    ASPEN_PROFILE_PATH="$CLUSTER_DIR/node$i/nix-profile" \
+    ASPEN_RESTART_METHOD=execve \
     "$ASPEN_NODE" \
       --node-id "$i" \
       --data-dir "$CLUSTER_DIR/node$i" \

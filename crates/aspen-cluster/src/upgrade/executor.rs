@@ -70,20 +70,24 @@ impl NodeUpgradeExecutor {
         // Phase 2: Replace binary
         self.report_status(status_writer, NodeDeployStatus::Upgrading).await;
 
-        match artifact {
+        let resolved_binary = match artifact {
             DeployArtifact::NixStorePath(store_path) => {
                 self.upgrade_nix(store_path).await?;
+                // Resolve the new binary through the profile symlink so execve
+                // picks up the NEW store path (not the old /proc/self/exe).
+                self.resolve_nix_binary(store_path)
             }
             DeployArtifact::BlobHash(blob_hash) => {
                 self.upgrade_blob(blob_hash).await?;
+                None
             }
-        }
+        };
 
         // Phase 3: Restart
         self.report_status(status_writer, NodeDeployStatus::Restarting).await;
 
         info!(node_id, "binary replaced, initiating restart");
-        restart::restart_process(&self.config.restart_method).await?;
+        restart::restart_process(&self.config.restart_method, resolved_binary.as_deref()).await?;
 
         // If we reach here (shouldn't for execve), report healthy.
         // Systemd restart will kill this process, so this is a no-op path.
@@ -165,6 +169,29 @@ impl NodeUpgradeExecutor {
 
         info!(store_path, "nix profile switch complete");
         Ok(())
+    }
+
+    /// Resolve the binary path through the nix profile symlink.
+    ///
+    /// After `nix-env --set`, the profile points to the new store path.
+    /// Returns `Some(profile_path/bin/aspen-node)` for Nix upgrades,
+    /// None if the profile or binary can't be resolved.
+    fn resolve_nix_binary(&self, _store_path: &str) -> Option<PathBuf> {
+        let profile_path = match &self.config.upgrade_method {
+            UpgradeMethod::Nix { profile_path } => profile_path,
+            _ => return None,
+        };
+        let bin_name = self.config.expected_binary.as_deref().unwrap_or("bin/aspen-node");
+        let resolved = profile_path.join(bin_name);
+        if resolved.exists() {
+            Some(resolved)
+        } else {
+            warn!(
+                path = %resolved.display(),
+                "profile-resolved binary not found, execve will use /proc/self/exe"
+            );
+            None
+        }
     }
 
     /// Execute blob-based binary replacement.
