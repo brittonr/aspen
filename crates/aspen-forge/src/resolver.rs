@@ -26,6 +26,8 @@ use aspen_core::ScanRequest;
 use async_trait::async_trait;
 use tracing::debug;
 #[cfg(feature = "git-bridge")]
+use tracing::info;
+#[cfg(feature = "git-bridge")]
 use tracing::warn;
 
 use crate::constants::KV_PREFIX_FEDERATION_SETTINGS;
@@ -334,26 +336,40 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
         // objects are exported, used to convert have_set for DAG walk dedup.
         let mut content_to_envelope: HashMap<[u8; 32], [u8; 32]> = HashMap::new();
 
-        // Pre-populate content→envelope mapping from the have_set.
-        // The client sends content hashes from previous rounds. Look up
-        // the corresponding envelope hashes from the c2e index so the DAG
-        // walk can skip already-exported objects.
+        // Pre-populate content→envelope mapping from the c2e index.
+        // Scan all c2e entries for this repo (single KV scan, much faster
+        // than N individual reads). Then filter to those in have_set.
         if !have_set.is_empty() {
-            for content_hash in have_set {
-                let c2e_key = format!("forge:c2e:{}:{}", repo_id.to_hex(), hex::encode(content_hash));
-                if let Ok(result) = self.kv.read(aspen_core::ReadRequest::new(c2e_key)).await
-                    && let Some(kv) = result.kv
-                    && let Ok(env_bytes) = hex::decode(kv.value.trim())
-                    && env_bytes.len() == 32
-                {
-                    let mut env_hash = [0u8; 32];
-                    env_hash.copy_from_slice(&env_bytes);
-                    content_to_envelope.insert(*content_hash, env_hash);
-                    all_known_envelopes.insert(env_hash);
+            let c2e_prefix = format!("forge:c2e:{}:", repo_id.to_hex());
+            if let Ok(scan_result) = self
+                .kv
+                .scan(aspen_core::ScanRequest {
+                    prefix: c2e_prefix.clone(),
+                    limit_results: Some(50_000),
+                    continuation_token: None,
+                })
+                .await
+            {
+                for entry in &scan_result.entries {
+                    let ch_hex = entry.key.strip_prefix(&c2e_prefix).unwrap_or("");
+                    if let Ok(ch_bytes) = hex::decode(ch_hex)
+                        && ch_bytes.len() == 32
+                        && let Ok(env_bytes) = hex::decode(entry.value.trim())
+                        && env_bytes.len() == 32
+                    {
+                        let mut ch = [0u8; 32];
+                        ch.copy_from_slice(&ch_bytes);
+                        if have_set.contains(&ch) {
+                            let mut env_hash = [0u8; 32];
+                            env_hash.copy_from_slice(&env_bytes);
+                            content_to_envelope.insert(ch, env_hash);
+                            all_known_envelopes.insert(env_hash);
+                        }
+                    }
                 }
             }
             if !content_to_envelope.is_empty() {
-                debug!(
+                info!(
                     repo_id = %hex::encode(repo_id.0),
                     mapped = content_to_envelope.len(),
                     have_set_size = have_set.len(),
@@ -391,6 +407,9 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
                         has_more = result.has_more,
                         "export_dag_blake3 returned"
                     );
+                    // Collect new c2e mappings for batch write after the loop.
+                    let mut new_c2e_entries: Vec<(String, String)> = Vec::new();
+
                     for obj in result.objects {
                         let object_type = obj.object_type.as_str().to_string();
                         let b3_bytes: [u8; 32] = *obj.blake3.as_bytes();
@@ -403,17 +422,11 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
                         content_to_envelope.insert(content_hash, b3_bytes);
                         all_known_envelopes.insert(b3_bytes);
 
-                        // Persist c2e mapping for cross-request dedup.
-                        let c2e_key = format!("forge:c2e:{}:{}", hex::encode(repo_id.0), hex::encode(content_hash));
-                        let _ = self
-                            .kv
-                            .write(aspen_core::WriteRequest {
-                                command: aspen_core::WriteCommand::Set {
-                                    key: c2e_key,
-                                    value: hex::encode(b3_bytes),
-                                },
-                            })
-                            .await;
+                        // Queue c2e mapping for batch write.
+                        new_c2e_entries.push((
+                            format!("forge:c2e:{}:{}", hex::encode(repo_id.0), hex::encode(content_hash)),
+                            hex::encode(b3_bytes),
+                        ));
 
                         // Skip objects the client already has (by content hash).
                         if have_set.contains(&content_hash) {
@@ -427,6 +440,21 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
                             signature: None,
                             signer: None,
                         });
+                    }
+
+                    // Batch-write c2e mappings (single Raft write instead of N)
+                    if !new_c2e_entries.is_empty() {
+                        let entries: Vec<(String, String)> = new_c2e_entries;
+                        // Write in chunks of 500 to stay within SetMulti limits
+                        for chunk in entries.chunks(500) {
+                            let kvs: Vec<(String, String)> = chunk.to_vec();
+                            let _ = self
+                                .kv
+                                .write(aspen_core::WriteRequest {
+                                    command: aspen_core::WriteCommand::SetMulti { pairs: kvs },
+                                })
+                                .await;
+                        }
                     }
                 }
                 Err(e) => {

@@ -822,7 +822,10 @@ impl Node {
         if self.handle.config.federation.is_enabled {
             let hlc = Arc::new(aspen_core::hlc::create_hlc(&self.handle.config.node_id.to_string()));
 
-            // Create Forge resource resolver if forge feature is enabled
+            // Create Forge resource resolver if forge feature is enabled.
+            // NOTE: Created without git exporter because blob store isn't
+            // available yet at federation init time. The c2e index for
+            // federation DAG dedup is populated during git push import instead.
             #[cfg(feature = "forge")]
             let resolver: Option<Arc<dyn aspen_cluster::federation::FederationResourceResolver>> = {
                 let kv = self.handle.storage.raft_node.clone();

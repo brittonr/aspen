@@ -235,6 +235,22 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             }
         }
 
+        // Store content→envelope hash mapping for federation DAG dedup.
+        // Content hash = blake3(raw git content without header).
+        // Envelope hash = blake3 of the SignedObject wrapper (stored as `blake3`).
+        let content_hash = ::blake3::hash(content);
+        let c2e_key = format!("forge:c2e:{}:{}", repo_id.to_hex(), hex::encode(content_hash.as_bytes()));
+        let _ = self
+            .mapping
+            .kv()
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::Set {
+                    key: c2e_key,
+                    value: hex::encode(blake3.as_bytes()),
+                },
+            })
+            .await;
+
         Ok((blake3, sha1, obj_type))
     }
 
