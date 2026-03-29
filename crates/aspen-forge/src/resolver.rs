@@ -334,6 +334,34 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
         // objects are exported, used to convert have_set for DAG walk dedup.
         let mut content_to_envelope: HashMap<[u8; 32], [u8; 32]> = HashMap::new();
 
+        // Pre-populate content→envelope mapping from the have_set.
+        // The client sends content hashes from previous rounds. Look up
+        // the corresponding envelope hashes from the c2e index so the DAG
+        // walk can skip already-exported objects.
+        if !have_set.is_empty() {
+            for content_hash in have_set {
+                let c2e_key = format!("forge:c2e:{}:{}", repo_id.to_hex(), hex::encode(content_hash));
+                if let Ok(result) = self.kv.read(aspen_core::ReadRequest::new(c2e_key)).await
+                    && let Some(kv) = result.kv
+                    && let Ok(env_bytes) = hex::decode(kv.value.trim())
+                    && env_bytes.len() == 32
+                {
+                    let mut env_hash = [0u8; 32];
+                    env_hash.copy_from_slice(&env_bytes);
+                    content_to_envelope.insert(*content_hash, env_hash);
+                    all_known_envelopes.insert(env_hash);
+                }
+            }
+            if !content_to_envelope.is_empty() {
+                debug!(
+                    repo_id = %hex::encode(repo_id.0),
+                    mapped = content_to_envelope.len(),
+                    have_set_size = have_set.len(),
+                    "pre-populated content→envelope mapping from c2e index"
+                );
+            }
+        }
+
         for (_ref_name, head_hash) in ref_heads {
             if objects.len() >= limit {
                 break;
@@ -342,9 +370,10 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
             let commit_blake3 = blake3::Hash::from_bytes(*head_hash);
             let remaining = limit.saturating_sub(objects.len());
 
-            // Convert have_set content hashes to envelope hashes for the
-            // DAG walk. The mapping grows with each ref, so dedup becomes
-            // progressively more effective across shared objects.
+            // Build known set for DAG walk dedup.
+            // have_set contains content hashes from the client. Convert to
+            // envelope hashes using the mapping (built in prior iterations
+            // of this loop and pre-populated below).
             let mut known_for_walk = all_known_envelopes.clone();
             for content_hash in have_set {
                 if let Some(&envelope_hash) = content_to_envelope.get(content_hash) {
@@ -367,17 +396,26 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
                         let b3_bytes: [u8; 32] = *obj.blake3.as_bytes();
                         let data = obj.content;
 
-                        // Content hash for wire verification:
-                        //   verify_content_hash(&obj.data, &obj.hash)
+                        // Content hash for wire verification
                         let content_hash: [u8; 32] = blake3::hash(&data).into();
 
                         // Build content→envelope mapping for future dedup.
                         content_to_envelope.insert(content_hash, b3_bytes);
                         all_known_envelopes.insert(b3_bytes);
 
+                        // Persist c2e mapping for cross-request dedup.
+                        let c2e_key = format!("forge:c2e:{}:{}", hex::encode(repo_id.0), hex::encode(content_hash));
+                        let _ = self
+                            .kv
+                            .write(aspen_core::WriteRequest {
+                                command: aspen_core::WriteCommand::Set {
+                                    key: c2e_key,
+                                    value: hex::encode(b3_bytes),
+                                },
+                            })
+                            .await;
+
                         // Skip objects the client already has (by content hash).
-                        // Catches first-ref objects that the DAG walk couldn't
-                        // skip because the mapping wasn't built yet.
                         if have_set.contains(&content_hash) {
                             continue;
                         }
