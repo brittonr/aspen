@@ -24,9 +24,6 @@ use super::federation::get_or_create_mirror;
 use super::federation::update_mirror_refs;
 use super::federation::update_mirror_sync_timestamp;
 
-/// Staleness threshold: skip federation sync if mirror was synced within this window.
-const MIRROR_STALENESS_SECS: u64 = 30;
-
 /// Mirror metadata KV prefix (same as in federation.rs).
 const MIRROR_PREFIX: &str = "_fed:mirror:";
 
@@ -51,12 +48,6 @@ fn build_fed_id_str(origin_key: &str, upstream_repo_hex: &str) -> String {
     format!("{}:{}", origin_key, upstream_repo_hex)
 }
 
-/// Check if the mirror is fresh enough to serve without re-syncing.
-fn is_mirror_fresh(meta: &MirrorMetadata) -> bool {
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
-    now.saturating_sub(meta.last_sync_timestamp) < MIRROR_STALENESS_SECS
-}
-
 /// Look up existing mirror metadata by fed_id_str.
 async fn find_mirror_metadata(forge_node: &ForgeNodeRef, fed_id_str: &str) -> Option<MirrorMetadata> {
     let meta_key = format!("{}{}", MIRROR_PREFIX, fed_id_str);
@@ -69,7 +60,85 @@ async fn find_mirror_metadata(forge_node: &ForgeNodeRef, fed_id_str: &str) -> Op
     }
 }
 
-/// Perform a federation sync (refs + git objects) to populate a mirror repo.
+/// Build a FederatedId and endpoint address from origin parameters.
+fn build_origin_params(
+    origin_key: &str,
+    upstream_repo_hex: &str,
+    origin_addr_hint: Option<&str>,
+) -> Result<(aspen_cluster::federation::FederatedId, iroh::EndpointAddr), String> {
+    use aspen_cluster::federation::FederatedId;
+
+    let origin_pubkey: iroh::PublicKey =
+        origin_key.parse().map_err(|e| format!("invalid origin key '{}': {}", origin_key, e))?;
+
+    let upstream_bytes = hex::decode(upstream_repo_hex)
+        .map_err(|e| format!("invalid upstream repo ID '{}': {}", upstream_repo_hex, e))?;
+    if upstream_bytes.len() != 32 {
+        return Err(format!("upstream repo ID must be 32 bytes, got {}", upstream_bytes.len()));
+    }
+    let mut local_id = [0u8; 32];
+    local_id.copy_from_slice(&upstream_bytes);
+
+    let fed_id = FederatedId::new(origin_pubkey, local_id);
+
+    let endpoint_addr = if let Some(addr_str) = origin_addr_hint {
+        if let Ok(socket_addr) = addr_str.parse::<std::net::SocketAddr>() {
+            debug!(origin = %origin_key, addr = %socket_addr, "using address hint for origin");
+            let mut addr = iroh::EndpointAddr::from(origin_pubkey);
+            addr.addrs.insert(iroh::TransportAddr::Ip(socket_addr));
+            addr
+        } else {
+            iroh::EndpointAddr::from(origin_pubkey)
+        }
+    } else {
+        iroh::EndpointAddr::from(origin_pubkey)
+    };
+
+    Ok((fed_id, endpoint_addr))
+}
+
+/// Fetch only refs from the origin cluster (fast — no object transfer).
+///
+/// Returns the fetched refs with their SHA1 commit hashes.
+async fn fetch_refs_from_origin(
+    origin_key: &str,
+    upstream_repo_hex: &str,
+    origin_addr_hint: Option<&str>,
+    cluster_identity: &Arc<aspen_cluster::federation::ClusterIdentity>,
+    iroh_endpoint: &Arc<iroh::Endpoint>,
+) -> Result<Vec<FetchedRef>, String> {
+    let (fed_id, endpoint_addr) = build_origin_params(origin_key, upstream_repo_hex, origin_addr_hint)?;
+
+    let (connection, _remote_identity) =
+        aspen_cluster::federation::sync::connect_to_cluster(iroh_endpoint, cluster_identity, endpoint_addr, None)
+            .await
+            .map_err(|e| format!("connection to origin failed: {e}"))?;
+
+    let (ref_objects, _has_more) = aspen_cluster::federation::sync::sync_remote_objects(
+        &connection,
+        &fed_id,
+        vec!["refs".to_string()],
+        Vec::new(),
+        1000,
+        None,
+    )
+    .await
+    .map_err(|e| format!("ref fetch failed: {e}"))?;
+
+    let mut fetched_refs = Vec::new();
+    for obj in &ref_objects {
+        if obj.object_type != "ref" {
+            continue;
+        }
+        if let Ok(entry) = postcard::from_bytes::<RefEntry>(&obj.data) {
+            fetched_refs.push((entry.ref_name, entry.head_hash, entry.commit_sha1));
+        }
+    }
+
+    Ok(fetched_refs)
+}
+
+/// Perform a full federation sync (refs + git objects) to populate a mirror repo.
 ///
 /// Connects to the origin cluster, fetches refs and git objects, imports
 /// them into the local mirror repo, and updates the sync timestamp.
@@ -84,39 +153,9 @@ async fn sync_from_origin(
     forge_node: &ForgeNodeRef,
     mirror_repo_id: &aspen_forge::identity::RepoId,
 ) -> Result<(u32, u32, Vec<String>), String> {
-    use aspen_cluster::federation::FederatedId;
-
     let fed_id_str = build_fed_id_str(origin_key, upstream_repo_hex);
+    let (fed_id, endpoint_addr) = build_origin_params(origin_key, upstream_repo_hex, origin_addr_hint)?;
 
-    // Parse the origin public key to build the FederatedId
-    let origin_pubkey: iroh::PublicKey =
-        origin_key.parse().map_err(|e| format!("invalid origin key '{}': {}", origin_key, e))?;
-
-    let upstream_bytes = hex::decode(upstream_repo_hex)
-        .map_err(|e| format!("invalid upstream repo ID '{}': {}", upstream_repo_hex, e))?;
-    if upstream_bytes.len() != 32 {
-        return Err(format!("upstream repo ID must be 32 bytes, got {}", upstream_bytes.len()));
-    }
-    let mut local_id = [0u8; 32];
-    local_id.copy_from_slice(&upstream_bytes);
-
-    let fed_id = FederatedId::new(origin_pubkey, local_id);
-
-    // Build endpoint address with optional hint
-    let endpoint_addr = if let Some(addr_str) = origin_addr_hint {
-        if let Ok(socket_addr) = addr_str.parse::<std::net::SocketAddr>() {
-            debug!(origin = %origin_key, addr = %socket_addr, "using address hint for origin");
-            let mut addr = iroh::EndpointAddr::from(origin_pubkey);
-            addr.addrs.insert(iroh::TransportAddr::Ip(socket_addr));
-            addr
-        } else {
-            iroh::EndpointAddr::from(origin_pubkey)
-        }
-    } else {
-        iroh::EndpointAddr::from(origin_pubkey)
-    };
-
-    // Connect and handshake
     let (connection, _remote_identity) =
         aspen_cluster::federation::sync::connect_to_cluster(iroh_endpoint, cluster_identity, endpoint_addr, None)
             .await
@@ -367,80 +406,84 @@ pub(crate) async fn handle_federation_git_list_refs(
         }
     };
 
-    let fed_id_str = build_fed_id_str(origin_key, upstream_repo_hex);
-    let mirror_bytes = derive_mirror_repo_id(origin_key, upstream_repo_hex);
-    let mirror_repo_id = aspen_forge::identity::RepoId(mirror_bytes);
-
-    // Check existing mirror
-    let existing = find_mirror_metadata(forge_node, &fed_id_str).await;
-
-    let needs_sync = match &existing {
-        Some(meta) if is_mirror_fresh(meta) => {
-            debug!(fed_id = %fed_id_str, "mirror is fresh, serving from cache");
-            false
-        }
-        Some(_) => {
-            debug!(fed_id = %fed_id_str, "mirror is stale, re-syncing");
-            true
-        }
-        None => {
-            debug!(fed_id = %fed_id_str, "no mirror exists, creating and syncing");
-            // Create the mirror repo via the existing helper
-            if let Err(e) = get_or_create_mirror(forge_node, &fed_id_str, origin_key, None, None).await {
-                return Ok(ClientRpcResponse::FederationGitListRefs(GitBridgeListRefsResponse {
-                    is_success: false,
-                    refs: vec![],
-                    head: None,
-                    error: Some(format!("failed to create mirror: {e}")),
-                }));
+    // Fetch refs directly from the origin — fast, no object transfer needed.
+    // Object transfer happens in FederationGitFetch when git actually requests them.
+    let fetched_refs = match fetch_refs_from_origin(origin_key, upstream_repo_hex, origin_addr_hint, identity, endpoint)
+        .await
+    {
+        Ok(refs) => refs,
+        Err(e) => {
+            // Try stale mirror cache
+            let fed_id_str = build_fed_id_str(origin_key, upstream_repo_hex);
+            let mirror_bytes = derive_mirror_repo_id(origin_key, upstream_repo_hex);
+            let mirror_repo_id = aspen_forge::identity::RepoId(mirror_bytes);
+            if find_mirror_metadata(forge_node, &fed_id_str).await.is_some() {
+                warn!(error = %e, "origin unreachable, serving stale mirror refs");
+                let mirror_hex = hex::encode(mirror_repo_id.0);
+                let result = super::git_bridge::handle_git_bridge_list_refs(forge_node, mirror_hex).await?;
+                return match result {
+                    ClientRpcResponse::GitBridgeListRefs(resp) => Ok(ClientRpcResponse::FederationGitListRefs(resp)),
+                    other => Ok(other),
+                };
             }
-            true
+            return Ok(ClientRpcResponse::FederationGitListRefs(GitBridgeListRefsResponse {
+                is_success: false,
+                refs: vec![],
+                head: None,
+                error: Some(format!("origin unreachable: {e}")),
+            }));
         }
     };
 
-    if needs_sync {
-        match sync_from_origin(
-            origin_key,
-            upstream_repo_hex,
-            origin_addr_hint,
-            identity,
-            endpoint,
-            forge_node,
-            &mirror_repo_id,
-        )
-        .await
-        {
-            Ok((refs, objects, errors)) => {
-                if !errors.is_empty() {
-                    warn!(errors = ?errors, "federation sync completed with errors");
-                }
-                debug!(refs = refs, objects = objects, "federation sync populated mirror");
-            }
-            Err(e) => {
-                // If we have a stale mirror, serve it anyway with a warning
-                if existing.is_some() {
-                    warn!(error = %e, "federation sync failed, serving stale mirror");
-                } else {
-                    return Ok(ClientRpcResponse::FederationGitListRefs(GitBridgeListRefsResponse {
-                        is_success: false,
-                        refs: vec![],
-                        head: None,
-                        error: Some(format!("origin unreachable: {e}")),
-                    }));
-                }
+    if fetched_refs.is_empty() {
+        return Ok(ClientRpcResponse::FederationGitListRefs(GitBridgeListRefsResponse {
+            is_success: true,
+            refs: vec![],
+            head: None,
+            error: None,
+        }));
+    }
+
+    // Convert fetched refs to git bridge format using their commit SHA1 hashes
+    use aspen_client_api::GitBridgeRefInfo;
+    let mut git_refs = Vec::with_capacity(fetched_refs.len());
+    let mut head_sha1 = None;
+    let mut head_ref: Option<String> = None;
+
+    for (ref_name, _head_hash, commit_sha1) in &fetched_refs {
+        if let Some(sha1_bytes) = commit_sha1 {
+            let sha1_hex = hex::encode(sha1_bytes);
+            // Forge stores refs without "refs/" prefix (e.g., "heads/main").
+            // Git protocol expects the full ref path ("refs/heads/main").
+            let full_ref = if ref_name.starts_with("refs/") {
+                ref_name.clone()
+            } else {
+                format!("refs/{}", ref_name)
+            };
+            git_refs.push(GitBridgeRefInfo {
+                ref_name: full_ref.clone(),
+                sha1: sha1_hex.clone(),
+            });
+            // Use heads/main or heads/master as HEAD
+            if head_sha1.is_none() && (ref_name == "heads/main" || ref_name == "heads/master") {
+                head_sha1 = Some(sha1_hex);
+                head_ref = Some(full_ref);
             }
         }
     }
 
-    // Serve refs from the local mirror using the regular git bridge handler
-    let mirror_hex = hex::encode(mirror_repo_id.0);
-    let result = super::git_bridge::handle_git_bridge_list_refs(forge_node, mirror_hex).await?;
+    info!(
+        origin = %origin_key,
+        refs = git_refs.len(),
+        "federation list-refs served directly from origin (no object sync)"
+    );
 
-    // Re-wrap as FederationGitListRefs response
-    match result {
-        ClientRpcResponse::GitBridgeListRefs(resp) => Ok(ClientRpcResponse::FederationGitListRefs(resp)),
-        other => Ok(other),
-    }
+    Ok(ClientRpcResponse::FederationGitListRefs(GitBridgeListRefsResponse {
+        is_success: true,
+        refs: git_refs,
+        head: head_ref,
+        error: None,
+    }))
 }
 
 /// Handle `FederationGitFetch` — fetch git objects for a federated repo.
@@ -484,9 +527,13 @@ pub(crate) async fn handle_federation_git_fetch(
         }
     };
 
+    let fed_id_str = build_fed_id_str(origin_key, upstream_repo_hex);
     let mirror_bytes = derive_mirror_repo_id(origin_key, upstream_repo_hex);
     let mirror_repo_id = aspen_forge::identity::RepoId(mirror_bytes);
     let mirror_hex = hex::encode(mirror_repo_id.0);
+
+    // Ensure mirror repo exists
+    let _ = get_or_create_mirror(forge_node, &fed_id_str, origin_key, None, None).await;
 
     // Try serving from mirror first
     let result =
@@ -499,8 +546,9 @@ pub(crate) async fn handle_federation_git_fetch(
     };
 
     if needs_sync {
-        debug!(
+        info!(
             origin = %origin_key,
+            want_count = want.len(),
             "mirror missing objects, syncing from origin"
         );
 
