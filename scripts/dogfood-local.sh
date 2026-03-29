@@ -625,7 +625,7 @@ stream_pipeline() {
   local seen_jobs=""          # jobs we've already streamed (space-separated)
 
   cleanup_stream() {
-    if [ -n "$stream_pid" ] && kill -0 "$stream_pid" 2>/dev/null; then
+    if [ -n "${stream_pid:-}" ] && kill -0 "$stream_pid" 2>/dev/null; then
       kill "$stream_pid" 2>/dev/null || true
       wait "$stream_pid" 2>/dev/null || true
     fi
