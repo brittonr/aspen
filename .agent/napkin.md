@@ -34,6 +34,8 @@
 | Worker `mark_started` | If it fails, MUST release the queue item back (nack/release_unchanged). Otherwise job is orphaned: dequeued from queue but never started. Fixed in `run_worker_execute_with_handler` |
 | 3-node dogfood | QUIC stream contention during heavy git push (33K objects) causes 21-140ms node unreachability blips. ReadIndex quorum confirmations fail → forwarded reads fail → `get_job` returns None → `JobNotFound`. Single-node dogfood doesn't hit this |
 | Bash `set -u` + EXIT traps | Local vars go out of scope after function returns, but EXIT trap persists. Use `${var:-}` in cleanup functions called from traps |
+| Queue item disposition | On `mark_started` failure: ACK if job is Running or NotFound (another worker has it or it's gone). RELEASE only for transient errors. Releasing Running/NotFound items causes infinite dequeue-release hot loops |
+| MAX_SNAPSHOT_SIZE | 100MB too small for CI workloads (33K git objects + build logs). Raised to 512MB. Snapshot size exceeded breaks ReadIndex → cascading read failures |
 
 ### Feature Gate Rules
 
