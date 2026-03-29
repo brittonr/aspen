@@ -606,13 +606,13 @@ async fn run_worker_execute_with_handler<S: aspen_core::KeyValueStore + ?Sized +
             // ACK the queue item so it stops being redelivered.  For all other
             // errors (transient leadership blips, network issues), release it
             // back to the queue so a worker can retry.
-            let already_running = matches!(
+            let should_ack = matches!(
                 &e,
                 crate::error::JobError::InvalidJobState { state, .. } if state == "Running"
-            );
+            ) || matches!(&e, crate::error::JobError::JobNotFound { .. });
 
-            if already_running {
-                debug!(worker_id, job_id = %job.id, "job already running on another worker, acking queue item");
+            if should_ack {
+                debug!(worker_id, job_id = %job.id, error = ?e, "job not claimable, acking queue item");
                 if let Err(ack_err) =
                     manager.ack_queue_item_by_priority(&queue_item.receipt_handle, job.spec.config.priority).await
                 {

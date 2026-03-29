@@ -57,7 +57,7 @@ pub const IROH_READ_TIMEOUT_SECS: u64 = 10;
 ///
 /// Used in:
 /// - `network.rs`: Chunked snapshot reading with size validation
-pub const MAX_SNAPSHOT_SIZE: u64 = 100 * 1024 * 1024;
+pub const MAX_SNAPSHOT_SIZE: u64 = 512 * 1024 * 1024;
 
 /// Maximum number of concurrent streams per connection (100).
 ///

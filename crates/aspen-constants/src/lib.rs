@@ -153,7 +153,7 @@ mod tests {
         assert_eq!(network::IROH_CONNECT_TIMEOUT_SECS, 5);
         assert_eq!(network::IROH_STREAM_OPEN_TIMEOUT_SECS, 2);
         assert_eq!(network::IROH_READ_TIMEOUT_SECS, 10);
-        assert_eq!(network::MAX_SNAPSHOT_SIZE, 100 * 1024 * 1024);
+        assert_eq!(network::MAX_SNAPSHOT_SIZE, 512 * 1024 * 1024);
         assert_eq!(network::MAX_STREAMS_PER_CONNECTION, 100);
         assert_eq!(network::MAX_CONCURRENT_CONNECTIONS, 500);
         assert_eq!(network::MAX_PEERS, 1000);
