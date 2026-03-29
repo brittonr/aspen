@@ -58,7 +58,7 @@ pub const IROH_READ_TIMEOUT: Duration = Duration::from_secs(10);
 ///
 /// Used in:
 /// - `network.rs`: Chunked snapshot reading with size validation
-pub const MAX_SNAPSHOT_SIZE: u64 = 512 * 1024 * 1024;
+pub const MAX_SNAPSHOT_SIZE: u64 = 1024 * 1024 * 1024;
 
 // ============================================================================
 // Peer and Connection Constants
