@@ -262,6 +262,15 @@
 
 All resolved as of 2026-03-24.
 
+### Federation / Git Bridge
+
+| Date | What Went Wrong | What To Do Instead |
+|------|----------------|-------------------|
+| 2026-03-29 | Large git objects (>1MB base64) silently dropped from KV during push — only stored in iroh-blobs, which fails on read | Chunked KV storage: split across `forge:obj:{repo}:{hash}:c:{N}` entries with `chunks:N` manifest |
+| 2026-03-29 | Federation sync batch size 1000 with max 10 rounds = 10K objects max, repo has 33K+ | Increased to 5000/round, 100 rounds. Still not enough for federated git clone (DAG walk truncation) |
+| 2026-03-29 | `do_verify` in dogfood-federation.sh picked clippy job (first successful) instead of build-node | Filter by job name: prefer `build-node` → `nix-build` → `build-*` → first |
+| 2026-03-29 | Federated git clone empty for large repos — `federation_import_objects` fails with "hash mapping not found" | Root cause: truncated DAG walk sends trees referencing blobs not in batch. Need full dependency closure or incremental import that tolerates missing mappings |
+
 ## Session Log
 
 ### 2026-03-28: Dogfood self-forwarding fix
@@ -307,6 +316,20 @@ Two bugs causing "node 3 stuck draining" during 3-node dogfood deploy:
 2. **Missing timeout on QUIC stream ops in `IrohNodeRpcClient::send_rpc`**: Only `connect()` and `read_to_end()` had 30s timeouts. `open_bi()`, `write_all()`, and `finish()` had no timeout — if the target node was under load (full QUIC flow-control window from 33k git objects), these could block indefinitely. The coordinator's status stayed at "Draining" because `send_upgrade` never returned. Fix: single outer timeout around the entire I/O sequence (connect + open_bi + write + read).
 
 Also fixed: pre-existing compilation error in `deploy_rpc_integration.rs` (`handle_node_upgrade` missing `expected_binary` arg).
+
+### 2026-03-29: Federation dogfood — sync works, federated clone blocked on large repos
+
+Ran `nix run .#dogfood-federation -- full` end-to-end:
+
+**Working**: Two independent clusters (alice + bob) start, alice hosts Forge repo (33,543 objects pushed), federation sync discovers 1 resource (forge:repo, 1 ref), bob trusts alice, CI pipeline runs on bob (clippy ✅, build-node ✅, build-cli ✅, nextest-quick ✅), verify finds binary.
+
+**Fixed (3 bugs)**:
+
+1. Large git objects (15 tree objects >1MB) silently dropped from KV during push. Federation exporter couldn't read them. Fix: chunked KV storage across multiple keys.
+2. Federation sync capped at 10×1000=10K objects. Fix: 100×5000=500K.
+3. Verify script picked clippy output instead of build-node. Fix: name-based job selection.
+
+**Blocked**: Federated git clone (`fed:` URL) returns empty repo for large repos. The DAG walk exports objects but truncates at batch boundary, producing trees that reference blobs not in the batch. Bob's import fails: "hash mapping not found: {sha1}". Needs either full dependency closure per batch or an import path that tolerates forward references.
 
 ### 2026-03-29: 3-node dogfood full-loop — CI pipeline passes, deploy works
 
