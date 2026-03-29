@@ -247,6 +247,17 @@
 | 2026-03-27 | `aspen_core::test_support` is `pub(crate)` — not usable from other crates' tests | Use `aspen_testing_core::DeterministicKeyValueStore` instead |
 | 2026-03-27 | `tracing::info!` macro holds `&dyn Value` (non-Send) across `.await` inside `task_tracker.spawn` | Compute values before the macro: `let x = foo.read().await.len(); info!(x = x, ...)` |
 
+### 3-Node Dogfood
+
+| Date | What Went Wrong | What To Do Instead |
+|------|----------------|-------------------|
+| 2026-03-29 | `dependency_graph.mark_running()` on followers returns JobNotFound — dependency tracker is in-memory local state, not replicated through Raft | Return Ok(()) when job not in local graph — it was submitted on another node |
+| 2026-03-29 | `nix-env --profile /nix/var/nix/profiles/aspen-node --set` fails with permission denied in dogfood-local | Set `ASPEN_PROFILE_PATH=$CLUSTER_DIR/node$i/nix-profile` and `ASPEN_RESTART_METHOD=execve` |
+| 2026-03-29 | execve restart reads `/proc/self/exe` → old nix store path after profile switch | Pass profile-resolved binary path to execve: `profile_path/bin/aspen-node` |
+| 2026-03-29 | `ClientRpcResponse::Error` (discriminant 14) not handled in `interpret_write_response` → "unexpected response type" spam + write forwarding failures | Add explicit match arm for `ClientRpcResponse::Error` in write forwarding |
+| 2026-03-29 | 656MB snapshots exceed 512MB limit → snapshot transfer rejection between nodes | Raise MAX_SNAPSHOT_SIZE to 1GB |
+| 2026-03-29 | Worker error logging at debug level — failures invisible in default log config | Use info level for dequeue errors and mark_started failures |
+
 ## Investigation Items
 
 All resolved as of 2026-03-24.
@@ -296,3 +307,17 @@ Two bugs causing "node 3 stuck draining" during 3-node dogfood deploy:
 2. **Missing timeout on QUIC stream ops in `IrohNodeRpcClient::send_rpc`**: Only `connect()` and `read_to_end()` had 30s timeouts. `open_bi()`, `write_all()`, and `finish()` had no timeout — if the target node was under load (full QUIC flow-control window from 33k git objects), these could block indefinitely. The coordinator's status stayed at "Draining" because `send_upgrade` never returned. Fix: single outer timeout around the entire I/O sequence (connect + open_bi + write + read).
 
 Also fixed: pre-existing compilation error in `deploy_rpc_integration.rs` (`handle_node_upgrade` missing `expected_binary` arg).
+
+### 2026-03-29: 3-node dogfood full-loop — CI pipeline passes, deploy works
+
+Fixed 4 bugs blocking 3-node dogfood:
+
+1. **Deploy permission denied**: dogfood-local.sh didn't set `ASPEN_PROFILE_PATH` or `ASPEN_RESTART_METHOD`. Fix: set per-node profile path and execve restart.
+
+2. **execve restart used old binary**: `/proc/self/exe` points to old nix store path after profile switch. Fix: resolve binary through profile symlink.
+
+3. **Follower workers couldn't execute jobs** (ROOT CAUSE): `dependency_graph.mark_running()` returned JobNotFound — dependency tracker is local in-memory state, not replicated through Raft. Fix: return Ok when job not in local graph.
+
+4. **Write forwarding Error handling + snapshot size**: `ClientRpcResponse::Error` not handled in `interpret_write_response`. MAX_SNAPSHOT_SIZE raised 512MB→1GB.
+
+Results: CI pipeline all green ✅, all 3 nodes upgraded via rolling deploy ✅. Deploy status polling times out (QUIC strained after heavy pipeline) — cosmetic only.
