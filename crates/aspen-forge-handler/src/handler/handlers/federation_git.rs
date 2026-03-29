@@ -149,15 +149,20 @@ async fn sync_from_origin(
 
     let refs_fetched = fetched_refs.len() as u32;
 
-    // Phase 2: Fetch git objects (incremental)
-    // Large repos (e.g., Aspen with 33K+ objects) need many rounds.
-    // Each round fetches up to 5000 objects; 100 rounds allows ~500K objects.
+    // Phase 2: Fetch and import git objects incrementally.
+    //
+    // Each round fetches a batch from the origin, imports it into the local
+    // mirror, then tells the origin what we have for the next round. This
+    // builds up SHA1→BLAKE3 mappings incrementally so trees can resolve
+    // references to blobs imported in earlier rounds.
     let have_hashes = collect_local_blake3_hashes(forge_node, mirror_repo_id, 50_000).await;
 
     let mut all_git_objects = Vec::new();
     let mut current_have = have_hashes;
     let max_rounds = 100u32;
     let batch_size = 5000u32;
+    let mut total_imported = 0u32;
+    let mut combined_stats = super::federation::FederationImportStats::default();
 
     for round in 0..max_rounds {
         let (objects, has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
@@ -182,23 +187,44 @@ async fn sync_from_origin(
             debug!(
                 origin = %origin_key,
                 round = round,
-                total = all_git_objects.len(),
+                total = total_imported,
                 "sync returned empty git objects batch — stopping"
             );
             break;
         }
 
+        let batch_len = objects.len();
         debug!(
             origin = %origin_key,
             round = round,
-            batch = objects.len(),
+            batch = batch_len,
             has_more = has_more,
-            "fetched git object batch"
+            "fetched git object batch, importing..."
         );
 
         for obj in &objects {
             current_have.push(obj.hash);
         }
+
+        // Import this batch immediately so mappings are available for next round
+        let batch_stats = federation_import_objects(forge_node, mirror_repo_id, &objects).await;
+        let batch_imported = batch_stats.commits + batch_stats.trees + batch_stats.blobs;
+        total_imported += batch_imported;
+
+        // Merge stats
+        combined_stats.blobs += batch_stats.blobs;
+        combined_stats.trees += batch_stats.trees;
+        combined_stats.commits += batch_stats.commits;
+        combined_stats.skipped += batch_stats.skipped;
+        combined_stats.total_bytes += batch_stats.total_bytes;
+        for (k, v) in batch_stats.content_to_local_blake3 {
+            combined_stats.content_to_local_blake3.insert(k, v);
+        }
+        // Only log import errors, don't propagate — partial progress is OK
+        for err in &batch_stats.errors {
+            debug!(origin = %origin_key, round = round, error = %err, "batch import error (non-fatal)");
+        }
+
         all_git_objects.extend(objects);
 
         if !has_more {
@@ -206,10 +232,9 @@ async fn sync_from_origin(
         }
     }
 
-    // Import git objects into mirror
-    let stats = federation_import_objects(forge_node, mirror_repo_id, &all_git_objects).await;
-    let objects_imported = stats.commits + stats.trees + stats.blobs;
-    errors.extend(stats.errors.iter().cloned());
+    let objects_imported = total_imported;
+    // Use combined_stats for ref translation
+    let stats = combined_stats;
 
     // Translate remote ref hashes to local BLAKE3 hashes.
     //

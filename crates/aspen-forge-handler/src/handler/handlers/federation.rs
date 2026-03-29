@@ -1098,7 +1098,14 @@ pub(crate) async fn federation_import_objects(
     stats.trees = type_counts[1];
     stats.commits = type_counts[2];
 
-    // Phase 2: Import via topologically-sorted wave-based parallelism.
+    // Phase 2: Two-pass import — blobs first, then trees+commits.
+    //
+    // Federation sync batches may contain trees that reference blobs from
+    // a different batch (truncated DAG walk). By importing all blobs first,
+    // their SHA1→BLAKE3 mappings exist before trees try to resolve them.
+    // Trees referencing blobs from future batches will still fail, but trees
+    // referencing blobs in the SAME batch will succeed (the previous single-pass
+    // import failed because blobs and trees were mixed in topological sort).
     let mapping = std::sync::Arc::new(HashMappingStore::new(forge_node.kv().clone()));
     let hlc = create_hlc(&forge_node.public_key().to_string());
     let importer = GitImporter::new(
@@ -1109,21 +1116,46 @@ pub(crate) async fn federation_import_objects(
         hlc,
     );
 
-    let result = match importer.import_objects(repo_id, import_objects).await {
-        Ok(r) => r,
-        Err(e) => {
-            stats.errors.push(format!("import_objects failed: {e}"));
-            tracing::warn!(error = %e, "federation import_objects failed");
-            return stats;
+    // Pass 1: Import blobs (zero dependencies, always succeeds)
+    let (blobs, non_blobs): (Vec<_>, Vec<_>) =
+        import_objects.into_iter().partition(|(_, git_type, _)| *git_type == GitObjectType::Blob);
+
+    let mut all_mappings = Vec::new();
+    let mut total_skipped = 0u32;
+
+    if !blobs.is_empty() {
+        match importer.import_objects(repo_id, blobs).await {
+            Ok(r) => {
+                total_skipped += r.objects_skipped;
+                all_mappings.extend(r.mappings);
+            }
+            Err(e) => {
+                stats.errors.push(format!("blob import failed: {e}"));
+                tracing::warn!(error = %e, "federation blob import failed");
+            }
         }
-    };
+    }
 
-    stats.skipped = result.objects_skipped;
+    // Pass 2: Import trees + commits (trees depend on blobs, commits on trees)
+    if !non_blobs.is_empty() {
+        match importer.import_objects(repo_id, non_blobs).await {
+            Ok(r) => {
+                total_skipped += r.objects_skipped;
+                all_mappings.extend(r.mappings);
+            }
+            Err(e) => {
+                stats.errors.push(format!("tree/commit import failed: {e}"));
+                tracing::warn!(error = %e, "federation tree/commit import failed");
+            }
+        }
+    }
 
-    // Phase 3: Build content_to_local_blake3 from ImportResult.mappings.
+    stats.skipped = total_skipped;
+
+    // Phase 3: Build content_to_local_blake3 from all mappings.
     // Each mapping is (sha1, blake3). We look up the content hash via the
     // sha1_to_content_hash map built in phase 1.
-    for (sha1, local_blake3) in &result.mappings {
+    for (sha1, local_blake3) in &all_mappings {
         if let Some(content_hash) = sha1_to_content_hash.get(sha1.as_bytes()) {
             stats.content_to_local_blake3.insert(*content_hash, *local_blake3);
         }
@@ -1135,7 +1167,8 @@ pub(crate) async fn federation_import_objects(
         blobs = stats.blobs,
         skipped = stats.skipped,
         total_bytes = stats.total_bytes,
-        mappings = result.mappings.len(),
+        mappings = all_mappings.len(),
+        errors = stats.errors.len(),
         "federation git object import complete"
     );
 

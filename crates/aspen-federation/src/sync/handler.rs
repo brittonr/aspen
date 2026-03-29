@@ -597,7 +597,17 @@ async fn handle_sync_objects_resolved(
 ) -> Result<FederationResponse> {
     match resolver.sync_objects(fed_id, want_types, have_hashes, limit).await {
         Ok(objects) => {
-            let has_more = objects.len() >= limit as usize;
+            // For git object sync, the DAG walk may be truncated even when
+            // returning fewer objects than the limit. Use a conservative
+            // heuristic: has_more is true if we got any objects at all AND
+            // at least one non-ref type was requested. The client will send
+            // another round; if the server returns empty, the loop stops.
+            let wants_git = want_types.iter().any(|t| t == "commit" || t == "tree" || t == "blob");
+            let has_more = if wants_git {
+                !objects.is_empty()
+            } else {
+                objects.len() >= limit as usize
+            };
             Ok(FederationResponse::Objects { objects, has_more })
         }
         Err(FederationResourceError::NotFound { fed_id }) => Ok(FederationResponse::Error {

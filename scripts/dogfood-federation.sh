@@ -476,27 +476,78 @@ do_build() {
   log "Enabling CI watch on bob..."
   cli_bob_json ci watch "$bob_repo_id" 2>/dev/null || warn "CI watch may already be set"
 
-  # Push source to bob's forge for CI.
-  # NOTE: Federated git clone (`fed:` URL) doesn't yet support large repos
-  # (33K+ objects) — the federation sync protocol truncates the DAG walk,
-  # causing incomplete object imports. The metadata sync above proves
-  # cross-cluster connectivity; direct push exercises the CI pipeline.
-  # TODO: Fix federation_import_objects to handle incremental DAG fetches.
-  local bob_ticket
+  # Federated clone: bob clones from alice's forge via federation URL.
+  # Bob's node connects to alice, fetches git objects over iroh QUIC,
+  # imports them into a local mirror repo incrementally.
+  local bob_ticket alice_node_id alice_addr alice_repo_id
   bob_ticket=$(get_ticket_bob)
+  alice_node_id=$(cat "$BASE_DIR/alice_node_id" 2>/dev/null || true)
+  alice_addr=$(cat "$BASE_DIR/alice_addr" 2>/dev/null || true)
+  alice_repo_id=$(cat "$BASE_DIR/alice_repo_id" 2>/dev/null || true)
 
-  log "Pushing source to bob's Forge..."
-  cd "$PROJECT"
-  git remote remove aspen-fed-bob 2>/dev/null || true
-  git remote add aspen-fed-bob "aspen://${bob_ticket}/${bob_repo_id}"
-  if RUST_LOG=warn git push aspen-fed-bob HEAD:main 2>&1 | tail -5; then
-    ok "Source pushed to bob's Forge"
-  else
-    err "Push to bob's Forge failed"
-    git remote remove aspen-fed-bob 2>/dev/null || true
+  if [ -z "$alice_node_id" ] || [ -z "$alice_repo_id" ]; then
+    err "Missing alice identity or repo ID. Run sync first: $0 sync"
     exit 1
   fi
-  git remote remove aspen-fed-bob 2>/dev/null || true
+
+  local fed_url="aspen://${bob_ticket}/fed:${alice_node_id}:${alice_repo_id}"
+  local clone_dir="/tmp/aspen-fed-clone-$$"
+  rm -rf "$clone_dir"
+
+  log "Federated clone: bob cloning from alice..."
+  log "  URL: $fed_url"
+  local clone_rc=0
+  ASPEN_ORIGIN_ADDR="$alice_addr" \
+    RUST_LOG=warn \
+    git clone "$fed_url" "$clone_dir" 2>&1 | tail -10 || clone_rc=$?
+
+  if [ $clone_rc -ne 0 ]; then
+    warn "Federated clone failed (rc=$clone_rc), retrying after 5s..."
+    rm -rf "$clone_dir"
+    sleep 5
+    ASPEN_ORIGIN_ADDR="$alice_addr" \
+      RUST_LOG=warn \
+      git clone "$fed_url" "$clone_dir" 2>&1 | tail -10 || clone_rc=$?
+  fi
+
+  if [ $clone_rc -ne 0 ]; then
+    err "Federated clone failed after retry"
+    rm -rf "$clone_dir"
+    exit 1
+  fi
+
+  # Check if clone has content
+  if ! git -C "$clone_dir" rev-parse HEAD >/dev/null 2>&1; then
+    warn "Federated clone returned empty repo, falling back to direct push..."
+    rm -rf "$clone_dir"
+    log "Pushing source directly to bob's Forge..."
+    cd "$PROJECT"
+    git remote remove aspen-fed-bob 2>/dev/null || true
+    git remote add aspen-fed-bob "aspen://${bob_ticket}/${bob_repo_id}"
+    if RUST_LOG=warn git push aspen-fed-bob HEAD:main 2>&1 | tail -5; then
+      ok "Source pushed to bob's Forge (direct fallback)"
+    else
+      err "Push to bob's Forge failed"
+      git remote remove aspen-fed-bob 2>/dev/null || true
+      exit 1
+    fi
+    git remote remove aspen-fed-bob 2>/dev/null || true
+  else
+    ok "Federated clone succeeded"
+    # Push cloned content to bob's local forge for CI
+    log "Pushing federated clone to bob's Forge..."
+    cd "$clone_dir"
+    git remote add bob-forge "aspen://${bob_ticket}/${bob_repo_id}"
+    if RUST_LOG=warn git push bob-forge main 2>&1 | tail -5; then
+      ok "Federated content pushed to bob's Forge"
+    else
+      err "Push to bob's Forge failed"
+      rm -rf "$clone_dir"
+      exit 1
+    fi
+    cd "$PROJECT"
+    rm -rf "$clone_dir"
+  fi
 
   # Wait for CI pipeline
   log "Waiting for CI pipeline on bob..."
