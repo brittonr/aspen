@@ -269,7 +269,9 @@ All resolved as of 2026-03-24.
 | 2026-03-29 | Large git objects (>1MB base64) silently dropped from KV during push — only stored in iroh-blobs, which fails on read | Chunked KV storage: split across `forge:obj:{repo}:{hash}:c:{N}` entries with `chunks:N` manifest |
 | 2026-03-29 | Federation sync batch size 1000 with max 10 rounds = 10K objects max, repo has 33K+ | Increased to 5000/round, 100 rounds. Still not enough for federated git clone (DAG walk truncation) |
 | 2026-03-29 | `do_verify` in dogfood-federation.sh picked clippy job (first successful) instead of build-node | Filter by job name: prefer `build-node` → `nix-build` → `build-*` → first |
-| 2026-03-29 | Federated git clone empty for large repos — `federation_import_objects` fails with "hash mapping not found" | Root cause: truncated DAG walk sends trees referencing blobs not in batch. Need full dependency closure or incremental import that tolerates missing mappings |
+| 2026-03-29 | Federated git clone empty for large repos — `federation_import_objects` fails with "hash mapping not found" | Root cause: truncated DAG walk sends trees referencing blobs not in batch. Fixed: two-pass import (blobs first), list-refs split from fetch, c2e index for DAG dedup |
+| 2026-03-29 | c2e index (content→envelope hash) only matches 4/33K entries | Content hash from import path (`blake3(raw_git_content)`) differs from export path (`blake3(export_object_content)`). The export reconstructs git bytes which may differ from the original. Next: key c2e by envelope hash directly or fix export to produce identical bytes |
+| 2026-03-29 | Federation resolver created without git exporter — `sync_objects` used generic KV path instead of DAG walk | Blob store not available at federation init time. c2e index writes moved to import path instead |
 
 ## Session Log
 
