@@ -546,7 +546,7 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                 }
             }
             Err(e) => {
-                debug!(worker_id, error = ?e, "failed to dequeue jobs, retrying");
+                info!(worker_id, error = ?e, "failed to dequeue jobs, retrying");
                 tokio::time::sleep(config.poll_interval).await;
             }
         }
@@ -612,7 +612,7 @@ async fn run_worker_execute_with_handler<S: aspen_core::KeyValueStore + ?Sized +
             ) || matches!(&e, crate::error::JobError::JobNotFound { .. });
 
             if should_ack {
-                debug!(worker_id, job_id = %job.id, error = ?e, "job not claimable, acking queue item");
+                info!(worker_id, job_id = %job.id, error = ?e, "job not claimable, acking queue item");
                 if let Err(ack_err) =
                     manager.ack_queue_item_by_priority(&queue_item.receipt_handle, job.spec.config.priority).await
                 {

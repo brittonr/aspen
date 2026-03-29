@@ -528,10 +528,11 @@ impl DependencyGraph {
                 });
             }
             info.state = DependencyState::Running;
-            Ok(())
-        } else {
-            Err(JobError::JobNotFound { id: job_id.to_string() })
         }
+        // Job not in the dependency graph is OK — it may have been submitted
+        // on a different node. The dependency tracker is local in-memory state,
+        // not replicated through Raft.
+        Ok(())
     }
 
     /// Reset a running job back to ready state for retry.

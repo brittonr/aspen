@@ -54,10 +54,25 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         const MAX_RETRIES: u32 = 3;
         let mut retries = 0;
         let mut not_leader_retries = 0u32;
+        let mut not_found_retries = 0u32;
 
         loop {
-            // Read current job
-            let mut job = self.get_job(id).await?.ok_or_else(|| JobError::JobNotFound { id: id.to_string() })?;
+            // Read current job.
+            // On followers, transient NotFound can occur when the job was just
+            // written via a forwarded write but the local state machine hasn't
+            // applied it yet. Retry a few times before giving up.
+            let job_opt = self.get_job(id).await?;
+            let mut job = match job_opt {
+                Some(j) => j,
+                None => {
+                    not_found_retries += 1;
+                    if not_found_retries >= 5 {
+                        return Err(JobError::JobNotFound { id: id.to_string() });
+                    }
+                    tokio::time::sleep(Duration::from_millis(20 * not_found_retries as u64)).await;
+                    continue;
+                }
+            };
 
             let expected_version = job.version;
 
