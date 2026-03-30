@@ -202,7 +202,7 @@ async fn sync_from_origin(
     let mut all_git_objects = Vec::new();
     let mut current_have = have_hashes;
     let max_rounds = 100u32;
-    let batch_size = 5000u32;
+    let batch_size = 2000u32;
     let mut total_imported = 0u32;
     let mut combined_stats = super::federation::FederationImportStats::default();
 

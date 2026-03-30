@@ -42,7 +42,7 @@ use crate::identity::RepoId;
 const MAX_REFS_PER_QUERY: u32 = 1000;
 
 /// Maximum git objects returned per sync request.
-const MAX_GIT_OBJECTS_PER_SYNC: u32 = 5000;
+const MAX_GIT_OBJECTS_PER_SYNC: u32 = 2000;
 
 /// Zero-pad a 20-byte SHA-1 hash to 32 bytes for the federation have_set wire format.
 ///

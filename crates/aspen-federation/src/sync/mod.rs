@@ -81,7 +81,7 @@ pub const MAX_FEDERATION_CONNECTIONS: u32 = 64;
 pub const MAX_STREAMS_PER_CONNECTION: u32 = 16;
 
 /// Maximum size of a single federation message.
-pub const MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024; // 16 MB
+pub const MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 
 /// Maximum objects per sync request.
 pub const MAX_OBJECTS_PER_SYNC: u32 = 1000;
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_max_message_size() {
-        assert_eq!(MAX_MESSAGE_SIZE, 16 * 1024 * 1024); // 16 MB
+        assert_eq!(MAX_MESSAGE_SIZE, 64 * 1024 * 1024); // 64 MB
     }
 
     #[test]
