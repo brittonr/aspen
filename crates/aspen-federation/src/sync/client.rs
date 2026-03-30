@@ -56,6 +56,7 @@ pub async fn connect_to_cluster(
         credential,
     };
     write_message(&mut send, &request).await?;
+    send.finish().context("failed to finish handshake send stream")?;
 
     // Read handshake response
     let response: FederationResponse = read_message(&mut recv).await?;
@@ -97,6 +98,7 @@ pub async fn list_remote_resources(
         limit,
     };
     write_message(&mut send, &request).await?;
+    send.finish().context("failed to finish send stream")?;
 
     let response: FederationResponse = read_message(&mut recv).await?;
 
@@ -118,6 +120,7 @@ pub async fn get_remote_resource_state(
 
     let request = FederationRequest::GetResourceState { fed_id: *fed_id };
     write_message(&mut send, &request).await?;
+    send.finish().context("failed to finish send stream")?;
 
     let response: FederationResponse = read_message(&mut recv).await?;
 
@@ -160,6 +163,11 @@ pub async fn sync_remote_objects(
         limit,
     };
     write_message(&mut send, &request).await?;
+    // Finish the send stream so the peer knows we're done writing and QUIC
+    // can reclaim the stream slot. Without this, each round of the multi-round
+    // sync loop leaks a half-open stream, hitting the server's max concurrent
+    // stream limit and killing the connection.
+    send.finish().context("failed to finish send stream")?;
 
     let response: FederationResponse = read_message(&mut recv).await?;
 
@@ -263,6 +271,7 @@ pub async fn push_to_cluster(
         ref_updates,
     };
     write_message(&mut send, &request).await?;
+    send.finish().context("failed to finish send stream")?;
 
     let response: FederationResponse = read_message(&mut recv).await?;
 

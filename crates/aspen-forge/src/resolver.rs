@@ -382,13 +382,29 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
                     }
                 }
             }
-            if !all_known_envelopes.is_empty() {
-                info!(
-                    repo_id = %hex::encode(repo_id.0),
-                    mapped = all_known_envelopes.len(),
-                    have_set_size = have_set.len(),
-                    "pre-populated envelope BLAKE3 set from SHA-1 hash mapping store"
-                );
+            if !have_set.is_empty() {
+                let mapped_count = all_known_envelopes.len();
+                let have_count = have_set.len();
+                if mapped_count > 0 {
+                    info!(
+                        repo_id = %hex::encode(repo_id.0),
+                        mapped = mapped_count,
+                        have_set_size = have_count,
+                        "pre-populated envelope BLAKE3 set from SHA-1 hash mapping store"
+                    );
+                }
+                // Warn when most have entries fail to resolve — the exporter will
+                // re-send objects the receiver already has, wasting bandwidth and
+                // potentially stalling the multi-round sync loop.
+                if mapped_count * 2 < have_count {
+                    warn!(
+                        repo_id = %hex::encode(repo_id.0),
+                        mapped = mapped_count,
+                        have_set_size = have_count,
+                        ratio_pct = (mapped_count * 100).checked_div(have_count).unwrap_or(0),
+                        "low have-set mapping ratio — exporter may re-send already-transferred objects"
+                    );
+                }
             }
         }
 
@@ -1782,5 +1798,147 @@ mod git_bridge_tests {
         let commit_sha1 = compute_sha1(&commit_bytes);
         let has_commit = dest_mapping.has_sha1(&h.repo_id, &commit_sha1).await.unwrap();
         assert!(has_commit, "dest should have mapping for commit");
+    }
+
+    // ====================================================================
+    // Test: Cross-batch dedup — batches are disjoint, union = full set,
+    // have-set grows monotonically, and mapping ratio stays healthy.
+    // ====================================================================
+
+    /// Regression test for the multi-round sync feedback loop.
+    ///
+    /// At 33K objects the exporter's have-set→BLAKE3 resolution found only
+    /// 29 of 1000+ entries, causing it to re-export the same objects every
+    /// round. This test creates a repo large enough to force many rounds
+    /// (200 blobs + trees + commits across ~5 chains) and asserts:
+    ///
+    /// 1. No object appears in more than one batch (batches are disjoint)
+    /// 2. Union of all batches = full object set (nothing lost)
+    /// 3. Have-set grows monotonically
+    /// 4. The loop converges (doesn't hit max_rounds)
+    #[tokio::test]
+    async fn test_cross_batch_no_duplicate_objects() {
+        let h = FederationTestHarness::new();
+        h.federate_repo().await;
+
+        // Build a deeper DAG: 5 chained commits, each adding 40 unique blobs.
+        // Total: 200 blobs + 5 trees + 5 commits = 210 objects.
+        let mut prev_commit_sha1: Option<Sha1Hash> = None;
+        let mut all_expected_sha1s: HashSet<[u8; 20]> = HashSet::new();
+        let mut last_commit_b3 = None;
+
+        for chain in 0..5u32 {
+            let mut blob_sha1s = Vec::new();
+            for i in 0..40u32 {
+                let content = format!("chain{chain}-blob{i:04}-content\n");
+                let (_b3, sha1) = h.import_blob(content.as_bytes()).await;
+                all_expected_sha1s.insert(sha1.0);
+                blob_sha1s.push(sha1);
+            }
+
+            let entries: Vec<Vec<u8>> = blob_sha1s
+                .iter()
+                .enumerate()
+                .map(|(i, sha1)| make_tree_entry("100644", &format!("c{chain}f{i:04}.txt"), sha1))
+                .collect();
+            let tree_bytes = make_git_tree(&entries);
+            let tree_sha1 = compute_sha1(&tree_bytes);
+            let tree_b3 = h.source_importer.import_object(&h.repo_id, &tree_bytes).await.unwrap();
+            all_expected_sha1s.insert(tree_sha1.0);
+            let _ = tree_b3;
+
+            let parents: Vec<&Sha1Hash> = prev_commit_sha1.as_ref().into_iter().collect();
+            let commit_bytes = make_git_commit(&tree_sha1, &parents, &format!("commit {chain}\n"));
+            let commit_sha1 = compute_sha1(&commit_bytes);
+            let commit_b3 = h.source_importer.import_object(&h.repo_id, &commit_bytes).await.unwrap();
+            all_expected_sha1s.insert(commit_sha1.0);
+            prev_commit_sha1 = Some(commit_sha1);
+            last_commit_b3 = Some(commit_b3);
+        }
+
+        h.set_ref("heads/main", last_commit_b3.unwrap()).await;
+
+        let total_expected = all_expected_sha1s.len();
+        assert_eq!(total_expected, 210);
+
+        // Sync with limit=30 — forces ~7+ rounds for 210 objects.
+        let resolver = h.resolver();
+        let mut have_sha1s: Vec<[u8; 32]> = Vec::new();
+        let mut all_seen_content_hashes: HashSet<[u8; 32]> = HashSet::new();
+        let mut all_seen_sha1s: HashSet<[u8; 20]> = HashSet::new();
+        let mut rounds = 0u32;
+        let mut total_objects = 0usize;
+        let mut prev_have_len = 0usize;
+        let max_rounds = 30u32;
+
+        loop {
+            rounds += 1;
+            assert!(
+                rounds <= max_rounds,
+                "sync did not converge in {max_rounds} rounds — \
+                 likely re-exporting same objects (got {total_objects}/{total_expected})"
+            );
+
+            let batch = resolver
+                .sync_objects(
+                    &h.fed_id,
+                    &["commit".to_string(), "tree".to_string(), "blob".to_string()],
+                    &have_sha1s,
+                    30,
+                )
+                .await
+                .unwrap();
+
+            if batch.is_empty() {
+                break;
+            }
+
+            // Assert: no object in this batch was seen in a previous batch.
+            for obj in &batch {
+                assert!(
+                    all_seen_content_hashes.insert(obj.hash),
+                    "duplicate object across batches (content hash {}): \
+                     round {rounds} re-sent an object from a previous round",
+                    hex::encode(obj.hash)
+                );
+            }
+
+            // Compute SHA-1 for each object and track
+            for obj in &batch {
+                use sha1::Digest as _;
+                let header = format!("{} {}\0", obj.object_type, obj.data.len());
+                let mut hasher = sha1::Sha1::new();
+                hasher.update(header.as_bytes());
+                hasher.update(&obj.data);
+                let sha1: [u8; 20] = hasher.finalize().into();
+                all_seen_sha1s.insert(sha1);
+                have_sha1s.push(sha1_to_have_hash(&sha1));
+            }
+
+            // Assert: have-set grows monotonically.
+            assert!(
+                have_sha1s.len() > prev_have_len,
+                "have-set did not grow in round {rounds} \
+                 (stuck at {prev_have_len} entries, batch had {} objects)",
+                batch.len()
+            );
+            prev_have_len = have_sha1s.len();
+
+            total_objects += batch.len();
+        }
+
+        // Assert: union of all batches = full object set.
+        assert_eq!(
+            total_objects, total_expected,
+            "total synced objects ({total_objects}) != expected ({total_expected})"
+        );
+
+        // Assert: every expected SHA-1 was seen.
+        for expected in &all_expected_sha1s {
+            assert!(all_seen_sha1s.contains(expected), "expected SHA-1 {} was never exported", hex::encode(expected));
+        }
+
+        // Assert: took multiple rounds (proves the limit forced batching).
+        assert!(rounds >= 4, "should take ≥4 rounds for 210 objects at limit=30, got {rounds}");
     }
 }
