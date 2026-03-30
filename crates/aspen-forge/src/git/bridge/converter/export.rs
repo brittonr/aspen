@@ -91,6 +91,12 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         // Committer line
         content.push_str(&format!("committer {}\n", self.format_git_author(&commit.committer)));
 
+        // Extra headers (gpgsig, mergetag, encoding, etc.)
+        // Preserved verbatim from import for byte-identical round-trip.
+        for (name, value) in &commit.extra_headers {
+            content.push_str(&format!("{} {}\n", name, value));
+        }
+
         // Blank line + message (preserved verbatim from import)
         content.push('\n');
         content.push_str(&commit.message);

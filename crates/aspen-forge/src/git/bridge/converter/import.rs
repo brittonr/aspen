@@ -219,6 +219,34 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         })?;
         let committer = self.parse_git_author_line(committer_line, "committer")?;
 
+        // Parse extra headers (gpgsig, mergetag, encoding, etc.).
+        // These sit between the committer line and the blank line separator.
+        // Multi-line headers use leading-space continuation lines.
+        let mut extra_headers: Vec<(String, String)> = Vec::new();
+        while let Some(line) = lines.peek() {
+            if line.is_empty() {
+                // Blank line = end of headers, start of message
+                break;
+            }
+            if line.starts_with(' ') {
+                // Continuation of previous header
+                if let Some(last) = extra_headers.last_mut() {
+                    last.1.push('\n');
+                    last.1.push_str(line);
+                }
+                lines.next();
+            } else if let Some(space_pos) = line.find(' ') {
+                // New header: "name value..."
+                let name = line[..space_pos].to_string();
+                let value = line[space_pos + 1..].to_string();
+                extra_headers.push((name, value));
+                lines.next();
+            } else {
+                // Unknown line format — stop parsing headers
+                break;
+            }
+        }
+
         // The message is everything after the blank line separator.
         // We use byte-offset slicing instead of lines.collect().join("\n")
         // to preserve the exact bytes (including trailing newlines) for
@@ -238,6 +266,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
             parents: parents_blake3.iter().map(|h| *h.as_bytes()).collect(),
             author,
             committer,
+            extra_headers,
             message,
         })
     }

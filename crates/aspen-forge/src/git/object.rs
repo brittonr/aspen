@@ -213,6 +213,17 @@ pub struct CommitObject {
 
     /// The commit message.
     pub message: String,
+
+    /// Extra headers preserved verbatim for round-trip fidelity.
+    ///
+    /// Git commits can have additional headers between the committer line
+    /// and the blank line that separates headers from the message body.
+    /// Common examples: `gpgsig` (PGP signatures from GitHub), `mergetag`,
+    /// `encoding`. Multi-line headers use leading-space continuation lines.
+    ///
+    /// Each entry is `(header_name, full_value)` where `full_value` includes
+    /// continuation lines (with their leading spaces preserved).
+    pub extra_headers: Vec<(String, String)>,
 }
 
 impl CommitObject {
@@ -223,6 +234,7 @@ impl CommitObject {
             parents: parents.iter().map(|h| *h.as_bytes()).collect(),
             author: author.clone(),
             committer: author,
+            extra_headers: Vec::new(),
             message: message.into(),
         }
     }

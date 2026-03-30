@@ -80,6 +80,29 @@ fn make_git_commit(tree_sha1: &Sha1Hash, parent_sha1s: &[Sha1Hash], message: &st
     content.into_bytes()
 }
 
+/// Build a git commit with a gpgsig header (simulating GitHub signed commits).
+fn make_signed_git_commit(tree_sha1: &Sha1Hash, parent_sha1s: &[Sha1Hash], message: &str) -> Vec<u8> {
+    let mut content = String::new();
+    content.push_str(&format!("tree {}\n", tree_sha1.to_hex()));
+    for parent in parent_sha1s {
+        content.push_str(&format!("parent {}\n", parent.to_hex()));
+    }
+    content.push_str("author Test Author <test@example.com> 1700000000 +0000\n");
+    content.push_str("committer GitHub <noreply@github.com> 1700000000 +0000\n");
+    // Multi-line gpgsig header (leading space = continuation)
+    content.push_str("gpgsig -----BEGIN PGP SIGNATURE-----\n");
+    content.push_str(" \n");
+    content.push_str(" wsFcBAABCAAQBQJptsVACRC1aQ7uu5UhlAAAopsQAFJn\n");
+    content.push_str(" FTT/hOLqNsvPsu+FrLrpGuT7CqPFLqpKlAb2z665RhNQ\n");
+    content.push_str(" -----END PGP SIGNATURE-----\n");
+    content.push('\n');
+    content.push_str(message);
+    if !message.ends_with('\n') {
+        content.push('\n');
+    }
+    content.into_bytes()
+}
+
 // ============================================================================
 // Basic Git Object Import/Export Tests
 // ============================================================================
@@ -1357,4 +1380,55 @@ async fn test_federated_incremental_sync_no_duplication() {
     // 2 commits + 2 trees + 2 blobs (blob1 shared) = 6 objects
     // Actually: blob1, blob2, tree1, tree2, commit1, commit2 = 6
     assert_eq!(dag.objects.len(), 6, "DAG should have exactly 6 unique objects");
+}
+
+/// Test that commits with gpgsig headers (GitHub-signed) survive the
+/// import→export round-trip with identical SHA-1.
+#[tokio::test]
+async fn test_gpgsig_commit_roundtrip() {
+    let forge = create_test_forge_node().await;
+    let identity = forge.create_repo("gpgsig-test", vec![forge.public_key()], 1).await.expect("create repo");
+    let repo_id = identity.repo_id();
+
+    let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
+    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let importer = GitImporter::new(
+        Arc::clone(&mapping),
+        forge.git.blobs().clone(),
+        Arc::new(forge.refs.clone()),
+        secret_key.clone(),
+        create_hlc("test-importer"),
+    );
+    let exporter = GitExporter::new(
+        Arc::clone(&mapping),
+        forge.git.blobs().clone(),
+        Arc::new(forge.refs.clone()),
+        secret_key,
+        create_hlc("test-exporter"),
+    );
+
+    // Create a blob + tree
+    let blob_content = b"gpgsig test content";
+    let blob_sha1 = compute_git_sha1("blob", blob_content);
+    importer.import_object_raw(&repo_id, blob_sha1, "blob", blob_content).await.expect("import blob");
+
+    let tree_content = make_git_tree_entry("100644", "file.txt", &blob_sha1);
+    let tree_sha1 = compute_git_sha1("tree", &tree_content);
+    importer.import_object_raw(&repo_id, tree_sha1, "tree", &tree_content).await.expect("import tree");
+
+    // Create a GPG-signed commit
+    let commit_content = make_signed_git_commit(&tree_sha1, &[], "Signed commit message\n");
+    let commit_sha1 = compute_git_sha1("commit", &commit_content);
+    let import_result = importer
+        .import_object_raw(&repo_id, commit_sha1, "commit", &commit_content)
+        .await
+        .expect("import signed commit");
+
+    // Export and verify SHA-1 round-trip
+    let exported = exporter.export_object(&repo_id, import_result.blake3).await.expect("export signed commit");
+
+    assert_eq!(exported.sha1, commit_sha1, "gpgsig commit SHA-1 must survive import→export round-trip");
+
+    // Verify the exported content matches the original
+    assert_eq!(exported.content, commit_content, "gpgsig commit content must be byte-identical after round-trip");
 }
