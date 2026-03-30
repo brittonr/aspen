@@ -726,6 +726,7 @@ pub(crate) async fn handle_federation_fetch_refs(
     // =========================================================================
     // Phase 1: Fetch refs
     // =========================================================================
+    #[allow(deprecated)] // Single-shot ref fetch; SyncSession not needed
     let (ref_objects, _has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
         &connection,
         &fed_id,
@@ -807,6 +808,7 @@ pub(crate) async fn handle_federation_fetch_refs(
         let max_rounds = 10u32; // Tiger Style: bounded pagination
 
         for _round in 0..max_rounds {
+            #[allow(deprecated)] // Legacy handler; sync_from_origin uses SyncSession
             let (objects, has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
                 &connection,
                 &fed_id,
@@ -2028,6 +2030,7 @@ pub(crate) async fn handle_federation_bidi_sync(
             collect_local_blake3_hashes(forge_node, &aspen_forge::identity::RepoId(repo_id_bytes), 10_000).await;
 
         // Fetch git objects from remote
+        #[allow(deprecated)] // Single-shot pull; SyncSession not needed
         let (objects, _has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
             &connection,
             &remote_fed_id,

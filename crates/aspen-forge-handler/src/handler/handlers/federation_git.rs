@@ -113,6 +113,7 @@ async fn fetch_refs_from_origin(
             .await
             .map_err(|e| format!("connection to origin failed: {e}"))?;
 
+    #[allow(deprecated)] // Single-shot ref fetch; SyncSession not needed
     let (ref_objects, _has_more) = aspen_cluster::federation::sync::sync_remote_objects(
         &connection,
         &fed_id,
@@ -167,6 +168,7 @@ async fn sync_from_origin(
     let mut errors = Vec::new();
 
     // Phase 1: Fetch refs
+    #[allow(deprecated)] // Single-shot ref fetch on existing connection
     let (ref_objects, _has_more) = aspen_cluster::federation::sync::sync_remote_objects(
         &connection,
         &fed_id,

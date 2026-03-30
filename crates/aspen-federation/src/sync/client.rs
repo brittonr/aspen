@@ -194,6 +194,14 @@ pub async fn get_remote_resource_state(
 ///
 /// Pass `None` for `delegates` to skip signature verification (e.g., for
 /// CRDTs that don't use delegate signing).
+///
+/// # Deprecation
+///
+/// Prefer [`SyncSession`] for multi-round sync. `SyncSession` reuses a
+/// single QUIC bidirectional stream across rounds, avoiding stream
+/// exhaustion on long-running syncs. This function opens a new stream
+/// per call.
+#[deprecated(note = "use SyncSession::sync_objects() for multi-round sync")]
 pub async fn sync_remote_objects(
     connection: &Connection,
     fed_id: &FederatedId,

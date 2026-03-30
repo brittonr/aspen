@@ -43,6 +43,7 @@ pub use client::connect_to_cluster_full;
 pub use client::get_remote_resource_state;
 pub use client::list_remote_resources;
 pub use client::push_to_cluster;
+#[allow(deprecated)]
 pub use client::sync_remote_objects;
 // Handler
 pub use handler::FederationProtocolContext;

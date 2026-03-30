@@ -1,3 +1,4 @@
+#![allow(deprecated)] // Tests exercise legacy sync_remote_objects API
 //! Cluster integration tests for federation + auth.
 //!
 //! Tests that exercise credential-based authorization over real iroh QUIC

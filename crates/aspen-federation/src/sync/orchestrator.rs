@@ -21,6 +21,7 @@ use tracing::warn;
 
 use super::client::connect_to_cluster;
 use super::client::get_remote_resource_state;
+#[allow(deprecated)]
 use super::client::sync_remote_objects;
 use super::types::SyncObject;
 use crate::identity::ClusterIdentity;
@@ -357,6 +358,7 @@ async fn sync_from_best(
         .await
         .context("handshake with best seeder failed")?;
 
+    #[allow(deprecated)] // Single-shot sync; SyncSession overhead not needed
     let (objects, has_more) = sync_remote_objects(
         &conn,
         req.fed_id,

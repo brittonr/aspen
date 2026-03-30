@@ -941,3 +941,420 @@ async fn test_simulate_git_push() {
     // Should have all 6 objects: 2 blobs + 2 trees + 2 commits
     assert_eq!(dag_result.objects.len(), 6, "Should have all objects from both commits");
 }
+
+// ============================================================================
+// Federated Clone Integration Tests
+//
+// These tests simulate the federation import flow: objects arrive in batches
+// where cross-batch dependencies (tree references blob from another batch)
+// must be resolved via convergent retry.
+// ============================================================================
+
+/// Helper: build a tree entry with multiple files.
+fn make_multi_entry_tree(entries: &[(&str, &str, &Sha1Hash)]) -> Vec<u8> {
+    let mut content = Vec::new();
+    for (mode, name, sha1) in entries {
+        content.extend(make_git_tree_entry(mode, name, sha1));
+    }
+    content
+}
+
+/// Simulates a federated clone of a multi-commit repo with nested trees.
+///
+/// Objects are split across 3 batches with cross-batch dependencies:
+/// - Batch 1: commits + root trees (references subtrees not yet imported)
+/// - Batch 2: subtrees (references blobs not yet imported)
+/// - Batch 3: blobs (leaf objects, no dependencies)
+///
+/// With convergent retry (import each batch, then re-import failed objects),
+/// all objects should eventually import. The mirror's export should produce
+/// the same DAG as the origin.
+#[tokio::test]
+async fn test_federated_clone_cross_batch_convergence() {
+    // === Origin cluster: create a repo with 12 commits, nested trees ===
+    let origin = create_test_forge_node().await;
+    let origin_identity = origin
+        .create_repo("fed-clone-test", vec![origin.public_key()], 1)
+        .await
+        .expect("create origin repo");
+    let origin_repo_id = origin_identity.repo_id();
+
+    let origin_mapping = Arc::new(HashMappingStore::new(origin.kv().clone()));
+    let origin_secret = iroh::SecretKey::generate(&mut rand::rng());
+    let origin_importer = GitImporter::new(
+        Arc::clone(&origin_mapping),
+        origin.git.blobs().clone(),
+        Arc::new(origin.refs.clone()),
+        origin_secret.clone(),
+        create_hlc("origin-importer"),
+    );
+    let origin_exporter = GitExporter::new(
+        Arc::clone(&origin_mapping),
+        origin.git.blobs().clone(),
+        Arc::new(origin.refs.clone()),
+        origin_secret,
+        create_hlc("origin-exporter"),
+    );
+
+    // Build 12 commits with nested tree structure:
+    //   root-tree/
+    //     src/
+    //       lib.rs
+    //       main.rs
+    //     README.md
+    // Each commit changes a file, creating new blobs/trees up the chain.
+    let mut prev_commit_sha1: Option<Sha1Hash> = None;
+    let mut all_sha1s_in_order: Vec<(Sha1Hash, GitObjectType, Vec<u8>)> = Vec::new();
+
+    for i in 0..12u32 {
+        // Blob: lib.rs content changes each commit
+        let lib_content = format!("// lib.rs v{}\npub fn version() -> u32 {{ {} }}\n", i, i);
+        let lib_blob = lib_content.as_bytes();
+        let lib_sha1 = compute_git_sha1("blob", lib_blob);
+        origin_importer
+            .import_object_raw(&origin_repo_id, lib_sha1, "blob", lib_blob)
+            .await
+            .expect("import lib blob");
+        all_sha1s_in_order.push((lib_sha1, GitObjectType::Blob, {
+            let h = format!("blob {}\0", lib_blob.len());
+            let mut v = Vec::with_capacity(h.len() + lib_blob.len());
+            v.extend_from_slice(h.as_bytes());
+            v.extend_from_slice(lib_blob);
+            v
+        }));
+
+        // Blob: main.rs (same across commits for simplicity)
+        let main_content = b"fn main() { lib::version(); }\n";
+        let main_sha1 = compute_git_sha1("blob", main_content);
+        // Idempotent import is fine
+        let _ = origin_importer.import_object_raw(&origin_repo_id, main_sha1, "blob", main_content).await;
+        if i == 0 {
+            all_sha1s_in_order.push((main_sha1, GitObjectType::Blob, {
+                let h = format!("blob {}\0", main_content.len());
+                let mut v = Vec::with_capacity(h.len() + main_content.len());
+                v.extend_from_slice(h.as_bytes());
+                v.extend_from_slice(main_content);
+                v
+            }));
+        }
+
+        // Subtree: src/ containing lib.rs + main.rs
+        let src_tree = make_multi_entry_tree(&[("100644", "lib.rs", &lib_sha1), ("100644", "main.rs", &main_sha1)]);
+        let src_sha1 = compute_git_sha1("tree", &src_tree);
+        origin_importer
+            .import_object_raw(&origin_repo_id, src_sha1, "tree", &src_tree)
+            .await
+            .expect("import src tree");
+        all_sha1s_in_order.push((src_sha1, GitObjectType::Tree, {
+            let h = format!("tree {}\0", src_tree.len());
+            let mut v = Vec::with_capacity(h.len() + src_tree.len());
+            v.extend_from_slice(h.as_bytes());
+            v.extend_from_slice(&src_tree);
+            v
+        }));
+
+        // Blob: README.md
+        let readme_content = format!("# Project v{}\n", i);
+        let readme_blob = readme_content.as_bytes();
+        let readme_sha1 = compute_git_sha1("blob", readme_blob);
+        origin_importer
+            .import_object_raw(&origin_repo_id, readme_sha1, "blob", readme_blob)
+            .await
+            .expect("import readme blob");
+        all_sha1s_in_order.push((readme_sha1, GitObjectType::Blob, {
+            let h = format!("blob {}\0", readme_blob.len());
+            let mut v = Vec::with_capacity(h.len() + readme_blob.len());
+            v.extend_from_slice(h.as_bytes());
+            v.extend_from_slice(readme_blob);
+            v
+        }));
+
+        // Root tree: src/ + README.md
+        let root_tree = make_multi_entry_tree(&[("100644", "README.md", &readme_sha1), ("40000", "src", &src_sha1)]);
+        let root_sha1 = compute_git_sha1("tree", &root_tree);
+        origin_importer
+            .import_object_raw(&origin_repo_id, root_sha1, "tree", &root_tree)
+            .await
+            .expect("import root tree");
+        all_sha1s_in_order.push((root_sha1, GitObjectType::Tree, {
+            let h = format!("tree {}\0", root_tree.len());
+            let mut v = Vec::with_capacity(h.len() + root_tree.len());
+            v.extend_from_slice(h.as_bytes());
+            v.extend_from_slice(&root_tree);
+            v
+        }));
+
+        // Commit
+        let parents: Vec<Sha1Hash> = prev_commit_sha1.iter().copied().collect();
+        let msg = format!("Commit {}\n", i);
+        let commit_bytes = make_git_commit(&root_sha1, &parents, &msg);
+        let commit_sha1 = compute_git_sha1("commit", &commit_bytes);
+        origin_importer
+            .import_object_raw(&origin_repo_id, commit_sha1, "commit", &commit_bytes)
+            .await
+            .expect("import commit");
+        all_sha1s_in_order.push((commit_sha1, GitObjectType::Commit, {
+            let h = format!("commit {}\0", commit_bytes.len());
+            let mut v = Vec::with_capacity(h.len() + commit_bytes.len());
+            v.extend_from_slice(h.as_bytes());
+            v.extend_from_slice(&commit_bytes);
+            v
+        }));
+
+        prev_commit_sha1 = Some(commit_sha1);
+    }
+
+    let head_sha1 = prev_commit_sha1.unwrap();
+    origin_importer.update_ref(&origin_repo_id, "heads/main", head_sha1).await.expect("set main ref");
+
+    // Verify origin DAG is complete
+    let head_blake3 = origin_importer.get_blake3(&origin_repo_id, &head_sha1).await.unwrap().unwrap();
+    let origin_dag = origin_exporter
+        .export_commit_dag(&origin_repo_id, head_blake3, &HashSet::new())
+        .await
+        .expect("export origin DAG");
+    // 12 commits × (1 lib blob + 1 src tree + 1 readme blob + 1 root tree + 1 commit) + 1 main.rs blob
+    // = 12 × 5 + 1 = 61 unique objects (some may be deduplicated if content repeats)
+    assert!(origin_dag.objects.len() >= 40, "Origin should have many objects, got {}", origin_dag.objects.len());
+
+    // === Mirror cluster: import objects in adversarial batch order ===
+    let mirror = create_test_forge_node().await;
+    let mirror_identity = mirror
+        .create_repo("fed-clone-mirror", vec![mirror.public_key()], 1)
+        .await
+        .expect("create mirror repo");
+    let mirror_repo_id = mirror_identity.repo_id();
+
+    let mirror_mapping = Arc::new(HashMappingStore::new(mirror.kv().clone()));
+    let mirror_secret = iroh::SecretKey::generate(&mut rand::rng());
+    let mirror_importer = GitImporter::new(
+        Arc::clone(&mirror_mapping),
+        mirror.git.blobs().clone(),
+        Arc::new(mirror.refs.clone()),
+        mirror_secret.clone(),
+        create_hlc("mirror-importer"),
+    );
+    let mirror_exporter = GitExporter::new(
+        Arc::clone(&mirror_mapping),
+        mirror.git.blobs().clone(),
+        Arc::new(mirror.refs.clone()),
+        mirror_secret,
+        create_hlc("mirror-exporter"),
+    );
+
+    // Deduplicate objects (same SHA-1 appears once)
+    let mut seen = HashSet::new();
+    let unique_objects: Vec<_> =
+        all_sha1s_in_order.into_iter().filter(|(sha1, _, _)| seen.insert(*sha1.as_bytes())).collect();
+
+    // Split into 3 batches: commits+root-trees first, subtrees second, blobs last.
+    // This is adversarial: trees arrive before the blobs they reference.
+    let mut batch_commits_and_roots = Vec::new();
+    let mut batch_subtrees = Vec::new();
+    let mut batch_blobs = Vec::new();
+
+    for (sha1, obj_type, data) in &unique_objects {
+        match obj_type {
+            GitObjectType::Commit => batch_commits_and_roots.push((*sha1, *obj_type, data.clone())),
+            GitObjectType::Tree => {
+                // Root trees reference subtrees AND blobs; subtrees reference only blobs.
+                // Put root trees (which contain "40000" subtree entries) with commits.
+                let content_start = data.iter().position(|&b| b == 0).unwrap() + 1;
+                let content = &data[content_start..];
+                let has_subtree = content.windows(6).any(|w| w.starts_with(b"40000"));
+                if has_subtree {
+                    batch_commits_and_roots.push((*sha1, *obj_type, data.clone()));
+                } else {
+                    batch_subtrees.push((*sha1, *obj_type, data.clone()));
+                }
+            }
+            GitObjectType::Blob => batch_blobs.push((*sha1, *obj_type, data.clone())),
+            _ => {}
+        }
+    }
+
+    assert!(!batch_commits_and_roots.is_empty(), "should have commits");
+    assert!(!batch_subtrees.is_empty(), "should have subtrees");
+    assert!(!batch_blobs.is_empty(), "should have blobs");
+
+    // Import batch 1: commits + root trees (will fail — deps missing)
+    let r1 = mirror_importer
+        .import_objects(&mirror_repo_id, batch_commits_and_roots.clone())
+        .await
+        .expect("batch 1 import");
+    // Some commits/trees will fail because their subtrees/blobs aren't imported yet
+    let batch1_failed = r1.failures.len();
+    assert!(batch1_failed > 0, "batch 1 should have failures (missing subtree/blob deps)");
+
+    // Import batch 2: subtrees (some will fail — blob deps missing)
+    let r2 = mirror_importer
+        .import_objects(&mirror_repo_id, batch_subtrees.clone())
+        .await
+        .expect("batch 2 import");
+    let batch2_failed = r2.failures.len();
+    // Subtrees reference blobs not yet imported
+    assert!(batch2_failed > 0, "batch 2 should have failures (missing blob deps)");
+
+    // Import batch 3: blobs (all should succeed — no deps)
+    let r3 = mirror_importer.import_objects(&mirror_repo_id, batch_blobs.clone()).await.expect("batch 3 import");
+    assert_eq!(r3.failures.len(), 0, "blobs should all import (no deps)");
+    assert!(r3.objects_imported > 0, "should import some blobs");
+
+    // === Convergent retry: re-import failed objects ===
+    // Now that blobs are present, subtrees should succeed.
+    // Then with subtrees present, commits/root-trees should succeed.
+    let remaining_subtrees: Vec<_> = batch_subtrees
+        .into_iter()
+        .filter(|(sha1, _, _)| {
+            // Keep objects that failed (no mapping yet)
+            // Use a synchronous-compatible check
+            r2.failures.iter().any(|(f_sha1, _)| f_sha1 == sha1)
+        })
+        .collect();
+
+    if !remaining_subtrees.is_empty() {
+        let r2b = mirror_importer.import_objects(&mirror_repo_id, remaining_subtrees).await.expect("retry subtrees");
+        assert_eq!(r2b.failures.len(), 0, "subtrees should succeed after blobs imported");
+    }
+
+    let remaining_roots: Vec<_> = batch_commits_and_roots
+        .into_iter()
+        .filter(|(sha1, _, _)| r1.failures.iter().any(|(f_sha1, _)| f_sha1 == sha1))
+        .collect();
+
+    if !remaining_roots.is_empty() {
+        let r1b = mirror_importer.import_objects(&mirror_repo_id, remaining_roots).await.expect("retry commits+roots");
+        assert_eq!(r1b.failures.len(), 0, "commits/roots should succeed after subtrees imported");
+    }
+
+    // === Verify: mirror DAG matches origin ===
+    // Look up the HEAD commit's BLAKE3 on the mirror
+    let mirror_head_blake3 = mirror_importer
+        .get_blake3(&mirror_repo_id, &head_sha1)
+        .await
+        .expect("mirror head lookup")
+        .expect("mirror should have HEAD commit mapped");
+
+    let mirror_dag = mirror_exporter
+        .export_commit_dag(&mirror_repo_id, mirror_head_blake3, &HashSet::new())
+        .await
+        .expect("export mirror DAG");
+
+    // Mirror should have the same number of objects as origin
+    assert_eq!(
+        mirror_dag.objects.len(),
+        origin_dag.objects.len(),
+        "mirror DAG object count should match origin ({} vs {})",
+        mirror_dag.objects.len(),
+        origin_dag.objects.len(),
+    );
+
+    // Verify SHA-1s match: every origin object's SHA-1 should appear in mirror
+    let origin_sha1s: HashSet<Vec<u8>> = origin_dag
+        .objects
+        .iter()
+        .map(|obj| {
+            let git_bytes = obj.to_git_bytes();
+            let digest: [u8; 20] = Sha1::digest(&git_bytes).into();
+            digest.to_vec()
+        })
+        .collect();
+    let mirror_sha1s: HashSet<Vec<u8>> = mirror_dag
+        .objects
+        .iter()
+        .map(|obj| {
+            let git_bytes = obj.to_git_bytes();
+            let digest: [u8; 20] = Sha1::digest(&git_bytes).into();
+            digest.to_vec()
+        })
+        .collect();
+
+    assert_eq!(origin_sha1s, mirror_sha1s, "origin and mirror DAGs should contain identical objects");
+}
+
+/// Test that incremental import (simulating multi-round federation sync)
+/// correctly handles already-imported objects without duplication.
+#[tokio::test]
+async fn test_federated_incremental_sync_no_duplication() {
+    let forge = create_test_forge_node().await;
+    let identity = forge.create_repo("incr-sync-test", vec![forge.public_key()], 1).await.expect("create repo");
+    let repo_id = identity.repo_id();
+
+    let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
+    let secret = iroh::SecretKey::generate(&mut rand::rng());
+    let importer = GitImporter::new(
+        Arc::clone(&mapping),
+        forge.git.blobs().clone(),
+        Arc::new(forge.refs.clone()),
+        secret.clone(),
+        create_hlc("incr-importer"),
+    );
+    let exporter = GitExporter::new(
+        Arc::clone(&mapping),
+        forge.git.blobs().clone(),
+        Arc::new(forge.refs.clone()),
+        secret,
+        create_hlc("incr-exporter"),
+    );
+
+    // Round 1: import commit 1 with its blob + tree
+    let blob1 = b"initial content";
+    let blob1_sha1 = compute_git_sha1("blob", blob1);
+    let tree1 = make_git_tree_entry("100644", "file.txt", &blob1_sha1);
+    let tree1_sha1 = compute_git_sha1("tree", &tree1);
+    let commit1_bytes = make_git_commit(&tree1_sha1, &[], "Commit 1\n");
+    let commit1_sha1 = compute_git_sha1("commit", &commit1_bytes);
+
+    fn git_bytes(obj_type: &str, content: &[u8]) -> Vec<u8> {
+        let header = format!("{} {}\0", obj_type, content.len());
+        let mut v = Vec::with_capacity(header.len() + content.len());
+        v.extend_from_slice(header.as_bytes());
+        v.extend_from_slice(content);
+        v
+    }
+
+    let r1 = importer
+        .import_objects(&repo_id, vec![
+            (blob1_sha1, GitObjectType::Blob, git_bytes("blob", blob1)),
+            (tree1_sha1, GitObjectType::Tree, git_bytes("tree", &tree1)),
+            (commit1_sha1, GitObjectType::Commit, git_bytes("commit", &commit1_bytes)),
+        ])
+        .await
+        .expect("round 1 import");
+    assert_eq!(r1.objects_imported, 3);
+    assert!(r1.failures.is_empty());
+
+    // Round 2: import commit 2 + overlapping objects from round 1
+    let blob2 = b"updated content";
+    let blob2_sha1 = compute_git_sha1("blob", blob2);
+    let tree2 = make_git_tree_entry("100644", "file.txt", &blob2_sha1);
+    let tree2_sha1 = compute_git_sha1("tree", &tree2);
+    let commit2_bytes = make_git_commit(&tree2_sha1, &[commit1_sha1], "Commit 2\n");
+    let commit2_sha1 = compute_git_sha1("commit", &commit2_bytes);
+
+    let r2 = importer
+        .import_objects(&repo_id, vec![
+            // Re-send objects from round 1 (simulating overlapping sync batches)
+            (blob1_sha1, GitObjectType::Blob, git_bytes("blob", blob1)),
+            (commit1_sha1, GitObjectType::Commit, git_bytes("commit", &commit1_bytes)),
+            // New objects
+            (blob2_sha1, GitObjectType::Blob, git_bytes("blob", blob2)),
+            (tree2_sha1, GitObjectType::Tree, git_bytes("tree", &tree2)),
+            (commit2_sha1, GitObjectType::Commit, git_bytes("commit", &commit2_bytes)),
+        ])
+        .await
+        .expect("round 2 import");
+
+    // Round 1 objects should be skipped, round 2 objects imported
+    assert_eq!(r2.objects_imported, 3, "only new objects should be imported");
+    assert_eq!(r2.objects_skipped, 2, "round 1 objects should be skipped");
+    assert!(r2.failures.is_empty());
+
+    // Verify complete DAG from HEAD
+    let head_blake3 = importer.get_blake3(&repo_id, &commit2_sha1).await.unwrap().unwrap();
+    let dag = exporter.export_commit_dag(&repo_id, head_blake3, &HashSet::new()).await.expect("export DAG");
+
+    // 2 commits + 2 trees + 2 blobs (blob1 shared) = 6 objects
+    // Actually: blob1, blob2, tree1, tree2, commit1, commit2 = 6
+    assert_eq!(dag.objects.len(), 6, "DAG should have exactly 6 unique objects");
+}

@@ -1,3 +1,4 @@
+#![allow(deprecated)] // Tests exercise legacy sync_remote_objects API
 //! Wire-level integration tests for the federation sync protocol.
 //!
 //! Tests the complete federation handshake, resource listing, state queries,
@@ -29,6 +30,7 @@
 //! ```
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -1329,4 +1331,265 @@ async fn test_bidi_sync_push_rejected_pull_succeeds() {
         push_result.is_err() || !push_result.as_ref().unwrap().accepted,
         "push should fail when bob doesn't trust alice"
     );
+}
+
+// ============================================================================
+// SyncSession (single-stream multi-round) Tests
+// ============================================================================
+
+/// Test that SyncSession performs multi-round sync on a single QUIC stream.
+///
+/// Creates a resolver with many objects and a low limit so the client must
+/// make multiple sync_objects() calls. Verifies all objects are eventually
+/// retrieved and the session can be finished cleanly.
+#[tokio::test]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
+async fn test_sync_session_multi_round() {
+    use aspen_federation::sync::SyncSession;
+
+    // Resolver returns objects not in have_hashes (simulating incremental sync)
+    struct PaginatingResolver {
+        objects: Vec<SyncObject>,
+    }
+
+    #[async_trait]
+    impl FederationResourceResolver for PaginatingResolver {
+        async fn get_resource_state(
+            &self,
+            _fed_id: &FederatedId,
+        ) -> Result<FederationResourceState, FederationResourceError> {
+            Ok(FederationResourceState::default())
+        }
+
+        async fn sync_objects(
+            &self,
+            _fed_id: &FederatedId,
+            _want_types: &[String],
+            have_hashes: &[[u8; 32]],
+            limit: u32,
+        ) -> Result<Vec<SyncObject>, FederationResourceError> {
+            let remaining: Vec<_> = self.objects.iter().filter(|o| !have_hashes.contains(&o.hash)).cloned().collect();
+            Ok(remaining.into_iter().take(limit as usize).collect())
+        }
+
+        async fn resource_exists(&self, _fed_id: &FederatedId) -> bool {
+            true
+        }
+
+        async fn list_resources(&self, _limit: u32) -> Vec<(FederatedId, String)> {
+            vec![]
+        }
+
+        async fn import_pushed_objects(
+            &self,
+            _fed_id: &FederatedId,
+            _objects: Vec<SyncObject>,
+            _ref_updates: Vec<aspen_federation::sync::RefEntry>,
+        ) -> Result<(u32, u32, u32), FederationResourceError> {
+            Ok((0, 0, 0))
+        }
+    }
+
+    // Create 15 objects — with limit=5, this forces 3 rounds
+    let mut objects = Vec::new();
+    for i in 0..15u8 {
+        let data = format!("object-data-{}", i).into_bytes();
+        let hash: [u8; 32] = blake3::hash(&data).into();
+        objects.push(SyncObject {
+            object_type: "blob".to_string(),
+            hash,
+            data,
+            signature: None,
+            signer: None,
+            envelope_hash: None,
+            origin_sha1: None,
+        });
+    }
+
+    let alice = TestCluster::new("alice-session").await;
+    let bob = TestCluster::new_with_resolver(
+        "bob-session",
+        Some(Arc::new(PaginatingResolver {
+            objects: objects.clone(),
+        })),
+    )
+    .await;
+
+    alice.trust_manager.add_trusted(bob.cluster_key(), "bob".to_string(), None);
+    bob.trust_manager.add_trusted(alice.cluster_key(), "alice".to_string(), None);
+
+    let repo = test_fed_id(bob.cluster_key(), "session-repo");
+    bob.add_resource(repo, FederationMode::Public).await;
+
+    let (conn, _) = tokio::time::timeout(
+        Duration::from_secs(10),
+        connect_and_handshake(&alice.endpoint, &alice.identity, bob.endpoint_addr()),
+    )
+    .await
+    .expect("timeout")
+    .expect("handshake");
+
+    // Open a single SyncSession
+    let mut session = tokio::time::timeout(Duration::from_secs(5), SyncSession::open(&conn))
+        .await
+        .expect("timeout")
+        .expect("open session");
+
+    // Multi-round sync: limit=5, so 15 objects requires 3 rounds
+    let mut collected = Vec::new();
+    let mut have_hashes = Vec::new();
+    let max_rounds = 10u32;
+
+    for round in 0..max_rounds {
+        let (batch, _has_more) = tokio::time::timeout(
+            Duration::from_secs(5),
+            session.sync_objects(
+                &repo,
+                vec!["blob".to_string()],
+                have_hashes.clone(),
+                5, // Low limit to force multiple rounds
+                None,
+            ),
+        )
+        .await
+        .expect("timeout")
+        .expect(&format!("sync round {}", round));
+
+        if batch.is_empty() {
+            break;
+        }
+
+        for obj in &batch {
+            have_hashes.push(obj.hash);
+        }
+        collected.extend(batch);
+    }
+
+    // All 15 objects should have been retrieved across multiple rounds
+    assert_eq!(collected.len(), 15, "should retrieve all 15 objects across rounds");
+
+    // Verify all original hashes are present
+    let expected_hashes: HashSet<[u8; 32]> = objects.iter().map(|o| o.hash).collect();
+    let actual_hashes: HashSet<[u8; 32]> = collected.iter().map(|o| o.hash).collect();
+    assert_eq!(expected_hashes, actual_hashes, "retrieved objects should match originals");
+
+    // Clean session finish
+    tokio::time::timeout(Duration::from_secs(5), session.finish())
+        .await
+        .expect("timeout")
+        .expect("session finish");
+}
+
+/// Test that SyncSession handles a single round (all objects fit in one batch).
+#[tokio::test]
+#[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
+async fn test_sync_session_single_round() {
+    use aspen_federation::sync::SyncSession;
+
+    struct SmallResolver {
+        objects: Vec<SyncObject>,
+    }
+
+    #[async_trait]
+    impl FederationResourceResolver for SmallResolver {
+        async fn get_resource_state(
+            &self,
+            _fed_id: &FederatedId,
+        ) -> Result<FederationResourceState, FederationResourceError> {
+            Ok(FederationResourceState::default())
+        }
+
+        async fn sync_objects(
+            &self,
+            _fed_id: &FederatedId,
+            _want_types: &[String],
+            have_hashes: &[[u8; 32]],
+            _limit: u32,
+        ) -> Result<Vec<SyncObject>, FederationResourceError> {
+            Ok(self.objects.iter().filter(|o| !have_hashes.contains(&o.hash)).cloned().collect())
+        }
+
+        async fn resource_exists(&self, _fed_id: &FederatedId) -> bool {
+            true
+        }
+
+        async fn list_resources(&self, _limit: u32) -> Vec<(FederatedId, String)> {
+            vec![]
+        }
+
+        async fn import_pushed_objects(
+            &self,
+            _fed_id: &FederatedId,
+            _objects: Vec<SyncObject>,
+            _ref_updates: Vec<aspen_federation::sync::RefEntry>,
+        ) -> Result<(u32, u32, u32), FederationResourceError> {
+            Ok((0, 0, 0))
+        }
+    }
+
+    let data = b"single round blob";
+    let hash: [u8; 32] = blake3::hash(data).into();
+    let objects = vec![SyncObject {
+        object_type: "blob".to_string(),
+        hash,
+        data: data.to_vec(),
+        signature: None,
+        signer: None,
+        envelope_hash: None,
+        origin_sha1: None,
+    }];
+
+    let alice = TestCluster::new("alice-single").await;
+    let bob = TestCluster::new_with_resolver(
+        "bob-single",
+        Some(Arc::new(SmallResolver {
+            objects: objects.clone(),
+        })),
+    )
+    .await;
+
+    alice.trust_manager.add_trusted(bob.cluster_key(), "bob".to_string(), None);
+    bob.trust_manager.add_trusted(alice.cluster_key(), "alice".to_string(), None);
+
+    let repo = test_fed_id(bob.cluster_key(), "single-round-repo");
+    bob.add_resource(repo, FederationMode::Public).await;
+
+    let (conn, _) = tokio::time::timeout(
+        Duration::from_secs(10),
+        connect_and_handshake(&alice.endpoint, &alice.identity, bob.endpoint_addr()),
+    )
+    .await
+    .expect("timeout")
+    .expect("handshake");
+
+    let mut session = tokio::time::timeout(Duration::from_secs(5), SyncSession::open(&conn))
+        .await
+        .expect("timeout")
+        .expect("open session");
+
+    // Round 1: get the one object
+    let (batch, _) = tokio::time::timeout(
+        Duration::from_secs(5),
+        session.sync_objects(&repo, vec!["blob".to_string()], vec![], 100, None),
+    )
+    .await
+    .expect("timeout")
+    .expect("sync round 1");
+    assert_eq!(batch.len(), 1);
+    assert_eq!(batch[0].hash, hash);
+
+    // Round 2: nothing left
+    let (batch2, _) = tokio::time::timeout(
+        Duration::from_secs(5),
+        session.sync_objects(&repo, vec!["blob".to_string()], vec![hash], 100, None),
+    )
+    .await
+    .expect("timeout")
+    .expect("sync round 2");
+    assert!(batch2.is_empty(), "second round should return empty");
+
+    tokio::time::timeout(Duration::from_secs(5), session.finish())
+        .await
+        .expect("timeout")
+        .expect("session finish");
 }
