@@ -1207,12 +1207,10 @@ pub(crate) async fn federation_import_objects(
     // find objects by their original SHA-1.
     let mapping_store = aspen_forge::git::bridge::HashMappingStore::new(forge_node.kv().clone());
     let mut origin_mappings_stored = 0u32;
+    let mut origin_sha1_matched = 0u32;
+    let mut origin_sha1_same = 0u32;
+    let mut origin_sha1_missed = 0u32;
     let origin_sha1_count = objects.iter().filter(|o| o.origin_sha1.is_some()).count();
-    tracing::info!(
-        total_objects = objects.len(),
-        with_origin_sha1 = origin_sha1_count,
-        "Phase 4: checking origin SHA-1 mappings"
-    );
     for obj in objects {
         if let Some(origin_sha1_bytes) = obj.origin_sha1 {
             // Find the local BLAKE3 for this object using its re-serialized SHA-1.
@@ -1236,21 +1234,37 @@ pub(crate) async fn federation_import_objects(
                     _ => continue,
                 };
 
+                origin_sha1_matched += 1;
                 // Only store if original differs from import SHA-1
                 if origin_sha1_bytes != import_sha1 {
-                    if let Err(e) = mapping_store.store_batch(repo_id, &[(*local_blake3, origin_sha1, git_type)]).await
+                    if let Err(e) = mapping_store
+                        .store_batch(repo_id, &[(*local_blake3, origin_sha1, git_type)])
+                        .await
                     {
                         tracing::debug!(error = %e, "failed to store origin SHA-1 mapping (non-fatal)");
                     } else {
                         origin_mappings_stored += 1;
                     }
+                } else {
+                    origin_sha1_same += 1;
                 }
 
                 // Also add to stats map for ref translation
                 stats.sha1_to_local_blake3.insert(origin_sha1_bytes, *local_blake3);
+            } else {
+                origin_sha1_missed += 1;
             }
         }
     }
+
+    tracing::info!(
+        total = origin_sha1_count,
+        matched = origin_sha1_matched,
+        stored = origin_mappings_stored,
+        same = origin_sha1_same,
+        missed = origin_sha1_missed,
+        "Phase 4: origin SHA-1 mapping results"
+    );
 
     if origin_mappings_stored > 0 {
         tracing::info!(count = origin_mappings_stored, "stored origin SHA-1 → BLAKE3 mappings for git client lookups");
