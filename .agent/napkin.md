@@ -260,13 +260,15 @@
 
 ## Investigation Items
 
-### Federated clone SHA-1 drift in export (2026-03-30)
+### Federated clone SHA-1 drift in export (2026-03-30) — FIXED
 
 **Symptom**: `dogfood-federation -- full` fails at federated clone. `git-remote-aspen` receives all 34,051 objects (18 chunks) but git reports `Could not read 9970f375...` (a commit).
 
-**Root cause**: Import succeeds (4 convergent passes, all 34,051 mapped). Export re-serializes objects, producing different SHA-1s for 164 objects where tree entry ordering or commit formatting differs. Child commits reference parent by origin SHA-1 (`9970f375`), but the parent's re-serialized SHA-1 differs. Git can't find the parent.
+**Root cause**: 15 GitHub-signed commits have `gpgsig` multi-line headers between the committer line and the blank line separator. The `parse_git_commit` import parser didn't handle these — it jumped straight from committer to message. The gpgsig was either lost or mixed into the message, so re-exported commits had different content → different SHA-1. The 164 drifted objects = 15 signed commits + trees/commits that transitively reference them.
 
-**The fix**: The exporter (`export_object` in `exporter.rs`) must use origin SHA-1 for all cross-references in exported commits/trees, not the re-serialized SHA-1. The origin SHA-1 mappings exist (`origin_sha1` stored in Phase 4 of `federation_import_objects`). The exporter's `converter.export_object()` needs to look up origin SHA-1 from the mapping store when the object was imported via federation (not from a direct git push).
+**Fix**: Added `extra_headers: Vec<(String, String)>` to `CommitObject`. Import parser captures all headers between committer and blank line (gpgsig, mergetag, encoding, etc.) including multi-line continuation (leading space). Export emits them verbatim. Test: `test_gpgsig_commit_roundtrip`.
+
+**Not the cause** (investigated and ruled out): tree entry mode format (`40000` vs `040000` — git stores without leading zero), tree entry sort order (our `git_tree_entry_cmp` matches git exactly across 20K+ trees), author line spacing (zero drift across 2,909 commits).
 
 ### Federation / Git Bridge
 
