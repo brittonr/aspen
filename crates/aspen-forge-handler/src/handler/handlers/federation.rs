@@ -802,22 +802,35 @@ pub(crate) async fn handle_federation_fetch_refs(
         let have_hashes = collect_local_blake3_hashes(forge_node, &mirror_repo_id, 10_000).await;
         let already_present_objects = have_hashes.len() as u32;
 
-        // Fetch git objects with pagination
+        // Fetch git objects with pagination via SyncSession (single QUIC stream)
         let mut all_git_objects = Vec::new();
         let mut current_have = have_hashes;
         let max_rounds = 10u32; // Tiger Style: bounded pagination
 
+        let mut session = match aspen_cluster::federation::sync::SyncSession::open(&connection).await {
+            Ok(s) => s,
+            Err(e) => {
+                errors.push(format!("failed to open sync session: {e}"));
+                return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+                    is_success: false,
+                    fetched: refs_fetched,
+                    already_present: already_present_objects,
+                    errors,
+                    error: Some(format!("sync session open failed: {e}")),
+                }));
+            }
+        };
+
         for _round in 0..max_rounds {
-            #[allow(deprecated)] // Legacy handler; sync_from_origin uses SyncSession
-            let (objects, has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
-                &connection,
-                &fed_id,
-                vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
-                current_have.clone(),
-                1000,
-                None,
-            )
-            .await
+            let (objects, has_more) = match session
+                .sync_objects(
+                    &fed_id,
+                    vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
+                    current_have.clone(),
+                    1000,
+                    None,
+                )
+                .await
             {
                 Ok(result) => result,
                 Err(e) => {
@@ -840,6 +853,11 @@ pub(crate) async fn handle_federation_fetch_refs(
             if !has_more {
                 break;
             }
+        }
+
+        // Signal the server that the sync conversation is done
+        if let Err(e) = session.finish().await {
+            tracing::debug!(error = %e, "sync session finish (non-fatal)");
         }
 
         // Import git objects into mirror
