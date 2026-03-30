@@ -28,8 +28,9 @@ use super::MAX_FEDERATION_CONNECTIONS;
 use super::MAX_OBJECTS_PER_SYNC;
 use super::MAX_RESOURCES_PER_LIST;
 use super::MAX_STREAMS_PER_CONNECTION;
-use super::MESSAGE_PROCESSING_TIMEOUT;
+use super::MESSAGE_READ_TIMEOUT;
 use super::REQUEST_TIMEOUT;
+use super::SYNC_PROCESSING_TIMEOUT;
 use super::types::FederationRequest;
 use super::types::FederationResponse;
 use super::types::ResourceInfo;
@@ -191,16 +192,17 @@ async fn handle_federation_stream(
 ) -> Result<()> {
     // Read request with size limit and per-message timeout
     // Tiger Style: Prevents CPU exhaustion from slow/malicious senders
-    let request = tokio::time::timeout(MESSAGE_PROCESSING_TIMEOUT, read_message::<FederationRequest>(recv))
+    let request = tokio::time::timeout(MESSAGE_READ_TIMEOUT, read_message::<FederationRequest>(recv))
         .await
         .context("message read timeout")?
         .context("failed to read federation request")?;
 
-    // Process request with timeout to prevent CPU exhaustion
+    // Process request with longer timeout — git DAG walks for large repos
+    // involve many KV reads and can take tens of seconds for 30K+ object repos
     let response =
-        tokio::time::timeout(MESSAGE_PROCESSING_TIMEOUT, process_federation_request(request, context, remote_peer))
+        tokio::time::timeout(SYNC_PROCESSING_TIMEOUT, process_federation_request(request, context, remote_peer))
             .await
-            .context("message processing timeout")?
+            .context("sync processing timeout")?
             .context("failed to process federation request")?;
 
     // Write response

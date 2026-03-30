@@ -84,7 +84,12 @@ pub const MAX_STREAMS_PER_CONNECTION: u32 = 16;
 pub const MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 
 /// Maximum objects per sync request.
-pub const MAX_OBJECTS_PER_SYNC: u32 = 1000;
+///
+/// Set high enough that a full-repo federation sync completes in a reasonable
+/// number of rounds. Each round re-traverses previously-known objects in the
+/// DAG walk, so fewer rounds = less wasted I/O. For a 34K-object git repo,
+/// 5000 objects/round needs ~7 rounds instead of ~34 rounds at 1000.
+pub const MAX_OBJECTS_PER_SYNC: u32 = 5000;
 
 /// Maximum resources per list request.
 pub const MAX_RESOURCES_PER_LIST: u32 = 1000;
@@ -95,12 +100,24 @@ pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 /// Request timeout.
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Per-message processing timeout (5 seconds).
+/// Per-message read timeout (5 seconds).
 ///
-/// Tiger Style: Prevents CPU exhaustion from large message deserialization.
-/// Applied to both read and process operations per message.
-/// Generous enough for 16MB message at typical network speeds.
-pub const MESSAGE_PROCESSING_TIMEOUT: Duration = Duration::from_secs(5);
+/// Tiger Style: Prevents CPU exhaustion from slow/malicious message senders.
+/// Applied to reading and deserializing incoming federation messages.
+/// Generous enough for 64MB message at typical network speeds.
+pub const MESSAGE_READ_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Sync processing timeout (120 seconds).
+///
+/// Applied to processing federation requests after the message has been read.
+/// Git DAG walks for large repositories (30K+ objects) must traverse the
+/// object graph, which involves many KV reads. With incremental sync, later
+/// rounds re-traverse previously-known objects (skipping but still reading
+/// them to discover dependencies), making processing time proportional to
+/// the total DAG size — not just the batch size.
+///
+/// 120s accommodates repos up to ~100K objects with comfortable margin.
+pub const SYNC_PROCESSING_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[cfg(test)]
 mod tests {
@@ -152,7 +169,7 @@ mod tests {
 
     #[test]
     fn test_max_objects_per_sync() {
-        assert_eq!(MAX_OBJECTS_PER_SYNC, 1000);
+        assert_eq!(MAX_OBJECTS_PER_SYNC, 5000);
     }
 
     #[test]
@@ -171,13 +188,21 @@ mod tests {
     }
 
     #[test]
-    fn test_message_processing_timeout_constant() {
-        // Tiger Style: Verify timeout is reasonable for 16MB messages
-        assert_eq!(MESSAGE_PROCESSING_TIMEOUT, Duration::from_secs(5));
-        // Ensure processing timeout is shorter than request timeout
-        assert!(MESSAGE_PROCESSING_TIMEOUT < REQUEST_TIMEOUT);
-        // Ensure we have enough time to process large messages (16MB at ~100Mbps = ~1.3s)
-        assert!(MESSAGE_PROCESSING_TIMEOUT >= Duration::from_secs(2));
+    fn test_message_read_timeout_constant() {
+        // Tiger Style: Verify read timeout is reasonable for 64MB messages
+        assert_eq!(MESSAGE_READ_TIMEOUT, Duration::from_secs(5));
+        // Ensure read timeout is shorter than request timeout
+        assert!(MESSAGE_READ_TIMEOUT < REQUEST_TIMEOUT);
+        // Ensure we have enough time to read large messages (64MB at ~100Mbps = ~5s)
+        assert!(MESSAGE_READ_TIMEOUT >= Duration::from_secs(2));
+    }
+
+    #[test]
+    fn test_sync_processing_timeout_constant() {
+        // Git DAG walks for large repos need significant processing time
+        assert_eq!(SYNC_PROCESSING_TIMEOUT, Duration::from_secs(120));
+        // Processing timeout must be longer than read timeout
+        assert!(SYNC_PROCESSING_TIMEOUT > MESSAGE_READ_TIMEOUT);
     }
 
     // =========================================================================
