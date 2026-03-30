@@ -322,6 +322,21 @@ Two bugs causing "node 3 stuck draining" during 3-node dogfood deploy:
 
 Also fixed: pre-existing compilation error in `deploy_rpc_integration.rs` (`handle_node_upgrade` missing `expected_binary` arg).
 
+### 2026-03-30: Federation dogfood — stream-too-long fixed, DAG walk incomplete
+
+Fixed `stream too long` error in federated clone: git-remote-aspen used `MAX_CLIENT_MESSAGE_SIZE` (16MB) for `read_to_end` but a 33K-object federated clone response is much larger. Added `MAX_GIT_FETCH_RESPONSE_SIZE` (256MB).
+
+After fix: federation sync pulls all 33,847 objects (post-sync retry recovers cross-batch failures). But `handle_git_bridge_fetch` on the mirror only exports 7,514 objects — the `export_commit_dag` BFS doesn't walk the complete DAG. Git sees "Could not read 387a1814..." (missing parent commit).
+
+Root cause hypothesis: during federation import retry, many objects get imported but their SHA-1→BLAKE3 mappings may not be fully written. The exporter's BFS relies on `read_object_bytes` which reads from the blob store by BLAKE3 hash, but the cross-references from commits→trees→blobs are via BLAKE3 hashes stored in the signed objects. Some BLAKE3 hashes in the DAG may reference objects not stored in the mirror's blob namespace (wrong repo prefix), or the mapping store has gaps.
+
+Key evidence from bob's logs:
+
+- First batch: 1000 objects → 547 imported, 453 stuck (unresolvable deps)
+- Post-sync retry: recovered 33,847 objects (1990 commits + 15675 trees + 16182 blobs)
+- But mirror fetch returns only 7,514 objects — BFS terminates early without error
+- Git reports missing parent commit → incomplete object graph
+
 ### 2026-03-29: Federation dogfood — sync works, federated clone blocked on large repos
 
 Ran `nix run .#dogfood-federation -- full` end-to-end:
