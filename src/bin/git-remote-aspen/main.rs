@@ -115,6 +115,13 @@ const MAX_BATCH_BYTES: usize = 4 * 1024 * 1024; // 4MB
 /// The bottleneck is now I/O parallelism, not Raft consensus per object.
 const MAX_BATCH_OBJECTS: usize = 2000;
 
+/// Maximum response size for git fetch operations (256 MB).
+///
+/// Git fetch responses carry all requested objects inline (SHA-1 + type + base64 data).
+/// A full clone of Aspen (~33K objects) produces a response well over 16MB.
+/// The generic MAX_CLIENT_MESSAGE_SIZE (16MB) is too small for large repos.
+const MAX_GIT_FETCH_RESPONSE_SIZE: usize = 256 * 1024 * 1024;
+
 /// Supported options and their current values.
 struct Options {
     /// Verbosity level (0 = quiet, 1 = normal, 2+ = verbose).
@@ -260,7 +267,6 @@ impl RpcClient {
     /// Send a single RPC request without retry.
     async fn send_once(&self, request: ClientRpcRequest) -> io::Result<ClientRpcResponse> {
         use aspen::client_rpc::AuthenticatedRequest;
-        use aspen::client_rpc::MAX_CLIENT_MESSAGE_SIZE;
         use tokio::time::timeout;
 
         // Get first bootstrap peer address
@@ -292,8 +298,8 @@ impl RpcClient {
         send.write_all(&request_bytes).await.map_err(io::Error::other)?;
         send.finish().map_err(io::Error::other)?;
 
-        // Read response
-        let response_bytes = timeout(RPC_TIMEOUT, async { recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await })
+        // Read response — use larger limit for git fetch which returns all objects inline
+        let response_bytes = timeout(RPC_TIMEOUT, async { recv.read_to_end(MAX_GIT_FETCH_RESPONSE_SIZE).await })
             .await
             .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "response timeout"))?
             .map_err(io::Error::other)?;
