@@ -1723,3 +1723,182 @@ async fn test_federation_export_closure_with_known_set() {
     assert_eq!(tree_count, 1, "tree should be in batch (blob deps satisfied by known_blake3)");
     assert_eq!(commit_count, 1, "commit should be in batch (tree dep is in batch)");
 }
+
+// ============================================================================
+// Partial-success and convergent import tests
+// ============================================================================
+
+/// Test 1.4: A tree referencing a non-existent blob should appear in failures,
+/// while independent blobs succeed.
+#[tokio::test]
+async fn test_import_objects_partial_success_missing_dep() {
+    let h = BridgeTestHarness::new();
+
+    // Create a blob that will be imported successfully
+    let good_blob = make_git_blob(b"good content");
+    let good_sha1 = compute_sha1(&good_blob);
+
+    // Create a tree referencing a blob that does NOT exist in the import set
+    let fake_sha1 = Sha1Hash::from_bytes([0xDE; 20]);
+    let tree_entry = make_tree_entry("100644", "missing.txt", &fake_sha1);
+    let bad_tree = make_git_tree(&[tree_entry]);
+    let bad_tree_sha1 = compute_sha1(&bad_tree);
+
+    let objects = vec![
+        (good_sha1, GitObjectType::Blob, good_blob),
+        (bad_tree_sha1, GitObjectType::Tree, bad_tree),
+    ];
+
+    let result = h.importer.import_objects(&h.repo_id, objects).await.unwrap();
+
+    // Good blob should succeed
+    assert_eq!(result.objects_imported, 1, "blob should import successfully");
+    assert!(result.mappings.iter().any(|(sha1, _)| *sha1 == good_sha1), "good blob should have a mapping");
+
+    // Bad tree should be in failures
+    assert_eq!(result.failures.len(), 1, "tree with missing dep should fail");
+    assert_eq!(result.failures[0].0, bad_tree_sha1, "failed object should be the bad tree");
+}
+
+/// Test 4.1: Cross-batch convergent import — tree depends on blob from different batch.
+/// After importing both batches, the tree should resolve.
+#[tokio::test]
+async fn test_import_cross_batch_convergence() {
+    let h = BridgeTestHarness::new();
+
+    // Batch 1: just a blob
+    let blob_bytes = make_git_blob(b"batch1 content");
+    let blob_sha1 = compute_sha1(&blob_bytes);
+
+    // Batch 2: tree referencing the blob from batch 1
+    let tree_entry = make_tree_entry("100644", "file.txt", &blob_sha1);
+    let tree_bytes = make_git_tree(&[tree_entry]);
+    let tree_sha1 = compute_sha1(&tree_bytes);
+
+    // Import batch 1 (blob)
+    let r1 = h
+        .importer
+        .import_objects(&h.repo_id, vec![(blob_sha1, GitObjectType::Blob, blob_bytes.clone())])
+        .await
+        .unwrap();
+    assert_eq!(r1.objects_imported, 1);
+    assert!(r1.failures.is_empty());
+
+    // Import batch 2 (tree) — blob mapping exists from batch 1, should succeed
+    let r2 = h
+        .importer
+        .import_objects(&h.repo_id, vec![(tree_sha1, GitObjectType::Tree, tree_bytes)])
+        .await
+        .unwrap();
+    assert_eq!(r2.objects_imported, 1, "tree should import (blob mapped in batch 1)");
+    assert!(r2.failures.is_empty(), "no failures expected");
+}
+
+/// Test 4.2: Deep dependency chain (blob → subtree → tree → commit) split
+/// across separate import calls converges correctly.
+#[tokio::test]
+async fn test_import_deep_chain_convergence() {
+    let h = BridgeTestHarness::new();
+
+    // Layer 0: blob
+    let blob_bytes = make_git_blob(b"deep chain content");
+    let blob_sha1 = compute_sha1(&blob_bytes);
+
+    // Layer 1: subtree containing the blob
+    let subtree_entry = make_tree_entry("100644", "data.txt", &blob_sha1);
+    let subtree_bytes = make_git_tree(&[subtree_entry]);
+    let subtree_sha1 = compute_sha1(&subtree_bytes);
+
+    // Layer 2: root tree containing the subtree
+    let root_entry = make_tree_entry("40000", "subdir", &subtree_sha1);
+    let root_tree_bytes = make_git_tree(&[root_entry]);
+    let root_tree_sha1 = compute_sha1(&root_tree_bytes);
+
+    // Layer 3: commit referencing root tree
+    let commit_bytes = make_git_commit(&root_tree_sha1, &[], "deep chain commit");
+    let commit_sha1 = compute_sha1(&commit_bytes);
+
+    // Import each layer separately (simulating 4 different batches)
+    let layers: Vec<Vec<(Sha1Hash, GitObjectType, Vec<u8>)>> = vec![
+        vec![(blob_sha1, GitObjectType::Blob, blob_bytes)],
+        vec![(subtree_sha1, GitObjectType::Tree, subtree_bytes)],
+        vec![(root_tree_sha1, GitObjectType::Tree, root_tree_bytes)],
+        vec![(commit_sha1, GitObjectType::Commit, commit_bytes)],
+    ];
+
+    for (i, batch) in layers.into_iter().enumerate() {
+        let r = h.importer.import_objects(&h.repo_id, batch).await.unwrap();
+        assert_eq!(r.objects_imported, 1, "layer {i} should import (deps from prior layers)");
+        assert!(r.failures.is_empty(), "layer {i} should have no failures");
+    }
+
+    // Verify all 4 objects have mappings
+    assert!(h.mapping.has_sha1(&h.repo_id, &blob_sha1).await.unwrap());
+    assert!(h.mapping.has_sha1(&h.repo_id, &subtree_sha1).await.unwrap());
+    assert!(h.mapping.has_sha1(&h.repo_id, &root_tree_sha1).await.unwrap());
+    assert!(h.mapping.has_sha1(&h.repo_id, &commit_sha1).await.unwrap());
+}
+
+/// Test 4.3: All objects in one batch — single pass, zero retries.
+#[tokio::test]
+async fn test_import_all_in_one_batch_no_retry() {
+    let h = BridgeTestHarness::new();
+
+    let blob_bytes = make_git_blob(b"single batch");
+    let blob_sha1 = compute_sha1(&blob_bytes);
+
+    let tree_entry = make_tree_entry("100644", "file.txt", &blob_sha1);
+    let tree_bytes = make_git_tree(&[tree_entry]);
+    let tree_sha1 = compute_sha1(&tree_bytes);
+
+    let commit_bytes = make_git_commit(&tree_sha1, &[], "all in one");
+    let commit_sha1 = compute_sha1(&commit_bytes);
+
+    let objects = vec![
+        (blob_sha1, GitObjectType::Blob, blob_bytes),
+        (tree_sha1, GitObjectType::Tree, tree_bytes),
+        (commit_sha1, GitObjectType::Commit, commit_bytes),
+    ];
+
+    let result = h.importer.import_objects(&h.repo_id, objects).await.unwrap();
+    assert_eq!(result.objects_imported, 3, "all 3 objects should import in one pass");
+    assert!(result.failures.is_empty(), "no failures when all deps present");
+    assert_eq!(result.mappings.len(), 3, "3 mappings");
+}
+
+/// Test 4.4: Objects with genuinely missing dependencies — the failed objects
+/// appear in failures after the import.
+#[tokio::test]
+async fn test_import_genuinely_missing_deps_reported() {
+    let h = BridgeTestHarness::new();
+
+    // Tree referencing a blob that doesn't exist anywhere
+    let missing_sha1 = Sha1Hash::from_bytes([0xAB; 20]);
+    let tree_entry = make_tree_entry("100644", "ghost.txt", &missing_sha1);
+    let tree_bytes = make_git_tree(&[tree_entry]);
+    let tree_sha1 = compute_sha1(&tree_bytes);
+
+    // Commit referencing a tree that doesn't exist
+    let missing_tree_sha1 = Sha1Hash::from_bytes([0xCD; 20]);
+    let commit_bytes = make_git_commit(&missing_tree_sha1, &[], "orphan commit");
+    let commit_sha1 = compute_sha1(&commit_bytes);
+
+    // Also include a good blob (should succeed independently)
+    let good_blob = make_git_blob(b"still good");
+    let good_sha1 = compute_sha1(&good_blob);
+
+    let objects = vec![
+        (good_sha1, GitObjectType::Blob, good_blob),
+        (tree_sha1, GitObjectType::Tree, tree_bytes),
+        (commit_sha1, GitObjectType::Commit, commit_bytes),
+    ];
+
+    let result = h.importer.import_objects(&h.repo_id, objects).await.unwrap();
+
+    assert_eq!(result.objects_imported, 1, "only the blob should import");
+    assert_eq!(result.failures.len(), 2, "tree and commit should both fail");
+
+    let failed_sha1s: Vec<Sha1Hash> = result.failures.iter().map(|(s, _)| *s).collect();
+    assert!(failed_sha1s.contains(&tree_sha1), "tree should be in failures");
+    assert!(failed_sha1s.contains(&commit_sha1), "commit should be in failures");
+}

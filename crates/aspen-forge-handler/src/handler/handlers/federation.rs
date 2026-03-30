@@ -1032,8 +1032,14 @@ pub struct FederationImportStats {
 /// Import federation `SyncObject` entries into a forge repo via the git bridge.
 ///
 /// Converts SyncObjects to the `(Sha1Hash, GitObjectType, Vec<u8>)` format
-/// expected by `import_objects()`, which performs topological sorting (wave-based
-/// parallelism) to ensure dependencies are imported before dependents.
+/// expected by `import_objects()`, then runs a convergent retry loop:
+///
+/// 1. Each pass calls `import_objects` (wave-based parallel, partial-success)
+/// 2. Failed objects (missing cross-batch dependencies) are retried next pass
+/// 3. Loop terminates when no new objects are imported or after 10 passes
+///
+/// This handles cross-batch dependencies where trees reference blobs from
+/// a different sync batch. Typical convergence: 1-3 passes.
 ///
 /// Returns import statistics including a `sha1_to_local_blake3` map for
 /// translating remote ref hashes to locally imported BLAKE3 hashes.
@@ -1091,100 +1097,119 @@ pub(crate) async fn federation_import_objects(
     stats.trees = type_counts[1];
     stats.commits = type_counts[2];
 
-    // Phase 2: Two-pass import — blobs first, then trees+commits.
+    // Phase 2: Convergent import loop.
     //
-    // Federation sync batches may contain trees that reference blobs from
-    // a different batch (truncated DAG walk). By importing all blobs first,
-    // their SHA1→BLAKE3 mappings exist before trees try to resolve them.
-    // Trees referencing blobs from future batches will still fail, but trees
-    // referencing blobs in the SAME batch will succeed (the previous single-pass
-    // import failed because blobs and trees were mixed in topological sort).
+    // Federation sync collects objects across multiple batches. Cross-batch
+    // dependencies (tree references blob from a different batch) cause
+    // single-pass imports to fail because the mapping doesn't exist yet.
+    //
+    // The convergent loop runs import passes until no new objects are imported
+    // (fixed-point). Each pass:
+    //   1. Filters to objects without SHA-1 mappings
+    //   2. Calls import_objects (wave-based parallel, partial-success)
+    //   3. Collects newly created mappings
+    //   4. Repeats if progress was made
+    //
+    // Blobs always import on pass 1 (no deps). Trees depending on those blobs
+    // import on pass 2. Commits depending on those trees import on pass 3.
+    // Typical convergence: 1-3 passes.
     let mapping = std::sync::Arc::new(HashMappingStore::new(forge_node.kv().clone()));
     let hlc = create_hlc(&forge_node.public_key().to_string());
     let importer = GitImporter::new(
-        mapping,
+        mapping.clone(),
         forge_node.git.blobs().clone(),
         std::sync::Arc::new(forge_node.refs.clone()),
         forge_node.secret_key().clone(),
         hlc,
     );
 
-    // Pass 1: Import blobs (zero dependencies, always succeeds)
-    let (blobs, non_blobs): (Vec<_>, Vec<_>) =
-        import_objects.into_iter().partition(|(_, git_type, _)| *git_type == GitObjectType::Blob);
-
     let mut all_mappings = Vec::new();
     let mut total_skipped = 0u32;
+    let max_convergence_passes = 10u32;
+    let mut remaining_objects = import_objects;
 
-    if !blobs.is_empty() {
-        match importer.import_objects(repo_id, blobs).await {
-            Ok(r) => {
-                total_skipped += r.objects_skipped;
-                all_mappings.extend(r.mappings);
-            }
-            Err(e) => {
-                stats.errors.push(format!("blob import failed: {e}"));
-                tracing::warn!(error = %e, "federation blob import failed");
-            }
-        }
-    }
-
-    // Pass 2: Import trees + commits (trees depend on blobs, commits on trees)
-    let mut pass2_failed = false;
-    if !non_blobs.is_empty() {
-        match importer.import_objects(repo_id, non_blobs).await {
-            Ok(r) => {
-                total_skipped += r.objects_skipped;
-                all_mappings.extend(r.mappings);
-            }
-            Err(e) => {
-                stats.errors.push(format!("tree/commit import failed: {e}"));
-                tracing::warn!(error = %e, "federation tree/commit import failed, will retry");
-                pass2_failed = true;
+    for pass in 0..max_convergence_passes {
+        // Filter to objects that still lack SHA-1 mappings.
+        let mut unmapped = Vec::new();
+        let mut pass_skipped = 0u32;
+        for (sha1, git_type, git_bytes) in remaining_objects {
+            if mapping.has_sha1(repo_id, &sha1).await.unwrap_or(false) {
+                pass_skipped += 1;
+            } else {
+                unmapped.push((sha1, git_type, git_bytes));
             }
         }
-    }
 
-    // Pass 3 (belt-and-suspenders): Retry non-blob objects that failed in pass 2.
-    //
-    // With exporter-side closure enforcement, pass 2 should always succeed.
-    // This retry catches residual ordering issues (e.g., cross-references
-    // within the same wave). import_objects() skips objects with existing
-    // SHA-1 mappings, so the retry is idempotent and cheap when pass 2 succeeded.
-    if pass2_failed {
-        let retry_objects: Vec<_> = objects
-            .iter()
-            .filter_map(|obj| {
-                let git_type = match obj.object_type.as_str() {
-                    "tree" => GitObjectType::Tree,
-                    "commit" => GitObjectType::Commit,
-                    _ => return None,
-                };
-                let header = format!("{} {}\0", obj.object_type, obj.data.len());
-                let mut git_bytes = Vec::with_capacity(header.len() + obj.data.len());
-                git_bytes.extend_from_slice(header.as_bytes());
-                git_bytes.extend_from_slice(&obj.data);
-                let sha1 = {
-                    use sha1::Digest;
-                    let digest: [u8; 20] = sha1::Sha1::digest(&git_bytes).into();
-                    Sha1Hash::from_bytes(digest)
-                };
-                Some((sha1, git_type, git_bytes))
-            })
-            .collect();
+        if unmapped.is_empty() {
+            tracing::info!(
+                pass = pass,
+                total_imported = all_mappings.len(),
+                total_skipped = total_skipped,
+                "convergent import: all objects mapped"
+            );
+            total_skipped += pass_skipped;
+            break;
+        }
 
-        if !retry_objects.is_empty() {
-            match importer.import_objects(repo_id, retry_objects).await {
-                Ok(r) => {
-                    all_mappings.extend(r.mappings);
-                    if r.objects_imported > 0 {
-                        tracing::info!(recovered = r.objects_imported, "retry pass recovered objects");
+        let attempt_count = unmapped.len() as u32;
+
+        // Build a SHA-1 set of failed objects for cheap lookup after import.
+        // We need to recover the original (sha1, git_type, git_bytes) tuples
+        // for failed objects to retry. Build a map keyed by SHA-1 bytes.
+        let mut retry_map: std::collections::HashMap<[u8; 20], (Sha1Hash, GitObjectType, Vec<u8>)> =
+            unmapped.iter().map(|(sha1, gt, gb)| (*sha1.as_bytes(), (*sha1, *gt, gb.clone()))).collect();
+
+        match importer.import_objects(repo_id, unmapped).await {
+            Ok(r) => {
+                let newly_imported = r.objects_imported;
+                total_skipped += r.objects_skipped + pass_skipped;
+                all_mappings.extend(r.mappings);
+
+                tracing::info!(
+                    pass = pass,
+                    attempted = attempt_count,
+                    imported = newly_imported,
+                    skipped = r.objects_skipped,
+                    failed = r.failures.len(),
+                    cumulative_mapped = all_mappings.len(),
+                    "convergent import pass complete"
+                );
+
+                if newly_imported == 0 {
+                    // No progress — remaining objects have genuinely missing deps.
+                    let stuck_count = r.failures.len();
+                    if stuck_count > 0 {
+                        let preview: Vec<String> = r.failures.iter().take(20).map(|(sha1, _)| sha1.to_hex()).collect();
+                        tracing::warn!(
+                            pass = pass,
+                            stuck = stuck_count,
+                            first_20 = ?preview,
+                            "convergent import stalled: no progress, objects have unresolvable dependencies"
+                        );
+                        for (sha1, err) in &r.failures {
+                            stats.errors.push(format!("stuck object {}: {}", sha1.to_hex(), err));
+                        }
+                    }
+                    break;
+                }
+
+                // Collect failed objects for next pass.
+                remaining_objects = Vec::with_capacity(r.failures.len());
+                for (sha1, _err) in &r.failures {
+                    if let Some(entry) = retry_map.remove(sha1.as_bytes()) {
+                        remaining_objects.push(entry);
                     }
                 }
-                Err(e) => {
-                    stats.errors.push(format!("retry pass also failed: {e}"));
-                    tracing::warn!(error = %e, "federation retry pass also failed");
+
+                if remaining_objects.is_empty() {
+                    break;
                 }
+            }
+            Err(e) => {
+                stats.errors.push(format!("convergent pass {pass} failed: {e}"));
+                tracing::warn!(pass = pass, error = %e, "convergent import pass error");
+                // Recover all objects from the retry map for next attempt
+                remaining_objects = retry_map.into_values().collect();
             }
         }
     }

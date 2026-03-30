@@ -56,6 +56,10 @@ pub struct ImportResult {
     /// git SHA-1 hashes with Forge BLAKE3 hashes (e.g., federation ref translation)
     /// can use this without extra KV lookups.
     pub mappings: Vec<(Sha1Hash, blake3::Hash)>,
+    /// Objects that failed to import. Each entry is (SHA-1, error description).
+    /// Non-empty when partial-success mode is used (e.g., federation convergent
+    /// retry). The caller can retry these objects in a subsequent pass.
+    pub failures: Vec<(Sha1Hash, String)>,
 }
 
 /// Service for importing Git objects into Forge.
@@ -238,17 +242,18 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         Ok((blake3, sha1, obj_type))
     }
 
-    /// Import multiple objects using wave-based parallelism.
+    /// Import multiple objects using wave-based parallelism with partial-success semantics.
     ///
     /// Objects are sorted into waves where all objects in a wave can be
     /// processed concurrently (they have no dependencies on each other).
     /// Waves are processed sequentially to ensure dependencies are satisfied.
     ///
-    /// This provides significant speedup over sequential import while
-    /// maintaining correctness: a typical Git push with many blobs will
-    /// have most blobs in wave 0, processed in parallel.
+    /// Individual object failures within a wave are collected in
+    /// `ImportResult::failures` rather than aborting the entire import.
+    /// This enables callers (e.g., federation convergent retry) to make
+    /// maximum progress per pass and retry only the failed objects.
     ///
-    /// Returns import statistics.
+    /// Returns import statistics including per-object mappings and failures.
     pub async fn import_objects(
         &self,
         repo_id: &RepoId,
@@ -310,6 +315,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         let mut imported = 0u32;
         let mut all_mappings: Vec<(Sha1Hash, blake3::Hash)> =
             Vec::with_capacity(total_objects as usize + skipped_count as usize);
+        let mut all_failures: Vec<(Sha1Hash, String)> = Vec::new();
 
         // Include skipped objects (already had mappings) in the result.
         for sha1 in &waves.skipped {
@@ -322,22 +328,36 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             let wave_size = wave.len();
 
             // Store blobs concurrently, collect mapping info for c2e.
-            let results: Vec<BridgeResult<(blake3::Hash, Sha1Hash, GitObjectType)>> = n0_future::stream::iter(wave)
-                .map(|obj| async move { self.import_object_store_blob(&repo_id, &obj.data).await })
-                .buffered_unordered(MAX_IMPORT_CONCURRENCY)
-                .collect()
-                .await;
+            // Carry the SHA-1 through so failures can be attributed.
+            #[allow(clippy::type_complexity)]
+            let results: Vec<(Sha1Hash, BridgeResult<(blake3::Hash, Sha1Hash, GitObjectType)>)> =
+                n0_future::stream::iter(wave)
+                    .map(|obj| {
+                        let sha1 = obj.sha1;
+                        async move { (sha1, self.import_object_store_blob(&repo_id, &obj.data).await) }
+                    })
+                    .buffered_unordered(MAX_IMPORT_CONCURRENCY)
+                    .collect()
+                    .await;
 
-            // Collect successful mappings, propagate first error.
+            // Collect successful mappings; record per-object failures and continue.
             let mut wave_mappings: Vec<(blake3::Hash, Sha1Hash, GitObjectType)> = Vec::with_capacity(wave_size);
             // c2e: (sha1, envelope_blake3) — keyed by SHA-1 for deterministic lookup
             let mut wave_c2e: Vec<(Sha1Hash, [u8; 32])> = Vec::with_capacity(wave_size);
-            for result in results {
-                let (blake3, sha1, obj_type) = result?;
-                all_mappings.push((sha1, blake3));
-                wave_mappings.push((blake3, sha1, obj_type));
-                wave_c2e.push((sha1, *blake3.as_bytes()));
-                imported += 1;
+            let mut wave_failures = 0u32;
+            for (obj_sha1, result) in results {
+                match result {
+                    Ok((blake3, sha1, obj_type)) => {
+                        all_mappings.push((sha1, blake3));
+                        wave_mappings.push((blake3, sha1, obj_type));
+                        wave_c2e.push((sha1, *blake3.as_bytes()));
+                        imported += 1;
+                    }
+                    Err(e) => {
+                        all_failures.push((obj_sha1, e.to_string()));
+                        wave_failures += 1;
+                    }
+                }
             }
 
             // Batch-write all hash mappings for this wave.
@@ -367,13 +387,23 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
                 }
             }
 
-            tracing::trace!(wave = wave_idx, objects = wave_size, "wave import complete");
+            if wave_failures > 0 {
+                tracing::debug!(
+                    wave = wave_idx,
+                    imported = wave_size as u32 - wave_failures,
+                    failed = wave_failures,
+                    "wave import partial — some objects failed"
+                );
+            } else {
+                tracing::trace!(wave = wave_idx, objects = wave_size, "wave import complete");
+            }
         }
 
         tracing::info!(
             total = total_objects,
             imported = imported,
             skipped = skipped_count,
+            failed = all_failures.len(),
             waves = wave_count,
             "wave-based parallel import complete"
         );
@@ -383,6 +413,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             objects_skipped: skipped_count,
             refs_updated: Vec::new(),
             mappings: all_mappings,
+            failures: all_failures,
         })
     }
 
