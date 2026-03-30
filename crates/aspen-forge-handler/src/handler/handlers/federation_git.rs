@@ -866,64 +866,21 @@ pub(crate) async fn handle_federation_git_fetch(
         // Retry from mirror after sync
         let retry = super::git_bridge::handle_git_bridge_fetch(forge_node, mirror_hex, want, have).await?;
 
-        return wrap_fetch_for_federation(retry, forge_node).await;
+        return wrap_fetch_for_federation(retry);
     }
 
     // Re-wrap as FederationGitFetch response
-    wrap_fetch_for_federation(result, forge_node).await
+    wrap_fetch_for_federation(result)
 }
 
 /// Convert a `GitBridgeFetch` response to `FederationGitFetch`.
 ///
-/// If the response signals chunked mode (large repo), assemble all chunks
-/// into a single inline response. Federation callers (git-remote-aspen) expect
-/// a single response with all objects.
-async fn wrap_fetch_for_federation(
-    result: ClientRpcResponse,
-    forge_node: &ForgeNodeRef,
-) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_api::GitBridgeFetchResponse;
-
+/// Passes the response through as-is, including any chunked redirect signal.
+/// git-remote-aspen handles the chunked fetch protocol for both direct and
+/// federated fetches — the FetchStart/Chunk/Complete RPCs go to the local
+/// cluster which holds the session.
+fn wrap_fetch_for_federation(result: ClientRpcResponse) -> anyhow::Result<ClientRpcResponse> {
     match result {
-        ClientRpcResponse::GitBridgeFetch(resp) if resp.chunked_session_id.is_some() => {
-            // Chunked mode — collect all chunks from the in-process session.
-            let session_id = resp.chunked_session_id.as_ref().unwrap().clone();
-            let total_chunks = resp.total_chunks;
-            let mut all_objects = Vec::new();
-
-            for chunk_id in 0..total_chunks {
-                let chunk_resp =
-                    super::git_bridge::handle_git_bridge_fetch_chunk(forge_node, session_id.clone(), chunk_id).await?;
-
-                if let ClientRpcResponse::GitBridgeFetchChunk(chunk) = chunk_resp {
-                    if !chunk.is_success {
-                        return Ok(ClientRpcResponse::FederationGitFetch(GitBridgeFetchResponse {
-                            is_success: false,
-                            objects: vec![],
-                            skipped: 0,
-                            error: chunk.error,
-                            chunked_session_id: None,
-                            total_objects: 0,
-                            total_chunks: 0,
-                        }));
-                    }
-                    all_objects.extend(chunk.objects);
-                }
-            }
-
-            // Clean up the session.
-            let _ = super::git_bridge::handle_git_bridge_fetch_complete(session_id).await;
-
-            Ok(ClientRpcResponse::FederationGitFetch(GitBridgeFetchResponse {
-                is_success: true,
-                objects: all_objects,
-                skipped: resp.skipped,
-                error: None,
-                chunked_session_id: None,
-                total_objects: 0,
-                total_chunks: 0,
-            }))
-        }
         ClientRpcResponse::GitBridgeFetch(resp) => Ok(ClientRpcResponse::FederationGitFetch(resp)),
         other => Ok(other),
     }
