@@ -59,6 +59,9 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::ForgeGetDelegateKey { .. }
         | ClientRpcRequest::GitBridgeListRefs { .. }
         | ClientRpcRequest::GitBridgeFetch { .. }
+        | ClientRpcRequest::GitBridgeFetchStart { .. }
+        | ClientRpcRequest::GitBridgeFetchChunk { .. }
+        | ClientRpcRequest::GitBridgeFetchComplete { .. }
         | ClientRpcRequest::GitBridgeProbeObjects { .. }
         | ClientRpcRequest::FederationListTokens => Some(Some(Operation::Read {
             key: "_forge:".to_string(),

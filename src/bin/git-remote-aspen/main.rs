@@ -587,23 +587,123 @@ impl RemoteHelper {
             return writer.write_fetch_done();
         }
 
-        if self.options.verbosity > 0 {
-            eprintln!("git-remote-aspen: received {} objects", fetch_resp.objects.len());
-        }
-
-        // Write objects to git's object store as loose objects
         let git_dir = std::env::var("GIT_DIR").unwrap_or_else(|_| ".git".to_string());
         let objects_dir = std::path::Path::new(&git_dir).join("objects");
 
-        for obj in &fetch_resp.objects {
-            if let Err(e) = self.write_loose_object(&objects_dir, obj) {
+        // Check if server signaled chunked mode.
+        if let Some(session_id) = fetch_resp.chunked_session_id {
+            if self.options.verbosity > 0 {
+                eprintln!(
+                    "git-remote-aspen: chunked fetch: {} objects in {} chunks",
+                    fetch_resp.total_objects, fetch_resp.total_chunks
+                );
+            }
+            self.handle_chunked_fetch(&objects_dir, &session_id, fetch_resp.total_chunks).await?;
+        } else {
+            // Single-shot path: all objects inline.
+            if self.options.verbosity > 0 {
+                eprintln!("git-remote-aspen: received {} objects", fetch_resp.objects.len());
+            }
+            self.write_objects_to_store(&objects_dir, &fetch_resp.objects)?;
+        }
+
+        writer.write_fetch_done()
+    }
+
+    /// Write a batch of objects to the git loose object store.
+    fn write_objects_to_store(
+        &self,
+        objects_dir: &std::path::Path,
+        objects: &[aspen::client_rpc::GitBridgeObject],
+    ) -> io::Result<()> {
+        for obj in objects {
+            if let Err(e) = self.write_loose_object(objects_dir, obj) {
                 eprintln!("git-remote-aspen: failed to write object {}: {}", obj.sha1, e);
             } else if self.options.verbosity > 1 {
                 eprintln!("git-remote-aspen: wrote object {} ({})", obj.sha1, obj.object_type);
             }
         }
+        Ok(())
+    }
 
-        writer.write_fetch_done()
+    /// Handle chunked fetch: request each chunk, verify integrity, write objects incrementally.
+    async fn handle_chunked_fetch(
+        &mut self,
+        objects_dir: &std::path::Path,
+        session_id: &str,
+        total_chunks: u32,
+    ) -> io::Result<()> {
+        use aspen::client_rpc::ClientRpcRequest;
+        use aspen::client_rpc::ClientRpcResponse;
+
+        let verbosity = self.options.verbosity;
+        let client = self.get_client().await?;
+
+        for chunk_id in 0..total_chunks {
+            let request = ClientRpcRequest::GitBridgeFetchChunk {
+                session_id: session_id.to_string(),
+                chunk_id,
+            };
+
+            let response = client.send(request).await?;
+
+            match response {
+                ClientRpcResponse::GitBridgeFetchChunk(chunk_resp) => {
+                    if !chunk_resp.is_success {
+                        let msg = chunk_resp.error.unwrap_or_else(|| "unknown error".to_string());
+                        eprintln!("git-remote-aspen: chunk {} failed: {}", chunk_id, msg);
+                        return Err(io::Error::other(msg));
+                    }
+
+                    // Verify chunk integrity.
+                    let mut hasher = blake3::Hasher::new();
+                    for obj in &chunk_resp.objects {
+                        hasher.update(obj.sha1.as_bytes());
+                        hasher.update(obj.object_type.as_bytes());
+                        hasher.update(&obj.data);
+                    }
+                    let computed = *hasher.finalize().as_bytes();
+                    if computed != chunk_resp.chunk_hash {
+                        eprintln!("git-remote-aspen: chunk {} integrity check failed", chunk_id);
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, "chunk hash mismatch"));
+                    }
+
+                    if verbosity > 0 {
+                        eprintln!(
+                            "git-remote-aspen: chunk {}/{}: {} objects",
+                            chunk_id + 1,
+                            total_chunks,
+                            chunk_resp.objects.len()
+                        );
+                    }
+
+                    // Write objects incrementally.
+                    for obj in &chunk_resp.objects {
+                        if let Err(e) = write_loose_object_static(objects_dir, obj) {
+                            eprintln!("git-remote-aspen: failed to write object {}: {}", obj.sha1, e);
+                        } else if verbosity > 1 {
+                            eprintln!("git-remote-aspen: wrote object {} ({})", obj.sha1, obj.object_type);
+                        }
+                    }
+                }
+                ClientRpcResponse::Error(err) => {
+                    eprintln!("git-remote-aspen: chunk {} error [{}]: {}", chunk_id, err.code, err.message);
+                    return Err(io::Error::other(err.message));
+                }
+                _ => {
+                    eprintln!("git-remote-aspen: chunk {}: unexpected response type", chunk_id);
+                    return Err(io::Error::other("unexpected response"));
+                }
+            }
+        }
+
+        // Signal session complete.
+        let complete_request = ClientRpcRequest::GitBridgeFetchComplete {
+            session_id: session_id.to_string(),
+        };
+        let _ = client.send(complete_request).await;
+
+        Ok(())
     }
 
     /// Write a git object as a loose object file.
@@ -612,34 +712,7 @@ impl RemoteHelper {
         objects_dir: &std::path::Path,
         obj: &aspen::client_rpc::GitBridgeObject,
     ) -> io::Result<()> {
-        use std::io::Write as _;
-
-        use flate2::Compression;
-        use flate2::write::ZlibEncoder;
-
-        // Build the full object content: "{type} {size}\0{data}"
-        let header = format!("{} {}\0", obj.object_type, obj.data.len());
-        let mut full_content = header.into_bytes();
-        full_content.extend_from_slice(&obj.data);
-
-        // Compress with zlib
-        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(&full_content)?;
-        let compressed = encoder.finish()?;
-
-        // Write to objects/{sha1[0..2]}/{sha1[2..]}
-        let dir = objects_dir.join(&obj.sha1[0..2]);
-        let file = dir.join(&obj.sha1[2..]);
-
-        // Create directory if needed
-        std::fs::create_dir_all(&dir)?;
-
-        // Write file (skip if exists)
-        if !file.exists() {
-            std::fs::write(&file, &compressed)?;
-        }
-
-        Ok(())
+        write_loose_object_static(objects_dir, obj)
     }
 
     /// Handle a batch of push commands.
@@ -1096,6 +1169,40 @@ fn build_object_batches_inner(
     }
 
     batches
+}
+
+/// Write a single git object as a loose object file.
+fn write_loose_object_static(
+    objects_dir: &std::path::Path,
+    obj: &aspen::client_rpc::GitBridgeObject,
+) -> io::Result<()> {
+    use std::io::Write as _;
+
+    use flate2::Compression;
+    use flate2::write::ZlibEncoder;
+
+    // Build the full object content: "{type} {size}\0{data}"
+    let header = format!("{} {}\0", obj.object_type, obj.data.len());
+    let mut full_content = header.into_bytes();
+    full_content.extend_from_slice(&obj.data);
+
+    // Compress with zlib
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(&full_content)?;
+    let compressed = encoder.finish()?;
+
+    // Write to objects/{sha1[0..2]}/{sha1[2..]}
+    let dir = objects_dir.join(&obj.sha1[0..2]);
+    let file = dir.join(&obj.sha1[2..]);
+
+    std::fs::create_dir_all(&dir)?;
+
+    // Skip if already exists.
+    if !file.exists() {
+        std::fs::write(&file, &compressed)?;
+    }
+
+    Ok(())
 }
 
 impl RemoteHelper {

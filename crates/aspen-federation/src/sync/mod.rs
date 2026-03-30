@@ -34,9 +34,12 @@ pub mod wire;
 
 use std::time::Duration;
 
+pub use client::ConnectResult;
 pub use client::PushResult;
+pub use client::SyncSession;
 // Client
 pub use client::connect_to_cluster;
+pub use client::connect_to_cluster_full;
 pub use client::get_remote_resource_state;
 pub use client::list_remote_resources;
 pub use client::push_to_cluster;

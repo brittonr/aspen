@@ -257,6 +257,9 @@ fn handle_client_request_is_rate_limit_exempt(request: &ClientRpcRequest) -> boo
                 | ClientRpcRequest::HookTrigger { .. }
                 | ClientRpcRequest::GitBridgeListRefs { .. }
                 | ClientRpcRequest::GitBridgeFetch { .. }
+                | ClientRpcRequest::GitBridgeFetchStart { .. }
+                | ClientRpcRequest::GitBridgeFetchChunk { .. }
+                | ClientRpcRequest::GitBridgeFetchComplete { .. }
                 | ClientRpcRequest::GitBridgePush { .. }
                 | ClientRpcRequest::GitBridgeProbeObjects { .. }
                 | ClientRpcRequest::CiWatchRepo { .. }

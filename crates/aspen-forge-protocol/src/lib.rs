@@ -430,6 +430,56 @@ pub struct GitBridgeFetchResponse {
     pub skipped: u32,
     /// Error message if operation failed.
     pub error: Option<String>,
+    /// When set, signals that the response is too large for single-shot delivery.
+    /// The client should switch to the chunked fetch protocol using this session ID.
+    pub chunked_session_id: Option<String>,
+    /// Total objects available in the chunked session (only set when chunked_session_id is Some).
+    pub total_objects: u32,
+    /// Total chunks the client needs to request (only set when chunked_session_id is Some).
+    pub total_chunks: u32,
+}
+
+/// Response to `GitBridgeFetchStart` — provides session metadata for chunked transfer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgeFetchStartResponse {
+    /// Unique session ID for requesting chunks.
+    pub session_id: String,
+    /// Total number of objects across all chunks.
+    pub total_objects: u32,
+    /// Total number of chunks the client must request.
+    pub total_chunks: u32,
+    /// Whether the operation succeeded.
+    pub is_success: bool,
+    /// Error message if operation failed.
+    pub error: Option<String>,
+}
+
+/// Response to `GitBridgeFetchChunk` — a batch of git objects with integrity hash.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgeFetchChunkResponse {
+    /// Session ID this chunk belongs to.
+    pub session_id: String,
+    /// Chunk index that was requested.
+    pub chunk_id: u32,
+    /// Git objects in this chunk (dependency-ordered: blobs → trees → commits).
+    pub objects: Vec<GitBridgeObject>,
+    /// BLAKE3 hash of the serialized chunk objects for integrity verification.
+    pub chunk_hash: [u8; 32],
+    /// Whether the operation succeeded.
+    pub is_success: bool,
+    /// Error message if operation failed.
+    pub error: Option<String>,
+}
+
+/// Response to `GitBridgeFetchComplete`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgeFetchCompleteResponse {
+    /// Session ID that was cleaned up.
+    pub session_id: String,
+    /// Whether the operation succeeded.
+    pub is_success: bool,
+    /// Error message if operation failed.
+    pub error: Option<String>,
 }
 
 /// Additional metadata for chunked git push operations.
@@ -712,6 +762,9 @@ mod tests {
             }],
             skipped: 10,
             error: None,
+            chunked_session_id: None,
+            total_objects: 0,
+            total_chunks: 0,
         };
         let json = serde_json::to_string(&resp).unwrap();
         let decoded: GitBridgeFetchResponse = serde_json::from_str(&json).unwrap();

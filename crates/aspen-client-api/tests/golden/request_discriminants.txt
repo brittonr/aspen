@@ -337,3 +337,6 @@
 331 NostrGetProfile
 332 NostrAuthVerify
 333 HashCheck
+334 GitBridgeFetchStart
+335 GitBridgeFetchChunk
+336 GitBridgeFetchComplete

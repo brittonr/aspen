@@ -70,9 +70,9 @@ fn test_request_variant_count() {
     let golden = load_golden("request_discriminants.txt");
     assert_eq!(
         golden.len(),
-        334,
+        337,
         "ClientRpcRequest variant count changed! \
-         Expected 334, golden file has {}. \
+         Expected 337, golden file has {}. \
          Update the golden file AND this count.",
         golden.len()
     );
@@ -83,9 +83,9 @@ fn test_response_variant_count() {
     let golden = load_golden("response_discriminants.txt");
     assert_eq!(
         golden.len(),
-        267,
+        270,
         "ClientRpcResponse variant count changed! \
-         Expected 267, golden file has {}. \
+         Expected 270, golden file has {}. \
          Update the golden file AND this count.",
         golden.len()
     );
@@ -172,6 +172,9 @@ fn response_variant_name(resp: &ClientRpcResponse) -> &'static str {
         ClientRpcResponse::ForgeRepoResult(_) => "ForgeRepoResult",
         ClientRpcResponse::FederationStatus(_) => "FederationStatus",
         ClientRpcResponse::GitBridgeListRefs(_) => "GitBridgeListRefs",
+        ClientRpcResponse::GitBridgeFetchStart(_) => "GitBridgeFetchStart",
+        ClientRpcResponse::GitBridgeFetchChunk(_) => "GitBridgeFetchChunk",
+        ClientRpcResponse::GitBridgeFetchComplete(_) => "GitBridgeFetchComplete",
         ClientRpcResponse::JobSubmitResult(_) => "JobSubmitResult",
         ClientRpcResponse::HookListResult(_) => "HookListResult",
         ClientRpcResponse::CiTriggerPipelineResult(_) => "CiTriggerPipelineResult",
@@ -406,6 +409,16 @@ fn test_request_discriminants_golden() {
         repo_id: s(),
         sha1s: Vec::new(),
     });
+    assert_request_disc(&map, &ClientRpcRequest::GitBridgeFetchStart {
+        repo_id: s(),
+        want: Vec::new(),
+        have: Vec::new(),
+    });
+    assert_request_disc(&map, &ClientRpcRequest::GitBridgeFetchChunk {
+        session_id: s(),
+        chunk_id: 0,
+    });
+    assert_request_disc(&map, &ClientRpcRequest::GitBridgeFetchComplete { session_id: s() });
 
     // Section: jobs (192-201)
     assert_request_disc(&map, &ClientRpcRequest::JobSubmit {
@@ -811,6 +824,35 @@ fn test_response_discriminants_golden() {
             is_success: false,
             refs: Vec::new(),
             head: None,
+            error: None,
+        }),
+    );
+    assert_response_disc(
+        &map,
+        &ClientRpcResponse::GitBridgeFetchStart(GitBridgeFetchStartResponse {
+            session_id: String::new(),
+            total_objects: 0,
+            total_chunks: 0,
+            is_success: false,
+            error: None,
+        }),
+    );
+    assert_response_disc(
+        &map,
+        &ClientRpcResponse::GitBridgeFetchChunk(GitBridgeFetchChunkResponse {
+            session_id: String::new(),
+            chunk_id: 0,
+            objects: Vec::new(),
+            chunk_hash: [0u8; 32],
+            is_success: false,
+            error: None,
+        }),
+    );
+    assert_response_disc(
+        &map,
+        &ClientRpcResponse::GitBridgeFetchComplete(GitBridgeFetchCompleteResponse {
+            session_id: String::new(),
+            is_success: false,
             error: None,
         }),
     );

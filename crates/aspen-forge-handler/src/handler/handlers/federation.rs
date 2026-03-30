@@ -1062,10 +1062,18 @@ pub(crate) async fn federation_import_objects(
     }
 
     // Phase 1: Convert SyncObjects to import_objects() input format.
-    // Also build a SHA-1→origin BLAKE3 index for remap entries.
+    // Also build a SHA-1→origin BLAKE3 index for remap entries, and a
+    // re-serialized SHA-1 → origin SHA-1 map for cross-pass resolution.
     let mut import_objects = Vec::with_capacity(objects.len());
     let mut type_counts: [u32; 3] = [0; 3]; // [blobs, trees, commits]
     let mut sha1_to_envelope: std::collections::HashMap<[u8; 20], blake3::Hash> =
+        std::collections::HashMap::with_capacity(objects.len());
+    // Map from re-serialized SHA-1 → (origin SHA-1 bytes, git type).
+    // Used after each convergent pass to store origin SHA-1 mappings so
+    // the NEXT pass can resolve tree entries that reference objects by
+    // their original SHA-1 (which may differ from re-serialized SHA-1
+    // for trees/commits due to entry ordering or mode formatting).
+    let mut re_sha1_to_origin: std::collections::HashMap<[u8; 20], ([u8; 20], GitObjectType)> =
         std::collections::HashMap::with_capacity(objects.len());
 
     for obj in objects {
@@ -1099,6 +1107,13 @@ pub(crate) async fn federation_import_objects(
                 object_type = obj.object_type.as_str(),
                 "SyncObject has no envelope_hash, skipping remap"
             );
+        }
+
+        // Record origin SHA-1 for cross-pass resolution
+        if let Some(origin_sha1_bytes) = obj.origin_sha1
+            && origin_sha1_bytes != *sha1.as_bytes()
+        {
+            re_sha1_to_origin.insert(*sha1.as_bytes(), (origin_sha1_bytes, git_type));
         }
 
         stats.total_bytes += obj.data.len() as u64;
@@ -1195,6 +1210,37 @@ pub(crate) async fn federation_import_objects(
                     }
                 }
                 tracing::info!(pass = pass, remap_entries = remap_count, "wrote origin→mirror BLAKE3 remap entries");
+
+                // Store origin SHA-1 → local BLAKE3 mappings for newly imported
+                // objects. This is critical for multi-pass convergence: tree entries
+                // reference sub-objects by their ORIGINAL SHA-1 (from the source
+                // cluster's mapping store). If a subtree's re-serialized SHA-1
+                // differs from its origin SHA-1 (due to entry ordering or mode
+                // formatting), parent trees can't resolve the reference. By storing
+                // origin_sha1 → blake3 after each pass, the next pass can find
+                // subtrees by their origin SHA-1.
+                let mut origin_mappings_this_pass = 0u32;
+                for (re_sha1, local_blake3) in &r.mappings {
+                    if let Some((origin_sha1_bytes, git_type)) = re_sha1_to_origin.get(re_sha1.as_bytes()) {
+                        let origin_sha1 = Sha1Hash::from_bytes(*origin_sha1_bytes);
+                        if let Err(e) = mapping.store_batch(repo_id, &[(*local_blake3, origin_sha1, *git_type)]).await {
+                            tracing::debug!(
+                                error = %e,
+                                origin_sha1 = %origin_sha1.to_hex(),
+                                "failed to store origin SHA-1 mapping in convergent pass (non-fatal)"
+                            );
+                        } else {
+                            origin_mappings_this_pass += 1;
+                        }
+                    }
+                }
+                if origin_mappings_this_pass > 0 {
+                    tracing::info!(
+                        pass = pass,
+                        origin_mappings = origin_mappings_this_pass,
+                        "stored origin SHA-1 → BLAKE3 mappings for cross-pass resolution"
+                    );
+                }
 
                 all_mappings.extend(r.mappings);
 

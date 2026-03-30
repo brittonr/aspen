@@ -192,13 +192,13 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
                         parents_blake3.push(parent_blake3);
                     }
                     None => {
-                        // Parent not yet imported or external - skip it
-                        // This can happen during incremental imports or if the topological
-                        // sort encountered an object that references a parent not in the batch.
-                        tracing::debug!(
-                            parent_sha1 = %parent_sha1.to_hex(),
-                            "skipping parent commit without mapping"
-                        );
+                        // Parent not yet imported — fail so the convergent
+                        // loop retries this commit in a later pass when the
+                        // parent's mapping is available. Silently skipping
+                        // parents breaks the DAG chain.
+                        return Err(BridgeError::MappingNotFound {
+                            hash: parent_sha1.to_hex(),
+                        });
                     }
                 }
                 lines.next();

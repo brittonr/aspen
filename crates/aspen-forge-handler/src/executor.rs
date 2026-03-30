@@ -177,6 +177,9 @@ impl ForgeServiceExecutor {
         "ForgeFetchFederated",
         "GitBridgeListRefs",
         "GitBridgeFetch",
+        "GitBridgeFetchStart",
+        "GitBridgeFetchChunk",
+        "GitBridgeFetchComplete",
         "GitBridgePush",
         "GitBridgePushStart",
         "GitBridgePushChunk",
@@ -1943,10 +1946,36 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 crate::handler::handlers::git_bridge::handle_git_bridge_probe_objects(&self.forge_node, repo_id, sha1s)
                     .await
             }
+            #[cfg(feature = "git-bridge")]
+            ClientRpcRequest::GitBridgeFetchStart { repo_id, want, have } => {
+                crate::handler::handlers::git_bridge::handle_git_bridge_fetch_start(
+                    &self.forge_node,
+                    repo_id,
+                    want,
+                    have,
+                )
+                .await
+            }
+            #[cfg(feature = "git-bridge")]
+            ClientRpcRequest::GitBridgeFetchChunk { session_id, chunk_id } => {
+                crate::handler::handlers::git_bridge::handle_git_bridge_fetch_chunk(
+                    &self.forge_node,
+                    session_id,
+                    chunk_id,
+                )
+                .await
+            }
+            #[cfg(feature = "git-bridge")]
+            ClientRpcRequest::GitBridgeFetchComplete { session_id } => {
+                crate::handler::handlers::git_bridge::handle_git_bridge_fetch_complete(session_id).await
+            }
 
             #[cfg(not(feature = "git-bridge"))]
             ClientRpcRequest::GitBridgeListRefs { .. }
             | ClientRpcRequest::GitBridgeFetch { .. }
+            | ClientRpcRequest::GitBridgeFetchStart { .. }
+            | ClientRpcRequest::GitBridgeFetchChunk { .. }
+            | ClientRpcRequest::GitBridgeFetchComplete { .. }
             | ClientRpcRequest::GitBridgePush { .. }
             | ClientRpcRequest::GitBridgePushStart { .. }
             | ClientRpcRequest::GitBridgePushChunk { .. }

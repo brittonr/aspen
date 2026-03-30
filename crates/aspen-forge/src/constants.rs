@@ -252,6 +252,30 @@ pub const MAX_CONCURRENT_PUSH_SESSIONS: usize = 64;
 pub const PUSH_SESSION_TIMEOUT: Duration = Duration::from_secs(300);
 
 // ============================================================================
+// Chunked Fetch Session Limits
+// ============================================================================
+
+/// Maximum concurrent chunked fetch sessions.
+///
+/// Tiger Style: Prevents memory exhaustion from abandoned sessions.
+pub const MAX_CONCURRENT_FETCH_SESSIONS: usize = 64;
+
+/// Session timeout for chunked fetch (5 minutes).
+///
+/// Tiger Style: Automatic cleanup of abandoned sessions.
+pub const FETCH_SESSION_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Object count threshold: repos with more objects use chunked fetch.
+///
+/// 2,000 objects at ~2 KB avg = ~4 MB, well within 16 MB RPC limit.
+pub const FETCH_CHUNK_THRESHOLD: u32 = 2_000;
+
+/// Maximum objects per fetch chunk.
+///
+/// Tiger Style: Keeps each chunk response under the RPC size limit.
+pub const FETCH_CHUNK_OBJECT_LIMIT: u32 = 2_000;
+
+// ============================================================================
 // CI Configuration Limits
 // ============================================================================
 
@@ -369,6 +393,8 @@ const _: () = assert!(FORGE_GOSSIP_GLOBAL_BURST >= FORGE_GOSSIP_PER_PEER_BURST);
 
 // Push session limits must be positive
 const _: () = assert!(MAX_CONCURRENT_PUSH_SESSIONS > 0);
+const _: () = assert!(MAX_CONCURRENT_FETCH_SESSIONS > 0);
+const _: () = assert!(FETCH_CHUNK_OBJECT_LIMIT > 0);
 
 // CI config limits must be positive
 const _: () = assert!(MAX_CI_CONFIG_SIZE_BYTES > 0);

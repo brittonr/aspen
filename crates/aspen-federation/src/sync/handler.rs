@@ -140,40 +140,45 @@ impl ProtocolHandler for FederationProtocolHandler {
 #[instrument(skip(connection, context))]
 async fn handle_federation_connection(connection: Connection, context: Arc<FederationProtocolContext>) -> Result<()> {
     let remote_id = connection.remote_id();
-    let mut stream_count = 0u32;
+    // With streaming-sync, each stream handles a full conversation (loop of
+    // requests). We limit concurrent streams to MAX_STREAMS_PER_CONNECTION
+    // but this is rarely hit — typical usage is 1 handshake stream + 1 sync
+    // stream per connection.
+    let stream_semaphore = Arc::new(Semaphore::new(MAX_STREAMS_PER_CONNECTION as usize));
 
     loop {
         // Accept incoming streams
         let stream = match tokio::time::timeout(REQUEST_TIMEOUT, connection.accept_bi()).await {
             Ok(Ok(stream)) => stream,
             Ok(Err(e)) => {
-                // Connection closed or error
                 debug!(remote = %remote_id, error = %e, "federation connection ended");
                 break;
             }
             Err(_) => {
-                // Timeout - check if connection is still alive
                 continue;
             }
         };
 
-        // Check stream limit
-        stream_count += 1;
-        if stream_count > MAX_STREAMS_PER_CONNECTION {
-            warn!(
-                remote = %remote_id,
-                "Too many streams ({}), closing connection",
-                stream_count
-            );
-            break;
-        }
+        let permit = match stream_semaphore.clone().try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                warn!(
+                    remote = %remote_id,
+                    max = MAX_STREAMS_PER_CONNECTION,
+                    "concurrent stream limit reached"
+                );
+                break;
+            }
+        };
 
         let (mut send, mut recv) = stream;
         let ctx = context.clone();
         let peer_key = remote_id;
 
-        // Handle stream in background
+        // Handle stream in background — stream handler loops until client
+        // finishes the send side, then the permit is released.
         tokio::spawn(async move {
+            let _permit = permit;
             if let Err(e) = handle_federation_stream(&mut send, &mut recv, &ctx, peer_key).await {
                 warn!(remote = %remote_id, error = %e, "federation stream error");
             }
@@ -183,30 +188,68 @@ async fn handle_federation_connection(connection: Connection, context: Arc<Feder
     Ok(())
 }
 
-/// Handle a single federation stream (request/response).
+/// Handle a federation stream.
+///
+/// Supports two modes:
+/// - **One-shot** (legacy): single request → response, then stream closes.
+/// - **Streaming** (new): loops reading requests until the client finishes the send side (EOF).
+///   Used by `SyncSession` for multi-round sync.
+///
+/// The server detects the mode by attempting to read the next request after
+/// the first response. If the client called `send.finish()` after one
+/// request (legacy), the read returns EOF and the loop exits. If the client
+/// sends another request (streaming), the loop processes it.
 async fn handle_federation_stream(
     send: &mut iroh::endpoint::SendStream,
     recv: &mut iroh::endpoint::RecvStream,
     context: &FederationProtocolContext,
     remote_peer: PublicKey,
 ) -> Result<()> {
-    // Read request with size limit and per-message timeout
-    // Tiger Style: Prevents CPU exhaustion from slow/malicious senders
-    let request = tokio::time::timeout(MESSAGE_READ_TIMEOUT, read_message::<FederationRequest>(recv))
-        .await
-        .context("message read timeout")?
-        .context("failed to read federation request")?;
+    let mut requests_handled = 0u32;
+    let max_requests_per_stream = 1000u32; // Tiger Style: bound the loop
 
-    // Process request with longer timeout — git DAG walks for large repos
-    // involve many KV reads and can take tens of seconds for 30K+ object repos
-    let response =
-        tokio::time::timeout(SYNC_PROCESSING_TIMEOUT, process_federation_request(request, context, remote_peer))
-            .await
-            .context("sync processing timeout")?
-            .context("failed to process federation request")?;
+    loop {
+        if requests_handled >= max_requests_per_stream {
+            debug!(requests = requests_handled, "stream request limit reached, closing");
+            break;
+        }
 
-    // Write response
-    write_message(send, &response).await?;
+        // Read next request. Timeout applies per-message.
+        // EOF means the client finished the send side — conversation done.
+        let request = match tokio::time::timeout(MESSAGE_READ_TIMEOUT, read_message::<FederationRequest>(recv)).await {
+            Ok(Ok(req)) => req,
+            Ok(Err(e)) => {
+                // EOF or deserialization error. EOF after ≥1 request is normal
+                // (client finished). On the first read it's an error.
+                if requests_handled > 0 {
+                    debug!(requests = requests_handled, "stream finished (client done)");
+                } else {
+                    warn!(error = %e, "stream read failed on first request");
+                }
+                break;
+            }
+            Err(_) => {
+                // Timeout — no more requests coming
+                if requests_handled > 0 {
+                    debug!(requests = requests_handled, "stream idle timeout, closing");
+                } else {
+                    debug!("stream read timeout on first request");
+                }
+                break;
+            }
+        };
+
+        requests_handled += 1;
+
+        // Process with longer timeout for git DAG walks
+        let response =
+            tokio::time::timeout(SYNC_PROCESSING_TIMEOUT, process_federation_request(request, context, remote_peer))
+                .await
+                .context("sync processing timeout")?
+                .context("failed to process federation request")?;
+
+        write_message(send, &response).await?;
+    }
 
     Ok(())
 }
@@ -430,7 +473,7 @@ fn handle_handshake(
     Ok(FederationResponse::Handshake {
         identity: context.cluster_identity.to_signed(),
         protocol_version: FEDERATION_PROTOCOL_VERSION,
-        capabilities: vec!["forge".to_string()],
+        capabilities: vec!["forge".to_string(), "streaming-sync".to_string()],
         trusted,
     })
 }

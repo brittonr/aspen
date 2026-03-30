@@ -12,6 +12,10 @@ use std::sync::OnceLock;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::GitBridgeObject;
 use aspen_client_api::GitBridgeRefUpdate;
+use aspen_forge::constants::FETCH_CHUNK_OBJECT_LIMIT;
+use aspen_forge::constants::FETCH_CHUNK_THRESHOLD;
+use aspen_forge::constants::FETCH_SESSION_TIMEOUT;
+use aspen_forge::constants::MAX_CONCURRENT_FETCH_SESSIONS;
 use aspen_forge::constants::MAX_CONCURRENT_PUSH_SESSIONS;
 use aspen_forge::constants::PUSH_SESSION_TIMEOUT;
 
@@ -66,6 +70,47 @@ fn lock_sessions(
         tracing::warn!(
             target: "aspen_forge::git_bridge",
             "push sessions mutex was poisoned, recovering"
+        );
+        poisoned.into_inner()
+    })
+}
+
+// =============================================================================
+// Chunked Fetch Session State
+// =============================================================================
+
+/// State for an active chunked fetch session.
+///
+/// Stores pre-computed chunks of `GitBridgeObject`s. The DAG walk already loaded
+/// all object content into memory; we split it into chunks here and serve them
+/// on demand. Sessions are bounded (MAX_CONCURRENT_FETCH_SESSIONS) and expire
+/// after FETCH_SESSION_TIMEOUT.
+pub(crate) struct ChunkedFetchSession {
+    /// Object data batched into chunks (dependency-ordered: blobs → trees → commits).
+    /// Each chunk has a pre-computed BLAKE3 integrity hash.
+    pub(crate) chunks: Vec<(Vec<GitBridgeObject>, [u8; 32])>,
+    /// Session creation time for timeout tracking.
+    pub(crate) created_at: std::time::Instant,
+}
+
+/// Global session store for chunked fetch operations.
+///
+/// Tiger Style: Bounded to MAX_CONCURRENT_FETCH_SESSIONS with timeout-based cleanup.
+pub(crate) static FETCH_SESSIONS: OnceLock<Arc<Mutex<HashMap<String, ChunkedFetchSession>>>> = OnceLock::new();
+
+/// Get the global fetch session store, initializing if needed.
+fn get_fetch_session_store() -> &'static Arc<Mutex<HashMap<String, ChunkedFetchSession>>> {
+    FETCH_SESSIONS.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+}
+
+/// Lock the fetch session store, recovering from mutex poisoning.
+fn lock_fetch_sessions(
+    store: &Mutex<HashMap<String, ChunkedFetchSession>>,
+) -> MutexGuard<'_, HashMap<String, ChunkedFetchSession>> {
+    store.lock().unwrap_or_else(|poisoned| {
+        tracing::warn!(
+            target: "aspen_forge::git_bridge",
+            "fetch sessions mutex was poisoned, recovering"
         );
         poisoned.into_inner()
     })
@@ -161,6 +206,9 @@ pub(crate) async fn handle_git_bridge_fetch(
                 objects: vec![],
                 skipped: 0,
                 error: Some(format!("Invalid repo ID: {}", e)),
+                chunked_session_id: None,
+                total_objects: 0,
+                total_chunks: 0,
             }));
         }
     };
@@ -175,6 +223,9 @@ pub(crate) async fn handle_git_bridge_fetch(
                 objects: vec![],
                 skipped: 0,
                 error: Some(format!("Invalid want hash: {}", e)),
+                chunked_session_id: None,
+                total_objects: 0,
+                total_chunks: 0,
             }));
         }
     };
@@ -188,6 +239,9 @@ pub(crate) async fn handle_git_bridge_fetch(
                 objects: vec![],
                 skipped: 0,
                 error: Some(format!("Invalid have hash: {}", e)),
+                chunked_session_id: None,
+                total_objects: 0,
+                total_chunks: 0,
             }));
         }
     };
@@ -246,6 +300,9 @@ pub(crate) async fn handle_git_bridge_fetch(
                             objects: vec![],
                             skipped: 0,
                             error: Some(e.to_string()),
+                            chunked_session_id: None,
+                            total_objects: 0,
+                            total_chunks: 0,
                         }));
                     }
                 }
@@ -253,11 +310,92 @@ pub(crate) async fn handle_git_bridge_fetch(
         }
     }
 
+    // If the result is small enough, return inline (single-shot).
+    // Otherwise create a chunked fetch session and return a redirect signal.
+    if objects.len() <= FETCH_CHUNK_THRESHOLD as usize {
+        return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
+            is_success: true,
+            objects,
+            skipped,
+            error: None,
+            chunked_session_id: None,
+            total_objects: 0,
+            total_chunks: 0,
+        }));
+    }
+
+    // Large result — create a chunked fetch session.
+    let total_objects = objects.len() as u32;
+
+    // Sort by type (blobs → trees → commits) for dependency-safe writing.
+    let type_order = |t: &str| -> u8 {
+        match t {
+            "blob" => 0,
+            "tree" => 1,
+            "commit" => 2,
+            "tag" => 3,
+            _ => 4,
+        }
+    };
+    objects.sort_by_key(|a| type_order(&a.object_type));
+
+    // Split into chunks with pre-computed integrity hashes.
+    let chunks: Vec<(Vec<GitBridgeObject>, [u8; 32])> = objects
+        .chunks(FETCH_CHUNK_OBJECT_LIMIT as usize)
+        .map(|chunk| {
+            let mut hasher = blake3::Hasher::new();
+            for obj in chunk {
+                hasher.update(obj.sha1.as_bytes());
+                hasher.update(obj.object_type.as_bytes());
+                hasher.update(&obj.data);
+            }
+            (chunk.to_vec(), *hasher.finalize().as_bytes())
+        })
+        .collect();
+    let total_chunks = chunks.len() as u32;
+
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let session = ChunkedFetchSession {
+        chunks,
+        created_at: std::time::Instant::now(),
+    };
+
+    // Store the session.
+    let store = get_fetch_session_store();
+    let mut sessions = lock_fetch_sessions(store);
+    sessions.retain(|_, s| s.created_at.elapsed() < FETCH_SESSION_TIMEOUT);
+
+    if sessions.len() >= MAX_CONCURRENT_FETCH_SESSIONS {
+        return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
+            is_success: false,
+            objects: vec![],
+            skipped: 0,
+            error: Some("Too many concurrent fetch sessions - try again later".to_string()),
+            chunked_session_id: None,
+            total_objects: 0,
+            total_chunks: 0,
+        }));
+    }
+
+    sessions.insert(session_id.clone(), session);
+    drop(sessions);
+
+    tracing::info!(
+        target: "aspen_forge::git_bridge",
+        session_id = %session_id,
+        total_objects = total_objects,
+        total_chunks = total_chunks,
+        "created chunked fetch session"
+    );
+
     Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
         is_success: true,
-        objects,
+        objects: vec![],
         skipped,
         error: None,
+        chunked_session_id: Some(session_id),
+        total_objects,
+        total_chunks,
     }))
 }
 
@@ -801,4 +939,187 @@ pub(crate) async fn handle_git_bridge_probe_objects(
         known_sha1s,
         error: None,
     }))
+}
+
+// =============================================================================
+// Chunked Fetch Handlers
+// =============================================================================
+
+/// Handle GitBridgeFetchStart — run DAG walk, create session, return metadata.
+pub(crate) async fn handle_git_bridge_fetch_start(
+    forge_node: &ForgeNodeRef,
+    repo_id: String,
+    want: Vec<String>,
+    have: Vec<String>,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::GitBridgeFetchStartResponse;
+
+    // Delegate the DAG walk to the existing fetch handler.
+    // If the result is small, it returns inline objects; if large, it already
+    // created a chunked session and returned a redirect signal.
+    let resp = handle_git_bridge_fetch(forge_node, repo_id, want, have).await?;
+
+    match resp {
+        ClientRpcResponse::GitBridgeFetch(fetch_resp) if fetch_resp.chunked_session_id.is_some() => {
+            // Large result — session already created by handle_git_bridge_fetch.
+            Ok(ClientRpcResponse::GitBridgeFetchStart(GitBridgeFetchStartResponse {
+                session_id: fetch_resp.chunked_session_id.unwrap(),
+                total_objects: fetch_resp.total_objects,
+                total_chunks: fetch_resp.total_chunks,
+                is_success: true,
+                error: None,
+            }))
+        }
+        ClientRpcResponse::GitBridgeFetch(fetch_resp) if fetch_resp.is_success => {
+            // Small result — wrap inline objects into a single-chunk session.
+            let total_objects = fetch_resp.objects.len() as u32;
+            let chunks = build_fetch_chunks(fetch_resp.objects);
+            let total_chunks = chunks.len() as u32;
+            let session_id = uuid::Uuid::new_v4().to_string();
+
+            let session = ChunkedFetchSession {
+                chunks,
+                created_at: std::time::Instant::now(),
+            };
+
+            let store = get_fetch_session_store();
+            let mut sessions = lock_fetch_sessions(store);
+            sessions.retain(|_, s| s.created_at.elapsed() < FETCH_SESSION_TIMEOUT);
+            sessions.insert(session_id.clone(), session);
+            drop(sessions);
+
+            Ok(ClientRpcResponse::GitBridgeFetchStart(GitBridgeFetchStartResponse {
+                session_id,
+                total_objects,
+                total_chunks,
+                is_success: true,
+                error: None,
+            }))
+        }
+        ClientRpcResponse::GitBridgeFetch(fetch_resp) => {
+            // Error from DAG walk.
+            Ok(ClientRpcResponse::GitBridgeFetchStart(GitBridgeFetchStartResponse {
+                session_id: String::new(),
+                total_objects: 0,
+                total_chunks: 0,
+                is_success: false,
+                error: fetch_resp.error,
+            }))
+        }
+        _ => Ok(ClientRpcResponse::GitBridgeFetchStart(GitBridgeFetchStartResponse {
+            session_id: String::new(),
+            total_objects: 0,
+            total_chunks: 0,
+            is_success: false,
+            error: Some("unexpected response from fetch handler".to_string()),
+        })),
+    }
+}
+
+/// Handle GitBridgeFetchChunk — return objects for a specific chunk.
+pub(crate) async fn handle_git_bridge_fetch_chunk(
+    _forge_node: &ForgeNodeRef,
+    session_id: String,
+    chunk_id: u32,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::GitBridgeFetchChunkResponse;
+
+    let store = get_fetch_session_store();
+    let sessions = lock_fetch_sessions(store);
+
+    let session = match sessions.get(&session_id) {
+        Some(s) => s,
+        None => {
+            return Ok(ClientRpcResponse::GitBridgeFetchChunk(GitBridgeFetchChunkResponse {
+                session_id,
+                chunk_id,
+                objects: vec![],
+                chunk_hash: [0u8; 32],
+                is_success: false,
+                error: Some("Session not found or expired".to_string()),
+            }));
+        }
+    };
+
+    // Check session timeout.
+    if session.created_at.elapsed() > FETCH_SESSION_TIMEOUT {
+        let sid = session_id.clone();
+        drop(sessions);
+        let mut sessions = lock_fetch_sessions(store);
+        sessions.remove(&session_id);
+        return Ok(ClientRpcResponse::GitBridgeFetchChunk(GitBridgeFetchChunkResponse {
+            session_id: sid,
+            chunk_id,
+            objects: vec![],
+            chunk_hash: [0u8; 32],
+            is_success: false,
+            error: Some("SESSION_EXPIRED".to_string()),
+        }));
+    }
+
+    let chunk_idx = chunk_id as usize;
+    if chunk_idx >= session.chunks.len() {
+        return Ok(ClientRpcResponse::GitBridgeFetchChunk(GitBridgeFetchChunkResponse {
+            session_id,
+            chunk_id,
+            objects: vec![],
+            chunk_hash: [0u8; 32],
+            is_success: false,
+            error: Some(format!("chunk_id {} out of range (total: {})", chunk_id, session.chunks.len())),
+        }));
+    }
+
+    // Clone objects and hash from the session. Each chunk is ~4 MB so this clone is bounded.
+    let (objects, chunk_hash) = session.chunks[chunk_idx].clone();
+    drop(sessions);
+
+    Ok(ClientRpcResponse::GitBridgeFetchChunk(GitBridgeFetchChunkResponse {
+        session_id,
+        chunk_id,
+        objects,
+        chunk_hash,
+        is_success: true,
+        error: None,
+    }))
+}
+
+/// Handle GitBridgeFetchComplete — clean up session state.
+pub(crate) async fn handle_git_bridge_fetch_complete(session_id: String) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::GitBridgeFetchCompleteResponse;
+
+    let store = get_fetch_session_store();
+    let mut sessions = lock_fetch_sessions(store);
+    let existed = sessions.remove(&session_id).is_some();
+
+    tracing::info!(
+        target: "aspen_forge::git_bridge",
+        session_id = %session_id,
+        existed = existed,
+        "chunked fetch session completed"
+    );
+
+    Ok(ClientRpcResponse::GitBridgeFetchComplete(GitBridgeFetchCompleteResponse {
+        session_id,
+        is_success: true,
+        error: None,
+    }))
+}
+
+/// Split objects into chunks with pre-computed BLAKE3 integrity hashes.
+fn build_fetch_chunks(objects: Vec<GitBridgeObject>) -> Vec<(Vec<GitBridgeObject>, [u8; 32])> {
+    if objects.is_empty() {
+        return vec![];
+    }
+    objects
+        .chunks(FETCH_CHUNK_OBJECT_LIMIT as usize)
+        .map(|chunk| {
+            let mut hasher = blake3::Hasher::new();
+            for obj in chunk {
+                hasher.update(obj.sha1.as_bytes());
+                hasher.update(obj.object_type.as_bytes());
+                hasher.update(&obj.data);
+            }
+            (chunk.to_vec(), *hasher.finalize().as_bytes())
+        })
+        .collect()
 }

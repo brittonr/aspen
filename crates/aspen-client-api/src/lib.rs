@@ -154,6 +154,9 @@ mod tests {
             objects: vec![],
             skipped: 0,
             error: None,
+            chunked_session_id: None,
+            total_objects: 0,
+            total_chunks: 0,
         });
         let bytes = postcard::to_stdvec(&resp).expect("FederationGitFetch resp serialize");
         let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("FederationGitFetch resp deserialize");

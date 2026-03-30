@@ -270,3 +270,6 @@
 264 AutomergeGenerateSyncMessageResult
 265 AutomergeReceiveSyncMessageResult
 266 HashCheckResult
+267 GitBridgeFetchStart
+268 GitBridgeFetchChunk
+269 GitBridgeFetchComplete

@@ -193,10 +193,9 @@ async fn sync_from_origin(
 
     // Phase 2: Fetch and import git objects incrementally.
     //
-    // Each round fetches a batch from the origin, imports it into the local
-    // mirror, then tells the origin what we have for the next round. This
-    // builds up SHA1→BLAKE3 mappings incrementally so trees can resolve
-    // references to blobs imported in earlier rounds.
+    // Uses a single QUIC bidirectional stream (SyncSession) for the entire
+    // multi-round sync. Each round sends a request and reads a response on
+    // the same stream, avoiding stream exhaustion.
     let have_hashes = super::federation::collect_local_sha1_hashes(forge_node, mirror_repo_id, 50_000).await;
 
     let mut all_git_objects = Vec::new();
@@ -206,26 +205,28 @@ async fn sync_from_origin(
     let mut total_imported = 0u32;
     let mut combined_stats = super::federation::FederationImportStats::default();
 
-    // Reconnection tracking — QUIC connections can drop under heavy load
-    // (typically after ~70MB transferred, ~7 rounds). Reconnect transparently.
-    let mut connection = connection;
+    // Open a persistent sync session on the connection.
+    // If the connection drops, reconnect and open a new session.
+    let mut session = aspen_cluster::federation::sync::SyncSession::open(&connection)
+        .await
+        .map_err(|e| format!("failed to open sync session: {e}"))?;
     let mut reconnect_count = 0u32;
-    let max_reconnects = 5u32;
+    let max_reconnects = 3u32;
 
     for round in 0..max_rounds {
-        let (objects, has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
-            &connection,
-            &fed_id,
-            vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
-            current_have.clone(),
-            batch_size,
-            None,
-        )
-        .await
+        let (objects, has_more) = match session
+            .sync_objects(
+                &fed_id,
+                vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
+                current_have.clone(),
+                batch_size,
+                None,
+            )
+            .await
         {
             Ok(result) => result,
             Err(e) => {
-                // Try reconnecting on stream/connection errors
+                // Connection-level error — reconnect and open a new session
                 if reconnect_count < max_reconnects {
                     reconnect_count += 1;
                     tracing::info!(
@@ -233,7 +234,7 @@ async fn sync_from_origin(
                         round = round,
                         reconnect = reconnect_count,
                         error = %e,
-                        "connection lost, reconnecting to origin"
+                        "sync session error, reconnecting to origin"
                     );
                     match aspen_cluster::federation::sync::connect_to_cluster(
                         iroh_endpoint,
@@ -244,17 +245,19 @@ async fn sync_from_origin(
                     .await
                     {
                         Ok((new_conn, _)) => {
-                            connection = new_conn;
-                            // Retry this round with the new connection
-                            match aspen_cluster::federation::sync::sync_remote_objects(
-                                &connection,
-                                &fed_id,
-                                vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
-                                current_have.clone(),
-                                batch_size,
-                                None,
-                            )
-                            .await
+                            session = aspen_cluster::federation::sync::SyncSession::open(&new_conn)
+                                .await
+                                .map_err(|e2| format!("failed to reopen sync session: {e2}"))?;
+                            // Retry this round on the new session
+                            match session
+                                .sync_objects(
+                                    &fed_id,
+                                    vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
+                                    current_have.clone(),
+                                    batch_size,
+                                    None,
+                                )
+                                .await
                             {
                                 Ok(result) => result,
                                 Err(e2) => {
@@ -272,7 +275,7 @@ async fn sync_from_origin(
                         }
                     }
                 } else {
-                    tracing::warn!(origin = %origin_key, error = %e, round = round, "git object sync_remote_objects failed (max reconnects exceeded)");
+                    tracing::warn!(origin = %origin_key, error = %e, round = round, "sync session failed (max reconnects exceeded)");
                     errors.push(format!("git object fetch round {round}: {e}"));
                     break;
                 }
@@ -318,25 +321,17 @@ async fn sync_from_origin(
             }
         }
 
-        // Import this batch immediately so mappings are available for next round
-        let batch_stats = federation_import_objects(forge_node, mirror_repo_id, &objects).await;
-        let batch_imported = batch_stats.commits + batch_stats.trees + batch_stats.blobs;
-        total_imported += batch_imported;
-
-        // Merge stats
-        combined_stats.blobs += batch_stats.blobs;
-        combined_stats.trees += batch_stats.trees;
-        combined_stats.commits += batch_stats.commits;
-        combined_stats.skipped += batch_stats.skipped;
-        combined_stats.total_bytes += batch_stats.total_bytes;
-        for (k, v) in batch_stats.sha1_to_local_blake3 {
-            combined_stats.sha1_to_local_blake3.insert(k, v);
-        }
-        // Only log import errors, don't propagate — partial progress is OK
-        for err in &batch_stats.errors {
-            debug!(origin = %origin_key, round = round, error = %err, "batch import error (non-fatal)");
-        }
-
+        // Accumulate objects — don't import per-round.
+        //
+        // Per-round imports create SHA-1→BLAKE3 mappings from partial state:
+        // trees imported early get BLAKE3 entry references based on whatever
+        // mappings exist at that point. Later rounds add more objects, but the
+        // already-imported trees keep their stale references. The result is a
+        // truncated DAG (HEAD reaches only ~7K of ~34K objects).
+        //
+        // Instead, collect everything, then import once at the end with the
+        // full set. The convergent loop in federation_import_objects handles
+        // dependency ordering (blobs → trees → commits).
         all_git_objects.extend(objects);
 
         if !has_more {
@@ -350,33 +345,38 @@ async fn sync_from_origin(
         }
     }
 
-    // Retry pass: re-import ALL accumulated objects. Trees/commits that failed
-    // in earlier rounds (due to missing blob deps) may now succeed because later
-    // rounds imported the blobs. import_objects() skips already-imported objects
-    // via has_sha1, so this is cheap when everything already succeeded.
-    if !all_git_objects.is_empty() && total_imported > 0 {
-        let retry_stats = federation_import_objects(forge_node, mirror_repo_id, &all_git_objects).await;
-        let retry_new = retry_stats.commits + retry_stats.trees + retry_stats.blobs;
-        if retry_new > 0 {
-            total_imported += retry_new;
-            combined_stats.commits += retry_stats.commits;
-            combined_stats.trees += retry_stats.trees;
-            combined_stats.blobs += retry_stats.blobs;
-            for (k, v) in retry_stats.sha1_to_local_blake3 {
-                combined_stats.sha1_to_local_blake3.insert(k, v);
-            }
-            info!(
-                origin = %origin_key,
-                recovered_commits = retry_stats.commits,
-                recovered_trees = retry_stats.trees,
-                recovered_blobs = retry_stats.blobs,
-                "post-sync retry recovered objects"
-            );
+    // Finish the sync session (signals server that conversation is done)
+    if let Err(e) = session.finish().await {
+        debug!(origin = %origin_key, error = %e, "session finish failed (non-fatal)");
+    }
+
+    // Import ALL accumulated objects in one pass.
+    //
+    // Objects are NOT imported per-round to avoid stale BLAKE3 references.
+    // The convergent loop in federation_import_objects resolves dependencies
+    // in topological order: blobs (no deps) → trees → commits.
+    if !all_git_objects.is_empty() {
+        info!(
+            origin = %origin_key,
+            total_objects = all_git_objects.len(),
+            "importing all accumulated federation objects in single pass"
+        );
+        let import_stats = federation_import_objects(forge_node, mirror_repo_id, &all_git_objects).await;
+        total_imported = import_stats.commits + import_stats.trees + import_stats.blobs;
+        combined_stats.commits = import_stats.commits;
+        combined_stats.trees = import_stats.trees;
+        combined_stats.blobs = import_stats.blobs;
+        combined_stats.skipped = import_stats.skipped;
+        combined_stats.total_bytes = import_stats.total_bytes;
+        for (k, v) in import_stats.sha1_to_local_blake3 {
+            combined_stats.sha1_to_local_blake3.insert(k, v);
+        }
+        for err in &import_stats.errors {
+            debug!(origin = %origin_key, error = %err, "import error (non-fatal)");
         }
     }
 
     let objects_imported = total_imported;
-    // Use combined_stats for ref translation
     let stats = combined_stats;
 
     // Translate remote ref hashes to local BLAKE3 hashes.
@@ -393,6 +393,167 @@ async fn sync_from_origin(
 
     // Update sync timestamp
     let _ = update_mirror_sync_timestamp(forge_node, &fed_id_str).await;
+
+    // DAG integrity diagnostic: count stored objects vs reachable objects.
+    // Runs AFTER refs are set so the BFS walk can start from ref heads.
+    {
+        let mirror_hex = hex::encode(mirror_repo_id.0);
+        let obj_prefix = format!("forge:obj:{}:", mirror_hex);
+        let refs_prefix = format!("forge:refs:{}:", mirror_hex);
+
+        // Count total stored objects
+        let stored_count = match forge_node
+            .kv()
+            .scan(aspen_core::ScanRequest {
+                prefix: obj_prefix.clone(),
+                limit_results: Some(50_000),
+                continuation_token: None,
+            })
+            .await
+        {
+            Ok(r) => r.entries.len() as u32,
+            Err(_) => 0,
+        };
+
+        // Scan ref heads
+        let ref_heads: Vec<(String, [u8; 32])> = match forge_node
+            .kv()
+            .scan(aspen_core::ScanRequest {
+                prefix: refs_prefix.clone(),
+                limit_results: Some(100),
+                continuation_token: None,
+            })
+            .await
+        {
+            Ok(r) => r
+                .entries
+                .into_iter()
+                .filter_map(|e| {
+                    let ref_name = e.key.strip_prefix(&format!("{}:", refs_prefix.trim_end_matches(':')));
+                    let hash_bytes = hex::decode(e.value.trim()).ok();
+                    match (ref_name, hash_bytes) {
+                        (Some(name), Some(bytes)) if bytes.len() == 32 => {
+                            let mut h = [0u8; 32];
+                            h.copy_from_slice(&bytes);
+                            Some((name.to_string(), h))
+                        }
+                        _ => None,
+                    }
+                })
+                .collect(),
+            Err(_) => vec![],
+        };
+
+        // BFS walk from each ref head to count reachable objects
+        let mut reachable = std::collections::HashSet::new();
+        let mut queue: std::collections::VecDeque<[u8; 32]> = std::collections::VecDeque::new();
+        let mut missing_refs: Vec<String> = Vec::new();
+
+        for (_ref_name, head_hash) in &ref_heads {
+            if !reachable.contains(head_hash) {
+                queue.push_back(*head_hash);
+            }
+        }
+
+        let mut walk_errors = 0u32;
+        while let Some(hash) = queue.pop_front() {
+            if reachable.contains(&hash) {
+                continue;
+            }
+            reachable.insert(hash);
+
+            // Read the object
+            let obj_key = format!("{}{}", obj_prefix, hex::encode(hash));
+            let obj_data = match forge_node.kv().read(aspen_core::ReadRequest::new(obj_key)).await {
+                Ok(r) => r.kv.map(|kv| kv.value),
+                Err(_) => None,
+            };
+
+            let Some(obj_b64) = obj_data else {
+                walk_errors += 1;
+                if walk_errors <= 10 {
+                    missing_refs.push(hex::encode(hash));
+                    tracing::warn!(
+                        blake3 = %hex::encode(hash),
+                        "DAG walk: object referenced but not stored in KV"
+                    );
+                }
+                continue;
+            };
+
+            // Decode and extract child references
+            use base64::Engine as _;
+            let Ok(obj_bytes) = base64::engine::general_purpose::STANDARD.decode(obj_b64.trim()) else {
+                continue;
+            };
+            let Ok(signed) = aspen_forge::SignedObject::<aspen_forge::GitObject>::from_bytes(&obj_bytes) else {
+                continue;
+            };
+
+            match &signed.payload {
+                aspen_forge::GitObject::Commit(c) => {
+                    queue.push_back(*c.tree().as_bytes());
+                    for p in c.parents() {
+                        queue.push_back(*p.as_bytes());
+                    }
+                }
+                aspen_forge::GitObject::Tree(t) => {
+                    for entry in &t.entries {
+                        queue.push_back(entry.hash);
+                    }
+                }
+                aspen_forge::GitObject::Tag(tag) => {
+                    queue.push_back(*tag.target().as_bytes());
+                }
+                aspen_forge::GitObject::Blob(_) => {}
+            }
+        }
+
+        let reachable_count = reachable.len() as u32;
+        let unreachable_count = stored_count.saturating_sub(reachable_count);
+
+        // Count SHA-1 mappings (= total unique imported objects)
+        let sha1_prefix = format!("forge:hashmap:sha1:{}:", mirror_hex);
+        let mapping_count = match forge_node
+            .kv()
+            .scan(aspen_core::ScanRequest {
+                prefix: sha1_prefix,
+                limit_results: Some(50_000),
+                continuation_token: None,
+            })
+            .await
+        {
+            Ok(r) => r.entries.len() as u32,
+            Err(_) => 0,
+        };
+
+        let transferred = all_git_objects.len() as u32;
+
+        if unreachable_count > 0 || walk_errors > 0 {
+            tracing::warn!(
+                origin = %origin_key,
+                mirror_repo = %mirror_hex,
+                transferred = transferred,
+                sha1_mappings = mapping_count,
+                stored_objects = stored_count,
+                reachable = reachable_count,
+                unreachable = unreachable_count,
+                walk_errors = walk_errors,
+                ref_heads_found = ref_heads.len(),
+                missing_blake3 = ?missing_refs,
+                "DAG integrity: mirror has unreachable objects"
+            );
+        } else {
+            tracing::info!(
+                origin = %origin_key,
+                transferred = transferred,
+                sha1_mappings = mapping_count,
+                stored_objects = stored_count,
+                reachable = reachable_count,
+                "DAG integrity: all stored objects are reachable"
+            );
+        }
+    }
 
     info!(
         origin = %origin_key,
@@ -614,6 +775,9 @@ pub(crate) async fn handle_federation_git_fetch(
                 objects: vec![],
                 skipped: 0,
                 error: Some("federation not configured on this cluster".to_string()),
+                chunked_session_id: None,
+                total_objects: 0,
+                total_chunks: 0,
             }));
         }
     };
@@ -626,25 +790,46 @@ pub(crate) async fn handle_federation_git_fetch(
                 objects: vec![],
                 skipped: 0,
                 error: Some("iroh endpoint not available".to_string()),
+                chunked_session_id: None,
+                total_objects: 0,
+                total_chunks: 0,
             }));
         }
     };
 
     let fed_id_str = build_fed_id_str(origin_key, upstream_repo_hex);
-    let mirror_bytes = derive_mirror_repo_id(origin_key, upstream_repo_hex);
-    let mirror_repo_id = aspen_forge::identity::RepoId(mirror_bytes);
-    let mirror_hex = hex::encode(mirror_repo_id.0);
 
-    // Ensure mirror repo exists
-    let _ = get_or_create_mirror(forge_node, &fed_id_str, origin_key, None, None).await;
+    // Ensure mirror repo exists and use its ACTUAL repo ID.
+    // get_or_create_mirror returns the real repo ID (which may differ from
+    // derive_mirror_repo_id's deterministic hash — the mirror repo is
+    // created by forge_node.create_repo() which uses its own ID scheme).
+    let mirror_repo_id = match get_or_create_mirror(forge_node, &fed_id_str, origin_key, None, None).await {
+        Ok(id) => id,
+        Err(e) => {
+            return Ok(ClientRpcResponse::FederationGitFetch(GitBridgeFetchResponse {
+                is_success: false,
+                objects: vec![],
+                skipped: 0,
+                error: Some(format!("failed to create mirror repo: {e}")),
+                chunked_session_id: None,
+                total_objects: 0,
+                total_chunks: 0,
+            }));
+        }
+    };
+    let mirror_hex = hex::encode(mirror_repo_id.0);
 
     // Try serving from mirror first
     let result =
         super::git_bridge::handle_git_bridge_fetch(forge_node, mirror_hex.clone(), want.clone(), have.clone()).await?;
 
-    // Check if all objects were found
+    // Check if all objects were found.
+    // A chunked redirect (chunked_session_id.is_some()) means objects are available
+    // but too large for inline delivery — no sync needed.
     let needs_sync = match &result {
-        ClientRpcResponse::GitBridgeFetch(resp) => !resp.is_success || resp.objects.is_empty(),
+        ClientRpcResponse::GitBridgeFetch(resp) => {
+            !resp.is_success || (resp.objects.is_empty() && resp.chunked_session_id.is_none())
+        }
         _ => true,
     };
 
@@ -672,20 +857,73 @@ pub(crate) async fn handle_federation_git_fetch(
                 objects: vec![],
                 skipped: 0,
                 error: Some(format!("federation sync failed: {e}")),
+                chunked_session_id: None,
+                total_objects: 0,
+                total_chunks: 0,
             }));
         }
 
         // Retry from mirror after sync
         let retry = super::git_bridge::handle_git_bridge_fetch(forge_node, mirror_hex, want, have).await?;
 
-        return match retry {
-            ClientRpcResponse::GitBridgeFetch(resp) => Ok(ClientRpcResponse::FederationGitFetch(resp)),
-            other => Ok(other),
-        };
+        return wrap_fetch_for_federation(retry, forge_node).await;
     }
 
     // Re-wrap as FederationGitFetch response
+    wrap_fetch_for_federation(result, forge_node).await
+}
+
+/// Convert a `GitBridgeFetch` response to `FederationGitFetch`.
+///
+/// If the response signals chunked mode (large repo), assemble all chunks
+/// into a single inline response. Federation callers (git-remote-aspen) expect
+/// a single response with all objects.
+async fn wrap_fetch_for_federation(
+    result: ClientRpcResponse,
+    forge_node: &ForgeNodeRef,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::GitBridgeFetchResponse;
+
     match result {
+        ClientRpcResponse::GitBridgeFetch(resp) if resp.chunked_session_id.is_some() => {
+            // Chunked mode — collect all chunks from the in-process session.
+            let session_id = resp.chunked_session_id.as_ref().unwrap().clone();
+            let total_chunks = resp.total_chunks;
+            let mut all_objects = Vec::new();
+
+            for chunk_id in 0..total_chunks {
+                let chunk_resp =
+                    super::git_bridge::handle_git_bridge_fetch_chunk(forge_node, session_id.clone(), chunk_id).await?;
+
+                if let ClientRpcResponse::GitBridgeFetchChunk(chunk) = chunk_resp {
+                    if !chunk.is_success {
+                        return Ok(ClientRpcResponse::FederationGitFetch(GitBridgeFetchResponse {
+                            is_success: false,
+                            objects: vec![],
+                            skipped: 0,
+                            error: chunk.error,
+                            chunked_session_id: None,
+                            total_objects: 0,
+                            total_chunks: 0,
+                        }));
+                    }
+                    all_objects.extend(chunk.objects);
+                }
+            }
+
+            // Clean up the session.
+            let _ = super::git_bridge::handle_git_bridge_fetch_complete(session_id).await;
+
+            Ok(ClientRpcResponse::FederationGitFetch(GitBridgeFetchResponse {
+                is_success: true,
+                objects: all_objects,
+                skipped: resp.skipped,
+                error: None,
+                chunked_session_id: None,
+                total_objects: 0,
+                total_chunks: 0,
+            }))
+        }
         ClientRpcResponse::GitBridgeFetch(resp) => Ok(ClientRpcResponse::FederationGitFetch(resp)),
         other => Ok(other),
     }

@@ -416,6 +416,9 @@ async fn dispatch_git_bridge(
                         objects: vec![],
                         skipped: 0,
                         error: Some(format!("Invalid repo ID: {}", e)),
+                        chunked_session_id: None,
+                        total_objects: 0,
+                        total_chunks: 0,
                     });
                 }
             };
@@ -429,6 +432,9 @@ async fn dispatch_git_bridge(
                         objects: vec![],
                         skipped: 0,
                         error: Some(format!("Invalid want hash: {}", e)),
+                        chunked_session_id: None,
+                        total_objects: 0,
+                        total_chunks: 0,
                     });
                 }
             };
@@ -460,6 +466,9 @@ async fn dispatch_git_bridge(
                                 objects: vec![],
                                 skipped: 0,
                                 error: Some(e.to_string()),
+                                chunked_session_id: None,
+                                total_objects: 0,
+                                total_chunks: 0,
                             });
                         }
                     }
@@ -471,6 +480,9 @@ async fn dispatch_git_bridge(
                 objects,
                 skipped,
                 error: None,
+                chunked_session_id: None,
+                total_objects: 0,
+                total_chunks: 0,
             })
         }
 

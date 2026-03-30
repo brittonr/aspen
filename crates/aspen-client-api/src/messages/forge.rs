@@ -308,6 +308,16 @@ pub enum ForgeRequest {
         /// Bounded by MAX_GIT_OBJECTS_PER_PUSH.
         sha1s: Vec<String>,
     },
+    /// Start a chunked git fetch operation.
+    GitBridgeFetchStart {
+        repo_id: String,
+        want: Vec<String>,
+        have: Vec<String>,
+    },
+    /// Request a specific chunk from a chunked fetch session.
+    GitBridgeFetchChunk { session_id: String, chunk_id: u32 },
+    /// Complete a chunked fetch session.
+    GitBridgeFetchComplete { session_id: String },
 }
 
 #[cfg(feature = "auth")]
@@ -370,6 +380,9 @@ impl ForgeRequest {
             | Self::ForgeGetMirrorStatus { .. }
             | Self::GitBridgeListRefs { .. }
             | Self::GitBridgeFetch { .. }
+            | Self::GitBridgeFetchStart { .. }
+            | Self::GitBridgeFetchChunk { .. }
+            | Self::GitBridgeFetchComplete { .. }
             | Self::GitBridgeProbeObjects { .. } => Some(Operation::Read {
                 key: "_forge:".to_string(),
             }),

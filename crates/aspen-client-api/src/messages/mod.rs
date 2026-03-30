@@ -277,7 +277,10 @@ pub use forge::ForgeRepoResultResponse;
 pub use forge::ForgeRequest;
 pub use forge::ForgeTreeEntry;
 pub use forge::ForgeTreeResultResponse;
+pub use forge::GitBridgeFetchChunkResponse;
+pub use forge::GitBridgeFetchCompleteResponse;
 pub use forge::GitBridgeFetchResponse;
+pub use forge::GitBridgeFetchStartResponse;
 pub use forge::GitBridgeListRefsResponse;
 pub use forge::GitBridgeObject;
 pub use forge::GitBridgeProbeObjectsResponse;
@@ -3783,6 +3786,34 @@ pub enum ClientRpcRequest {
         /// Expected BLAKE3 content hash (32 bytes).
         expected_hash: [u8; 32],
     },
+
+    /// Start a chunked git fetch operation.
+    ///
+    /// For large repos (> 2,000 objects), the server runs the DAG walk once,
+    /// creates a session, and returns metadata. The client then requests
+    /// individual chunks via `GitBridgeFetchChunk`.
+    GitBridgeFetchStart {
+        /// Repository ID (hex-encoded BLAKE3 hash).
+        repo_id: String,
+        /// SHA-1 hashes the client wants to fetch.
+        want: Vec<String>,
+        /// SHA-1 hashes the client already has.
+        have: Vec<String>,
+    },
+
+    /// Request a specific chunk from a chunked fetch session.
+    GitBridgeFetchChunk {
+        /// Session ID from `GitBridgeFetchStartResponse`.
+        session_id: String,
+        /// Chunk index (0-based).
+        chunk_id: u32,
+    },
+
+    /// Signal completion of a chunked fetch — lets the server clean up session state.
+    GitBridgeFetchComplete {
+        /// Session ID from `GitBridgeFetchStartResponse`.
+        session_id: String,
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -3992,6 +4023,9 @@ impl ClientRpcRequest {
             Self::GetTopology { .. } => "GetTopology",
             Self::GetVaultKeys { .. } => "GetVaultKeys",
             Self::GitBridgeFetch { .. } => "GitBridgeFetch",
+            Self::GitBridgeFetchStart { .. } => "GitBridgeFetchStart",
+            Self::GitBridgeFetchChunk { .. } => "GitBridgeFetchChunk",
+            Self::GitBridgeFetchComplete { .. } => "GitBridgeFetchComplete",
             Self::GitBridgeListRefs { .. } => "GitBridgeListRefs",
             Self::GitBridgePush { .. } => "GitBridgePush",
             Self::GitBridgePushChunk { .. } => "GitBridgePushChunk",
@@ -4391,6 +4425,9 @@ impl ClientRpcRequest {
             // Git Bridge operations
             Self::GitBridgeListRefs { .. }
             | Self::GitBridgeFetch { .. }
+            | Self::GitBridgeFetchStart { .. }
+            | Self::GitBridgeFetchChunk { .. }
+            | Self::GitBridgeFetchComplete { .. }
             | Self::GitBridgePush { .. }
             | Self::GitBridgePushStart { .. }
             | Self::GitBridgePushChunk { .. }
@@ -5413,6 +5450,15 @@ pub enum ClientRpcResponse {
 
     /// Content hash check result for FUSE lazy fetch cache revalidation.
     HashCheckResult(HashCheckResultResponse),
+
+    /// Git bridge chunked fetch start result.
+    GitBridgeFetchStart(GitBridgeFetchStartResponse),
+
+    /// Git bridge chunked fetch chunk result.
+    GitBridgeFetchChunk(GitBridgeFetchChunkResponse),
+
+    /// Git bridge chunked fetch complete result.
+    GitBridgeFetchComplete(GitBridgeFetchCompleteResponse),
 }
 
 /// Result of a plugin reload operation.
