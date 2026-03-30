@@ -1208,7 +1208,7 @@ pub(crate) async fn federation_import_objects(
     let mapping_store = aspen_forge::git::bridge::HashMappingStore::new(forge_node.kv().clone());
     let mut origin_mappings_stored = 0u32;
     let origin_sha1_count = objects.iter().filter(|o| o.origin_sha1.is_some()).count();
-    tracing::debug!(
+    tracing::info!(
         total_objects = objects.len(),
         with_origin_sha1 = origin_sha1_count,
         "Phase 4: checking origin SHA-1 mappings"

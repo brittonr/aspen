@@ -647,7 +647,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                     Some(stored_sha1)
                 }
                 Ok(None) => {
-                    tracing::debug!(
+                    tracing::info!(
                         blake3 = %hex::encode(b3.as_bytes()),
                         "no stored SHA-1 mapping for object"
                     );
