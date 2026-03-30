@@ -635,8 +635,32 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
             // SHA-1 from the initial git push, which may differ from `sha1`
             // (computed from re-serialized content) for trees and commits.
             let origin_sha1 = match self.mapping.get_sha1(repo_id, b3).await {
-                Ok(Some((stored_sha1, _))) => Some(stored_sha1),
-                _ => None,
+                Ok(Some((stored_sha1, _))) => {
+                    if stored_sha1 != sha1 {
+                        tracing::debug!(
+                            blake3 = %hex::encode(b3.as_bytes()),
+                            origin = %stored_sha1.to_hex(),
+                            export = %sha1.to_hex(),
+                            "origin SHA-1 differs from export SHA-1"
+                        );
+                    }
+                    Some(stored_sha1)
+                }
+                Ok(None) => {
+                    tracing::debug!(
+                        blake3 = %hex::encode(b3.as_bytes()),
+                        "no stored SHA-1 mapping for object"
+                    );
+                    None
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        blake3 = %hex::encode(b3.as_bytes()),
+                        error = %e,
+                        "failed to look up stored SHA-1"
+                    );
+                    None
+                }
             };
 
             objects.push(FederationExportedObject {
