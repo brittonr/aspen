@@ -155,10 +155,14 @@ async fn sync_from_origin(
     let fed_id_str = build_fed_id_str(origin_key, upstream_repo_hex);
     let (fed_id, endpoint_addr) = build_origin_params(origin_key, upstream_repo_hex, origin_addr_hint)?;
 
-    let (connection, _remote_identity) =
-        aspen_cluster::federation::sync::connect_to_cluster(iroh_endpoint, cluster_identity, endpoint_addr, None)
-            .await
-            .map_err(|e| format!("connection to origin failed: {e}"))?;
+    let (connection, _remote_identity) = aspen_cluster::federation::sync::connect_to_cluster(
+        iroh_endpoint,
+        cluster_identity,
+        endpoint_addr.clone(),
+        None,
+    )
+    .await
+    .map_err(|e| format!("connection to origin failed: {e}"))?;
 
     let mut errors = Vec::new();
 
@@ -202,6 +206,12 @@ async fn sync_from_origin(
     let mut total_imported = 0u32;
     let mut combined_stats = super::federation::FederationImportStats::default();
 
+    // Reconnection tracking — QUIC connections can drop under heavy load
+    // (typically after ~70MB transferred, ~7 rounds). Reconnect transparently.
+    let mut connection = connection;
+    let mut reconnect_count = 0u32;
+    let max_reconnects = 5u32;
+
     for round in 0..max_rounds {
         let (objects, has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
             &connection,
@@ -215,9 +225,57 @@ async fn sync_from_origin(
         {
             Ok(result) => result,
             Err(e) => {
-                tracing::warn!(origin = %origin_key, error = %e, round = round, "git object sync_remote_objects failed");
-                errors.push(format!("git object fetch round {round}: {e}"));
-                break;
+                // Try reconnecting on stream/connection errors
+                if reconnect_count < max_reconnects {
+                    reconnect_count += 1;
+                    tracing::info!(
+                        origin = %origin_key,
+                        round = round,
+                        reconnect = reconnect_count,
+                        error = %e,
+                        "connection lost, reconnecting to origin"
+                    );
+                    match aspen_cluster::federation::sync::connect_to_cluster(
+                        iroh_endpoint,
+                        cluster_identity,
+                        endpoint_addr.clone(),
+                        None,
+                    )
+                    .await
+                    {
+                        Ok((new_conn, _)) => {
+                            connection = new_conn;
+                            // Retry this round with the new connection
+                            match aspen_cluster::federation::sync::sync_remote_objects(
+                                &connection,
+                                &fed_id,
+                                vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
+                                current_have.clone(),
+                                batch_size,
+                                None,
+                            )
+                            .await
+                            {
+                                Ok(result) => result,
+                                Err(e2) => {
+                                    tracing::warn!(origin = %origin_key, error = %e2, round = round, "sync failed after reconnect");
+                                    errors.push(format!("git object fetch round {round} (post-reconnect): {e2}"));
+                                    break;
+                                }
+                            }
+                        }
+                        Err(reconn_err) => {
+                            tracing::warn!(origin = %origin_key, error = %reconn_err, "reconnect to origin failed");
+                            errors
+                                .push(format!("git object fetch round {round}: {e} (reconnect failed: {reconn_err})"));
+                            break;
+                        }
+                    }
+                } else {
+                    tracing::warn!(origin = %origin_key, error = %e, round = round, "git object sync_remote_objects failed (max reconnects exceeded)");
+                    errors.push(format!("git object fetch round {round}: {e}"));
+                    break;
+                }
             }
         };
 

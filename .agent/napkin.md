@@ -266,6 +266,8 @@ All resolved as of 2026-03-24.
 
 | Date | What Went Wrong | What To Do Instead |
 |------|----------------|-------------------|
+| 2026-03-30 | Federation sync have-set dedup only resolved 2% of entries — server re-sent 97% of objects each round | SHA-1 from re-serialized content (export) ≠ SHA-1 from original bytes (import). Fix: include envelope BLAKE3 in SyncObject, client returns them directly, server adds to BFS skip-set without mapping store lookup |
+| 2026-03-30 | QUIC connection drops at round 7 of federation sync (~70MB transferred) — "failed to read message length" | Still investigating. Connection drops consistently at ~7 rounds × 5000 objects. Possibly QUIC idle timeout or max data limit on iroh connections with relay disabled |
 | 2026-03-29 | Large git objects (>1MB base64) silently dropped from KV during push — only stored in iroh-blobs, which fails on read | Chunked KV storage: split across `forge:obj:{repo}:{hash}:c:{N}` entries with `chunks:N` manifest |
 | 2026-03-29 | Federation sync batch size 1000 with max 10 rounds = 10K objects max, repo has 33K+ | Increased to 5000/round, 100 rounds. Still not enough for federated git clone (DAG walk truncation) |
 | 2026-03-29 | `do_verify` in dogfood-federation.sh picked clippy job (first successful) instead of build-node | Filter by job name: prefer `build-node` → `nix-build` → `build-*` → first |
