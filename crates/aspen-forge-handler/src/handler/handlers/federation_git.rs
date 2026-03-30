@@ -274,7 +274,38 @@ async fn sync_from_origin(
         all_git_objects.extend(objects);
 
         if !has_more {
+            info!(
+                origin = %origin_key,
+                round = round,
+                total = total_imported,
+                "sync stopping: remote reported no more objects"
+            );
             break;
+        }
+    }
+
+    // Retry pass: re-import ALL accumulated objects. Trees/commits that failed
+    // in earlier rounds (due to missing blob deps) may now succeed because later
+    // rounds imported the blobs. import_objects() skips already-imported objects
+    // via has_sha1, so this is cheap when everything already succeeded.
+    if !all_git_objects.is_empty() && total_imported > 0 {
+        let retry_stats = federation_import_objects(forge_node, mirror_repo_id, &all_git_objects).await;
+        let retry_new = retry_stats.commits + retry_stats.trees + retry_stats.blobs;
+        if retry_new > 0 {
+            total_imported += retry_new;
+            combined_stats.commits += retry_stats.commits;
+            combined_stats.trees += retry_stats.trees;
+            combined_stats.blobs += retry_stats.blobs;
+            for (k, v) in retry_stats.sha1_to_local_blake3 {
+                combined_stats.sha1_to_local_blake3.insert(k, v);
+            }
+            info!(
+                origin = %origin_key,
+                recovered_commits = retry_stats.commits,
+                recovered_trees = retry_stats.trees,
+                recovered_blobs = retry_stats.blobs,
+                "post-sync retry recovered objects"
+            );
         }
     }
 

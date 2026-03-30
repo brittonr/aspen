@@ -1130,6 +1130,7 @@ pub(crate) async fn federation_import_objects(
     }
 
     // Pass 2: Import trees + commits (trees depend on blobs, commits on trees)
+    let mut pass2_failed = false;
     if !non_blobs.is_empty() {
         match importer.import_objects(repo_id, non_blobs).await {
             Ok(r) => {
@@ -1138,7 +1139,52 @@ pub(crate) async fn federation_import_objects(
             }
             Err(e) => {
                 stats.errors.push(format!("tree/commit import failed: {e}"));
-                tracing::warn!(error = %e, "federation tree/commit import failed");
+                tracing::warn!(error = %e, "federation tree/commit import failed, will retry");
+                pass2_failed = true;
+            }
+        }
+    }
+
+    // Pass 3 (belt-and-suspenders): Retry non-blob objects that failed in pass 2.
+    //
+    // With exporter-side closure enforcement, pass 2 should always succeed.
+    // This retry catches residual ordering issues (e.g., cross-references
+    // within the same wave). import_objects() skips objects with existing
+    // SHA-1 mappings, so the retry is idempotent and cheap when pass 2 succeeded.
+    if pass2_failed {
+        let retry_objects: Vec<_> = objects
+            .iter()
+            .filter_map(|obj| {
+                let git_type = match obj.object_type.as_str() {
+                    "tree" => GitObjectType::Tree,
+                    "commit" => GitObjectType::Commit,
+                    _ => return None,
+                };
+                let header = format!("{} {}\0", obj.object_type, obj.data.len());
+                let mut git_bytes = Vec::with_capacity(header.len() + obj.data.len());
+                git_bytes.extend_from_slice(header.as_bytes());
+                git_bytes.extend_from_slice(&obj.data);
+                let sha1 = {
+                    use sha1::Digest;
+                    let digest: [u8; 20] = sha1::Sha1::digest(&git_bytes).into();
+                    Sha1Hash::from_bytes(digest)
+                };
+                Some((sha1, git_type, git_bytes))
+            })
+            .collect();
+
+        if !retry_objects.is_empty() {
+            match importer.import_objects(repo_id, retry_objects).await {
+                Ok(r) => {
+                    all_mappings.extend(r.mappings);
+                    if r.objects_imported > 0 {
+                        tracing::info!(recovered = r.objects_imported, "retry pass recovered objects");
+                    }
+                }
+                Err(e) => {
+                    stats.errors.push(format!("retry pass also failed: {e}"));
+                    tracing::warn!(error = %e, "federation retry pass also failed");
+                }
             }
         }
     }

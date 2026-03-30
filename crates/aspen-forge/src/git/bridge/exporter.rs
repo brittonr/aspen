@@ -456,6 +456,80 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         Ok(self.mapping.get_sha1(repo_id, blake3).await?.map(|(h, _)| h))
     }
 
+    /// Extract dependency BLAKE3 hashes from a git object.
+    ///
+    /// Returns the envelope hashes this object references:
+    /// - Commit: tree + parent commits
+    /// - Tree: all entry hashes (blobs + subtrees)
+    /// - Tag: target object
+    /// - Blob: empty (leaf node)
+    fn get_object_deps(object: &GitObject) -> Vec<blake3::Hash> {
+        match object {
+            GitObject::Commit(commit) => {
+                let mut deps = Vec::with_capacity(1 + commit.parents().len());
+                deps.push(commit.tree());
+                deps.extend(commit.parents());
+                deps
+            }
+            GitObject::Tree(tree) => tree.entries.iter().map(|e| e.hash()).collect(),
+            GitObject::Tag(tag) => vec![tag.target()],
+            GitObject::Blob(_) => Vec::new(),
+        }
+    }
+
+    /// Ensure a collected object set is dependency-closed.
+    #[allow(dead_code)] // Available for future use; current strategy uses importer-side retry
+    ///
+    /// Removes any object whose dependencies can't be resolved from the
+    /// batch itself or the `known_blake3` set. Returns the closed subset
+    /// preserving original order, plus the count of removed objects.
+    ///
+    /// Algorithm: forward-closure from grounded objects. Start with objects
+    /// whose deps are all in `known_blake3` (blobs have no deps, so they're
+    /// always grounded). Each round adds objects whose deps are all grounded.
+    /// Stop at fixpoint. Objects not reached are removed.
+    ///
+    /// Worst case O(n²) where n = collected.len(), bounded by the batch limit.
+    fn ensure_closure(
+        collected: Vec<(blake3::Hash, SignedObject<GitObject>, Vec<blake3::Hash>)>,
+        known_blake3: &HashSet<[u8; 32]>,
+    ) -> (Vec<(blake3::Hash, SignedObject<GitObject>)>, usize) {
+        if collected.is_empty() {
+            return (Vec::new(), 0);
+        }
+
+        let total = collected.len();
+        let mut grounded: HashSet<[u8; 32]> = known_blake3.clone();
+        let mut included = vec![false; total];
+
+        loop {
+            let mut progress = false;
+            for (i, (hash, _obj, deps)) in collected.iter().enumerate() {
+                if included[i] {
+                    continue;
+                }
+                if deps.iter().all(|dep| grounded.contains(dep.as_bytes())) {
+                    included[i] = true;
+                    grounded.insert(*hash.as_bytes());
+                    progress = true;
+                }
+            }
+            if !progress {
+                break;
+            }
+        }
+
+        let included_count = included.iter().filter(|&&x| x).count();
+        let removed = total - included_count;
+        let result = collected
+            .into_iter()
+            .zip(included)
+            .filter_map(|(item, inc)| if inc { Some((item.0, item.1)) } else { None })
+            .collect();
+
+        (result, removed)
+    }
+
     /// Walk the DAG and collect objects, using BLAKE3 hashes for dedup.
     ///
     /// Like `export_commit_dag_collect` but accepts BLAKE3 hashes in
@@ -471,8 +545,8 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         commit_blake3: blake3::Hash,
         known_blake3: &HashSet<[u8; 32]>,
         limit: usize,
-    ) -> BridgeResult<(Vec<(blake3::Hash, SignedObject<GitObject>)>, usize, bool)> {
-        let mut to_export: Vec<(blake3::Hash, SignedObject<GitObject>)> = Vec::new();
+    ) -> BridgeResult<(Vec<(blake3::Hash, SignedObject<GitObject>, Vec<blake3::Hash>)>, usize, bool)> {
+        let mut to_export: Vec<(blake3::Hash, SignedObject<GitObject>, Vec<blake3::Hash>)> = Vec::new();
         let mut visited: HashSet<blake3::Hash> = HashSet::new();
         let mut queue: VecDeque<blake3::Hash> = VecDeque::new();
         let mut skipped = 0usize;
@@ -494,16 +568,23 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
 
             visited.insert(blake3);
 
-            // Check if remote already has this object (by BLAKE3 directly)
+            // Read the object to discover its dependencies for DAG traversal.
+            let bytes = self.read_object_bytes(repo_id, blake3).await?;
+            let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes)?;
+            let deps = Self::get_object_deps(&signed.payload);
+            for dep in &deps {
+                queue.push_back(*dep);
+            }
+
+            // Skip collecting objects the remote already has, but still
+            // traverse their deps (queued above). Without this, skipping
+            // the commit entry point would orphan the entire DAG.
             if known_blake3.contains(blake3.as_bytes()) {
                 skipped += 1;
                 continue;
             }
 
-            let bytes = self.read_object_bytes(repo_id, blake3).await?;
-            let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes)?;
-            Self::export_commit_dag_queue_deps(&mut queue, &signed.payload);
-            to_export.push((blake3, signed));
+            to_export.push((blake3, signed, deps));
 
             if to_export.len() >= limit {
                 hit_limit = true;
@@ -527,8 +608,13 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         known_blake3: &HashSet<[u8; 32]>,
         limit: usize,
     ) -> BridgeResult<FederationExportResult> {
-        let (mut to_export, skipped, has_more) =
+        let (collected, skipped, has_more) =
             self.collect_dag_blake3(repo_id, commit_blake3, known_blake3, limit).await?;
+
+        // Strip the dependency tracking — only needed if ensure_closure is used.
+        // We rely on the importer to handle partial batches with retry instead.
+        let mut to_export: Vec<(blake3::Hash, SignedObject<GitObject>)> =
+            collected.into_iter().map(|(h, obj, _deps)| (h, obj)).collect();
 
         // Reverse to get dependency order (blobs first, then trees, then commits)
         to_export.reverse();

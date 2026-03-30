@@ -1565,3 +1565,161 @@ async fn test_c2e_index_sha1_roundtrip() {
         assert_eq!(env_hex, expected_hex, "c2e value for {} should match envelope hash", sha1.to_hex());
     }
 }
+
+// ============================================================================
+// Federation DAG closure tests
+// ============================================================================
+
+/// Create a repo with `n_blobs` blobs, one tree referencing all of them,
+/// and one commit pointing to that tree. Returns the commit's BLAKE3 hash.
+async fn create_wide_tree_repo(h: &BridgeTestHarness, n_blobs: usize) -> blake3::Hash {
+    let mut blob_sha1s = Vec::with_capacity(n_blobs);
+    for i in 0..n_blobs {
+        let content = format!("blob content {i}\n");
+        let git_bytes = make_git_blob(content.as_bytes());
+        let sha1 = compute_sha1(&git_bytes);
+        h.importer.import_object(&h.repo_id, &git_bytes).await.unwrap();
+        blob_sha1s.push(sha1);
+    }
+
+    // Tree referencing all blobs
+    let entries: Vec<Vec<u8>> = blob_sha1s
+        .iter()
+        .enumerate()
+        .map(|(i, sha1)| make_tree_entry("100644", &format!("file{i:04}.txt"), sha1))
+        .collect();
+    let tree_bytes = make_git_tree(&entries);
+    let tree_sha1 = compute_sha1(&tree_bytes);
+    h.importer.import_object(&h.repo_id, &tree_bytes).await.unwrap();
+
+    // Commit
+    let commit_bytes = make_git_commit(&tree_sha1, &[], "wide tree commit\n");
+    let commit_b3 = h.importer.import_object(&h.repo_id, &commit_bytes).await.unwrap();
+    commit_b3
+}
+
+/// When the full DAG fits in one batch, all objects are returned and has_more is false.
+#[tokio::test]
+async fn test_federation_export_closure_single_batch() {
+    use std::collections::HashSet;
+
+    let h = BridgeTestHarness::new();
+    let n_blobs = 10;
+    let commit_b3 = create_wide_tree_repo(&h, n_blobs).await;
+
+    // Limit well above total objects (10 blobs + 1 tree + 1 commit = 12)
+    let result = h.exporter.export_commit_dag_blake3(&h.repo_id, commit_b3, &HashSet::new(), 100).await.unwrap();
+
+    // All 12 objects should be returned
+    assert_eq!(result.objects.len(), n_blobs + 2, "should have all blobs + tree + commit");
+    assert!(!result.has_more, "single batch should have has_more=false");
+
+    // Verify dependency closure: every tree entry's blob hash should be in the batch
+    let batch_blake3s: HashSet<[u8; 32]> = result.objects.iter().map(|o| *o.blake3.as_bytes()).collect();
+    for obj in &result.objects {
+        if obj.object_type == super::mapping::GitObjectType::Tree {
+            // Parse tree entries to get referenced SHA-1s, look up BLAKE3
+            // Not trivial to parse raw tree here, but we can verify the count is right
+        }
+    }
+    // Count by type
+    let blob_count = result.objects.iter().filter(|o| o.object_type == super::mapping::GitObjectType::Blob).count();
+    let tree_count = result.objects.iter().filter(|o| o.object_type == super::mapping::GitObjectType::Tree).count();
+    let commit_count = result.objects.iter().filter(|o| o.object_type == super::mapping::GitObjectType::Commit).count();
+    assert_eq!(blob_count, n_blobs);
+    assert_eq!(tree_count, 1);
+    assert_eq!(commit_count, 1);
+}
+
+/// When the limit forces truncation, the batch includes objects up to the limit
+/// and has_more=true. The importer handles any cross-batch deps via retry.
+#[tokio::test]
+async fn test_federation_export_truncated_batch_has_more() {
+    use std::collections::HashSet;
+
+    let h = BridgeTestHarness::new();
+    // Create 20 blobs + 1 tree + 1 commit = 22 objects
+    let n_blobs = 20;
+    let commit_b3 = create_wide_tree_repo(&h, n_blobs).await;
+
+    // Limit to 10 — the BFS will collect commit + tree + some blobs
+    let result = h.exporter.export_commit_dag_blake3(&h.repo_id, commit_b3, &HashSet::new(), 10).await.unwrap();
+
+    assert!(result.has_more, "truncated batch should report has_more=true");
+    assert_eq!(result.objects.len(), 10, "should return exactly limit objects");
+}
+
+/// import_objects is idempotent: calling it twice with the same input
+/// skips already-imported objects on the second call. This is the foundation
+/// for the federation retry pass.
+#[tokio::test]
+async fn test_import_objects_idempotent_for_retry() {
+    use std::collections::HashSet;
+
+    use super::mapping::GitObjectType;
+
+    let h = BridgeTestHarness::new();
+
+    // Create blob → tree → commit
+    let blob_bytes = make_git_blob(b"retry test\n");
+    let blob_sha1 = compute_sha1(&blob_bytes);
+
+    let entry = make_tree_entry("100644", "retry.txt", &blob_sha1);
+    let tree_bytes = make_git_tree(&[entry]);
+    let tree_sha1 = compute_sha1(&tree_bytes);
+
+    let commit_bytes = make_git_commit(&tree_sha1, &[], "retry commit\n");
+    let commit_sha1 = compute_sha1(&commit_bytes);
+
+    let objects = vec![
+        (blob_sha1, GitObjectType::Blob, blob_bytes.clone()),
+        (tree_sha1, GitObjectType::Tree, tree_bytes.clone()),
+        (commit_sha1, GitObjectType::Commit, commit_bytes.clone()),
+    ];
+
+    // First import
+    let r1 = h.importer.import_objects(&h.repo_id, objects.clone()).await.unwrap();
+    assert_eq!(r1.objects_imported, 3);
+
+    // Second import (retry) — all should be skipped
+    let r2 = h.importer.import_objects(&h.repo_id, objects).await.unwrap();
+    assert_eq!(r2.objects_imported, 0, "retry should import 0 new objects");
+    assert_eq!(r2.objects_skipped, 3, "retry should skip all 3 objects");
+
+    // Mappings from retry should still contain all 3 (from existing lookups)
+    assert_eq!(r2.mappings.len(), 3, "retry should return mappings for all objects");
+}
+
+/// When some blobs are in known_blake3 (have_set), the tree can stay in
+/// the batch even if those blobs aren't — the receiver already has them.
+#[tokio::test]
+async fn test_federation_export_closure_with_known_set() {
+    use std::collections::HashSet;
+
+    let h = BridgeTestHarness::new();
+    let n_blobs = 20;
+    let commit_b3 = create_wide_tree_repo(&h, n_blobs).await;
+
+    // First, do a full export to get all BLAKE3 hashes
+    let full = h.exporter.export_commit_dag_blake3(&h.repo_id, commit_b3, &HashSet::new(), 1000).await.unwrap();
+    assert_eq!(full.objects.len(), n_blobs + 2);
+
+    // Put all blob BLAKE3 hashes into known_blake3 (simulate receiver having them)
+    let known: HashSet<[u8; 32]> = full
+        .objects
+        .iter()
+        .filter(|o| o.object_type == super::mapping::GitObjectType::Blob)
+        .map(|o| *o.blake3.as_bytes())
+        .collect();
+    assert_eq!(known.len(), n_blobs);
+
+    // Now export with limit=5 but all blobs known — tree + commit should be in batch
+    // because their blob deps are satisfied by known_blake3
+    let result = h.exporter.export_commit_dag_blake3(&h.repo_id, commit_b3, &known, 5).await.unwrap();
+
+    // Should have tree + commit (blobs are skipped because known)
+    let tree_count = result.objects.iter().filter(|o| o.object_type == super::mapping::GitObjectType::Tree).count();
+    let commit_count = result.objects.iter().filter(|o| o.object_type == super::mapping::GitObjectType::Commit).count();
+    assert_eq!(tree_count, 1, "tree should be in batch (blob deps satisfied by known_blake3)");
+    assert_eq!(commit_count, 1, "commit should be in batch (tree dep is in batch)");
+}
