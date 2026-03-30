@@ -1109,7 +1109,9 @@ pub(crate) async fn federation_import_objects(
             );
         }
 
-        // Record origin SHA-1 for cross-pass resolution
+        // Record origin SHA-1 for cross-pass resolution.
+        // Skip tracking for objects whose computed SHA-1 matches origin
+        // (no drift, no remap needed).
         if let Some(origin_sha1_bytes) = obj.origin_sha1
             && origin_sha1_bytes != *sha1.as_bytes()
         {
@@ -1152,9 +1154,77 @@ pub(crate) async fn federation_import_objects(
         hlc,
     );
 
+    // Phase 1.5: Pre-populate origin SHA-1 → BLAKE3 mappings BEFORE the
+    // convergent loop. Trees reference sub-objects by the origin cluster's
+    // SHA-1. The convergent loop stores these mappings AFTER each pass via
+    // `re_sha1_to_origin`. Pre-populating from ALREADY-IMPORTED objects
+    // (from previous federation fetches) gives the first pass access to
+    // mappings that would otherwise require extra convergent passes.
+    //
+    // Only pre-populate for objects whose origin_sha1 is set and whose
+    // computed SHA-1 already has a mapping in the store (imported previously).
+    let mut pre_populated = 0u32;
+    for obj in objects {
+        let Some(origin_sha1_bytes) = obj.origin_sha1 else {
+            continue;
+        };
+        let git_type = match obj.object_type.as_str() {
+            "blob" => GitObjectType::Blob,
+            "tree" => GitObjectType::Tree,
+            "commit" => GitObjectType::Commit,
+            _ => continue,
+        };
+
+        // Compute the SHA-1 from raw content (same as what import would produce)
+        let type_str = obj.object_type.as_str();
+        let header = format!("{} {}\0", type_str, obj.data.len());
+        let computed_sha1 = {
+            use sha1::Digest;
+            let mut hasher = sha1::Sha1::new();
+            hasher.update(header.as_bytes());
+            hasher.update(&obj.data);
+            let digest: [u8; 20] = hasher.finalize().into();
+            Sha1Hash::from_bytes(digest)
+        };
+
+        let origin_sha1 = Sha1Hash::from_bytes(origin_sha1_bytes);
+
+        // Skip if origin matches computed (no drift, no remap needed)
+        if origin_sha1_bytes == *computed_sha1.as_bytes() {
+            continue;
+        }
+
+        // Check if the computed SHA-1 already has a mapping (from a previous
+        // federation fetch or earlier import). If so, store origin_sha1 →
+        // same BLAKE3 so trees referencing this object by origin SHA-1 find it.
+        match mapping.get_blake3(repo_id, &computed_sha1).await {
+            Ok(Some((existing_blake3, _))) => {
+                if let Err(e) = mapping.store_batch(repo_id, &[(existing_blake3, origin_sha1, git_type)]).await {
+                    tracing::debug!(
+                        error = %e,
+                        origin_sha1 = %origin_sha1.to_hex(),
+                        "failed to pre-populate origin SHA-1 mapping (non-fatal)"
+                    );
+                } else {
+                    pre_populated += 1;
+                }
+            }
+            _ => {
+                // Object not yet imported — will be handled by the convergent
+                // loop's re_sha1_to_origin mechanism after import.
+            }
+        }
+    }
+    if pre_populated > 0 {
+        tracing::info!(
+            pre_populated = pre_populated,
+            "pre-populated origin SHA-1 → BLAKE3 mappings from previously imported objects"
+        );
+    }
+
     let mut all_mappings = Vec::new();
     let mut total_skipped = 0u32;
-    let max_convergence_passes = 10u32;
+    let max_convergence_passes = 30u32;
     let mut remaining_objects = import_objects;
 
     for pass in 0..max_convergence_passes {
@@ -1255,18 +1325,99 @@ pub(crate) async fn federation_import_objects(
                 );
 
                 if newly_imported == 0 {
-                    // No progress — remaining objects have genuinely missing deps.
+                    // No progress — try a final pass with relaxed dep checking.
+                    // Objects whose SHA-1 validates against their content are safe
+                    // to store even if dependency mappings are incomplete. The
+                    // missing deps may be among the stuck objects themselves
+                    // (circular dependency at the mapping level, not the data level).
                     let stuck_count = r.failures.len();
                     if stuck_count > 0 {
-                        let preview: Vec<String> = r.failures.iter().take(20).map(|(sha1, _)| sha1.to_hex()).collect();
-                        tracing::warn!(
+                        tracing::info!(
                             pass = pass,
                             stuck = stuck_count,
-                            first_20 = ?preview,
-                            "convergent import stalled: no progress, objects have unresolvable dependencies"
+                            "convergent loop stalled, attempting final pass with raw-bytes import"
                         );
-                        for (sha1, err) in &r.failures {
-                            stats.errors.push(format!("stuck object {}: {}", sha1.to_hex(), err));
+
+                        // Collect stuck objects from the retry map
+                        let mut stuck_objects: Vec<(Sha1Hash, GitObjectType, Vec<u8>)> = Vec::new();
+                        for (sha1, _err) in &r.failures {
+                            if let Some(entry) = retry_map.remove(sha1.as_bytes()) {
+                                stuck_objects.push(entry);
+                            }
+                        }
+
+                        // Force-store each stuck object by directly writing its
+                        // blob and mapping, bypassing dependency resolution.
+                        let mut force_imported = 0u32;
+                        for (sha1, git_type, git_bytes) in &stuck_objects {
+                            // Validate: SHA-1 of content must match the SHA-1 key
+                            let check_sha1 = {
+                                use sha1::Digest;
+                                let digest: [u8; 20] = sha1::Sha1::digest(git_bytes).into();
+                                Sha1Hash::from_bytes(digest)
+                            };
+                            if check_sha1 != *sha1 {
+                                stats.errors.push(format!(
+                                    "stuck object {} failed SHA-1 validation in final pass",
+                                    sha1.to_hex()
+                                ));
+                                continue;
+                            }
+
+                            // Store the raw bytes directly via blob store + KV
+                            match importer.import_object(repo_id, git_bytes).await {
+                                Ok(blake3_hash) => {
+                                    all_mappings.push((*sha1, blake3_hash));
+                                    force_imported += 1;
+
+                                    // Also store origin SHA-1 mapping if applicable
+                                    if let Some((origin_sha1_bytes, _)) = re_sha1_to_origin.get(sha1.as_bytes()) {
+                                        let origin_sha1 = Sha1Hash::from_bytes(*origin_sha1_bytes);
+                                        let _ = mapping
+                                            .store_batch(repo_id, &[(blake3_hash, origin_sha1, *git_type)])
+                                            .await;
+                                    }
+                                }
+                                Err(e) => {
+                                    stats.errors.push(format!(
+                                        "stuck object {} final pass import failed: {}",
+                                        sha1.to_hex(),
+                                        e
+                                    ));
+                                }
+                            }
+                        }
+
+                        if force_imported > 0 {
+                            tracing::info!(
+                                force_imported = force_imported,
+                                remaining = stuck_objects.len() as u32 - force_imported,
+                                "final pass imported stuck objects, continuing convergent loop"
+                            );
+                            // The newly imported objects may unblock others.
+                            // Collect remaining stuck objects for another loop iteration.
+                            remaining_objects = Vec::new();
+                            for (sha1, git_type, git_bytes) in stuck_objects {
+                                if !mapping.has_sha1(repo_id, &sha1).await.unwrap_or(false) {
+                                    remaining_objects.push((sha1, git_type, git_bytes));
+                                }
+                            }
+                            if remaining_objects.is_empty() {
+                                break;
+                            }
+                            continue; // Continue the convergent loop
+                        }
+
+                        // Final pass made no progress — log remaining stuck objects
+                        let preview: Vec<String> =
+                            stuck_objects.iter().take(20).map(|(sha1, _, _)| sha1.to_hex()).collect();
+                        tracing::warn!(
+                            stuck = stuck_objects.len(),
+                            first_20 = ?preview,
+                            "final pass made no progress, objects have genuinely unresolvable dependencies"
+                        );
+                        for (sha1, _git_type, _git_bytes) in &stuck_objects {
+                            stats.errors.push(format!("stuck object {}: unresolvable after final pass", sha1.to_hex()));
                         }
                     }
                     break;

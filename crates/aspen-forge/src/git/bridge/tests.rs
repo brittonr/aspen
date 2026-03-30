@@ -2054,3 +2054,87 @@ async fn test_remap_missing_entry_skips_gracefully() {
     let result = h.exporter.export_commit_dag(&h.repo_id, fake_b3, &std::collections::HashSet::new()).await.unwrap();
     assert_eq!(result.objects.len(), 0, "unresolvable root should be skipped");
 }
+
+// ============================================================================
+// Federation import: pre-populated origin SHA-1 mapping tests
+// ============================================================================
+
+/// Test that pre-populated origin SHA-1 mappings are visible to `has_sha1`
+/// before import. Simulates the pre-populate step from federation_import_objects.
+#[tokio::test]
+async fn test_prepopulated_origin_sha1_visible_before_import() {
+    let h = BridgeTestHarness::new();
+
+    // Create a blob and import it to get a real BLAKE3 mapping
+    let blob_content = b"federation test blob";
+    let git_blob = make_git_blob(blob_content);
+    let blob_sha1 = compute_sha1(&git_blob);
+    let blob_blake3 = h.importer.import_object(&h.repo_id, &git_blob).await.unwrap();
+
+    // Simulate an origin SHA-1 that differs from the computed SHA-1.
+    // In a real federation scenario, this would be the SHA-1 from the
+    // original git push to the origin cluster.
+    let origin_sha1 = Sha1Hash::from_bytes([0xAA; 20]);
+    assert_ne!(*origin_sha1.as_bytes(), *blob_sha1.as_bytes(), "origin should differ from computed");
+
+    // Verify origin SHA-1 is NOT visible yet
+    let has_before = h.mapping.has_sha1(&h.repo_id, &origin_sha1).await.unwrap();
+    assert!(!has_before, "origin SHA-1 should not be visible before pre-populate");
+
+    // Pre-populate: store origin_sha1 → blob_blake3 (same BLAKE3 as the
+    // real imported object, just accessible via a different SHA-1 key)
+    h.mapping.store_batch(&h.repo_id, &[(blob_blake3, origin_sha1, GitObjectType::Blob)]).await.unwrap();
+
+    // Verify origin SHA-1 IS visible after pre-populate
+    let has_after = h.mapping.has_sha1(&h.repo_id, &origin_sha1).await.unwrap();
+    assert!(has_after, "origin SHA-1 should be visible after pre-populate");
+
+    // Verify get_blake3 returns the correct BLAKE3 for the origin SHA-1
+    let (looked_up_blake3, obj_type) = h.mapping.get_blake3(&h.repo_id, &origin_sha1).await.unwrap().unwrap();
+    assert_eq!(looked_up_blake3, blob_blake3, "origin SHA-1 should map to same BLAKE3 as computed SHA-1");
+    assert_eq!(obj_type, GitObjectType::Blob);
+
+    // Verify the computed SHA-1 also still works
+    let has_computed = h.mapping.has_sha1(&h.repo_id, &blob_sha1).await.unwrap();
+    assert!(has_computed, "computed SHA-1 should still be visible");
+}
+
+/// Test that raw-bytes import produces SHA-1 matching the input bytes (no drift).
+/// The SHA-1 stored in the mapping must match the SHA-1 computed from the
+/// exact git bytes passed to import_object.
+#[tokio::test]
+async fn test_raw_bytes_import_sha1_matches_input() {
+    let h = BridgeTestHarness::new();
+
+    // Create a blob with known content
+    let blob_content = b"raw bytes import test - no drift expected";
+    let git_blob = make_git_blob(blob_content);
+    let expected_sha1 = compute_sha1(&git_blob);
+
+    // Import the raw bytes
+    let blake3_hash = h.importer.import_object(&h.repo_id, &git_blob).await.unwrap();
+
+    // Verify the mapping store has the exact SHA-1 we computed from input bytes
+    let (stored_sha1, _) = h.mapping.get_sha1(&h.repo_id, &blake3_hash).await.unwrap().unwrap();
+    assert_eq!(stored_sha1, expected_sha1, "stored SHA-1 must match SHA-1 computed from input bytes (no drift)");
+
+    // Now test with a tree containing the blob
+    let tree_entry = make_tree_entry("100644", "test.txt", &expected_sha1);
+    let git_tree = make_git_tree(&[tree_entry]);
+    let expected_tree_sha1 = compute_sha1(&git_tree);
+
+    let tree_blake3 = h.importer.import_object(&h.repo_id, &git_tree).await.unwrap();
+    let (stored_tree_sha1, _) = h.mapping.get_sha1(&h.repo_id, &tree_blake3).await.unwrap().unwrap();
+    assert_eq!(stored_tree_sha1, expected_tree_sha1, "tree SHA-1 must match SHA-1 computed from raw input bytes");
+
+    // Test with a commit referencing the tree
+    let git_commit = make_git_commit(&expected_tree_sha1, &[], "test commit for SHA-1 fidelity\n");
+    let expected_commit_sha1 = compute_sha1(&git_commit);
+
+    let commit_blake3 = h.importer.import_object(&h.repo_id, &git_commit).await.unwrap();
+    let (stored_commit_sha1, _) = h.mapping.get_sha1(&h.repo_id, &commit_blake3).await.unwrap().unwrap();
+    assert_eq!(
+        stored_commit_sha1, expected_commit_sha1,
+        "commit SHA-1 must match SHA-1 computed from raw input bytes"
+    );
+}
