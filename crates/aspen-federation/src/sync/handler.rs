@@ -898,6 +898,7 @@ mod tests {
                 data: vec![i as u8],
                 signature: None,
                 signer: None,
+                envelope_hash: None,
             })
             .collect();
 

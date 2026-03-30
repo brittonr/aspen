@@ -874,6 +874,8 @@ async fn test_sync_objects_with_credential() {
             data: data1.to_vec(),
             signature: None,
             signer: None,
+
+            envelope_hash: None,
         },
         SyncObject {
             object_type: "commit".to_string(),
@@ -881,6 +883,8 @@ async fn test_sync_objects_with_credential() {
             data: data2.to_vec(),
             signature: None,
             signer: None,
+
+            envelope_hash: None,
         },
     ];
 

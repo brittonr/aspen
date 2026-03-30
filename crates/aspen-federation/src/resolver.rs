@@ -379,6 +379,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Di
                                 data: entry.value.into_bytes(),
                                 signature: None,
                                 signer: None,
+                                envelope_hash: None,
                             });
 
                             if objects.len() >= limit as usize {
@@ -611,6 +612,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Sh
                                 data: entry.value.into_bytes(),
                                 signature: None,
                                 signer: None,
+                                envelope_hash: None,
                             });
 
                             if objects.len() >= limit as usize {

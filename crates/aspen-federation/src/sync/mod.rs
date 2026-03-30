@@ -637,6 +637,7 @@ mod tests {
             data: b"hello world".to_vec(),
             signature: None,
             signer: None,
+            envelope_hash: None,
         };
 
         let bytes = postcard::to_allocvec(&obj).unwrap();
@@ -654,6 +655,7 @@ mod tests {
             data: b"commit data".to_vec(),
             signature: Some(Signature::from_bytes([0u8; 64])),
             signer: Some([0xee; 32]),
+            envelope_hash: None,
         };
 
         let bytes = postcard::to_allocvec(&obj).unwrap();
@@ -672,6 +674,7 @@ mod tests {
             data: vec![],
             signature: None,
             signer: None,
+            envelope_hash: None,
         };
 
         let bytes = postcard::to_allocvec(&obj).unwrap();
@@ -690,6 +693,7 @@ mod tests {
                     data: b"data1".to_vec(),
                     signature: None,
                     signer: None,
+                    envelope_hash: None,
                 },
                 SyncObject {
                     object_type: "blob".to_string(),
@@ -697,6 +701,7 @@ mod tests {
                     data: b"data2".to_vec(),
                     signature: None,
                     signer: None,
+                    envelope_hash: None,
                 },
             ],
             has_more: true,

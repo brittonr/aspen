@@ -240,16 +240,24 @@ async fn sync_from_origin(
             "fetched git object batch, importing..."
         );
 
-        // Add SHA-1 of each received object to have_set for next round.
-        // SHA-1 is computed from the reconstructed full git bytes (header + content).
+        // Build have-set for next round. Prefer envelope BLAKE3 hashes
+        // (set by the Forge resolver on git SyncObjects) over SHA-1.
+        // Envelope hashes let the server skip objects in its BFS walk
+        // directly, without the lossy SHA-1 → envelope BLAKE3 conversion
+        // that breaks for trees/commits whose re-serialized bytes differ
+        // from the original import bytes.
         for obj in &objects {
-            use sha1::Digest as _;
-            let header = format!("{} {}\0", obj.object_type, obj.data.len());
-            let mut hasher = sha1::Sha1::new();
-            hasher.update(header.as_bytes());
-            hasher.update(&obj.data);
-            let sha1: [u8; 20] = hasher.finalize().into();
-            current_have.push(aspen_forge::resolver::sha1_to_have_hash(&sha1));
+            if let Some(env_hash) = obj.envelope_hash {
+                current_have.push(env_hash);
+            } else {
+                use sha1::Digest as _;
+                let header = format!("{} {}\0", obj.object_type, obj.data.len());
+                let mut hasher = sha1::Sha1::new();
+                hasher.update(header.as_bytes());
+                hasher.update(&obj.data);
+                let sha1: [u8; 20] = hasher.finalize().into();
+                current_have.push(aspen_forge::resolver::sha1_to_have_hash(&sha1));
+            }
         }
 
         // Import this batch immediately so mappings are available for next round
@@ -714,6 +722,7 @@ mod tests {
                 data: commit_data_a.to_vec(),
                 signature: None,
                 signer: None,
+                envelope_hash: None,
             },
             aspen_cluster::federation::sync::SyncObject {
                 object_type: "commit".to_string(),
@@ -721,6 +730,7 @@ mod tests {
                 data: commit_data_b.to_vec(),
                 signature: None,
                 signer: None,
+                envelope_hash: None,
             },
         ];
 

@@ -272,7 +272,7 @@ pub struct RefEntry {
 pub struct SyncObject {
     /// Object type (e.g., "blob", "tree", "commit", "ref", "cob").
     pub object_type: String,
-    /// Object hash (BLAKE3).
+    /// Object hash (BLAKE3 of `data`).
     pub hash: [u8; 32],
     /// Object data.
     pub data: Vec<u8>,
@@ -280,6 +280,13 @@ pub struct SyncObject {
     pub signature: Option<Signature>,
     /// Optional signer (for signed objects).
     pub signer: Option<[u8; 32]>,
+    /// Optional envelope BLAKE3 hash (the storage-layer hash of the
+    /// `SignedObject` wrapping this content). Present for git objects
+    /// exported by the Forge resolver. Clients return these in
+    /// `have_hashes` for dedup instead of computing SHA-1, avoiding
+    /// byte-level mismatches from tree/commit re-serialization.
+    #[serde(default)]
+    pub envelope_hash: Option<[u8; 32]>,
 }
 
 #[cfg(test)]
@@ -295,6 +302,7 @@ mod tests {
             data: b"hello world".to_vec(),
             signature: None,
             signer: None,
+            envelope_hash: None,
         };
         let ref_entry = RefEntry {
             ref_name: "heads/main".to_string(),

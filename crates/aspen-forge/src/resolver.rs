@@ -343,68 +343,78 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
         // Track envelope hashes for cross-ref dedup in the DAG walk.
         let mut all_known_envelopes: HashSet<[u8; 32]> = HashSet::new();
 
-        // Pre-populate envelope BLAKE3 set from the SHA-1 hash mapping store.
+        // Pre-populate envelope BLAKE3 set from the have_set.
         //
-        // The mapping store (`forge:hashmap:sha1:{repo}:{sha1_hex}`) is the
-        // authoritative SHA-1→BLAKE3 index, written by store_batch() with
-        // error propagation (unlike the c2e index which silently drops writes
-        // under heavy Raft load). Scanning it converts have_set SHA-1 hashes
-        // to envelope BLAKE3 hashes for BFS dedup.
+        // Have entries are either:
+        //   (a) Envelope BLAKE3 hashes (32 real bytes) — sent by clients that
+        //       received SyncObjects with `envelope_hash` set. These go
+        //       directly into `all_known_envelopes` for BFS dedup.
+        //   (b) Padded SHA-1 hashes (20 bytes + 12 zero bytes) — legacy
+        //       clients. These require a mapping store scan to convert to
+        //       envelope BLAKE3.
+        //
+        // We distinguish the two by checking if bytes [20..32] are all zero
+        // (padded SHA-1) or not (envelope BLAKE3).
         if !have_set.is_empty() {
-            let sha1_prefix = format!("{}{}:", crate::git::bridge::constants::KV_PREFIX_SHA1_TO_B3, repo_id.to_hex());
-            if let Ok(scan_result) = self
-                .kv
-                .scan(aspen_core::ScanRequest {
-                    prefix: sha1_prefix.clone(),
-                    limit_results: Some(50_000),
-                    continuation_token: None,
-                })
-                .await
-            {
-                for entry in &scan_result.entries {
-                    let sha1_hex = entry.key.strip_prefix(&sha1_prefix).unwrap_or("");
-                    if let Ok(sha1_bytes) = hex::decode(sha1_hex)
-                        && sha1_bytes.len() == 20
-                    {
-                        let mut sha1 = [0u8; 20];
-                        sha1.copy_from_slice(&sha1_bytes);
-                        let padded = sha1_to_have_hash(&sha1);
-                        if have_set.contains(&padded) {
-                            // Decode the HashMapping to extract the envelope BLAKE3.
-                            use base64::Engine;
-                            if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(entry.value.trim())
-                                && let Ok(mapping) =
-                                    postcard::from_bytes::<crate::git::bridge::mapping::HashMapping>(&bytes)
-                            {
-                                all_known_envelopes.insert(mapping.blake3);
+            let mut envelope_direct = 0u32;
+            let mut sha1_entries: HashSet<[u8; 32]> = HashSet::new();
+
+            for entry in have_set.iter() {
+                if entry[20..] == [0u8; 12] {
+                    // Padded SHA-1 — needs mapping store lookup
+                    sha1_entries.insert(*entry);
+                } else {
+                    // Full 32-byte hash — treat as envelope BLAKE3 directly
+                    all_known_envelopes.insert(*entry);
+                    envelope_direct += 1;
+                }
+            }
+
+            // Legacy path: convert remaining SHA-1 entries via mapping store
+            if !sha1_entries.is_empty() {
+                let sha1_prefix =
+                    format!("{}{}:", crate::git::bridge::constants::KV_PREFIX_SHA1_TO_B3, repo_id.to_hex());
+                if let Ok(scan_result) = self
+                    .kv
+                    .scan(aspen_core::ScanRequest {
+                        prefix: sha1_prefix.clone(),
+                        limit_results: Some(50_000),
+                        continuation_token: None,
+                    })
+                    .await
+                {
+                    for entry in &scan_result.entries {
+                        let sha1_hex = entry.key.strip_prefix(&sha1_prefix).unwrap_or("");
+                        if let Ok(sha1_bytes) = hex::decode(sha1_hex)
+                            && sha1_bytes.len() == 20
+                        {
+                            let mut sha1 = [0u8; 20];
+                            sha1.copy_from_slice(&sha1_bytes);
+                            let padded = sha1_to_have_hash(&sha1);
+                            if sha1_entries.contains(&padded) {
+                                use base64::Engine;
+                                if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(entry.value.trim())
+                                    && let Ok(mapping) =
+                                        postcard::from_bytes::<crate::git::bridge::mapping::HashMapping>(&bytes)
+                                {
+                                    all_known_envelopes.insert(mapping.blake3);
+                                }
                             }
                         }
                     }
                 }
             }
-            if !have_set.is_empty() {
-                let mapped_count = all_known_envelopes.len();
-                let have_count = have_set.len();
-                if mapped_count > 0 {
-                    info!(
-                        repo_id = %hex::encode(repo_id.0),
-                        mapped = mapped_count,
-                        have_set_size = have_count,
-                        "pre-populated envelope BLAKE3 set from SHA-1 hash mapping store"
-                    );
-                }
-                // Warn when most have entries fail to resolve — the exporter will
-                // re-send objects the receiver already has, wasting bandwidth and
-                // potentially stalling the multi-round sync loop.
-                if mapped_count * 2 < have_count {
-                    warn!(
-                        repo_id = %hex::encode(repo_id.0),
-                        mapped = mapped_count,
-                        have_set_size = have_count,
-                        ratio_pct = (mapped_count * 100).checked_div(have_count).unwrap_or(0),
-                        "low have-set mapping ratio — exporter may re-send already-transferred objects"
-                    );
-                }
+
+            let mapped_count = all_known_envelopes.len();
+            let have_count = have_set.len();
+            if mapped_count > 0 {
+                info!(
+                    repo_id = %hex::encode(repo_id.0),
+                    mapped = mapped_count,
+                    have_set_size = have_count,
+                    envelope_direct = envelope_direct,
+                    "pre-populated envelope BLAKE3 set for BFS dedup"
+                );
             }
         }
 
@@ -446,6 +456,7 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
                             data,
                             signature: None,
                             signer: None,
+                            envelope_hash: Some(b3_bytes),
                         });
                     }
                 }
@@ -636,6 +647,7 @@ impl<K: ?Sized + KeyValueStore + Send + Sync + 'static> FederationResourceResolv
                     data,
                     signature: None,
                     signer: None,
+                    envelope_hash: None,
                 });
             }
         }
