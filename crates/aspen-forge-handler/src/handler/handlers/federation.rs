@@ -1224,7 +1224,20 @@ pub(crate) async fn federation_import_objects(
                 digest
             };
 
-            if let Some(local_blake3) = stats.sha1_to_local_blake3.get(&import_sha1) {
+            // Look up local BLAKE3 from import stats (newly imported objects)
+            // or from the mirror's mapping store (previously imported/skipped objects).
+            let local_blake3 = if let Some(b3) = stats.sha1_to_local_blake3.get(&import_sha1) {
+                Some(*b3)
+            } else {
+                // Object was skipped (already in mirror from a previous batch).
+                // Look up its BLAKE3 from the mirror's KV mapping store.
+                let import_sha1_hash = aspen_forge::git::bridge::Sha1Hash::from_bytes(import_sha1);
+                match mapping_store.get_blake3(repo_id, &import_sha1_hash).await {
+                    Ok(Some((b3, _))) => Some(b3),
+                    _ => None,
+                }
+            };
+            if let Some(local_blake3) = local_blake3 {
                 // Store mapping: original_sha1 → same local BLAKE3
                 let origin_sha1 = aspen_forge::git::bridge::Sha1Hash::from_bytes(origin_sha1_bytes);
                 let git_type = match obj.object_type.as_str() {
@@ -1237,10 +1250,7 @@ pub(crate) async fn federation_import_objects(
                 origin_sha1_matched += 1;
                 // Only store if original differs from import SHA-1
                 if origin_sha1_bytes != import_sha1 {
-                    if let Err(e) = mapping_store
-                        .store_batch(repo_id, &[(*local_blake3, origin_sha1, git_type)])
-                        .await
-                    {
+                    if let Err(e) = mapping_store.store_batch(repo_id, &[(local_blake3, origin_sha1, git_type)]).await {
                         tracing::debug!(error = %e, "failed to store origin SHA-1 mapping (non-fatal)");
                     } else {
                         origin_mappings_stored += 1;
@@ -1250,7 +1260,7 @@ pub(crate) async fn federation_import_objects(
                 }
 
                 // Also add to stats map for ref translation
-                stats.sha1_to_local_blake3.insert(origin_sha1_bytes, *local_blake3);
+                stats.sha1_to_local_blake3.insert(origin_sha1_bytes, local_blake3);
             } else {
                 origin_sha1_missed += 1;
             }
