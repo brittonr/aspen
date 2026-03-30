@@ -457,6 +457,7 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
                             signature: None,
                             signer: None,
                             envelope_hash: Some(b3_bytes),
+                            origin_sha1: obj.origin_sha1.map(|s| *s.as_bytes()),
                         });
                     }
                 }
@@ -648,6 +649,7 @@ impl<K: ?Sized + KeyValueStore + Send + Sync + 'static> FederationResourceResolv
                     signature: None,
                     signer: None,
                     envelope_hash: None,
+                    origin_sha1: None,
                 });
             }
         }

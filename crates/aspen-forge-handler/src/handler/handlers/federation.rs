@@ -1198,6 +1198,58 @@ pub(crate) async fn federation_import_objects(
         stats.sha1_to_local_blake3.insert(*sha1.as_bytes(), *local_blake3);
     }
 
+    // Phase 4: Store ORIGINAL SHA-1 → local BLAKE3 mappings.
+    //
+    // The SHA-1 in `all_mappings` is from re-serialized content, which
+    // may differ from the original git push SHA-1 for trees/commits.
+    // When SyncObjects carry `origin_sha1` (the original SHA-1 from the
+    // source cluster), we store an additional mapping so git clients can
+    // find objects by their original SHA-1.
+    let mapping_store = aspen_forge::git::bridge::HashMappingStore::new(forge_node.kv().clone());
+    let mut origin_mappings_stored = 0u32;
+    for obj in objects {
+        if let Some(origin_sha1_bytes) = obj.origin_sha1 {
+            // Find the local BLAKE3 for this object using its re-serialized SHA-1.
+            let import_sha1 = {
+                use sha1::Digest;
+                let header = format!("{} {}\0", obj.object_type, obj.data.len());
+                let mut hasher = sha1::Sha1::new();
+                hasher.update(header.as_bytes());
+                hasher.update(&obj.data);
+                let digest: [u8; 20] = hasher.finalize().into();
+                digest
+            };
+
+            if let Some(local_blake3) = stats.sha1_to_local_blake3.get(&import_sha1) {
+                // Store mapping: original_sha1 → same local BLAKE3
+                let origin_sha1 = aspen_forge::git::bridge::Sha1Hash::from_bytes(origin_sha1_bytes);
+                let git_type = match obj.object_type.as_str() {
+                    "blob" => aspen_forge::git::bridge::GitObjectType::Blob,
+                    "tree" => aspen_forge::git::bridge::GitObjectType::Tree,
+                    "commit" => aspen_forge::git::bridge::GitObjectType::Commit,
+                    _ => continue,
+                };
+
+                // Only store if original differs from import SHA-1
+                if origin_sha1_bytes != import_sha1 {
+                    if let Err(e) = mapping_store.store_batch(repo_id, &[(*local_blake3, origin_sha1, git_type)]).await
+                    {
+                        tracing::debug!(error = %e, "failed to store origin SHA-1 mapping (non-fatal)");
+                    } else {
+                        origin_mappings_stored += 1;
+                    }
+                }
+
+                // Also add to stats map for ref translation
+                stats.sha1_to_local_blake3.insert(origin_sha1_bytes, *local_blake3);
+            }
+        }
+    }
+
+    if origin_mappings_stored > 0 {
+        tracing::info!(count = origin_mappings_stored, "stored origin SHA-1 → BLAKE3 mappings for git client lookups");
+    }
+
     tracing::info!(
         commits = stats.commits,
         trees = stats.trees,

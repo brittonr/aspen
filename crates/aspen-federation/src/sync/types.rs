@@ -287,6 +287,12 @@ pub struct SyncObject {
     /// byte-level mismatches from tree/commit re-serialization.
     #[serde(default)]
     pub envelope_hash: Option<[u8; 32]>,
+    /// Original SHA-1 hash from the initial git push import. May differ
+    /// from the SHA-1 computed from `data` for trees/commits. The receiver
+    /// stores a mapping from this SHA-1 to its local BLAKE3 so that git
+    /// clients can look up objects by their original SHA-1.
+    #[serde(default)]
+    pub origin_sha1: Option<[u8; 20]>,
 }
 
 #[cfg(test)]
@@ -303,6 +309,8 @@ mod tests {
             signature: None,
             signer: None,
             envelope_hash: None,
+
+            origin_sha1: None,
         };
         let ref_entry = RefEntry {
             ref_name: "heads/main".to_string(),

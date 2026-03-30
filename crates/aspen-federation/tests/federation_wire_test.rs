@@ -654,6 +654,8 @@ async fn test_sync_objects_drops_bad_content_hash() {
             signer: None,
 
             envelope_hash: None,
+
+            origin_sha1: None,
         },
         // Bad object: hash doesn't match data
         SyncObject {
@@ -664,6 +666,8 @@ async fn test_sync_objects_drops_bad_content_hash() {
             signer: None,
 
             envelope_hash: None,
+
+            origin_sha1: None,
         },
     ];
 
@@ -740,6 +744,8 @@ async fn test_sync_objects_drops_bad_delegate_signature() {
         signer: Some(*unauthorized_secret.public().as_bytes()),
 
         envelope_hash: None,
+
+        origin_sha1: None,
     }];
 
     let resolver = Arc::new(MockResolver::new(mock_objects));
@@ -809,6 +815,8 @@ async fn test_sync_objects_passes_valid_delegate_signature() {
         signer: Some(*delegate_pub.as_bytes()),
 
         envelope_hash: None,
+
+        origin_sha1: None,
     }];
 
     let resolver = Arc::new(MockResolver::new(mock_objects));
@@ -863,6 +871,8 @@ async fn test_sync_objects_accepts_unsigned_when_no_delegates() {
             signer: None,
 
             envelope_hash: None,
+
+            origin_sha1: None,
         },
         SyncObject {
             object_type: "blob".to_string(),
@@ -872,6 +882,8 @@ async fn test_sync_objects_accepts_unsigned_when_no_delegates() {
             signer: None,
 
             envelope_hash: None,
+
+            origin_sha1: None,
         },
     ];
 
@@ -928,6 +940,8 @@ async fn test_pull_cold_handshake_discovers_cluster_identity() {
         signer: None,
 
         envelope_hash: None,
+
+        origin_sha1: None,
     }]);
 
     let alice = TestCluster::new("alice-puller").await;
@@ -1035,6 +1049,8 @@ async fn test_pull_incremental_with_have_hashes() {
                 signer: None,
 
                 envelope_hash: None,
+
+                origin_sha1: None,
             },
             SyncObject {
                 object_type: "blob".to_string(),
@@ -1044,6 +1060,8 @@ async fn test_pull_incremental_with_have_hashes() {
                 signer: None,
 
                 envelope_hash: None,
+
+                origin_sha1: None,
             },
         ],
     };
@@ -1182,6 +1200,8 @@ async fn test_bidi_sync_both_directions() {
             signer: None,
 
             envelope_hash: None,
+
+            origin_sha1: None,
         }],
         heads: bob_heads.clone(),
     };
@@ -1229,6 +1249,8 @@ async fn test_bidi_sync_both_directions() {
         signer: None,
 
         envelope_hash: None,
+
+        origin_sha1: None,
     }];
     let ref_updates = vec![RefEntry {
         ref_name: "heads/feature".to_string(),
@@ -1261,6 +1283,8 @@ async fn test_bidi_sync_push_rejected_pull_succeeds() {
         signer: None,
 
         envelope_hash: None,
+
+        origin_sha1: None,
     }]);
 
     let alice = TestCluster::new("alice-partial").await;

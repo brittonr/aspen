@@ -876,6 +876,8 @@ async fn test_sync_objects_with_credential() {
             signer: None,
 
             envelope_hash: None,
+
+            origin_sha1: None,
         },
         SyncObject {
             object_type: "commit".to_string(),
@@ -885,6 +887,8 @@ async fn test_sync_objects_with_credential() {
             signer: None,
 
             envelope_hash: None,
+
+            origin_sha1: None,
         },
     ];
 

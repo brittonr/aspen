@@ -899,6 +899,8 @@ mod tests {
                 signature: None,
                 signer: None,
                 envelope_hash: None,
+
+                origin_sha1: None,
             })
             .collect();
 

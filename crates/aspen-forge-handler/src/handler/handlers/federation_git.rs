@@ -781,6 +781,8 @@ mod tests {
                 signature: None,
                 signer: None,
                 envelope_hash: None,
+
+                origin_sha1: None,
             },
             aspen_cluster::federation::sync::SyncObject {
                 object_type: "commit".to_string(),
@@ -789,6 +791,8 @@ mod tests {
                 signature: None,
                 signer: None,
                 envelope_hash: None,
+
+                origin_sha1: None,
             },
         ];
 

@@ -631,11 +631,20 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
             // Convert to git bytes (without header) for the receiver to import
             let (content, sha1) = self.converter.export_object(repo_id, &signed.payload).await?;
 
+            // Look up the ORIGINAL SHA-1 from the mapping store. This is the
+            // SHA-1 from the initial git push, which may differ from `sha1`
+            // (computed from re-serialized content) for trees and commits.
+            let origin_sha1 = match self.mapping.get_sha1(repo_id, b3).await {
+                Ok(Some((stored_sha1, _))) => Some(stored_sha1),
+                _ => None,
+            };
+
             objects.push(FederationExportedObject {
                 blake3: *b3,
                 object_type,
                 content,
                 sha1,
+                origin_sha1,
             });
         }
 
@@ -654,10 +663,15 @@ pub struct FederationExportedObject {
     pub blake3: blake3::Hash,
     /// Object type (commit, tree, blob, tag).
     pub object_type: GitObjectType,
-    /// Git SHA-1 hash, computed from the exported content.
+    /// Git SHA-1 hash, computed from the exported (re-serialized) content.
     pub sha1: super::sha1::Sha1Hash,
     /// Git object content (without header).
     pub content: Vec<u8>,
+    /// Original SHA-1 from the initial git push import. May differ from
+    /// `sha1` for trees/commits due to re-serialization (entry ordering,
+    /// mode formatting, author line reconstruction). `None` if the mapping
+    /// store doesn't have the original.
+    pub origin_sha1: Option<super::sha1::Sha1Hash>,
 }
 
 /// Result of a federation DAG export.
