@@ -18,6 +18,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::constants::KV_PREFIX_B3_TO_SHA1;
+use super::constants::KV_PREFIX_REMAP;
 use super::constants::KV_PREFIX_SHA1_TO_B3;
 use super::constants::MAX_HASH_CACHE_SIZE;
 use super::constants::MAX_HASH_MAPPING_BATCH_SIZE;
@@ -393,6 +394,107 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
         let cache = self.cache.read();
         (cache.len(), cache.cap().get())
     }
+
+    // ========================================================================
+    // Origin→Mirror BLAKE3 remap (federation)
+    // ========================================================================
+
+    /// Build the KV key for an origin→mirror BLAKE3 remap entry.
+    fn remap_key(repo_id: &RepoId, origin_blake3: &blake3::Hash) -> String {
+        format!("{}{}:{}", KV_PREFIX_REMAP, repo_id.to_hex(), hex::encode(origin_blake3.as_bytes()))
+    }
+
+    /// Store an origin-BLAKE3 → mirror-BLAKE3 remap entry.
+    ///
+    /// Written during federation import so the mirror's DAG exporter can
+    /// translate embedded origin BLAKE3 references to mirror hashes.
+    pub async fn write_remap(
+        &self,
+        repo_id: &RepoId,
+        origin_blake3: blake3::Hash,
+        mirror_blake3: blake3::Hash,
+    ) -> BridgeResult<()> {
+        let key = Self::remap_key(repo_id, &origin_blake3);
+        let value = hex::encode(mirror_blake3.as_bytes());
+        let request = WriteRequest {
+            command: WriteCommand::Set { key, value },
+        };
+        self.kv.write(request).await.map_err(|e| BridgeError::KvStorage {
+            message: format!("failed to write remap entry: {e}"),
+        })?;
+        Ok(())
+    }
+
+    /// Store multiple origin→mirror BLAKE3 remap entries in batched KV writes.
+    pub async fn write_remap_batch(
+        &self,
+        repo_id: &RepoId,
+        remaps: &[(blake3::Hash, blake3::Hash)],
+    ) -> BridgeResult<()> {
+        if remaps.is_empty() {
+            return Ok(());
+        }
+
+        let pairs: Vec<(String, String)> = remaps
+            .iter()
+            .map(|(origin, mirror)| {
+                let key = Self::remap_key(repo_id, origin);
+                let value = hex::encode(mirror.as_bytes());
+                (key, value)
+            })
+            .collect();
+
+        let max_pairs = aspen_core::MAX_SETMULTI_KEYS as usize;
+        for chunk in pairs.chunks(max_pairs) {
+            let request = WriteRequest {
+                command: WriteCommand::SetMulti { pairs: chunk.to_vec() },
+            };
+            self.kv.write(request).await.map_err(|e| BridgeError::KvStorage {
+                message: format!("failed to write remap batch: {e}"),
+            })?;
+        }
+
+        Ok(())
+    }
+
+    /// Look up a mirror BLAKE3 hash from an origin BLAKE3 hash.
+    ///
+    /// Returns `None` if no remap entry exists (non-federated objects
+    /// or objects whose `SyncObject.envelope_hash` was absent).
+    pub async fn get_remap(
+        &self,
+        repo_id: &RepoId,
+        origin_blake3: &blake3::Hash,
+    ) -> BridgeResult<Option<blake3::Hash>> {
+        let key = Self::remap_key(repo_id, origin_blake3);
+        let request = ReadRequest::new(key);
+        let result = match self.kv.read(request).await {
+            Ok(r) => r,
+            Err(aspen_core::KeyValueStoreError::NotFound { .. }) => {
+                return Ok(None);
+            }
+            Err(e) => {
+                return Err(BridgeError::KvStorage { message: e.to_string() });
+            }
+        };
+
+        match result.kv {
+            Some(kv) => {
+                let bytes = hex::decode(&kv.value).map_err(|e| BridgeError::Serialization {
+                    message: format!("invalid remap hex: {e}"),
+                })?;
+                if bytes.len() != 32 {
+                    return Err(BridgeError::Serialization {
+                        message: format!("remap value has wrong length: {} (expected 32)", bytes.len()),
+                    });
+                }
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(&bytes);
+                Ok(Some(blake3::Hash::from_bytes(arr)))
+            }
+            None => Ok(None),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -451,5 +553,29 @@ mod tests {
         assert_eq!(decoded.blake3, mapping.blake3);
         assert_eq!(decoded.sha1, mapping.sha1);
         assert_eq!(decoded.object_type, mapping.object_type);
+    }
+
+    #[tokio::test]
+    async fn test_remap_write_and_get_roundtrip() {
+        let kv = aspen_testing_core::DeterministicKeyValueStore::new();
+        let store = HashMappingStore::new(kv);
+        let repo_id = RepoId::from_hash(blake3::Hash::from_bytes([0x01; 32]));
+        let origin_b3 = blake3::hash(b"origin object bytes");
+        let mirror_b3 = blake3::hash(b"mirror object bytes");
+
+        store.write_remap(&repo_id, origin_b3, mirror_b3).await.unwrap();
+        let got = store.get_remap(&repo_id, &origin_b3).await.unwrap();
+        assert_eq!(got, Some(mirror_b3));
+    }
+
+    #[tokio::test]
+    async fn test_remap_get_nonexistent_returns_none() {
+        let kv = aspen_testing_core::DeterministicKeyValueStore::new();
+        let store = HashMappingStore::new(kv);
+        let repo_id = RepoId::from_hash(blake3::Hash::from_bytes([0x02; 32]));
+        let missing_b3 = blake3::hash(b"never stored");
+
+        let got = store.get_remap(&repo_id, &missing_b3).await.unwrap();
+        assert_eq!(got, None);
     }
 }

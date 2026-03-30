@@ -1062,8 +1062,11 @@ pub(crate) async fn federation_import_objects(
     }
 
     // Phase 1: Convert SyncObjects to import_objects() input format.
+    // Also build a SHA-1→origin BLAKE3 index for remap entries.
     let mut import_objects = Vec::with_capacity(objects.len());
     let mut type_counts: [u32; 3] = [0; 3]; // [blobs, trees, commits]
+    let mut sha1_to_envelope: std::collections::HashMap<[u8; 20], blake3::Hash> =
+        std::collections::HashMap::with_capacity(objects.len());
 
     for obj in objects {
         let (git_type, type_idx) = match obj.object_type.as_str() {
@@ -1086,6 +1089,17 @@ pub(crate) async fn federation_import_objects(
             let digest: [u8; 20] = sha1::Sha1::digest(&git_bytes).into();
             Sha1Hash::from_bytes(digest)
         };
+
+        // Record envelope_hash (origin BLAKE3) for remap index
+        if let Some(env_bytes) = obj.envelope_hash {
+            sha1_to_envelope.insert(*sha1.as_bytes(), blake3::Hash::from_bytes(env_bytes));
+        } else {
+            tracing::debug!(
+                sha1 = sha1.to_hex(),
+                object_type = obj.object_type.as_str(),
+                "SyncObject has no envelope_hash, skipping remap"
+            );
+        }
 
         stats.total_bytes += obj.data.len() as u64;
         type_counts[type_idx] += 1;
@@ -1163,6 +1177,25 @@ pub(crate) async fn federation_import_objects(
             Ok(r) => {
                 let newly_imported = r.objects_imported;
                 total_skipped += r.objects_skipped + pass_skipped;
+
+                // Write origin→mirror BLAKE3 remap entries for this pass.
+                let mut remap_batch: Vec<(blake3::Hash, blake3::Hash)> = Vec::new();
+                for (sha1, mirror_blake3) in &r.mappings {
+                    if let Some(origin_blake3) = sha1_to_envelope.get(sha1.as_bytes()) {
+                        remap_batch.push((*origin_blake3, *mirror_blake3));
+                    }
+                }
+                let remap_count = remap_batch.len() as u32;
+                if !remap_batch.is_empty() {
+                    // Chunk into MAX_HASH_MAPPING_BATCH_SIZE to stay within batch limits
+                    for chunk in remap_batch.chunks(1000) {
+                        if let Err(e) = mapping.write_remap_batch(repo_id, chunk).await {
+                            tracing::warn!(error = %e, "failed to write remap batch (non-fatal)");
+                        }
+                    }
+                }
+                tracing::info!(pass = pass, remap_entries = remap_count, "wrote origin→mirror BLAKE3 remap entries");
+
                 all_mappings.extend(r.mappings);
 
                 tracing::info!(

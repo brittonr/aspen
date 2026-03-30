@@ -316,7 +316,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
 
             visited.insert(blake3);
 
-            // Check if remote already has this object
+            // Check if remote already has this object (try direct hash first).
             if let Some((sha1, _)) =
                 self.mapping.get_sha1(repo_id, &blake3).await.map_err(|e| BridgeError::KvStorage {
                     message: format!("failed to lookup SHA1 mapping for {}: {}", hex::encode(blake3.as_bytes()), e),
@@ -327,10 +327,61 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 continue;
             }
 
-            let bytes = self.read_object_bytes(repo_id, blake3).await?;
+            // Try reading the object directly. If not found, consult the
+            // remap index (origin BLAKE3 → mirror BLAKE3) for federated repos.
+            let (effective_blake3, bytes) = match self.read_object_bytes(repo_id, blake3).await {
+                Ok(b) => (blake3, b),
+                Err(BridgeError::ObjectNotFound { .. }) => {
+                    // Object not found under this BLAKE3 — try remap.
+                    match self.mapping.get_remap(repo_id, &blake3).await {
+                        Ok(Some(mirror_b3)) => {
+                            // Also check if we already visited the mirror hash.
+                            if visited.contains(&mirror_b3) {
+                                continue;
+                            }
+                            visited.insert(mirror_b3);
+
+                            // Check known-to-remote under the mirror hash too.
+                            if let Some((sha1, _)) = self.mapping.get_sha1(repo_id, &mirror_b3).await.map_err(|e| {
+                                BridgeError::KvStorage {
+                                    message: format!(
+                                        "failed to lookup SHA1 mapping for remapped {}: {}",
+                                        hex::encode(mirror_b3.as_bytes()),
+                                        e
+                                    ),
+                                }
+                            })? && known_to_remote.contains(&sha1)
+                            {
+                                skipped += 1;
+                                continue;
+                            }
+
+                            let b = self.read_object_bytes(repo_id, mirror_b3).await?;
+                            (mirror_b3, b)
+                        }
+                        Ok(None) => {
+                            tracing::warn!(
+                                blake3 = %hex::encode(blake3.as_bytes()),
+                                "unresolvable BLAKE3 hash in DAG walk: not found directly and no remap entry"
+                            );
+                            continue;
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                blake3 = %hex::encode(blake3.as_bytes()),
+                                error = %e,
+                                "remap lookup failed during DAG walk, skipping"
+                            );
+                            continue;
+                        }
+                    }
+                }
+                Err(e) => return Err(e),
+            };
+
             let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes)?;
             Self::export_commit_dag_queue_deps(&mut queue, &signed.payload);
-            to_export.push((blake3, signed));
+            to_export.push((effective_blake3, signed));
         }
 
         Ok((to_export, skipped))

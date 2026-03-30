@@ -114,6 +114,17 @@ pub const OBJ_MAX_CHUNKS: usize = 200;
 /// Value: BLAKE3 hex string (64 chars)
 pub const KV_PREFIX_SHA1_TO_B3: &str = "forge:hashmap:sha1:";
 
+/// KV prefix for origin-BLAKE3 → mirror-BLAKE3 remap index.
+///
+/// Used by federated mirrors to translate BLAKE3 hashes embedded in
+/// imported objects (which reference the origin cluster's envelope hashes)
+/// to the mirror's own envelope hashes. The exporter consults this index
+/// during DAG walks when a BLAKE3 reference doesn't resolve directly.
+///
+/// Key format: `{KV_PREFIX_REMAP}{repo_id_hex}:{origin_blake3_hex}`
+/// Value: mirror BLAKE3 hex string (64 chars)
+pub const KV_PREFIX_REMAP: &str = "forge:remap:";
+
 /// KV prefix for stored credentials (encrypted).
 ///
 /// Key format: `{KV_PREFIX_CREDENTIALS}{repo_id_hex}:{url_hash}`
