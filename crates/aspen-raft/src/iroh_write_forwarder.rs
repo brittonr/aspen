@@ -330,7 +330,13 @@ impl IrohWriteForwarder {
 
             match Self::send_rpc_on_stream(&connection, &rpc_request, leader_id).await {
                 Ok(resp) => Ok(resp),
-                Err(KeyValueStoreError::Failed { ref reason }) if reason.contains("failed to open stream") => {
+                Err(KeyValueStoreError::Failed { ref reason })
+                    if reason.contains("failed to open stream")
+                        || reason.contains("truncated stream")
+                        || reason.contains("failed to deserialize forwarded response")
+                        || reason.contains("empty response") =>
+                {
+                    // Connection or stream is broken — evict and retry once on a fresh connection.
                     self.evict_connection(leader_id).await;
                     let fresh = self.get_connection(leader_id, leader_addr).await?;
                     Self::send_rpc_on_stream(&fresh, &rpc_request, leader_id).await
@@ -383,8 +389,19 @@ impl IrohWriteForwarder {
                 reason: format!("failed to read forwarded response: {e}"),
             })?;
 
+        // Detect truncated/empty responses before attempting deserialization.
+        // Under QUIC load (e.g., concurrent snapshot transfers), streams can
+        // deliver 0 bytes when the leader's handler fails to write a response
+        // or the connection is disrupted. Return a retryable error instead of
+        // a confusing postcard "Hit the end of buffer" message.
+        if response_bytes.is_empty() {
+            return Err(KeyValueStoreError::Failed {
+                reason: format!("empty response from leader {} (truncated stream under load)", leader_id.0),
+            });
+        }
+
         postcard::from_bytes(&response_bytes).map_err(|e| KeyValueStoreError::Failed {
-            reason: format!("failed to deserialize forwarded response: {e}"),
+            reason: format!("failed to deserialize forwarded response ({} bytes): {e}", response_bytes.len()),
         })
     }
 }

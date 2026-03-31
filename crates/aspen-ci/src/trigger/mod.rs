@@ -15,6 +15,8 @@ pub use service::CiTriggerHandler;
 #[cfg(feature = "nickel")]
 pub use service::ConfigFetcher;
 #[cfg(feature = "nickel")]
+pub use service::IsLeaderFn;
+#[cfg(feature = "nickel")]
 pub use service::PipelineStarter;
 #[cfg(feature = "nickel")]
 pub use service::TriggerEvent;

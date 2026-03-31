@@ -205,7 +205,20 @@ pub async fn setup_client_protocol(
                     ..Default::default()
                 };
 
-                let service = TriggerService::new(trigger_config, config_fetcher, pipeline_starter);
+                let raft_for_leader_check = primary_raft_node.clone();
+                let my_node_id = config.node_id;
+                let is_leader: aspen_ci::trigger::IsLeaderFn = Arc::new(move || {
+                    // Synchronous leader check via raft metrics watch receiver.
+                    // No async needed — metrics are updated on every Raft tick.
+                    let metrics = raft_for_leader_check.raft().metrics().borrow().clone();
+                    metrics.current_leader == Some(aspen_raft::types::NodeId(my_node_id))
+                });
+                let service = TriggerService::with_leader_check(
+                    trigger_config,
+                    config_fetcher,
+                    pipeline_starter,
+                    Some(is_leader),
+                );
 
                 // Start periodic mirror scanning for federation CI
                 service.start_mirror_scan_task(kv_store.clone());

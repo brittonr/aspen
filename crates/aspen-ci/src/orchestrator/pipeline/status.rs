@@ -135,11 +135,12 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     }
                 },
                 Ok(None) => {
-                    debug!(
+                    warn!(
                         run_id = %run.id,
                         job_id = %job_id,
-                        "Job not found during status sync, treating as completed"
+                        "Job not found during status sync, treating as incomplete (read failure or replication lag)"
                     );
+                    all_completed = false;
                 }
                 Err(e) => {
                     debug!(

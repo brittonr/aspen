@@ -163,6 +163,14 @@ pub trait PipelineStarter: Send + Sync + 'static {
 ///
 /// It listens for RefUpdate announcements from forge gossip and
 /// automatically starts pipelines for repositories with CI configuration.
+/// Callback to check whether this node is the Raft leader.
+///
+/// Used by `TriggerService` to deduplicate CI triggers: only the leader
+/// processes trigger events. Followers drop them silently because they'll
+/// also receive the gossip broadcast, and the leader will handle it.
+pub type IsLeaderFn = Arc<dyn Fn() -> bool + Send + Sync>;
+
+/// Service that watches forge repositories and triggers CI pipelines on push events.
 pub struct TriggerService {
     /// Service configuration.
     config: TriggerServiceConfig,
@@ -183,6 +191,9 @@ pub struct TriggerService {
     /// the watch_repo() call, gets buffered here and replayed when watch_repo()
     /// is called. Entries expire after REPLAY_BUFFER_TTL_MS.
     replay_buffer: RwLock<std::collections::VecDeque<(tokio::time::Instant, PendingTrigger)>>,
+    /// Leader check callback. Only the Raft leader processes triggers to
+    /// prevent duplicate pipelines from gossip broadcasts.
+    is_leader: Option<IsLeaderFn>,
 }
 
 /// Internal pending trigger waiting to be processed.
@@ -326,6 +337,20 @@ impl TriggerService {
         config_fetcher: Arc<dyn ConfigFetcher>,
         pipeline_starter: Arc<dyn PipelineStarter>,
     ) -> Arc<Self> {
+        Self::with_leader_check(config, config_fetcher, pipeline_starter, None)
+    }
+
+    /// Create a new TriggerService with a leader check callback.
+    ///
+    /// When `is_leader` is provided, only the Raft leader processes trigger
+    /// events. This prevents duplicate pipelines from gossip broadcasts in
+    /// multi-node clusters.
+    pub fn with_leader_check(
+        config: TriggerServiceConfig,
+        config_fetcher: Arc<dyn ConfigFetcher>,
+        pipeline_starter: Arc<dyn PipelineStarter>,
+        is_leader: Option<IsLeaderFn>,
+    ) -> Arc<Self> {
         let (trigger_tx, trigger_rx) = mpsc::channel(MAX_PENDING_TRIGGERS);
         let task_tracker = TaskTracker::new();
 
@@ -338,6 +363,7 @@ impl TriggerService {
             trigger_tx,
             task_tracker,
             replay_buffer: RwLock::new(std::collections::VecDeque::with_capacity(MAX_REPLAY_BUFFER)),
+            is_leader,
         });
 
         // Spawn the processing task
@@ -545,6 +571,20 @@ impl TriggerService {
     /// Handle a single trigger event.
     async fn handle_trigger(&self, trigger: PendingTrigger) -> Result<()> {
         let repo_hex = trigger.repo_id.to_hex();
+
+        // Leader-only dedup: in multi-node clusters, only the leader processes
+        // triggers. All nodes receive gossip, but only one should start a pipeline.
+        if let Some(ref is_leader) = self.is_leader {
+            if !is_leader() {
+                debug!(
+                    repo_id = %repo_hex,
+                    ref_name = %trigger.ref_name,
+                    "Dropping CI trigger on follower node (leader-only dedup)"
+                );
+                return Ok(());
+            }
+        }
+
         info!(
             repo_id = %repo_hex,
             ref_name = %trigger.ref_name,
