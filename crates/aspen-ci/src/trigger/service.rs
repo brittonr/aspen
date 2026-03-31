@@ -194,6 +194,11 @@ pub struct TriggerService {
     /// Leader check callback. Only the Raft leader processes triggers to
     /// prevent duplicate pipelines from gossip broadcasts.
     is_leader: Option<IsLeaderFn>,
+    /// Recently-processed triggers for dedup. Key: (repo_id, commit_hash).
+    /// The leader receives the same trigger twice: once from the local handler
+    /// and once from its own gossip broadcast. This prevents double-processing.
+    #[allow(clippy::type_complexity)]
+    recent_triggers: RwLock<std::collections::VecDeque<(tokio::time::Instant, (RepoId, [u8; 32]))>>,
 }
 
 /// Internal pending trigger waiting to be processed.
@@ -364,6 +369,7 @@ impl TriggerService {
             task_tracker,
             replay_buffer: RwLock::new(std::collections::VecDeque::with_capacity(MAX_REPLAY_BUFFER)),
             is_leader,
+            recent_triggers: RwLock::new(std::collections::VecDeque::with_capacity(64)),
         });
 
         // Spawn the processing task
@@ -583,6 +589,35 @@ impl TriggerService {
                 );
                 return Ok(());
             }
+        }
+
+        // Dedup: the leader receives the same push event twice — once from
+        // notify_local_handler() and once from its own gossip broadcast.
+        // Skip if we already processed this (repo, commit) recently.
+        {
+            let now = tokio::time::Instant::now();
+            let key = (trigger.repo_id, trigger.new_hash);
+            let mut recent = self.recent_triggers.write().await;
+
+            // Evict entries older than 60s
+            while let Some((ts, _)) = recent.front() {
+                if now.duration_since(*ts).as_secs() > 60 {
+                    recent.pop_front();
+                } else {
+                    break;
+                }
+            }
+
+            if recent.iter().any(|(_, k)| *k == key) {
+                debug!(
+                    repo_id = %repo_hex,
+                    ref_name = %trigger.ref_name,
+                    "Dropping duplicate CI trigger (same repo+commit already processed)"
+                );
+                return Ok(());
+            }
+
+            recent.push_back((now, key));
         }
 
         info!(
