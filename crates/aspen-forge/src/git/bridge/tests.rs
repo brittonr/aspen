@@ -2138,3 +2138,111 @@ async fn test_raw_bytes_import_sha1_matches_input() {
         "commit SHA-1 must match SHA-1 computed from raw input bytes"
     );
 }
+
+/// Gitlink (mode 160000) entries must survive import → export round-trip.
+/// The exported tree content must be byte-identical to the original,
+/// producing the same SHA-1.
+#[tokio::test]
+async fn test_gitlink_tree_import_export_roundtrip() {
+    let h = BridgeTestHarness::new();
+
+    // Create a blob so the tree has a regular entry too
+    let blob_content = b"hello gitlink test\n";
+    let blob_git = make_git_blob(blob_content);
+    let blob_sha1 = compute_sha1(&blob_git);
+    h.importer.import_object(&h.repo_id, &blob_git).await.unwrap();
+
+    // Build a tree with a regular file AND a gitlink entry.
+    // Git sorts gitlinks like regular files (NUL-terminated, not '/').
+    // "README.md" < "my-submodule" lexicographically, so file comes first.
+    let submodule_sha1 = Sha1Hash::from_bytes([0xab; 20]);
+    let file_entry = make_tree_entry("100644", "README.md", &blob_sha1);
+    let gitlink_entry = make_tree_entry("160000", "my-submodule", &submodule_sha1);
+    let git_tree = make_git_tree(&[file_entry, gitlink_entry]);
+    let expected_tree_sha1 = compute_sha1(&git_tree);
+
+    // Import the tree
+    let tree_blake3 = h.importer.import_object(&h.repo_id, &git_tree).await.unwrap();
+
+    // Verify stored SHA-1 matches original
+    let (stored_sha1, _) = h.mapping.get_sha1(&h.repo_id, &tree_blake3).await.unwrap().unwrap();
+    assert_eq!(stored_sha1, expected_tree_sha1, "stored SHA-1 must match original tree SHA-1");
+
+    // Export the tree back
+    let exported = h.exporter.export_object(&h.repo_id, tree_blake3).await.unwrap();
+    assert_eq!(exported.object_type, super::mapping::GitObjectType::Tree);
+
+    // Verify export SHA-1 matches original
+    assert_eq!(exported.sha1, expected_tree_sha1, "exported SHA-1 must match original tree SHA-1");
+
+    // Verify byte-identical content by recomputing SHA-1
+    let recomputed = super::converter::sha1_hash::compute_sha1("tree", &exported.content);
+    assert_eq!(recomputed, expected_tree_sha1, "recomputed SHA-1 from exported content must match original");
+}
+
+/// Gitlink entries in a tree with name collisions (e.g., "foo" gitlink vs
+/// "foo-bar" file) must sort correctly: gitlinks get NUL (not '/') appended.
+#[tokio::test]
+async fn test_gitlink_sort_order_matches_git() {
+    let h = BridgeTestHarness::new();
+
+    // Create a blob for the file entry
+    let blob_git = make_git_blob(b"sort test");
+    let blob_sha1 = compute_sha1(&blob_git);
+    h.importer.import_object(&h.repo_id, &blob_git).await.unwrap();
+
+    // Git sorts "foo" (gitlink, NUL appended) BEFORE "foo-bar" (file)
+    // because NUL (0) < '-' (45)
+    let submodule_sha1 = Sha1Hash::from_bytes([0xcd; 20]);
+    let gitlink_entry = make_tree_entry("160000", "foo", &submodule_sha1);
+    let file_entry = make_tree_entry("100644", "foo-bar", &blob_sha1);
+    // Entries in git's correct order: gitlink first
+    let git_tree = make_git_tree(&[gitlink_entry, file_entry]);
+    let expected_sha1 = compute_sha1(&git_tree);
+
+    let tree_blake3 = h.importer.import_object(&h.repo_id, &git_tree).await.unwrap();
+    let exported = h.exporter.export_object(&h.repo_id, tree_blake3).await.unwrap();
+
+    assert_eq!(exported.sha1, expected_sha1, "sort order must match git: gitlink 'foo' before file 'foo-bar'");
+}
+
+/// DAG walk must skip gitlink entries — they reference external commits.
+#[tokio::test]
+async fn test_dag_walk_skips_gitlink_entries() {
+    use std::collections::HashSet;
+
+    let h = BridgeTestHarness::new();
+
+    // Import a blob
+    let blob_git = make_git_blob(b"dag walk test");
+    let blob_sha1 = compute_sha1(&blob_git);
+    let blob_blake3 = h.importer.import_object(&h.repo_id, &blob_git).await.unwrap();
+
+    // Import a tree with one file and one gitlink
+    let submodule_sha1 = Sha1Hash::from_bytes([0xef; 20]);
+    let file_entry = make_tree_entry("100644", "file.txt", &blob_sha1);
+    let gitlink_entry = make_tree_entry("160000", "ext-repo", &submodule_sha1);
+    let git_tree = make_git_tree(&[gitlink_entry, file_entry]);
+    let tree_blake3 = h.importer.import_object(&h.repo_id, &git_tree).await.unwrap();
+
+    // Import a commit pointing to the tree
+    let tree_sha1 = compute_sha1(&git_tree);
+    let git_commit = make_git_commit(&tree_sha1, &[], "test dag walk with gitlink\n");
+    let commit_blake3 = h.importer.import_object(&h.repo_id, &git_commit).await.unwrap();
+
+    // Export the full DAG
+    let result = h.exporter.export_commit_dag(&h.repo_id, commit_blake3, &HashSet::new()).await.unwrap();
+
+    // Should have 3 objects: blob, tree, commit. NOT the gitlink target.
+    assert_eq!(result.objects.len(), 3, "DAG should contain blob + tree + commit, not gitlink target");
+
+    let types: Vec<_> = result.objects.iter().map(|o| o.object_type).collect();
+    assert!(types.contains(&super::mapping::GitObjectType::Blob), "should contain blob");
+    assert!(types.contains(&super::mapping::GitObjectType::Tree), "should contain tree");
+    assert!(types.contains(&super::mapping::GitObjectType::Commit), "should contain commit");
+
+    // The gitlink SHA-1 should NOT appear as any exported object's SHA-1
+    for obj in &result.objects {
+        assert_ne!(obj.sha1, submodule_sha1, "gitlink target must not appear in exported objects");
+    }
+}
