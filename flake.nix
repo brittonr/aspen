@@ -3958,7 +3958,53 @@
               ''}";
             };
 
-            # kitty-cluster removed (script deleted, aspen-tui extracted)
+            # Forge web UI with a single-node cluster
+            # Usage: nix run .#forge-web
+            # Opens http://127.0.0.1:3000 with CI dashboard, cluster overview
+            forge-web = {
+              type = "app";
+              program = "${pkgs.writeShellScript "aspen-forge-web-dev" ''
+                set -e
+                DATA_DIR="$(mktemp -d /tmp/aspen-forge-web-XXXXXX)"
+                trap 'echo "Cleaning up..."; kill 0; rm -rf "$DATA_DIR"' EXIT INT TERM
+
+                echo "Starting Aspen node..."
+                ${aspenNode}/bin/aspen-node \
+                  --node-id 1 --cookie forge-web-dev \
+                  --storage redb --data-dir "$DATA_DIR" \
+                  --init --features ci,docs,hooks,automerge,blob \
+                  --relay-mode disabled \
+                  > "$DATA_DIR/node.log" 2>&1 &
+                NODE_PID=$!
+
+                # Wait for cluster ticket
+                echo "Waiting for cluster to initialize..."
+                for i in $(seq 1 30); do
+                  [ -f "$DATA_DIR/cluster-ticket.txt" ] && break
+                  sleep 1
+                done
+                if [ ! -f "$DATA_DIR/cluster-ticket.txt" ]; then
+                  echo "ERROR: cluster ticket not written after 30s"
+                  cat "$DATA_DIR/node.log"
+                  exit 1
+                fi
+                TICKET=$(cat "$DATA_DIR/cluster-ticket.txt")
+
+                echo "Starting Forge web UI..."
+                ${bins.full-aspen-forge-web}/bin/aspen-forge-web \
+                  --ticket "$TICKET" --tcp-port 3000 &
+
+                echo ""
+                echo "  Forge web UI: http://127.0.0.1:3000"
+                echo "  CI dashboard: http://127.0.0.1:3000/ci"
+                echo "  Cluster:      http://127.0.0.1:3000/cluster"
+                echo ""
+                echo "  Data dir: $DATA_DIR"
+                echo "  Press Ctrl-C to stop."
+                echo ""
+                wait
+              ''}";
+            };
 
             # Default: single development node with sensible defaults
             # Usage: nix run
