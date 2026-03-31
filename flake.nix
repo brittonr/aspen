@@ -3999,12 +3999,12 @@
 
                 echo "Starting Forge web UI..."
                 ${aspenForgeWeb}/bin/aspen-forge-web \
-                  --ticket "$TICKET" --tcp-port 3000 &
+                  --ticket "$TICKET" --tcp-port 3450 &
 
                 echo ""
-                echo "  Forge web UI: http://127.0.0.1:3000"
-                echo "  CI dashboard: http://127.0.0.1:3000/ci"
-                echo "  Cluster:      http://127.0.0.1:3000/cluster"
+                echo "  Forge web UI: http://127.0.0.1:3450"
+                echo "  CI dashboard: http://127.0.0.1:3450/ci"
+                echo "  Cluster:      http://127.0.0.1:3450/cluster"
                 echo ""
                 echo "  Data dir: $DATA_DIR"
                 echo "  Press Ctrl-C to stop."
