@@ -372,3 +372,15 @@ Fixed 4 bugs blocking 3-node dogfood:
 4. **Write forwarding Error handling + snapshot size**: `ClientRpcResponse::Error` not handled in `interpret_write_response`. MAX_SNAPSHOT_SIZE raised 512MB→1GB.
 
 Results: CI pipeline all green ✅, all 3 nodes upgraded via rolling deploy ✅. Deploy status polling times out (QUIC strained after heavy pipeline) — cosmetic only.
+
+### 2026-03-30: Fix federation clone — gitlink entries dropped during import
+
+Two bugs caused "bad tree object" during federated clone:
+
+1. **Gitlink entries (mode 160000) skipped during tree import**: `parse_git_tree_content` had `continue` for mode 160000 entries (submodules like `cloud-hypervisor`, `iroh-proxy-utils`). The original tree SHA-1 was computed from ALL entries, but the imported TreeObject was missing gitlinks → re-exported tree had different content → different SHA-1. Parent commits referenced the original SHA-1 → git said "bad tree object".
+
+2. **Sort order**: Initially tried treating gitlinks as directories (appending `/` for sort). Wrong — git's `base_name_compare` uses `S_ISDIR()` which is false for mode 160000. Gitlinks get `\0` like regular files. The wrong sort produced different byte ordering → different SHA-1.
+
+Fix: preserve gitlink entries with raw SHA-1 zero-padded to 32 bytes in the `[u8; 32]` hash field. Export uses stored SHA-1 directly. DAG walk skips gitlink entries (external commits).
+
+Results: federated clone of 34,072 objects (18 chunks) succeeded ✅. Push to bob's forge succeeded ✅. CI trigger failed (separate issue — needs CI config on bob's repo).
