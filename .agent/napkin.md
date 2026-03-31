@@ -390,3 +390,16 @@ Results: federated clone of 34,072 objects (18 chunks) succeeded ✅. Push to bo
 Root cause: `handle_git_bridge_push` in `git_bridge.rs` updated refs but never called `forge_node.announce_ref_update()`. The federation path (`federation.rs:1717`) calls it correctly, but the regular git push path via `git-remote-aspen` never wired it up. Both `dogfood-local.sh` and `dogfood-federation.sh` always fell back to manual `ci run` because the gossip `RefUpdate` announcement was never emitted.
 
 Fix: Added `announce_ref_update` call after each successful ref update in `handle_git_bridge_push`. Also resolves `old_sha1` → blake3 hash for the announcement's `old_hash` field (used by path-based trigger filters). Also set `ASPEN_CI_FEDERATION_CI_ENABLED=true` for bob in `dogfood-federation.sh` so mirror repos can auto-trigger CI.
+
+### 2026-03-31: Fix federation clone completeness — IncompleteDag error + verify_dag_integrity
+
+`export_commit_dag_collect` silently `continue`d past unresolvable BLAKE3 hashes in the BFS walk, orphaning entire subtrees. For the Aspen repo (~34K objects), this truncated federation clones to ~7.5K objects. The silent skip masked the root cause — any import gap was invisible.
+
+Fixes:
+
+1. **IncompleteDag error**: BFS now collects missing hashes and returns `BridgeError::IncompleteDag` instead of silently continuing. The error includes the missing hash list and count of successfully collected objects.
+2. **verify_dag_integrity**: New reusable function in `aspen-forge::git::bridge::integrity` that walks from ref heads, verifying all objects are reachable in KV. Replaces 130-line inline BFS in `federation_git.rs`.
+3. **Tests**: gpgsig round-trip, mergetag round-trip, 14-object DAG completeness, IncompleteDag error behavior, verify_dag_integrity.
+4. **Updated existing test**: `test_remap_missing_entry_skips_gracefully` now expects IncompleteDag instead of silent empty result.
+
+Note: The 7.5K/34K truncation was observed *before* the gitlink/gpgsig fixes (also 3/30). After those fixes, SHA-1 drift is eliminated and the convergent import should succeed completely. The IncompleteDag error makes any remaining gaps visible rather than silent.
