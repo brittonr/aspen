@@ -63,9 +63,24 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             run.has_pending_deploys,
         );
 
+        info!(
+            run_id = %run.id,
+            workflow_state = %workflow_state.state,
+            active_jobs = workflow_state.active_jobs.len(),
+            completed_jobs = workflow_state.completed_jobs.len(),
+            failed_jobs = workflow_state.failed_jobs.len(),
+            workflow_status = ?new_status,
+            "sync_run_status: workflow state check"
+        );
+
         // If workflow state doesn't show completion, check actual job statuses
         if new_status.is_none() && !workflow_state.active_jobs.is_empty() {
             new_status = self.check_active_job_statuses(&workflow_state.active_jobs, run).await;
+            info!(
+                run_id = %run.id,
+                job_check_result = ?new_status,
+                "sync_run_status: active job status check result"
+            );
         }
 
         // Always update job IDs and statuses in stages
@@ -121,19 +136,27 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
 
         for job_id in active_job_ids {
             match self.job_manager.get_job(job_id).await {
-                Ok(Some(job)) => match job.status {
-                    AspenJobStatus::Completed => {}
-                    AspenJobStatus::Failed | AspenJobStatus::Cancelled | AspenJobStatus::DeadLetter => {
-                        any_failed = true;
+                Ok(Some(job)) => {
+                    debug!(
+                        run_id = %run.id,
+                        job_id = %job_id,
+                        status = ?job.status,
+                        "check_active_job_statuses: job found"
+                    );
+                    match job.status {
+                        AspenJobStatus::Completed => {}
+                        AspenJobStatus::Failed | AspenJobStatus::Cancelled | AspenJobStatus::DeadLetter => {
+                            any_failed = true;
+                        }
+                        AspenJobStatus::Pending
+                        | AspenJobStatus::Running
+                        | AspenJobStatus::Retrying
+                        | AspenJobStatus::Scheduled
+                        | AspenJobStatus::Unknown => {
+                            all_completed = false;
+                        }
                     }
-                    AspenJobStatus::Pending
-                    | AspenJobStatus::Running
-                    | AspenJobStatus::Retrying
-                    | AspenJobStatus::Scheduled
-                    | AspenJobStatus::Unknown => {
-                        all_completed = false;
-                    }
-                },
+                }
                 Ok(None) => {
                     warn!(
                         run_id = %run.id,
