@@ -1956,6 +1956,13 @@
           });
         aspenSops = u2nSopsWorkspace.workspaceMembers."aspen-sops".build;
 
+        # aspen-forge-web
+        u2nForgeWebWorkspace = unit2nix.lib.${system}.buildFromUnitGraphAuto (u2nAutoCommon
+          // {
+            package = "aspen-forge-web";
+          });
+        aspenForgeWeb = u2nForgeWebWorkspace.workspaceMembers."aspen-forge-web".build;
+
         # aspen-sops-install-secrets: drop-in replacement for sops-nix's Go binary
         u2nSopsInstallWorkspace = unit2nix.lib.${system}.buildFromUnitGraphAuto (u2nAutoCommon
           // {
@@ -3991,7 +3998,7 @@
                 TICKET=$(cat "$DATA_DIR/cluster-ticket.txt")
 
                 echo "Starting Forge web UI..."
-                ${bins.full-aspen-forge-web}/bin/aspen-forge-web \
+                ${aspenForgeWeb}/bin/aspen-forge-web \
                   --ticket "$TICKET" --tcp-port 3000 &
 
                 echo ""
