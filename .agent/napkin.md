@@ -36,6 +36,7 @@
 | Bash `set -u` + EXIT traps | Local vars go out of scope after function returns, but EXIT trap persists. Use `${var:-}` in cleanup functions called from traps |
 | Queue item disposition | On `mark_started` failure: ACK if job is Running or NotFound (another worker has it or it's gone). RELEASE only for transient errors. Releasing Running/NotFound items causes infinite dequeue-release hot loops |
 | MAX_SNAPSHOT_SIZE | 100MB too small for CI workloads (33K git objects + build logs). Raised to 512MB. Snapshot size exceeded breaks ReadIndex → cascading read failures |
+| Deploy self-connect | iroh QUIC `Endpoint::connect()` rejects self-connections. 1-node deploy failed with "Connecting to ourself is not supported". Fixed: `IrohNodeRpcClient` detects `node_id == source_node_id` and validates artifact locally |
 
 ### Feature Gate Rules
 
