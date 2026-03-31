@@ -37,6 +37,9 @@
 | Queue item disposition | On `mark_started` failure: ACK if job is Running or NotFound (another worker has it or it's gone). RELEASE only for transient errors. Releasing Running/NotFound items causes infinite dequeue-release hot loops |
 | MAX_SNAPSHOT_SIZE | 100MB too small for CI workloads (33K git objects + build logs). Raised to 512MB. Snapshot size exceeded breaks ReadIndex → cascading read failures |
 | Deploy self-connect | iroh QUIC `Endpoint::connect()` rejects self-connections. 1-node deploy failed with "Connecting to ourself is not supported". Fixed: `IrohNodeRpcClient` detects `node_id == source_node_id` and validates artifact locally |
+| 3-node CI trigger dedup | Leader receives same RefUpdate twice: once from `notify_local_handler()` (stripped `refs/` prefix) and once from gossip broadcast. Fixed: `recent_triggers` dedup cache keyed on (repo_id, commit_hash) + leader-only processing via `is_leader` callback |
+| Pipeline false Success | `check_active_job_statuses` treated `Ok(None)` (job not found) as completed. Under forwarding failures, all jobs appear "not found" → pipeline marked Success. Fixed: treat as incomplete |
+| Forwarded RPC truncation | Under QUIC snapshot load, `recv.read_to_end()` returns 0 bytes → postcard "Hit the end of buffer". Fixed: detect empty/truncated responses, retry with fresh connection. 3-node dogfood now completes check+build stages (previously stuck at check) |
 
 ### Feature Gate Rules
 
