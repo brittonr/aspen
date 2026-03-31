@@ -3973,12 +3973,18 @@
               program = "${pkgs.writeShellScript "aspen-forge-web-dev" ''
                 set -e
                 DATA_DIR="$(mktemp -d /tmp/aspen-forge-web-XXXXXX)"
-                trap 'echo "Cleaning up..."; kill 0; rm -rf "$DATA_DIR"' EXIT INT TERM
+                cleanup() {
+                  trap - EXIT INT TERM
+                  echo "Cleaning up..."
+                  kill 0 2>/dev/null || true
+                  rm -rf "$DATA_DIR"
+                }
+                trap cleanup EXIT INT TERM
 
                 echo "Starting Aspen node..."
                 ${aspenNode}/bin/aspen-node \
                   --node-id 1 --cookie forge-web-dev \
-                  --storage redb --data-dir "$DATA_DIR" \
+                  --storage-backend redb --data-dir "$DATA_DIR" \
                   --init --features ci,docs,hooks,automerge,blob \
                   --relay-mode disabled \
                   > "$DATA_DIR/node.log" 2>&1 &
