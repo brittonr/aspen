@@ -161,6 +161,17 @@ async fn handle_raft_rpc_stream(
 
     debug!(request_type = ?request, "received Raft RPC request");
 
+    // Set response stream priority based on request type.
+    // Vote/AppendEntries responses are critical (Raft consensus).
+    // Snapshot responses are bulk (large data transfer).
+    let response_priority = match &request {
+        RaftRpcProtocol::Vote(_) | RaftRpcProtocol::AppendEntries(_) => aspen_constants::network::STREAM_PRIORITY_RAFT,
+        RaftRpcProtocol::InstallSnapshot(_) => aspen_constants::network::STREAM_PRIORITY_BULK,
+    };
+    if let Err(e) = send.set_priority(response_priority) {
+        debug!(error = %e, "failed to set response stream priority (stream closed)");
+    }
+
     // Process the RPC and create response
     let response = match request {
         RaftRpcProtocol::Vote(vote_req) => {

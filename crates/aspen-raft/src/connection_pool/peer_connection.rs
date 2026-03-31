@@ -8,6 +8,7 @@ use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
+use aspen_raft_types::StreamPriority;
 use iroh::endpoint::Connection;
 use iroh::endpoint::RecvStream;
 use iroh::endpoint::SendStream;
@@ -43,6 +44,10 @@ pub struct PeerConnection {
     stream_semaphore: Arc<Semaphore>,
     /// Active stream count (for metrics).
     active_streams: Arc<AtomicU32>,
+    /// Total Raft-priority streams opened (monotonic counter for metrics).
+    raft_streams_opened: Arc<AtomicU32>,
+    /// Total bulk-priority streams opened (monotonic counter for metrics).
+    bulk_streams_opened: Arc<AtomicU32>,
 }
 
 impl PeerConnection {
@@ -64,6 +69,8 @@ impl PeerConnection {
             health: AsyncMutex::new(ConnectionHealth::Healthy),
             stream_semaphore: Arc::new(Semaphore::new(MAX_STREAMS_PER_CONNECTION as usize)),
             active_streams: Arc::new(AtomicU32::new(0)),
+            raft_streams_opened: Arc::new(AtomicU32::new(0)),
+            bulk_streams_opened: Arc::new(AtomicU32::new(0)),
         }
     }
 
@@ -73,10 +80,15 @@ impl PeerConnection {
     /// and releases the semaphore permit when dropped. This ensures proper cleanup
     /// even if the caller forgets to close the streams or panics.
     ///
+    /// The `priority` parameter controls QUIC-level scheduling via noq's
+    /// `SendStream::set_priority()`. Critical streams (Raft heartbeats, votes)
+    /// are transmitted ahead of bulk streams (snapshots, git objects) when the
+    /// congestion window is full.
+    ///
     /// No authentication handshake is performed - NodeId was verified at connection time.
     ///
     /// Tiger Style: Enforces stream limit per connection, fails fast on unhealthy connections.
-    pub async fn acquire_stream(&self) -> Result<StreamHandle> {
+    pub async fn acquire_stream(&self, priority: StreamPriority) -> Result<StreamHandle> {
         self.acquire_stream_check_health().await?;
         let permit = self.acquire_stream_get_permit()?;
 
@@ -93,7 +105,7 @@ impl PeerConnection {
             .context("failed to open stream");
 
         match stream_result {
-            Ok(stream) => self.acquire_stream_handle_success(stream, permit).await,
+            Ok(stream) => self.acquire_stream_handle_success(stream, permit, priority).await,
             Err(err) => self.acquire_stream_handle_failure(err).await,
         }
     }
@@ -115,11 +127,12 @@ impl PeerConnection {
             .map_err(|_| anyhow::anyhow!("stream limit reached ({} streams in use)", MAX_STREAMS_PER_CONNECTION))
     }
 
-    /// Handle successful stream open: update health, create guard, return handle.
+    /// Handle successful stream open: update health, set priority, create guard, return handle.
     async fn acquire_stream_handle_success(
         &self,
         stream: (SendStream, RecvStream),
         permit: tokio::sync::OwnedSemaphorePermit,
+        priority: StreamPriority,
     ) -> Result<StreamHandle> {
         use crate::verified::transition_connection_health;
 
@@ -136,6 +149,28 @@ impl PeerConnection {
         drop(health);
 
         let (send, recv) = stream;
+
+        // Increment per-priority counter for metrics.
+        match priority {
+            StreamPriority::Critical => {
+                self.raft_streams_opened.fetch_add(1, Ordering::Relaxed);
+            }
+            StreamPriority::Bulk => {
+                self.bulk_streams_opened.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+
+        // Set QUIC stream priority before any data is written.
+        // Higher priority streams' buffered data is transmitted first by noq.
+        if let Err(e) = send.set_priority(priority.to_i32()) {
+            warn!(
+                node_id = %self.node_id,
+                priority = ?priority,
+                error = %e,
+                "failed to set stream priority (stream already closed)"
+            );
+        }
+
         let guard = StreamGuard {
             _permit: permit,
             active_streams: Arc::clone(&self.active_streams),
@@ -202,6 +237,16 @@ impl PeerConnection {
     /// Get active stream count.
     pub fn active_stream_count(&self) -> u32 {
         self.active_streams.load(Ordering::Relaxed)
+    }
+
+    /// Get total Raft-priority streams opened (monotonic).
+    pub fn raft_streams_opened(&self) -> u32 {
+        self.raft_streams_opened.load(Ordering::Relaxed)
+    }
+
+    /// Get total bulk-priority streams opened (monotonic).
+    pub fn bulk_streams_opened(&self) -> u32 {
+        self.bulk_streams_opened.load(Ordering::Relaxed)
     }
 }
 

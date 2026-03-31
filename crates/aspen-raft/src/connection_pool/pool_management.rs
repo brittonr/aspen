@@ -327,9 +327,13 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         let mut degraded = 0u32;
         let mut failed = 0u32;
         let mut total_streams = 0u32;
+        let mut raft_streams_opened = 0u32;
+        let mut bulk_streams_opened = 0u32;
 
         for conn in connections.values() {
             total_streams = total_streams.saturating_add(conn.active_stream_count());
+            raft_streams_opened = raft_streams_opened.saturating_add(conn.raft_streams_opened());
+            bulk_streams_opened = bulk_streams_opened.saturating_add(conn.bulk_streams_opened());
 
             match conn.health().await {
                 ConnectionHealth::Healthy => healthy += 1,
@@ -363,6 +367,10 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             degraded_connections: degraded,
             failed_connections: failed,
             total_active_streams: total_streams,
+            raft_streams_opened,
+            bulk_streams_opened,
+            read_index_retry_count: crate::node::read_index_retry_count(),
+            read_index_retry_success_count: crate::node::read_index_retry_success_count(),
         }
     }
 }

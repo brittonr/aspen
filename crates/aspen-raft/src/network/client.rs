@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use aspen_core::NetworkTransport;
+use aspen_raft_types::StreamPriority;
 use aspen_sharding::ShardId;
 use openraft::OptionalSend;
 use openraft::Snapshot;
@@ -146,12 +147,12 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     /// 5. Deserialize and return the response
     ///
     /// Updates failure detector and drift detector based on RPC success/failure.
-    async fn send_rpc(&self, request: RaftRpcProtocol) -> anyhow::Result<RaftRpcResponse> {
+    async fn send_rpc(&self, request: RaftRpcProtocol, priority: StreamPriority) -> anyhow::Result<RaftRpcResponse> {
         let peer_addr = self.peer_addr.as_ref().context("peer address not found in peer map")?;
 
         // Acquire connection and stream. On failure, check gossip cache for
         // a fresher address (peer may have restarted with a new port).
-        let mut stream_handle = match self.send_rpc_acquire_stream(peer_addr).await {
+        let mut stream_handle = match self.send_rpc_acquire_stream(peer_addr, priority).await {
             Ok(sh) => sh,
             Err(first_err) => {
                 if let Some(refreshed) = self.try_refresh_addr_from_gossip(peer_addr).await {
@@ -159,7 +160,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
                         target_node = %self.target,
                         "retrying RPC with gossip-refreshed address"
                     );
-                    self.send_rpc_acquire_stream(&refreshed).await?
+                    self.send_rpc_acquire_stream(&refreshed, priority).await?
                 } else {
                     return Err(first_err);
                 }
@@ -201,6 +202,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     async fn send_rpc_acquire_stream(
         &self,
         peer_addr: &iroh::EndpointAddr,
+        priority: StreamPriority,
     ) -> anyhow::Result<crate::connection_pool::StreamHandle> {
         // Get or create connection from pool
         //
@@ -230,7 +232,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         // Error classification: Stream failure with existing connection is classified
         // as ActorCrash (Iroh connected but Raft disconnected).
         peer_connection
-            .acquire_stream()
+            .acquire_stream(priority)
             .await
             .inspect_err(|err| {
                 tracing::debug!(
@@ -370,8 +372,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         let request = RaftAppendEntriesRequest { request: rpc };
         let protocol = RaftRpcProtocol::AppendEntries(request);
 
-        // Send the RPC and get response
-        let response = match self.send_rpc(protocol).await {
+        // Send the RPC and get response (Critical: heartbeats must beat bulk data)
+        let response = match self.send_rpc(protocol, StreamPriority::Critical).await {
             Ok(resp) => resp,
             Err(err) => {
                 warn!(target_node = %self.target, error = %err, "failed to send append_entries RPC");
@@ -413,8 +415,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         let request = RaftVoteRequest { request: rpc };
         let protocol = RaftRpcProtocol::Vote(request);
 
-        // Send the RPC and get response
-        let response = match self.send_rpc(protocol).await {
+        // Send the RPC and get response (Critical: votes must beat bulk data)
+        let response = match self.send_rpc(protocol, StreamPriority::Critical).await {
             Ok(resp) => resp,
             Err(err) => {
                 warn!(target_node = %self.target, error = %err, "failed to send vote RPC");
@@ -491,9 +493,9 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         };
         let protocol = RaftRpcProtocol::InstallSnapshot(request);
 
-        // Send the RPC with cancellation support
+        // Send the RPC with cancellation support (Bulk: snapshots are large)
         let response = select! {
-            send_result = self.send_rpc(protocol) => {
+            send_result = self.send_rpc(protocol, StreamPriority::Bulk) => {
                 match send_result {
                     Ok(resp) => resp,
                     Err(err) => {

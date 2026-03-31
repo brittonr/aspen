@@ -88,6 +88,10 @@ fn test_connection_pool_metrics_fields() {
         degraded_connections: 2,
         failed_connections: 1,
         total_active_streams: 25,
+        raft_streams_opened: 0,
+        bulk_streams_opened: 0,
+        read_index_retry_count: 0,
+        read_index_retry_success_count: 0,
     };
 
     assert_eq!(metrics.total_connections, 10);
@@ -112,6 +116,10 @@ fn test_connection_pool_metrics_clone_debug() {
         degraded_connections: 1,
         failed_connections: 1,
         total_active_streams: 10,
+        raft_streams_opened: 0,
+        bulk_streams_opened: 0,
+        read_index_retry_count: 0,
+        read_index_retry_success_count: 0,
     };
 
     let metrics_clone = metrics.clone();
@@ -164,6 +172,10 @@ fn test_connection_pool_metrics_edge_cases() {
         degraded_connections: 0,
         failed_connections: 0,
         total_active_streams: 0,
+        raft_streams_opened: 0,
+        bulk_streams_opened: 0,
+        read_index_retry_count: 0,
+        read_index_retry_success_count: 0,
     };
     assert_eq!(empty.total_connections, 0);
 
@@ -174,6 +186,10 @@ fn test_connection_pool_metrics_edge_cases() {
         degraded_connections: 0,
         failed_connections: 0,
         total_active_streams: 500,
+        raft_streams_opened: 0,
+        bulk_streams_opened: 0,
+        read_index_retry_count: 0,
+        read_index_retry_success_count: 0,
     };
     assert_eq!(all_healthy.healthy_connections, all_healthy.total_connections);
 
@@ -184,6 +200,10 @@ fn test_connection_pool_metrics_edge_cases() {
         degraded_connections: 0,
         failed_connections: 10,
         total_active_streams: 0,
+        raft_streams_opened: 0,
+        bulk_streams_opened: 0,
+        read_index_retry_count: 0,
+        read_index_retry_success_count: 0,
     };
     assert_eq!(all_failed.failed_connections, all_failed.total_connections);
 }

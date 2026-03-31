@@ -378,5 +378,94 @@ pub const MAX_GIT_OBJECTS_PER_PUSH: u32 = 100_000;
 /// - `git-remote-aspen/main.rs`: read_loose_object() bounded decompression
 pub const MAX_GIT_OBJECT_SIZE: u64 = 100 * 1024 * 1024;
 
+// ============================================================================
+// QUIC Stream Priority Constants
+// ============================================================================
+
+/// Stream priority for Raft consensus traffic (heartbeats, AppendEntries, Vote).
+///
+/// noq's `SendStream::set_priority(i32)` schedules higher-priority streams'
+/// buffered data before lower-priority streams'. Setting Raft RPCs to 100
+/// ensures heartbeats and quorum confirmations are transmitted ahead of bulk
+/// data (git object writes, blob transfer, snapshots) under congestion.
+///
+/// Tiger Style: Fixed priority level prevents priority inversion.
+///
+/// Used in:
+/// - `aspen-raft/connection_pool/peer_connection.rs`: `acquire_stream(Critical)`
+/// - `aspen-transport/raft.rs`: Response stream priority
+pub const STREAM_PRIORITY_RAFT: i32 = 100;
+
+/// Stream priority for bulk data traffic (snapshots, git bridge, blobs).
+///
+/// Default noq priority (0). Bulk streams yield to Raft traffic when the
+/// QUIC congestion window is full, but use full bandwidth when Raft is idle.
+///
+/// Tiger Style: Matches noq's default — no behavioral change for existing streams.
+///
+/// Used in:
+/// - `aspen-raft/connection_pool/peer_connection.rs`: `acquire_stream(Bulk)`
+/// - `aspen-transport/raft.rs`: Snapshot response priority
+pub const STREAM_PRIORITY_BULK: i32 = 0;
+
+// ============================================================================
+// Adaptive ReadIndex Retry Constants
+// ============================================================================
+
+/// Maximum retry attempts for transient ReadIndex failures on the leader.
+///
+/// During heavy write load, the leader's ReadIndex quorum confirmation can
+/// fail transiently. With QUIC stream priorities this should rarely fire,
+/// but remains as a safety net for genuine contention (e.g., snapshot install).
+///
+/// Tiger Style: Bounded retry count prevents infinite loops.
+///
+/// Used in:
+/// - `aspen-raft/node/kv_store.rs`: read/scan consistency retry loops
+pub const READ_INDEX_MAX_RETRIES: u32 = 5;
+
+/// Base backoff for ReadIndex retry in milliseconds.
+///
+/// Actual backoff is jittered: random duration between
+/// `READ_INDEX_RETRY_BASE_MS` and `2 × READ_INDEX_RETRY_BASE_MS` to prevent
+/// thundering herd when multiple concurrent reads fail simultaneously.
+///
+/// Tiger Style: Fixed base with bounded jitter.
+///
+/// Used in:
+/// - `aspen-raft/node/kv_store.rs`: read/scan consistency retry backoff
+pub const READ_INDEX_RETRY_BASE_MS: u64 = 50;
+
+/// Maximum gap between last_log_index and committed_index for ReadIndex retry.
+///
+/// If the gap exceeds this, the leader is too far behind and retrying won't
+/// help — the node should return an error instead.
+///
+/// Tiger Style: Fixed threshold prevents retrying when the cluster is unhealthy.
+pub const READ_INDEX_RETRY_MAX_LOG_GAP: u64 = 100;
+
+// ============================================================================
+// Compile-Time Constant Assertions (Stream Priority / Retry)
+// ============================================================================
+
+// Raft priority must be strictly higher than bulk priority
+const _: () = assert!(STREAM_PRIORITY_RAFT > STREAM_PRIORITY_BULK);
+
+// Raft priority must be positive
+const _: () = assert!(STREAM_PRIORITY_RAFT > 0);
+
+// Bulk priority must match noq's default (0)
+const _: () = assert!(STREAM_PRIORITY_BULK == 0);
+
+// ReadIndex retry must be bounded and positive
+const _: () = assert!(READ_INDEX_MAX_RETRIES > 0);
+const _: () = assert!(READ_INDEX_MAX_RETRIES <= 10);
+const _: () = assert!(READ_INDEX_RETRY_BASE_MS > 0);
+const _: () = assert!(READ_INDEX_RETRY_MAX_LOG_GAP > 0);
+
+// ============================================================================
+// Client ALPN
+// ============================================================================
+
 /// ALPN protocol identifier for Aspen client connections.
 pub const CLIENT_ALPN: &[u8] = b"aspen-client";

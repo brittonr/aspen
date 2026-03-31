@@ -10,6 +10,7 @@ categories = ["network-programming"]
 
 [dependencies]
 # Internal dependencies
+aspen-constants = { path = "../aspen-constants" }
 aspen-core = { workspace = true }
 
 # Vendored openraft

@@ -102,6 +102,10 @@ fn test_connection_pool_metrics_creation() {
         degraded_connections: 2,
         failed_connections: 1,
         total_active_streams: 25,
+        raft_streams_opened: 0,
+        bulk_streams_opened: 0,
+        read_index_retry_count: 0,
+        read_index_retry_success_count: 0,
     };
     assert_eq!(metrics.total_connections, 10);
     assert_eq!(metrics.healthy_connections, 7);
@@ -118,6 +122,10 @@ fn test_connection_pool_metrics_clone() {
         degraded_connections: 1,
         failed_connections: 1,
         total_active_streams: 10,
+        raft_streams_opened: 0,
+        bulk_streams_opened: 0,
+        read_index_retry_count: 0,
+        read_index_retry_success_count: 0,
     };
     let cloned = metrics.clone();
     assert_eq!(metrics.total_connections, cloned.total_connections);
@@ -135,6 +143,10 @@ fn test_connection_pool_metrics_debug() {
         degraded_connections: 1,
         failed_connections: 0,
         total_active_streams: 5,
+        raft_streams_opened: 0,
+        bulk_streams_opened: 0,
+        read_index_retry_count: 0,
+        read_index_retry_success_count: 0,
     };
     let debug_str = format!("{:?}", metrics);
     assert!(debug_str.contains("ConnectionPoolMetrics"));
@@ -150,6 +162,10 @@ fn test_connection_pool_metrics_zero_values() {
         degraded_connections: 0,
         failed_connections: 0,
         total_active_streams: 0,
+        raft_streams_opened: 0,
+        bulk_streams_opened: 0,
+        read_index_retry_count: 0,
+        read_index_retry_success_count: 0,
     };
     assert_eq!(metrics.total_connections, 0);
     assert_eq!(metrics.total_active_streams, 0);
@@ -163,6 +179,10 @@ fn test_connection_pool_metrics_max_values() {
         degraded_connections: u32::MAX,
         failed_connections: u32::MAX,
         total_active_streams: u32::MAX,
+        raft_streams_opened: 0,
+        bulk_streams_opened: 0,
+        read_index_retry_count: 0,
+        read_index_retry_success_count: 0,
     };
     assert_eq!(metrics.total_connections, u32::MAX);
 }

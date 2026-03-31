@@ -59,6 +59,7 @@ pub use network::ConnectionHealth;
 pub use network::ConnectionStatus;
 pub use network::DriftSeverity;
 pub use network::FailureType;
+pub use network::StreamPriority;
 pub use request::AppRequest;
 pub use request::AppResponse;
 

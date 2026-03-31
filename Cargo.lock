@@ -2320,6 +2320,7 @@ dependencies = [
 name = "aspen-raft-types"
 version = "0.1.0"
 dependencies = [
+ "aspen-constants",
  "aspen-core",
  "iroh",
  "irpc",

@@ -15,6 +15,40 @@ pub enum ConnectionStatus {
     Disconnected,
 }
 
+/// QUIC stream priority for Raft traffic scheduling.
+///
+/// noq (iroh's QUIC implementation) supports per-stream priority via
+/// `SendStream::set_priority(i32)`. Higher priority streams' buffered data
+/// is transmitted before lower priority streams'. This enum maps application
+/// intent to concrete priority values.
+///
+/// Used in:
+/// - `connection_pool/peer_connection.rs`: `acquire_stream(priority)`
+/// - `network/client.rs`: Raft RPC sends
+/// - `transport/raft.rs`: Raft protocol handler responses
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StreamPriority {
+    /// Raft consensus traffic: heartbeats, AppendEntries, Vote.
+    /// Scheduled ahead of bulk data under congestion.
+    Critical,
+    /// Bulk data: snapshot install, git bridge writes, blob transfer.
+    /// Yields to critical traffic when the congestion window is full.
+    Bulk,
+}
+
+impl StreamPriority {
+    /// Convert to the `i32` value expected by `SendStream::set_priority()`.
+    ///
+    /// Higher values = higher priority in noq's scheduler.
+    #[inline]
+    pub fn to_i32(self) -> i32 {
+        match self {
+            Self::Critical => aspen_constants::network::STREAM_PRIORITY_RAFT,
+            Self::Bulk => aspen_constants::network::STREAM_PRIORITY_BULK,
+        }
+    }
+}
+
 /// Classification of node failures based on connection status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FailureType {
@@ -62,6 +96,44 @@ pub enum ConnectionHealth {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // =========================================================================
+    // StreamPriority Tests
+    // =========================================================================
+
+    #[test]
+    fn test_stream_priority_to_i32() {
+        assert_eq!(StreamPriority::Critical.to_i32(), aspen_constants::network::STREAM_PRIORITY_RAFT);
+        assert_eq!(StreamPriority::Bulk.to_i32(), aspen_constants::network::STREAM_PRIORITY_BULK);
+    }
+
+    #[test]
+    fn test_stream_priority_critical_higher_than_bulk() {
+        assert!(StreamPriority::Critical.to_i32() > StreamPriority::Bulk.to_i32());
+    }
+
+    #[test]
+    fn test_stream_priority_equality() {
+        assert_eq!(StreamPriority::Critical, StreamPriority::Critical);
+        assert_eq!(StreamPriority::Bulk, StreamPriority::Bulk);
+        assert_ne!(StreamPriority::Critical, StreamPriority::Bulk);
+    }
+
+    #[test]
+    fn test_stream_priority_copy() {
+        let p = StreamPriority::Critical;
+        let copied = p;
+        assert_eq!(p, copied);
+    }
+
+    #[test]
+    fn test_stream_priority_serde_roundtrip() {
+        for p in [StreamPriority::Critical, StreamPriority::Bulk] {
+            let json = serde_json::to_string(&p).expect("serialize");
+            let deserialized: StreamPriority = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(p, deserialized);
+        }
+    }
 
     // =========================================================================
     // ConnectionStatus Tests

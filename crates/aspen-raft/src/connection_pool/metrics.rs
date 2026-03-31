@@ -13,4 +13,12 @@ pub struct ConnectionPoolMetrics {
     pub failed_connections: u32,
     /// Total active streams across all connections.
     pub total_active_streams: u32,
+    /// Total Raft-priority (critical) streams opened across all connections.
+    pub raft_streams_opened: u32,
+    /// Total bulk-priority streams opened across all connections.
+    pub bulk_streams_opened: u32,
+    /// Total ReadIndex retry attempts.
+    pub read_index_retry_count: u64,
+    /// Total ReadIndex operations that succeeded after retrying.
+    pub read_index_retry_success_count: u64,
 }

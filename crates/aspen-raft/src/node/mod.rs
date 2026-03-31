@@ -30,6 +30,8 @@ mod cluster_controller;
 mod conversions;
 mod health;
 mod kv_store;
+pub use kv_store::read_index_retry_count;
+pub use kv_store::read_index_retry_success_count;
 mod membership_refresh;
 #[cfg(feature = "sql")]
 mod sql;

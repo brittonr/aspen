@@ -1,6 +1,27 @@
 //! KeyValueStore trait implementation for RaftNode.
 
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
+
+/// Global counter: total ReadIndex retry attempts across all RaftNode instances.
+///
+/// Uses a static atomic because RaftNode construction is complex and threading
+/// an Arc through the builder chain for metrics-only counters is not worth it.
+static READ_INDEX_RETRY_COUNT: AtomicU64 = AtomicU64::new(0);
+
+/// Global counter: ReadIndex operations that succeeded after retrying.
+static READ_INDEX_RETRY_SUCCESS_COUNT: AtomicU64 = AtomicU64::new(0);
+
+/// Get the current ReadIndex retry count (for metrics collection).
+pub fn read_index_retry_count() -> u64 {
+    READ_INDEX_RETRY_COUNT.load(Ordering::Relaxed)
+}
+
+/// Get the current ReadIndex retry success count (for metrics collection).
+pub fn read_index_retry_success_count() -> u64 {
+    READ_INDEX_RETRY_SUCCESS_COUNT.load(Ordering::Relaxed)
+}
 
 use aspen_constants::api::DEFAULT_SCAN_LIMIT;
 use aspen_constants::api::MAX_SCAN_RESULTS;
@@ -352,59 +373,72 @@ impl RaftNode {
         self.read_ensure_linearizable_with_policy(ReadPolicy::ReadIndex).await
     }
 
-    /// Maximum retry attempts for transient ReadIndex failures on the leader.
-    /// During heavy write load (e.g. git push), the leader's ReadIndex quorum
-    /// confirmation can fail transiently. Retrying avoids returning NotLeader
-    /// when we ARE the leader.
-    const READ_INDEX_RETRIES: u32 = 3;
-
-    /// Read consistency check with retry for transient leader-side ReadIndex failures.
+    /// Read consistency check with adaptive retry for transient leader-side ReadIndex failures.
     ///
-    /// When the leader's own ReadIndex fails (quorum timeout under load), retrying
-    /// typically succeeds within 1-2 attempts. Without this, the leader would
-    /// return NotLeader to callers even though it IS the leader, because iroh
-    /// can't self-connect so forwarding to self is impossible.
+    /// Uses Raft metrics (leader identity, log lag) to decide whether a retry is
+    /// warranted. Only retries when this node believes it is still the leader and
+    /// the log is reasonably current. Jittered backoff prevents thundering herd.
+    ///
+    /// With QUIC stream priorities (heartbeats scheduled ahead of bulk data),
+    /// these retries should rarely fire — but they remain as a safety net for
+    /// genuine contention (e.g., during snapshot install).
     async fn read_ensure_consistency_with_retry(&self, consistency: ReadConsistency) -> Result<(), KeyValueStoreError> {
-        let mut last_err = None;
-        for attempt in 0..Self::READ_INDEX_RETRIES {
-            match self.read_ensure_consistency(consistency).await {
-                Ok(()) => return Ok(()),
-                Err(e @ KeyValueStoreError::NotLeader { leader, .. }) => {
-                    // Only retry if the leader hint points to us (transient self-failure)
-                    if leader == Some(self.node_id().0) && attempt + 1 < Self::READ_INDEX_RETRIES {
-                        debug!(
-                            node_id = self.node_id().0,
-                            attempt = attempt + 1,
-                            "ReadIndex failed on leader, retrying"
-                        );
-                        tokio::time::sleep(Duration::from_millis(50 * (attempt as u64 + 1))).await;
-                        last_err = Some(e);
-                        continue;
-                    }
-                    return Err(e);
-                }
-                Err(e) => return Err(e),
-            }
-        }
-        Err(last_err.unwrap_or_else(|| KeyValueStoreError::Failed {
-            reason: "read consistency retries exhausted".to_string(),
-        }))
+        self.retry_read_index(|this| Box::pin(this.read_ensure_consistency(consistency)), "read").await
     }
 
-    /// Scan linearizable check with retry for transient leader-side ReadIndex failures.
+    /// Scan linearizable check with adaptive retry.
     async fn scan_ensure_linearizable_with_retry(&self) -> Result<(), KeyValueStoreError> {
+        self.retry_read_index(|this| Box::pin(this.scan_ensure_linearizable()), "scan").await
+    }
+
+    /// Generic adaptive ReadIndex retry loop.
+    ///
+    /// Calls the provided async function, retrying on transient NotLeader errors
+    /// when this node is the leader with a reasonably current log.
+    async fn retry_read_index<F>(&self, op: F, label: &str) -> Result<(), KeyValueStoreError>
+    where F: Fn(
+            &Self,
+        )
+            -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), KeyValueStoreError>> + Send + '_>> {
+        use aspen_constants::network::READ_INDEX_MAX_RETRIES;
+        use aspen_constants::network::READ_INDEX_RETRY_BASE_MS;
+
+        use crate::verified::should_retry_read_index;
+
         let mut last_err = None;
-        for attempt in 0..Self::READ_INDEX_RETRIES {
-            match self.scan_ensure_linearizable().await {
-                Ok(()) => return Ok(()),
-                Err(e @ KeyValueStoreError::NotLeader { leader, .. }) => {
-                    if leader == Some(self.node_id().0) && attempt + 1 < Self::READ_INDEX_RETRIES {
+        for attempt in 0..READ_INDEX_MAX_RETRIES {
+            match op(self).await {
+                Ok(()) => {
+                    if attempt > 0 {
+                        READ_INDEX_RETRY_SUCCESS_COUNT.fetch_add(1, Ordering::Relaxed);
+                        debug!(node_id = self.node_id().0, attempt, label, "ReadIndex succeeded after retry");
+                    }
+                    return Ok(());
+                }
+                Err(e @ KeyValueStoreError::NotLeader { .. }) => {
+                    // Use Raft metrics to decide if retry is warranted
+                    let metrics = self.raft().metrics().borrow().clone();
+                    let current_leader = metrics.current_leader.map(|id| id.0);
+                    let last_log_index = metrics.last_log_index.unwrap_or(0);
+                    let committed_index = metrics.last_applied.map(|li| li.index).unwrap_or(0);
+
+                    let should_retry =
+                        should_retry_read_index(current_leader, self.node_id().0, last_log_index, committed_index);
+
+                    if should_retry && attempt + 1 < READ_INDEX_MAX_RETRIES {
+                        READ_INDEX_RETRY_COUNT.fetch_add(1, Ordering::Relaxed);
+                        // Jittered backoff: random between base and 2*base
+                        let jitter = rand::random_range(0..=READ_INDEX_RETRY_BASE_MS);
+                        let backoff_ms = READ_INDEX_RETRY_BASE_MS + jitter;
                         debug!(
                             node_id = self.node_id().0,
                             attempt = attempt + 1,
-                            "ReadIndex failed on leader (scan), retrying"
+                            backoff_ms,
+                            log_gap = last_log_index.saturating_sub(committed_index),
+                            label,
+                            "ReadIndex failed on leader, retrying with jittered backoff"
                         );
-                        tokio::time::sleep(Duration::from_millis(50 * (attempt as u64 + 1))).await;
+                        tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
                         last_err = Some(e);
                         continue;
                     }
@@ -414,7 +448,7 @@ impl RaftNode {
             }
         }
         Err(last_err.unwrap_or_else(|| KeyValueStoreError::Failed {
-            reason: "scan consistency retries exhausted".to_string(),
+            reason: format!("{} consistency retries exhausted", label),
         }))
     }
 

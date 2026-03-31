@@ -39,6 +39,7 @@ mod integrity;
 pub mod kv;
 pub mod membership;
 mod network;
+pub mod read_index;
 pub mod scan;
 mod write_batcher;
 
@@ -184,15 +185,17 @@ pub use network::deserialize_rpc_response;
 // Sharded Message Handling
 pub use network::extract_sharded_response;
 pub use network::maybe_prefix_shard_id;
-// Pagination Logic
-pub use scan::PaginationResult;
-pub use scan::compute_pagination_result;
-pub use scan::compute_safe_scan_limit;
 // ============================================================================
 // Re-exports: Scan and Pagination
 // ============================================================================
 
 // Continuation Tokens
+// ReadIndex Retry
+pub use read_index::should_retry_read_index;
+// Pagination Logic
+pub use scan::PaginationResult;
+pub use scan::compute_pagination_result;
+pub use scan::compute_safe_scan_limit;
 pub use scan::decode_continuation_token;
 pub use scan::encode_continuation_token;
 pub use scan::filter_kv_pairs_after_token;
