@@ -81,6 +81,10 @@ pub enum BridgeError {
     #[snafu(display("DAG traversal depth exceeded: {depth} > {max}"))]
     DepthExceeded { depth: u32, max: u32 },
 
+    /// DAG walk encountered unresolvable objects.
+    #[snafu(display("incomplete DAG: {exported} objects collected, {} unresolvable", missing.len()))]
+    IncompleteDag { missing: Vec<String>, exported: u32 },
+
     // ========================================================================
     // Batch Limits (Tiger Style)
     // ========================================================================

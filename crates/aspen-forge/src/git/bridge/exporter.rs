@@ -292,6 +292,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         let mut to_export: Vec<(blake3::Hash, SignedObject<GitObject>)> = Vec::new();
         let mut visited: HashSet<blake3::Hash> = HashSet::new();
         let mut queue: VecDeque<blake3::Hash> = VecDeque::new();
+        let mut missing: Vec<String> = Vec::new();
         let mut skipped = 0;
         let mut depth = 0;
 
@@ -359,22 +360,35 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                                 continue;
                             }
 
-                            let b = self.read_object_bytes(repo_id, mirror_b3).await?;
-                            (mirror_b3, b)
+                            match self.read_object_bytes(repo_id, mirror_b3).await {
+                                Ok(b) => (mirror_b3, b),
+                                Err(BridgeError::ObjectNotFound { .. }) => {
+                                    tracing::warn!(
+                                        blake3 = %hex::encode(blake3.as_bytes()),
+                                        mirror_blake3 = %hex::encode(mirror_b3.as_bytes()),
+                                        "remapped object also not found in DAG walk"
+                                    );
+                                    missing.push(hex::encode(blake3.as_bytes()));
+                                    continue;
+                                }
+                                Err(e) => return Err(e),
+                            }
                         }
                         Ok(None) => {
                             tracing::warn!(
                                 blake3 = %hex::encode(blake3.as_bytes()),
                                 "unresolvable BLAKE3 hash in DAG walk: not found directly and no remap entry"
                             );
+                            missing.push(hex::encode(blake3.as_bytes()));
                             continue;
                         }
                         Err(e) => {
                             tracing::warn!(
                                 blake3 = %hex::encode(blake3.as_bytes()),
                                 error = %e,
-                                "remap lookup failed during DAG walk, skipping"
+                                "remap lookup failed during DAG walk"
                             );
+                            missing.push(hex::encode(blake3.as_bytes()));
                             continue;
                         }
                     }
@@ -385,6 +399,13 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
             let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes)?;
             Self::export_commit_dag_queue_deps(&mut queue, &signed.payload);
             to_export.push((effective_blake3, signed));
+        }
+
+        if !missing.is_empty() {
+            return Err(BridgeError::IncompleteDag {
+                exported: to_export.len() as u32,
+                missing,
+            });
         }
 
         Ok((to_export, skipped))

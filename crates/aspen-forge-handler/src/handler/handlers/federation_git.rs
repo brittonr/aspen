@@ -396,162 +396,30 @@ async fn sync_from_origin(
     // Update sync timestamp
     let _ = update_mirror_sync_timestamp(forge_node, &fed_id_str).await;
 
-    // DAG integrity diagnostic: count stored objects vs reachable objects.
+    // DAG integrity diagnostic: verify all objects reachable from ref heads.
     // Runs AFTER refs are set so the BFS walk can start from ref heads.
     {
-        let mirror_hex = hex::encode(mirror_repo_id.0);
-        let obj_prefix = format!("forge:obj:{}:", mirror_hex);
-        let refs_prefix = format!("forge:refs:{}:", mirror_hex);
-
-        // Count total stored objects
-        let stored_count = match forge_node
-            .kv()
-            .scan(aspen_core::ScanRequest {
-                prefix: obj_prefix.clone(),
-                limit_results: Some(50_000),
-                continuation_token: None,
-            })
-            .await
-        {
-            Ok(r) => r.entries.len() as u32,
-            Err(_) => 0,
-        };
-
-        // Scan ref heads
-        let ref_heads: Vec<(String, [u8; 32])> = match forge_node
-            .kv()
-            .scan(aspen_core::ScanRequest {
-                prefix: refs_prefix.clone(),
-                limit_results: Some(100),
-                continuation_token: None,
-            })
-            .await
-        {
-            Ok(r) => r
-                .entries
-                .into_iter()
-                .filter_map(|e| {
-                    let ref_name = e.key.strip_prefix(&format!("{}:", refs_prefix.trim_end_matches(':')));
-                    let hash_bytes = hex::decode(e.value.trim()).ok();
-                    match (ref_name, hash_bytes) {
-                        (Some(name), Some(bytes)) if bytes.len() == 32 => {
-                            let mut h = [0u8; 32];
-                            h.copy_from_slice(&bytes);
-                            Some((name.to_string(), h))
-                        }
-                        _ => None,
-                    }
-                })
-                .collect(),
-            Err(_) => vec![],
-        };
-
-        // BFS walk from each ref head to count reachable objects
-        let mut reachable = std::collections::HashSet::new();
-        let mut queue: std::collections::VecDeque<[u8; 32]> = std::collections::VecDeque::new();
-        let mut missing_refs: Vec<String> = Vec::new();
-
-        for (_ref_name, head_hash) in &ref_heads {
-            if !reachable.contains(head_hash) {
-                queue.push_back(*head_hash);
-            }
-        }
-
-        let mut walk_errors = 0u32;
-        while let Some(hash) = queue.pop_front() {
-            if reachable.contains(&hash) {
-                continue;
-            }
-            reachable.insert(hash);
-
-            // Read the object
-            let obj_key = format!("{}{}", obj_prefix, hex::encode(hash));
-            let obj_data = match forge_node.kv().read(aspen_core::ReadRequest::new(obj_key)).await {
-                Ok(r) => r.kv.map(|kv| kv.value),
-                Err(_) => None,
-            };
-
-            let Some(obj_b64) = obj_data else {
-                walk_errors += 1;
-                if walk_errors <= 10 {
-                    missing_refs.push(hex::encode(hash));
-                    tracing::warn!(
-                        blake3 = %hex::encode(hash),
-                        "DAG walk: object referenced but not stored in KV"
-                    );
-                }
-                continue;
-            };
-
-            // Decode and extract child references
-            use base64::Engine as _;
-            let Ok(obj_bytes) = base64::engine::general_purpose::STANDARD.decode(obj_b64.trim()) else {
-                continue;
-            };
-            let Ok(signed) = aspen_forge::SignedObject::<aspen_forge::GitObject>::from_bytes(&obj_bytes) else {
-                continue;
-            };
-
-            match &signed.payload {
-                aspen_forge::GitObject::Commit(c) => {
-                    queue.push_back(*c.tree().as_bytes());
-                    for p in c.parents() {
-                        queue.push_back(*p.as_bytes());
-                    }
-                }
-                aspen_forge::GitObject::Tree(t) => {
-                    for entry in &t.entries {
-                        queue.push_back(entry.hash);
-                    }
-                }
-                aspen_forge::GitObject::Tag(tag) => {
-                    queue.push_back(*tag.target().as_bytes());
-                }
-                aspen_forge::GitObject::Blob(_) => {}
-            }
-        }
-
-        let reachable_count = reachable.len() as u32;
-        let unreachable_count = stored_count.saturating_sub(reachable_count);
-
-        // Count SHA-1 mappings (= total unique imported objects)
-        let sha1_prefix = format!("forge:hashmap:sha1:{}:", mirror_hex);
-        let mapping_count = match forge_node
-            .kv()
-            .scan(aspen_core::ScanRequest {
-                prefix: sha1_prefix,
-                limit_results: Some(50_000),
-                continuation_token: None,
-            })
-            .await
-        {
-            Ok(r) => r.entries.len() as u32,
-            Err(_) => 0,
-        };
+        let result = aspen_forge::git::bridge::verify_dag_integrity(forge_node.kv().as_ref(), mirror_repo_id).await;
 
         let transferred = all_git_objects.len() as u32;
 
-        if unreachable_count > 0 || walk_errors > 0 {
+        if !result.is_complete() {
             tracing::warn!(
                 origin = %origin_key,
-                mirror_repo = %mirror_hex,
                 transferred = transferred,
-                sha1_mappings = mapping_count,
-                stored_objects = stored_count,
-                reachable = reachable_count,
-                unreachable = unreachable_count,
-                walk_errors = walk_errors,
-                ref_heads_found = ref_heads.len(),
-                missing_blake3 = ?missing_refs,
+                stored_objects = result.total_stored,
+                reachable = result.reachable,
+                missing_count = result.missing.len(),
+                ref_heads_found = result.ref_heads.len(),
+                first_missing = ?result.missing.iter().take(10).collect::<Vec<_>>(),
                 "DAG integrity: mirror has unreachable objects"
             );
         } else {
             tracing::info!(
                 origin = %origin_key,
                 transferred = transferred,
-                sha1_mappings = mapping_count,
-                stored_objects = stored_count,
-                reachable = reachable_count,
+                stored_objects = result.total_stored,
+                reachable = result.reachable,
                 "DAG integrity: all stored objects are reachable"
             );
         }

@@ -2049,10 +2049,17 @@ async fn test_remap_missing_entry_skips_gracefully() {
     assert_eq!(result.objects.len(), 3);
 
     // Now try with a fabricated BLAKE3 that doesn't exist and has no remap.
-    // The exporter should return an empty result (skip the unresolvable root).
+    // The exporter should return IncompleteDag (not silently skip).
     let fake_b3 = blake3::hash(b"does not exist");
-    let result = h.exporter.export_commit_dag(&h.repo_id, fake_b3, &std::collections::HashSet::new()).await.unwrap();
-    assert_eq!(result.objects.len(), 0, "unresolvable root should be skipped");
+    let result = h.exporter.export_commit_dag(&h.repo_id, fake_b3, &std::collections::HashSet::new()).await;
+    match result {
+        Err(super::error::BridgeError::IncompleteDag { missing, exported }) => {
+            assert_eq!(missing.len(), 1, "should report the unresolvable root");
+            assert_eq!(exported, 0, "no objects collected before hitting the missing root");
+        }
+        Err(e) => panic!("expected IncompleteDag, got: {:?}", e),
+        Ok(r) => panic!("expected error for missing root, got {} objects", r.objects.len()),
+    }
 }
 
 // ============================================================================
@@ -2245,4 +2252,304 @@ async fn test_dag_walk_skips_gitlink_entries() {
     for obj in &result.objects {
         assert_ne!(obj.sha1, submodule_sha1, "gitlink target must not appear in exported objects");
     }
+}
+
+/// Build a git commit with gpgsig header.
+fn make_git_commit_with_gpgsig(tree_sha1: &Sha1Hash, parents: &[&Sha1Hash], message: &str, gpgsig: &str) -> Vec<u8> {
+    let mut content = String::new();
+    content.push_str(&format!("tree {}\n", tree_sha1));
+    for parent in parents {
+        content.push_str(&format!("parent {}\n", parent));
+    }
+    content.push_str("author Test User <test@example.com> 1700000000 +0000\n");
+    content.push_str("committer Test User <test@example.com> 1700000000 +0000\n");
+    content.push_str(&format!("gpgsig {}\n", gpgsig));
+    content.push('\n');
+    content.push_str(message);
+    if !message.ends_with('\n') {
+        content.push('\n');
+    }
+
+    let header = format!("commit {}\0", content.len());
+    let mut bytes = Vec::with_capacity(header.len() + content.len());
+    bytes.extend_from_slice(header.as_bytes());
+    bytes.extend_from_slice(content.as_bytes());
+    bytes
+}
+
+/// FCLONE-3: gpgsig multi-line header round-trips with identical SHA-1.
+#[tokio::test]
+async fn test_gpgsig_commit_roundtrip() {
+    let h = BridgeTestHarness::new();
+
+    // Import a blob and tree first (commit needs them)
+    let blob_bytes = make_git_blob(b"gpgsig test content\n");
+    let blob_b3 = h.importer.import_object(&h.repo_id, &blob_bytes).await.unwrap();
+    let blob_sha1 = compute_sha1(&blob_bytes);
+
+    let tree_bytes = make_git_tree(&[make_tree_entry("100644", "file.txt", &blob_sha1)]);
+    let tree_b3 = h.importer.import_object(&h.repo_id, &tree_bytes).await.unwrap();
+    let tree_sha1 = compute_sha1(&tree_bytes);
+    let _ = blob_b3;
+    let _ = tree_b3;
+
+    // Multi-line gpgsig header (realistic PGP signature)
+    let gpgsig = "-----BEGIN PGP SIGNATURE-----\n \
+     \n wsBcBAABCAAQBJgmGBYJCK8XhQkF4U0AACgkQLSPDwDyr8VN\n \
+     ABkIAB0GnOMZVxxx9GY0jMfzGIH+bQIA\n \
+     =abcd\n \
+     -----END PGP SIGNATURE-----";
+
+    let commit_bytes = make_git_commit_with_gpgsig(&tree_sha1, &[], "signed commit\n", gpgsig);
+    let original_sha1 = compute_sha1(&commit_bytes);
+
+    let commit_b3 = h.importer.import_object(&h.repo_id, &commit_bytes).await.unwrap();
+
+    // Export and check SHA-1 matches
+    let exported = h.exporter.export_object(&h.repo_id, commit_b3).await.unwrap();
+    assert_eq!(exported.sha1, original_sha1, "gpgsig commit SHA-1 must survive import/export round-trip");
+    assert_eq!(exported.object_type, GitObjectType::Commit);
+}
+
+/// FCLONE-3: mergetag header round-trips with identical SHA-1.
+#[tokio::test]
+async fn test_mergetag_commit_roundtrip() {
+    let h = BridgeTestHarness::new();
+
+    let blob_bytes = make_git_blob(b"mergetag test\n");
+    h.importer.import_object(&h.repo_id, &blob_bytes).await.unwrap();
+    let blob_sha1 = compute_sha1(&blob_bytes);
+
+    let tree_bytes = make_git_tree(&[make_tree_entry("100644", "f.txt", &blob_sha1)]);
+    h.importer.import_object(&h.repo_id, &tree_bytes).await.unwrap();
+    let tree_sha1 = compute_sha1(&tree_bytes);
+
+    // Commit with mergetag + encoding extra headers
+    let mut content = String::new();
+    content.push_str(&format!("tree {}\n", tree_sha1));
+    content.push_str("author Test User <test@example.com> 1700000000 +0000\n");
+    content.push_str("committer Test User <test@example.com> 1700000000 +0000\n");
+    content.push_str("mergetag object abc123def456789012345678901234567890abcd\n");
+    content.push_str(" type commit\n");
+    content.push_str(" tag v1.0\n");
+    content.push_str("encoding UTF-8\n");
+    content.push_str("\n");
+    content.push_str("merge with extra headers\n");
+
+    let header = format!("commit {}\0", content.len());
+    let mut commit_bytes = Vec::new();
+    commit_bytes.extend_from_slice(header.as_bytes());
+    commit_bytes.extend_from_slice(content.as_bytes());
+
+    let original_sha1 = compute_sha1(&commit_bytes);
+    let commit_b3 = h.importer.import_object(&h.repo_id, &commit_bytes).await.unwrap();
+
+    let exported = h.exporter.export_object(&h.repo_id, commit_b3).await.unwrap();
+    assert_eq!(exported.sha1, original_sha1, "mergetag+encoding commit SHA-1 must survive round-trip");
+}
+
+/// FCLONE-4: Import a multi-level DAG, export from HEAD, verify all objects present.
+///
+/// DAG structure:
+///   commit2 (HEAD, merge) ─┬─ commit1 ─── commit0 (root)
+///   │                      │   │            │
+///   tree2                  │   tree1        tree0
+///   ├── dir/ (subtree1)    │   └── a.txt    └── readme.txt
+///   │   └── nested.txt     │       (blob1)      (blob0)
+///   └── b.txt (blob2)      │
+///                          └─ commit1b (branch)
+///                              │
+///                              tree1b
+///                              └── c.txt (blob3)
+///
+/// Total: 4 blobs + 4 trees (tree0, tree1, subtree1, tree2, tree1b) = 5 trees
+///        + 4 commits = 13 objects
+#[tokio::test]
+async fn test_federation_import_export_dag_completeness() {
+    let h = BridgeTestHarness::new();
+
+    // ── blobs ───
+    let blob0_bytes = make_git_blob(b"readme content\n");
+    let blob0_sha1 = compute_sha1(&blob0_bytes);
+    h.importer.import_object(&h.repo_id, &blob0_bytes).await.unwrap();
+
+    let blob1_bytes = make_git_blob(b"file a content\n");
+    let blob1_sha1 = compute_sha1(&blob1_bytes);
+    h.importer.import_object(&h.repo_id, &blob1_bytes).await.unwrap();
+
+    let blob2_bytes = make_git_blob(b"file b content\n");
+    let blob2_sha1 = compute_sha1(&blob2_bytes);
+    h.importer.import_object(&h.repo_id, &blob2_bytes).await.unwrap();
+
+    let blob3_bytes = make_git_blob(b"file c content\n");
+    let blob3_sha1 = compute_sha1(&blob3_bytes);
+    h.importer.import_object(&h.repo_id, &blob3_bytes).await.unwrap();
+
+    let blob_nested_bytes = make_git_blob(b"nested content\n");
+    let blob_nested_sha1 = compute_sha1(&blob_nested_bytes);
+    h.importer.import_object(&h.repo_id, &blob_nested_bytes).await.unwrap();
+
+    // ── trees ───
+    let tree0_bytes = make_git_tree(&[make_tree_entry("100644", "readme.txt", &blob0_sha1)]);
+    let tree0_sha1 = compute_sha1(&tree0_bytes);
+    h.importer.import_object(&h.repo_id, &tree0_bytes).await.unwrap();
+
+    let tree1_bytes = make_git_tree(&[make_tree_entry("100644", "a.txt", &blob1_sha1)]);
+    let tree1_sha1 = compute_sha1(&tree1_bytes);
+    h.importer.import_object(&h.repo_id, &tree1_bytes).await.unwrap();
+
+    let subtree1_bytes = make_git_tree(&[make_tree_entry("100644", "nested.txt", &blob_nested_sha1)]);
+    let subtree1_sha1 = compute_sha1(&subtree1_bytes);
+    h.importer.import_object(&h.repo_id, &subtree1_bytes).await.unwrap();
+
+    let tree2_bytes = make_git_tree(&[
+        make_tree_entry("100644", "b.txt", &blob2_sha1),
+        make_tree_entry("40000", "dir", &subtree1_sha1),
+    ]);
+    let tree2_sha1 = compute_sha1(&tree2_bytes);
+    h.importer.import_object(&h.repo_id, &tree2_bytes).await.unwrap();
+
+    let tree1b_bytes = make_git_tree(&[make_tree_entry("100644", "c.txt", &blob3_sha1)]);
+    let tree1b_sha1 = compute_sha1(&tree1b_bytes);
+    h.importer.import_object(&h.repo_id, &tree1b_bytes).await.unwrap();
+
+    // ── commits ───
+    let commit0_bytes = make_git_commit(&tree0_sha1, &[], "initial commit");
+    let commit0_sha1 = compute_sha1(&commit0_bytes);
+    let commit0_b3 = h.importer.import_object(&h.repo_id, &commit0_bytes).await.unwrap();
+    let _ = commit0_b3;
+
+    let commit1_bytes = make_git_commit(&tree1_sha1, &[&commit0_sha1], "add a.txt");
+    let commit1_sha1 = compute_sha1(&commit1_bytes);
+    h.importer.import_object(&h.repo_id, &commit1_bytes).await.unwrap();
+
+    let commit1b_bytes = make_git_commit(&tree1b_sha1, &[&commit0_sha1], "branch commit");
+    let commit1b_sha1 = compute_sha1(&commit1b_bytes);
+    h.importer.import_object(&h.repo_id, &commit1b_bytes).await.unwrap();
+
+    // Merge commit: two parents
+    let commit2_bytes = make_git_commit(&tree2_sha1, &[&commit1_sha1, &commit1b_sha1], "merge");
+    let commit2_sha1 = compute_sha1(&commit2_bytes);
+    let commit2_b3 = h.importer.import_object(&h.repo_id, &commit2_bytes).await.unwrap();
+
+    // Set ref
+    h.importer.update_ref(&h.repo_id, "refs/heads/main", commit2_sha1).await.unwrap();
+
+    // ── export the full DAG ───
+    let export = h
+        .exporter
+        .export_commit_dag(&h.repo_id, commit2_b3, &std::collections::HashSet::new())
+        .await
+        .unwrap();
+
+    // 5 blobs + 5 trees + 4 commits = 14 objects
+    assert_eq!(
+        export.objects.len(),
+        14,
+        "export must include all 14 objects in the DAG (got {})",
+        export.objects.len(),
+    );
+
+    // Verify all SHA-1s are present
+    let exported_sha1s: std::collections::HashSet<_> = export.objects.iter().map(|o| o.sha1).collect();
+    assert!(exported_sha1s.contains(&blob0_sha1), "missing blob0");
+    assert!(exported_sha1s.contains(&blob1_sha1), "missing blob1");
+    assert!(exported_sha1s.contains(&blob2_sha1), "missing blob2");
+    assert!(exported_sha1s.contains(&blob3_sha1), "missing blob3");
+    assert!(exported_sha1s.contains(&blob_nested_sha1), "missing blob_nested");
+    assert!(exported_sha1s.contains(&tree0_sha1), "missing tree0");
+    assert!(exported_sha1s.contains(&tree1_sha1), "missing tree1");
+    assert!(exported_sha1s.contains(&tree2_sha1), "missing tree2");
+    assert!(exported_sha1s.contains(&subtree1_sha1), "missing subtree1");
+    assert!(exported_sha1s.contains(&tree1b_sha1), "missing tree1b");
+    assert!(exported_sha1s.contains(&commit0_sha1), "missing commit0");
+    assert!(exported_sha1s.contains(&commit1_sha1), "missing commit1");
+    assert!(exported_sha1s.contains(&commit1b_sha1), "missing commit1b");
+    assert!(exported_sha1s.contains(&commit2_sha1), "missing commit2 (HEAD)");
+}
+
+/// FCLONE-1: export_commit_dag returns IncompleteDag when objects are missing.
+#[tokio::test]
+async fn test_export_dag_returns_error_on_missing_objects() {
+    let h = BridgeTestHarness::new();
+
+    // Import a blob and tree
+    let blob_bytes = make_git_blob(b"exists\n");
+    let blob_sha1 = compute_sha1(&blob_bytes);
+    h.importer.import_object(&h.repo_id, &blob_bytes).await.unwrap();
+
+    let tree_bytes = make_git_tree(&[make_tree_entry("100644", "f.txt", &blob_sha1)]);
+    let tree_sha1 = compute_sha1(&tree_bytes);
+    h.importer.import_object(&h.repo_id, &tree_bytes).await.unwrap();
+
+    // Create a commit that references this tree
+    let commit_bytes = make_git_commit(&tree_sha1, &[], "ok commit");
+    let commit_sha1 = compute_sha1(&commit_bytes);
+    let commit_b3 = h.importer.import_object(&h.repo_id, &commit_bytes).await.unwrap();
+
+    // Now create a second commit whose parent is the first, but whose tree
+    // references a blob that does NOT exist in the store.
+    // To do this, we manually construct a tree with a fake SHA-1 mapping.
+    let fake_blob_sha1 = Sha1Hash::from_bytes([0xDE; 20]);
+    let fake_blob_b3 = blake3::hash(b"fake-blob-that-doesnt-exist");
+    // Store the SHA-1 → BLAKE3 mapping but NOT the actual object bytes
+    h.mapping.store(&h.repo_id, fake_blob_b3, fake_blob_sha1, GitObjectType::Blob).await.unwrap();
+
+    // Build tree referencing the fake blob
+    let tree2_bytes = make_git_tree(&[make_tree_entry("100644", "missing.txt", &fake_blob_sha1)]);
+    let tree2_sha1 = compute_sha1(&tree2_bytes);
+    h.importer.import_object(&h.repo_id, &tree2_bytes).await.unwrap();
+
+    // Build commit2 referencing tree2 with commit as parent
+    let commit2_bytes = make_git_commit(&tree2_sha1, &[&commit_sha1], "has missing blob");
+    let commit2_b3 = h.importer.import_object(&h.repo_id, &commit2_bytes).await.unwrap();
+
+    // export_commit_dag should return IncompleteDag
+    let result = h.exporter.export_commit_dag(&h.repo_id, commit2_b3, &std::collections::HashSet::new()).await;
+
+    match result {
+        Err(super::error::BridgeError::IncompleteDag { missing, exported }) => {
+            assert_eq!(missing.len(), 1, "should report exactly 1 missing object");
+            assert!(exported > 0, "should have collected some objects before hitting the gap");
+            assert_eq!(
+                missing[0],
+                hex::encode(fake_blob_b3.as_bytes()),
+                "missing hash should be the fake blob's BLAKE3"
+            );
+        }
+        Err(e) => panic!("expected IncompleteDag, got: {:?}", e),
+        Ok(r) => panic!("expected error, got {} objects", r.objects.len()),
+    }
+}
+
+/// FCLONE-2: verify_dag_integrity reports missing objects.
+#[tokio::test]
+async fn test_verify_dag_integrity_complete() {
+    let h = BridgeTestHarness::new();
+
+    // Import a simple blob → tree → commit chain
+    let blob_bytes = make_git_blob(b"integrity test\n");
+    let blob_sha1 = compute_sha1(&blob_bytes);
+    h.importer.import_object(&h.repo_id, &blob_bytes).await.unwrap();
+
+    let tree_bytes = make_git_tree(&[make_tree_entry("100644", "f.txt", &blob_sha1)]);
+    let tree_sha1 = compute_sha1(&tree_bytes);
+    h.importer.import_object(&h.repo_id, &tree_bytes).await.unwrap();
+
+    let commit_bytes = make_git_commit(&tree_sha1, &[], "integrity");
+    let commit_sha1 = compute_sha1(&commit_bytes);
+    h.importer.import_object(&h.repo_id, &commit_bytes).await.unwrap();
+
+    // Set ref
+    h.importer.update_ref(&h.repo_id, "refs/heads/main", commit_sha1).await.unwrap();
+
+    // Verify integrity
+    let kv: Arc<dyn KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());
+    // We need the SAME KV the harness uses. Let's get it from the mapping.
+    let result = super::integrity::verify_dag_integrity(h.mapping.kv().as_ref(), &h.repo_id).await;
+
+    assert!(result.is_complete(), "DAG should be complete, missing: {:?}", result.missing);
+    assert_eq!(result.reachable, 3, "should have 3 reachable objects (blob + tree + commit)");
+    assert_eq!(result.ref_heads.len(), 1, "should have 1 ref head");
+    let _ = kv;
 }
