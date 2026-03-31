@@ -751,3 +751,35 @@ async fn test_branched_deploy_failure_aborts() {
     let result = coord.run_deployment_branched("deploy-branch-2").await;
     assert!(result.is_err());
 }
+
+// ============================================================================
+// Single-node deployment (the leader upgrades itself)
+// ============================================================================
+
+/// Verify that a single-node cluster can complete a deployment.
+///
+/// This is the scenario that failed in production: the coordinator (node 1)
+/// is the only voter and must upgrade itself. The mock RPC client handles
+/// self-calls just like remote calls, so this test verifies the coordinator
+/// logic partitions correctly (no followers, leader in list).
+#[tokio::test]
+async fn test_single_node_deployment_upgrades_self() {
+    let kv = new_kv();
+    let rpc = Arc::new(MockRpcClient::new());
+    rpc.set_all_healthy(&[1]).await;
+
+    // node_id=1, single voter list
+    let coord = make_coordinator(Arc::clone(&kv), Arc::clone(&rpc), 1);
+    coord
+        .start_deployment("deploy-single".into(), test_artifact(), DeployStrategy::rolling(1), &[1], now_ms())
+        .await
+        .unwrap();
+
+    let result = coord.run_deployment("deploy-single").await.unwrap();
+    assert_eq!(result.status, DeploymentStatus::Completed);
+
+    // The coordinator should have sent an upgrade RPC to node 1 (itself)
+    let calls = rpc.get_upgrade_calls().await;
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, 1);
+}
