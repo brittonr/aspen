@@ -572,20 +572,37 @@ async fn rollback(client: &AspenClient, json: bool) -> Result<()> {
 /// Diffs per-node statuses against a snapshot and prints transitions.
 /// Returns `Ok(())` on completed, `Err` on failed/rolled_back/timeout.
 /// Exit codes (handled by caller or process): 0=completed, 1=failed, 2=timeout.
+///
+/// During a rolling deploy, nodes restart — connection failures are expected.
+/// This function tolerates errors for the entire deploy timeout duration,
+/// using backoff to reduce QUIC pressure when nodes are temporarily down.
 async fn deploy_wait(client: &AspenClient, deploy_id: Option<&str>, timeout_secs: u64, json: bool) -> Result<()> {
     use std::collections::HashMap;
 
-    const POLL_INTERVAL_SECS: u64 = 5;
-    let interval = std::time::Duration::from_secs(POLL_INTERVAL_SECS);
+    const BASE_POLL_INTERVAL_SECS: u64 = 5;
+    /// Extended poll interval when errors persist (reduces QUIC pressure
+    /// during node restarts).
+    const ERROR_POLL_INTERVAL_SECS: u64 = 10;
+    /// Print a warning every N consecutive errors (every ~50s at error interval).
+    const WARN_EVERY_N_ERRORS: u32 = 5;
+
+    let base_interval = std::time::Duration::from_secs(BASE_POLL_INTERVAL_SECS);
+    let error_interval = std::time::Duration::from_secs(ERROR_POLL_INTERVAL_SECS);
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
 
     // Track per-node status for diff-based output.
     let mut prev_statuses: HashMap<u64, String> = HashMap::new();
-    // Count consecutive RPC errors to distinguish transient from persistent failures.
+    // Count consecutive RPC errors for logging.
     let mut consecutive_errors: u32 = 0;
-    const MAX_CONSECUTIVE_ERRORS: u32 = 12; // 60s at 5s intervals
 
     loop {
+        // Use longer interval when errors persist — nodes are restarting
+        // and hammering QUIC makes reconnection slower.
+        let interval = if consecutive_errors > 0 {
+            error_interval
+        } else {
+            base_interval
+        };
         tokio::time::sleep(interval).await;
 
         // Check timeout.
@@ -612,18 +629,21 @@ async fn deploy_wait(client: &AspenClient, deploy_id: Option<&str>, timeout_secs
 
         let response = match client.send(ClientRpcRequest::ClusterDeployStatus).await {
             Ok(r) => {
+                if consecutive_errors > 0 && !json {
+                    eprintln!("info: reconnected after {} consecutive errors", consecutive_errors);
+                }
                 consecutive_errors = 0;
                 r
             }
             Err(e) => {
                 consecutive_errors += 1;
-                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
-                    anyhow::bail!("lost connection to cluster after {} consecutive errors: {}", consecutive_errors, e);
-                }
-                if !json {
+                // Periodic warnings — not a hard failure. During a rolling
+                // deploy, the node we're connected to may be the one
+                // restarting. The deploy timeout is the real deadline.
+                if !json && consecutive_errors % WARN_EVERY_N_ERRORS == 1 {
                     eprintln!(
-                        "warning: status poll error (retry {}/{}): {}",
-                        consecutive_errors, MAX_CONSECUTIVE_ERRORS, e
+                        "warning: status poll error ({} consecutive, will retry until deploy timeout): {}",
+                        consecutive_errors, e
                     );
                 }
                 continue;
@@ -718,17 +738,15 @@ async fn deploy_wait(client: &AspenClient, deploy_id: Option<&str>, timeout_secs
                 if e.code.contains("DEPLOY_UNAVAILABLE") {
                     anyhow::bail!("deploy feature not enabled on server");
                 }
+                // RPC-level errors during deploy are expected — the node
+                // may be mid-restart. Track for logging but don't bail;
+                // the deploy timeout is the real deadline.
                 consecutive_errors += 1;
-                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
-                    anyhow::bail!(
-                        "lost connection to cluster after {} consecutive RPC errors: {}: {}",
-                        consecutive_errors,
-                        e.code,
-                        e.message
+                if !json && consecutive_errors % WARN_EVERY_N_ERRORS == 1 {
+                    eprintln!(
+                        "warning: status poll RPC error ({} consecutive): {}: {}",
+                        consecutive_errors, e.code, e.message
                     );
-                }
-                if !json {
-                    eprintln!("warning: status poll error: {}: {}", e.code, e.message);
                 }
             }
             _ => {

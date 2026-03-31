@@ -407,3 +407,9 @@ Fixes:
 4. **Updated existing test**: `test_remap_missing_entry_skips_gracefully` now expects IncompleteDag instead of silent empty result.
 
 Note: The 7.5K/34K truncation was observed *before* the gitlink/gpgsig fixes (also 3/30). After those fixes, SHA-1 drift is eliminated and the convergent import should succeed completely. The IncompleteDag error makes any remaining gaps visible rather than silent.
+
+### 2026-03-31: Fix deploy status polling timeout — remove premature error bail
+
+`deploy_wait` in the CLI had `MAX_CONSECUTIVE_ERRORS = 12` (60s at 5s interval) which bailed with "lost connection to cluster" even when the deploy actually succeeded. During a rolling deploy, nodes restart — connection failures are expected. After a heavy CI pipeline (33K git objects), QUIC reconnection under load took >60s, triggering the premature bail. The dogfood script treated this as a deploy failure.
+
+Fix: removed the hard consecutive error bail. The `--deploy-timeout` deadline already provides the real timeout. Errors during deploy are logged periodically (every 5th consecutive error) but don't terminate polling. Added backoff: poll interval doubles from 5s to 10s when errors persist, reducing QUIC pressure during node restarts.
