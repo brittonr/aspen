@@ -1959,4 +1959,110 @@ mod git_bridge_tests {
         // Assert: took multiple rounds (proves the limit forced batching).
         assert!(rounds >= 4, "should take ≥4 rounds for 210 objects at limit=30, got {rounds}");
     }
+
+    /// Verify envelope BLAKE3 dedup: multi-round sync uses envelope_hash
+    /// from SyncObjects (the production path) instead of padded SHA-1.
+    /// No object should be returned more than once across rounds.
+    #[tokio::test]
+    async fn test_cross_batch_dedup_via_envelope_blake3() {
+        let h = FederationTestHarness::new();
+        h.federate_repo().await;
+
+        // Build 100 objects: 40 blobs + 2 trees (20 entries each) + 2 commits.
+        let mut all_expected = 0u32;
+        let mut blob_sha1s_a = Vec::new();
+        let mut blob_sha1s_b = Vec::new();
+
+        for i in 0..20u32 {
+            let content = format!("alpha-blob-{i:04}\n");
+            let (_b3, sha1) = h.import_blob(content.as_bytes()).await;
+            blob_sha1s_a.push(sha1);
+            all_expected += 1;
+        }
+        for i in 0..20u32 {
+            let content = format!("beta-blob-{i:04}\n");
+            let (_b3, sha1) = h.import_blob(content.as_bytes()).await;
+            blob_sha1s_b.push(sha1);
+            all_expected += 1;
+        }
+
+        let entries_a: Vec<Vec<u8>> = blob_sha1s_a
+            .iter()
+            .enumerate()
+            .map(|(i, sha1)| make_tree_entry("100644", &format!("a{i:04}.txt"), sha1))
+            .collect();
+        let tree_a_bytes = make_git_tree(&entries_a);
+        let tree_a_sha1 = compute_sha1(&tree_a_bytes);
+        h.source_importer.import_object(&h.repo_id, &tree_a_bytes).await.unwrap();
+        all_expected += 1;
+
+        let entries_b: Vec<Vec<u8>> = blob_sha1s_b
+            .iter()
+            .enumerate()
+            .map(|(i, sha1)| make_tree_entry("100644", &format!("b{i:04}.txt"), sha1))
+            .collect();
+        let tree_b_bytes = make_git_tree(&entries_b);
+        let tree_b_sha1 = compute_sha1(&tree_b_bytes);
+        h.source_importer.import_object(&h.repo_id, &tree_b_bytes).await.unwrap();
+        all_expected += 1;
+
+        let (_, commit1_sha1) = h.import_commit(&tree_a_sha1, &[], "first").await;
+        all_expected += 1;
+        let (commit2_b3, _commit2_sha1) = h.import_commit(&tree_b_sha1, &[&commit1_sha1], "second").await;
+        all_expected += 1;
+
+        h.set_ref("heads/main", commit2_b3).await;
+
+        // Sync using envelope BLAKE3 have-set (production path)
+        let resolver = h.resolver();
+        let mut have: Vec<[u8; 32]> = Vec::new();
+        let mut seen_content: HashSet<[u8; 32]> = HashSet::new();
+        let mut total = 0usize;
+        let mut rounds = 0u32;
+        let mut duplicates = 0u32;
+
+        loop {
+            rounds += 1;
+            assert!(rounds <= 20, "did not converge in 20 rounds (total={total}/{all_expected})");
+
+            let batch = resolver
+                .sync_objects(
+                    &h.fed_id,
+                    &["commit".into(), "tree".into(), "blob".into()],
+                    &have,
+                    15, // small limit to force many rounds
+                )
+                .await
+                .unwrap();
+
+            if batch.is_empty() {
+                break;
+            }
+
+            for obj in &batch {
+                if !seen_content.insert(obj.hash) {
+                    duplicates += 1;
+                }
+                // Use envelope BLAKE3 for have-set (production path)
+                if let Some(env) = obj.envelope_hash {
+                    have.push(env);
+                } else {
+                    // Fallback: padded SHA-1
+                    use sha1::Digest as _;
+                    let header = format!("{} {}\0", obj.object_type, obj.data.len());
+                    let mut hasher = sha1::Sha1::new();
+                    hasher.update(header.as_bytes());
+                    hasher.update(&obj.data);
+                    let sha1: [u8; 20] = hasher.finalize().into();
+                    have.push(sha1_to_have_hash(&sha1));
+                }
+            }
+
+            total += batch.len();
+        }
+
+        assert_eq!(duplicates, 0, "envelope BLAKE3 dedup should prevent ALL duplicates, got {duplicates}");
+        assert_eq!(total, all_expected as usize, "should receive all {all_expected} objects (got {total})");
+        assert!(rounds >= 2, "should take multiple rounds at limit=15 for {all_expected} objects");
+    }
 }
