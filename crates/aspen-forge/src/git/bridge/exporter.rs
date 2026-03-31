@@ -269,7 +269,10 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
             }
             GitObject::Tree(tree) => {
                 for entry in &tree.entries {
-                    queue.push_back(entry.hash());
+                    // Skip gitlinks — they reference commits in external repos
+                    if !entry.is_gitlink() {
+                        queue.push_back(entry.hash());
+                    }
                 }
             }
             GitObject::Tag(tag) => {
@@ -522,7 +525,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 deps.extend(commit.parents());
                 deps
             }
-            GitObject::Tree(tree) => tree.entries.iter().map(|e| e.hash()).collect(),
+            GitObject::Tree(tree) => tree.entries.iter().filter(|e| !e.is_gitlink()).map(|e| e.hash()).collect(),
             GitObject::Tag(tag) => vec![tag.target()],
             GitObject::Blob(_) => Vec::new(),
         }

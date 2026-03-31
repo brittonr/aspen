@@ -43,20 +43,26 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         let mut content = Vec::new();
 
         for entry in &tree.entries {
-            // Get SHA-1 for this entry's BLAKE3 hash
-            let blake3 = blake3::Hash::from_bytes(entry.hash);
-            let (sha1, _) =
-                self.mapping.get_sha1(repo_id, &blake3).await?.ok_or_else(|| BridgeError::MappingNotFound {
-                    hash: hex::encode(entry.hash),
-                })?;
-
             // Git tree entry: `<mode> <name>\0<20-byte-sha1>`
             let mode_str = format!("{:o}", entry.mode);
             content.extend_from_slice(mode_str.as_bytes());
             content.push(b' ');
             content.extend_from_slice(entry.name.as_bytes());
             content.push(0);
-            content.extend_from_slice(sha1.as_bytes());
+
+            if entry.is_gitlink() {
+                // Gitlink entries store raw SHA-1 (20 bytes) zero-padded
+                // in the 32-byte hash field. Use directly.
+                content.extend_from_slice(&entry.gitlink_sha1_bytes());
+            } else {
+                // Regular entries: look up SHA-1 from BLAKE3 mapping
+                let blake3 = blake3::Hash::from_bytes(entry.hash);
+                let (sha1, _) =
+                    self.mapping.get_sha1(repo_id, &blake3).await?.ok_or_else(|| BridgeError::MappingNotFound {
+                        hash: hex::encode(entry.hash),
+                    })?;
+                content.extend_from_slice(sha1.as_bytes());
+            }
         }
 
         let sha1 = compute_sha1("tree", &content);

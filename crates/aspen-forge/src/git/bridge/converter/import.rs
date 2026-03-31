@@ -68,8 +68,9 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     ///
     /// Git tree format: sequence of `<mode> <name>\0<20-byte-sha1>`
     ///
-    /// Note: Gitlinks (mode 160000, submodules) are skipped because they reference
-    /// commits in external repositories that cannot be translated to BLAKE3.
+    /// Gitlinks (mode 160000, submodules) are preserved with their raw SHA-1
+    /// stored zero-padded in the 32-byte hash field. They reference commits
+    /// in external repositories that don't exist locally.
     async fn parse_git_tree_content(&self, repo_id: &RepoId, content: &[u8]) -> BridgeResult<Vec<TreeEntry>> {
         let mut entries = Vec::new();
         let mut pos = 0;
@@ -105,14 +106,15 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
             let sha1 = Sha1Hash::from_slice(&content[pos..pos + 20])?;
             pos += 20;
 
-            // Skip gitlinks (mode 160000) - they reference commits in external repositories
-            // The SHA-1 cannot be translated to BLAKE3 because the object doesn't exist locally
+            // Gitlinks (mode 160000) reference commits in external repos.
+            // Store the raw SHA-1 zero-padded to 32 bytes; no BLAKE3 translation.
             if mode == 0o160000 {
                 tracing::debug!(
                     name = %name,
                     sha1 = %sha1.to_hex(),
-                    "skipping gitlink entry (submodule)"
+                    "preserving gitlink entry (submodule)"
                 );
+                entries.push(TreeEntry::gitlink(name, *sha1.as_bytes()));
                 continue;
             }
 

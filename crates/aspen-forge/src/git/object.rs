@@ -107,6 +107,8 @@ fn git_tree_entry_cmp(a: &TreeEntry, b: &TreeEntry) -> std::cmp::Ordering {
 
     // Common prefix matches — compare the "virtual" next byte.
     // Directories get '/' appended, others get '\0' (sorts before anything).
+    // Note: gitlinks (mode 160000) are NOT treated as directories by git's
+    // base_name_compare — S_ISDIR(160000) is false. They get '\0'.
     let a_next = if a_bytes.len() > min_len {
         a_bytes[min_len]
     } else if a.is_directory() {
@@ -173,6 +175,37 @@ impl TreeEntry {
             name: name.into(),
             hash: *hash.as_bytes(),
         }
+    }
+
+    /// Create a new tree entry for a gitlink (submodule).
+    ///
+    /// Gitlinks reference commits in external repositories. Since those
+    /// commits don't exist in the current repo's Forge store, we store
+    /// the raw SHA-1 (20 bytes) zero-padded to 32 bytes instead of a
+    /// BLAKE3 hash.
+    pub fn gitlink(name: impl Into<String>, sha1_bytes: [u8; 20]) -> Self {
+        let mut hash = [0u8; 32];
+        hash[..20].copy_from_slice(&sha1_bytes);
+        Self {
+            mode: 0o160000,
+            name: name.into(),
+            hash,
+        }
+    }
+
+    /// Check if this entry is a gitlink (submodule).
+    pub fn is_gitlink(&self) -> bool {
+        self.mode == 0o160000
+    }
+
+    /// Get the raw SHA-1 bytes for a gitlink entry.
+    ///
+    /// Returns the first 20 bytes of the hash field (SHA-1 stored
+    /// zero-padded in the 32-byte BLAKE3 hash slot).
+    pub fn gitlink_sha1_bytes(&self) -> [u8; 20] {
+        let mut sha1 = [0u8; 20];
+        sha1.copy_from_slice(&self.hash[..20]);
+        sha1
     }
 
     /// Check if this entry is a directory.
