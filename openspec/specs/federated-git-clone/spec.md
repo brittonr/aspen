@@ -93,3 +93,17 @@ A two-cluster NixOS VM test SHALL verify the full federated git clone flow end-t
 
 - **WHEN** Alice creates and federates a repo on her cluster, and Bob runs `git clone aspen://<bob-ticket>/fed:<alice-key>:<repo-id>` against his cluster
 - **THEN** Bob gets a working git checkout with the correct file contents
+
+### Requirement: Federation clone supports repos with submodules
+
+Federation clone MUST succeed for repositories containing gitlink (submodule) tree entries. Gitlink entries (mode 160000) are preserved during import and exported with their original SHA-1.
+
+#### Scenario: Federated clone of repo with submodules
+
+- **WHEN** a federated clone is performed on a repository containing trees with mode 160000 entries
+- **THEN** the clone completes successfully with all objects transferred and git reports no missing or bad objects
+
+#### Scenario: Round-trip integrity for submodule trees
+
+- **WHEN** a tree containing gitlinks is pushed to alice's forge, then fetched via federation clone through bob
+- **THEN** the fetched tree has identical content and SHA-1 to the original
