@@ -383,4 +383,10 @@ Two bugs caused "bad tree object" during federated clone:
 
 Fix: preserve gitlink entries with raw SHA-1 zero-padded to 32 bytes in the `[u8; 32]` hash field. Export uses stored SHA-1 directly. DAG walk skips gitlink entries (external commits).
 
-Results: federated clone of 34,072 objects (18 chunks) succeeded ✅. Push to bob's forge succeeded ✅. CI trigger failed (separate issue — needs CI config on bob's repo).
+Results: federated clone of 34,072 objects (18 chunks) succeeded ✅. Push to bob's forge succeeded ✅. CI trigger failed (separate issue — root cause found: `handle_git_bridge_push` never called `announce_ref_update`, so auto-trigger was dead code for all git pushes).
+
+### 2026-03-31: Fix git push CI auto-trigger — missing announce_ref_update
+
+Root cause: `handle_git_bridge_push` in `git_bridge.rs` updated refs but never called `forge_node.announce_ref_update()`. The federation path (`federation.rs:1717`) calls it correctly, but the regular git push path via `git-remote-aspen` never wired it up. Both `dogfood-local.sh` and `dogfood-federation.sh` always fell back to manual `ci run` because the gossip `RefUpdate` announcement was never emitted.
+
+Fix: Added `announce_ref_update` call after each successful ref update in `handle_git_bridge_push`. Also resolves `old_sha1` → blake3 hash for the announcement's `old_hash` field (used by path-based trigger filters). Also set `ASPEN_CI_FEDERATION_CI_ENABLED=true` for bob in `dogfood-federation.sh` so mirror repos can auto-trigger CI.

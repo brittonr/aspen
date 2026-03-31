@@ -526,6 +526,24 @@ pub(crate) async fn handle_git_bridge_push(
 
         match forge_node.refs.set(&repo_id, ref_name, blake3_hash).await {
             Ok(()) => {
+                // Resolve old_hash for the announcement (used by path-based trigger filters).
+                let old_hash = if !ref_update.old_sha1.is_empty() {
+                    match Sha1Hash::from_hex(&ref_update.old_sha1) {
+                        Ok(old_sha1) => match importer.get_blake3(&repo_id, &old_sha1).await {
+                            Ok(Some(h)) => Some(*h.as_bytes()),
+                            _ => None,
+                        },
+                        Err(_) => None,
+                    }
+                } else {
+                    None
+                };
+
+                // Emit RefUpdate so CI TriggerService sees the push.
+                forge_node
+                    .announce_ref_update(&repo_id, &ref_update.ref_name, *blake3_hash.as_bytes(), old_hash)
+                    .await;
+
                 ref_results.push(GitBridgeRefResult {
                     ref_name: ref_update.ref_name.clone(),
                     is_success: true,

@@ -163,6 +163,8 @@ start_cluster() {
   local ci_args=()
   if [ "$enable_ci" = "true" ]; then
     ci_args=(--enable-workers --enable-ci --ci-auto-trigger)
+    # Enable CI triggers for federation mirror repos.
+    export ASPEN_CI_FEDERATION_CI_ENABLED=true
   fi
 
   ASPEN_FEDERATION_ENABLED=true \
