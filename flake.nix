@@ -3985,13 +3985,11 @@
                 ${aspenNode}/bin/aspen-node \
                   --node-id 1 --cookie forge-web-dev \
                   --storage-backend redb --data-dir "$DATA_DIR" \
-                  --init --features ci,docs,hooks,automerge,blob \
                   --relay-mode disabled \
                   > "$DATA_DIR/node.log" 2>&1 &
-                NODE_PID=$!
 
                 # Wait for cluster ticket
-                echo "Waiting for cluster to initialize..."
+                echo "Waiting for node to start..."
                 for i in $(seq 1 30); do
                   [ -f "$DATA_DIR/cluster-ticket.txt" ] && break
                   sleep 1
@@ -4002,6 +4000,10 @@
                   exit 1
                 fi
                 TICKET=$(cat "$DATA_DIR/cluster-ticket.txt")
+
+                echo "Initializing cluster..."
+                ${aspenCli}/bin/aspen-cli --ticket "$TICKET" cluster init 2>/dev/null || true
+                sleep 2
 
                 echo "Starting Forge web UI..."
                 ${aspenForgeWeb}/bin/aspen-forge-web \
