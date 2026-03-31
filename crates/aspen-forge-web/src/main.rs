@@ -76,7 +76,19 @@ async fn main() -> anyhow::Result<()> {
         "forge web serving HTTP/3 over iroh QUIC"
     );
 
-    let handler = aspen_forge_web::server::ForgeH3Handler::new(state);
+    // Register with service mesh (if net feature enabled)
+    #[cfg(feature = "net")]
+    {
+        let tcp_port_for_reg = cli.tcp_port.unwrap_or(0);
+        let endpoint_id_str = target_addr.id.to_string();
+        let reg_client = state.client().clone();
+        tokio::spawn(async move {
+            aspen_forge_web::service_registration::register_service(&reg_client, &endpoint_id_str, tcp_port_for_reg)
+                .await;
+        });
+    }
+
+    let handler = aspen_forge_web::server::ForgeH3Handler::new(state.clone());
     let _router = iroh::protocol::Router::builder(endpoint).accept(b"aspen/forge-web/1", handler).spawn();
 
     // Optionally start embedded TCP proxy for browser access
@@ -100,5 +112,12 @@ async fn main() -> anyhow::Result<()> {
     // Wait for shutdown
     tokio::signal::ctrl_c().await.ok();
     info!("shutting down");
+
+    // Deregister from service mesh on graceful shutdown
+    #[cfg(feature = "net")]
+    {
+        aspen_forge_web::service_registration::deregister_service(state.client()).await;
+    }
+
     Ok(())
 }

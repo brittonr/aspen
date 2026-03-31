@@ -28,6 +28,9 @@ pulldown-cmark = "0.13"
 
 # Diff computation
 similar = "2.6"
+
+# ANSI escape code to HTML conversion for CI log rendering
+ansi-to-html = "0.2"
 async-recursion = "1.1"
 
 # Runtime
@@ -81,6 +84,9 @@ nostr = { version = "0.44", default-features = true }
 serde_json = { workspace = true }
 patchbay = { git = "https://github.com/n0-computer/patchbay.git", rev = "e0c48e094ae11442b1ea374b6d4d8fd55a498ac1" }
 rand = "0.9"
+
+[features]
+net = []
 
 [[bin]]
 name = "aspen-forge-web"

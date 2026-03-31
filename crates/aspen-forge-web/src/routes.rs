@@ -132,6 +132,8 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
     // GET routes
     match segments.as_slice() {
         [] => repo_list(state).await,
+        ["ci"] => ci_list_all(state, &query).await,
+        ["cluster"] => cluster_overview(state).await,
         ["login"] => login_page(state).await,
         ["login", "challenge"] => login_challenge(state, &query).await,
         [repo_id] => repo_overview(state, repo_id).await,
@@ -156,6 +158,9 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
         [repo_id, "issues", id] => issue_detail(state, repo_id, id).await,
         [repo_id, "patches"] => patches(state, repo_id).await,
         [repo_id, "patches", id] => patch_detail(state, repo_id, id).await,
+        [repo_id, "ci"] => ci_list_repo(state, repo_id, &query).await,
+        [repo_id, "ci", run_id] => ci_run_detail(state, repo_id, run_id).await,
+        [repo_id, "ci", run_id, job_id] => ci_job_logs(state, repo_id, run_id, job_id, &query).await,
         _ => not_found(path),
     }
 }
@@ -180,8 +185,16 @@ async fn repo_overview(st: &AppState, repo_id: &str) -> RouteResponse {
         let text = String::from_utf8(bytes).ok()?;
         Some(render_markdown(&text))
     });
+    let ci_status = st.get_latest_ci_status(repo_id).await;
     let ticket = st.ticket_str();
-    ok(templates::repo_overview(&repo, &branches, &recent, readme_html.as_deref(), &ticket))
+    ok(templates::repo_overview(
+        &repo,
+        &branches,
+        &recent,
+        readme_html.as_deref(),
+        &ticket,
+        ci_status.as_ref(),
+    ))
 }
 
 async fn tree_root(st: &AppState, repo_id: &str) -> RouteResponse {
@@ -457,6 +470,120 @@ async fn approve_patch_post(st: &AppState, repo_id: &str, patch_id: &str) -> Rou
     }
     redirect(&format!("/{repo_id}/patches/{patch_id}"))
 }
+
+// ── CI handlers ─────────────────────────────────────────────────────
+
+async fn ci_list_all(st: &AppState, query: &HashMap<String, String>) -> RouteResponse {
+    let status_filter = query.get("status").map(|s| s.as_str()).unwrap_or("");
+    let filter = if status_filter.is_empty() {
+        None
+    } else {
+        Some(status_filter)
+    };
+    match st.list_runs(None, filter, Some(50)).await {
+        Ok(resp) => ok(templates::pipeline_list(&resp.runs, None, None, status_filter)),
+        Err(e) => {
+            if e.downcast_ref::<crate::state::ForgeUnavailableError>().is_some() {
+                return ok(templates::ci_unavailable());
+            }
+            err(e)
+        }
+    }
+}
+
+async fn ci_list_repo(st: &AppState, repo_id: &str, query: &HashMap<String, String>) -> RouteResponse {
+    let repo = match st.get_repo(repo_id).await {
+        Ok(r) => r,
+        Err(e) => return err(e),
+    };
+    let status_filter = query.get("status").map(|s| s.as_str()).unwrap_or("");
+    let filter = if status_filter.is_empty() {
+        None
+    } else {
+        Some(status_filter)
+    };
+    match st.list_runs(Some(repo_id), filter, Some(50)).await {
+        Ok(resp) => ok(templates::pipeline_list(&resp.runs, Some(repo_id), Some(&repo.name), status_filter)),
+        Err(e) => {
+            if e.downcast_ref::<crate::state::ForgeUnavailableError>().is_some() {
+                return ok(templates::ci_unavailable());
+            }
+            err(e)
+        }
+    }
+}
+
+async fn ci_run_detail(st: &AppState, repo_id: &str, run_id: &str) -> RouteResponse {
+    let repo = match st.get_repo(repo_id).await {
+        Ok(r) => r,
+        Err(e) => return err(e),
+    };
+    match st.get_run_status(run_id).await {
+        Ok(resp) if !resp.was_found => not_found(&format!("/{repo_id}/ci/{run_id}")),
+        Ok(resp) => ok(templates::pipeline_detail(repo_id, &repo.name, &resp)),
+        Err(e) => err(e),
+    }
+}
+
+async fn ci_job_logs(
+    st: &AppState,
+    repo_id: &str,
+    run_id: &str,
+    job_id: &str,
+    query: &HashMap<String, String>,
+) -> RouteResponse {
+    let repo = match st.get_repo(repo_id).await {
+        Ok(r) => r,
+        Err(e) => return err(e),
+    };
+
+    let start_index: u32 = query.get("start").and_then(|s| s.parse().ok()).unwrap_or(0);
+
+    // Get job info from the run status
+    let run_status = match st.get_run_status(run_id).await {
+        Ok(r) => r,
+        Err(e) => return err(e),
+    };
+
+    let job = run_status.stages.iter().flat_map(|s| s.jobs.iter()).find(|j| j.id == job_id);
+
+    let (job_name, job_status, job_started, job_ended) = match job {
+        Some(j) => (j.name.as_str(), j.status.as_str(), j.started_at_ms, j.ended_at_ms),
+        None => return not_found(&format!("/{repo_id}/ci/{run_id}/{job_id}")),
+    };
+
+    match st.get_job_logs(run_id, job_id, start_index, Some(100)).await {
+        Ok(logs) => ok(templates::job_log_viewer(&templates::JobLogParams {
+            repo_id,
+            repo_name: &repo.name,
+            run_id,
+            job_id,
+            job_name,
+            job_status,
+            job_started_ms: job_started,
+            job_ended_ms: job_ended,
+            logs_resp: &logs,
+            start_index,
+        })),
+        Err(e) => err(e),
+    }
+}
+
+// ── Cluster handler ─────────────────────────────────────────────────
+
+async fn cluster_overview(st: &AppState) -> RouteResponse {
+    let health = match st.get_health().await {
+        Ok(h) => h,
+        Err(e) => return err(e),
+    };
+    let cluster = match st.get_cluster_state().await {
+        Ok(c) => c,
+        Err(e) => return err(e),
+    };
+    ok(templates::cluster_overview(&health, &cluster))
+}
+
+// ── Login handlers ──────────────────────────────────────────────────
 
 async fn login_page(_st: &AppState) -> RouteResponse {
     ok(templates::login_page())
@@ -782,5 +909,283 @@ mod tests {
         let e = anyhow::anyhow!("something broke");
         let resp = err(e);
         assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    // ── CI and cluster template rendering tests ──────────────────────
+
+    #[test]
+    fn pipeline_list_empty_state() {
+        let markup = templates::pipeline_list(&[], None, None, "");
+        let html = markup.into_string();
+        assert!(html.contains("CI Pipelines"));
+        assert!(html.contains("No pipeline runs yet"));
+    }
+
+    #[test]
+    fn pipeline_list_with_runs() {
+        let runs = vec![
+            aspen_client_api::messages::CiRunInfo {
+                run_id: "abc123def456".into(),
+                repo_id: "repo1".into(),
+                ref_name: "main".into(),
+                status: "succeeded".into(),
+                created_at_ms: 1700000000000,
+            },
+            aspen_client_api::messages::CiRunInfo {
+                run_id: "xyz789".into(),
+                repo_id: "repo1".into(),
+                ref_name: "main".into(),
+                status: "failed".into(),
+                created_at_ms: 1700000100000,
+            },
+        ];
+        let html = templates::pipeline_list(&runs, None, None, "").into_string();
+        assert!(html.contains("abc123def456"));
+        assert!(html.contains("ci-succeeded"));
+        assert!(html.contains("ci-failed"));
+        assert!(html.contains("main"));
+    }
+
+    #[test]
+    fn pipeline_list_with_status_filter() {
+        let html = templates::pipeline_list(&[], None, None, "running").into_string();
+        assert!(html.contains("ci-filter-active"));
+    }
+
+    #[test]
+    fn pipeline_detail_running_has_meta_refresh() {
+        let resp = aspen_client_api::messages::CiGetStatusResponse {
+            was_found: true,
+            run_id: Some("run123".into()),
+            repo_id: Some("repo1".into()),
+            ref_name: Some("main".into()),
+            commit_hash: Some("deadbeef".into()),
+            status: Some("running".into()),
+            stages: vec![],
+            created_at_ms: Some(1700000000000),
+            completed_at_ms: None,
+            error: None,
+        };
+        let html = templates::pipeline_detail("repo1", "my-repo", &resp).into_string();
+        assert!(html.contains("meta http-equiv=\"refresh\""));
+        assert!(html.contains("ci-running"));
+    }
+
+    #[test]
+    fn pipeline_detail_completed_no_meta_refresh() {
+        let resp = aspen_client_api::messages::CiGetStatusResponse {
+            was_found: true,
+            run_id: Some("run123".into()),
+            repo_id: Some("repo1".into()),
+            ref_name: Some("main".into()),
+            commit_hash: Some("deadbeef".into()),
+            status: Some("succeeded".into()),
+            stages: vec![],
+            created_at_ms: Some(1700000000000),
+            completed_at_ms: Some(1700000060000),
+            error: None,
+        };
+        let html = templates::pipeline_detail("repo1", "my-repo", &resp).into_string();
+        assert!(!html.contains("meta http-equiv=\"refresh\""));
+        assert!(html.contains("ci-succeeded"));
+    }
+
+    #[test]
+    fn pipeline_detail_with_stages_and_jobs() {
+        let resp = aspen_client_api::messages::CiGetStatusResponse {
+            was_found: true,
+            run_id: Some("run456".into()),
+            repo_id: Some("repo1".into()),
+            ref_name: Some("main".into()),
+            commit_hash: None,
+            status: Some("succeeded".into()),
+            stages: vec![aspen_client_api::messages::CiStageInfo {
+                name: "build".into(),
+                status: "succeeded".into(),
+                jobs: vec![aspen_client_api::messages::CiJobInfo {
+                    id: "job1".into(),
+                    name: "compile".into(),
+                    status: "succeeded".into(),
+                    started_at_ms: Some(1700000000000),
+                    ended_at_ms: Some(1700000045000),
+                    error: None,
+                }],
+            }],
+            created_at_ms: Some(1700000000000),
+            completed_at_ms: Some(1700000060000),
+            error: None,
+        };
+        let html = templates::pipeline_detail("repo1", "my-repo", &resp).into_string();
+        assert!(html.contains("build"));
+        assert!(html.contains("compile"));
+        assert!(html.contains("45s"));
+        assert!(html.contains("logs"));
+    }
+
+    #[test]
+    fn job_log_viewer_running_has_meta_refresh() {
+        let logs = aspen_client_api::messages::CiGetJobLogsResponse {
+            was_found: true,
+            chunks: vec![aspen_client_api::messages::CiLogChunkInfo {
+                index: 0,
+                content: "Building...".into(),
+                timestamp_ms: 1700000000000,
+            }],
+            last_index: 0,
+            has_more: false,
+            is_complete: false,
+            error: None,
+        };
+        let html = templates::job_log_viewer(&templates::JobLogParams {
+            repo_id: "repo1",
+            repo_name: "my-repo",
+            run_id: "run1",
+            job_id: "job1",
+            job_name: "build",
+            job_status: "running",
+            job_started_ms: Some(1700000000000),
+            job_ended_ms: None,
+            logs_resp: &logs,
+            start_index: 0,
+        })
+        .into_string();
+        assert!(html.contains("meta http-equiv=\"refresh\""));
+        assert!(html.contains("Building..."));
+    }
+
+    #[test]
+    fn job_log_viewer_has_load_more() {
+        let logs = aspen_client_api::messages::CiGetJobLogsResponse {
+            was_found: true,
+            chunks: vec![],
+            last_index: 99,
+            has_more: true,
+            is_complete: false,
+            error: None,
+        };
+        let html = templates::job_log_viewer(&templates::JobLogParams {
+            repo_id: "repo1",
+            repo_name: "my-repo",
+            run_id: "run1",
+            job_id: "job1",
+            job_name: "build",
+            job_status: "succeeded",
+            job_started_ms: Some(1700000000000),
+            job_ended_ms: Some(1700000060000),
+            logs_resp: &logs,
+            start_index: 0,
+        })
+        .into_string();
+        assert!(html.contains("Load more"));
+    }
+
+    #[test]
+    fn cluster_overview_renders() {
+        let health = aspen_client_api::messages::HealthResponse {
+            status: "healthy".into(),
+            node_id: 1,
+            raft_node_id: Some(1),
+            uptime_seconds: 3661,
+            is_initialized: true,
+            membership_node_count: Some(3),
+            iroh_node_id: None,
+        };
+        let cluster = aspen_client_api::messages::ClusterStateResponse {
+            nodes: vec![
+                aspen_client_api::messages::NodeDescriptor {
+                    node_id: 1,
+                    endpoint_addr: "addr1".into(),
+                    is_voter: true,
+                    is_learner: false,
+                    is_leader: true,
+                },
+                aspen_client_api::messages::NodeDescriptor {
+                    node_id: 2,
+                    endpoint_addr: "addr2".into(),
+                    is_voter: true,
+                    is_learner: false,
+                    is_leader: false,
+                },
+            ],
+            leader_id: Some(1),
+            this_node_id: 1,
+        };
+        let html = templates::cluster_overview(&health, &cluster).into_string();
+        assert!(html.contains("Cluster Overview"));
+        assert!(html.contains("meta http-equiv=\"refresh\""));
+        assert!(html.contains("healthy"));
+        assert!(html.contains("leader"));
+        assert!(html.contains("follower"));
+        assert!(html.contains("1h 1m"));
+    }
+
+    #[test]
+    fn ci_unavailable_page() {
+        let html = templates::ci_unavailable().into_string();
+        assert!(html.contains("CI Unavailable"));
+        assert!(html.contains("--features ci"));
+    }
+
+    #[test]
+    fn ci_status_badge_variants() {
+        let run = aspen_client_api::messages::CiRunInfo {
+            run_id: "r1".into(),
+            repo_id: "repo1".into(),
+            ref_name: "main".into(),
+            status: "succeeded".into(),
+            created_at_ms: 0,
+        };
+        let html = templates::ci_status_badge("repo1", &run).into_string();
+        assert!(html.contains("CI: passing"));
+        assert!(html.contains("ci-succeeded"));
+
+        let failed = aspen_client_api::messages::CiRunInfo {
+            status: "failed".into(),
+            ..run.clone()
+        };
+        let html = templates::ci_status_badge("repo1", &failed).into_string();
+        assert!(html.contains("CI: failing"));
+        assert!(html.contains("ci-failed"));
+    }
+
+    // ── ANSI to HTML conversion tests ────────────────────────────────
+
+    #[test]
+    fn ansi_to_html_plain_text() {
+        let result = ansi_to_html::convert("hello world").unwrap();
+        assert!(result.contains("hello world"));
+    }
+
+    #[test]
+    fn ansi_to_html_red_text() {
+        let input = "\x1b[31merror\x1b[0m";
+        let result = ansi_to_html::convert(input).unwrap();
+        // Should contain a span with red color
+        assert!(result.contains("error"));
+        assert!(result.contains("<span"));
+    }
+
+    #[test]
+    fn ansi_to_html_nested_colors() {
+        let input = "\x1b[31mred \x1b[32mgreen\x1b[0m after";
+        let result = ansi_to_html::convert(input).unwrap();
+        assert!(result.contains("red"));
+        assert!(result.contains("green"));
+        assert!(result.contains("after"));
+    }
+
+    #[test]
+    fn ansi_to_html_reset() {
+        let input = "\x1b[1mbold\x1b[0m normal";
+        let result = ansi_to_html::convert(input).unwrap();
+        assert!(result.contains("bold"));
+        assert!(result.contains("normal"));
+    }
+
+    #[test]
+    fn ansi_to_html_no_escapes() {
+        let input = "plain text with no escapes";
+        let result = ansi_to_html::convert(input).unwrap();
+        assert_eq!(result, "plain text with no escapes");
     }
 }

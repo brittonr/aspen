@@ -3,6 +3,8 @@
 
 pub mod routes;
 pub mod server;
+#[cfg(feature = "net")]
+pub mod service_registration;
 pub mod state;
 pub mod templates;
 

@@ -1,5 +1,12 @@
 //! HTML templates using maud for the Forge web frontend.
 
+use aspen_client_api::messages::CiGetJobLogsResponse;
+use aspen_client_api::messages::CiGetStatusResponse;
+use aspen_client_api::messages::CiJobInfo;
+use aspen_client_api::messages::CiRunInfo;
+use aspen_client_api::messages::CiStageInfo;
+use aspen_client_api::messages::ClusterStateResponse;
+use aspen_client_api::messages::HealthResponse;
 use aspen_forge_protocol::ForgeCommitInfo;
 use aspen_forge_protocol::ForgeIssueInfo;
 use aspen_forge_protocol::ForgeMergeCheckResultResponse;
@@ -87,6 +94,7 @@ fn repo_tabs(repo: &ForgeRepoInfo, active: &str) -> Markup {
         ("Commits", format!("/{}/commits", repo.id), "commits"),
         ("Issues", format!("/{}/issues", repo.id), "issues"),
         ("Patches", format!("/{}/patches", repo.id), "patches"),
+        ("CI", format!("/{}/ci", repo.id), "ci"),
     ];
     html! {
         div.tabs {
@@ -168,6 +176,8 @@ pub fn base_layout(title: &str, content: Markup) -> Markup {
             body {
                 nav {
                     a href="/" { "🌲 Aspen Forge" }
+                    a.nav-link href="/ci" { "CI" }
+                    a.nav-link href="/cluster" { "Cluster" }
                     a.nav-login href="/login" { "Login" }
                 }
                 main { (content) }
@@ -213,10 +223,16 @@ pub fn repo_overview(
     recent_commits: &[ForgeCommitInfo],
     readme_html: Option<&str>,
     ticket: &str,
+    ci_status: Option<&CiRunInfo>,
 ) -> Markup {
     let clone_cmd = format!("git clone aspen://{}/{} {}", ticket, repo.id, repo.name);
     base_layout(&repo.name, html! {
-        h1 { (&repo.name) }
+        h1 {
+            (&repo.name)
+            @if let Some(run) = ci_status {
+                " " (ci_status_badge(&repo.id, run))
+            }
+        }
         @if let Some(ref desc) = repo.description {
             p.muted { (desc) }
         }
@@ -856,6 +872,395 @@ pub fn forge_unavailable(message: &str, hints: &[aspen_client_api::CapabilityHin
     })
 }
 
+// ── CI Templates ─────────────────────────────────────────────────────
+
+/// Convert ANSI escape codes to HTML. Returns safe HTML.
+fn ansi_to_html_safe(input: &str) -> String {
+    ansi_to_html::convert(input).unwrap_or_else(|_| maud::html! { (input) }.into_string())
+}
+
+/// CSS class for a pipeline status badge.
+fn status_badge_class(status: &str) -> &'static str {
+    match status {
+        "succeeded" => "badge ci-succeeded",
+        "failed" => "badge ci-failed",
+        "running" => "badge ci-running",
+        "pending" => "badge ci-pending",
+        "cancelled" => "badge ci-cancelled",
+        _ => "badge ci-pending",
+    }
+}
+
+/// Human-friendly status label.
+fn status_label(status: &str) -> &str {
+    match status {
+        "succeeded" => "passed",
+        "failed" => "failed",
+        "running" => "running",
+        "pending" => "pending",
+        "cancelled" => "cancelled",
+        other => other,
+    }
+}
+
+/// Format a duration from start/end timestamps.
+fn format_duration_ms(started_ms: Option<u64>, ended_ms: Option<u64>) -> String {
+    match (started_ms, ended_ms) {
+        (Some(start), Some(end)) if end >= start => {
+            let secs = (end - start) / 1000;
+            if secs < 60 {
+                format!("{secs}s")
+            } else {
+                format!("{}m {}s", secs / 60, secs % 60)
+            }
+        }
+        (Some(_), None) => "running…".to_string(),
+        _ => "-".to_string(),
+    }
+}
+
+/// CI pipeline list page (all repos or per-repo).
+pub fn pipeline_list(
+    runs: &[CiRunInfo],
+    repo_id: Option<&str>,
+    repo_name: Option<&str>,
+    active_filter: &str,
+) -> Markup {
+    let title = match repo_name {
+        Some(name) => format!("{name} — CI Pipelines"),
+        None => "CI Pipelines".to_string(),
+    };
+    let base_path = match repo_id {
+        Some(id) => format!("/{id}/ci"),
+        None => "/ci".to_string(),
+    };
+    base_layout(&title, html! {
+        @if let Some(name) = repo_name {
+            @if let Some(id) = repo_id {
+                (repo_tabs_with_ci(&ForgeRepoInfo { id: id.to_string(), name: name.to_string(), ..dummy_repo() }, "ci"))
+            }
+        }
+        h1 { (title) }
+        div.ci-filters {
+            @for (label, filter_val) in [("All", ""), ("Running", "running"), ("Passed", "succeeded"), ("Failed", "failed")] {
+                @if *filter_val == *active_filter {
+                    span.ci-filter-active { (label) }
+                } @else if filter_val.is_empty() {
+                    a href=(&base_path) { (label) }
+                } @else {
+                    a href=(format!("{base_path}?status={filter_val}")) { (label) }
+                }
+            }
+        }
+        @if runs.is_empty() {
+            p.muted { "No pipeline runs yet." }
+        } @else {
+            table.ci-runs {
+                thead {
+                    tr {
+                        th { "Status" }
+                        th { "Pipeline" }
+                        th { "Ref" }
+                        th { "Created" }
+                    }
+                }
+                tbody {
+                    @for run in runs {
+                        tr {
+                            td {
+                                span class=(status_badge_class(&run.status)) { (status_label(&run.status)) }
+                            }
+                            td {
+                                a href=(format!("/{}/ci/{}", run.repo_id, run.run_id)) {
+                                    code { (short_hash(&run.run_id)) }
+                                }
+                            }
+                            td { code { (&run.ref_name) } }
+                            td.meta { (format_time(run.created_at_ms)) }
+                        }
+                    }
+                }
+            }
+        }
+    })
+}
+
+/// CI pipeline run detail page with stages and jobs.
+pub fn pipeline_detail(repo_id: &str, repo_name: &str, status_resp: &CiGetStatusResponse) -> Markup {
+    let run_id = status_resp.run_id.as_deref().unwrap_or("unknown");
+    let status = status_resp.status.as_deref().unwrap_or("unknown");
+    let is_active = status == "running" || status == "pending";
+    let title = format!("{repo_name} — Pipeline {}", short_hash(run_id));
+
+    base_layout(&title, html! {
+        (repo_tabs_with_ci(&ForgeRepoInfo { id: repo_id.to_string(), name: repo_name.to_string(), ..dummy_repo() }, "ci"))
+        @if is_active {
+            meta http-equiv="refresh" content="5";
+        }
+        h1 {
+            "Pipeline " code { (short_hash(run_id)) }
+            " "
+            span class=(status_badge_class(status)) { (status_label(status)) }
+        }
+        div.commit-meta {
+            @if let Some(ref ref_name) = status_resp.ref_name {
+                "Ref: " code { (ref_name) }
+            }
+            @if let Some(ref commit) = status_resp.commit_hash {
+                " · Commit: " code { (short_hash(commit)) }
+            }
+            @if let Some(created) = status_resp.created_at_ms {
+                " · Created: " (format_time(created))
+            }
+        }
+        @for stage in &status_resp.stages {
+            (stage_section(repo_id, run_id, stage))
+        }
+        @if status_resp.stages.is_empty() {
+            p.muted { "No stages defined for this pipeline." }
+        }
+    })
+}
+
+/// Render a single stage section with its jobs.
+fn stage_section(repo_id: &str, run_id: &str, stage: &CiStageInfo) -> Markup {
+    html! {
+        div.ci-stage {
+            h3.ci-stage-header {
+                span class=(status_badge_class(&stage.status)) { (status_label(&stage.status)) }
+                " "
+                (&stage.name)
+            }
+            table.ci-jobs {
+                thead {
+                    tr {
+                        th { "Status" }
+                        th { "Job" }
+                        th { "Duration" }
+                        th { "" }
+                    }
+                }
+                tbody {
+                    @for job in &stage.jobs {
+                        (job_row(repo_id, run_id, job))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Render a single job row.
+fn job_row(repo_id: &str, run_id: &str, job: &CiJobInfo) -> Markup {
+    html! {
+        tr {
+            td {
+                span class=(status_badge_class(&job.status)) { (status_label(&job.status)) }
+            }
+            td { (&job.name) }
+            td.meta { (format_duration_ms(job.started_at_ms, job.ended_at_ms)) }
+            td {
+                a href=(format!("/{repo_id}/ci/{run_id}/{}", job.id)) { "logs →" }
+            }
+        }
+    }
+}
+
+/// Parameters for rendering a CI job log page.
+pub struct JobLogParams<'a> {
+    pub repo_id: &'a str,
+    pub repo_name: &'a str,
+    pub run_id: &'a str,
+    pub job_id: &'a str,
+    pub job_name: &'a str,
+    pub job_status: &'a str,
+    pub job_started_ms: Option<u64>,
+    pub job_ended_ms: Option<u64>,
+    pub logs_resp: &'a CiGetJobLogsResponse,
+    pub start_index: u32,
+}
+
+/// CI job log viewer page.
+pub fn job_log_viewer(params: &JobLogParams<'_>) -> Markup {
+    let is_active = params.job_status == "running";
+    let title = format!("{} — {} logs", params.repo_name, params.job_name);
+
+    let mut log_html = String::new();
+    for chunk in &params.logs_resp.chunks {
+        log_html.push_str(&ansi_to_html_safe(&chunk.content));
+    }
+
+    base_layout(&title, html! {
+        (repo_tabs_with_ci(&ForgeRepoInfo { id: params.repo_id.to_string(), name: params.repo_name.to_string(), ..dummy_repo() }, "ci"))
+        @if is_active {
+            meta http-equiv="refresh" content="5";
+        }
+        div.ci-job-header {
+            h1 {
+                (params.job_name)
+                " "
+                span class=(status_badge_class(params.job_status)) { (status_label(params.job_status)) }
+            }
+            div.meta {
+                "Duration: " (format_duration_ms(params.job_started_ms, params.job_ended_ms))
+                " · "
+                a href=(format!("/{}/ci/{}", params.repo_id, params.run_id)) { "← Back to pipeline" }
+            }
+        }
+        pre.log-viewer {
+            (PreEscaped(&log_html))
+        }
+        @if params.logs_resp.has_more {
+            div.ci-load-more {
+                a href=(format!("/{}/ci/{}/{}?start={}", params.repo_id, params.run_id, params.job_id, params.start_index + params.logs_resp.chunks.len() as u32)) {
+                    "Load more…"
+                }
+            }
+        }
+    })
+}
+
+/// CI status badge for the repo overview page.
+pub fn ci_status_badge(repo_id: &str, run: &CiRunInfo) -> Markup {
+    let label = match run.status.as_str() {
+        "succeeded" => "CI: passing",
+        "failed" => "CI: failing",
+        "running" => "CI: running",
+        _ => "CI: pending",
+    };
+    html! {
+        a.ci-badge-link href=(format!("/{repo_id}/ci/{}", run.run_id)) {
+            span class=(status_badge_class(&run.status)) { (label) }
+        }
+    }
+}
+
+/// CI unavailable page.
+pub fn ci_unavailable() -> Markup {
+    base_layout("CI Unavailable", html! {
+        h1 { "CI Unavailable" }
+        div.card {
+            p { "CI pipelines are not available on this cluster." }
+            p.muted {
+                "The cluster node needs to be started with CI features enabled."
+                br;
+                "Try: " code { "--features ci" }
+            }
+        }
+    })
+}
+
+// ── Cluster Templates ────────────────────────────────────────────────
+
+/// Cluster overview page.
+pub fn cluster_overview(health: &HealthResponse, cluster: &ClusterStateResponse) -> Markup {
+    let total_nodes = cluster.nodes.len();
+    let leader_id = cluster.leader_id;
+
+    base_layout("Cluster Overview", html! {
+        meta http-equiv="refresh" content="10";
+        h1 { "Cluster Overview" }
+        div.cluster-summary {
+            div.cluster-stat {
+                span.cluster-stat-value { (total_nodes) }
+                span.cluster-stat-label { "nodes" }
+            }
+            div.cluster-stat {
+                span.cluster-stat-value { (health.status) }
+                span.cluster-stat-label { "health" }
+            }
+            @if let Some(lid) = leader_id {
+                div.cluster-stat {
+                    span.cluster-stat-value { (lid) }
+                    span.cluster-stat-label { "leader" }
+                }
+            }
+            div.cluster-stat {
+                span.cluster-stat-value { (format_uptime_secs(health.uptime_seconds)) }
+                span.cluster-stat-label { "uptime" }
+            }
+        }
+        table.cluster-nodes {
+            thead {
+                tr {
+                    th { "Node" }
+                    th { "Role" }
+                    th { "Health" }
+                }
+            }
+            tbody {
+                @for node in &cluster.nodes {
+                    tr {
+                        td { "Node " (node.node_id) }
+                        td {
+                            @if node.is_leader {
+                                span.badge.cluster-leader { "leader" }
+                            } @else if node.is_learner {
+                                span.badge.cluster-learner { "learner" }
+                            } @else {
+                                span.badge.cluster-follower { "follower" }
+                            }
+                        }
+                        td {
+                            span.badge.cluster-healthy { "healthy" }
+                        }
+                    }
+                }
+            }
+        }
+    })
+}
+
+/// Format uptime from seconds into human-readable.
+fn format_uptime_secs(secs: u64) -> String {
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m {}s", secs / 60, secs % 60)
+    } else {
+        format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
+    }
+}
+
+/// Create a minimal dummy ForgeRepoInfo for tab rendering.
+fn dummy_repo() -> ForgeRepoInfo {
+    ForgeRepoInfo {
+        id: String::new(),
+        name: String::new(),
+        description: None,
+        default_branch: "main".to_string(),
+        delegates: vec![],
+        threshold_delegates: 0,
+        created_at_ms: 0,
+    }
+}
+
+/// Repo tabs variant that includes the CI tab.
+fn repo_tabs_with_ci(repo: &ForgeRepoInfo, active: &str) -> Markup {
+    let tabs = [
+        ("Overview", format!("/{}", repo.id), "overview"),
+        ("Files", format!("/{}/tree", repo.id), "tree"),
+        ("Commits", format!("/{}/commits", repo.id), "commits"),
+        ("Issues", format!("/{}/issues", repo.id), "issues"),
+        ("Patches", format!("/{}/patches", repo.id), "patches"),
+        ("CI", format!("/{}/ci", repo.id), "ci"),
+    ];
+    html! {
+        div.tabs {
+            @for (label, href, key) in &tabs {
+                @if *key == active {
+                    a.active href=(href) { (label) }
+                } @else {
+                    a href=(href) { (label) }
+                }
+            }
+            form.tabs-search method="get" action=(format!("/{}/search", repo.id)) {
+                input type="text" name="q" placeholder="Search…" {}
+            }
+        }
+    }
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 fn commit_table(repo: &ForgeRepoInfo, commits: &[ForgeCommitInfo]) -> Markup {
@@ -1038,8 +1443,46 @@ table.search-matches tr.ctx td{color:#8b949e}
 .tabs-search input:focus{outline:none;border-color:#58a6ff;width:14rem}
 .commit-meta{margin:.75rem 0}
 .commit-meta .hash{font-size:.9rem;color:#8b949e}
+.nav-link{font-weight:400 !important;font-size:.9rem !important;color:#8b949e !important;margin-left:1rem}
+.nav-link:hover{color:#58a6ff !important}
+.badge.ci-succeeded{background:#238636;color:#fff}
+.badge.ci-failed{background:#da3633;color:#fff}
+.badge.ci-running{background:#9e6a03;color:#fff}
+.badge.ci-pending{background:#484f58;color:#c9d1d9}
+.badge.ci-cancelled{background:#484f58;color:#8b949e}
+.ci-filters{display:flex;gap:1rem;margin:.75rem 0}
+.ci-filters a,.ci-filter-active{padding:.25rem .6rem;border-radius:4px;font-size:.85rem}
+.ci-filter-active{background:#30363d;color:#f0f6fc;font-weight:600}
+table.ci-runs{width:100%;border-collapse:collapse}
+table.ci-runs th{text-align:left;padding:.4rem .6rem;border-bottom:2px solid #30363d;font-size:.85rem;color:#8b949e}
+table.ci-runs td{padding:.4rem .6rem;border-bottom:1px solid #21262d}
+table.ci-runs tr:hover{background:#161b22}
+.ci-stage{border:1px solid #30363d;border-radius:6px;margin:.75rem 0;overflow:hidden}
+.ci-stage-header{background:#161b22;padding:.5rem .75rem;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:.5rem}
+table.ci-jobs{width:100%;border-collapse:collapse}
+table.ci-jobs th{text-align:left;padding:.3rem .6rem;font-size:.8rem;color:#8b949e}
+table.ci-jobs td{padding:.3rem .6rem;border-bottom:1px solid #21262d}
+table.ci-jobs tr:hover{background:#0d1117}
+.ci-job-header{margin:.75rem 0}
+.log-viewer{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:1rem;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:.8rem;line-height:1.5;color:#c9d1d9;white-space:pre-wrap;word-break:break-all;max-height:80vh;overflow-y:auto}
+.ci-load-more{text-align:center;padding:.75rem}
+.ci-badge-link{text-decoration:none}
+.ci-badge-link:hover{text-decoration:none}
+.cluster-summary{display:flex;gap:1.5rem;margin:1rem 0;flex-wrap:wrap}
+.cluster-stat{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:.75rem 1.25rem;text-align:center;min-width:100px}
+.cluster-stat-value{display:block;font-size:1.5rem;font-weight:700;color:#f0f6fc}
+.cluster-stat-label{display:block;font-size:.8rem;color:#8b949e}
+table.cluster-nodes{width:100%;border-collapse:collapse;margin:.75rem 0}
+table.cluster-nodes th{text-align:left;padding:.4rem .6rem;border-bottom:2px solid #30363d;font-size:.85rem;color:#8b949e}
+table.cluster-nodes td{padding:.4rem .6rem;border-bottom:1px solid #21262d}
+.badge.cluster-leader{background:#1f6feb;color:#fff}
+.badge.cluster-follower{background:#30363d;color:#c9d1d9}
+.badge.cluster-learner{background:#9e6a03;color:#fff}
+.badge.cluster-healthy{background:#238636;color:#fff}
+.badge.cluster-unreachable{background:#da3633;color:#fff}
 @media (max-width: 768px) {
     main{padding:0.75rem}
     table{font-size:0.85rem}
+    .cluster-summary{flex-direction:column}
 }
 "#;

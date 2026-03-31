@@ -4,8 +4,15 @@ use anyhow::Context;
 use anyhow::Result;
 use aspen_client::AspenClient;
 use aspen_client_api::CapabilityHint;
+use aspen_client_api::messages::CiGetJobLogsResponse;
+use aspen_client_api::messages::CiGetJobOutputResponse;
+use aspen_client_api::messages::CiGetStatusResponse;
+use aspen_client_api::messages::CiListRunsResponse;
+use aspen_client_api::messages::CiRunInfo;
 use aspen_client_api::messages::ClientRpcRequest;
 use aspen_client_api::messages::ClientRpcResponse;
+use aspen_client_api::messages::ClusterStateResponse;
+use aspen_client_api::messages::HealthResponse;
 use aspen_forge_protocol::ForgeBlobResultResponse;
 use aspen_forge_protocol::ForgeCommitInfo;
 use aspen_forge_protocol::ForgeIssueInfo;
@@ -799,6 +806,111 @@ impl AppState {
             .context("merge patch")?;
         match resp {
             ClientRpcResponse::ForgeMergeCheckResult(r) => Ok(r),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    // ── CI operations ─────────────────────────────────────────────
+
+    /// List CI pipeline runs.
+    pub async fn list_runs(
+        &self,
+        repo_id: Option<&str>,
+        status: Option<&str>,
+        limit: Option<u32>,
+    ) -> Result<CiListRunsResponse> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::CiListRuns {
+                repo_id: repo_id.map(|s| s.to_string()),
+                status: status.map(|s| s.to_string()),
+                limit,
+            })
+            .await
+            .context("ci list runs")?;
+        match resp {
+            ClientRpcResponse::CiListRunsResult(r) => Ok(r),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    /// Get CI pipeline run status with stages and jobs.
+    pub async fn get_run_status(&self, run_id: &str) -> Result<CiGetStatusResponse> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::CiGetStatus {
+                run_id: run_id.to_string(),
+            })
+            .await
+            .context("ci get status")?;
+        match resp {
+            ClientRpcResponse::CiGetStatusResult(r) => Ok(r),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    /// Get CI job logs in chunks.
+    pub async fn get_job_logs(
+        &self,
+        run_id: &str,
+        job_id: &str,
+        start_index: u32,
+        limit: Option<u32>,
+    ) -> Result<CiGetJobLogsResponse> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::CiGetJobLogs {
+                run_id: run_id.to_string(),
+                job_id: job_id.to_string(),
+                start_index,
+                limit,
+            })
+            .await
+            .context("ci get job logs")?;
+        match resp {
+            ClientRpcResponse::CiGetJobLogsResult(r) => Ok(r),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    /// Get CI job full output.
+    pub async fn get_job_output(&self, run_id: &str, job_id: &str) -> Result<CiGetJobOutputResponse> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::CiGetJobOutput {
+                run_id: run_id.to_string(),
+                job_id: job_id.to_string(),
+            })
+            .await
+            .context("ci get job output")?;
+        match resp {
+            ClientRpcResponse::CiGetJobOutputResult(r) => Ok(r),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    /// Get latest CI status for a repo (most recent run, if any).
+    pub async fn get_latest_ci_status(&self, repo_id: &str) -> Option<CiRunInfo> {
+        let resp = self.list_runs(Some(repo_id), None, Some(1)).await.ok()?;
+        resp.runs.into_iter().next()
+    }
+
+    // ── Cluster operations ────────────────────────────────────────
+
+    /// Get node health status.
+    pub async fn get_health(&self) -> Result<HealthResponse> {
+        let resp = self.client.send(ClientRpcRequest::GetHealth).await.context("get health")?;
+        match resp {
+            ClientRpcResponse::Health(r) => Ok(r),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    /// Get cluster state (all nodes, leader, roles).
+    pub async fn get_cluster_state(&self) -> Result<ClusterStateResponse> {
+        let resp = self.client.send(ClientRpcRequest::GetClusterState).await.context("get cluster state")?;
+        match resp {
+            ClientRpcResponse::ClusterState(r) => Ok(r),
             other => Err(unexpected_response(other)),
         }
     }
