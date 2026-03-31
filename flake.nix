@@ -2387,6 +2387,15 @@
                     ));
                 }
               );
+              full-aspen-forge-web = craneLib.buildPackage (
+                fullCommonArgs
+                // {
+                  pname = "aspen-forge-web";
+                  version = "0.1.0";
+                  cargoExtraArgs = "-p aspen-forge-web --bin aspen-forge-web";
+                  doCheck = false;
+                }
+              );
               full-aspen-net-daemon = craneLib.buildPackage (
                 fullCommonArgs
                 // {
@@ -3491,6 +3500,27 @@
               };
             }
             // lib.optionalAttrs (system == "x86_64-linux") {
+              # Forge web CI dashboard + cluster overview test.
+              # No WASM plugins required — uses CI node with CI features.
+              # Build: nix build .#checks.x86_64-linux.forge-web-dashboard-test --option sandbox false
+              forge-web-dashboard-test = import ./nix/tests/forge-web-dashboard.nix {
+                inherit pkgs;
+                aspenNodePackage = ciVmTestBin {
+                  name = "aspen-node";
+                  features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets"];
+                };
+                aspenCliPackage = ciVmTestCliBin ["ci"];
+                aspenForgeWebPackage = craneLib.buildPackage (
+                  ciCommonArgs
+                  // {
+                    pname = "aspen-forge-web";
+                    version = "0.1.0";
+                    cargoExtraArgs = "-p aspen-forge-web --bin aspen-forge-web";
+                    doCheck = false;
+                  }
+                );
+              };
+
               # Full-loop test: 3-stage pipeline orchestration (check → build → test).
               # Uses aspen-constants crate with 4 jobs: format-check (shell),
               # clippy-check (nix), build-and-test (nix), unit-tests (nix).
