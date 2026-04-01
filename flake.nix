@@ -3507,6 +3507,19 @@
               };
             }
             // lib.optionalAttrs (system == "x86_64-linux") {
+              # Observability metrics test: 3-node cluster, verify GetNetworkMetrics,
+              # Prometheus counter output, and snapshot transfer metrics.
+              # No WASM plugins required — uses core operations only.
+              # Build: nix build .#checks.x86_64-linux.observability-metrics-test
+              observability-metrics-test = import ./nix/tests/observability-metrics.nix {
+                inherit pkgs;
+                aspenNodePackage = ciVmTestBin {
+                  name = "aspen-node";
+                  features = ["jobs" "docs" "blob" "hooks" "automerge"];
+                };
+                aspenCliPackage = ciVmTestCliBin [];
+              };
+
               # Forge web CI dashboard + cluster overview test.
               # No WASM plugins required — uses CI node with CI features.
               # Build: nix build .#checks.x86_64-linux.forge-web-dashboard-test --option sandbox false

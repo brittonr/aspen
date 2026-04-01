@@ -33,7 +33,7 @@
 - [x] 4.3 At snapshot receive completion, emit the same metrics with `direction=receive`
 - [x] 4.4 Emit `metrics::counter!("aspen.snapshot.transfers_total", "direction" => ..., "outcome" => "success"|"error")` on completion/failure
 - [x] 4.5 Add a bounded ring buffer (capacity 100) of `SnapshotTransferRecord` structs in the network layer for the `GetNetworkMetrics` response
-- [ ] 4.6 Add test: trigger a snapshot install in a 3-node test cluster, verify snapshot metrics appear in Prometheus output
+- [x] 4.6 Add test: trigger a snapshot install in a 3-node test cluster, verify snapshot metrics appear in Prometheus output
 
 ## 5. Network Observability RPC
 
@@ -45,7 +45,7 @@
 - [x] 5.6 Add periodic (10s) network gauge emission: spawn a background task that calls `connection_pool.metrics()` and emits `metrics::gauge!("aspen.network.connections", "state" => ...)` and `metrics::gauge!("aspen.network.active_streams")`
 - [x] 5.7 Add `network` subcommand to `aspen-cli` that sends `GetNetworkMetrics` and prints formatted output
 - [x] 5.8 Add client SDK method `get_network_metrics()` to `aspen-client`
-- [ ] 5.9 Add integration test: boot 3-node cluster, query `GetNetworkMetrics` from each node, verify peer counts match
+- [x] 5.9 Add integration test: boot 3-node cluster, query `GetNetworkMetrics` from each node, verify peer counts match
 
 ## 6. TUI Metrics View Upgrade
 
