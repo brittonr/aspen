@@ -455,3 +455,7 @@ The NixOS VM tests work because VMs have their own network stack with proper rou
 - Or the node's `EmptyPreset` approach instead of `presets::N0`
 
 Openspec change created: `fix-dogfood-local-networking`
+
+### 2026-04-01: Federation clone validated — 127-file large repo passes VM test
+
+Expanded `federation-git-clone.nix` with 127-file nested repo (src/{a..z}/{1..4}.txt, docs/{a..j}.md, lib/{a..f}/{x,y}.rs). All files synced correctly through federation. Also found and fixed a mirror name collision bug: `get_or_create_mirror` truncated `fed_id_str` to 24 chars, capturing only the origin key prefix. Two repos from the same origin got identical mirror names. Fixed by hashing the full `fed_id_str` with blake3.
