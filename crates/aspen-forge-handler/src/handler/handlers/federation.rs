@@ -1654,8 +1654,11 @@ pub(crate) async fn get_or_create_mirror(
         return Ok(aspen_forge::identity::RepoId(repo_bytes));
     }
 
-    // Create a new mirror repo
-    let mirror_name = format!("mirror/{}", &fed_id_str[..24.min(fed_id_str.len())]);
+    // Create a new mirror repo.
+    // Derive a unique name from the full fed_id_str (origin_key:repo_id)
+    // to avoid collisions when multiple repos share the same origin.
+    let name_hash = blake3::hash(fed_id_str.as_bytes());
+    let mirror_name = format!("mirror/{}", &hex::encode(name_hash.as_bytes())[..24]);
     let identity = forge_node
         .create_repo(&mirror_name, vec![forge_node.public_key()], 1)
         .await
