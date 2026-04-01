@@ -365,7 +365,24 @@ pub async fn setup_client_protocol(
         service_executors: Vec::new(),
         app_registry: aspen_core::shared_registry(),
         proxy_config: aspen_rpc_handlers::aspen_rpc_core::ProxyConfig::default(),
-        prometheus_handle: aspen_cluster::metrics_init::install_prometheus_recorder(),
+        prometheus_handle: {
+            #[cfg(feature = "otlp")]
+            {
+                if let Some(ref endpoint) = args.otlp_endpoint {
+                    aspen_cluster::metrics_init::install_prometheus_and_otlp_recorder(
+                        endpoint,
+                        config.node_id,
+                        &config.cookie,
+                    )
+                } else {
+                    aspen_cluster::metrics_init::install_prometheus_recorder()
+                }
+            }
+            #[cfg(not(feature = "otlp"))]
+            {
+                aspen_cluster::metrics_init::install_prometheus_recorder()
+            }
+        },
         network_metrics: None, // wired after bootstrap when pool is available
         #[cfg(feature = "deploy")]
         drain_state: Some(aspen_cluster::upgrade::DrainState::new()),

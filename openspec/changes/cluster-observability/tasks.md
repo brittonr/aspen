@@ -42,7 +42,7 @@
 - [x] 5.3 Add `NetworkMetrics(NetworkMetricsResponse)` variant to `ClientRpcResponse`
 - [x] 5.4 Wire the connection pool into `ClientProtocolContext` — add `connection_pool: Option<Arc<ConnectionPool>>` field
 - [x] 5.5 Implement `handle_get_network_metrics` in `CoreHandler` — call `connection_pool.metrics()` and build the response
-- [ ] 5.6 Add periodic (10s) network gauge emission: spawn a background task that calls `connection_pool.metrics()` and emits `metrics::gauge!("aspen.network.connections", "state" => ...)` and `metrics::gauge!("aspen.network.active_streams")`
+- [x] 5.6 Add periodic (10s) network gauge emission: spawn a background task that calls `connection_pool.metrics()` and emits `metrics::gauge!("aspen.network.connections", "state" => ...)` and `metrics::gauge!("aspen.network.active_streams")`
 - [x] 5.7 Add `network` subcommand to `aspen-cli` that sends `GetNetworkMetrics` and prints formatted output
 - [x] 5.8 Add client SDK method `get_network_metrics()` to `aspen-client`
 - [ ] 5.9 Add integration test: boot 3-node cluster, query `GetNetworkMetrics` from each node, verify peer counts match
@@ -59,13 +59,13 @@
 
 ## 7. OTLP Export
 
-- [ ] 7.1 Add `otlp` feature flag to `aspen-cluster/Cargo.toml` with `opentelemetry-otlp` and `metrics-exporter-opentelemetry` dependencies
-- [ ] 7.2 Add `--otlp-endpoint` CLI flag to `aspen-node` (only available when `otlp` feature is enabled)
-- [ ] 7.3 In `metrics_init.rs`, when `otlp` is enabled and endpoint is configured, install the OpenTelemetry metrics exporter alongside the Prometheus exporter (fan-out)
-- [ ] 7.4 Add OTLP resource attributes: `service.name=aspen-node`, `service.instance.id=<node_id>`, `aspen.cluster.cookie=<cookie>`
+- [x] 7.1 Add `otlp` feature flag to `aspen-cluster/Cargo.toml` with `opentelemetry-otlp` and `metrics-exporter-opentelemetry` dependencies
+- [x] 7.2 Add `--otlp-endpoint` CLI flag to `aspen-node` (only available when `otlp` feature is enabled)
+- [x] 7.3 In `metrics_init.rs`, when `otlp` is enabled and endpoint is configured, install the OpenTelemetry metrics exporter alongside the Prometheus exporter (fan-out)
+- [x] 7.4 Add OTLP resource attributes: `service.name=aspen-node`, `service.instance.id=<node_id>`, `aspen.cluster.cookie=<cookie>`
 - [ ] 7.5 Wire `TraceIngest` handler to forward spans to the OTLP trace exporter when enabled (in addition to KV storage)
-- [ ] 7.6 Add `otlp` to the `full` feature set in the root `Cargo.toml`
-- [ ] 7.7 Add compile test: `cargo check --features otlp` passes, `cargo check` (no features) still compiles without OTLP deps
+- [x] 7.6 Add `otlp` to the `full` feature set in the root `Cargo.toml`
+- [x] 7.7 Add compile test: `cargo check --features otlp` passes, `cargo check` (no features) still compiles without OTLP deps
 
 ## 8. Documentation and Verification
 

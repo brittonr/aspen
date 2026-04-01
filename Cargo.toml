@@ -233,6 +233,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 validit = "0.2.2"
 metrics = "0.24"
 metrics-exporter-prometheus = "0.16"
+metrics-exporter-opentelemetry = "0.2"
+opentelemetry-otlp = { version = "0.30", features = ["metrics", "grpc-tonic"] }
+opentelemetry_sdk = { version = "0.30", features = ["rt-tokio"] }
+opentelemetry = "0.30"
 # === Core crates (in workspace) ===
 aspen-client = { path = "crates/aspen-client" }
 aspen-client-api = { path = "crates/aspen-client-api" }
@@ -484,7 +488,7 @@ cloud-hypervisor-client = "0.3"
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
 default = []
 
-full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "snix-http", "snix-daemon", "snix-eval", "snix-build", "deploy", "kv-branch", "commit-dag", "nostr-relay"]
+full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "snix-http", "snix-daemon", "snix-eval", "snix-build", "deploy", "kv-branch", "commit-dag", "nostr-relay", "otlp"]
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
@@ -520,6 +524,7 @@ commit-dag = ["kv-branch", "dep:aspen-commit-dag", "aspen-kv-branch/commit-dag"]
 exec-cache = ["dep:aspen-exec-cache"]
 nostr-relay = ["dep:aspen-nostr-relay", "hooks", "aspen-cluster/nostr-relay"]
 federation = ["aspen-cluster/federation"]
+otlp = ["aspen-cluster/otlp"]
 relay-server = ["aspen-cluster/relay-server"]
 snix = ["dep:aspen-snix", "dep:aspen-castore", "dep:snix-castore", "dep:snix-store", "blob", "aspen-cluster/snix", "aspen-ci?/nix-executor-snix"]
 snix-http = ["snix", "dep:nar-bridge", "dep:snix-castore-http"]

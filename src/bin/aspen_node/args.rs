@@ -264,4 +264,12 @@ pub struct Args {
     /// Also configurable via: ASPEN_MODE=ci_worker
     #[arg(long)]
     pub worker_only: bool,
+
+    // === Observability ===
+    /// OTLP gRPC endpoint for metrics export (e.g. http://localhost:4317).
+    ///
+    /// When set, metrics are exported to the OTLP collector alongside the
+    /// in-process Prometheus recorder. Requires the `otlp` feature.
+    #[arg(long)]
+    pub otlp_endpoint: Option<String>,
 }

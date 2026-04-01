@@ -82,6 +82,10 @@ url = "2"
 tracing = "0.1"
 metrics = { workspace = true }
 metrics-exporter-prometheus = { workspace = true }
+metrics-exporter-opentelemetry = { workspace = true, optional = true }
+opentelemetry-otlp = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
+opentelemetry = { workspace = true, optional = true }
 parking_lot = "0.12"
 clap = { version = "4.5.4", features = ["derive"] }
 hex = "0.4"
@@ -120,3 +124,4 @@ relay-server = ["dep:iroh-relay"]
 snix = ["dep:aspen-castore", "blob"]
 deploy = ["dep:aspen-deploy", "dep:nix"]
 nostr-relay = ["dep:aspen-nostr-relay"]
+otlp = ["dep:metrics-exporter-opentelemetry", "dep:opentelemetry-otlp", "dep:opentelemetry_sdk", "dep:opentelemetry"]
