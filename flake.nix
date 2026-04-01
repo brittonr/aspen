@@ -3981,6 +3981,14 @@
                                 }
                                 trap cleanup EXIT INT TERM
 
+                                # Free port if held by a stale process
+                                STALE=$(${pkgs.lsof}/bin/lsof -ti:3450 2>/dev/null || true)
+                                if [ -n "$STALE" ]; then
+                                  echo "Killing stale process on :3450 (pid $STALE)"
+                                  kill -9 $STALE 2>/dev/null || true
+                                  sleep 1
+                                fi
+
                                 CLI="${aspenCli}/bin/aspen-cli"
 
                                 echo "Starting Aspen node..."
